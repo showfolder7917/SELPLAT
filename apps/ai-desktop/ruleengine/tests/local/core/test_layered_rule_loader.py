@@ -205,7 +205,7 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         common_validation = loader.validate_index_tree()
         self.assertEqual(loader.IndexValidation(2, 11), common_validation)
         user_validation = loader.validate_current_user_index_tree()
-        self.assertEqual(loader.IndexValidation(32, 104), user_validation)
+        self.assertEqual(loader.IndexValidation(33, 108), user_validation)
 
     def test_loads_fujitsu_json_single_line_format_gate(self) -> None:
         """Fujitsu JSON 变更必须从当前用户层命中单行格式交付门禁。"""

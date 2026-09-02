@@ -19,3 +19,5 @@
 1017|schema-AiDesktopRequirementTrajectory.sql|建立需求分析与提问结果轨迹表
 1018|schema-AiDesktopRequirementNode.sql|建立需求树节点与闭合状态表
 1019|schema-AiDesktopInspectionExperience.sql|建立真实验收复验通过后的项目经验表
+1020|schema-AiDesktopPersonaConversationMessage.sql|建立韩立自由对话的持久消息表
+1021|migration-1021-add-persona-conversation-speaker.sql|为人物内部研讨消息登记真实发言人物

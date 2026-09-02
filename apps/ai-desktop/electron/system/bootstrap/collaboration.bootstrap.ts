@@ -28,7 +28,7 @@ export interface CollaborationBootstrapOptions {
   capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts" | "rules">;
   linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
   releaseVersion: string;
-  readRuleInstructions(memberId: string, task: import("../../contracts/services/workflow/index.js").CollaborationTaskOutDto): string;
+  readRuleInstructions(memberId: string, task: import("../../../contracts/services/workflow/index.js").CollaborationTaskOutDto): string;
   runUnifiedTests(rootPath: string): Promise<string>;
   publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   onStateChanged: CoordinatorOptions["emitState"];

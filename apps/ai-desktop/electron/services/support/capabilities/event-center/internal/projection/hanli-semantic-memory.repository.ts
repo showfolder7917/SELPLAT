@@ -27,14 +27,16 @@ export class HanliSemanticMemoryRepository {
     const limit = Math.max(1, Math.min(20, Math.trunc(requestedLimit)));
     return this.database.transaction((connection) => {
       const topics = connection.prepare(`
-        SELECT corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType,
-          inferredIntent, tagsJson, updatedAt
+        SELECT topic.corpusTopicId AS corpusTopicId, topic.source AS source,
+          topic.sourceConversationId AS sourceConversationId, topic.sourceTurnId AS sourceTurnId,
+          topic.title AS title, topic.topicType AS topicType, topic.inferredIntent AS inferredIntent,
+          topic.tagsJson AS tagsJson, topic.updatedAt AS updatedAt
         FROM AiDesktopTrainingCorpusTopic topic
         LEFT JOIN AiDesktopCorpusExtractionState extraction
           ON extraction.corpusTopicId=topic.corpusTopicId
           AND extraction.stableUserId=$stableUserId
           AND extraction.extractorType=$extractorType
-        WHERE definitionSource='ai-confirmed'
+        WHERE topic.definitionSource='ai-confirmed'
           AND EXISTS (SELECT 1 FROM AiDesktopTrainingCorpusMessage message
             WHERE message.corpusTopicId=topic.corpusTopicId AND message.speakerRole='user')
           AND (extraction.extractionId IS NULL

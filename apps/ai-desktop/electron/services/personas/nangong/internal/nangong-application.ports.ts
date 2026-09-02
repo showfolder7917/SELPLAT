@@ -38,6 +38,7 @@ export interface NangongApplicationServiceOptions {
     newChat(): Promise<void>;
   };
   memory?: CollaborationMemoryPort | null;
+  refreshSemanticMemory?: () => void;
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   recordFailure?(input: EventCenterExceptionInDto): void;

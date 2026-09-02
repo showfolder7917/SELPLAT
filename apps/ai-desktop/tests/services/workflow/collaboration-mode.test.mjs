@@ -1353,6 +1353,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
     "RUL_AIDesktop协作与自动化规则.md",
     "RUL_AIDesktop截图与输入规则.md",
     "RUL_AIDesktop演化持久化与发布规则.md",
+    "RUL_AIDesktop韩立用户代理提问规则.md",
   ].map((fileName) => readFileSync(new URL(`../../../ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/${fileName}`, import.meta.url), "utf8")).join("\n");
   assert.match(rule, /^rule_version = \d+\.\d+\.\d+$/m);
   assert.match(rule, /ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation \+ hanli_and_nangong_same_formal_exports/);
@@ -1365,6 +1366,9 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);
   assert.match(rule, /never_expand_user_intent/);
   assert.match(rule, /codex_conversation_backfill_contract = one_training_corpus_table_with_codex_nangong_hanli_source/);
+  assert.match(rule, /persona_semantic_memory_human_trigger_contract = completed_user_with_nangong_or_user_with_hanli_round_only[\s\S]*real_user_message_required[\s\S]*persona_to_persona_business_archive_only[\s\S]*no_training_topic_message_or_semantic_refresh_for_internal_persona_exchange/);
+  assert.match(rule, /hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit[\s\S]*no_unconfirmed_legacy_background_flow[\s\S]*user_confirmed_or_explicit_continuous_switch_only[\s\S]*no_internal_training_corpus_write_or_semantic_refresh/);
+  assert.match(rule, /hanli_nangong_continuous_deliberation_contract = hanli_conversation_maturity_invitation[\s\S]*standalone_1_starts_user_anchored_read_only_deliberation[\s\S]*continuous_switch_restarts_discovery_after_completion[\s\S]*no_new_evidence_waits_and_rechecks_without_inventing_problem/);
   assert.match(rule, /workflow_event_center_single_entry_contract = EventCenterFacade_to_archive_and_main_process_SQLite/);
   assert.match(rule, /opt_in_codex_work_desktop_current_workspace_task_complete_watch_plus_startup_backfill/);
   assert.match(rule, /codex_app_ingestion_default_off_and_user_toggleable/);
@@ -1525,11 +1529,13 @@ test("耗时日志按等待原因生成集成批次瓶颈报告", () => {
 test("执行人物只做技术分析并直接进入实施，不再创建内部审核连接", () => {
   const coordinator = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
   const sessions = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+  const technicalAnalysisPrompt = readFileSync(new URL("../../../prompts/execution/executor-technical-analysis.md", import.meta.url), "utf8");
   assert.match(coordinator, /status: "ready-for-execution"/);
   assert.match(coordinator, /await this\.#execute\(taskId\)/);
   assert.doesNotMatch(coordinator, /createReviewer|scheduleReviewers|beginReview/);
-  assert.match(sessions, /执行人物技术分析/);
-  assert.match(sessions, /不要重新解释客户为什么要做/);
+  assert.match(sessions, /prompts\.render\("executor\.technical-analysis"/);
+  assert.match(technicalAnalysisPrompt, /执行人物技术分析/);
+  assert.match(technicalAnalysisPrompt, /不要重新解释客户为什么要做/);
   assert.doesNotMatch(sessions, /CodexReviewerSession|review_decision/);
 });
 

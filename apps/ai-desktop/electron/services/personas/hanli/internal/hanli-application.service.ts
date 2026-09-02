@@ -3,17 +3,20 @@ import type {
   DecideHanliResultInDto,
   HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
+  HanliConversationOutDto,
+  SendHanliConversationMessageInDto,
 } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../evolution/index.js";
 import type { HanliApplicationPort } from "../hanli.facade.js";
 import { EvolutionApprovalService } from "./evolution-approval.service.js";
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
-import { HanliDeliberationService } from "./hanli-deliberation.service.js";
+import { HanliDecisionService } from "./hanli-decision.service.js";
+import { HanliConversationService } from "./hanli-conversation.service.js";
 
 export type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 
-/** 韩立人物应用服务：统一拥有研讨、方向审批和真实应用验收判断。 */
+/** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */
 export class HanliApplicationService implements HanliApplicationPort {
   readonly #store: HanliApplicationServiceOptions["store"];
   readonly #memory: NonNullable<HanliApplicationServiceOptions["memory"]> | null;
@@ -21,11 +24,12 @@ export class HanliApplicationService implements HanliApplicationPort {
   readonly #recordEvent: HanliApplicationServiceOptions["recordEvent"];
   readonly #mutations: EvolutionMutationPort;
   readonly #approvals: EvolutionApprovalService;
-  readonly #deliberation: HanliDeliberationService;
+  readonly #decision: HanliDecisionService;
+  readonly #conversation: HanliConversationService;
   readonly #readStableUserId: () => string;
   readonly #readProjectScope: () => string;
 
-  /** 装配韩立已有的研讨与审批能力；构造时不执行判断，也不修改 Evolution 状态。 */
+  /** 装配韩立自由讨论与审批能力；构造时不执行判断，也不修改 Evolution 状态。 */
   constructor(options: HanliApplicationServiceOptions) {
     this.#store = options.store;
     this.#memory = options.memory || null;
@@ -35,23 +39,24 @@ export class HanliApplicationService implements HanliApplicationPort {
     this.#readProjectScope = options.readProjectScope || (() => "global");
     this.#mutations = createEvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation });
     this.#approvals = new EvolutionApprovalService(this.#store, options.recordTimelineEvent || null);
-    this.#deliberation = new HanliDeliberationService({
+    this.#conversation = new HanliConversationService(options);
+    this.#decision = new HanliDecisionService({
       store: this.#store,
       prompts: options.prompts,
       memory: this.#memory,
       askHanli: options.askHanli || (async () => { throw new Error("韩立研讨会话尚未接入。"); }),
-      askNangong: options.askNangong || (async () => { throw new Error("南宫婉研讨会话尚未接入。"); }),
-      recordEvent: this.#recordEvent,
       readStableUserId: this.#readStableUserId,
       readProjectScope: () => this.#readProjectScope(),
     });
   }
 
+  conversation(): HanliConversationOutDto { return this.#conversation.conversation(); }
+  sendConversationMessage(request: SendHanliConversationMessageInDto): Promise<HanliConversationOutDto> { return this.#conversation.send(request); }
+  newConversation(): Promise<HanliConversationOutDto> { return this.#conversation.newConversation(); }
+
   /** 接收人物提交的提案并登记审批申请；不会提前作出审批结论。 */
   requestProposalReview(proposalId: string): EvolutionStateOutDto { return this.#approvals.recordApplication(proposalId); }
 
-  /** 推进一轮韩立研讨；问题、证据判断和专题确立均留在韩立内部。 */
-  advanceHanLiDeliberation(): Promise<EvolutionStateOutDto> { return this.#deliberation.advance(); }
 
   /** 保存用户给出的人工方向审批，Mutation 门禁保证重复请求不会覆盖历史。 */
   decideProposal(proposalId: string, request: DecideHanliProposalInDto): EvolutionStateOutDto {
@@ -62,7 +67,7 @@ export class HanliApplicationService implements HanliApplicationPort {
   /** 一次性流程请求韩立完成正式判断并保存决定；Workflow 只等待完成状态。 */
   async reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto> {
     const proposal = requireProposal(this.#store.state(), proposalId);
-    const decision = await this.#deliberation.reviewOneShotProposal(proposal);
+    const decision = await this.#decision.reviewOneShotProposal(proposal);
     return this.#approvals.decide(proposalId, decision.decision, decision.advice, "automatic-han-li", []);
   }
 
@@ -84,7 +89,7 @@ export class HanliApplicationService implements HanliApplicationPort {
     const semanticContext = this.#memory?.readHanliSemanticContext(this.#readStableUserId(), this.#readProjectScope(), proposal.title, 20)
       || { stableUserId: this.#readStableUserId(), projectScope: this.#readProjectScope(), concerns: [], trajectories: [], inspectionExperiences: [] };
     const priorFindings = semanticContext.inspectionExperiences.slice(-10) as unknown as Record<string, unknown>[];
-    const plan = await this.#deliberation.createAcceptancePlan(topic, proposal, priorFindings, semanticContext as unknown as Record<string, unknown>, this.#planAcceptance);
+    const plan = await this.#decision.createAcceptancePlan(topic, proposal, priorFindings, semanticContext as unknown as Record<string, unknown>, this.#planAcceptance);
     this.#store.recordAcceptancePlan(plan);
     this.#recordEvent("hanli.acceptance.plan_generated", { topicId: topic.topicId, proposalId, planId: plan.planId, checkCount: plan.checks.length });
     return plan;

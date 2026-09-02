@@ -6,8 +6,10 @@ import test from "node:test";
 import { PersonaEvolutionRuntime as WorkflowPersonaEvolutionRuntime } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/persona-evolution.runtime.js";
 import { EvolutionStateStore } from "../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
 import { EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
+import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/hanli-nangong-deliberation.service.js";
 import { HanliRealAppAcceptanceRunner } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.js";
 import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
+import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.service.js";
 import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { controlledTestRoot, projectPaths } from "#test-paths";
 
@@ -21,13 +23,14 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
       prompts,
       memory: options.memory || null,
       askHanli: options.hanLi?.send,
-      askNangong: options.nangongDeliberation?.send,
       planAcceptance: options.planAcceptance,
       recordEvent: options.recordEvent,
       recordTimelineEvent: options.recordTimelineEvent,
       beginMutation: options.beginMutation,
       completeMutation: options.completeMutation,
       failMutation: options.failMutation,
+      readStableUserId: options.readStableUserId || (() => "XUNAN"),
+      readProjectScope: options.readProjectScope || (() => projectPaths.projectRoot),
       screenshots: {},
     });
     super({ ...options, prompts, hanli: hanliRuntime.facade });
@@ -42,7 +45,6 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
   reviseProposal(...args) { return this.nangongRuntime.facade.reviseProposal(...args); }
   investigateAndReviseReturnedProposal(...args) { return this.nangongRuntime.facade.investigateAndReviseReturnedProposal(...args); }
   dispatch(...args) { return this.nangongRuntime.facade.distributeProposal(...args); }
-  advanceHanLiDeliberation(...args) { return this.hanliRuntime.facade.advanceDeliberation(...args); }
   decideProposal(...args) { return this.hanliRuntime.facade.decideProposal(...args); }
   autoApprove(...args) { return this.hanliRuntime.facade.autoApprove(...args); }
   generateAcceptancePlan(...args) { return this.hanliRuntime.facade.generateAcceptancePlan(...args); }
@@ -61,6 +63,7 @@ const personaEvolutionRuntimeSource = readFileSync(new URL("../../../electron/se
 const approvalServiceSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/evolution-approval.service.ts", import.meta.url), "utf8");
 const hanliDeliberationSource = readFileSync(new URL("../../../prompts/personas/hanli/proposal-review.md", import.meta.url), "utf8");
 const hanliApplicationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/hanli-application.service.ts", import.meta.url), "utf8");
+const hanliConversationPromptSource = readFileSync(new URL("../../../prompts/personas/hanli/conversation.md", import.meta.url), "utf8");
 const distributionServiceSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/nangong-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
 function evolutionPersistence(key) {
@@ -104,6 +107,95 @@ test("韩立审批意见面向普通用户且不得发明产品约束", () => {
   assert.match(hanliDeliberationSource, /不得自行发明数量上限、页面规则或验收要求/);
 });
 
+test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时确立专题", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-nangong-deliberation-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+    const internalMessages = [];
+    const snapshots = [{
+      snapshotId: "source:hanli:user-1", deliberationId: "placeholder", source: "hanli", conversationId: "hanli-thread-1",
+      sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null,
+      content: "希望韩立和南宫婉自动研讨并在成熟后推进。", originalCreatedAt: "2026-09-02T00:00:00.000Z", capturedAt: "2026-09-02T00:00:01.000Z",
+    }];
+    const hanliReplies = [
+      JSON.stringify({ action: "ask", question: "持续运行在没有新问题时应如何处理？", reason: "必须明确不得为了循环而虚构问题" }),
+      JSON.stringify({ decision: "establish-topic", assessment: "目标、范围、证据和验收条件已经明确。", topic: { title: "持续人物研讨", goal: "让内部研讨成熟后自动推进", scope: ["AI Desktop"], exclusions: ["无用户证据的问题"], evidence: ["用户明确要求持续研讨"], acceptanceCriteria: ["一问一答可见且成熟后建立专题"], establishmentReason: "整理条件完整" } }),
+    ];
+    const service = new HanliNangongDeliberationService({
+      store, prompts,
+      memory: {
+        readHanLiEvolutionCorpus(deliberationId) { return snapshots.map((item) => ({ ...item, deliberationId })); },
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendHanliInternalMessage(message) { internalMessages.push(message); return { conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+      },
+      askHanli: async () => hanliReplies.shift(),
+      askNangong: async () => "没有新问题时保持监测；出现新的用户证据后再继续提问。",
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread-1",
+    });
+    const result = await service.advance({ requireProblem: true });
+    assert.equal(result.activity, "topic-established");
+    assert.equal(result.state.deliberations[0].rounds.length, 1);
+    assert.equal(result.state.deliberations[0].rounds[0].answer, "没有新问题时保持监测；出现新的用户证据后再继续提问。");
+    assert.equal(result.state.topics[0].title, "持续人物研讨");
+    assert.deepEqual(internalMessages.map((message) => message.role), ["hanli", "nangong", "hanli"]);
+    assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨，请回复 1。/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("连续自动开关开启后不因单题轮数上限自行停止", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-nangong-continuous-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: 1, maxCorrectionRounds: 1, workspaceState, locale: "zh-CN" });
+    store.setAutomation("evolution", true);
+    const replies = [
+      JSON.stringify({ action: "ask", question: "还缺少哪项用户证据？", reason: "需要确认真实边界" }),
+      JSON.stringify({ decision: "continue", assessment: "当前证据仍不足。", nextQuestion: "用户实际期望哪项结果？", questionReason: "缺少可验收结果" }),
+    ];
+    const service = new HanliNangongDeliberationService({
+      store, prompts,
+      memory: {
+        readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "continuous-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-message", sequenceNumber: 0, role: "user", responsePhase: null, content: "请持续找出新问题并修正。", originalCreatedAt: "2026-09-02T00:00:00.000Z", capturedAt: "2026-09-02T00:00:01.000Z" }]; },
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendHanliInternalMessage(message) { return { conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+      },
+      askHanli: async () => replies.shift(), askNangong: async () => "目前还需要更具体的用户结果证据。", recordEvent() {},
+      readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
+    });
+    const result = await service.advance({ requireProblem: false });
+    assert.equal(result.activity, "questioning");
+    assert.equal(result.state.automaticEvolutionEnabled, true);
+    assert.equal(result.state.deliberations[0].status, "questioning");
+    assert.equal(result.state.deliberations[0].rounds.length, 2);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", async () => {
+  let started = 0;
+  let externalChatCalls = 0;
+  const messages = [{ messageId: "hanli-invite", sequenceNumber: 0, role: "hanli", content: "需求已经可以开始调查。若确认由韩立与南宫婉开始内部研讨，请回复 1。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
+  const memory = {
+    readHanliConversation() { return { conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
+    registerHanliRound(input) {
+      messages.push({ messageId: input.userMessageId, sequenceNumber: messages.length, role: "user", content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt });
+      messages.push({ messageId: input.hanliMessageId, sequenceNumber: messages.length, role: "hanli", content: input.hanliContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
+      return { conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: input.completedAt };
+    },
+  };
+  const service = new HanliConversationService({
+    store: evolutionStore(path.join(controlledTestRoot, "hanli-confirmation-state")), prompts, memory,
+    conversation: { activeConversationId: () => "hanli-thread-1", async send() { externalChatCalls += 1; throw new Error("不应调用普通聊天"); }, async newChat() {} },
+    async startInternalDeliberation() { started += 1; return { continuous: true }; },
+    recordEvent() {}, refreshSemanticMemory() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+  });
+  const result = await service.send({ clientMessageId: "confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
+  assert.equal(started, 1);
+  assert.equal(externalChatCalls, 0);
+  assert.equal(result.messages.at(-2).content, "1");
+  assert.match(result.messages.at(-1).content, /持续自动开关已开启/);
+});
+
 test("审批、编排和分发服务不再互相代替职责", () => {
   const orchestrator = new EvolutionFlowOrchestrator();
   assert.equal(orchestrator.next({ status: "pending-approval", distributedTaskIds: [] }), "await-approval");
@@ -113,7 +205,8 @@ test("审批、编排和分发服务不再互相代替职责", () => {
   assert.doesNotMatch(distributionServiceSource, /\.decide\(|EvolutionApprovalService/);
   assert.doesNotMatch(evolutionFacadeSource, /#dispatchOnce|#store\.decide\(|createEvolutionApprovalService|EvolutionTaskDistributionService/);
   assert.match(hanliApplicationSource, /new EvolutionApprovalService/);
-  assert.match(hanliApplicationSource, /new HanliDeliberationService/);
+  assert.match(hanliApplicationSource, /new HanliConversationService/);
+  assert.match(hanliApplicationSource, /new HanliDecisionService/);
   assert.doesNotMatch(personaEvolutionRuntimeSource, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
   assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowOrchestrator/);
   assert.match(personaEvolutionRuntimeSource, /createNangongTaskDistribution/);
@@ -510,7 +603,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才通知南宫婉登记专题池", async () => {
+test.skip("历史兼容：韩立后台逐轮发问已经退役", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "han-li-deliberation-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -521,6 +614,7 @@ test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才�
       '{"decision":"establish-topic","assessment":"来源、断点和验收链已经明确。","topic":{"title":"专题全生命周期原始档案","goal":"从来源对话到验收保留完整原始记录","scope":["AI Desktop"],"exclusions":["其他应用"],"evidence":["南宫婉与 Codex 原始会话均显示执行证据缺少专题关联"],"acceptanceCriteria":["专题页面可从头查看全部原始记录"],"establishmentReason":"两轮研讨已经确认问题边界和验收方法"}}',
     ];
     const memory = {
+      readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: projectPaths.projectRoot, concerns: [], trajectories: [], inspectionExperiences: [] }; },
       readHanLiEvolutionCorpus(deliberationId) {
         const capturedAt = "2026-08-26T00:00:00.000Z";
         return [
@@ -547,7 +641,7 @@ test("韩立综合南宫婉和 Codex 完整会话后逐轮发问，确立后才�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("研讨达到配置上限但证据仍不足时保留缺口并阻断，不机械生成专题", async () => {
+test.skip("历史兼容：后台研讨轮次上限已经退役", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "han-li-deliberation-limit-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -558,7 +652,10 @@ test("研讨达到配置上限但证据仍不足时保留缺口并阻断，不�
     ];
     const facade = new PersonaEvolutionRuntime({
       store, collaboration: {}, conversation, recordEvent: () => undefined,
-      memory: { readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "limit-source", deliberationId, source: "codex", conversationId: "thread", sourceMessageId: "message", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "只完成了代码修改。", originalCreatedAt: "2026-08-26T00:00:00.000Z", capturedAt: "2026-08-26T00:00:00.000Z" }]; } },
+      memory: {
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: projectPaths.projectRoot, concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "limit-source", deliberationId, source: "codex", conversationId: "thread", sourceMessageId: "message", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "只完成了代码修改。", originalCreatedAt: "2026-08-26T00:00:00.000Z", capturedAt: "2026-08-26T00:00:00.000Z" }]; },
+      },
       hanLi: { async send() { return replies.shift(); } },
       nangongDeliberation: { async send() { return "目前没有发布后的页面证据。"; } },
     });

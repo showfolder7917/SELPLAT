@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { attachDependencyCache, detachOwnedDependencyCache, resolveDependencyCache } from "./dependency-cache.mjs";
 
@@ -8,6 +8,9 @@ if (!command) throw new Error("A command is required.");
 
 const unresolvedCache = resolveDependencyCache();
 const controlledNodeCompileCache = path.join(unresolvedCache.cacheProjectRoot, "cache", unresolvedCache.applicationName, "test-tmp", "node-compile-cache");
+const controlledProcessTemp = path.join(unresolvedCache.cacheProjectRoot, "cache", unresolvedCache.applicationName, "test-tmp", "process-temp");
+// 所有受控依赖命令统一写入工程缓存临时目录，避免测试与打包越过项目数据边界访问系统临时目录。
+mkdirSync(controlledProcessTemp, { recursive: true });
 
 // 锁文件变化后先复用统一准备入口补齐新哈希缓存，避免所有受控命令在挂载阶段直接失败。
 if (!existsSync(unresolvedCache.dependencyRoot)) {
@@ -56,7 +59,14 @@ function runCommand(dependencyRoot, appRoot, nodeCompileCache) {
     stdio: "inherit",
     shell: false,
     windowsVerbatimArguments: usesWindowsCommandInterpreter,
-    env: { ...process.env, NODE_COMPILE_CACHE: nodeCompileCache, PATH: `${path.join(dependencyRoot, ".bin")}${path.delimiter}${process.env.PATH || ""}` },
+    env: {
+      ...process.env,
+      NODE_COMPILE_CACHE: nodeCompileCache,
+      TMPDIR: controlledProcessTemp,
+      TMP: controlledProcessTemp,
+      TEMP: controlledProcessTemp,
+      PATH: `${path.join(dependencyRoot, ".bin")}${path.delimiter}${process.env.PATH || ""}`,
+    },
   });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;

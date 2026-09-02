@@ -87,6 +87,7 @@ let linghuAutomationState = {
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
 let evolutionState = { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
+let hanliConversation = { conversationId: "hanli-conversation-isolated", messages: [], updatedAt: "2026-09-02T00:00:00.000Z" };
 const publishNangongEvolution = (reason) => {
   const previousStateVersion = evolutionState.updatedAt;
   evolutionState.updatedAt = new Date().toISOString();
@@ -394,7 +395,24 @@ contextBridge.exposeInMainWorld("desktop", {
   getEvolutionWorkbenchPreference: async (perspective, nodeId) => structuredClone(evolutionWorkbenchPreferences.get(`${perspective}:${nodeId}`) || null),
   saveEvolutionWorkbenchPreference: async (request) => { const value = { ...request, updatedAt: new Date().toISOString() }; evolutionWorkbenchPreferences.set(`${request.perspective}:${request.nodeId}`, value); return structuredClone(value); },
   onEvolutionWorkbenchChanged: (listener) => { evolutionWorkbenchChangeListeners.add(listener); return () => evolutionWorkbenchChangeListeners.delete(listener); },
-  advanceHanLiDeliberation: async () => publishNangongEvolution("deliberation.advanced"),
+  getHanliConversation: async () => structuredClone(hanliConversation),
+  sendHanliConversationMessage: async (request) => {
+    const now = new Date().toISOString();
+    const userMessageId = request.clientMessageId || `hanli-user-${Date.now()}`;
+    const sequenceNumber = hanliConversation.messages.length;
+    hanliConversation.messages.push({ messageId: userMessageId, sequenceNumber, role: "user", content: request.message, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: request.attachmentIds || [], createdAt: now, completedAt: now });
+    if (request.message.trim() === "1") {
+      hanliConversation.messages.push({ messageId: `hanli-confirmed-${Date.now()}`, sequenceNumber: sequenceNumber + 1, role: "hanli", content: "已启动韩立与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `hanli-question-${Date.now()}`, sequenceNumber: sequenceNumber + 2, role: "hanli", content: "当前需求最关键的验收边界是什么？", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `nangong-answer-${Date.now()}`, sequenceNumber: sequenceNumber + 3, role: "nangong", content: "验收时需确认内部一问一答可见，且不写入用户语义资料。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+    } else {
+      hanliConversation.messages.push({ messageId: `hanli-answer-${Date.now()}`, sequenceNumber: sequenceNumber + 1, role: "hanli", content: "我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `hanli-invitation-${Date.now()}`, sequenceNumber: sequenceNumber + 2, role: "hanli", content: "若确认由韩立与南宫婉开始内部研讨，请回复 1。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+    }
+    hanliConversation.updatedAt = now;
+    return structuredClone(hanliConversation);
+  },
+  newHanliConversation: async () => { hanliConversation = { conversationId: `hanli-conversation-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() }; return structuredClone(hanliConversation); },
   getApprovalGovernance: async () => [],
   sendNangongConversationMessage: async (request) => {
     const now = new Date().toISOString();

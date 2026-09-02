@@ -4,6 +4,8 @@ import type {
   DecideHanliResultInDto,
   HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
+  HanliConversationOutDto,
+  SendHanliConversationMessageInDto,
 } from "../../../../contracts/services/personas/hanli/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
@@ -11,10 +13,12 @@ import { HanliApplicationService, type HanliApplicationServiceOptions } from "./
 import { HanliRealAppAcceptanceRunner } from "./internal/hanli-real-app-acceptance.runner.js";
 import { HanliSemanticExtractionRunner } from "./internal/hanli-semantic-extraction.runner.js";
 
-/** 韩立人物端口只包含研讨、审批和验收，不包含南宫对话或令狐恢复。 */
+/** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */
 export interface HanliApplicationPort {
+  conversation(): HanliConversationOutDto;
+  sendConversationMessage(request: SendHanliConversationMessageInDto): Promise<HanliConversationOutDto>;
+  newConversation(): Promise<HanliConversationOutDto>;
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
-  advanceHanLiDeliberation(): Promise<EvolutionStateOutDto>;
   decideProposal(proposalId: string, request: DecideHanliProposalInDto): EvolutionStateOutDto;
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
@@ -28,7 +32,6 @@ export interface HanliApplicationPort {
 /** Workflow 可调用的韩立最小端口；不包含人工 IPC 或真实窗口执行能力。 */
 export interface HanliWorkflowPort {
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
-  advanceDeliberation(): Promise<EvolutionStateOutDto>;
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
   generateAcceptancePlan(proposalId: string): Promise<HanliAcceptancePlanOutDto>;
@@ -56,10 +59,14 @@ export class HanliFacade {
     this.#application = application;
     this.#acceptanceRunner = acceptanceRunner;
   }
+  /** 读取韩立固定人物线程中的自由对话。 */
+  conversation() { return this.#application.conversation(); }
+  /** 与韩立自由讨论；人物使用语义记忆精准追问，但不执行工程写入。 */
+  sendConversationMessage(request: SendHanliConversationMessageInDto) { return this.#application.sendConversationMessage(request); }
+  /** 删除当前韩立线程并返回空白人物会话。 */
+  newConversation() { return this.#application.newConversation(); }
   /** 接收南宫或令狐提交的提案并登记审批申请，不提前生成审批结论。 */
   requestProposalReview(proposalId: string) { return this.#application.requestProposalReview(proposalId); }
-  /** 推进一轮证据研讨；证据不足时继续提问而不是机械确立专题。 */
-  advanceDeliberation() { return this.#application.advanceHanLiDeliberation(); }
   /** 记录人工方向审批；返回 Evolution 保存后的最新共同状态。 */
   decideProposal(proposalId: string, request: DecideHanliProposalInDto) { return this.#application.decideProposal(proposalId, request); }
   /** 一次性流程请求韩立审查并保存正式决定；调用方不能替韩立拼装结论。 */

@@ -320,22 +320,6 @@ export class WorkflowRepository {
 
   syncEvolutionState(state: EvolutionStateOutDto): void {
     this.#database.transaction((connection) => {
-      const insertHanLiTopic = connection.prepare(`
-        INSERT INTO AiDesktopTrainingCorpusTopic
-          (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent,
-           tagsJson, definitionSource, createdAt, updatedAt)
-        VALUES ($topicId, 'hanli', $conversationId, $turnId, '待 AI 归类', '待归类', NULL,
-          '[]', 'pending', $createdAt, $updatedAt)
-        ON CONFLICT(corpusTopicId) DO NOTHING
-      `);
-      const insertHanLiMessage = connection.prepare(`
-        INSERT INTO AiDesktopTrainingCorpusMessage
-          (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId,
-           sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
-        VALUES ($corpusMessageId, $topicId, 'hanli', $conversationId, $turnId, $messageId,
-          $sequenceNumber, 'hanli', $content, 'preview-300', 'low', $createdAt, $recordedAt)
-        ON CONFLICT(corpusMessageId) DO NOTHING
-      `);
       for (const deliberation of state.deliberations) {
         connection.prepare(`
           INSERT INTO AiDesktopEvolutionDeliberation (deliberationId, topicId, status, candidateJson, createdAt, updatedAt)
@@ -358,20 +342,6 @@ export class WorkflowRepository {
           $role: snapshot.role, $responsePhase: snapshot.responsePhase, $content: snapshot.content,
           $originalCreatedAt: snapshot.originalCreatedAt, $capturedAt: snapshot.capturedAt,
         });
-        for (const round of deliberation.rounds) {
-          if (!round.question || Array.from(round.question).length > 300) continue;
-          const topicId = `corpus-topic:hanli:${round.roundId}`;
-          insertHanLiTopic.run({
-            $topicId: topicId, $conversationId: deliberation.deliberationId, $turnId: round.roundId,
-            $createdAt: round.createdAt, $updatedAt: deliberation.updatedAt,
-          });
-          insertHanLiMessage.run({
-            $corpusMessageId: `corpus:hanli:${round.roundId}:question`, $topicId: topicId,
-            $conversationId: deliberation.deliberationId, $turnId: round.roundId,
-            $messageId: `${round.roundId}:question`, $sequenceNumber: (round.roundNumber - 1) * 2,
-            $content: round.question, $createdAt: round.createdAt, $recordedAt: new Date().toISOString(),
-          });
-        }
       }
       const insertArchive = connection.prepare(`
         INSERT OR IGNORE INTO AiDesktopEvolutionArchiveRecord

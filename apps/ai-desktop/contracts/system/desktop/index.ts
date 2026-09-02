@@ -159,6 +159,9 @@ export type {
   HanliDeliberationRoundOutDto,
   HanliDeliberationStatusValue,
   HanliEvolutionDeliberationOutDto,
+  HanliConversationMessageOutDto,
+  HanliConversationOutDto,
+  SendHanliConversationMessageInDto,
   HanliTopicCandidateOutDto,
 } from "../../services/personas/hanli/index.js";
 

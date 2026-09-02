@@ -7,7 +7,7 @@ import type { NangongApplicationServiceOptions } from "./nangong-application.por
 import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nangong-conversation.parser.js";
 
 type NangongConversationServiceOptions = Pick<NangongApplicationServiceOptions,
-  "store" | "prompts" | "conversation" | "memory" | "recordEvent" | "recordFailure" | "oneShotWorkflow" | "newConversationRetryDelaysMs">;
+  "store" | "prompts" | "conversation" | "memory" | "recordEvent" | "recordFailure" | "oneShotWorkflow" | "newConversationRetryDelaysMs" | "refreshSemanticMemory">;
 
 /** 处理南宫人物会话、草稿判断和用户一次性确认，不实现后续跨人物状态机。 */
 export class NangongConversationService {
@@ -19,6 +19,7 @@ export class NangongConversationService {
   readonly #recordFailure: NonNullable<NangongConversationServiceOptions["recordFailure"]>;
   readonly #oneShotWorkflow: NangongConversationServiceOptions["oneShotWorkflow"];
   readonly #newConversationRetryDelaysMs: number[];
+  readonly #refreshSemanticMemory: () => void;
 
   /** 装配人物会话所需端口；构造时不发送消息或启动流程。 */
   constructor(options: NangongConversationServiceOptions) {
@@ -30,6 +31,7 @@ export class NangongConversationService {
     this.#recordFailure = options.recordFailure || (() => undefined);
     this.#oneShotWorkflow = options.oneShotWorkflow;
     this.#newConversationRetryDelaysMs = options.newConversationRetryDelaysMs || [0, 500, 1_500, 3_000];
+    this.#refreshSemanticMemory = options.refreshSemanticMemory || (() => undefined);
   }
 
   /** 保存用户消息并生成南宫回复；独立“1”只在存在可恢复邀请时启动一次性演化。 */
@@ -141,11 +143,16 @@ export class NangongConversationService {
   /** 完整人物回合异步进入训练归档；归档失败不改写已经成功的对话。 */
   #archiveConversationRound(state: EvolutionStateOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto | null): void {
     if (!this.#memory) return;
+    const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId);
+    const nangongMessage = state.conversation.messages.find((message) => message.messageId === nangongMessageId);
+    // 人物内部交流不代表客户意图；缺少真实用户参与时既不写语义语料，也不触发韩立整理。
+    if (userMessage?.role !== "user" || nangongMessage?.role !== "nangong") return;
     queueMicrotask(() => {
       try {
         if (decision) this.#memory?.registerRound(state.conversation, userMessageId, nangongMessageId, decision);
         else this.#memory?.syncConversation(state.conversation);
         this.#recordEvent("training_corpus.conversation_round_archived", { conversationId: state.conversation.conversationId, userMessageId, nangongMessageId, source: "nangong" });
+        this.#refreshSemanticMemory();
       } catch (error) {
         this.#recordFailure({
           kind: "technical", sourceType: "system", sourceId: "nangong-training-archive",

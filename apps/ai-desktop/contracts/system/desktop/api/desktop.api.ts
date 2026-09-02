@@ -18,7 +18,7 @@ import type { TestDataResetResultOutDto } from "../../../services/support/applic
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
 import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, UpdateLinghuStartupPromptInDto } from "../../../services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionWorkspaceLocationOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../services/evolution/index.js";
-import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliConversationOutDto, SendHanliConversationMessageInDto } from "../../../services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, SendNangongConversationMessageInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
 import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
@@ -181,8 +181,12 @@ export interface DesktopApi {
   saveEvolutionWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceInDto): Promise<EvolutionWorkbenchPreferenceOutDto>;
   /** 订阅工作台轻量增量事件；版本断档时由 Renderer 重新查询当前数据库页。 */
   onEvolutionWorkbenchChanged(listener: (event: EvolutionWorkbenchChangeEventOutDto) => void): () => void;
-  /** 推进一轮韩立审议并返回新的演化状态。 */
-  advanceHanLiDeliberation(): Promise<EvolutionStateOutDto>;
+  /** 读取韩立当前固定人物会话。 */
+  getHanliConversation(): Promise<HanliConversationOutDto>;
+  /** 向韩立发送自由讨论消息；韩立只读取语义记忆并进行只读分析。 */
+  sendHanliConversationMessage(request: SendHanliConversationMessageInDto): Promise<HanliConversationOutDto>;
+  /** 关闭韩立当前固定线程并建立空白自由对话。 */
+  newHanliConversation(): Promise<HanliConversationOutDto>;
   /** 从已确认输入建立新专题。 */
   createEvolutionTopic(request: CreateNangongTopicInDto): Promise<EvolutionStateOutDto>;
   /** 开关指定演化自动化环节。 */

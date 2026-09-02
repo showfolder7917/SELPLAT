@@ -82,7 +82,7 @@ export function releaseManagedDependencyLease(lease: ManagedDependencyLease | nu
   cleanupIntegrationDependencyLinks(lease.workspaceDesktopRoot, [...temporaryLinkPaths]);
 }
 
-/** 集成批次只运行代码级组合检查；正式构建和当前应用重启仍属于用户明确触发的测试托管。 */
+/** 集成批次只运行代码级组合检查；正式构建和当前应用重启仍需用户明确触发结果验证。 */
 export async function verifyCollaborationIntegration(
   rootPath: string,
   taskIds: string[],

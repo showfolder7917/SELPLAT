@@ -39,6 +39,7 @@ import type {
   // 用法：IPC 查询补齐状态时约束返回结构；数据库不可用时也必须返回同样完整的失败结构。
   CorpusSemanticBackfillStatusOutDto,
 } from "../../../contracts/services/support/platform/persistence/index.js";
+import type { SendHanliConversationMessageInDto } from "../../../contracts/services/personas/hanli/index.js";
 import type {
   // 来源：contracts/services/support/platform/workspace/index.ts → dto/workspace.out.dto.ts。
   // 含义：当前工作区快照，由 primaryId 和多个 { id、name、path、permission } 工程根组成。
@@ -287,6 +288,7 @@ export async function startApplication(): Promise<void> {
   let corpusIngestionRunning = false;
   let corpusIngestionRequested = false;
   let requestHanliSemanticRefresh: () => void = () => undefined;
+  let startHanliInternalDeliberation: (request: SendHanliConversationMessageInDto) => Promise<{ continuous: boolean }> = async () => { throw new Error("韩立与南宫婉内部研讨运行时尚未就绪。"); };
   let latestCorpusTrigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled" = "startup";
   /** 按触发来源增量导入尚未处理的会话；本函数后台执行，不阻塞界面启动。 */
   const ingestTrainingCorpus = (trigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled"): void => {
@@ -524,17 +526,20 @@ export async function startApplication(): Promise<void> {
       throw error;
     }
   } : undefined;
-  // 韩立 Runtime 在人物模块内组装研讨、审批和验收；Workflow 只接收公开 Facade。
+  // 韩立 Runtime 在人物模块内组装自由讨论、审批和验收；Workflow 只接收公开 Facade。
   const hanliRuntime = createHanliRuntime({
     // 韩立和南宫只取得只读 Codex 端口，人物模块不能直接访问 Electron 或文件系统。
     store: evolutionStateStore,
     prompts,
     memory: collaborationMemory,
-    askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
-    askNangong: async (question, context, state) => (await nangongDeliberationCodex!.send(prompts.render("nangong.deliberation-answer", {
-      context,
-      question,
-    }), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
+    askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
+    conversation: {
+      send: async (request, prompt) => hanLiCodex!.send(prompt, request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null),
+      newChat: () => hanLiCodex!.newChat(),
+      activeConversationId: () => hanLiCodex!.activeSession().threadId,
+    },
+    refreshSemanticMemory: () => requestHanliSemanticRefresh(),
+    startInternalDeliberation: (request) => startHanliInternalDeliberation(request),
     analyzeCorpus: async (prompt) => {
       if (!corpusSemanticBackfillCodex) throw new Error("韩立客户认知提取服务尚未就绪。");
       return (await runCorpusSemanticAnalysis(() => corpusSemanticBackfillCodex!.send(prompt, "zh-CN", "read-only", corpusSemanticWorkspace))).text;
@@ -544,7 +549,7 @@ export async function startApplication(): Promise<void> {
       const current = workspaces.read();
       return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
     },
-    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
+    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, null)).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordTimelineEvent: recordEvolutionTimelineEvent,
     beginMutation: beginEvolutionMutation,
@@ -565,12 +570,21 @@ export async function startApplication(): Promise<void> {
       send: async (request, context) => nangongCodex!.send(prompts.render("nangong.conversation", {
         recentConversation: context,
         userMessage: request.message,
-      }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
+      }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null),
       // 新聊天只重置人物 Codex 线程，不删除已经持久化的专题事实。
       newChat: () => nangongCodex!.newChat(),
     },
-    investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
-    planDistribution: async (prompt, workspaceState, locale, emit) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], emit, "conversation-managed")).text,
+    investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, null)).text,
+    planDistribution: async (prompt, workspaceState, locale, emit) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], emit, null)).text,
+    refreshSemanticMemory: () => requestHanliSemanticRefresh(),
+    askHanliDeliberation: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
+    askNangongDeliberation: async (prompt, state) => (await nangongDeliberationCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
+    readStableUserId: () => rules.activeUserId(),
+    readProjectScope: () => {
+      const current = workspaces.read();
+      return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
+    },
+    readHanliConversationId: () => hanLiCodex!.activeSession().threadId,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
@@ -591,6 +605,10 @@ export async function startApplication(): Promise<void> {
       }
     } : undefined,
   });
+  startHanliInternalDeliberation = async (request) => {
+    const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale);
+    return { continuous: state.automaticEvolutionEnabled };
+  };
   // 三个人物和两个共享模块分别取得受控 Facade；完整运行实例只留在组合根，不再传给 IPC。
   const nangongRuntime = personaEvolution.nangongRuntime;
   // Evolution Facade 面向专题页面，Workflow Facade 面向跨人物调度。

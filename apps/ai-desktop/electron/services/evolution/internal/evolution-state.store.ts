@@ -307,7 +307,6 @@ export class EvolutionStateStore {
       round.assessedAt = now;
       deliberation.status = "blocked";
       deliberation.updatedAt = now;
-      state.automaticEvolutionEnabled = false;
       state.automationRuntime.status = "blocked";
       state.automationRuntime.stopReason = required(reason, "研讨阻断原因", 8_000);
     });
@@ -622,7 +621,6 @@ export class EvolutionStateStore {
         topic.recoveryPoint = "han-li-result-correction-required";
         state.automationRuntime.correctionRounds += 1;
         if (state.automationRuntime.correctionRounds >= state.automationSettings.maxCorrectionRounds && state.oneShotRun?.status !== "running") {
-          state.automaticEvolutionEnabled = false;
           state.automationRuntime.status = "blocked";
           state.automationRuntime.stopReason = `结果纠偏达到 ${state.automationSettings.maxCorrectionRounds} 轮，等待韩立调整方向。`;
         }

@@ -513,7 +513,7 @@ export class CodexService {
         title: "SELPLAT AI Desktop",
         version: "0.1.0",
       },
-      // 会话托管在默认协作模式中使用官方结构化提问，客户端必须显式接收实验性请求协议。
+      // 意图理解策略使用官方结构化提问，客户端必须显式接收实验性请求协议。
       capabilities: { experimentalApi: true },
     });
     this.#notify("initialized", {});
@@ -601,12 +601,12 @@ export class CodexService {
     const analysisOnly = this.#activeExecutionMode === "conversation-managed" || this.#activeExecutionMode === "requirement-managed";
     if (analysisOnly) {
       this.#respond(id, { decision: "decline" });
-      this.#emitCommandPolicy(id, command || displayValue(item.changes), "会话托管和需求托管只允许只读分析，不能申请命令提权或修改文件。");
+      this.#emitCommandPolicy(id, command || displayValue(item.changes), "当前处于只读分析阶段，不能申请命令提权或修改文件。");
       return;
     }
     if (isCommand && this.#activeExecutionMode === "task-managed" && command && isManagedBuildOrStartCommand(command)) {
       this.#respond(id, { decision: "decline" });
-      this.#emitCommandPolicy(id, command, "任务托管只允许代码级验证；构建、启动和重启需单独使用测试托管执行。");
+      this.#emitCommandPolicy(id, command, "当前修改阶段只允许代码级验证；构建、启动和重启需在结果验证阶段执行。");
       return;
     }
     if (isCommand && this.#activeExecutionMode === "task-managed" && this.#options.validationOwner === "desktop"

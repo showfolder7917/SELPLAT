@@ -15,3 +15,5 @@ export type {
   HanliTopicCandidateOutDto,
 } from "./dto/deliberation.out.dto.js";
 export type { HanliDeliberationStatusValue } from "./value/deliberation.value.js";
+export type { HanliConversationMessageOutDto, HanliConversationOutDto } from "./dto/conversation.out.dto.js";
+export type { SendHanliConversationMessageInDto } from "./dto/send-conversation-message.in.dto.js";

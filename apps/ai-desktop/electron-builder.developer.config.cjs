@@ -17,6 +17,8 @@ module.exports = {
     ...baseConfig.directories,
     output: path.join(selplatRoot, "build", "ai-desktop", "package", "developer"),
   },
+  // 开发版打包复用依赖缓存中已经安装并校验过的 Electron，避免再次进入外部下载缓存的解压等待。
+  electronDist: path.join(applicationRoot, "node_modules", "electron", "dist"),
   // 只有开发版包写入构建机的工程定位；其他发布配置不得复用本文件，避免携带该绝对路径。
   extraMetadata: {
     ...baseConfig.extraMetadata,

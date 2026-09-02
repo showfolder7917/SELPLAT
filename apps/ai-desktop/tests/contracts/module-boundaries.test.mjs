@@ -103,7 +103,8 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /mutations\.runAsync\(/);
   assert.match(source("electron/services/personas/hanli/internal/hanli-application.service.ts"), /#mutations\.run\(/);
   assert.doesNotMatch(source("electron/services/personas/nangong/nangong.facade.ts"), /decideProposal|autoApprove|generateAcceptancePlan|#mutations/);
-  assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /sendConversationMessage|createProposal|resumeOneShotRun/);
+  assert.match(source("electron/services/personas/hanli/hanli.facade.ts"), /sendConversationMessage/);
+  assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /createProposal|resumeOneShotRun/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /automaticApprovalEnabled|raw\.version === [1-7]/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /node:fs|readFileSync|writeFileSync|renameSync/);
   assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(aiMemoryDatabase\)/);
@@ -163,6 +164,7 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
   const migration = source("db/sql/schema-AiDesktopCurrent.sql");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
   const main = source("electron/system/bootstrap/application-runtime.ts");
+  const nangongPrompt = source("prompts/personas/nangong/conversation.md");
   const app = source("src/applications/developer/DeveloperApplication.tsx");
   assert.match(migration, /content TEXT NOT NULL/);
   assert.match(migration, /contentPreview TEXT NOT NULL/);
@@ -174,8 +176,9 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
   assert.match(corpusMigration, /contentRetention IN \('exact', 'preview-300'\)/);
   assert.match(memory, /characters\.slice\(0, 80\)/);
   assert.match(memory, /AI登记的用户意图/);
-  assert.match(main, /不要复述、改写或冒充用户原话/);
-  assert.match(main, /NANGONG_TOPIC_META=.*userIntent/);
+  assert.match(main, /prompts\.render\("nangong\.conversation"/);
+  assert.match(nangongPrompt, /不要复述、改写或冒充用户原话/);
+  assert.match(nangongPrompt, /NANGONG_TOPIC_META=.*userIntent/);
   assert.doesNotMatch(app, /nangong-intent-summary|我了解到您的想法是/);
 });
 
@@ -235,7 +238,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(developerApp, /features\/collaboration\/model\/collaboration-task-progress/);
   assert.match(developerApp, /features\/settings\/components\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /evolution\/components\/EvolutionRevisionPanels/);
-  assert.match(architectureRule, /rule_version = 2\.6\.0/);
+  assert.match(architectureRule, /rule_version = 2\.8\.0/);
   assert.match(architectureRule, /renderer_application_structure_contract/);
   assert.match(architectureRule, /renderer_application_runtime_dependency_contract/);
   assert.match(architectureRule, /renderer_layout_structure_contract/);
@@ -362,7 +365,7 @@ test("tests mirror production owners and the full runner discovers them recursiv
   assert.deepEqual(ownerDirectories, ["applications", "contracts", "features", "interaction", "release", "services", "support"]);
 
   const manifest = JSON.parse(source("package.json"));
-  assert.equal(manifest.scripts.test, "npm run build:electron && node scripts/run-owned-tests.mjs");
+  assert.equal(manifest.scripts.test, "npm run build:electron && node scripts/run-with-dependencies.mjs node scripts/run-owned-tests.mjs");
   assert.match(source("scripts/run-owned-tests.mjs"), /entry\.name\.endsWith\("\.test\.mjs"\)/);
   assert.match(source("scripts/run-owned-tests.mjs"), /return collectOwnedTests\(entryPath\)/);
   assert.equal(manifest.imports["#test-paths"], "./tests/support/test-paths.mjs");
@@ -546,16 +549,17 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(registry, /requireCapability/);
   const personaWorkflow = source("electron/services/workflow/internal/persona-evolution.runtime.ts");
   assert.doesNotMatch(personaWorkflow, /你是韩立|parseHanLiQuestion|parseHanLiJudgment/);
-  assert.match(source("prompts/personas/hanli/first-question.md"), /你是韩立/);
-  assert.doesNotMatch(source("electron/services/personas/hanli/internal/hanli-deliberation.service.ts"), /你是韩立/);
+  assert.match(source("prompts/personas/hanli/conversation.md"), /韩立的用户目标代理身份/);
+  assert.equal(existsSync(path.join(appRoot, "electron/services/personas/hanli/internal/hanli-deliberation.service.ts")), false);
   const hanliApplication = source("electron/services/personas/hanli/internal/hanli-application.service.ts");
   assert.match(hanliApplication, /class HanliApplicationService/);
   assert.match(hanliApplication, /new EvolutionApprovalService/);
-  assert.match(hanliApplication, /new HanliDeliberationService/);
+  assert.match(hanliApplication, /new HanliConversationService/);
+  assert.match(hanliApplication, /new HanliDecisionService/);
   assert.doesNotMatch(personaWorkflow, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
   assert.match(source("electron/services/personas/hanli/hanli.facade.ts"), /interface HanliWorkflowPort/);
   assert.match(personaWorkflow, /hanli:\s*HanliWorkflowPort/);
-  for (const method of ["decideProposal", "decideResult", "autoApprove", "generateAcceptancePlan", "acceptancePlan", "recordAcceptanceRun", "advanceHanLiDeliberation"]) {
+  for (const method of ["decideProposal", "decideResult", "autoApprove", "generateAcceptancePlan", "acceptancePlan", "recordAcceptanceRun", "sendConversationMessage"]) {
     assert.doesNotMatch(personaWorkflow, new RegExp(`\\n\\s{2}${method}\\(`), `${method} 只能由 HanliFacade 公开`);
   }
   const hanliIndex = source("electron/services/personas/hanli/index.ts");

@@ -578,7 +578,7 @@ export class CollaborationCoordinator {
       if (result.status !== "code-verified") {
         if (changeSpan) this.#durations.finish(changeSpan, "failed", { pendingActions: result.pendingActions.join("；") });
         if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { pendingActions: result.pendingActions.join("；") });
-        return this.#repairFailedExecution(taskId, result.pendingActions.join("；") || "任务托管未完成代码验证");
+        return this.#repairFailedExecution(taskId, result.pendingActions.join("；") || "当前修改尚未完成代码验证");
       }
       if (changeSpan) this.#durations.finish(changeSpan, "completed", { releaseEvent: "task.code_verified" });
       if (verificationSpan) this.#durations.finish(verificationSpan, "completed", { releaseEvent: "task.code_verified" });

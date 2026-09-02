@@ -121,7 +121,7 @@ test("屏幕录制权限恢复只允许用户通过 macOS 专用无参数 IPC �
   assert.equal((ipc.match(/app\.relaunch\(\)/g) || []).length, 2);
 });
 
-test("界面按四阶段确认推进，日志记录阶段结果而不强制构建", () => {
+test("内部策略按确认推进但界面不再暴露四种托管模式和返回切换", () => {
   assert.match(developerApp, /useState<ManagedExecutionModeValue>\("conversation-managed"\)/);
   assert.match(developerApp, /就是这意思/);
   assert.match(developerApp, /按这个方案执行/);
@@ -129,14 +129,14 @@ test("界面按四阶段确认推进，日志记录阶段结果而不强制构�
   assert.match(developerApp, /重新分析需求/);
   assert.match(developerApp, /重新执行/);
   assert.match(developerApp, /重新测试/);
-  assert.match(developerApp, /回到会话托管/);
-  assert.match(developerApp, /回到任务托管/);
+  assert.doesNotMatch(developerApp, /回到会话托管/);
+  assert.doesNotMatch(developerApp, /回到任务托管/);
   assert.match(chatMessageModel, /normalized === "1"/);
   assert.match(chatMessageModel, /current === "conversation-managed" && normalized === "就是这意思"/);
   assert.match(chatMessageModel, /current === "requirement-managed" && normalized === "按这个方案执行"/);
   assert.match(developerApp, /managed-stage-action/);
-  assert.match(developerApp, /onReturn=\{setExecutionMode\}/);
-  assert.match(developerApp, /activeMode === returnTarget/);
+  assert.doesNotMatch(developerApp, /stage-return/);
+  assert.doesNotMatch(developerApp, /activeMode === returnTarget/);
   assert.match(chatMessageModel, /current === "task-managed" \|\| current === "test-managed"/);
   assert.match(developerApp, /latestManagedAssistantId/);
   assert.match(developerApp, /disabled=\{!actionable \|\| message\.streaming\}/);

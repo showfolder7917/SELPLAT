@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { controlledTestRoot } from "#test-paths";
 import { ActiveUserRuleFacade, RulePackageArchiveFacade, RulePackageUploadCoordinator, RuleWorkspaceFacade } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/rules/index.js";
 
 const roleIds = {
@@ -30,7 +30,7 @@ function fixture(root, user = "XUNAN") {
 }
 
 test("活动用户加载器只递归当前用户，并冻结任务规则正文", () => {
-  const root = mkdtempSync(path.join(tmpdir(), "ai-desktop-active-rules-"));
+  const root = mkdtempSync(path.join(controlledTestRoot, "ai-desktop-active-rules-"));
   const { engine, rules, userRoot } = fixture(root);
   const service = new ActiveUserRuleFacade({ mode: "source", workspaceRoot: engine, agentsPath: path.join(engine, "AGENTS.md"), ruleRoot: rules });
   assert.equal(service.resolve("FORBIDDEN_CORE").rule, null);
@@ -42,7 +42,7 @@ test("活动用户加载器只递归当前用户，并冻结任务规则正文",
 });
 
 test("无源码工作区在规则版本变化后生成 ZIP outbox，并在启动上传成功后归档", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "ai-desktop-local-rules-"));
+  const root = mkdtempSync(path.join(controlledTestRoot, "ai-desktop-local-rules-"));
   const bundledProject = path.join(root, "bundled-project");
   const { engine: bundled } = fixture(bundledProject);
   const projectWithoutSource = path.join(root, "customer-project"); mkdirSync(projectWithoutSource);

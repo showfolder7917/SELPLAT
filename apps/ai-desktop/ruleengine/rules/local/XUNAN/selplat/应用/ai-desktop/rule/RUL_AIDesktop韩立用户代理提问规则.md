@@ -1,11 +1,18 @@
 # AI Desktop 韩立用户代理提问规则
 
+<!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
-rule_version = 2.0.0
+<!-- 2.2.0 接入用户确认启动的韩立—南宫婉内部研讨与持续发现。 -->
+rule_version = 2.2.0
+<!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
+<!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->
 override_mode = extend
+<!-- 本人物规则不需要 Java 执行能力。 -->
 java_ability_refs = none
+<!-- 本人物规则不需要 Python 执行能力。 -->
 python_ability_refs = none
+<!-- 本人物规则不需要 Node 执行能力。 -->
 node_ability_refs = none
 
 <!-- 韩立代表用户理解目标、维护需求结构并确认下一动作；可以发起和消费受控只读调查，但不替执行人修改源码。 -->
@@ -29,3 +36,9 @@ hanli_maturity_conflict_contract = recent_explicit_correction_then_recent_repeat
 hanli_semantic_extraction_contract = active_stable_user_isolation + source_message_authority + pending_processing_completed_retryable_blocked_superseded + content_hash_and_extractor_version + lease_recovery + exponential_backoff + asynchronous_no_conversation_block
 <!-- 只有失败后修正并由韩立真实复验通过的发现才能形成项目经验；多场景治理前不得冒充稳定专业规则。 -->
 hanli_inspection_experience_contract = failed_finding_then_correction_then_linghu_gate_then_real_retest_pass + project_experience_only + counterexample_conflict_limit_supersede_retire + lifecycle_governance_before_stable_rule
+<!-- 韩立人物入口采用独立固定线程；需求成熟后显示唯一邀请，用户输入 1 才启动与南宫婉的内部研讨。 -->
+hanli_free_conversation_contract = fixed_persona_thread + direct_natural_answer + one_question_only_for_material_information_gap + canonical_internal_deliberation_invitation_when_mature + standalone_1_confirmation + read_only_no_engineering_authorization + confirmed_deliberation_required_before_topic_automation
+<!-- 韩立回答只读取按稳定用户和项目范围整理后的客户关注点、证据、轨迹、需求节点与验收经验；原始人物对话只负责独立留存和后续异步提取。 -->
+hanli_semantic_read_boundary_contract = derived_semantic_tables_only_for_answer_context + no_raw_conversation_snapshot_scan + stable_user_and_project_isolation + evidence_status_conflict_and_supersession_preserved
+<!-- 旧的无用户锚点后台流程不得恢复；新研讨必须由用户确认或持续自动开关触发，复用可审计轮次结构但不写训练语料。 -->
+hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit + no_unconfirmed_legacy_background_flow + user_confirmed_or_explicit_continuous_switch_only + current_question_answer_assessment_round_archive + no_internal_training_corpus_write_or_semantic_refresh

@@ -17,10 +17,10 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1019");
+    assert.equal(fixture.database.latestSchemaVersion, "1021");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
@@ -30,6 +30,46 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
   } finally {
     fixture.close();
   }
+});
+
+test("韩立自由对话原子入库并向统一语料提交用户原文和回答摘要", () => {
+  const fixture = createFixture("hanli-free-conversation");
+  try {
+    const memory = new CollaborationMemoryService(fixture.database);
+    const conversation = memory.registerHanliRound({
+      conversationId: "hanli-thread-free", userMessageId: "hanli-user-free", userContent: "请先结合整理后的资料判断我真正关心什么。", attachmentIds: ["shot-1"],
+      hanliMessageId: "hanli-answer-free", hanliContent: "你更关心判断是否有证据，而不是增加流程。", createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:01.000Z",
+      decision: { title: "基于证据理解用户", type: "自由讨论", switchTopic: false, userIntent: "使用整理后的资料精准判断目标", tags: ["韩立", "语义记忆"], summary: "用户要求韩立以派生语义证据提高判断精度。" },
+    });
+    assert.deepEqual(conversation.messages.map((message) => message.role), ["user", "hanli"]);
+    assert.deepEqual(conversation.messages[0].attachmentIds, ["shot-1"]);
+    assert.equal(fixture.repository.tableCount("AiDesktopPersonaConversationMessage"), 2);
+    const corpus = memory.searchTrainingCorpusTopics("语义记忆");
+    assert.equal(corpus[0].source, "hanli");
+    assert.ok(corpus[0].messages.some((message) => message.content === "请先结合整理后的资料判断我真正关心什么。"));
+  } finally { fixture.close(); }
+});
+
+test("人物内部消息只保留业务记录且不生成或领取语义资料", () => {
+  const fixture = createFixture("persona-internal-conversation");
+  try {
+    const memory = new CollaborationMemoryService(fixture.database);
+    memory.syncConversation({
+      conversationId: "persona-internal-conversation",
+      messages: [{ messageId: "nangong-internal", role: "nangong", content: "韩立，这是人物内部状态同步。", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z" }],
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1, "内部消息仍可作为业务记录查询");
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
+    assert.deepEqual(memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 10), []);
+    const internal = memory.appendHanliInternalMessage({ conversationId: "hanli-thread-internal", messageId: "internal-round-1-question", role: "hanli", content: "南宫婉，请核对当前范围。", createdAt: "2026-09-02T00:00:01.000Z" });
+    const answered = memory.appendHanliInternalMessage({ conversationId: "hanli-thread-internal", messageId: "internal-round-1-answer", role: "nangong", content: "当前范围只涉及 AI Desktop。", replyToMessageId: "internal-round-1-question", createdAt: "2026-09-02T00:00:02.000Z" });
+    assert.deepEqual(internal.messages.map((message) => message.role), ["hanli"]);
+    assert.deepEqual(answered.messages.map((message) => message.role), ["hanli", "nangong"]);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0, "内部问答不得生成训练主题");
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0, "内部问答不得生成训练消息");
+  } finally { fixture.close(); }
 });
 
 test("一键清空只删除运行投影并保留数据库版本与人物训练语料", () => {
@@ -513,6 +553,8 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
     assert.equal(fixture.repository.tableCount("AiDesktopEvolutionDeliberation"), 1);
     assert.equal(fixture.repository.tableCount("AiDesktopEvolutionSourceSnapshot"), 1);
     assert.equal(fixture.repository.tableCount("AiDesktopEvolutionArchiveRecord"), 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0, "韩立内部审议不生成训练主题");
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0, "韩立内部审议不生成训练消息");
     const collaboration = collaborationState(now);
     collaboration.tasks[0].evolutionProposalId = "proposal-1";
     fixture.repository.syncCollaborationState(collaboration);

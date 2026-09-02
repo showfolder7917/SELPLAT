@@ -19,7 +19,7 @@
     "build:renderer": "npm run build:renderer:developer",
     "build:developer": "npm run typecheck && npm run build:electron && npm run build:renderer:developer",
     "build": "npm run build:developer",
-    "test": "npm run build:electron && node scripts/run-owned-tests.mjs",
+    "test": "npm run build:electron && node scripts/run-with-dependencies.mjs node scripts/run-owned-tests.mjs",
     "start": "npm run start:developer",
     "start:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/start-developer-desktop.mjs",
     "dist:win": "npm run dist:win:developer",

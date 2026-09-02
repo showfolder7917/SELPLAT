@@ -13,7 +13,7 @@ import type { WorkspaceStateOutDto } from "../../support/platform/workspace/inde
 export interface EvolutionSourceMessageSnapshotOutDto {
   snapshotId: string;
   deliberationId: string;
-  source: "nangong" | "codex";
+  source: "hanli" | "nangong" | "codex";
   conversationId: string;
   sourceMessageId: string;
   sequenceNumber: number;

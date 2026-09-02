@@ -51,7 +51,7 @@ export class ManagedTaskExecutor {
     const response = await request.runTurn(this.#managedPrompt(request.message, "execution.conversation"), request.emit, "conversation-managed");
     emitManaged(request, "conversation", "completed", 1, 1, "已经整理好你的完整意图");
     emitManaged(request, "completed", "completed", 1, 1, "确认无误后可以继续调查和分析");
-    return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后进入需求托管"], restartRequired: false, changedFiles: [], successfulCommands: [] };
+    return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后自动分析方案"], restartRequired: false, changedFiles: [], successfulCommands: [] };
   }
 
   async #runRequirementAnalysis(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -59,7 +59,7 @@ export class ManagedTaskExecutor {
     const response = await request.runTurn(this.#managedPrompt(request.message, "execution.requirement-analysis"), request.emit, "requirement-managed");
     emitManaged(request, "requirement-analysis", "completed", 1, 1, "原因和修正方案已经整理完成");
     emitManaged(request, "completed", "completed", 1, 1, "确认方案后可以开始修改");
-    return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后进入任务托管"], restartRequired: false, changedFiles: [], successfulCommands: [] };
+    return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后执行修改"], restartRequired: false, changedFiles: [], successfulCommands: [] };
   }
 
   async #runTask(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -121,7 +121,7 @@ export class ManagedTaskExecutor {
         return {
           ...response,
           managedStatus: "code-verified",
-          pendingActions: ["按需单独执行测试托管：构建、构建后测试和必要重启"],
+          pendingActions: ["按需验证结果：构建、构建后测试和必要重启"],
           restartRequired: false,
           changedFiles: [...evidence.changedFiles],
           successfulCommands: evidence.successfulCommands(),
@@ -161,7 +161,7 @@ export class ManagedTaskExecutor {
         return {
           ...response,
           managedStatus: "code-verified",
-          pendingActions: ["按需单独执行测试托管：构建、构建后测试和必要重启"],
+          pendingActions: ["按需验证结果：构建、构建后测试和必要重启"],
           restartRequired: false,
           changedFiles: [...evidence.changedFiles],
           successfulCommands: evidence.successfulCommands(),

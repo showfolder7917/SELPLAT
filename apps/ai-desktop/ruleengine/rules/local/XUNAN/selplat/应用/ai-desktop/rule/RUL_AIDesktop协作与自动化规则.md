@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.122.0
+rule_version = 5.125.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -33,6 +33,8 @@ collaboration_execution_repair_and_test_contract = execution_failure_dispatches_
 linghu_persona_responsibility_contract = fault_investigation_repair_unified_test_and_failed_retest_only + no_regular_distribution_review + nangong_plans_distribution + deterministic_program_conflict_validation
 <!-- 固定人物会话必须通过人物级唯一 writer 队列；等待是可观察的排队事实，不得记为任务失败，释放后沿原任务断点自动继续。 -->
 persona_session_single_writer_contract = one_writer_per_persona + fifo_waiting_without_renderer_block + queued_acquired_released_audit_events + waiting_is_not_failure + release_on_completion_error_and_dispose + resume_original_task_checkpoint
+<!-- 用户在韩立会话确认后，韩立与南宫婉逐轮内部问答；成熟即接入现有完整演化，持续开关开启时完成后继续发现下一问题且无新问题时保持监测。 -->
+hanli_nangong_continuous_deliberation_contract = hanli_conversation_maturity_invitation + standalone_1_starts_user_anchored_read_only_deliberation + hanli_single_question_to_nangong_answer_to_hanli_assessment + insufficient_evidence_continues_next_question + mature_goal_scope_evidence_and_acceptance_establishes_topic + existing_proposal_approval_distribution_execution_test_acceptance_flow + continuous_switch_restarts_discovery_after_completion + no_new_evidence_waits_and_rechecks_without_inventing_problem + pause_stop_handover_and_real_block_recovery_preserved
 <!-- 统一测试失败不能只把同一结果重新排队；结构化 verification 失败由令狐在原任务范围内修复并形成新结果。重试前必须核对源码、构建产物与实际运行主进程的修复版本；运行编排器尚未加载修复时禁止继续创建候选批次，必须转入可恢复的自身引导升级，只有缺少外部权限或真实业务选择才等待人工。 -->
 collaboration_unified_test_repair_contract = task_state_and_structured_failure_kind_before_free_text_classification + test_failed_or_verification_never_business_due_to_quoted_rule_text + in_flight_verification_failure_directly_schedules_linghu_repair_independent_from_proactive_automation_switch + per_task_idempotent_repair_lock + linghu_repairs_original_task_worktree_with_failure_evidence + code_validation_then_new_resultSHA + pre_retry_source_bundle_and_loaded_process_provenance_check + runtime_missing_repair_sha_blocks_new_candidate_generation + active_orchestrator_fix_enters_persisted_bootstrap_upgrade_checkpoint + no_same_fault_retry_before_runtime_matches_repair_sha + verified_restart_resumes_original_task_checkpoint + same_fault_max_three_repair_attempts + external_permission_or_genuine_business_choice_only_waits_for_human
 <!-- 任务详细默认折叠，折叠标题中的发起人来自任务冻结快照，禁止展示层按任务类型猜测姓名。 -->
@@ -115,12 +117,12 @@ collaboration_task_worktree_validation_owner = ai_desktop_main_process + validat
 collaboration_task_test_cache_and_artifact_scope = shared_private_npm_and_playwright_dependency_cache + lockfile_identical_node_modules_temporary_reuse + per_task_worktree_execution + per_task_temp_interaction_task_id + remove_dependency_link_before_commit + serialized_local_interaction_port
 <!-- 隔离 Playwright 使用确定性测试画面，不得借此申请真实屏幕录制；真实屏幕只能由稳定签名的 AI Desktop 能力验证。 -->
 isolated_playwright_permission_boundary = no_harness_command_approval + no_macos_screen_recording_requirement + localhost_only + stable_ai_desktop_identity_for_separate_real_screen_validation
-<!-- 会话托管只理解和复述意图，需求托管只读调查并给出方案；两阶段必须强制只读沙箱并拒绝文件修改及命令提权。 -->
+<!-- 自动策略的意图理解和方案分析阶段强制只读，拒绝文件修改及命令提权。 -->
 managed_analysis_stage_write_guard_contract = conversation_intent_only + requirement_read_only_investigation_and_plan + force_read_only_sandbox + decline_file_change_and_privileged_command
-<!-- 每次确认只推进一个阶段；独立 1 和配置短语与按钮等价，关键词不得替代授权，任务阶段必须观察到真实源码变更。 -->
+<!-- 程序按当前结果自动选择下一策略；每次用户确认只授权一个边界，关键词不得替代授权，修改阶段必须观察到真实源码变更。 -->
 managed_stage_advance_authorization_contract = conversation_to_requirement_to_task_to_test + one_confirmation_one_stage + standalone_1_or_matching_phrase_equivalent + no_keyword_inferred_authorization + task_requires_observed_source_change
-<!-- 最新托管回复右下角必须显示与当前阶段匹配的图标文字动作。 -->
-managed_stage_action_button_contract = latest_managed_response_lower_right_icon_and_text
+<!-- 最新结果右下角显示与下一动作匹配的图标文字，不显示旧托管模式名。 -->
+managed_stage_action_button_contract = latest_result_lower_right_next_action_icon_and_text + no_managed_mode_name
 <!-- 会话、需求和任务阶段动作分别使用确认意图、执行方案和测试。 -->
 managed_stage_action_button_contract.2 = confirm_intent_execute_plan_test_actions
 <!-- 最新回复运行期间动作保持可见但必须禁用，完成后才启用。 -->
@@ -129,19 +131,15 @@ managed_stage_action_button_contract.3 = latest_action_visible_disabled_while_ru
 managed_stage_action_button_contract.4 = historical_clicked_action_highlighted_but_not_actionable
 <!-- 独立 1 或完全匹配的配置短语才与按钮等价，包含关键词的长句不构成授权。 -->
 managed_stage_action_button_contract.5 = standalone_1_or_exact_configured_phrase_only
-<!-- 从需求、任务或测试阶段可以通过最新回复右下角显式返回会话托管。 -->
-managed_stage_return_button_contract = latest_response_can_return_to_conversation_managed
-<!-- 任务阶段已经到达时，最新回复右下角必须显示返回任务托管入口。 -->
-managed_stage_return_button_contract.2 = task_or_test_response_can_return_to_task_managed
-<!-- 返回按钮只更新本地执行模式，禁止仅因点击返回就发起 Harness 回合。 -->
-managed_stage_return_button_contract.3 = switch_local_execution_mode_without_new_harness_turn
-<!-- 当前已选模式对应的返回按钮必须禁用。 -->
-managed_stage_return_button_contract.4 = selected_mode_return_button_disabled
-<!-- 历史回复中的返回入口不得切换当前执行模式。 -->
-managed_stage_return_button_contract.5 = historical_response_return_buttons_not_actionable
+<!-- 四个旧托管模式退役为内部兼容策略；页面不再展示模式名称、切换和返回入口，程序只按事实与用户确认自动推进。 -->
+managed_stage_return_button_contract = retired_no_return_button
+managed_stage_return_button_contract.2 = internal_compatibility_strategy_only
+managed_stage_return_button_contract.3 = no_user_selectable_mode
+managed_stage_return_button_contract.4 = automatic_strategy_resolves_read_only_write_and_validation_boundary
+managed_stage_return_button_contract.5 = historical_response_cannot_switch_strategy
 <!-- 默认协作模式必须显式启用官方实验性 requestUserInput 能力。 -->
 harness_user_input_confirmation_contract = default_mode_experimental_request_user_input_enabled
-<!-- 会话托管每次只询问一个最高优先级疑问。 -->
+<!-- 意图理解策略每次只询问一个最高优先级疑问。 -->
 harness_user_input_confirmation_contract.2 = one_highest_priority_question_per_request
 <!-- 每个问题独立显示互斥选项、其他输入和紧邻的确认动作。 -->
 harness_user_input_confirmation_contract.3 = one_question_one_choice_group_other_input_and_adjacent_confirm
@@ -211,3 +209,5 @@ collaboration_topic_timeline_projection_contract.18 = node_turn_item_stream_iden
 collaboration_topic_timeline_projection_contract.19 = recovering_transition_appends_one_task_interrupted_fact_only + repeated_startup_while_recovering_preserves_checkpoint_without_new_event + legacy_same_task_same_recovery_segment_projects_latest_node_only_after_producer_fix + latest_waiting_recovery_header_one_high_contrast_continue_action + continue_uses_typed_workflow_API + visible_busy_focus_and_failure_feedback + no_duplicate_continue_buttons
 <!-- 禁止用定时器伪造步骤或把原始推理正文暴露到渲染层。 -->
 harness_streaming_safety_contract = no_fake_progress + no_raw_reasoning_text + renderer_receives_filtered_turn_scoped_events
+<!-- 连续自动开关只能由用户暂停、停止或转人工；轮数和纠偏上限可以形成阻塞等待，但不得自行关闭开关。 -->
+hanli_nangong_continuous_deliberation_contract = user_stop_pause_or_handover_only + never_self_disable_on_round_or_correction_limit + keep_blocked_checkpoint_and_monitor + discover_only_user_evidence_backed_new_problem

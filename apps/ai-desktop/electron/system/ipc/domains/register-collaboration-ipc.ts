@@ -5,7 +5,7 @@ import type {
   QueryEvolutionWorkbenchInDto,
   SaveEvolutionWorkbenchPreferenceInDto,
 } from "../../../../contracts/services/evolution/index.js";
-import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto, SendHanliConversationMessageInDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type {
   ConvertNangongConversationToTopicInDto,
   CreateNangongProposalInDto,
@@ -62,7 +62,9 @@ export function registerCollaborationIpc(
   handle("desktop:query-evolution-workbench", (_event, request: QueryEvolutionWorkbenchInDto) => evolution.queryWorkbench(request));
   handle("desktop:get-evolution-workbench-preference", (_event, perspective: "nangong" | "hanli", nodeId: string) => evolution.getWorkbenchPreference(perspective, nodeId));
   handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceInDto) => evolution.saveWorkbenchPreference(request));
-  handle("desktop:advance-han-li-deliberation", () => hanli.advanceDeliberation());
+  handle("desktop:get-han-li-conversation", () => hanli.conversation());
+  handle("desktop:send-han-li-conversation-message", (_event, request: SendHanliConversationMessageInDto) => hanli.sendConversationMessage(request));
+  handle("desktop:new-han-li-conversation", () => hanli.newConversation());
   handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageInDto) => nangong.sendConversationMessage(request));
   handle("desktop:new-nangong-conversation", () => nangong.newConversation());
   handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftInDto) => nangong.generateTopicDraft(request));

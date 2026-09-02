@@ -318,7 +318,17 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
 
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.locator(".dev-tab").getByText("韩立", { exact: true })).toBeVisible();
-  await expect(page.locator(".selconversation-composer")).toBeVisible();
+  const hanliConversation = page.locator(".hanli-person-chat");
+  await expect(hanliConversation.getByText("和韩立讨论客户真正需要什么", { exact: true })).toBeVisible();
+  const hanliComposer = page.locator(".hanli-person-composer");
+  await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("结合整理后的资料，告诉我现在最关键的目标。");
+  await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
+  await expect(hanliConversation.getByText("我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("若确认由韩立与南宫婉开始内部研讨，请回复 1。", { exact: true })).toBeVisible();
+  await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("1");
+  await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
+  await expect(hanliConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("验收时需确认内部一问一答可见，且不写入用户语义资料。", { exact: true })).toBeVisible();
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
@@ -1014,7 +1024,7 @@ test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", as
   await expect(composer.locator(".dispatch-queue-item")).toHaveCount(0);
 });
 
-test("最新阶段按钮在回复运行中保持可见禁用并在完成后启用", async () => {
+test("最新自动策略动作在运行中禁用并且不再显示旧模式返回入口", async () => {
   await page.getByRole("button", { name: "就是这意思" }).click();
   const execute = page.getByRole("button", { name: "按这个方案执行" });
   await expect(execute).toBeVisible();
@@ -1033,14 +1043,10 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
   await execute.click();
 
   const latestManagedCard = page.locator('.selconversation-message[data-role="assistant"]').last();
-  const returnConversation = latestManagedCard.getByRole("button", { name: "回到会话托管" });
-  const returnTask = latestManagedCard.getByRole("button", { name: "回到任务托管" });
   const testAction = latestManagedCard.getByRole("button", { name: "测试一下" });
-  await expect(returnConversation).toBeVisible();
-  await expect(returnTask).toBeVisible();
   await expect(testAction).toBeVisible();
-  await expect(returnConversation).toBeDisabled();
-  await expect(returnTask).toBeDisabled();
+  await expect(latestManagedCard.getByRole("button", { name: "回到会话托管" })).toHaveCount(0);
+  await expect(latestManagedCard.getByRole("button", { name: "回到任务托管" })).toHaveCount(0);
 
   await panel.getByRole("radio", { name: /原对话框/ }).click();
   await panel.getByRole("button", { name: "确认" }).click();
@@ -1048,16 +1054,8 @@ test("最新阶段按钮在回复运行中保持可见禁用并在完成后启�
   await panel.getByRole("radio", { name: /不追加提示/ }).click();
   await panel.getByRole("button", { name: "确认" }).click();
 
-  await expect(returnConversation).toBeEnabled();
-  await expect(returnTask).toBeDisabled();
   await expect(testAction).toBeEnabled();
-  await returnConversation.click();
-  await expect(page.locator(".execution-mode-badge")).toHaveText("会话托管");
-  await expect(returnConversation).toBeDisabled();
-  await expect(returnTask).toBeEnabled();
-  await returnTask.click();
-  await expect(page.locator(".execution-mode-badge")).toHaveText("任务托管");
-  await expect(returnTask).toBeDisabled();
+  await expect(page.locator(".execution-mode-badge")).toHaveText("执行修改");
 });
 
 test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清空", async () => {

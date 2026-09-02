@@ -56,6 +56,7 @@ import type {
   ManagedExecutionModeValue,
   EvolutionStateOutDto,
   EvolutionStateEventOutDto,
+  HanliConversationOutDto,
   ModelServiceTierValue,
   ReasoningEffortValue,
   SandboxModeValue,
@@ -93,6 +94,7 @@ import { DeveloperExplorer } from "./layout/DeveloperExplorer";
 import { DeveloperWorkspace } from "./layout/DeveloperWorkspace";
 import { RuleManagementFeature } from "../../features/rules/components/RuleManagementFeature";
 import { NangongConversationWorkspace } from "../../features/nangong/components/NangongConversationWorkspace";
+import { HanliConversationWorkspace } from "../../features/hanli/components/HanliConversationWorkspace";
 import { SelUiDialog, useSelUi } from "../../theme/SelUiProvider";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
@@ -181,7 +183,8 @@ export function DeveloperApplication() {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [nangongAttachments, setNangongAttachments] = useState<ComposerAttachment[]>([]);
-  const screenshotDestinationRef = useRef<"main" | "nangong">("main");
+  const [hanliAttachments, setHanliAttachments] = useState<ComposerAttachment[]>([]);
+  const screenshotDestinationRef = useRef<"main" | "nangong" | "hanli">("main");
   const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [screenshotMode, setScreenshotMode] = useState<"current" | "hidden" | null>(null);
   const [screenshotError, setScreenshotError] = useState("");
@@ -195,6 +198,7 @@ export function DeveloperApplication() {
   const [collaborationTimeline, setCollaborationTimeline] = useState<CollaborationTimelineSnapshotOutDto | null>(null);
   const [linghuAutomationState, setLinghuAutomationState] = useState<LinghuAutomationStateOutDto | null>(null);
   const [evolutionState, setEvolutionState] = useState<EvolutionStateOutDto | null>(null);
+  const [hanliConversation, setHanliConversation] = useState<HanliConversationOutDto>({ conversationId: null, messages: [], updatedAt: new Date(0).toISOString() });
   const [collaborationStreams, setCollaborationStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationTimelineStreams, setCollaborationTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [collaborationPanel, setCollaborationPanel] = useState<"member" | "execution-list" | "task-group" | "task-detail">("member");
@@ -207,6 +211,8 @@ export function DeveloperApplication() {
   const [dispatchError, setDispatchError] = useState("");
   const [nangongNewConversationBusy, setNangongNewConversationBusy] = useState(false);
   const [nangongError, setNangongError] = useState("");
+  const [hanliNewConversationBusy, setHanliNewConversationBusy] = useState(false);
+  const [hanliError, setHanliError] = useState("");
   const [automaticTestEnabled, setAutomaticTestEnabled] = useState(false);
   const [automaticTestChecking, setAutomaticTestChecking] = useState(false);
   const [automaticTestDialog, setAutomaticTestDialog] = useState<AutomaticTestPreflightResultOutDto | null>(null);
@@ -354,6 +360,7 @@ export function DeveloperApplication() {
     refreshTimeline();
     void desktop.getLinghuAutomationState().then((state) => { linghuAutomationStateRef.current = state; setLinghuAutomationState(state); });
     void desktop.getEvolutionState().then(setEvolutionState);
+    void desktop.getHanliConversation().then(setHanliConversation).catch((error) => setHanliError(readableDesktopError(error, "无法读取韩立会话。")));
     const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEventOutDto) => { collaborationStateRef.current = event.state; setCollaborationState(event.state); });
     const removeTimelineListener = desktop.onCollaborationTimelineChanged(() => refreshTimeline());
     const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => { linghuAutomationStateRef.current = event.state; setLinghuAutomationState(event.state); });
@@ -440,7 +447,7 @@ export function DeveloperApplication() {
     if (!desktop) return;
     return desktop.onScreenshotCompleted(({ attachment, dataUrl, hasAnnotations }) => {
       // 独立截图窗口完成后把签发附件放回输入框；只有真实画过红色标注才追加定向调查提示。
-      const setDestinationAttachments = screenshotDestinationRef.current === "nangong" ? setNangongAttachments : setAttachments;
+      const setDestinationAttachments = screenshotDestinationRef.current === "nangong" ? setNangongAttachments : screenshotDestinationRef.current === "hanli" ? setHanliAttachments : setAttachments;
       setDestinationAttachments((current) => current.some((item) => item.id === attachment.id) || current.length >= 5 ? current : [...current, { ...attachment, dataUrl }]);
       if (hasAnnotations && screenshotDestinationRef.current === "main") setInput((current) => {
         const prompt = "调查图片红色部分是什么问题";
@@ -745,7 +752,7 @@ export function DeveloperApplication() {
         && mode === "task-managed"
         && "managedStatus" in response
         && response.managedStatus === "code-verified") {
-        // 代码级验证完成后只排入一条固定测试托管消息，交给现有串行队列在当前回合收尾后执行。
+        // 代码级验证完成后只排入一条固定结果验证消息，交给现有串行队列在当前回合收尾后执行。
         void enqueueAutomaticTest(completedAssistantId);
       }
     } catch (error) {
@@ -837,6 +844,17 @@ export function DeveloperApplication() {
     }
   };
 
+  const startNewHanliConversation = async () => {
+    if (hanliNewConversationBusy) return;
+    setHanliNewConversationBusy(true); setHanliError("");
+    try {
+      const conversation = await window.desktop?.newHanliConversation();
+      if (!conversation) throw new Error("韩立新建对话服务没有返回结果。");
+      setHanliConversation(conversation); setHanliAttachments([]);
+    } catch (error) { setHanliError(readableDesktopError(error, "无法重新建立韩立对话。")); }
+    finally { setHanliNewConversationBusy(false); }
+  };
+
   const setOperatingMode = async (mode: "single-conversation" | "collaboration") => {
     const state = await window.desktop?.setDesktopOperatingMode(mode);
     if (state) {
@@ -907,7 +925,7 @@ export function DeveloperApplication() {
       title: (latestUser?.text || message.text).slice(0, 80),
       problemStatement: latestUser?.text || message.text,
       confirmedIntent: message.text,
-      constraints: ["协同执行停在任务托管代码验证，不自动进入测试托管"],
+      constraints: ["协同执行停在代码级验证，不自动进入构建与应用验证"],
       acceptanceCriteria: [],
       sourceMessageIds: messages.map((item) => item.id),
       attachmentIds,
@@ -949,9 +967,9 @@ export function DeveloperApplication() {
     }
   };
 
-  const startScreenshot = async (hideOwnerWindow = false, destination: "main" | "nangong" = "main") => {
+  const startScreenshot = async (hideOwnerWindow = false, destination: "main" | "nangong" | "hanli" = "main") => {
     if (screenshotBusy) return;
-    const destinationAttachments = destination === "nangong" ? nangongAttachments : attachments;
+    const destinationAttachments = destination === "nangong" ? nangongAttachments : destination === "hanli" ? hanliAttachments : attachments;
     if (destinationAttachments.length >= 5) {
       setScreenshotError("最多可以同时发送 5 张截图。");
       return;
@@ -1045,9 +1063,9 @@ export function DeveloperApplication() {
     }
   };
 
-  const pasteClipboardImages = async (files: File[], destination: "main" | "nangong" = "main") => {
+  const pasteClipboardImages = async (files: File[], destination: "main" | "nangong" | "hanli" = "main") => {
     if (screenshotBusy || files.length === 0) return;
-    const destinationAttachments = destination === "nangong" ? nangongAttachments : attachments;
+    const destinationAttachments = destination === "nangong" ? nangongAttachments : destination === "hanli" ? hanliAttachments : attachments;
     if (destinationAttachments.length + files.length > 5) {
       setScreenshotError("最多可以同时发送 5 张图片。");
       return;
@@ -1063,7 +1081,7 @@ export function DeveloperApplication() {
         if (!saved) throw new Error("AI Desktop clipboard image service is unavailable.");
         savedAttachments.push({ ...saved, dataUrl });
       }
-      (destination === "nangong" ? setNangongAttachments : setAttachments)((current) => [...current, ...savedAttachments]);
+      (destination === "nangong" ? setNangongAttachments : destination === "hanli" ? setHanliAttachments : setAttachments)((current) => [...current, ...savedAttachments]);
       const info = await window.desktop?.getTempDirectoryInfo();
       if (info) setTempInfo(info);
     } catch (error) {
@@ -1221,7 +1239,8 @@ export function DeveloperApplication() {
       || collaborationState?.members.find((member) => member.memberId === selectedCollaborationTask.initiator?.memberId)
       || selectedCollaborationMember
     : null;
-  const showHanLiConversationWorkspace = !collaborationMode || (collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li");
+  const showMainConversationWorkspace = !collaborationMode;
+  const showHanLiConversationWorkspace = Boolean(collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li");
   const showNangongConversationWorkspace = Boolean(collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "nangong-wan" && evolutionState);
   const evolutionWorkspacePerspective = collaborationMode && collaborationPanel === "member" && selectedCollaborationMember?.memberId === "han-li"
     ? "hanli"
@@ -1344,10 +1363,10 @@ export function DeveloperApplication() {
     />}
 
     <DeveloperWorkspace>
-      <div className={`dev-tab${evolutionWorkspacePerspective ? " with-workspace-action" : ""}`}><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{evolutionWorkspacePerspective && <button type="button" className="open-evolution-workspace" onClick={() => { setEvolutionWorkspaceOpenError(""); void window.desktop?.openEvolutionWorkspace(defaultEvolutionWorkspaceLocation(evolutionWorkspacePerspective)).catch((error) => setEvolutionWorkspaceOpenError(readableDesktopError(error, "无法打开专题演化工作台。"))); }}>{locale === "ja" ? "専門進化ワークベンチ" : "打开专题演化工作台"}</button>}{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={text.newCodexSession} data-sel-tooltip-mode="always" aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={nangongNewConversationLabel} data-sel-tooltip-mode="always" aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
+      <div className={`dev-tab${evolutionWorkspacePerspective ? " with-workspace-action" : ""}`}><Prompt24Regular /><span>{collaborationMode ? collaborationTabTitle : "Codex Chat"}</span>{evolutionWorkspacePerspective && <button type="button" className="open-evolution-workspace" onClick={() => { setEvolutionWorkspaceOpenError(""); void window.desktop?.openEvolutionWorkspace(defaultEvolutionWorkspaceLocation(evolutionWorkspacePerspective)).catch((error) => setEvolutionWorkspaceOpenError(readableDesktopError(error, "无法打开专题演化工作台。"))); }}>{locale === "ja" ? "専門進化ワークベンチ" : "打开专题演化工作台"}</button>}{showMainConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={text.newCodexSession} data-sel-tooltip-mode="always" aria-label={text.newCodexSession} onClick={() => void startNewTask()}><ArrowClockwise24Regular /></button>}{showHanLiConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip="重新建立韩立对话" data-sel-tooltip-mode="always" aria-label="重新建立韩立对话" disabled={hanliNewConversationBusy} onClick={() => void startNewHanliConversation()}><ArrowClockwise24Regular className={hanliNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}{showNangongConversationWorkspace && <button type="button" className="tab-new-task" data-sel-tooltip={nangongNewConversationLabel} data-sel-tooltip-mode="always" aria-label={nangongNewConversationLabel} disabled={nangongNewConversationBusy} onClick={() => void startNewNangongConversation()}><ArrowClockwise24Regular className={nangongNewConversationBusy ? "screenshot-spinner" : undefined} /></button>}<Dismiss20Regular /></div>
       {evolutionWorkspaceOpenError && <div className="evolution-window-error" role="alert">{evolutionWorkspaceOpenError} 当前数据没有被修改，请检查工作台位置参数后重试。</div>}
       {aiMemoryDatabaseStatus && aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${aiMemoryDatabaseStatus.state}`} role="alert"><strong>{locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
-      {showHanLiConversationWorkspace ? <section ref={chatRef} className="selconversation-timeline">
+      {showMainConversationWorkspace ? <section ref={chatRef} className="selconversation-timeline">
         {messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1><p>{codexStatus.account.authenticated ? text.ready : text.signedOut}</p>{!codexStatus.account.authenticated && <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{!codexStatus.account.authenticated && loginHint && <em className="dev-login-hint">{loginHint}</em>}</div>}
         {messages.map((message) => {
           const messageTask = message.collaborationTaskId
@@ -1355,7 +1374,9 @@ export function DeveloperApplication() {
             : null;
           return <article key={message.id} className="selconversation-message" data-role={message.role} data-streaming={message.streaming || undefined}><header>{message.role === "user" ? `YOU${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "CODEX"}</header><div className="selconversation-message-body">{message.attachments?.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : null}{message.text && (message.role === "assistant" ? <MarkdownMessage text={message.text} /> : <div className="message-text">{message.text}</div>)}{message.role === "assistant" && <StreamDetails message={message} locale={locale} />}{message.role === "assistant" && messageTask && <CollaborationStatusChain task={messageTask} locale={locale} onRetry={async (taskId) => { const state = await window.desktop?.continueCollaborationTask(taskId); if (state) setCollaborationState(state); }} />}{message.role === "assistant" && message.id === activeAssistantIdRef.current && userInputRequest && <CodexUserInputPanel request={userInputRequest} answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds} locale={locale} submitting={userInputSubmitting} onChoose={(questionId, value) => { setCustomAnswerIds((current) => { const next = new Set(current); next.delete(questionId); return next; }); setUserInputAnswers((current) => ({ ...current, [questionId]: value })); }} onChooseCustom={(questionId) => { setCustomAnswerIds((current) => new Set(current).add(questionId)); setUserInputAnswers((current) => ({ ...current, [questionId]: "" })); }} onCustomChange={(questionId, value) => setUserInputAnswers((current) => ({ ...current, [questionId]: value }))} onConfirm={(questionId) => void submitUserInput(questionId)} />}{message.role === "assistant" && !message.streamError && (message.actionTriggered || message.id === latestManagedAssistantId) && <ManagedStageAction message={message} locale={locale} actionable={message.id === latestManagedAssistantId} activeMode={executionMode} onReturn={setExecutionMode} onAdvance={(mode, label) => collaborationMode && message.managedMode === "conversation-managed" ? void submitConfirmedCollaborationTask(message).catch((error) => setDispatchError(readableDesktopError(error, "无法提交协同任务。"))) : void send({ message: "1", displayText: label, mode, sourceMessageId: message.id })} />}</div></article>;
         })}
-      </section> : showNangongConversationWorkspace && evolutionState
+      </section> : showHanLiConversationWorkspace
+        ? <HanliConversationWorkspace key={hanliConversation.conversationId || "new-hanli-conversation"} conversation={hanliConversation} attachments={hanliAttachments} workspaces={workspaces} locale={locale} newConversationBusy={hanliNewConversationBusy} error={hanliError} onConversation={setHanliConversation} onAttachments={setHanliAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "hanli")} onPaste={(files) => void pasteClipboardImages(files, "hanli")} onError={setHanliError} />
+        : showNangongConversationWorkspace && evolutionState
         ? <NangongConversationWorkspace key={evolutionState.conversation.conversationId} state={evolutionState} attachments={nangongAttachments} workspaces={workspaces} locale={locale} newConversationBusy={nangongNewConversationBusy} error={nangongError} onState={setEvolutionState} onAttachments={setNangongAttachments} onScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setNangongError} />
         : collaborationPanel === "task-group"
         ? <TaskCollaborationGroup snapshot={collaborationTimeline} liveTextByNodeId={Object.fromEntries(Object.entries(collaborationTimelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={async (taskId) => { const state = await window.desktop?.continueCollaborationTask(taskId); if (state) setCollaborationState(state); }} />
@@ -1364,7 +1385,7 @@ export function DeveloperApplication() {
         : collaborationPanel === "task-detail" && selectedCollaborationTask && selectedCollaborationTaskMember
           ? <CollaborationTaskDetail task={selectedCollaborationTask} member={selectedCollaborationTaskMember} liveOutput={collaborationStreams[selectedCollaborationTask.taskId] || null} automation={linghuAutomationState} locale={locale} onBack={() => { setSelectedCollaborationTaskId(null); setCollaborationPanel(terminalCollaborationStates.has(selectedCollaborationTask.state) ? "execution-list" : "member"); }} />
           : <CollaborationMemberPage member={selectedCollaborationMember} tasks={selectedMemberTasks} streams={collaborationStreams} locale={locale} linghuAutomation={linghuAutomationState} nangongEvolution={evolutionState} nangongAttachments={nangongAttachments} workspaces={workspaces} onLinghuState={setLinghuAutomationState} onNangongState={setEvolutionState} onNangongAttachments={setNangongAttachments} onNangongScreenshot={(hidden) => void startScreenshot(hidden, "nangong")} onNangongPaste={(files) => void pasteClipboardImages(files, "nangong")} onError={setDispatchError} onRename={(member) => void renameCollaborationMember(member)} onDelete={(member) => void deleteCollaborationMember(member)} onContinue={(taskId) => void window.desktop?.continueCollaborationTask(taskId)} onCancel={(taskId) => void window.desktop?.cancelCollaborationTask(taskId)} onOpen={(taskId) => { setSelectedCollaborationTaskId(taskId); setCollaborationPanel("task-detail"); }} />}
-      {showHanLiConversationWorkspace && <SelUiConversation id="selConversationHanLiId" onSubmit={() => void send()} timeline={null} composer={<form className="selconversation-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
+      {showMainConversationWorkspace && <SelUiConversation id="selConversationHanLiId" onSubmit={() => void send()} timeline={null} composer={<form className="selconversation-composer" onSubmit={(event: FormEvent) => { event.preventDefault(); void send(); }}>
         {attachments.length > 0 && <div className="composer-attachments">{attachments.map((attachment) => <figure key={attachment.id}><img src={attachment.dataUrl} alt={attachment.name} /><figcaption>{text.attachment}</figcaption><button type="button" title={text.remove} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}><Dismiss20Regular /></button></figure>)}</div>}
         {dispatchState.activeTask?.status === "recoverable" && <div className="dispatch-recovery" role="status"><span>发现上次未完成的任务</span><div><button type="button" onClick={() => void recoverConversationTask()}>继续执行</button><button type="button" onClick={() => void discardConversationRecovery()}>放弃任务</button></div></div>}
         {dispatchState.activeTask?.status === "running" && !loading && <div className="dispatch-background" role="status">任务正在后台执行，完成后将继续处理等待队列。</div>}

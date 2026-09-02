@@ -34,7 +34,7 @@ test("截图编辑器使用可编辑红框并只在选中状态显示完成取�
   assert.doesNotMatch(screenshotEditor, /disabled=\{saving\} onClick=\{onCancel\}/);
   assert.match(screenshotEditor, /className="screenshot-actions">[\s\S]*returnToSelection/);
   assert.match(developerApp, /if \(hasAnnotations && screenshotDestinationRef\.current === "main"\) setInput/);
-  assert.match(developerApp, /screenshotDestinationRef\.current === "nangong" \? setNangongAttachments : setAttachments/);
+  assert.match(developerApp, /screenshotDestinationRef\.current === "nangong" \? setNangongAttachments : screenshotDestinationRef\.current === "hanli" \? setHanliAttachments : setAttachments/);
   assert.match(developerApp, /composerRef\.current\?\.focus\(\)/);
   assert.match(ipc, /hasAnnotations: request\.hasAnnotations === true/);
 });

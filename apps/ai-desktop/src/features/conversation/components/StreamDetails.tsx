@@ -3,10 +3,10 @@ import type { Message } from "../model/chat-message";
 
 export function managedModeLabel(mode: ManagedExecutionModeValue, locale: LocaleValue): string {
   const labelsByMode: Record<ManagedExecutionModeValue, { ja: string; "zh-CN": string }> = {
-    "conversation-managed": { ja: "会話管理", "zh-CN": "会话托管" },
-    "requirement-managed": { ja: "要件管理", "zh-CN": "需求托管" },
-    "task-managed": { ja: "タスク管理", "zh-CN": "任务托管" },
-    "test-managed": { ja: "テスト管理", "zh-CN": "测试托管" },
+    "conversation-managed": { ja: "意図を確認", "zh-CN": "理解意图" },
+    "requirement-managed": { ja: "案を整理", "zh-CN": "分析方案" },
+    "task-managed": { ja: "変更を実行", "zh-CN": "执行修改" },
+    "test-managed": { ja: "結果を検証", "zh-CN": "验证结果" },
   };
   return labelsByMode[mode][locale];
 }

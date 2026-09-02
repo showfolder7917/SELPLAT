@@ -11,6 +11,7 @@ import type { CodexStreamEventOutDto } from "../../../../contracts/services/supp
 import type { CollaborationWorkflowFacade } from "../index.js";
 import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
 import { EvolutionFlowOrchestrator } from "./evolution-flow.orchestrator.js";
+import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../personas/hanli/index.js";
 import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../personas/nangong/index.js";
 import {
@@ -35,6 +36,12 @@ export interface PersonaEvolutionRuntimeOptions {
   recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;
   recordTimelineStream?: (taskId: string, memberId: string, event: CodexStreamEventOutDto) => void;
   memory?: CollaborationMemoryPort | null;
+  refreshSemanticMemory?: () => void;
+  askHanliDeliberation?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
+  askNangongDeliberation?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
+  readStableUserId?: () => string;
+  readProjectScope?: (state: EvolutionStateOutDto) => string;
+  readHanliConversationId?: () => string | null;
   readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
   queryWorkbench?: (request: QueryEvolutionWorkbenchInDto) => EvolutionWorkbenchPageOutDto;
   getWorkbenchPreference?: (perspective: "nangong" | "hanli", nodeId: string) => EvolutionWorkbenchPreferenceOutDto | null;
@@ -65,10 +72,12 @@ export class PersonaEvolutionRuntime {
   readonly #getWorkbenchPreference: PersonaEvolutionRuntimeOptions["getWorkbenchPreference"];
   readonly #saveWorkbenchPreference: PersonaEvolutionRuntimeOptions["saveWorkbenchPreference"];
   readonly #mutations: EvolutionMutationPort;
+  readonly #deliberation: HanliNangongDeliberationService | null;
   readonly nangongRuntime: NangongRuntime;
   // 流程判断器只根据已保存事实决定下一步，不替人物作审批决定。
   readonly #flow = new EvolutionFlowOrchestrator();
   #timer: ReturnType<typeof setInterval> | null = null;
+  #continuationTimer: ReturnType<typeof setTimeout> | null = null;
   #running = false;
   #oneShotAcceptanceRunner: ((plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>) | null = null;
 
@@ -98,6 +107,16 @@ export class PersonaEvolutionRuntime {
     this.#saveWorkbenchPreference = options.saveWorkbenchPreference;
     // 所有专题写动作共用同一个幂等和互斥协调器。
     this.#mutations = createEvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation });
+    this.#deliberation = options.askHanliDeliberation && options.askNangongDeliberation
+      ? new HanliNangongDeliberationService({
+        store: this.#store, prompts: options.prompts, memory: this.#memory,
+        askHanli: options.askHanliDeliberation, askNangong: options.askNangongDeliberation,
+        recordEvent: this.#recordEvent,
+        readStableUserId: options.readStableUserId || (() => ""),
+        readProjectScope: options.readProjectScope || (() => "global"),
+        readHanliConversationId: options.readHanliConversationId || (() => null),
+      })
+      : null;
     // 南宫人物在自己的模块内装配业务服务；Workflow 只提供跨人物推进和成员查询端口。
     const taskDistribution = createNangongTaskDistribution({
       store: this.#store,
@@ -115,6 +134,7 @@ export class PersonaEvolutionRuntime {
       mutations: this.#mutations,
       conversation: options.conversation,
       memory: this.#memory,
+      refreshSemanticMemory: options.refreshSemanticMemory,
       investigateRevision: options.investigateRevision,
       recordEvent: this.#recordEvent,
       recordFailure: this.#recordFailure,
@@ -167,7 +187,12 @@ export class PersonaEvolutionRuntime {
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
 
   /** 停止自动检查；已持久化的专题和恢复点不会被清除。 */
-  stop(): void { if (this.#timer) clearInterval(this.#timer); this.#timer = null; }
+  stop(): void {
+    if (this.#timer) clearInterval(this.#timer);
+    if (this.#continuationTimer) clearTimeout(this.#continuationTimer);
+    this.#timer = null;
+    this.#continuationTimer = null;
+  }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
   setOneShotAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>): void { this.#oneShotAcceptanceRunner = runner; }
   /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
@@ -175,11 +200,37 @@ export class PersonaEvolutionRuntime {
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto { return this.#store.createTopic(request); }
   /** 独立开关一个自动化环节，其他审批或执行开关保持原值。 */
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto { return this.#store.setAutomation(kind, enabled); }
+  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto {
+    const state = this.#store.setAutomation(kind, enabled);
+    if (kind === "evolution" && enabled) this.#scheduleContinuation(0);
+    return state;
+  }
   /** 保存轮询间隔、最大轮数等受控参数，不立即推进业务状态。 */
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto { return this.#store.configureAutomation(request); }
   /** 启动、暂停、恢复或停止自动流程，并保留可恢复的当前卡点。 */
-  controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto { return this.#store.controlAutomation(action); }
+  controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto {
+    const state = this.#store.controlAutomation(action);
+    if (action === "start" || action === "resume") this.#scheduleContinuation(0);
+    return state;
+  }
+
+  /** 用户在韩立会话输入 1 后建立单轮完整流程；长期自动开关决定完成后是否继续发现下一问题。 */
+  startHanliNangongDeliberation(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"]): EvolutionStateOutDto {
+    if (!this.#deliberation) throw new Error("韩立与南宫婉内部研讨能力尚未接入。");
+    let state = this.#store.beginOneShotRun(workspaceState, locale);
+    state = this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "正在围绕用户已确认需求向南宫婉提出第一项调查问题", null, null);
+    this.#recordEvent("hanli.nangong.deliberation_confirmed", { runId: state.oneShotRun?.runId || null, continuous: state.automaticEvolutionEnabled });
+    this.#scheduleContinuation(0);
+    return state;
+  }
+
+  #scheduleContinuation(delayMs = 1_000): void {
+    if (this.#continuationTimer) return;
+    this.#continuationTimer = setTimeout(() => {
+      this.#continuationTimer = null;
+      void this.#tick();
+    }, delayMs);
+  }
   /** 只有任务与人物运行事实互相吻合时，才允许旧 running 状态阻止新的用户确认。 */
   #oneShotHasLiveOwner(state: EvolutionStateOutDto): boolean {
     const run = state.oneShotRun;
@@ -349,7 +400,9 @@ export class PersonaEvolutionRuntime {
 
       if (flowAction === "complete" || topic.status === "completed") {
         state = this.#store.finishOneShotRun();
-        return this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”已通过韩立审批、任务执行、令狐统一测试和韩立真实界面验收，全部记录已归档到专题工作台。`, []);
+        state = this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”已通过韩立审批、任务执行、令狐统一测试和韩立真实界面验收，全部记录已归档到专题工作台。`, []);
+        if (state.automaticEvolutionEnabled) this.#scheduleContinuation(1_000);
+        return state;
       }
       return state;
     }
@@ -401,15 +454,50 @@ export class PersonaEvolutionRuntime {
         if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
       }
       if (state.oneShotRun?.status === "running") {
+        if (!state.oneShotRun.topicId) {
+          if (!this.#deliberation) {
+            this.#blockOneShotFailure("technical", "advance_hanli_nangong_deliberation", new Error("人物内部研讨能力尚未接入。"), "人物内部研讨能力尚未接入。");
+            return;
+          }
+          const hasCurrentRunDeliberation = state.deliberations.some((item) => Date.parse(item.createdAt) >= Date.parse(state.oneShotRun!.startedAt));
+          const result = await this.#deliberation.advance({ requireProblem: true, forceNew: !hasCurrentRunDeliberation });
+          state = result.state;
+          const established = [...state.deliberations].reverse().find((item) => item.status === "established" && item.topicId);
+          if (!established?.topicId) {
+            this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "正在判断南宫婉回答；条件不足时继续提出下一问", null, null);
+            this.#scheduleContinuation(1_000);
+            return;
+          }
+          state = this.#store.updateOneShotRun("forming-proposal", "nangong-wan", "南宫婉", "内部研讨条件已满足，正在把结论整理为实施提案", established.topicId, null);
+        }
         await this.#advanceOneShot();
         return;
       }
-      // 一个专题完成后重新进入韩立读库与发问流程；禁止复制旧专题标题伪造下一专题。
+      // 自动化只推进已经由人物对话确认的专题；韩立旧式后台发问流程已经退役。
       for (const proposal of this.#flow.automaticApprovalQueue(state)) state = this.#hanli.autoApprove(proposal.proposalId);
       for (const proposal of this.#flow.automaticDistributionQueue(state)) state = await this.#dispatch(proposal.proposalId);
       if (!state.automaticEvolutionEnabled) return;
-      const hasOpenTopicFlow = state.topics.some((item) => !["completed", "rejected"].includes(item.status));
-      if (!hasOpenTopicFlow) state = await this.#hanli.advanceDeliberation();
+      const hasActiveWork = state.proposals.some((item) => !["completed", "rejected"].includes(item.status))
+        || state.topics.some((item) => !["completed", "rejected"].includes(item.status));
+      const activeDeliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
+      if (this.#deliberation && (activeDeliberation || !hasActiveWork)) {
+        const result = await this.#deliberation.advance({ requireProblem: false });
+        state = result.state;
+        if (result.activity !== "idle") {
+          state = this.#store.beginOneShotRun(state.automationContext.workspaceState!, state.automationContext.locale);
+          const established = [...state.deliberations].reverse().find((item) => item.status === "established" && item.topicId);
+          state = this.#store.updateOneShotRun(
+            established?.topicId ? "forming-proposal" : "preparing-topic",
+            established?.topicId ? "nangong-wan" : "han-li",
+            established?.topicId ? "南宫婉" : "韩立",
+            established?.topicId ? "内部研讨条件已满足，正在形成实施提案" : "正在判断南宫婉回答并继续内部研讨",
+            established?.topicId || null,
+            null,
+          );
+          this.#scheduleContinuation(1_000);
+          return;
+        }
+      }
       const topic = state.topics.find((item) => ["registered", "investigating"].includes(item.status));
       if (!topic || state.proposals.some((item) => item.topicId === topic.topicId && item.status === "pending-approval")) return;
       const content = `课题：${topic.title}\n\n目标：${topic.goal}\n\n调查事实：\n${topic.evidence.map((item) => `- ${item}`).join("\n")}\n\n推荐方向：在已登记范围内实施，并保持排除项不变。`;
