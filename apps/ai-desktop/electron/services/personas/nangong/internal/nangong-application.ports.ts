@@ -4,6 +4,7 @@ import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../.
 import type { SendNangongConversationMessageInDto } from "../../../../../contracts/services/personas/nangong/index.js";
 import type { EventCenterExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
+import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
 
 /** 南宫向韩立申请提案审查的唯一跨人物端口；审批事实仍由韩立模块写入。 */
 export interface NangongProposalReviewPort {
@@ -30,6 +31,7 @@ export interface NangongTaskDistributionPort {
 /** 南宫 Runtime 的完整装配参数；共享事实与跨模块动作均通过显式 Port 注入。 */
 export interface NangongApplicationServiceOptions {
   store: EvolutionStatePort;
+  prompts: PromptLibraryPort;
   mutations: EvolutionMutationPort;
   conversation: {
     send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageOutDto>;

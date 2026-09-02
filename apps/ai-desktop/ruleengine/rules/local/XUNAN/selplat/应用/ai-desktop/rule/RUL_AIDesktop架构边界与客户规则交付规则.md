@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.6.0 在 Renderer 所有权基础上同步固定测试所有者目录、递归完整发现与发布分层。 -->
-rule_version = 2.6.0
+<!-- 2.7.0 增加统一提示词库、阶段描述元数据、构建交付和运行时权限边界。 -->
+rule_version = 2.7.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -115,7 +115,16 @@ effective_rule_consumption_contract = inject_into_Codex_developer_instructions +
 <!-- 客户运行优先使用 TypeScript 加载预编译 bundle，不要求额外安装 Python。 -->
 customer_runtime_language_contract = TypeScript_precompiled_bundle_loader + no_required_external_Python_runtime
 
+<!-- 应用提示词统一从一个清单进入，正文按人物、执行流程和支撑能力分目录；每条必须登记稳定 ID、名称、描述、所有者、工作流、阶段、触发条件、版本、变量和组合依赖。 -->
+application_prompt_library_contract = one_apps_ai_desktop_prompts_manifest + business_grouped_Markdown + stable_id_name_description_owner_workflow_stage_stageName_trigger_version_variables_and_includes + no_single_giant_prompt_file
+<!-- 业务服务只能通过公共 PromptLibraryFacade 按逻辑 ID 渲染；禁止组合根、人物服务或执行器自行读取 Markdown、扫描目录猜测提示词或保留第二份内联正文。 -->
+application_prompt_runtime_contract = PromptLibraryFacade_single_entry + business_service_uses_logical_id_and_structured_variables + no_direct_Markdown_read + no_directory_guess + no_duplicate_inline_prompt_authority
+<!-- 提示词构建必须校验 ID、路径、变量、include 环和内容哈希；开发态读取 build/ai-desktop/prompt-bundle，安装态读取 resources/prompts。 -->
+application_prompt_bundle_contract = build_time_id_path_variable_include_cycle_and_hash_validation + development_build_ai_desktop_prompt_bundle + packaged_resources_prompts + builtin_read_only
+<!-- 修改提示词只允许改变 AI 表达与业务判断；文件、沙箱、命令、审批、状态机、解析和持久化权限继续由程序门禁决定。 -->
+application_prompt_permission_boundary = editable_AI_behavior_only + filesystem_sandbox_command_approval_workflow_parser_and_persistence_remain_program_owned + prompt_never_grants_permission
+
 <!-- 打包验收必须检查真实产物中规则存在、禁止内容不存在，并在脱离源码根的环境中加载成功。 -->
 package_acceptance_contract = inspect_real_artifact + required_rule_files_present + forbidden_internal_content_absent + start_and_load_without_SELPLAT_source_root
 <!-- 结构和规则交付变更必须登记 contracts、模块边界、bundle、覆盖、Codex 注入和真实打包回归。 -->
-test_registration_contract = contracts_layout + dependency_direction + bundle_build + overlay_validation + Codex_instruction_injection + real_package_content_and_isolated_startup
+test_registration_contract = contracts_layout + dependency_direction + rule_and_prompt_bundle_build + prompt_metadata_variable_include_and_hash_validation + overlay_validation + Codex_instruction_injection + real_package_content_and_isolated_startup

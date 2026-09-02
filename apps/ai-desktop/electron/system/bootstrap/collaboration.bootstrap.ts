@@ -25,7 +25,7 @@ type CoordinatorOptions = ConstructorParameters<typeof CollaborationWorkflowFaca
 
 export interface CollaborationBootstrapOptions {
   startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha">;
-  capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings">;
+  capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts">;
   linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
   releaseVersion: string;
   readRuleInstructions(): string;
@@ -38,7 +38,7 @@ export interface CollaborationBootstrapOptions {
 /** 装配多人协作、隔离工作树、测试资源和集成发布能力。 */
 export function createCollaborationContext(options: CollaborationBootstrapOptions) {
   const { projectRoot, applicationName, projectPaths, workspaces, eventCenter } = options.startup;
-  const { collaborationRoot, codexHome, trustedCommands, screenshots, settings } = options.capabilities;
+  const { collaborationRoot, codexHome, trustedCommands, screenshots, settings, prompts } = options.capabilities;
   const collaborationStore = createCollaborationState(path.join(collaborationRoot, "collaboration-state.json"));
   const collaborationDurations = createCollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
@@ -74,6 +74,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     readSettings: () => settings.read(),
     readRuleInstructions: options.readRuleInstructions,
     readWorkspaceState: () => workspaces.read(),
+    prompts,
     personaSessionStore: (memberId) => memberId === "linghu-ancestor" ? options.linghuSessions : null,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
   });

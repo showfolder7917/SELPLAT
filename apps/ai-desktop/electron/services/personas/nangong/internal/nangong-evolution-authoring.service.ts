@@ -6,15 +6,16 @@ import type {
 } from "../../../../../contracts/services/personas/nangong/index.js";
 import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
-import { hasMaterialRevisionEvidence, parseRevisionInvestigation, revisionInvestigationPrompt } from "./nangong-revision.investigator.js";
+import { hasMaterialRevisionEvidence, parseRevisionInvestigation } from "./nangong-revision.investigator.js";
 
 type NangongEvolutionAuthoringServiceOptions = Pick<NangongApplicationServiceOptions,
-  "store" | "mutations" | "investigateRevision" | "recordEvent" | "recordFailure" | "proposalReview" | "memberDirectory" | "oneShotWorkflow">;
+  "store" | "prompts" | "mutations" | "investigateRevision" | "recordEvent" | "recordFailure" | "proposalReview" | "memberDirectory" | "oneShotWorkflow">;
 
 /** 处理南宫对共同 Evolution 专题和提案的作者动作，不拥有审批结论或流程轮转。 */
 export class NangongEvolutionAuthoringService {
   readonly #store: NangongEvolutionAuthoringServiceOptions["store"];
   readonly #mutations: NangongEvolutionAuthoringServiceOptions["mutations"];
+  readonly #prompts: NangongEvolutionAuthoringServiceOptions["prompts"];
   readonly #investigateRevision: NonNullable<NangongEvolutionAuthoringServiceOptions["investigateRevision"]>;
   readonly #recordEvent: NangongEvolutionAuthoringServiceOptions["recordEvent"];
   readonly #recordFailure: NonNullable<NangongEvolutionAuthoringServiceOptions["recordFailure"]>;
@@ -26,6 +27,7 @@ export class NangongEvolutionAuthoringService {
   constructor(options: NangongEvolutionAuthoringServiceOptions) {
     this.#store = options.store;
     this.#mutations = options.mutations;
+    this.#prompts = options.prompts;
     this.#investigateRevision = options.investigateRevision || (async () => { throw new Error("南宫婉返修调查能力尚未接入。"); });
     this.#recordEvent = options.recordEvent;
     this.#recordFailure = options.recordFailure || (() => undefined);
@@ -65,7 +67,12 @@ export class NangongEvolutionAuthoringService {
     const feedback = proposal.approvals.at(-1);
     const topic = state.topics.find((item) => item.topicId === proposal.topicId);
     if (!feedback?.advice.trim() || !topic) throw new Error("返修调查缺少课题或明确审批意见。");
-    const response = await this.#investigateRevision(revisionInvestigationPrompt(topic, proposal, feedback.advice, feedback.feedbackTarget, feedback.capabilityScope), topic.workspaceState, topic.locale);
+    const response = await this.#investigateRevision(this.#prompts.render("nangong.revision-investigation", {
+      feedbackTarget: `${feedback.feedbackTarget}${feedback.capabilityScope ? `；能力范围：${feedback.capabilityScope}` : ""}`,
+      approvalAdvice: feedback.advice,
+      topicJson: JSON.stringify({ title: topic.title, goal: topic.goal, scope: topic.scope, exclusions: topic.exclusions, evidence: topic.evidence, acceptanceCriteria: topic.acceptanceCriteria }),
+      proposalJson: JSON.stringify({ version: proposal.version, content: proposal.content, evidence: proposal.evidence, impactScope: proposal.impactScope, exclusions: proposal.exclusions, risks: proposal.risks, rollbackPlan: proposal.rollbackPlan, acceptanceCriteria: proposal.acceptanceCriteria }),
+    }), topic.workspaceState, topic.locale);
     const investigation = parseRevisionInvestigation(response);
     if (!hasMaterialRevisionEvidence(proposal, investigation, feedback.advice)) {
       const reason = `南宫婉只读调查没有产生可核验的新事实，未创建提案 v${proposal.version + 1}；请补充实际组件、状态或复现证据后从当前卡点继续。`;

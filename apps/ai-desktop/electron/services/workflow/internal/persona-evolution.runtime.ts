@@ -9,6 +9,7 @@ import type { EventCenterExceptionInDto } from "../../../../contracts/services/s
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
 import type { CodexStreamEventOutDto } from "../../../../contracts/services/support/platform/codex/index.js";
 import type { CollaborationWorkflowFacade } from "../index.js";
+import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
 import { EvolutionFlowOrchestrator } from "./evolution-flow.orchestrator.js";
 import type { HanliWorkflowPort } from "../../personas/hanli/index.js";
 import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../personas/nangong/index.js";
@@ -20,6 +21,7 @@ import {
 
 export interface PersonaEvolutionRuntimeOptions {
   store: EvolutionStatePort;
+  prompts: PromptLibraryPort;
   collaboration: CollaborationWorkflowFacade;
   hanli: HanliWorkflowPort;
   conversation: {
@@ -105,9 +107,11 @@ export class PersonaEvolutionRuntime {
       timeline: options.recordTimelineEvent,
       timelineStream: options.recordTimelineStream,
       plan: this.#planDistribution,
+      prompts: options.prompts,
     });
     this.nangongRuntime = createNangongRuntime({
       store: this.#store,
+      prompts: options.prompts,
       mutations: this.#mutations,
       conversation: options.conversation,
       memory: this.#memory,

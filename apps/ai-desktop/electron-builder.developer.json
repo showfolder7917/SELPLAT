@@ -12,7 +12,8 @@
     "!node_modules/@selplat/node-common-core/{src,tests}/**/*"
   ],
   "extraResources": [
-    { "from": "../../build/ai-desktop/rule-bundle", "to": "ruleengine", "filter": ["manifest.json", "rules.json"] }
+    { "from": "../../build/ai-desktop/rule-bundle", "to": "ruleengine", "filter": ["manifest.json", "rules.json"] },
+    { "from": "../../build/ai-desktop/prompt-bundle", "to": "prompts", "filter": ["manifest.json", "prompts.json"] }
   ],
   "asarUnpack": ["node_modules/@openai/codex/**/*", "node_modules/@openai/codex-*/**/*"],
   "win": { "target": "nsis", "artifactName": "AI-Desktop-${version}-Setup.${ext}" },

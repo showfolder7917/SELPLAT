@@ -8,13 +8,17 @@ import { EvolutionStateStore } from "../../../../../build/ai-desktop/electron/el
 import { EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
 import { HanliRealAppAcceptanceRunner } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.js";
 import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
-import { controlledTestRoot } from "#test-paths";
+import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
+import { controlledTestRoot, projectPaths } from "#test-paths";
+
+const prompts = new PromptLibraryFacade(path.join(projectPaths.buildRoot, "prompt-bundle"));
 
 // 业务回归继续复用既有测试正文；测试适配器把南宫和韩立动作显式转交各自 Facade，生产 Workflow 不保留人物兼容方法。
 class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
   constructor(options) {
     const hanliRuntime = createHanliRuntime({
       store: options.store,
+      prompts,
       memory: options.memory || null,
       askHanli: options.hanLi?.send,
       askNangong: options.nangongDeliberation?.send,
@@ -26,7 +30,7 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
       failMutation: options.failMutation,
       screenshots: {},
     });
-    super({ ...options, hanli: hanliRuntime.facade });
+    super({ ...options, prompts, hanli: hanliRuntime.facade });
     this.hanliRuntime = hanliRuntime;
   }
   sendConversationMessage(...args) { return this.nangongRuntime.facade.sendConversationMessage(...args); }
@@ -49,12 +53,13 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
 
 mkdirSync(controlledTestRoot, { recursive: true });
 const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: "/workspace", permission: "workspace-write" }] };
-const nangongPromptSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+const nangongPromptSource = readFileSync(new URL("../../../prompts/personas/nangong/conversation.md", import.meta.url), "utf8");
+const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../../../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
 const nangongApplicationSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/nangong-application.service.ts", import.meta.url), "utf8");
 const personaEvolutionRuntimeSource = readFileSync(new URL("../../../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");
 const approvalServiceSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/evolution-approval.service.ts", import.meta.url), "utf8");
-const hanliDeliberationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/hanli-deliberation.service.ts", import.meta.url), "utf8");
+const hanliDeliberationSource = readFileSync(new URL("../../../prompts/personas/hanli/proposal-review.md", import.meta.url), "utf8");
 const hanliApplicationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/hanli-application.service.ts", import.meta.url), "utf8");
 const distributionServiceSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/nangong-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
@@ -367,9 +372,9 @@ test("专题工作区缺失时返还执行显示业务错误而不是读取 null
 });
 
 test("生产分发会话显式使用专题工作区且令狐不再参与常规分发审核", () => {
-  assert.match(nangongPromptSource, /planDistribution: async \(prompt, workspaceState, locale, emit\)[\s\S]*nangongDistributionCodex![\s\S]*mergeWorkspaceState\(workspaces\.read\(\), workspaceState\)/);
-  assert.doesNotMatch(nangongPromptSource, /planDistribution: async[^\n]*automationContext\.workspaceState/);
-  assert.doesNotMatch(nangongPromptSource, /linghuDistributionAuditCodex|auditDistribution:/);
+  assert.match(applicationRuntimeSource, /planDistribution: async \(prompt, workspaceState, locale, emit\)[\s\S]*nangongDistributionCodex![\s\S]*mergeWorkspaceState\(workspaces\.read\(\), workspaceState\)/);
+  assert.doesNotMatch(applicationRuntimeSource, /planDistribution: async[^\n]*automationContext\.workspaceState/);
+  assert.doesNotMatch(applicationRuntimeSource, /linghuDistributionAuditCodex|auditDistribution:/);
   assert.match(distributionServiceSource, /validateDistributionPlan/);
   assert.match(distributionServiceSource, /nangong\.distribution_validation\.completed/);
 });

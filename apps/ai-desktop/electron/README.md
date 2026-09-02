@@ -129,7 +129,7 @@ preload 只通过 `contextBridge` 暴露白名单。领域源码在构建时合�
 | `evolution` | 专题、提案、审批、验收和档案共享事实 | 人物提示词、任务调度 |
 | `workflow` | 跨人物顺序、任务状态、恢复和监督 | 人物判断、人物 internal |
 | `support/application` | 协调多个公开领域完成一个应用用例 | 人物判断、SQL 实现、Electron 生命周期 |
-| `support/capabilities` | 会话、事件、执行、测试、发布、规则等复用能力 | 人物专属语义 |
+| `support/capabilities` | 会话、事件、执行、测试、发布、规则、提示词加载等复用能力 | 人物专属语义 |
 | `support/platform` | Codex、数据库、设置、附件、工作区和安全基础设施 | 反向依赖人物或 Workflow |
 
 ### `services/support/application`
@@ -160,7 +160,7 @@ personas/<persona>
 
 ### `services/support/capabilities`
 
-只有被多个独立业务域复用、同时仍带有应用语义的能力才能进入这里。当前包括 conversation、event-center、execution、testing、release 和 rules。
+只有被多个独立业务域复用、同时仍带有应用语义的能力才能进入这里。当前包括 conversation、event-center、execution、testing、release、rules 和 prompts。`prompts` 只从构建后的统一 bundle 按逻辑 ID 渲染；人物提示词正文仍按所有者保存在应用级 `prompts/` 资源根，业务服务不得自行读取 Markdown。
 
 ### `services/support/platform`
 

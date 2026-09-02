@@ -435,14 +435,17 @@ test("Electron entry delegates startup, persistence, collaboration, personas and
   assert.match(source("electron/system/bootstrap/application-runtime.ts"), /registerApplicationIpc/);
 });
 
-test("developer package carries external rule resources", () => {
+test("developer package carries external rule and prompt resources", () => {
   const developerConfig = source("electron-builder.developer.config.cjs");
   const builderManifest = JSON.parse(source("electron-builder.developer.json"));
   assert.match(developerConfig, /electron-builder\.developer\.json/);
   assert.match(developerConfig, /selplatDevelopmentRoot/);
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "ruleengine"));
+  assert.ok(builderManifest.extraResources.some((resource) => resource.to === "prompts"));
   assert.match(source("electron/system/config/app-config.ts"), /userData"\), "workspace"/);
   assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "ruleengine"/);
+  assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "prompts"/);
+  assert.match(source("package.json"), /build:prompts/);
 });
 
 test("核心业务区与 support 支撑区只通过唯一 index 交叉协作且旧路径归零", () => {
@@ -458,6 +461,7 @@ test("核心业务区与 support 支撑区只通过唯一 index 交叉协作且�
     "support/capabilities/testing",
     "support/capabilities/release",
     "support/capabilities/rules",
+    "support/capabilities/prompts",
     "support/platform/codex",
     "support/platform/persistence",
     "support/platform/workspace",
@@ -542,7 +546,8 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(registry, /requireCapability/);
   const personaWorkflow = source("electron/services/workflow/internal/persona-evolution.runtime.ts");
   assert.doesNotMatch(personaWorkflow, /你是韩立|parseHanLiQuestion|parseHanLiJudgment/);
-  assert.match(source("electron/services/personas/hanli/internal/hanli-deliberation.service.ts"), /你是韩立/);
+  assert.match(source("prompts/personas/hanli/first-question.md"), /你是韩立/);
+  assert.doesNotMatch(source("electron/services/personas/hanli/internal/hanli-deliberation.service.ts"), /你是韩立/);
   const hanliApplication = source("electron/services/personas/hanli/internal/hanli-application.service.ts");
   assert.match(hanliApplication, /class HanliApplicationService/);
   assert.match(hanliApplication, /new EvolutionApprovalService/);
@@ -574,7 +579,8 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.service.ts"), /class NangongConversationService/);
   assert.match(source("electron/services/personas/nangong/internal/nangong-evolution-authoring.service.ts"), /class NangongEvolutionAuthoringService/);
   assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.parser.ts"), /parseNangongConversationResponse/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-revision.investigator.ts"), /revisionInvestigationPrompt/);
+  assert.match(source("prompts/personas/nangong/revision-investigation.md"), /韩立已经退回当前提案/);
+  assert.doesNotMatch(source("electron/services/personas/nangong/internal/nangong-revision.investigator.ts"), /你是南宫婉/);
   assert.doesNotMatch(personaWorkflow, /parseConversationResponse|revisionInvestigationPrompt|NANGONG_TOPIC_META/);
   assert.doesNotMatch(personaWorkflow, /recordProposalApplication|resolveEnabledMemberDisplayName|hasLiveOneShotOwner|advanceOneShot:/);
   for (const method of ["sendConversationMessage", "newConversation", "generateTopicDraft", "convertConversationToTopic", "createProposal", "updateTopic", "reviseProposal", "investigateAndReviseReturnedProposal"]) {

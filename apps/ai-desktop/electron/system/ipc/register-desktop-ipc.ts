@@ -40,6 +40,7 @@ import { CommandGovernanceFacade as TrustedCommandStore } from "../../services/s
 import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFacade } from "../../services/support/capabilities/event-center/index.js";
 import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 import { RuleBundleFacade as RuleBundleService } from "../../services/support/capabilities/rules/index.js";
+import type { PromptLibraryPort } from "../../services/support/capabilities/prompts/index.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto;
@@ -66,6 +67,7 @@ interface DesktopIpcDependencies {
   prepareForApplicationExit: () => void;
   rendererRoot: string;
   rules: RuleBundleService;
+  prompts: PromptLibraryPort;
   clearTestData: () => Promise<TestDataResetResultOutDto>;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
@@ -145,11 +147,11 @@ function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocationOut
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
-  const managedExecutor = new ManagedTaskExecutor();
+  const managedExecutor = new ManagedTaskExecutor(prompts);
   let screenCaptureAttemptId = 0;
   let evolutionWorkspaceWindow: BrowserWindow | null = null;
   let evolutionWorkspaceLocation: EvolutionWorkspaceLocationOutDto = { perspective: "nangong", nodeId: null, page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: null };

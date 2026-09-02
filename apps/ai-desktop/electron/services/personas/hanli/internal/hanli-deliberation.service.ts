@@ -4,10 +4,12 @@ import type { CollaborationMemoryPort } from "../../../../../contracts/services/
 import type { EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptanceOperationValue, HanliAcceptancePlanOutDto, HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
+import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
 
 /** 韩立研讨所需的外部能力；南宫回答和韩立判断都由明确人物端口提供。 */
 export interface HanliDeliberationDependencies {
   store: EvolutionStatePort;
+  prompts: PromptLibraryPort;
   memory: CollaborationMemoryPort | null;
   askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
   askNangong(question: string, context: string, state: EvolutionStateOutDto): Promise<string>;
@@ -34,13 +36,9 @@ export class HanliDeliberationService {
       if (!memory) throw new Error("AI Memory 数据库不可用，韩立不能读取对话库。 ");
       const deliberationId = `han-li-deliberation-${randomUUID()}`;
       const snapshots = memory.readHanLiEvolutionCorpus(deliberationId);
-      const first = parseHanliQuestion(await askHanli([
-        "你是韩立，是自动演化专题研讨的发问方和最终确立者。",
-        "请综合下面按完整会话分组保存的南宫婉与 Codex 原始对话。现在不能直接生成专题，也不能替南宫婉拆任务。",
-        "取材优先级：近期 Codex 用户原话与南宫婉会话是主要事实；Codex 最终答复短预览只用于理解执行结果；你自己的既有问答和判断不是主要训练来源。越早期的记录成熟度越低，只用于观察演变，不能覆盖近期明确要求。",
-        "找出最值得进一步问清、又不能仅靠原记录下结论的一个问题。返回 JSON：{\"question\":\"向南宫婉提出的具体问题\",\"reason\":\"为什么必须先问清\"}。",
-        formatEvolutionCorpus(snapshots),
-      ].join("\n\n"), state));
+      const first = parseHanliQuestion(await askHanli(this.dependencies.prompts.render("hanli.first-question", {
+        corpus: formatEvolutionCorpus(snapshots),
+      }), state));
       state = store.beginDeliberation(deliberationId, snapshots, first.question, first.reason);
       deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId)!;
       recordEvent("han-li.evolution.deliberation_started", { deliberationId, sourceMessageCount: snapshots.length, sourceConversationCount: new Set(snapshots.map((item) => `${item.source}:${item.conversationId}`)).size, question: first.question });
@@ -58,14 +56,12 @@ export class HanliDeliberationService {
     if (!answeredRound.assessment) {
       const maximum = state.automationSettings.maxRoundsPerTopic;
       const mustConclude = maximum !== null && answeredRound.roundNumber >= maximum;
-      const judgment = parseHanliJudgment(await askHanli([
-        "你是韩立。请根据对话库证据和本次与南宫婉的逐轮交流判断是否足以确立一个可实施、可验收的演进专项。",
-        "不能按固定分数判断；必须指出事实、未确认内容和本轮回答对方向的影响。",
-        mustConclude ? `当前已到配置的第 ${maximum} 轮。证据足够时确立专题；仍不足时返回继续追问，但必须明确唯一缺口。` : "证据不足就继续追问，不能为了自动化而提前确立专题。",
-        "继续时返回 JSON：{\"decision\":\"continue\",\"assessment\":\"判断\",\"nextQuestion\":\"下一问\",\"questionReason\":\"下一问依据\"}。",
-        "确立时返回 JSON：{\"decision\":\"establish-topic\",\"assessment\":\"判断\",\"topic\":{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"exclusions\":[\"\"],\"evidence\":[\"\"],\"acceptanceCriteria\":[\"\"],\"establishmentReason\":\"\"}}。",
-        formatDeliberationContext(refreshed),
-      ].join("\n\n"), state));
+      const judgment = parseHanliJudgment(await askHanli(this.dependencies.prompts.render("hanli.topic-judgment", {
+        roundConstraint: mustConclude
+          ? `当前已到配置的第 ${maximum} 轮。证据足够时确立专题；仍不足时返回继续追问，但必须明确唯一缺口。`
+          : "证据不足就继续追问，不能为了自动化而提前确立专题。",
+        deliberationContext: formatDeliberationContext(refreshed),
+      }), state));
       if (mustConclude && !judgment.candidate) {
         state = store.blockDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, `韩立完成 ${maximum} 轮研讨后仍确认存在证据缺口：${judgment.nextQuestion?.reason || judgment.assessment}`);
         recordEvent("han-li.evolution.deliberation_blocked", { deliberationId: refreshed.deliberationId, roundId: answeredRound.roundId, roundNumber: answeredRound.roundNumber, assessment: judgment.assessment, missingEvidence: judgment.nextQuestion?.reason || null });
@@ -85,13 +81,9 @@ export class HanliDeliberationService {
   /** 一次性流程仍由韩立形成正式方向判断，Workflow 只能请求判断并使用结果。 */
   async reviewOneShotProposal(proposal: EvolutionProposalOutDto): Promise<{ decision: "approved" | "rejected" | "supplement-required"; advice: string }> {
     const state = this.dependencies.store.state();
-    const response = await this.dependencies.askHanli([
-      "你是韩立，正在执行现有演化方向审批。用户只授权这一轮连续托管，没有授权跳过审批。",
-      "请审查事实证据、影响范围、排除项、风险、回退方案和验收条件。材料足够且方向可执行时通过；缺少事实时退回补充；方向明显不成立时驳回。",
-      "审批意见直接面向普通用户：先用自然语言说明哪里不完整或为什么可以通过，再明确需要补充什么或通过依据。不得把 disabled、aria-disabled、选择器、状态字段等代码术语直接堆在摘要中；确有必要时先解释其业务含义。只能引用提案、专题或源码调查中已经存在的事实，不得自行发明数量上限、页面规则或验收要求。",
-      "仅返回 JSON：{\"decision\":\"approved|supplement-required|rejected\",\"advice\":\"具体审批依据或需要补充的内容\"}。",
-      JSON.stringify({ proposal, topic: state.topics.find((item) => item.topicId === proposal.topicId) }),
-    ].join("\n\n"), state);
+    const response = await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.proposal-review", {
+      proposalContextJson: JSON.stringify({ proposal, topic: state.topics.find((item) => item.topicId === proposal.topicId) }),
+    }), state);
     const value = parseJsonObject(response);
     const decision = value.decision;
     const advice = typeof value.advice === "string" ? value.advice.trim().slice(0, 8_000) : "";
@@ -106,7 +98,11 @@ export class HanliDeliberationService {
     priorFindings: Record<string, unknown>[],
     requestPlan: (prompt: string, workspaceState: typeof topic.workspaceState, locale: typeof topic.locale) => Promise<string>,
   ): Promise<HanliAcceptancePlanOutDto> {
-    const response = await requestPlan(acceptancePlanningPrompt(topic, proposal, priorFindings), topic.workspaceState, topic.locale);
+    const response = await requestPlan(this.dependencies.prompts.render("hanli.acceptance-plan", {
+      topicJson: JSON.stringify({ title: topic.title, goal: topic.goal, scope: topic.scope, exclusions: topic.exclusions, evidence: topic.evidence, acceptanceCriteria: topic.acceptanceCriteria }),
+      proposalJson: JSON.stringify({ title: proposal.title, content: proposal.content, impactScope: proposal.impactScope, risks: proposal.risks, resultSummary: proposal.resultSummary }),
+      priorFindingsJson: JSON.stringify(priorFindings),
+    }), topic.workspaceState, topic.locale);
     return parseAcceptancePlan(response, topic.topicId, proposal.proposalId);
   }
 }
@@ -119,19 +115,6 @@ function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshotOutDto[]
 function latest(messages: EvolutionSourceMessageSnapshotOutDto[]): number { return Math.max(...messages.map((item) => Date.parse(item.originalCreatedAt)).filter(Number.isFinite), 0); }
 function maturity(newest: number, group: number): string { const days = Math.max(0, newest - group) / 86_400_000; return days <= 30 ? "近期高权重" : days <= 180 ? "中期参考" : "早期低权重，仅用于演变追溯"; }
 function formatDeliberationContext(deliberation: HanliEvolutionDeliberationOutDto): string { return [`研讨编号：${deliberation.deliberationId}`, ...deliberation.rounds.map((round) => [`第 ${round.roundNumber} 轮韩立问题：${round.question}`, `发问依据：${round.questionReason}`, round.answer ? `南宫婉原回答：${round.answer}` : "南宫婉尚未回答", round.assessment ? `韩立判断：${round.assessment}` : ""].filter(Boolean).join("\n"))].join("\n\n"); }
-
-function acceptancePlanningPrompt(topic: EvolutionStateOutDto["topics"][number], proposal: EvolutionProposalOutDto, priorFindings: Record<string, unknown>[]): string {
-  return [
-    "你是韩立，负责在令狐门禁完成后制定真实应用界面验收计划。只制定计划，不声称已打开应用或已经通过。",
-    "必须从本次专题事实中理解用户关注点，并主动覆盖容易遗漏的交互细节：入口可达、按钮响应、状态切换、表格分页与滚动、弹窗或侧栏溢出、窗口缩放、键盘操作、加载/空态/错误态、数据写入与刷新一致性。不要机械复制固定清单；只保留与本专题有关的检查，并补充你根据界面影响合理推断的隐含检查。",
-    "每项必须能在真实应用里执行并留下证据，不得用源码、构建成功或测试报告替代操作检查。若项目经验为空，不得编造历史经验。",
-    `专题：${JSON.stringify({ title: topic.title, goal: topic.goal, scope: topic.scope, exclusions: topic.exclusions, evidence: topic.evidence, acceptanceCriteria: topic.acceptanceCriteria })}`,
-    `提案：${JSON.stringify({ title: proposal.title, content: proposal.content, impactScope: proposal.impactScope, risks: proposal.risks, resultSummary: proposal.resultSummary })}`,
-    `已验证项目经验：${JSON.stringify(priorFindings)}`,
-    "operations 只能使用 focus-window、resize-window、click、scroll、press-key、inspect-text、capture；click 禁止删除、清空、提交审批、分发或验收通过等写动作。",
-    "仅返回 JSON：{\"summary\":\"本次验收重点\",\"concerns\":[\"用户关注点\"],\"checks\":[{\"category\":\"类别\",\"target\":\"页面或控件\",\"action\":\"真实操作步骤\",\"expected\":\"可观察预期\",\"evidenceRequired\":\"证据\",\"operations\":[{\"type\":\"capture\",\"label\":\"初始状态\"}]}]}。checks 至少 2 项、最多 30 项。",
-  ].join("\n\n");
-}
 
 function parseAcceptancePlan(text: string, topicId: string, proposalId: string): HanliAcceptancePlanOutDto {
   const value = parseJsonObject(text);

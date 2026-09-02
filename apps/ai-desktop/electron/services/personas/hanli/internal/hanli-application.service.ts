@@ -33,6 +33,7 @@ export class HanliApplicationService implements HanliApplicationPort {
     this.#approvals = new EvolutionApprovalService(this.#store, options.recordTimelineEvent || null);
     this.#deliberation = new HanliDeliberationService({
       store: this.#store,
+      prompts: options.prompts,
       memory: this.#memory,
       askHanli: options.askHanli || (async () => { throw new Error("韩立研讨会话尚未接入。"); }),
       askNangong: options.askNangong || (async () => { throw new Error("南宫婉研讨会话尚未接入。"); }),

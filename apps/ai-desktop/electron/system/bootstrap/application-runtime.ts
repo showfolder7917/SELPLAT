@@ -234,7 +234,7 @@ export async function startApplication(): Promise<void> {
     resourcesPath: process.resourcesPath,
     eventCenter,
   });
-  const { trustedCommands, codexSessions, settings, rules, codexHome, collaborationRoot, screenshots, dispatch } = capabilityContext;
+  const { trustedCommands, codexSessions, settings, rules, prompts, codexHome, collaborationRoot, screenshots, dispatch } = capabilityContext;
   // Codex 开始任务时读取最新有效规则，避免把启动时状态永久缓存。
   const readRuleInstructions = () => rules.renderDeveloperInstructions();
   // AI Desktop 自己的会话只有在数据库可用时才进入训练语料库。
@@ -416,7 +416,7 @@ export async function startApplication(): Promise<void> {
       // 非空断言前先做运行时检查，启动装配异常时给出明确原因。
       if (!corpusSemanticBackfillCodex) throw new Error("Codex 历史语义整理服务尚未就绪。");
       const response = await corpusSemanticBackfillCodex.send(
-        buildCodexSemanticBackfillPrompt(candidates),
+        buildCodexSemanticBackfillPrompt(prompts, candidates),
         "zh-CN",
         "read-only",
         corpusSemanticWorkspace,
@@ -487,14 +487,13 @@ export async function startApplication(): Promise<void> {
   const hanliRuntime = createHanliRuntime({
     // 韩立和南宫只取得只读 Codex 端口，人物模块不能直接访问 Electron 或文件系统。
     store: evolutionStateStore,
+    prompts,
     memory: collaborationMemory,
     askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
-    askNangong: async (question, context, state) => (await nangongDeliberationCodex!.send([
-      "你是南宫婉，正在参加由韩立发起的自动演化专题研讨。韩立是发问方，你只回答他当前提出的问题。",
-      "回答必须区分已知事实、基于记录的判断和仍需调查的内容；不得自行确立专题、拆解任务或开始修改。",
-      `研讨原记录：\n${context}`,
-      `韩立当前问题：\n${question}`,
-    ].join("\n\n"), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
+    askNangong: async (question, context, state) => (await nangongDeliberationCodex!.send(prompts.render("nangong.deliberation-answer", {
+      context,
+      question,
+    }), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
     planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordTimelineEvent: recordEvolutionTimelineEvent,
@@ -506,19 +505,15 @@ export async function startApplication(): Promise<void> {
   // 总运行时组合南宫婉、韩立、共享专题状态和协作任务，是人物演化流程入口。
   personaEvolution = new PersonaEvolutionRuntime({
     store: evolutionStateStore,
+    prompts,
     collaboration,
     hanli: hanliRuntime.facade,
     conversation: {
       // 用户与南宫婉聊天时固定为只读调查；聊天确认不等于工程写入授权。
-      send: async (request, context) => nangongCodex!.send([
-        "你现在以南宫婉的专项演化调查者身份与用户讨论。只读调查和分析，不修改源码、不执行构建、不越过审批。",
-        "语气克制、温和、有判断，不冷硬、不说教，也不故作亲昵。直接回答用户真正关心的内容；不要复述、改写或冒充用户原话，也不要添加固定的意图确认套话。短问题直接短答；复杂问题按内容自然分段，不使用“结论：”“建议：”“1、2、3”这类模板化标题或编号。不要使用“我更希望”“就行”“可以考虑”等没有明确落点的表达。",
-        "需要提出方向时，明确说清现在有什么问题、为什么会造成问题，以及什么做法更合理。把已证实事实、基于事实的推断和仍待验证内容自然写进句子，不把推断或用户陈述说成既定事实，也不要机械套固定栏目。",
-        "这段聊天始终只是调查材料；不得声称已形成正式课题、已提交审批或将开始修改。只有用户在界面明确确认转换后，系统才会冻结对话材料为课题；即使提案获批，也不能替代工程写入授权或命令审批。不得提示用户回复 1 直接修改源码。你必须语义判断事实、范围和验收条件是否足以整理课题；成熟时在正文最后原样显示“若确认启动本轮完整演化，请回复 1。”，由程序登记可恢复的等待确认状态；用户已明确要求修正且对话中已有事实、范围和验收条件时，不要重复停留在只读边界说明。条件不足时说明唯一缺口，不得要求用户发送 1。",
-        "你必须自行判断本轮是否仍在处理当前主题，并在隐藏元数据中用一句清楚的话总结用户这条原话真正要推动的意图。回答正文最后另起一行输出 NANGONG_TOPIC_META={\"title\":\"本轮主题\",\"type\":\"自由判断的类型\",\"switchTopic\":false,\"userIntent\":\"用户意图摘要\",\"tags\":[\"AI理解后给出的标签\"],\"summary\":\"本轮回答核心主旨，最多300字\"}。正文直接回答，userIntent 只供内部检索；主题、类型、标签、意图和摘要必须基于本轮语义判断，不得用关键词规则机械填写。用户明显切换问题中心时 switchTopic 才为 true。该行只供程序登记，正文不得解释它。",
-        `最近对话：\n${context}`,
-        `用户最新消息：\n${request.message}`,
-      ].join("\n\n"), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
+      send: async (request, context) => nangongCodex!.send(prompts.render("nangong.conversation", {
+        recentConversation: context,
+        userMessage: request.message,
+      }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, "conversation-managed"),
       // 新聊天只重置人物 Codex 线程，不删除已经持久化的专题事实。
       newChat: () => nangongCodex!.newChat(),
     },
@@ -680,6 +675,7 @@ export async function startApplication(): Promise<void> {
     rendererRoot,
     // 规则查询、测试数据清理和历史语义补齐等专项能力。
     rules,
+    prompts,
     clearTestData,
     corpusSemanticBackfillStatus: () => corpusSemanticBackfill?.status() || ({
       // 功能未创建时返回完整失败 DTO，Renderer 无需猜测 null 的含义。

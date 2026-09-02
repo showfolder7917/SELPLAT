@@ -21,10 +21,12 @@ import { IntegrationReleaseCoordinatorFacade } from "../../../../../build/ai-des
 import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
 import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-workspace.manager.js";
 import { ManagedTaskExecutor } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/internal/managed-task.executor.js";
+import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { createAtomicJsonPersistence } from "../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/index.js";
-import { controlledTestRoot, projectRoot } from "#test-paths";
+import { controlledTestRoot, projectPaths, projectRoot } from "#test-paths";
 
 const controlledTempRoot = controlledTestRoot;
+const prompts = new PromptLibraryFacade(path.join(projectPaths.buildRoot, "prompt-bundle"));
 mkdirSync(controlledTempRoot, { recursive: true });
 const activeStableUserId = readFileSync(path.join(projectRoot, "AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
@@ -1656,7 +1658,7 @@ test("令狐候选统一测试把外层受控依赖链接传给全部固定脚�
 });
 
 test("协同执行人修改源码后由桌面内部验证分支而不再发起 Codex Playwright 回合", async () => {
-  const executor = new ManagedTaskExecutor();
+  const executor = new ManagedTaskExecutor(prompts);
   let turnCount = 0;
   let desktopValidationCount = 0;
   const events = [];

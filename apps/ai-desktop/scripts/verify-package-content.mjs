@@ -22,6 +22,10 @@ for (const ruleResource of ["manifest.json", "rules.json"]) {
   const rulePath = path.join(resourcesRoot, "ruleengine", ruleResource);
   if (!existsSync(rulePath)) throw new Error(`Packaged production rule resource is missing: ${rulePath}`);
 }
+for (const promptResource of ["manifest.json", "prompts.json"]) {
+  const promptPath = path.join(resourcesRoot, "prompts", promptResource);
+  if (!existsSync(promptPath)) throw new Error(`Packaged prompt resource is missing: ${promptPath}`);
+}
 
 const listing = execFileSync(process.execPath, [require.resolve("@electron/asar/bin/asar.js"), "list", asarPath], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 const entries = listing.split("\n").filter(Boolean);

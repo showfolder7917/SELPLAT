@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { EventCenterFacade } from "../../services/support/capabilities/event-center/index.js";
 import { ConversationFacade } from "../../services/support/capabilities/conversation/index.js";
+import { PromptLibraryFacade } from "../../services/support/capabilities/prompts/index.js";
 import { RuleBundleFacade } from "../../services/support/capabilities/rules/index.js";
 import { AttachmentFacade } from "../../services/support/platform/attachments/index.js";
 import { createFileCodexSessionRepository } from "../../services/support/platform/codex/index.js";
@@ -27,6 +28,10 @@ export function createCapabilityContext(options: CapabilityBootstrapOptions) {
     options.packaged ? path.join(options.resourcesPath, "ruleengine") : path.join(options.buildRoot, "rule-bundle"),
     path.join(options.userDataRoot, "ruleengine", "overrides"),
   );
+  // 内置提示词和规则分别打包；提示词只改变 AI 表达与判断，不能扩大规则或沙箱权限。
+  const prompts = new PromptLibraryFacade(
+    options.packaged ? path.join(options.resourcesPath, "prompts") : path.join(options.buildRoot, "prompt-bundle"),
+  );
   const codexHome = path.join(options.userDataRoot, "codex-home");
   mkdirSync(codexHome, { recursive: true });
   const collaborationRoot = path.join(options.userDataRoot, "collaboration");
@@ -35,5 +40,5 @@ export function createCapabilityContext(options: CapabilityBootstrapOptions) {
     path.join(options.userDataRoot, "conversation-dispatch.json"),
     (type, details, taskId) => options.eventCenter.recordEvent(type, details, taskId),
   );
-  return { trustedCommands, codexSessions, settings, rules, codexHome, collaborationRoot, screenshots, dispatch };
+  return { trustedCommands, codexSessions, settings, rules, prompts, codexHome, collaborationRoot, screenshots, dispatch };
 }

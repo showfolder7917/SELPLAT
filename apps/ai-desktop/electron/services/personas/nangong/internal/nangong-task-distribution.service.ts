@@ -5,6 +5,7 @@ import type { CodexStreamEventOutDto } from "../../../../../contracts/services/s
 import type { EvolutionDistributionPlanOutDto, EvolutionDistributionUnitOutDto, EvolutionDistributionValidationOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { CollaborationWorkflowFacade } from "../../../workflow/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
+import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 
@@ -13,6 +14,7 @@ export interface NangongTaskDistributionServiceOptions {
   mutations: EvolutionMutationPort;
   collaboration: CollaborationWorkflowFacade;
   plan(prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEventOutDto) => void): Promise<string>;
+  prompts: PromptLibraryPort;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   timeline?: (event: CollaborationTimelineBusinessEventOutDto) => void;
   timelineStream?: (taskId: string, memberId: string, event: CodexStreamEventOutDto) => void;
@@ -51,7 +53,15 @@ export class NangongTaskDistributionService {
         let planned: PlanResult;
         try {
           planned = parseDistributionPlan(await this.options.plan(
-            distributionPlanningPrompt(proposal, topic, feedback),
+            this.options.prompts.render("nangong.distribution-plan", {
+              topicTitle: topic.title,
+              topicGoal: topic.goal,
+              proposalContent: proposal.content,
+              impactScope: proposal.impactScope.join("；"),
+              acceptanceCriteria: proposal.acceptanceCriteria.join("；"),
+              exclusions: proposal.exclusions.join("；") || "无",
+              feedback: feedback ? `程序上一轮核对到的确定性冲突：${feedback}` : "这是首次拆分。",
+            }),
             topic.workspaceState,
             topic.locale,
             (event) => this.options.timelineStream?.(planningTaskId, proposal.submitterMemberId, event),
@@ -156,20 +166,6 @@ export class NangongTaskDistributionService {
       },
     });
   }
-}
-
-function distributionPlanningPrompt(proposal: EvolutionProposalOutDto, topic: EvolutionStateOutDto["topics"][number], feedback: string): string {
-  return [
-    "你是南宫婉，负责在真实工程中调查后形成最小、可独立合并的执行任务。现在只读调查，不修改源码。",
-    "影响范围只是调查边界，不等于任务数量。预计修改文件重叠或必须一起验收的内容必须合并。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。",
-    "请读取工作区相关实现并返回 JSON：{\"summary\":\"任务数量理由\",\"units\":[{\"title\":\"任务标题\",\"scope\":\"完整职责边界\",\"acceptanceCriteria\":[\"独立验收条件\"],\"expectedFiles\":[\"工程相对路径\"],\"independentReason\":\"可独立执行或不拆分的理由\"}]}。不要返回 Markdown。",
-    `课题：${topic.title}\n目标：${topic.goal}`,
-    `提案：${proposal.content}`,
-    `影响范围：${proposal.impactScope.join("；")}`,
-    `验收条件：${proposal.acceptanceCriteria.join("；")}`,
-    `排除范围：${proposal.exclusions.join("；") || "无"}`,
-    feedback ? `程序上一轮核对到的确定性冲突：${feedback}` : "这是首次拆分。",
-  ].join("\n\n");
 }
 
 function parseDistributionPlan(text: string): PlanResult {

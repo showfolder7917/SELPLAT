@@ -7,12 +7,13 @@ import type { NangongApplicationServiceOptions } from "./nangong-application.por
 import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nangong-conversation.parser.js";
 
 type NangongConversationServiceOptions = Pick<NangongApplicationServiceOptions,
-  "store" | "conversation" | "memory" | "recordEvent" | "recordFailure" | "oneShotWorkflow" | "newConversationRetryDelaysMs">;
+  "store" | "prompts" | "conversation" | "memory" | "recordEvent" | "recordFailure" | "oneShotWorkflow" | "newConversationRetryDelaysMs">;
 
 /** 处理南宫人物会话、草稿判断和用户一次性确认，不实现后续跨人物状态机。 */
 export class NangongConversationService {
   readonly #store: NangongConversationServiceOptions["store"];
   readonly #conversation: NangongConversationServiceOptions["conversation"];
+  readonly #prompts: NangongConversationServiceOptions["prompts"];
   readonly #memory: NonNullable<NangongConversationServiceOptions["memory"]> | null;
   readonly #recordEvent: NangongConversationServiceOptions["recordEvent"];
   readonly #recordFailure: NonNullable<NangongConversationServiceOptions["recordFailure"]>;
@@ -23,6 +24,7 @@ export class NangongConversationService {
   constructor(options: NangongConversationServiceOptions) {
     this.#store = options.store;
     this.#conversation = options.conversation;
+    this.#prompts = options.prompts;
     this.#memory = options.memory || null;
     this.#recordEvent = options.recordEvent;
     this.#recordFailure = options.recordFailure || (() => undefined);
@@ -88,7 +90,7 @@ export class NangongConversationService {
     const context = this.#memory?.buildNangongContext(this.#store.state().conversation)
       || messages.map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     const response = await this.#conversation.send({
-      message: "请根据上述对话生成课题草稿。仅返回 JSON：{\"title\":\"\",\"goal\":\"\",\"scope\":[\"\"],\"evidence\":[\"\"],\"acceptanceCriteria\":[\"\"]}。事实证据必须说明来自用户陈述或南宫婉调查，不要把推断写成已证实事实；每个数组至少一项。",
+      message: this.#prompts.render("nangong.topic-draft"),
       workspaceState: request.workspaceState,
       locale: request.locale,
     }, context);

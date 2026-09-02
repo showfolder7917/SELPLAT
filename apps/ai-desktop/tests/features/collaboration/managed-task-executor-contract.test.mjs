@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const executor = readFileSync(new URL("../../../electron/services/support/capabilities/execution/internal/managed-task.executor.ts", import.meta.url), "utf8");
+const executionPrompts = [
+  "conversation.md",
+  "requirement-analysis.md",
+  "task.md",
+  "task-repair.md",
+  "code-validation.md",
+  "build-validation.md",
+].map((file) => readFileSync(new URL(`../../../prompts/execution/${file}`, import.meta.url), "utf8")).join("\n");
 const codexService = readFileSync(new URL("../../../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");
 const codexStreamMapper = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-stream-event.mapper.ts", import.meta.url), "utf8");
 const codexRuntime = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-runtime.resolver.ts", import.meta.url), "utf8");
@@ -41,35 +49,35 @@ test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /codeValidationGate/);
   assert.match(executor, /任务要求修改源码，但未观察到文件变更/);
   assert.doesNotMatch(executor, /likelySourceChangeRequest/);
-  assert.match(executor, /必须产生可追踪的源码变更/);
-  assert.match(executor, /目标应用根为 cwd/);
-  assert.match(executor, /node scripts\/run-with-dependencies\.mjs node/);
-  assert.match(executor, /禁止用裸 node 直接导入该包/);
-  assert.match(executor, /不能为解析路径越过构建禁令/);
+  assert.match(executionPrompts, /必须产生可追踪的源码变更/);
+  assert.match(executionPrompts, /目标应用根为 cwd/);
+  assert.match(executionPrompts, /node scripts\/run-with-dependencies\.mjs node/);
+  assert.match(executionPrompts, /禁止用裸 node 直接导入该包/);
+  assert.match(executionPrompts, /不能为解析路径越过构建禁令/);
   assert.match(executor, /this\.#lastChange = this\.#sequence/);
   assert.match(executor, /diff-updated 是当前工作树的完整路径快照/);
   assert.match(executor, /isManagedValidationArtifact/);
   assert.match(executor, /if \(sourceFiles\.length > 0\) this\.#lastChange = this\.#sequence/);
-  assert.match(executor, /执行日志\\\/\(\?:待执行\|运行中\)\\\/测试/);
+  assert.match(executionPrompts, /执行日志\/待执行\/测试/);
   assert.match(executor, /归档日志\\\/\(\?:测试归档/);
   assert.match(executor, /静态检查已通过/);
-  assert.match(executor, /禁止构建、启动或重启/);
+  assert.match(executionPrompts, /禁止构建、启动或重启/);
   assert.match(codexService, /activeExecutionMode === "task-managed"/);
   assert.match(codexService, /isManagedBuildOrStartCommand/);
 });
 
 test("任务托管通过受控路径入口解析隔离依赖缓存中的公共包", () => {
-  assert.match(executor, /npm --prefix apps\/ai-desktop run paths:resolve/);
-  assert.match(executor, /禁止用裸 node 直接导入该包/);
-  assert.match(executor, /锁文件专属缓存中按需挂载/);
-  assert.match(executor, /禁止混用应用目录与 apps\/ai-desktop 前缀/);
+  assert.match(executionPrompts, /npm --prefix apps\/ai-desktop run paths:resolve/);
+  assert.match(executionPrompts, /禁止用裸 node 直接导入该包/);
+  assert.match(executionPrompts, /锁文件专属缓存中按需挂载/);
+  assert.match(executionPrompts, /禁止混用应用目录与 apps\/ai-desktop 前缀/);
 });
 
 test("任务托管使用后台隔离 Electron 交互测试并最多自动修复五轮", () => {
   assert.match(executor, /const VALIDATION_ROUNDS = 5/);
   assert.match(executor, /interaction-validation/);
   assert.match(executor, /isIsolatedInteractionTestCommand/);
-  assert.match(executor, /npm run test:interaction/);
+  assert.match(executionPrompts, /npm run test:interaction/);
   assert.match(executor, /后台隔离 Electron 交互测试已通过/);
   assert.match(audit, /isolated_interaction_test_not_observed/);
 });
@@ -77,10 +85,10 @@ test("任务托管使用后台隔离 Electron 交互测试并最多自动修复�
 test("会话与需求托管只读运行并由确认动作逐级推进", () => {
   assert.match(executor, /conversation-managed/);
   assert.match(executor, /requirement-managed/);
-  assert.match(executor, /当前只负责交流、理解和确认意图/);
-  assert.match(executor, /只允许只读调查原因、定位问题点并给出具体修正方案/);
+  assert.match(executionPrompts, /当前只负责交流、理解和确认意图/);
+  assert.match(executionPrompts, /只允许只读调查原因、定位问题点并给出具体修正方案/);
   assert.match(executor, /这是后台工作边界，仅供内部遵守/);
-  assert.match(executor, /不要把用户每句话都改写成正式需求/);
+  assert.match(executionPrompts, /不要把用户每句话都改写成正式需求/);
   assert.doesNotMatch(executor, /\[会话托管\]|\[需求托管\]|\[任务托管执行|\[测试托管执行/);
   assert.match(codexService, /analysisOnly/);
   assert.match(codexService, /普通问题直接回答/);
@@ -90,9 +98,9 @@ test("会话与需求托管只读运行并由确认动作逐级推进", () => {
 
 test("测试托管只在完成门禁明确要求时执行自身的单次受控重启", () => {
   assert.match(executor, /buildValidationGate/);
-  assert.match(executor, /公共路径能力解析当前工程目录/);
-  assert.match(executor, /归档日志\/测试归档\/<年月>\/<runId>/);
-  assert.match(executor, /npm run test:document/);
+  assert.match(executionPrompts, /公共路径能力解析当前工程目录/);
+  assert.match(executionPrompts, /归档日志\/测试归档\/<年月>\/<runId>/);
+  assert.match(executionPrompts, /npm run test:document/);
   assert.match(executor, /isUnifiedTestDocumentCommand/);
   assert.match(executor, /unifiedDocumentCompleted/);
   assert.match(executor, /this\.#targetedTest < this\.#build/);

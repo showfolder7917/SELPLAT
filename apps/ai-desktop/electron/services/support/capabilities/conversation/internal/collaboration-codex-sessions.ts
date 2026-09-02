@@ -21,6 +21,7 @@ import {
   type CodexSessionPersistence,
 } from "../../../platform/codex/index.js";
 import { ManagedExecutionFacade as ManagedTaskExecutor } from "../../execution/index.js";
+import type { PromptLibraryPort } from "../../prompts/index.js";
 import { CommandGovernanceFacade as TrustedCommandStore } from "../../../platform/security/index.js";
 import type {
   ExecutorExecutionResultOutDto,
@@ -208,6 +209,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   readSettings: CodexServiceOptions["readSettings"];
   readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
   readWorkspaceState?: () => WorkspaceStateOutDto;
+  prompts: PromptLibraryPort;
   personaSessionStore?: (memberId: string) => CodexSessionPersistence | null;
   recordEvent(type: string, details: Record<string, unknown>, taskId: string): void;
 }
@@ -250,6 +252,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
         this.#options.resolveAttachmentPaths,
         this.#options.runCodeValidation,
         this.#options.readWorkspaceState,
+        this.#options.prompts,
       );
     } catch (error) {
       releaseManagedDependencyLease(dependencyLease);
@@ -294,7 +297,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
   readonly #resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"];
   readonly #runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"];
   readonly #readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"];
-  readonly #managed = new ManagedTaskExecutor();
+  readonly #prompts: PromptLibraryPort;
+  readonly #managed: ManagedTaskExecutor;
 
   constructor(
     connection: RegisteredConnection,
@@ -302,46 +306,43 @@ class CodexExecutorSession implements ExecutorSessionPort {
     resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"],
     runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"],
     readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"],
+    prompts: PromptLibraryPort,
   ) {
     this.#connection = connection;
     this.#registry = registry;
     this.#resolveAttachmentPaths = resolveAttachmentPaths;
     this.#runCodeValidation = runCodeValidation;
     this.#readWorkspaceState = readWorkspaceState;
+    this.#prompts = prompts;
+    this.#managed = new ManagedTaskExecutor(prompts);
   }
 
   async analyze(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
-    return this.#runRequirement(task, [
-      "[执行人物技术分析]",
-      "南宫婉已经完成客户需求、目标、范围、验收标准和任务拆分。不要重新解释客户为什么要做，也不要重复南宫婉的需求分析。",
-      "只分析如何落地：代码位置、现有调用链、最小实现、技术风险和验证方式。若源码事实与南宫婉任务描述冲突，明确报告冲突并停止扩大实现，等待退回南宫婉修正。",
-      `已确认任务：\n${task.snapshot.confirmedIntent}`,
-    ].join("\n\n"), emit);
+    return this.#runRequirement(task, this.#prompts.render("executor.technical-analysis", {
+      confirmedIntent: task.snapshot.confirmedIntent,
+    }), emit);
   }
 
   isAlive(): boolean { return this.#connection.service.isAlive(); }
 
   async optimize(task: CollaborationTaskOutDto, feedback: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
     const currentPlan = task.plans.find((plan) => plan.version === task.currentPlanVersion)?.text || "";
-    return this.#runRequirement(task, `依据已登记的技术失败证据修正同一实施方案，不重复需求分析。\n\n当前技术分析：\n${currentPlan}\n\n失败证据：\n${feedback}`, emit);
+    return this.#runRequirement(task, this.#prompts.render("executor.optimize-analysis", { currentPlan, feedback }), emit);
   }
 
   async execute(task: CollaborationTaskOutDto, plan: CollaborationRequirementPlanOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
-    return this.#executePlan(task, [
-      `已确认任务：\n${task.snapshot.confirmedIntent}`,
-      `执行人完成的技术分析：\n${plan.text}`,
-    ], emit);
+    return this.#executePlan(task, this.#prompts.render("executor.execution", {
+      confirmedIntent: task.snapshot.confirmedIntent,
+      planText: plan.text,
+    }), emit);
   }
 
-  async #executePlan(task: CollaborationTaskOutDto, instructions: string[], emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
+  async #executePlan(task: CollaborationTaskOutDto, message: string, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
     const workspaceState = collaborationWorkspaceState(task, this.#readWorkspaceState?.());
     const attachmentPaths = await this.#resolveAttachmentPaths(task.snapshot.attachmentIds);
     const result = await this.#managed.run({
       mode: "task-managed",
-      message: [
-        ...instructions,
-        "完成源码修改与代码级验证后，最终回答必须在最前面依次使用以下独立 Markdown 标题，并在每个标题下给出简短、可直接归档的事实：最终执行结果、原来存在的问题、本次解决的问题、具体修正或改变、完成状态、遗留内容。之后可以再补充详细说明。禁止省略标题；没有遗留内容时明确写“无”。",
-      ].join("\n\n"),
+      message,
       restartRequired: false,
       emit,
       runCodeValidation: (onEvent) => this.#runCodeValidation(task, onEvent),
@@ -351,23 +352,16 @@ class CodexExecutorSession implements ExecutorSessionPort {
   }
 
   async investigateRepair(task: CollaborationTaskOutDto, failure: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
-    return this.#runRequirement(task, [
-      "[令狐故障只读调查]",
-      "先调查本次真实失败事实，再决定修复。禁止复述或执行原专题方案，禁止修改文件。",
-      "说明失败阶段、直接原因、证据位置、最小修复边界、禁止触碰范围和必须重跑的验证命令。若证据不足，明确指出缺少什么，不得猜测。",
-      `失败事实：\n${failure}`,
-    ].join("\n\n"), emit);
+    return this.#runRequirement(task, this.#prompts.render("executor.repair-investigation", { failure }), emit);
   }
 
   async executeRepair(task: CollaborationTaskOutDto, diagnosis: CollaborationRepairDiagnosisOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
-    return this.#executePlan(task, [
-      "[故障修复专用执行]",
-      diagnosis.repairInstruction,
-      `失败阶段：${diagnosis.failureStage}`,
-      `失败摘要：${diagnosis.failureSummary}`,
-      `技术证据：\n${diagnosis.technicalEvidence.join("\n")}`,
-      "只修复上述调查结论覆盖的问题；禁止读取或复用原专题实施方案，禁止重新完成原专题任务，禁止扩大范围。",
-    ], emit);
+    return this.#executePlan(task, this.#prompts.render("executor.repair-execution", {
+      repairInstruction: diagnosis.repairInstruction,
+      failureStage: diagnosis.failureStage,
+      failureSummary: diagnosis.failureSummary,
+      technicalEvidence: diagnosis.technicalEvidence.join("\n"),
+    }), emit);
   }
 
   async dispose(): Promise<void> {

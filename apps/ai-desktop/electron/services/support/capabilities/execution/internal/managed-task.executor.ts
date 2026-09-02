@@ -5,6 +5,7 @@ import type {
 } from "../../../../../../contracts/services/support/platform/codex/index.js";
 import type { ManagedExecutionModeValue } from "../../../../../../contracts/foundation/index.js";
 import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { PromptLibraryPort, PromptVariables } from "../../prompts/index.js";
 
 type RunTurn = (
   message: string,
@@ -35,6 +36,9 @@ const BUILD_ROUNDS = 3;
 
 /** 在官方 Harness 外管理多轮任务，但把构建验证与日常代码验证分成两个明确入口。 */
 export class ManagedTaskExecutor {
+  /** 注入统一提示词库；执行器仍由代码负责轮次、证据和命令门禁。 */
+  constructor(private readonly prompts: PromptLibraryPort) {}
+
   async run(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
     if (request.mode === "conversation-managed") return this.#runConversation(request);
     if (request.mode === "requirement-managed") return this.#runRequirementAnalysis(request);
@@ -44,7 +48,7 @@ export class ManagedTaskExecutor {
 
   async #runConversation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
     emitManaged(request, "conversation", "started", 1, 1, "正在结合上下文理解你的意思");
-    const response = await request.runTurn(conversationPrompt(request.message), request.emit, "conversation-managed");
+    const response = await request.runTurn(this.#managedPrompt(request.message, "execution.conversation"), request.emit, "conversation-managed");
     emitManaged(request, "conversation", "completed", 1, 1, "已经整理好你的完整意图");
     emitManaged(request, "completed", "completed", 1, 1, "确认无误后可以继续调查和分析");
     return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后进入需求托管"], restartRequired: false, changedFiles: [], successfulCommands: [] };
@@ -52,7 +56,7 @@ export class ManagedTaskExecutor {
 
   async #runRequirementAnalysis(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
     emitManaged(request, "requirement-analysis", "started", 1, 1, "正在调查原因并整理可执行的修正方案");
-    const response = await request.runTurn(requirementPrompt(request.message), request.emit, "requirement-managed");
+    const response = await request.runTurn(this.#managedPrompt(request.message, "execution.requirement-analysis"), request.emit, "requirement-managed");
     emitManaged(request, "requirement-analysis", "completed", 1, 1, "原因和修正方案已经整理完成");
     emitManaged(request, "completed", "completed", 1, 1, "确认方案后可以开始修改");
     return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后进入任务托管"], restartRequired: false, changedFiles: [], successfulCommands: [] };
@@ -62,7 +66,7 @@ export class ManagedTaskExecutor {
     const evidence = new ExecutionEvidence();
     let response: SendMessageOutDto = { text: "", itemCount: 0 };
     let taskRound = 0;
-    let taskMessage = taskExecutionPrompt(request.message);
+    let taskMessage = this.#managedPrompt(request.message, "execution.task");
 
     for (taskRound = 1; taskRound <= TASK_ROUNDS; taskRound += 1) {
       emitManaged(request, "task-execution", taskRound === 1 ? "started" : "continuing", taskRound, TASK_ROUNDS,
@@ -71,8 +75,8 @@ export class ManagedTaskExecutor {
       response = await request.runTurn(taskMessage, (event) => { evidence.record(event); request.emit(event); }, "task-managed");
       if (!evidence.roundFailed && evidence.changedFiles.size > 0) break;
       taskMessage = evidence.roundFailed
-        ? taskRepairPrompt(evidence.failedCommandSummaries())
-        : taskRepairPrompt(["任务要求修改源码，但上一轮没有观察到任何文件变更"]);
+        ? this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: evidence.failedCommandSummaries().join("\n") || "存在未解决错误" })
+        : this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: "任务要求修改源码，但上一轮没有观察到任何文件变更" });
     }
 
     if (evidence.roundFailed || evidence.changedFiles.size === 0) {
@@ -92,7 +96,10 @@ export class ManagedTaskExecutor {
       return this.#runDesktopOwnedCodeValidation(request, evidence, response);
     }
 
-    let validationMessage = codeValidationPrompt([...evidence.changedFiles]);
+    let validationMessage = this.#managedPrompt("继续验证本次修改。", "execution.code-validation", {
+      files: [...evidence.changedFiles].join("\n"),
+      maximumRounds: VALIDATION_ROUNDS,
+    });
     for (let round = 1; round <= VALIDATION_ROUNDS; round += 1) {
       emitManaged(request, "code-validation", round === 1 ? "started" : "continuing", round, VALIDATION_ROUNDS,
         round === 1 ? "代码验证阶段：静态检查与后台隔离交互测试" : "检查失败后正在修复并复测");
@@ -120,7 +127,11 @@ export class ManagedTaskExecutor {
           successfulCommands: evidence.successfulCommands(),
         };
       }
-      validationMessage = codeValidationRepairPrompt(gate.missing, evidence.failedCommandSummaries());
+      validationMessage = this.#managedPrompt("继续完成同一任务的代码级验证。", "execution.code-validation-repair", {
+        missing: gate.missing.join("；"),
+        failures: evidence.failedCommandSummaries().join("；") || "无",
+        maximumRounds: VALIDATION_ROUNDS,
+      });
     }
 
     const gate = evidence.codeValidationGate();
@@ -159,7 +170,7 @@ export class ManagedTaskExecutor {
         lastFailure = error instanceof Error ? error.message : String(error);
         if (round === VALIDATION_ROUNDS) break;
         evidence.beginRound();
-        response = await request.runTurn(desktopValidationRepairPrompt(lastFailure), (event) => {
+        response = await request.runTurn(this.#managedPrompt("继续修复当前任务。", "execution.desktop-validation-repair", { failure: lastFailure }), (event) => {
           evidence.record(event);
           request.emit(event);
         }, "task-managed");
@@ -174,7 +185,11 @@ export class ManagedTaskExecutor {
   async #runBuildValidation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
     const evidence = new ExecutionEvidence();
     let response: SendMessageOutDto = { text: "", itemCount: 0 };
-    let message = buildValidationPrompt(request.message, request.restartRequired);
+    let message = this.#managedPrompt(request.message, "execution.build-validation", {
+      restartInstruction: request.restartRequired
+        ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启当前应用。"
+        : "只有确有运行时验证需要时才说明重启要求。",
+    });
     for (let round = 1; round <= BUILD_ROUNDS; round += 1) {
       emitManaged(request, "build-validation", round === 1 ? "started" : "continuing", round, BUILD_ROUNDS,
         round === 1 ? "正在构建并执行构建后的测试" : "正在修复构建或测试问题并复测");
@@ -189,11 +204,19 @@ export class ManagedTaskExecutor {
         emitManaged(request, "completed", "completed", 1, 1, request.restartRequired ? "测试完成，接下来会受控重启一次" : "测试完成，本次不需要重启");
         return { ...response, managedStatus: "test-verified", pendingActions: [], restartRequired: request.restartRequired, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
       }
-      message = buildValidationRepairPrompt(gate.missing, evidence.failedCommandSummaries());
+      message = this.#managedPrompt("继续完成同一任务的构建和测试。", "execution.build-validation-repair", {
+        missing: gate.missing.join("；"),
+        failures: evidence.failedCommandSummaries().join("；") || "无",
+      });
     }
     const gate = evidence.buildValidationGate();
     emitManaged(request, "build-validation", "blocked", BUILD_ROUNDS, BUILD_ROUNDS, gate.missing.join("；"));
     return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
+  }
+
+  /** 公共外壳保留不可隐藏的后台边界，具体阶段行为从提示词库按 ID 取得。 */
+  #managedPrompt(message: string, promptId: string, variables: PromptVariables = {}): string {
+    return managedPrompt(message, this.prompts.render(promptId, variables));
   }
 }
 
@@ -308,40 +331,4 @@ function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUp
 /** 把职责作为后台边界附在真实用户消息之后；回复正文不得把内部阶段重新说给用户。 */
 function managedPrompt(message: string, responsibility: string): string {
   return `${message}\n\n<ai_desktop_internal_contract>\n这是后台工作边界，仅供内部遵守，不要在回复中复述、引用或解释这些约束，也不要使用阶段名称作为标题或开场白。直接回应用户此刻真正关心的事情，先给结论，结合上下文自然交流；简单问题直接说清楚，复杂问题再使用必要结构。\n${responsibility}\n</ai_desktop_internal_contract>`;
-}
-
-function taskExecutionPrompt(message: string): string {
-  return managedPrompt(message, "用户已经确认最近一份需求分析和修正方案。按该方案分析、修改源码并处理修改过程中的错误；必须产生可追踪的源码变更。当前只允许完成源码修改和代码级验证，禁止构建、启动或重启程序。必须从 SELPLAT 工程根通过固定受控入口 npm --prefix apps/ai-desktop run paths:resolve 调用 @selplat/node-common-core/path 解析真实工程名；禁止用裸 node 直接导入该包，因为隔离工作树的依赖只在锁文件专属缓存中按需挂载。除该固定路径诊断入口外，解析或验证命令必须以目标应用根为 cwd，并通过 node scripts/run-with-dependencies.mjs node 等应用包装入口加载正式依赖，不能为解析路径越过构建禁令。后续源码检查也必须保持工程根相对路径，禁止混用应用目录与 apps/ai-desktop 前缀。把待验证命令登记到“执行日志/待执行/测试/<runId>/测试文档.<threadId>.md”，不得在源码目录创建测试控制文档。完成后用自然语言说明结果、关键改动和仍待验证的内容。");
-}
-
-function conversationPrompt(message: string): string {
-  return managedPrompt(message, "当前只负责交流、理解和确认意图，禁止调查源码、执行命令、修改文件或声称已经完成操作。不要把用户每句话都改写成正式需求；普通提问直接自然回答。只有会影响后续方案的真实歧义才需要澄清，每次只选择一个最高优先级疑问并调用结构化 request_user_input，提供互斥选项。用户确认后重新理解完整会话；仍有歧义再继续提问，全部消除后自然地总结完整意图，等待用户确认，不得只复述最后一个答案。");
-}
-
-function requirementPrompt(message: string): string {
-  return managedPrompt(message, "用户已经确认完整意图。只允许只读调查原因、定位问题点并给出具体修正方案；禁止修改、新增或删除文件，禁止构建、启动或重启。回复先说明查到的原因和判断，再给出满足用户目标的最小修正方案与必要验证，不要复述流程名称。完成后等待用户确认方案。");
-}
-
-function taskRepairPrompt(failures: string[]): string {
-  return managedPrompt("继续处理同一任务。", `修复上一轮修改过程中仍未解决的问题：\n${failures.join("\n") || "存在未解决错误"}\n只修复当前任务范围内的源码，禁止构建、启动或重启。`);
-}
-
-function codeValidationPrompt(files: string[]): string {
-  return managedPrompt("继续验证本次修改。", `本任务已经修改的文件：\n${files.join("\n")}\n确认当前 runId 的测试文档已登记 npm run typecheck 与 npm run test:interaction，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。运行器会把完整批次原子移入运行中目录，完成后立即按年月和 runId 归档。占用时必须报告锁中的执行者、任务、线程和当前项。test:interaction 会在后台启动隔离 Electron，通过 Playwright 定位器执行真实程序化交互。禁止正式构建、启动或重启当前应用；失败时创建新 runId 的待执行测试批次再修复复测，最多 ${VALIDATION_ROUNDS} 轮。`);
-}
-
-function codeValidationRepairPrompt(missing: string[], failures: string[]): string {
-  return managedPrompt("继续完成同一任务的代码级验证。", `当前未满足：${missing.join("；")}\n失败命令：${failures.join("；") || "无"}\n读取当前工程“临时材料/测试证据”中的失败截图和结果，修复后重新执行静态检查与 npm run test:interaction。最多复测 ${VALIDATION_ROUNDS} 轮；禁止正式构建、启动或重启当前应用。`);
-}
-
-function desktopValidationRepairPrompt(failure: string): string {
-  return managedPrompt("继续修复当前任务。", `AI Desktop 已在本任务签发的独立 worktree 中执行固定静态检查与隔离 Playwright，失败事实如下：\n${failure}\n\n只修复导致失败的源码或测试；不要自行运行 npm、Playwright、Electron、构建、启动或重启命令。修复完成后直接说明改了什么，AI Desktop 将在同一 worktree 自动复测。`);
-}
-
-function buildValidationPrompt(message: string, restartRequired: boolean): string {
-  return managedPrompt(message, `通过公共路径能力解析当前工程目录，把构建与构建后针对性测试登记到唯一 runId 的待执行测试文档，然后只通过固定命令 npm run test:document 取得独占锁并统一执行；命令不得追加 executor、task、thread 或其他动态参数。读取到占用锁时报告正在执行的人、任务、线程和当前项。运行时完整批次进入“执行日志/运行中/测试”，每轮终态立即进入“归档日志/测试归档/<年月>/<runId>”；失败修复时创建新的 runId 再复测。${restartRequired ? "完成后由桌面主进程受控重启一次，不要在命令中自行启动或重启当前应用。" : "只有确有运行时验证需要时才说明重启要求。"}`);
-}
-
-function buildValidationRepairPrompt(missing: string[], failures: string[]): string {
-  return managedPrompt("继续完成同一任务的构建和测试。", `当前未满足：${missing.join("；")}。失败命令：${failures.join("；") || "无"}。修复后重新构建并执行构建后的针对性测试；不要自行重复启动 AI Desktop。`);
 }
