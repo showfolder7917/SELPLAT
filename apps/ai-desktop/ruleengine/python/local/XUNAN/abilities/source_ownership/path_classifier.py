@@ -13,7 +13,7 @@ def active_stable_user_id(project_root: Path) -> str:
     """Read the one stable user ID from the project authority file."""
     matches = re.findall(
         r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-        (project_root / "AGENTS.md").read_text(encoding="utf-8"),
+        (project_root / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
     )
     if len(matches) != 1 or not re.fullmatch(
             r"[A-Za-z][A-Za-z0-9_-]{0,63}", matches[0].strip()):

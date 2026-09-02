@@ -1,19 +1,7 @@
 # rule-engine manifest
 
-这里放规则引擎声明文件。
+这里仅保存 ruleengine 工程模块元数据 `module.json`。
 
-建议内容：
-
-- `module.json`
-- `routes.json`
-- `permissions.json`
-- `dependencies.json`
-
-当前正式声明：
-
-- `module.json`：ruleengine 工程模块元数据。
-- `production-rules.json`：唯一生产规则白名单，决定哪些规则进入客户包以及是否允许覆盖。
-- `customer-overlay.example.json`：客户覆盖格式示例，不进入安装包运行资源。
-
-禁止通过扫描整个 `rules/` 自动决定生产规则。新增生产规则必须先登记稳定逻辑
-ID、明确客户是否可覆盖，再经过规则包构建和真实安装产物检查。
+AI Desktop 生产规则不再维护固定规则白名单或 JSON 覆盖文件。构建脚本从
+`ruleengine/AGENTS.md` 解析唯一当前用户，再按该用户的递归索引树复制 Markdown；运行时同样
+只允许当前用户层。新增或升级规则必须先进入当前用户索引，并经过规则包构建与真实安装产物检查。

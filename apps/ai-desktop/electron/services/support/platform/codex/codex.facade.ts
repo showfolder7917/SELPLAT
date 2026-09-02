@@ -61,6 +61,8 @@ export interface CodexServiceOptions {
   readRuleInstructions?: () => string;
   /** 主人物回合完成后触发训练语料增量归档；内部自动化连接不配置此回调。 */
   onConversationTurnCompleted?: () => void | Promise<void>;
+  /** 账号状态读取后通知组合根，用于 AGENTS 未声明用户时建立稳定用户映射。 */
+  onAccountRead?: (account: CodexAccountOutDto) => void;
   /** 协作工作树由主进程签发的依赖租约；只携带标识，缓存根由子命令从 Git 公共仓库独立验证。 */
   dependencyLeaseId?: string;
   /** 固定人物会话允许工作区清单动态变化；仍恢复同一线程并用本轮最新工作区执行。 */
@@ -151,7 +153,9 @@ export class CodexService {
     try {
       await this.#ensureReady();
       const result = asObject(await this.#request("account/read", { refreshToken: false }));
-      return { connected: true, account: normalizeAccount(result), error: null, runtime: runtimeInfo(this.#runtime) };
+      const account = normalizeAccount(result);
+      this.#options.onAccountRead?.(account);
+      return { connected: true, account, error: null, runtime: runtimeInfo(this.#runtime) };
     } catch (error) {
       this.#lastError = errorMessage(error);
       return { connected: false, account: { ...EMPTY_ACCOUNT }, error: this.#lastError, runtime: runtimeInfo(this.#runtime) };
@@ -857,6 +861,7 @@ function normalizeAccount(result: JsonObject): CodexAccountOutDto {
   const type = stringValue(account.type);
   return {
     authenticated: Boolean(type),
+    accountSubject: stringValue(account.id) || stringValue(account.accountId),
     authMode: type,
     email: stringValue(account.email),
     planType: stringValue(account.planType),

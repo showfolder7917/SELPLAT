@@ -1,13 +1,7 @@
-/**
- * 从显式生产白名单生成客户安装包可读取的规则 bundle。
- *
- * 输入：ruleengine/manifest/production-rules.json 和其中登记的正式规则正文。
- * 输出：build/ai-desktop/rule-bundle 下的 manifest.json 与 rules.json。
- * 副作用：只重建该应用的规则构建目录，不修改规则源、客户覆盖或其他应用产物。
- */
+/** 构建 AI Desktop 可写规则工作区的只读初始快照：统一入口、根索引和当前用户规则树。 */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,87 +11,57 @@ import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceProjectRoot = path.resolve(appRoot, "../..");
 const projectRoot = resolveRuleBundleWorkspaceRoot(sourceProjectRoot);
-const resourceRoot = path.join(appRoot, "ruleengine", "rules");
-const sourceManifestPath = path.join(appRoot, "ruleengine", "manifest", "production-rules.json");
+const ruleEngineRoot = path.join(appRoot, "ruleengine");
+const resourceRoot = path.join(ruleEngineRoot, "rules");
+const agentsSourcePath = path.join(ruleEngineRoot, "AGENTS.md");
 const applicationName = resolveApplicationNameFromSourceRoot(appRoot);
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName });
 const outputRoot = path.join(projectPaths.buildRoot, "rule-bundle");
-const safeResourceRoot = `${path.resolve(resourceRoot)}${path.sep}`;
+const activeUserMatch = readFileSync(agentsSourcePath, "utf8").match(/^- 当前稳定用户 ID：`([^`]+)`\s*$/m);
+if (!activeUserMatch || !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(activeUserMatch[1].trim())) throw new Error("ruleengine/AGENTS.md 缺少安全的当前稳定用户 ID");
+const activeUserId = activeUserMatch[1].trim();
+const activeUserSource = path.join(resourceRoot, "local", activeUserId);
+if (!existsSync(path.join(resourceRoot, "RULE_INDEX.md")) || !existsSync(path.join(activeUserSource, "RULE_INDEX.md"))) throw new Error("当前用户完整规则索引树不存在");
 
-/** 隔离 worktree 构建只在未显式选择工程时从 Git 公共目录取得稳定输出根。 */
 function resolveRuleBundleWorkspaceRoot(candidateRoot) {
   if (String(process.env.SELPLAT_ROOT || "").trim()) return resolveSelectedWorkspaceRoot(candidateRoot);
-  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
-    cwd: candidateRoot,
-    encoding: "utf8",
-    shell: false,
-  });
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: candidateRoot, encoding: "utf8", shell: false });
   if (result.error || result.status !== 0) return resolveSelectedWorkspaceRoot(candidateRoot);
   const workspaceRoot = path.dirname(String(result.stdout || "").trim());
-  if (!existsSync(path.join(workspaceRoot, "settings.gradle")) || !existsSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"))) {
-    return resolveSelectedWorkspaceRoot(candidateRoot);
-  }
+  if (!existsSync(path.join(workspaceRoot, "settings.gradle")) || !existsSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"))) return resolveSelectedWorkspaceRoot(candidateRoot);
   return workspaceRoot;
 }
-
-/** 读取并校验生产白名单；缺失字段必须在构建期阻断，禁止安装态猜测规则。 */
-function readSourceManifest() {
-  const value = JSON.parse(readFileSync(sourceManifestPath, "utf8"));
-  if (value?.formatVersion !== 1 || typeof value.bundleVersion !== "string" || !Array.isArray(value.rules)) {
-    throw new Error(`Invalid production rule manifest: ${sourceManifestPath}`);
-  }
-  return value;
+function excluded(relative) { return relative.split("/").some((segment) => ["会话", "history", "template"].includes(segment)); }
+function filesUnder(root) {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const candidate = path.join(root, entry.name);
+    if (entry.isDirectory()) return filesUnder(candidate);
+    return entry.isFile() ? [candidate] : [];
+  }).sort();
 }
+function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 
-/** 从 Markdown 第一行提取用户可读标题；没有标题时回退到稳定逻辑 ID。 */
-function ruleTitle(content, logicalId) {
-  const heading = content.split(/\r?\n/, 1)[0]?.match(/^#\s+(.+)$/)?.[1]?.trim();
-  return heading || logicalId;
-}
-
-/** 生成内容哈希，供安装态诊断内置规则和覆盖规则的真实版本。 */
-function sha256(content) {
-  return createHash("sha256").update(content, "utf8").digest("hex");
-}
-
-const sourceManifest = readSourceManifest();
-const logicalIds = new Set();
-const rules = sourceManifest.rules.map((entry) => {
-  if (!entry || typeof entry.logicalId !== "string" || !/^[A-Z][A-Z0-9_]{2,127}$/.test(entry.logicalId)) {
-    throw new Error(`Invalid production rule logicalId: ${String(entry?.logicalId)}`);
-  }
-  if (logicalIds.has(entry.logicalId)) throw new Error(`Duplicate production rule logicalId: ${entry.logicalId}`);
-  logicalIds.add(entry.logicalId);
-  if (typeof entry.resourcePath !== "string" || path.isAbsolute(entry.resourcePath) || entry.resourcePath.includes("..")) {
-    throw new Error(`Invalid production rule resourcePath: ${String(entry.resourcePath)}`);
-  }
-  const sourcePath = path.resolve(resourceRoot, entry.resourcePath);
-  // 白名单路径仍需做最终根内检查，避免将机器文件或其他工程内容写入客户包。
-  if (!sourcePath.startsWith(safeResourceRoot) || !existsSync(sourcePath)) {
-    throw new Error(`Production rule source is unavailable or outside resources: ${entry.resourcePath}`);
-  }
-  const content = readFileSync(sourcePath, "utf8");
-  return {
-    logicalId: entry.logicalId,
-    title: ruleTitle(content, entry.logicalId),
-    content,
-    sha256: sha256(content),
-    customerOverridable: entry.customerOverridable === true,
-  };
-});
-
-// build 产物可由白名单和规则源完全重建；只清理本应用已解析的精确输出根。
 rmSync(outputRoot, { recursive: true, force: true });
-mkdirSync(outputRoot, { recursive: true });
-const generatedAt = new Date().toISOString();
-writeFileSync(path.join(outputRoot, "rules.json"), `${JSON.stringify({ formatVersion: 1, rules }, null, 2)}\n`, "utf8");
+mkdirSync(path.join(outputRoot, "rules"), { recursive: true });
+cpSync(agentsSourcePath, path.join(outputRoot, "AGENTS.md"));
+cpSync(path.join(resourceRoot, "RULE_INDEX.md"), path.join(outputRoot, "rules", "RULE_INDEX.md"));
+cpSync(activeUserSource, path.join(outputRoot, "rules", "local", activeUserId), {
+  recursive: true,
+  filter(source) {
+    const relative = path.relative(activeUserSource, source).replaceAll(path.sep, "/");
+    return !excluded(relative) && (source === activeUserSource || statSync(source).isDirectory() || source.endsWith(".md"));
+  },
+});
+const packagedFiles = filesUnder(outputRoot).filter((file) => path.basename(file) !== "manifest.json").map((file) => ({
+  path: path.relative(outputRoot, file).replaceAll(path.sep, "/"),
+  size: statSync(file).size,
+  sha256: sha256(readFileSync(file)),
+}));
 writeFileSync(path.join(outputRoot, "manifest.json"), `${JSON.stringify({
-  formatVersion: 1,
-  bundleVersion: sourceManifest.bundleVersion,
-  generatedAt,
-  ruleCount: rules.length,
-  rules: rules.map(({ logicalId, sha256: contentHash, customerOverridable }) => ({ logicalId, sha256: contentHash, customerOverridable })),
-  excludedCategories: sourceManifest.excludedCategories || [],
+  formatVersion: 2,
+  activeUserId,
+  generatedAt: new Date().toISOString(),
+  files: packagedFiles,
+  excludedCategories: ["core", "common", "other-users", "sessions", "history", "templates"],
 }, null, 2)}\n`, "utf8");
-
-console.log(`Production rule bundle generated: ${rules.length} rules -> ${outputRoot}`);
+console.log(`Active-user rule bundle generated: ${packagedFiles.length} files -> ${outputRoot}`);

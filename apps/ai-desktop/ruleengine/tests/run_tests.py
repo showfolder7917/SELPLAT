@@ -39,7 +39,7 @@ TEST_ROOT = PROJECT_ROOT / "apps/ai-desktop/ruleengine/tests/local"
 # 当前稳定用户只从工程根 AGENTS.md 读取，禁止扫描测试目录选择用户。
 ACTIVE_USER_MATCHES = re.findall(
     r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-    (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    (PROJECT_ROOT / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
 )
 if len(ACTIVE_USER_MATCHES) != 1 or not re.fullmatch(
         r"[A-Za-z][A-Za-z0-9_-]{0,63}", ACTIVE_USER_MATCHES[0].strip()):

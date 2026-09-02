@@ -54,8 +54,9 @@ ABILITY_ID = "layered_rule_loader"
 
 # 用户标识只允许路径安全的 ASCII 稳定字符。
 USER_ID_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
-# 工程根 AGENTS.md 是当前稳定用户的唯一事实源。
+# ruleengine/AGENTS.md 是当前稳定用户的唯一事实源。
 ACTIVE_USER_DECLARATION = re.compile(r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$")
+AGENTS_PATH = PROJECT_ROOT / "apps/ai-desktop/ruleengine/AGENTS.md"
 # common 一级作用域允许中英文、数字、下划线和连字符。
 SCOPE_PATTERN = re.compile(r"[^\W_][\w-]{0,63}", re.UNICODE)
 # 规则逻辑 ID 和索引汇总键统一使用稳定大写格式。
@@ -121,7 +122,7 @@ def current_stable_user_id() -> str:
     """从工程根 AGENTS.md 读取并校验唯一当前稳定用户。"""
 
     # 身份只读取唯一工程根文件，禁止扫描 local 目录猜测用户。
-    agents_text = (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    agents_text = AGENTS_PATH.read_text(encoding="utf-8")
     matches = ACTIVE_USER_DECLARATION.findall(agents_text)
     # 缺失或重复声明都无法建立唯一用户层，必须闭锁失败。
     if len(matches) != 1:

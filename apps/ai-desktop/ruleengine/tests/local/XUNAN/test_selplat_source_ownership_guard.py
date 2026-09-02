@@ -16,7 +16,7 @@ PROJECT_ROOT = next(
 )
 ACTIVE_USER_MATCHES = re.findall(
     r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-    (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    (PROJECT_ROOT / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
 )
 if len(ACTIVE_USER_MATCHES) != 1:
     raise RuntimeError("AGENTS.md 必须且只能声明一个当前稳定用户 ID。")
@@ -111,7 +111,9 @@ class SelplatSourceOwnershipGuardTests(unittest.TestCase):
     def create_fixture(self, temp_root: Path) -> Path:
         """创建最小 SELPLAT 工程事实，仅用于隔离扫描。"""
         (temp_root / "settings.gradle").write_text("rootProject.name = 'fixture'\n", encoding="utf-8")
-        (temp_root / "AGENTS.md").write_text(
+        agents_path = temp_root / "apps/ai-desktop/ruleengine/AGENTS.md"
+        agents_path.parent.mkdir(parents=True, exist_ok=True)
+        agents_path.write_text(
             f"- 当前稳定用户 ID：`{ACTIVE_STABLE_USER_ID}`\n",
             encoding="utf-8",
         )

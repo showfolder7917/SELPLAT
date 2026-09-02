@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (relativePath) => readFileSync(path.join(appRoot, relativePath), "utf8");
-const activeStableUserId = readFileSync(path.join(appRoot, "../../AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
+const activeStableUserId = readFileSync(path.join(appRoot, "ruleengine/AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 // 聚合公开入口及其领域协议正文，既验证唯一出口，也验证实际字段归属。
 const contracts = [

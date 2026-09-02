@@ -43,7 +43,7 @@
     "test:workflow-event-center": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/capabilities/event-center/workflow-event-center.test.mjs",
     "test:boundaries": "node --test tests/contracts/module-boundaries.test.mjs",
     "test:preload-sandbox": "npm run build:electron && node scripts/run-with-dependencies.mjs electron tests/release/preload-sandbox-runtime-smoke.cjs",
-    "test:rules": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/release/rule-bundle-service.test.mjs",
+    "test:rules": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/capabilities/rules/active-user-rule-workspace.test.mjs",
     "preview": "node scripts/run-with-dependencies.mjs vite preview",
     "test:common": "npm run build:common && node scripts/run-with-dependencies.mjs node --test ../../shared/node/common-core/tests/application-paths.test.mjs",
     "test:dependencies": "node --test tests/release/dependency-cache-self-heal.test.mjs",

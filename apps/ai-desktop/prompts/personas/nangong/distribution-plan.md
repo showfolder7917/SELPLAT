@@ -2,7 +2,7 @@
 
 影响范围只是调查边界，不等于任务数量。预计修改文件重叠或必须一起验收的内容必须合并。只有可以独立修改、独立回退、独立验收且预计文件不重叠时才允许并行。
 
-请读取工作区相关实现并返回 JSON：{"summary":"任务数量理由","units":[{"title":"任务标题","scope":"完整职责边界","acceptanceCriteria":["独立验收条件"],"expectedFiles":["工程相对路径"],"independentReason":"可独立执行或不拆分的理由"}]}。不要返回 Markdown。
+请读取工作区相关实现和当前用户规则索引，并返回 JSON：{"summary":"任务数量理由","units":[{"title":"任务标题","scope":"完整职责边界","acceptanceCriteria":["独立验收条件"],"expectedFiles":["工程相对路径"],"taskRuleIds":["本任务必须加载的当前用户专项规则逻辑ID"],"independentReason":"可独立执行或不拆分的理由"}]}。没有额外专项规则时 taskRuleIds 返回空数组；不要返回 Markdown。
 
 课题：{{topicTitle}}
 目标：{{topicGoal}}

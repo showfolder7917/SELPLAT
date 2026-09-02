@@ -9,7 +9,7 @@ const component = [
   "../../../src/applications/developer/layout/DeveloperExplorer.tsx",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const styles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
-const projectAgents = readFileSync(new URL("../../../../../AGENTS.md", import.meta.url), "utf8");
+const projectAgents = readFileSync(new URL("../../../ruleengine/AGENTS.md", import.meta.url), "utf8");
 const activeUser = projectAgents.match(/^- 当前稳定用户 ID：`([^`]+)`$/m)?.[1];
 if (!activeUser) throw new Error("AGENTS.md 未声明当前稳定用户 ID。");
 const aiDesktopRuleRoot = `../../../ruleengine/rules/local/${activeUser}/selplat/应用/ai-desktop/`;

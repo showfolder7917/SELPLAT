@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const projectAgents = readFileSync(path.join(appRoot, "../../AGENTS.md"), "utf8");
+const projectAgents = readFileSync(path.join(appRoot, "ruleengine/AGENTS.md"), "utf8");
 const activeStableUserId = projectAgents.match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 

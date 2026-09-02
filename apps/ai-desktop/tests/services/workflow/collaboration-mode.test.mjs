@@ -28,7 +28,7 @@ import { controlledTestRoot, projectPaths, projectRoot } from "#test-paths";
 const controlledTempRoot = controlledTestRoot;
 const prompts = new PromptLibraryFacade(path.join(projectPaths.buildRoot, "prompt-bundle"));
 mkdirSync(controlledTempRoot, { recursive: true });
-const activeStableUserId = readFileSync(path.join(projectRoot, "AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
+const activeStableUserId = readFileSync(path.join(projectRoot, "apps/ai-desktop/ruleengine/AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 const rendererCollaborationSources = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
@@ -602,11 +602,18 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
         }),
       }),
       integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      createTaskRuleContext: (taskRuleIds) => ({
+        activeUserId: "XUNAN", role: "executor", ruleRevision: "revision-one",
+        mandatoryRoleRuleIds: ["AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES"], matchedTaskRuleIds: taskRuleIds,
+        dependencyRuleIds: [], loadedRuleHashes: {}, loadedRuleContents: {}, agentsContent: "# AGENTS", indexCatalog: "# index", ruleReceipt: [],
+      }),
       emitState: () => undefined,
       emitStream: () => undefined,
     });
-    const state = coordinator.submitTask({ title: "权限恢复", problemStatement: "固定命令需要授权", confirmedIntent: "授权后继续原任务", workspaceState, locale: "zh-CN", preferredExecutorMemberId: "yuan-yao" });
+    const state = coordinator.submitTask({ title: "权限恢复", problemStatement: "固定命令需要授权", confirmedIntent: "授权后继续原任务", workspaceState, locale: "zh-CN", preferredExecutorMemberId: "yuan-yao", taskRuleIds: ["WORKSPACE_RULE"] });
     const taskId = state.tasks.at(-1).taskId;
+    assert.equal(store.task(taskId).snapshot.ruleContext.ruleRevision, "revision-one");
+    assert.deepEqual(store.task(taskId).snapshot.ruleContext.matchedTaskRuleIds, ["WORKSPACE_RULE"]);
     for (let attempt = 0; attempt < 100 && store.task(taskId).state !== "recovering"; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
     const task = store.task(taskId);
     assert.equal(task.state, "recovering");

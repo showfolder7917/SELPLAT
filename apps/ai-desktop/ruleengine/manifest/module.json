@@ -5,6 +5,6 @@
   "enabled": true,
   "runtime_language": "python",
   "source_roots": ["python", "rules", "tests"],
-  "customer_bundle_manifest": "manifest/production-rules.json",
-  "manifest_version": "2.0.0"
+  "runtime_rule_entry": "AGENTS.md",
+  "manifest_version": "3.0.0"
 }

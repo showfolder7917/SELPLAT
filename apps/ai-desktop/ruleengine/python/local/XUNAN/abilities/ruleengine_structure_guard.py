@@ -31,7 +31,6 @@ ABILITY_NAME = "规则引擎结构与解耦门禁"
 RULEENGINE_ROOT = PROJECT_ROOT / "apps/ai-desktop/ruleengine"
 RULE_ROOT = RULEENGINE_ROOT / "rules"
 ROOT_INDEX = Path("RULE_INDEX.md")
-MANIFEST_PATH = RULEENGINE_ROOT / "manifest/production-rules.json"
 LOGICAL_ID_PATTERN = re.compile(r"[A-Z][A-Z0-9_]{1,127}")
 ASSIGNMENT_PATTERN = re.compile(r"^([A-Za-z][A-Za-z0-9_.-]*)\s*=\s*(.+)$")
 WINDOWS_ABSOLUTE_PATTERN = re.compile(r"(?i)(?:^|[=\s`'\"])([A-Z]:[\\/][^\s`'\"]+)")
@@ -45,7 +44,7 @@ def active_stable_user_id(project_root: Path) -> str:
     """只从工程权威文件读取唯一安全的稳定用户 ID。"""
     matches = re.findall(
         r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-        (project_root / "AGENTS.md").read_text(encoding="utf-8"),
+        (project_root / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
     )
     if len(matches) != 1 or not re.fullmatch(
             r"[A-Za-z][A-Za-z0-9_-]{0,63}", matches[0].strip()):
@@ -222,18 +221,6 @@ def audit_ruleengine_structure(project_root: Path = PROJECT_ROOT) -> dict[str, A
         if "history" in pollution.parts:
             continue
         add_hard("RULEENGINE_SOURCE_CACHE", pollution.relative_to(project_root).as_posix(), "generated Python cache is forbidden in rule-engine source")
-
-    if MANIFEST_PATH.is_file() and project_root == PROJECT_ROOT.resolve():
-        manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-        for record in manifest.get("rules", []):
-            resource_path = str(record.get("resourcePath", ""))
-            if "history/" in resource_path.replace("\\", "/"):
-                add_hard("PRODUCTION_MANIFEST_HISTORY_DEPENDENCY", "apps/ai-desktop/ruleengine/manifest/production-rules.json", resource_path)
-            if resource_path not in indexed_paths:
-                add_hard("PRODUCTION_MANIFEST_UNINDEXED_RULE", "apps/ai-desktop/ruleengine/manifest/production-rules.json", resource_path)
-        excluded = set(manifest.get("excludedCategories", []))
-        if "history" not in excluded:
-            add_hard("PRODUCTION_MANIFEST_HISTORY_EXCLUSION_MISSING", "apps/ai-desktop/ruleengine/manifest/production-rules.json", "excludedCategories must contain history")
 
     machine_absolute_hits: list[dict[str, Any]] = []
     for candidate in [

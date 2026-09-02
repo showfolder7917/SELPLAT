@@ -13,6 +13,7 @@
 
 // Node.js 子进程 API：发布前只读核对 Git 提交与工作区洁净状态，不执行任何修改命令。
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 // Node.js 文件系统 API：检查工程、创建运行目录、读取版本以及写健康检查结果。
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 // 跨平台路径 API：避免手写 Windows 或 macOS 的路径分隔符。
@@ -228,15 +229,20 @@ export async function startApplication(): Promise<void> {
   eventCenter.recordApplicationStart({ variant, projectRoot, rendererRoot });
   const capabilityContext = createCapabilityContext({
     userDataRoot: app.getPath("userData"),
+    projectRoot,
     buildRoot: projectPaths.buildRoot,
     temporaryMaterialsRoot: projectPaths.temporaryMaterialsRoot,
     packaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     eventCenter,
   });
-  const { trustedCommands, codexSessions, settings, rules, prompts, codexHome, collaborationRoot, screenshots, dispatch } = capabilityContext;
+  const { trustedCommands, codexSessions, settings, rules, ruleWorkspace, ruleUploads, prompts, codexHome, collaborationRoot, screenshots, dispatch } = capabilityContext;
+  // 无源码规则工作区只在启动后异步尝试一次上传；失败保留 outbox 且不阻塞窗口和人物运行。
+  if (ruleWorkspace.descriptor.mode === "local") void ruleUploads.uploadLatestPendingOnce();
   // Codex 开始任务时读取最新有效规则，避免把启动时状态永久缓存。
-  const readRuleInstructions = () => rules.renderDeveloperInstructions();
+  const readRuleInstructions = () => rules.renderRoleInstructions("executor");
+  const readNangongRuleInstructions = () => rules.renderRoleInstructions("nangong");
+  const readHanliRuleInstructions = () => rules.renderRoleInstructions("hanli");
   // AI Desktop 自己的会话只有在数据库可用时才进入训练语料库。
   const corpusIngestion = aiMemoryDatabase
     ? createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
@@ -336,6 +342,11 @@ export async function startApplication(): Promise<void> {
       validationOwner: "codex",
       readSettings: () => settings.read(),
       readRuleInstructions,
+      onAccountRead: (account) => {
+        if (!account.authenticated || !account.accountSubject) return;
+        const stableUserId = `U_${createHash("sha256").update(`${account.authMode || "account"}:${account.accountSubject}`, "utf8").digest("hex").slice(0, 16).toUpperCase()}`;
+        rules.setAuthenticatedStableUserId(stableUserId);
+      },
       // 一轮正常结束后触发增量入库，而不是在流式输出中反复扫描。
       onConversationTurnCompleted: () => ingestTrainingCorpus("turn-completed"),
     },
@@ -357,7 +368,7 @@ export async function startApplication(): Promise<void> {
       sessionStorage: "ai-desktop",
       validationOwner: "desktop",
       readSettings: () => settings.read(),
-      readRuleInstructions,
+      readRuleInstructions: readNangongRuleInstructions,
       preserveThreadAcrossWorkspaceChanges: true,
     },
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
@@ -369,7 +380,7 @@ export async function startApplication(): Promise<void> {
     projectRoot, trustedCommands, hanLiSessions,
     {
       codexHome, serviceName: "selplat_ai_desktop_han_li_evolution", threadSource: "ai-desktop-han-li-evolution",
-      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions,
+      migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions: readHanliRuleInstructions,
       preserveThreadAcrossWorkspaceChanges: true,
     },
     (details) => eventCenter.recordEvent("han-li.evolution.trusted_command.decision", details),
@@ -430,7 +441,12 @@ export async function startApplication(): Promise<void> {
     capabilities: capabilityContext,
     linghuSessions,
     releaseVersion,
-    readRuleInstructions,
+    readRuleInstructions: (memberId, task) => {
+      if (memberId !== "linghu-ancestor" && task.snapshot.ruleContext) {
+        return rules.renderTaskRuleSnapshot(task.snapshot.ruleContext);
+      }
+      return rules.renderRoleInstructions(memberId === "linghu-ancestor" ? "linghu" : "executor");
+    },
     runUnifiedTests: (rootPath) => {
       if (!linghuRuntime) throw new Error("令狐运行时尚未初始化，不能执行统一测试。");
       return linghuRuntime.runUnifiedTests(rootPath);

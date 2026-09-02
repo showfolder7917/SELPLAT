@@ -41,7 +41,7 @@ export function RuleManagementFeature({ locale }: { locale: LocaleValue }) {
     {(error || status?.message) && <em role="alert">{error || status?.message}</em>}
     <details>
       <summary>{isJapanese ? "ルールと出所を表示" : "查看规则与来源"}</summary>
-      <ul>{rules.map((rule) => <li key={rule.logicalId}><code>{rule.logicalId}</code><span>{rule.source === "customer-overlay" ? (isJapanese ? "顧客上書き" : "客户覆盖") : (isJapanese ? "内蔵" : "内置")}</span></li>)}</ul>
+      <ul>{rules.map((rule) => <li key={rule.logicalId}><code>{rule.logicalId}</code><span>{rule.source === "active-user-local" ? (isJapanese ? "ローカル作業領域" : "本地规则工作区") : (isJapanese ? "ソース規則" : "源码规则")}</span></li>)}</ul>
     </details>
   </section>;
 }

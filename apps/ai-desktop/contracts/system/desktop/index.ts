@@ -51,6 +51,7 @@ export type {
   CollaborationStateEventOutDto,
   CollaborationStreamEventOutDto,
   CollaborationTaskOutDto,
+  CollaborationTaskRuleContextOutDto,
   CollaborationTaskSnapshotOutDto,
   CollaborationTaskStateValue,
   CollaborationTimelineBusinessEventOutDto,

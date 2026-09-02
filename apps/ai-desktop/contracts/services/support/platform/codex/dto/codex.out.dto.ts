@@ -10,6 +10,8 @@ import type { ModelServiceTierValue, ReasoningEffortValue } from "../../../../..
 
 export interface CodexAccountOutDto {
   authenticated: boolean;
+  /** 认证提供方返回的不可变账号主体；仅用于生成本地稳定用户 ID。 */
+  accountSubject?: string | null;
   authMode: string | null;
   email: string | null;
   planType: string | null;

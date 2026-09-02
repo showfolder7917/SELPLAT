@@ -29,7 +29,9 @@ class ExternalCodexConversationArchiverTest(unittest.TestCase):
             codex_home = root / ".codex"
             rollout = codex_home / "sessions/2026/08/31/rollout-thread-manual.jsonl"
             project_root.mkdir(parents=True)
-            (project_root / "AGENTS.md").write_text("# test\n", encoding="utf-8")
+            agents_path = project_root / "apps/ai-desktop/ruleengine/AGENTS.md"
+            agents_path.parent.mkdir(parents=True)
+            agents_path.write_text("# test\n", encoding="utf-8")
             rollout.parent.mkdir(parents=True)
             records = [
                 {"timestamp": "2026-08-31T01:00:00.000Z", "type": "session_meta", "payload": {"session_id": "thread-manual", "thread_source": "user", "originator": "codex_work_desktop"}},

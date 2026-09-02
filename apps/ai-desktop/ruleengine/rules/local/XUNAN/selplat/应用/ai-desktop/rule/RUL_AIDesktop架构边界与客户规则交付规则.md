@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.7.0 增加统一提示词库、阶段描述元数据、构建交付和运行时权限边界。 -->
-rule_version = 2.7.0
+<!-- 2.8.0 将运行时规则升级为 AGENTS 单入口、当前用户单层加载、人物规则与任务冻结快照，并增加无源码本地工作区和异步上传接口。 -->
+rule_version = 2.8.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -15,7 +15,7 @@ python_ability_refs = none
 <!-- 应用生产程序直接实现规则加载，不在 rule-engine 内伪造第二个 Node ability。 -->
 node_ability_refs = none
 <!-- 真实生产规则加载入口固定为主进程规则服务。 -->
-application_program_path = apps/ai-desktop/electron/services/support/capabilities/rules/rule-bundle.facade.ts
+application_program_path = apps/ai-desktop/electron/services/support/capabilities/rules/active-user-rule.facade.ts
 
 <!-- 应用私有协议顶层只保留 foundation、system、services；services 必须与 Electron 的真实业务所有者路径同构。 -->
 contracts_domain_layout_contract = foundation + system/desktop + services/personas_evolution_workflow_support + services/support/application_capabilities_platform + mirror_electron_service_owner_path + no_ownerless_theme_root + no_flat_business_contracts + no_root_codex_or_governance_domain
@@ -100,20 +100,24 @@ linghu_vertical_module_contract = contracts/services/personas/linghu + electron/
 <!-- 令狐 DTO 固定站在令狐模块边界判断方向：进入令狐为 InDto，离开令狐为 OutDto，主动事件为 EventOutDto；每个文件必须写明生产方、接收方、流向和禁止职责。 -->
 linghu_contract_dto_layout_contract = contracts/services/personas/linghu/dto_and_value + one_direction_per_kebab_case_dot_in_or_out_dot_dto_dot_ts_file_with_same_direction_supporting_types + linghu_boundary_is_direction_reference + inbound_names_end_with_InDto + outbound_names_end_with_OutDto + outbound_event_file_uses_dot_event_dot_out_dot_dto_and_type_ends_with_EventOutDto + stable_union_names_end_with_Value + file_comment_declares_producer_consumer_data_flow_and_forbidden_responsibility + linghu_index_is_only_public_facade + prohibit_external_direct_dto_or_value_import + repair_proposal_out_owned_by_linghu_not_nangong
 
-<!-- 客户安装包必须携带由显式白名单构建的生产规则 bundle，禁止依赖 SELPLAT 源码仓库。 -->
-production_rule_bundle_contract = explicit_allowlist_build + manifest_and_rules_JSON + packaged_extraResources + no_source_repository_dependency
-<!-- 规则 bundle 只允许包含批准的运行规则，必须排除历史、测试、模板、用户会话和无关应用资产。 -->
-production_rule_bundle_content_contract = approved_runtime_rules_only + exclude_archive_tests_templates_session_materials_unrelated_application_rules_and_development_abilities
-<!-- 安装态内置规则从 resourcesPath/ruleengine 读取，开发态从 build/ai-desktop/rule-bundle 读取。 -->
-production_rule_runtime_path_contract = packaged_process_resourcesPath_ruleengine + development_build_ai_desktop_rule_bundle
-<!-- 客户覆盖只能进入 userData/ruleengine/overrides，内置规则保持只读。 -->
-customer_rule_overlay_path_contract = userData_ruleengine_overrides + builtin_read_only
-<!-- 客户覆盖必须显式匹配可覆盖逻辑 ID，经过格式、大小、哈希和冲突校验后才能生效。 -->
-customer_rule_overlay_validation_contract = registered_overridable_logical_id + safe_JSON_shape + bounded_content + content_hash + invalid_overlay_rejected_with_diagnostic
-<!-- 有效规则必须真实注入 Codex 会话开发约束，同时可通过只读 IPC 查询来源和生效结果。 -->
-effective_rule_consumption_contract = inject_into_Codex_developer_instructions + read_only_status_list_and_resolve_IPC + source_traceability
-<!-- 客户运行优先使用 TypeScript 加载预编译 bundle，不要求额外安装 Python。 -->
-customer_runtime_language_contract = TypeScript_precompiled_bundle_loader + no_required_external_Python_runtime
+<!-- 构建产物只携带统一 AGENTS、根索引和构建时当前用户的完整索引树，排除会话、历史和模板。 -->
+production_rule_bundle_contract = ruleengine_AGENTS + root_RULE_INDEX + active_user_complete_index_tree + packaged_extraResources + exclude_sessions_history_templates
+<!-- AI Desktop 运行时只递归当前用户入口，禁止加载 core、common 和其他用户；用户冲突时当前用户规则优先。 -->
+active_user_rule_loading_contract = AGENTS_declared_user_else_authenticated_stable_subject_mapping + active_user_only + no_core_common_or_other_user + active_user_conflict_priority
+<!-- UI 主工作区存在 AI Desktop 源码时直接使用源码规则树并保持既有 Git/构建/发布/重启流程。 -->
+source_rule_workspace_contract = UI_primary_workspace_only + detect_apps_ai_desktop_package_AGENTS_root_index_and_user_index + source_rule_tree_direct_read + preserve_existing_release_flow
+<!-- 未检测到源码时初始化 userData 本地规则工作区；修改立即进入后续任务，并生成只含当前用户的 ZIP outbox。 -->
+local_rule_workspace_contract = userData_rule_workspace + writable_active_user_only + immediate_next_task_reload + revisioned_ZIP_outbox + no_installed_archive_mutation
+<!-- 每次任务提交冻结用户、人物、专项规则、正文、哈希、索引与回执；任务执行期间不随热更新漂移。 -->
+task_rule_snapshot_contract = activeUserId + role + ruleRevision + mandatoryRoleRuleIds + matchedTaskRuleIds + loadedRuleContents + loadedRuleHashes + indexCatalog + ruleReceipt + immutable_during_task
+<!-- 韩立、南宫婉、执行者和令狐各自加载专有人物规则，动态执行成员复用执行者规则。 -->
+persona_rule_contract = hanli_questioning + nangong_analysis_planning + executor_source_implementation + linghu_failure_test + dynamic_worker_reuses_executor
+<!-- 启动时只异步尝试上传最新待传 ZIP 一次；未配置端点或失败时保留 outbox，禁止阻塞本地规则加载。 -->
+rule_upload_contract = uploader_port + once_per_process_async_startup_attempt + latest_pending_only + SHA256_idempotency + success_receipt_history + failure_keeps_outbox + disabled_default
+<!-- 有效规则通过人物和任务上下文注入 Codex，同时通过只读 IPC 暴露当前用户解析结果。 -->
+effective_rule_consumption_contract = role_and_task_snapshot_Codex_injection + read_only_status_list_and_resolve_IPC + source_hash_receipt_traceability
+<!-- 客户运行使用 TypeScript 规则加载、ZIP 与上传端口，不要求额外安装 Python。 -->
+customer_runtime_language_contract = TypeScript_active_user_loader_and_archive + no_required_external_Python_runtime
 
 <!-- 应用提示词统一从一个清单进入，正文按人物、执行流程和支撑能力分目录；每条必须登记稳定 ID、名称、描述、所有者、工作流、阶段、触发条件、版本、变量和组合依赖。 -->
 application_prompt_library_contract = one_apps_ai_desktop_prompts_manifest + business_grouped_Markdown + stable_id_name_description_owner_workflow_stage_stageName_trigger_version_variables_and_includes + no_single_giant_prompt_file
@@ -127,4 +131,4 @@ application_prompt_permission_boundary = editable_AI_behavior_only + filesystem_
 <!-- 打包验收必须检查真实产物中规则存在、禁止内容不存在，并在脱离源码根的环境中加载成功。 -->
 package_acceptance_contract = inspect_real_artifact + required_rule_files_present + forbidden_internal_content_absent + start_and_load_without_SELPLAT_source_root
 <!-- 结构和规则交付变更必须登记 contracts、模块边界、bundle、覆盖、Codex 注入和真实打包回归。 -->
-test_registration_contract = contracts_layout + dependency_direction + rule_and_prompt_bundle_build + prompt_metadata_variable_include_and_hash_validation + overlay_validation + Codex_instruction_injection + real_package_content_and_isolated_startup
+test_registration_contract = contracts_layout + dependency_direction + active_user_only_loading + persona_rule_injection + task_rule_snapshot + source_and_local_workspace + ZIP_outbox_and_upload_fallback + rule_and_prompt_bundle_build + prompt_metadata_variable_include_and_hash_validation + real_package_content_and_isolated_startup

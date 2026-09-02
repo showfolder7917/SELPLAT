@@ -46,7 +46,7 @@ def archive_conversation(
 
     # 工程根必须真实存在，目标目录永远由工程根拼接而不是写死某台机器路径。
     resolved_project_root = project_root.resolve()
-    if not (resolved_project_root / "AGENTS.md").is_file():
+    if not (resolved_project_root / "apps/ai-desktop/ruleengine/AGENTS.md").is_file():
         raise ConversationArchiveError(f"不是有效 SELPLAT 工程根：{resolved_project_root}")
 
     # CODEX_HOME 未显式传入时遵循外部 Codex 标准环境变量和用户目录回退顺序。

@@ -14,7 +14,7 @@ PROJECT_ROOT = next(
 )
 ACTIVE_USER = re.findall(
     r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-    (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    (PROJECT_ROOT / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
 )[0]
 PROGRAM_PATH = (
     PROJECT_ROOT / "apps/ai-desktop/ruleengine/python/local"

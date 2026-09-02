@@ -5,6 +5,7 @@ export type { StalledTaskDetectionOutDto, WorkflowExceptionRecordOutDto } from "
 export type {
   CollaborationMemberOutDto,
   CollaborationParticipantSnapshotOutDto,
+  CollaborationTaskRuleContextOutDto,
   CollaborationTaskSnapshotOutDto,
 } from "./dto/collaboration-member.out.dto.js";
 export type { CollaborationMemberKindValue, CollaborationMemberRoleValue, CollaborationMemberStateValue, CollaborationWorkerPhaseValue, DesktopOperatingModeValue } from "./value/collaboration-member.value.js";

@@ -21,7 +21,7 @@ sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
 os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
 ACTIVE_USER_MATCHES = re.findall(
     r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-    (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    (PROJECT_ROOT / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
 )
 if len(ACTIVE_USER_MATCHES) != 1:
     raise RuntimeError("AGENTS.md 必须且只能声明一个当前稳定用户 ID。")

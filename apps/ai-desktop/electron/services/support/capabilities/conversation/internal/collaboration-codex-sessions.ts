@@ -208,6 +208,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   runCodeValidation(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<void>;
   readSettings: CodexServiceOptions["readSettings"];
   readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
+  readRuleInstructionsForMember?: (memberId: string, task: CollaborationTaskOutDto) => string;
   readWorkspaceState?: () => WorkspaceStateOutDto;
   prompts: PromptLibraryPort;
   personaSessionStore?: (memberId: string) => CodexSessionPersistence | null;
@@ -280,7 +281,9 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
         dependencyLeaseId: dependencyLease?.leaseId,
         preserveThreadAcrossWorkspaceChanges: Boolean(persistentSessions),
         readSettings: this.#options.readSettings,
-        readRuleInstructions: this.#options.readRuleInstructions,
+        readRuleInstructions: this.#options.readRuleInstructionsForMember
+          ? () => this.#options.readRuleInstructionsForMember!(member.memberId, task)
+          : this.#options.readRuleInstructions,
       },
       (details) => this.#options.recordEvent("collaboration.trusted_command.decision", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),
       (details) => this.#options.recordEvent("collaboration.thread.lifecycle", { connectionId, memberId: member.memberId, role, ...details }, task.taskId),

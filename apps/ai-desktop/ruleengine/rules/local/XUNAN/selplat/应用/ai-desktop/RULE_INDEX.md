@@ -1,5 +1,8 @@
 # 当前用户 SELPLAT ai-desktop 应用规则索引
 
+<!-- 韩立、南宫婉、动态执行者和令狐的长期职责从独立人物索引进入。 -->
+AI_DESKTOP_PERSONA_RULE_INDEX = local/XUNAN/selplat/应用/ai-desktop/index/人物职责/RULE_INDEX.md
+
 <!-- 单一 Developer 产品线、官方 Codex harness、专题工作台节点真实换页与专题工作区同源分发、开发包工程根注入、发布包路径隔离、跨平台截图适配、自然协作表达、托管职责分离、令狐自动流程最后保障、运行时测试批次与外部工程文档边界、ChatGPT 账号登录和桌面执行审批由本应用规则统一约束。 -->
 AI_DESKTOP_OFFICIAL_HARNESS_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md
 

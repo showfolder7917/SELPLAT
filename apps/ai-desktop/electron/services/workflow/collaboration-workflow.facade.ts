@@ -36,6 +36,7 @@ export interface CollaborationCoordinatorOptions {
   integrationPipeline: VersionIntegrationPipeline;
   emitState(state: CollaborationStateOutDto, reason: string, taskIds: string[]): void;
   emitStream(taskId: string, memberId: string, event: CodexStreamEventOutDto): void;
+  createTaskRuleContext?(taskRuleIds: string[]): NonNullable<CollaborationTaskOutDto["snapshot"]["ruleContext"]>;
 }
 
 /** 编排执行人的技术分析、实施、令狐验证和集成，业务方向审批由韩立专题线路负责。 */
@@ -46,6 +47,7 @@ export class CollaborationCoordinator {
   readonly #executor: ExecutorFacade;
   readonly #integrationPipeline: VersionIntegrationPipeline;
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
+  readonly #createTaskRuleContext: CollaborationCoordinatorOptions["createTaskRuleContext"];
   readonly #activeTaskRuns = new Set<string>();
   readonly #unifiedTestRepairRuns = new Map<string, Promise<boolean>>();
   readonly #mergeConflictCorrectionRuns = new Set<string>();
@@ -62,6 +64,7 @@ export class CollaborationCoordinator {
     this.#executor = options.executor;
     this.#integrationPipeline = options.integrationPipeline;
     this.#emitStream = options.emitStream;
+    this.#createTaskRuleContext = options.createTaskRuleContext;
     this.#unsubscribeStore = this.#store.subscribe((state, reason, taskIds) => {
       options.emitState(state, reason, taskIds);
       // 在途任务的统一测试失败属于协作主流程安全兜底，不依赖令狐“主动巡检”总开关。
@@ -83,7 +86,10 @@ export class CollaborationCoordinator {
   submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
     const enabledWorkers = this.state().members.filter((member) => member.kind === "worker" && member.enabled).length;
     if (enabledWorkers < 1) throw new Error("协同执行至少需要一名已启用的执行人物。");
-    const task = this.#store.submitTask(request);
+    const task = this.#store.submitTask({
+      ...request,
+      ruleContext: this.#createTaskRuleContext?.(request.taskRuleIds || []),
+    });
     this.#waitSpans.set(task.taskId, this.#durations.startWait(task.taskId, "executor-queue", "system-wait", "no-idle-executor", "executor-capacity", null));
     this.#schedule();
     return this.state();

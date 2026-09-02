@@ -29,7 +29,7 @@ import type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutD
 export interface DesktopApi {
   /** 读取内置规则包和客户覆盖的当前健康状态。示例：无覆盖时返回 builtinRuleCount 大于零、overlayRuleCount 为零；只读且不产生文件副作用。 */
   getRuleBundleStatus(): Promise<RuleBundleStatusOutDto>;
-  /** 列出已经合并客户覆盖的有效规则。示例：返回 source 为 builtin 或 customer-overlay 的数组；只读且不会返回被拒绝覆盖。 */
+  /** 列出当前用户的有效规则。示例：source 表示源码规则树或本地规则工作区；只读且不会返回 core、common 或其他用户。 */
   listEffectiveRules(): Promise<RuntimeRuleOutDto[]>;
   /** 按稳定逻辑 ID 查询最终规则。示例：resolveEffectiveRule("AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES")；未命中返回 rule=null，不抛出文件系统细节。 */
   resolveEffectiveRule(logicalId: string): Promise<ResolvedRuntimeRuleOutDto>;

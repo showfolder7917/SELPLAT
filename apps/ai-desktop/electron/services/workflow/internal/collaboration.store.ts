@@ -9,6 +9,7 @@ import type {
   CreateCollaborationMemberInDto,
   DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
+  CollaborationTaskRuleContextOutDto,
   UpdateCollaborationMemberInDto,
 } from "../../../../contracts/services/workflow/index.js";
 
@@ -156,7 +157,7 @@ export class CollaborationStore {
     });
   }
 
-  submitTask(request: SubmitCollaborationTaskInDto): CollaborationTaskOutDto {
+  submitTask(request: SubmitCollaborationTaskInDto & { ruleContext?: CollaborationTaskRuleContextOutDto }): CollaborationTaskOutDto {
     if (!request || typeof request.confirmedIntent !== "string" || !request.confirmedIntent.trim()) {
       throw new Error("必须提供韩立已经确认的完整任务意图。");
     }
@@ -212,6 +213,7 @@ export class CollaborationStore {
         workspaceState: structuredClone(request.workspaceState),
         locale: request.locale,
         contentHash: sha256(normalizedIntent),
+        ruleContext: request.ruleContext ? structuredClone(request.ruleContext) : null,
       },
       plans: [],
       executionRecords: [],

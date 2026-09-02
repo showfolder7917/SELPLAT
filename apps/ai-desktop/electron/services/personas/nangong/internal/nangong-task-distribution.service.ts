@@ -111,6 +111,7 @@ export class NangongTaskDistributionService {
         evolutionProposalId: proposal.proposalId, evolutionRoundId: proposal.proposalId,
         selfUpgradeTargetMemberId: proposal.targetMemberId || undefined, selfUpgradeCapabilityScope: proposal.capabilityScope || undefined,
         sourceEvolutionApprovalId: latestApproval?.approvalId,
+        taskRuleIds: unit.taskRuleIds || [],
       });
       const createdTask = next.tasks.find((task) => task.evolutionProposalId === proposal.proposalId && !distributedTaskIds.includes(task.taskId));
       if (!createdTask) throw new Error("协同任务已经创建，但未能建立提案关联。");
@@ -179,8 +180,9 @@ function parseDistributionPlan(text: string): PlanResult {
     const scope = typeof item.scope === "string" ? item.scope.trim().slice(0, 8_000) : "";
     const acceptanceCriteria = normalizeDraftList(item.acceptanceCriteria);
     const expectedFiles = normalizeDraftList(item.expectedFiles).map((file) => file.replaceAll("\\", "/").replace(/^\.\//u, "")).filter((file) => !file.startsWith("/") && !file.split("/").includes(".."));
+    const taskRuleIds = normalizeDraftList(item.taskRuleIds).filter((id) => /^[A-Z][A-Z0-9_]{1,127}$/u.test(id));
     const independentReason = typeof item.independentReason === "string" ? item.independentReason.trim().slice(0, 4_000) : "";
-    return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, independentReason }] : [];
+    return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, taskRuleIds, independentReason }] : [];
   });
   if (!summary || !units.length) throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
   return { summary, units };

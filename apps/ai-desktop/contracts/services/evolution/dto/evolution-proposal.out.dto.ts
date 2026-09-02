@@ -14,6 +14,8 @@ export interface EvolutionDistributionUnitOutDto {
   scope: string;
   acceptanceCriteria: string[];
   expectedFiles: string[];
+  /** 南宫婉从当前用户索引选择、由任务提交时冻结的专项规则逻辑 ID。 */
+  taskRuleIds?: string[];
   independentReason: string;
 }
 

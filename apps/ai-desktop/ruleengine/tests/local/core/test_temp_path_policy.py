@@ -31,7 +31,7 @@ OPTION_TEMP_ROOT = SELPLAT_ROOT / "OPTION" / "temp"
 # 当前稳定用户只从 AGENTS.md 读取，禁止扫描代码目录推断。
 ACTIVE_USER_MATCHES = re.findall(
     r"(?m)^- 当前稳定用户 ID：`([^`]+)`\s*$",
-    (PROJECT_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    (PROJECT_ROOT / "apps/ai-desktop/ruleengine/AGENTS.md").read_text(encoding="utf-8"),
 )
 if len(ACTIVE_USER_MATCHES) != 1:
     raise RuntimeError("AGENTS.md 必须且只能声明一个当前稳定用户 ID。")

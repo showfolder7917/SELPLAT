@@ -33,6 +33,20 @@ export interface CollaborationParticipantSnapshotOutDto {
   displayName: string;
 }
 
+export interface CollaborationTaskRuleContextOutDto {
+  activeUserId: string;
+  role: "hanli" | "nangong" | "executor" | "linghu";
+  ruleRevision: string;
+  mandatoryRoleRuleIds: string[];
+  matchedTaskRuleIds: string[];
+  dependencyRuleIds: string[];
+  loadedRuleHashes: Record<string, string>;
+  loadedRuleContents: Record<string, string>;
+  agentsContent: string;
+  indexCatalog: string;
+  ruleReceipt: string[];
+}
+
 export interface CollaborationTaskSnapshotOutDto {
   title: string;
   problemStatement: string;
@@ -44,4 +58,5 @@ export interface CollaborationTaskSnapshotOutDto {
   workspaceState: WorkspaceStateOutDto;
   locale: LocaleValue;
   contentHash: string;
+  ruleContext: CollaborationTaskRuleContextOutDto | null;
 }

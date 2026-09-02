@@ -39,7 +39,7 @@ import { SettingsFacade as SettingsStore } from "../../services/support/platform
 import { CommandGovernanceFacade as TrustedCommandStore } from "../../services/support/platform/security/index.js";
 import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFacade } from "../../services/support/capabilities/event-center/index.js";
 import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
-import { RuleBundleFacade as RuleBundleService } from "../../services/support/capabilities/rules/index.js";
+import { ActiveUserRuleFacade as RuleService } from "../../services/support/capabilities/rules/index.js";
 import type { PromptLibraryPort } from "../../services/support/capabilities/prompts/index.js";
 
 interface DesktopIpcDependencies {
@@ -66,7 +66,7 @@ interface DesktopIpcDependencies {
   preloadPath: string;
   prepareForApplicationExit: () => void;
   rendererRoot: string;
-  rules: RuleBundleService;
+  rules: RuleService;
   prompts: PromptLibraryPort;
   clearTestData: () => Promise<TestDataResetResultOutDto>;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;

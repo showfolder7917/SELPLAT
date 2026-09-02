@@ -18,9 +18,13 @@ if (!macDirectory) throw new Error(`Packaged developer application is unavailabl
 const asarPath = path.join(packageRoot, macDirectory.name, "AI Desktop.app", "Contents", "Resources", "app.asar");
 const resourcesRoot = path.dirname(asarPath);
 if (!existsSync(asarPath)) throw new Error(`Electron asar is unavailable: ${asarPath}`);
-for (const ruleResource of ["manifest.json", "rules.json"]) {
+for (const ruleResource of ["manifest.json"]) {
   const rulePath = path.join(resourcesRoot, "ruleengine", ruleResource);
   if (!existsSync(rulePath)) throw new Error(`Packaged production rule resource is missing: ${rulePath}`);
+}
+for (const ruleTreeResource of ["AGENTS.md", path.join("rules", "RULE_INDEX.md")]) {
+  const rulePath = path.join(resourcesRoot, "ruleengine", ruleTreeResource);
+  if (!existsSync(rulePath)) throw new Error(`Packaged active-user rule tree resource is missing: ${rulePath}`);
 }
 for (const promptResource of ["manifest.json", "prompts.json"]) {
   const promptPath = path.join(resourcesRoot, "prompts", promptResource);

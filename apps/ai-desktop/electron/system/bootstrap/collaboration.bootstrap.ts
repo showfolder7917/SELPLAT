@@ -25,10 +25,10 @@ type CoordinatorOptions = ConstructorParameters<typeof CollaborationWorkflowFaca
 
 export interface CollaborationBootstrapOptions {
   startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha">;
-  capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts">;
+  capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts" | "rules">;
   linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
   releaseVersion: string;
-  readRuleInstructions(): string;
+  readRuleInstructions(memberId: string, task: import("../../contracts/services/workflow/index.js").CollaborationTaskOutDto): string;
   runUnifiedTests(rootPath: string): Promise<string>;
   publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   onStateChanged: CoordinatorOptions["emitState"];
@@ -38,7 +38,7 @@ export interface CollaborationBootstrapOptions {
 /** 装配多人协作、隔离工作树、测试资源和集成发布能力。 */
 export function createCollaborationContext(options: CollaborationBootstrapOptions) {
   const { projectRoot, applicationName, projectPaths, workspaces, eventCenter } = options.startup;
-  const { collaborationRoot, codexHome, trustedCommands, screenshots, settings, prompts } = options.capabilities;
+  const { collaborationRoot, codexHome, trustedCommands, screenshots, settings, prompts, rules } = options.capabilities;
   const collaborationStore = createCollaborationState(path.join(collaborationRoot, "collaboration-state.json"));
   const collaborationDurations = createCollaborationDurationLog(projectPaths.collaborationArchiveRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
@@ -72,7 +72,8 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
       await taskTests.run({ taskId: task.taskId, worktreeRoot, emit });
     },
     readSettings: () => settings.read(),
-    readRuleInstructions: options.readRuleInstructions,
+    readRuleInstructions: () => "",
+    readRuleInstructionsForMember: options.readRuleInstructions,
     readWorkspaceState: () => workspaces.read(),
     prompts,
     personaSessionStore: (memberId) => memberId === "linghu-ancestor" ? options.linghuSessions : null,
@@ -111,6 +112,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     integrationPipeline: versionIntegration,
     emitState: options.onStateChanged,
     emitStream: options.onStream,
+    createTaskRuleContext: (taskRuleIds) => rules.createTaskRuleSnapshot("executor", taskRuleIds),
   });
 
   return {

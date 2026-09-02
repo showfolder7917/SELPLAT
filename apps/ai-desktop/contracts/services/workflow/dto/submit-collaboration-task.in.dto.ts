@@ -29,4 +29,6 @@ export interface SubmitCollaborationTaskInDto {
   selfUpgradeTargetMemberId?: string;
   selfUpgradeCapabilityScope?: string;
   sourceEvolutionApprovalId?: string;
+  /** 本任务显式命中的当前用户规则逻辑 ID；Workflow 会在提交时冻结解析结果。 */
+  taskRuleIds?: string[];
 }
