@@ -56,19 +56,13 @@ Windows 安装包：
 npm run dist:win:developer
 ```
 
-Windows 免安装 ZIP：
-
-```powershell
-npm run dist:zip:developer
-```
-
 macOS 安装包：
 
 ```bash
 npm run dist:mac:developer
 ```
 
-产物统一进入工程根 `build/ai-desktop/package/developer`。Developer 安装包在构建时写入已验证的 SELPLAT 工程根，运行时可使用 `--selplat-root` 或 `SELPLAT_ROOT` 覆盖；免安装 ZIP 把日志、缓存和临时材料写入压缩包旁的独立数据根。
+产物统一进入工程根 `build/ai-desktop/package/developer`。Developer 安装包在构建时写入已验证的 SELPLAT 工程根，运行时可使用 `--selplat-root` 或 `SELPLAT_ROOT` 覆盖。
 
 检查安装包中的工程根元数据：
 

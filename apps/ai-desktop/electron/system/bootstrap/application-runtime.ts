@@ -19,8 +19,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 // ES Module 没有 __dirname；它把 import.meta.url 转换为真实磁盘路径。
 
-// app 管理 Electron 生命周期，BrowserWindow 表示桌面窗口，protocol 注册内部资源协议。
-import { app, BrowserWindow, protocol } from "electron";
+// app 管理 Electron 生命周期，BrowserWindow 表示桌面窗口。
+import { app, BrowserWindow } from "electron";
 // SELPLAT 公共路径解析器：从工程根派生 build、cache、日志和临时目录。
 
 /**
@@ -118,7 +118,7 @@ import { createAtomicJsonPersistence, type DatabasePort as SqliteDatabase } from
 // 规则服务读取构建后的规则包，并合并用户允许的覆盖项。
 // 窗口工厂集中维护 BrowserWindow 安全配置和 Renderer 加载方式。
 import { createMainWindow } from "../window/create-main-window.js";
-import { ARCHIVE_SCHEME, createStartupContext } from "./startup-context.js";
+import { createStartupContext } from "./startup-context.js";
 import { createPersistenceContext, type PersistenceContext } from "./persistence.bootstrap.js";
 import { createCapabilityContext } from "./capabilities.bootstrap.js";
 import { createCollaborationContext } from "./collaboration.bootstrap.js";
@@ -127,7 +127,7 @@ import { registerApplicationIpc } from "./ipc.bootstrap.js";
 import { TestDataResetService } from "../../services/support/application/test-data-reset.service.js";
 
 const startup = createStartupContext();
-const { applicationName: startupApplicationName, variant: startupVariant, distributionMode: startupDistributionMode,
+const { applicationName: startupApplicationName, variant: startupVariant,
   projectRoot: startupProjectRoot, projectPaths: startupProjectPaths, preloadPath, healthCheckFile,
   workspaces: startupWorkspaces, eventCenter } = startup;
 
@@ -200,7 +200,6 @@ function prepareAiMemoryShutdown(): void {
 export async function startApplication(): Promise<void> {
   // 复用启动前已解析的稳定值，确保全部服务属于同一工程和产品变体。
   const variant = startupVariant;
-  const distributionMode = startupDistributionMode;
   const projectRoot = startupProjectRoot;
   const applicationName = startupApplicationName;
   const projectPaths = startupProjectPaths;
@@ -219,34 +218,10 @@ export async function startApplication(): Promise<void> {
   workflowRepository = persistenceContext.workflowRepository;
   collaborationTimeline = persistenceContext.collaborationTimeline;
   collaborationMemory = persistenceContext.collaborationMemory;
-  const archiveRuntime = distributionMode === "archive";
-  // Renderer 有三个位置：压缩包旁、安装包内部或开发态 build 目录。
-  const rendererRoot = archiveRuntime
-    ? path.join(path.dirname(process.execPath), "dist", "developer")
-    : app.isPackaged ? path.join(app.getAppPath(), "dist", "developer") : path.join(projectPaths.buildRoot, "renderer", "developer");
-  if (archiveRuntime) {
-    // 把 selplat-archive:// 请求映射到压缩包自带的 dist/developer 静态文件。
-    await protocol.handle(ARCHIVE_SCHEME, (request) => {
-      const relativePath = decodeURIComponent(new URL(request.url).pathname).replace(/^\/+/, "");
-      const resourcePath = path.resolve(rendererRoot, relativePath || "index.html");
-      const safeRendererRoot = `${path.resolve(rendererRoot)}${path.sep}`;
-      // 规范化后的文件必须仍在 Renderer 根内，阻止 ../ 读取包外文件。
-      if (!resourcePath.startsWith(safeRendererRoot)) return new Response("Not found", { status: 404 });
-      try {
-        const extension = path.extname(resourcePath).toLowerCase();
-        const contentType = extension === ".html"
-          ? "text/html; charset=utf-8"
-          : extension === ".js"
-            ? "text/javascript; charset=utf-8"
-            : extension === ".css"
-              ? "text/css; charset=utf-8"
-              : "application/octet-stream";
-        return new Response(new Uint8Array(readFileSync(resourcePath)), { headers: { "content-type": contentType } });
-      } catch {
-        return new Response("Not found", { status: 404 });
-      }
-    });
-  }
+  // Renderer 只从安装包内部或开发态 build 目录加载。
+  const rendererRoot = app.isPackaged
+    ? path.join(app.getAppPath(), "dist", "developer")
+    : path.join(projectPaths.buildRoot, "renderer", "developer");
   // 开发态从源码根读版本；安装态从 Electron 应用包内部读版本。
   const appRoot = app.isPackaged ? app.getAppPath() : projectPaths.sourceRoot;
   const releaseVersion = (JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8")) as { version: string }).version;
@@ -754,7 +729,7 @@ export async function startApplication(): Promise<void> {
     healthTimeout = setTimeout(() => finishHealthCheck({ status: "failed", errorDescription: "renderer-timeout" }), 15_000);
   }
   // 真正创建 Electron BrowserWindow；它会使用 preloadPath 并加载 rendererRoot/index.html。
-  let mainApplicationWindow: BrowserWindow | null = createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererReady, onRendererFailed });
+  let mainApplicationWindow: BrowserWindow | null = createMainWindow({ preloadPath, rendererRoot, variant, onRendererReady, onRendererFailed });
   // 窗口关闭后清空引用，否则 activate 会误以为旧窗口仍然可用。
   mainApplicationWindow.once("closed", () => { mainApplicationWindow = null; });
   if (healthCheckFile) {
@@ -773,7 +748,7 @@ export async function startApplication(): Promise<void> {
       mainApplicationWindow.focus();
       return;
     }
-    mainApplicationWindow = createMainWindow({ preloadPath, rendererRoot, variant, distributionMode, onRendererFailed });
+    mainApplicationWindow = createMainWindow({ preloadPath, rendererRoot, variant, onRendererFailed });
     mainApplicationWindow.once("closed", () => { mainApplicationWindow = null; });
   });
 }

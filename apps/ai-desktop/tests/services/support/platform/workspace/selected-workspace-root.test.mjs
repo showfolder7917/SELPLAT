@@ -9,7 +9,6 @@ import { appRoot, controlledTestRoot } from "#test-paths";
 test("发布、签名、验证和规则构建共用所选工作区门面", () => {
   for (const relative of [
     "electron-builder.developer.config.cjs",
-    "scripts/build-developer-archive-release.mjs",
     "scripts/build-rule-bundle.mjs",
     "scripts/sign-mac-developer-app.mjs",
     "scripts/interaction-test-paths.mjs",

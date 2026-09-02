@@ -8,7 +8,6 @@ interface MainWindowOptions {
   preloadPath: string;
   rendererRoot: string;
   variant: AppVariantValue;
-  distributionMode: "standard" | "archive";
   onRendererReady?: () => void;
   onRendererFailed?: (details: { errorCode: number; errorDescription: string; validatedURL: string }) => void;
 }
@@ -23,7 +22,7 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     frame: false,
     show: false,
     backgroundColor: "#080b12",
-    title: options.distributionMode === "archive" ? "AI Desktop - 压缩包版" : "AI Desktop",
+    title: "AI Desktop",
     webPreferences: {
       preload: options.preloadPath,
       contextIsolation: true,
@@ -40,13 +39,10 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     });
   }
   const rendererTarget = path.join(options.rendererRoot, "index.html");
-  const rendererLoad = options.distributionMode === "archive"
-    ? window.loadURL("selplat-archive://bundle/index.html?distribution=archive")
-    : window.loadFile(rendererTarget);
-  void rendererLoad.catch((error) => options.onRendererFailed?.({
+  void window.loadFile(rendererTarget).catch((error) => options.onRendererFailed?.({
     errorCode: -1,
     errorDescription: error instanceof Error ? error.message : String(error),
-    validatedURL: options.distributionMode === "archive" ? "selplat-archive://bundle/index.html" : rendererTarget,
+    validatedURL: rendererTarget,
   }));
   return window;
 }

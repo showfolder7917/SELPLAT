@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
@@ -9,7 +9,6 @@ const require = createRequire(import.meta.url);
 const applicationRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const expectedDevelopmentRoot = path.resolve(process.env.SELPLAT_ROOT || path.join(applicationRoot, "../.."));
 const developerConfig = require("../../electron-builder.developer.config.cjs");
-const archiveConfigSource = readFileSync(new URL("../../electron-builder.archive.config.cjs", import.meta.url), "utf8");
 const packageManifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
 const appConfigSource = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
 const unifiedRunnerSource = readFileSync(new URL("../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
@@ -17,16 +16,7 @@ const packagedVerifierSource = readFileSync(new URL("../../scripts/verify-develo
 const developerBatchSource = readFileSync(new URL("../../启动开发版.bat", import.meta.url), "utf8");
 const variantBatchSource = readFileSync(new URL("../../scripts/start-variant.bat", import.meta.url), "utf8");
 const developerDesktopLauncherSource = readFileSync(new URL("../../scripts/start-developer-desktop.mjs", import.meta.url), "utf8");
-const archiveReleaseBuilderSource = readFileSync(new URL("../../scripts/build-developer-archive-release.mjs", import.meta.url), "utf8");
-const mainSource = [
-  "../../electron/system/bootstrap/application-runtime.ts",
-  "../../electron/system/bootstrap/startup-context.ts",
-].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const mainWindowSource = readFileSync(new URL("../../electron/system/window/create-main-window.ts", import.meta.url), "utf8");
-const developerAppSource = [
-  "../../src/applications/developer/DeveloperApplication.tsx",
-  "../../src/applications/developer/layout/DeveloperShell.tsx",
-].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 
 test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {
   assert.equal(developerConfig.extraMetadata.selplatDevelopmentRoot, expectedDevelopmentRoot);
@@ -38,6 +28,22 @@ test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {
   assert.match(packagedVerifierSource, /mtimeMs/, "多平台产物并存时必须验证最新生成的真实包");
   assert.match(packagedVerifierSource, /extractFile\(asarPath, "package\.json"\)/);
   assert.match(packagedVerifierSource, /packagedManifest\.selplatDevelopmentRoot/);
+});
+
+test("打包入口只保留 Developer 配置", () => {
+  for (const scriptName of [
+    "dist:win:customer",
+    "package:win:customer",
+    "verify:win:customer",
+    "package:win:developer:archive",
+    "dist:zip:developer",
+  ]) assert.equal(packageManifest.scripts[scriptName], undefined, scriptName);
+  for (const relativePath of [
+    "electron-builder.customer.config.cjs",
+    "electron-builder.archive.config.cjs",
+    "scripts/verify-windows-customer-package.mjs",
+    "scripts/build-developer-archive-release.mjs",
+  ]) assert.equal(existsSync(path.join(applicationRoot, relativePath)), false, relativePath);
 });
 
 test("运行时优先使用显式覆盖且只有开发包读取内置工程根", () => {
@@ -69,29 +75,4 @@ test("Windows BAT 开发版从脚本位置解析工程根并进入无端口桌�
   assert.doesNotMatch(mainWindowSource, /VITE_DEV_SERVER_URL|127\.0\.0\.1:5173/);
   assert.match(mainWindowSource, /window\.loadFile\(rendererTarget\)/);
   assert.doesNotMatch(variantBatchSource, /dist:win:developer|electron-builder/);
-});
-
-test("免安装开发 ZIP 携带完整 Electron 运行目录且不依赖源工程", () => {
-  assert.match(packageManifest.scripts["package:win:developer:archive"], /electron-builder\.archive\.config\.cjs.*--win dir --x64/);
-  assert.match(archiveConfigSource, /target: "dir"/);
-  assert.match(archiveConfigSource, /node_modules", "electron", "dist"/);
-  assert.match(packageManifest.scripts["dist:zip:developer"], /build-developer-archive-release\.mjs/);
-  assert.match(archiveReleaseBuilderSource, /win-unpacked/);
-  assert.match(archiveReleaseBuilderSource, /cpSync\(lockedElectronRoot, portableRoot/);
-  assert.match(archiveReleaseBuilderSource, /%~dp0electron\.exe/);
-  assert.match(archiveReleaseBuilderSource, /%~dp0resources\\\\app\.asar/);
-  assert.match(archiveReleaseBuilderSource, /--disable-gpu.*--in-process-gpu/);
-  assert.match(archiveReleaseBuilderSource, /set \"SELPLAT_ROOT=\$\{dataRoot\}\"/);
-  assert.match(archiveReleaseBuilderSource, /--ai-desktop-distribution=archive/);
-  assert.match(archiveReleaseBuilderSource, /--ai-desktop-user-data-dir=%AI_DESKTOP_USER_DATA%/);
-  assert.match(archiveReleaseBuilderSource, /Compress-Archive/);
-  assert.match(appConfigSource, /resolveDistributionMode\(\) === "archive"/);
-  assert.match(mainSource, /path\.join\(path\.dirname\(process\.execPath\), "dist", "developer"\)/);
-  assert.match(mainSource, /distributionMode === "archive"\) app\.disableHardwareAcceleration\(\)/);
-  assert.match(mainSource, /process\.env\.AI_DESKTOP_HEALTH_CHECK_FILE/);
-  assert.match(mainWindowSource, /压缩包版/);
-  assert.match(mainWindowSource, /webContents\.once\("did-finish-load", options\.onRendererReady\)/);
-  assert.match(mainWindowSource, /onRendererFailed/);
-  assert.match(mainWindowSource, /window\.loadFile\(rendererTarget\)/);
-  assert.match(developerAppSource, /压缩包版/);
 });

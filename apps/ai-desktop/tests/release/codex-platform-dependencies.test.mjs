@@ -23,7 +23,7 @@ test("平台专属 Codex 包保持直接锁定但不阻塞其他平台安装", (
 });
 
 test("Windows 打包入口必须先通过 Windows 原生宿主门禁", () => {
-  for (const scriptName of ["dist:win:developer", "dist:win:customer", "package:win:customer", "package:win:developer:archive"]) {
+  for (const scriptName of ["dist:win:developer"]) {
     assert.match(manifest.scripts[scriptName], /^node scripts\/assert-package-host\.mjs win32 &&/);
   }
   const guard = readFileSync(new URL("../../scripts/assert-package-host.mjs", import.meta.url), "utf8");

@@ -2,20 +2,17 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { app, BrowserWindow, protocol } from "electron";
+import { app, BrowserWindow } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
-import { resolveApplicationName, resolveAppVariant, resolveDistributionMode, resolveProjectRoot } from "../config/app-config.js";
+import { resolveApplicationName, resolveAppVariant, resolveProjectRoot } from "../config/app-config.js";
 import { createBusinessAuditArchive, EventCenterFacade } from "../../services/support/capabilities/event-center/index.js";
 import { WorkspaceFacade } from "../../services/support/platform/workspace/index.js";
-
-export const ARCHIVE_SCHEME = "selplat-archive";
 
 /** 启动前解析出的稳定环境；后续 Bootstrap 禁止再次读取启动参数推断另一套路径。 */
 export interface StartupContext {
   readonly applicationName: string;
   readonly variant: ReturnType<typeof resolveAppVariant>;
-  readonly distributionMode: ReturnType<typeof resolveDistributionMode>;
   readonly projectRoot: string;
   readonly projectPaths: ReturnType<typeof resolveApplicationDataPaths>;
   readonly preloadPath: string;
@@ -30,14 +27,6 @@ export interface StartupContext {
 /** 在 Electron ready 之前完成用户目录、工程根、协议和单实例门禁。 */
 export function createStartupContext(): StartupContext {
   const electronDirectory = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  const distributionMode = resolveDistributionMode();
-  if (distributionMode === "archive") {
-    protocol.registerSchemesAsPrivileged([{
-      scheme: ARCHIVE_SCHEME,
-      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
-    }]);
-  }
-
   const applicationName = resolveApplicationName();
   const isolatedUserData = process.argv.find((argument) => argument.startsWith("--ai-desktop-user-data-dir="))
     ?.slice("--ai-desktop-user-data-dir=".length) || null;
@@ -65,8 +54,6 @@ export function createStartupContext(): StartupContext {
     if (window.isMinimized()) window.restore();
     window.focus();
   });
-  if (distributionMode === "archive") app.disableHardwareAcceleration();
-
   const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))
     ?.slice("--ai-desktop-health-check-file=".length)
     || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
@@ -81,7 +68,6 @@ export function createStartupContext(): StartupContext {
   return {
     applicationName,
     variant: resolveAppVariant(),
-    distributionMode,
     projectRoot,
     projectPaths,
     preloadPath: path.join(electronDirectory, "preload", "preload.cjs"),

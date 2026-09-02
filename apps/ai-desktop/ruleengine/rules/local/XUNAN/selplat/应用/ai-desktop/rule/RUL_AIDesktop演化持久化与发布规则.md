@@ -1,7 +1,7 @@
 # AI Desktop 演化、持久化与发布规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.111.0
+rule_version = 5.112.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -94,6 +94,8 @@ automatic_test_command_safety_contract = explicit_switch_authorizes_exact_no_arg
 automatic_test_transition_contract = task_code_verified_then_enqueue_exactly_one_test_managed_turn + existing_fifo_queue + no_stage_skip_before_code_verified + test_failure_never_auto_approves_more_permissions
 <!-- Electron 打包必须把官方 Codex JavaScript 入口和当前平台原生二进制解包到可执行文件系统，禁止从 asar 内直接拉起。 -->
 packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_package
+<!-- AI Desktop 只维护单一 Developer 产品线和 electron-builder.developer.config.cjs 配置；客户版与免安装 ZIP 的配置、脚本、运行模式和界面分支保持退役。 -->
+ai_desktop_single_packaging_configuration_contract = developer_product_only + electron-builder.developer.config.cjs_only + windows_NSIS_and_macos_DMG_or_dir + prohibit_customer_config_and_scripts + prohibit_archive_zip_config_script_protocol_runtime_or_UI_branch
 <!-- Windows 包只允许在 Windows 原生宿主生成；平台包仍直接锁定，但 macOS 不得再执行 Windows 交叉打包。 -->
 windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.149.0-win32-x64
 <!-- 所有 Windows 打包入口必须在任何构建前校验 process.platform=win32，真实启动和登录验收也只在 Windows 环境执行。 -->

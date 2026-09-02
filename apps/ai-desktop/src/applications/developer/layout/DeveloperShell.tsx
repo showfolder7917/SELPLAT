@@ -19,13 +19,12 @@ export function DeveloperShell({ shellRef, explorerExpanded, locale, style, chil
 interface DeveloperTitleBarProps {
   projectRoot: string;
   title: string;
-  archiveDistribution: boolean;
 }
 
 /** Developer 标题栏布局控件；窗口动作继续由 shell feature 统一提供。 */
-export function DeveloperTitleBar({ projectRoot, title, archiveDistribution }: DeveloperTitleBarProps) {
+export function DeveloperTitleBar({ projectRoot, title }: DeveloperTitleBarProps) {
   return <header className="dev-titlebar">
-    <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>{title}</span>{archiveDistribution && <span>压缩包版</span>}</div>
+    <div className="dev-brand"><Code24Regular /><strong>AI Desktop</strong><span>{title}</span></div>
     <div className="dev-command"><Search24Regular /><span>{projectRoot}</span></div>
     <WindowControls />
   </header>;

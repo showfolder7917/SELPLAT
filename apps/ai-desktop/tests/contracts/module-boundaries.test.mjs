@@ -435,11 +435,11 @@ test("Electron entry delegates startup, persistence, collaboration, personas and
   assert.match(source("electron/system/bootstrap/application-runtime.ts"), /registerApplicationIpc/);
 });
 
-test("customer package config excludes build-machine roots and carries external rule resources", () => {
-  const customerConfig = source("electron-builder.customer.config.cjs");
+test("developer package carries external rule resources", () => {
+  const developerConfig = source("electron-builder.developer.config.cjs");
   const builderManifest = JSON.parse(source("electron-builder.developer.json"));
-  assert.doesNotMatch(customerConfig, /selplatDevelopmentRoot\s*:/);
-  assert.match(customerConfig, /package\/customer/);
+  assert.match(developerConfig, /electron-builder\.developer\.json/);
+  assert.match(developerConfig, /selplatDevelopmentRoot/);
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "ruleengine"));
   assert.match(source("electron/system/config/app-config.ts"), /userData"\), "workspace"/);
   assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "ruleengine"/);

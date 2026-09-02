@@ -163,7 +163,6 @@ function readableDesktopError(error: unknown, fallback: string): string {
 export function DeveloperApplication() {
   const selUi = useSelUi();
   const shellRef = useRef<HTMLDivElement>(null);
-  const archiveDistribution = new URLSearchParams(window.location.search).get("distribution") === "archive";
   const [locale, setLocale] = useState<LocaleValue>("zh-CN");
   const [sandboxMode, setSandboxMode] = useState<SandboxModeValue>("workspace-write");
   const [defaultModel, setDefaultModel] = useState<string | null>(null);
@@ -1239,7 +1238,7 @@ export function DeveloperApplication() {
   const nangongNewConversationLabel = locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话";
 
   return <DeveloperShell shellRef={shellRef} explorerExpanded={explorerExpanded} locale={locale} style={shellStyle}>
-    <DeveloperTitleBar projectRoot={projectRoot} title={text.title} archiveDistribution={archiveDistribution} />
+    <DeveloperTitleBar projectRoot={projectRoot} title={text.title} />
 
     <DeveloperActivityBar explorerExpanded={explorerExpanded} filesLabel={text.files} expandLabel={text.expand} collapseLabel={text.collapse} onToggleExplorer={() => setExplorerExpanded((value) => !value)} settingsControl={<SettingsFloatingPanel locale={locale} open={settingsOpen} onOpenChange={setSettingsOpen}>
         <div className="dev-account"><span>{text.account}</span><strong>{codexStatus.account.email || codexStatus.account.planType || text.signedOut}</strong><small>{codexStatus.runtime ? `${codexStatus.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${codexStatus.runtime.version}` : codexStatus.connected ? "openai/codex app-server" : codexStatus.error || "Harness offline"}</small>{codexStatus.account.authenticated ? <button type="button" onClick={() => void logout()}><span>{text.signOut}</span></button> : <ChatGPTLoginAction label={text.signIn} onLogin={() => void login()} />}{loginHint && <em>{loginHint}</em>}</div>
