@@ -14,6 +14,8 @@ export interface HanliDeliberationDependencies {
   askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
   askNangong(question: string, context: string, state: EvolutionStateOutDto): Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>): void;
+  readStableUserId(): string;
+  readProjectScope(state: EvolutionStateOutDto): string;
 }
 
 /**
@@ -36,8 +38,10 @@ export class HanliDeliberationService {
       if (!memory) throw new Error("AI Memory 数据库不可用，韩立不能读取对话库。 ");
       const deliberationId = `han-li-deliberation-${randomUUID()}`;
       const snapshots = memory.readHanLiEvolutionCorpus(deliberationId);
+      const semanticContext = memory.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), "", 20);
       const first = parseHanliQuestion(await askHanli(this.dependencies.prompts.render("hanli.first-question", {
         corpus: formatEvolutionCorpus(snapshots),
+        semanticContextJson: JSON.stringify(semanticContext),
       }), state));
       state = store.beginDeliberation(deliberationId, snapshots, first.question, first.reason);
       deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId)!;
@@ -61,6 +65,7 @@ export class HanliDeliberationService {
           ? `当前已到配置的第 ${maximum} 轮。证据足够时确立专题；仍不足时返回继续追问，但必须明确唯一缺口。`
           : "证据不足就继续追问，不能为了自动化而提前确立专题。",
         deliberationContext: formatDeliberationContext(refreshed),
+        semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), answeredRound.question, 12) || null),
       }), state));
       if (mustConclude && !judgment.candidate) {
         state = store.blockDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, `韩立完成 ${maximum} 轮研讨后仍确认存在证据缺口：${judgment.nextQuestion?.reason || judgment.assessment}`);
@@ -81,8 +86,10 @@ export class HanliDeliberationService {
   /** 一次性流程仍由韩立形成正式方向判断，Workflow 只能请求判断并使用结果。 */
   async reviewOneShotProposal(proposal: EvolutionProposalOutDto): Promise<{ decision: "approved" | "rejected" | "supplement-required"; advice: string }> {
     const state = this.dependencies.store.state();
+    const semanticContext = this.dependencies.memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), proposal.title, 12) || null;
     const response = await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.proposal-review", {
       proposalContextJson: JSON.stringify({ proposal, topic: state.topics.find((item) => item.topicId === proposal.topicId) }),
+      semanticContextJson: JSON.stringify(semanticContext),
     }), state);
     const value = parseJsonObject(response);
     const decision = value.decision;
@@ -96,12 +103,14 @@ export class HanliDeliberationService {
     topic: EvolutionStateOutDto["topics"][number],
     proposal: EvolutionProposalOutDto,
     priorFindings: Record<string, unknown>[],
+    semanticContext: Record<string, unknown>,
     requestPlan: (prompt: string, workspaceState: typeof topic.workspaceState, locale: typeof topic.locale) => Promise<string>,
   ): Promise<HanliAcceptancePlanOutDto> {
     const response = await requestPlan(this.dependencies.prompts.render("hanli.acceptance-plan", {
       topicJson: JSON.stringify({ title: topic.title, goal: topic.goal, scope: topic.scope, exclusions: topic.exclusions, evidence: topic.evidence, acceptanceCriteria: topic.acceptanceCriteria }),
       proposalJson: JSON.stringify({ title: proposal.title, content: proposal.content, impactScope: proposal.impactScope, risks: proposal.risks, resultSummary: proposal.resultSummary }),
       priorFindingsJson: JSON.stringify(priorFindings),
+      semanticContextJson: JSON.stringify(semanticContext),
     }), topic.workspaceState, topic.locale);
     return parseAcceptancePlan(response, topic.topicId, proposal.proposalId);
   }
@@ -144,6 +153,7 @@ function parseAcceptanceOperation(raw: unknown): HanliAcceptanceOperationValue[]
   if (item.type === "scroll" && typeof item.target === "string" && (item.direction === "up" || item.direction === "down") && Number.isFinite(item.amount)) return [{ type: "scroll", target: item.target.trim().slice(0, 200), direction: item.direction, amount: Math.max(40, Math.min(2_000, Math.round(Number(item.amount)))) }];
   if (item.type === "press-key" && ["Tab", "Enter", "Escape", "ArrowDown", "ArrowUp", "PageDown", "PageUp"].includes(String(item.key))) return [{ type: "press-key", target: typeof item.target === "string" ? item.target.trim().slice(0, 200) : undefined, key: item.key as "Tab" | "Enter" | "Escape" | "ArrowDown" | "ArrowUp" | "PageDown" | "PageUp" }];
   if (item.type === "inspect-text" && typeof item.text === "string" && item.text.trim()) return [{ type: "inspect-text", text: item.text.trim().slice(0, 500) }];
+  if (item.type === "inspect-layout" && typeof item.target === "string" && item.target.trim()) return [{ type: "inspect-layout", target: item.target.trim().slice(0, 200) }];
   if (item.type === "capture" && typeof item.label === "string" && item.label.trim()) return [{ type: "capture", label: item.label.trim().slice(0, 160) }];
   return [];
 }

@@ -1,6 +1,6 @@
 # AI Desktop 人物职责规则索引
 
-<!-- 韩立代表用户逐轮追问下一步改动所缺少的唯一关键信息。 -->
+<!-- 韩立代表用户维护关注点与需求轨迹，先调查可查事实，再只追问下一步所缺少的唯一业务选择。 -->
 AI_DESKTOP_HANLI_USER_QUESTIONING_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop韩立用户代理提问规则.md
 
 <!-- 南宫婉只读调查代码、事实与规则，并形成可验收的修改方案。 -->

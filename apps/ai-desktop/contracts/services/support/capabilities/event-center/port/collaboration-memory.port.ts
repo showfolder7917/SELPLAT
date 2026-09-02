@@ -3,6 +3,9 @@ import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, Evolutio
 import type { NangongConversationOutDto } from "../../../../personas/nangong/index.js";
 import type { ApprovalMemoryEvidenceOutDto, TrainingCorpusTopicSearchResultOutDto } from "../dto/collaboration-memory.out.dto.js";
 import type { ConversationRoundTopicDecisionInDto } from "../dto/conversation-round-topic-decision.in.dto.js";
+import type { HanliSemanticExtractionInDto } from "../dto/hanli-semantic-extraction.in.dto.js";
+import type { HanliCorpusExtractionCandidateOutDto, HanliSemanticContextOutDto } from "../dto/hanli-semantic-memory.out.dto.js";
+import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../personas/hanli/index.js";
 
 export interface CollaborationMemoryPort {
   syncConversation(conversation: NangongConversationOutDto): void;
@@ -12,4 +15,9 @@ export interface CollaborationMemoryPort {
   searchTrainingCorpusTopics(query: string, limit?: number): TrainingCorpusTopicSearchResultOutDto[];
   readHanLiEvolutionCorpus(deliberationId: string): EvolutionSourceMessageSnapshotOutDto[];
   registerRound(conversation: NangongConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto): void;
+  claimHanliCorpusExtractions(stableUserId: string, projectScope: string, extractorVersion: string, limit?: number): HanliCorpusExtractionCandidateOutDto[];
+  completeHanliCorpusExtraction(candidate: HanliCorpusExtractionCandidateOutDto, result: HanliSemanticExtractionInDto): void;
+  failHanliCorpusExtraction(candidate: HanliCorpusExtractionCandidateOutDto, error: unknown): void;
+  readHanliSemanticContext(stableUserId: string, projectScope: string, query?: string, limit?: number): HanliSemanticContextOutDto;
+  recordVerifiedInspectionExperience(stableUserId: string, projectScope: string, candidate: HanliAcceptanceExperienceCandidateOutDto): void;
 }

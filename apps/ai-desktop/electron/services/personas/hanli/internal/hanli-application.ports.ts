@@ -11,6 +11,9 @@ export interface HanliApplicationServiceOptions {
   memory?: CollaborationMemoryPort | null;
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   askNangong?: (question: string, context: string, state: EvolutionStateOutDto) => Promise<string>;
+  analyzeCorpus?: (prompt: string) => Promise<string>;
+  readStableUserId?: () => string;
+  readProjectScope?: () => string;
   planAcceptance?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;

@@ -13,3 +13,9 @@
 1011|schema-AiDesktopTaskTimelineStream.sql|建立任务时间线流式正文表
 1012|migration-1012-retire-task-collaboration.sql|物理退役已由统一任务时间线替代的过渡协作三表
 1013|schema-AiDesktopPersonaSession.sql|建立南宫婉韩立令狐老祖固定人物会话注册表
+1014|schema-AiDesktopCorpusExtractionState.sql|建立训练语料语义提取状态与版本水位
+1015|schema-AiDesktopCustomerConcern.sql|建立稳定用户客户关注点事实表
+1016|schema-AiDesktopCustomerConcernEvidence.sql|建立客户关注点原始消息证据表
+1017|schema-AiDesktopRequirementTrajectory.sql|建立需求分析与提问结果轨迹表
+1018|schema-AiDesktopRequirementNode.sql|建立需求树节点与闭合状态表
+1019|schema-AiDesktopInspectionExperience.sql|建立真实验收复验通过后的项目经验表

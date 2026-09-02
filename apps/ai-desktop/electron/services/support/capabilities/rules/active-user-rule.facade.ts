@@ -72,6 +72,13 @@ export class ActiveUserRuleFacade {
     };
   }
 
+  /** 返回当前已经通过 AGENTS 或登录账号解析的稳定用户 ID；调用方不得从目录名称猜测。 */
+  activeUserId(): string {
+    this.#refreshIfChanged();
+    if (this.#diagnostic || !this.#activeUserId) throw new Error(this.#diagnostic || "当前稳定用户尚未解析。");
+    return this.#activeUserId;
+  }
+
   listEffectiveRules(): RuntimeRuleOutDto[] {
     this.#refreshIfChanged();
     return [...this.#rules.values()].sort((a, b) => a.logicalId.localeCompare(b.logicalId)).map(({ resourcePath: _path, ...rule }) => ({ ...rule }));

@@ -969,6 +969,7 @@ test("真实应用验收执行器只执行白名单操作并阻止业务写按�
         if (source.includes('})({ type: "click"')) return { clicked: true, description: "已点击：专题执行群" };
         if (source.includes('})({ type: "scroll"')) return { moved: true, description: "滚动位置 0 → 600，最大 1200。" };
         if (source.includes('})({ type: "focus"')) return true;
+        if (source.includes('})({ type: "inspect-layout"')) return { passed: true, description: "专题工作台：视口内=true，无内容溢出=true，中心未遮挡=true。" };
         return true;
       },
       sendInputEvent(event) { sentKeys.push(event); },
@@ -976,11 +977,11 @@ test("真实应用验收执行器只执行白名单操作并阻止业务写按�
     },
   };
   const executor = new HanliRealAppAcceptanceRunner({ async save() { screenshots += 1; return { id: `shot-${screenshots}`, name: "shot.png", filePath: "/evidence/shot.png", sizeBytes: 3, createdAt: new Date().toISOString() }; } });
-  const plan = { version: 1, planId: "plan-1", topicId: "topic-1", proposalId: "proposal-1", summary: "真实检查", concerns: ["滚动"], generatedAt: new Date().toISOString(), checks: [{ checkId: "check-1", category: "真实交互", target: "专题工作台", action: "缩放、导航和截图", expected: "可操作", evidenceRequired: "截图", operations: [{ type: "focus-window" }, { type: "resize-window", width: 980, height: 680 }, { type: "click", target: "专题执行群" }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "press-key", key: "PageDown" }, { type: "inspect-text", text: "真实界面验收计划" }, { type: "capture", label: "检查结果" }, { type: "click", target: "验收通过" }] }] };
+  const plan = { version: 1, planId: "plan-1", topicId: "topic-1", proposalId: "proposal-1", summary: "真实检查", concerns: ["滚动"], generatedAt: new Date().toISOString(), checks: [{ checkId: "check-1", category: "真实交互", target: "专题工作台", action: "缩放、导航和截图", expected: "可操作", evidenceRequired: "截图", operations: [{ type: "focus-window" }, { type: "resize-window", width: 980, height: 680 }, { type: "click", target: "专题执行群" }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "press-key", key: "PageDown" }, { type: "inspect-text", text: "真实界面验收计划" }, { type: "inspect-layout", target: "专题工作台" }, { type: "capture", label: "检查结果" }, { type: "click", target: "验收通过" }] }] };
   const run = await executor.execute(plan, targetWindow);
   assert.equal(run.status, "blocked");
   assert.match(run.stepResults.at(-1).actual, /禁止自动点击/);
-  assert.equal(run.stepResults.filter((item) => item.status === "passed").length, 7);
+  assert.equal(run.stepResults.filter((item) => item.status === "passed").length, 8);
   assert.equal(run.evidenceAttachmentIds.length, 1);
   assert.equal(screenshots, 2);
   assert.equal(sentKeys.length, 2);

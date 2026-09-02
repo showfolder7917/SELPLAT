@@ -9,6 +9,7 @@ import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../c
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions } from "./internal/hanli-application.service.js";
 import { HanliRealAppAcceptanceRunner } from "./internal/hanli-real-app-acceptance.runner.js";
+import { HanliSemanticExtractionRunner } from "./internal/hanli-semantic-extraction.runner.js";
 
 /** 韩立人物端口只包含研讨、审批和验收，不包含南宫对话或令狐恢复。 */
 export interface HanliApplicationPort {
@@ -43,6 +44,7 @@ export interface HanliRuntime {
   readonly facade: HanliFacade;
   start(): void;
   stop(): void;
+  refreshSemanticMemory(): void;
 }
 
 /** 韩立唯一公开业务入口；调用方无法通过它修改南宫私有会话。 */
@@ -82,5 +84,18 @@ export class HanliFacade {
 export function createHanliRuntime(options: CreateHanliRuntimeOptions): HanliRuntime {
   // Runner 在韩立 Runtime 内创建，IPC 只看到受控 Facade 方法，不能取得 Runner 对象。
   const facade = new HanliFacade(new HanliApplicationService(options), new HanliRealAppAcceptanceRunner(options.screenshots));
-  return { memberId: "han-li", facade, start: () => undefined, stop: () => undefined };
+  const semanticExtraction = new HanliSemanticExtractionRunner({
+    memory: options.memory || null,
+    prompts: options.prompts,
+    analyze: options.analyzeCorpus || (async () => { throw new Error("韩立训练语料分析器尚未接入。"); }),
+    readStableUserId: options.readStableUserId || (() => { throw new Error("当前稳定用户尚未解析。"); }),
+    readProjectScope: options.readProjectScope || (() => "global"),
+    recordEvent: options.recordEvent,
+  });
+  return {
+    memberId: "han-li", facade,
+    start: () => semanticExtraction.start(),
+    stop: () => semanticExtraction.stop(),
+    refreshSemanticMemory: () => semanticExtraction.trigger("corpus-ingested"),
+  };
 }

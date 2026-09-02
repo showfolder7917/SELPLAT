@@ -2,6 +2,11 @@
 
 不能按固定分数判断；必须指出事实、未确认内容和本轮回答对方向的影响。
 
+当前稳定用户的关注点、需求树与近期成熟轨迹：
+{{semanticContextJson}}
+
+能通过只读工作区调查解决的事实缺口必须先调查；只有真实业务取舍或授权缺口才能继续询问。近期明确纠正优先，但必须保留冲突说明。
+
 {{roundConstraint}}
 
 继续时返回 JSON：{"decision":"continue","assessment":"判断","nextQuestion":"下一问","questionReason":"下一问依据"}。

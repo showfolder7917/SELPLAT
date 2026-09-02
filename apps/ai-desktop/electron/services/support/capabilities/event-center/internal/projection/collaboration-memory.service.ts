@@ -1,9 +1,20 @@
 import { randomUUID } from "node:crypto";
 
-import type { ApprovalMemoryEvidenceOutDto, CollaborationMemoryMessageOutDto, CollaborationMemoryPort, ConversationRoundTopicDecisionInDto, TrainingCorpusTopicSearchResultOutDto } from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type {
+  ApprovalMemoryEvidenceOutDto,
+  CollaborationMemoryMessageOutDto,
+  CollaborationMemoryPort,
+  ConversationRoundTopicDecisionInDto,
+  HanliCorpusExtractionCandidateOutDto,
+  HanliSemanticContextOutDto,
+  HanliSemanticExtractionInDto,
+  TrainingCorpusTopicSearchResultOutDto,
+} from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
+import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
 import type { NangongConversationOutDto } from "../../../../../../../contracts/services/personas/nangong/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
+import { HanliSemanticMemoryRepository } from "./hanli-semantic-memory.repository.js";
 
 const CURRENT_CONVERSATION_TURN_LIMIT = 20;
 const HISTORICAL_USER_CONCERN_LIMIT = 8;
@@ -15,9 +26,36 @@ const EVOLUTION_CODEX_AI_PREVIEW_LIMIT = 120;
 /** 保存用户与南宫婉完整原文，并通过受控查询为后续调查和韩立审批提供上下文。 */
 export class CollaborationMemoryService implements CollaborationMemoryPort {
   readonly #database: SqliteDatabase;
+  readonly #hanliSemanticMemory: HanliSemanticMemoryRepository;
 
   constructor(database: SqliteDatabase) {
     this.#database = database;
+    this.#hanliSemanticMemory = new HanliSemanticMemoryRepository(database);
+  }
+
+  /** 领取本轮尚未分析或内容版本已变化的统一语料。 */
+  claimHanliCorpusExtractions(stableUserId: string, projectScope: string, extractorVersion: string, limit?: number): HanliCorpusExtractionCandidateOutDto[] {
+    return this.#hanliSemanticMemory.claim(stableUserId, projectScope, extractorVersion, limit);
+  }
+
+  /** 原子保存 AI 校验后的客户关注点、需求轨迹和需求树。 */
+  completeHanliCorpusExtraction(candidate: HanliCorpusExtractionCandidateOutDto, result: HanliSemanticExtractionInDto): void {
+    this.#hanliSemanticMemory.complete(candidate, result);
+  }
+
+  /** 保存可恢复失败和退避时间，防止相同坏语料被启动循环反复调用。 */
+  failHanliCorpusExtraction(candidate: HanliCorpusExtractionCandidateOutDto, error: unknown): void {
+    this.#hanliSemanticMemory.fail(candidate, error);
+  }
+
+  /** 为韩立当前回合返回一个稳定用户、一个项目范围内的成熟语义上下文。 */
+  readHanliSemanticContext(stableUserId: string, projectScope: string, query = "", limit?: number): HanliSemanticContextOutDto {
+    return this.#hanliSemanticMemory.readContext(stableUserId, projectScope, query, limit);
+  }
+
+  /** 把修复并复验成功的验收候选提升为当前用户、当前项目经验。 */
+  recordVerifiedInspectionExperience(stableUserId: string, projectScope: string, candidate: HanliAcceptanceExperienceCandidateOutDto): void {
+    this.#hanliSemanticMemory.recordExperience(stableUserId, projectScope, candidate);
   }
 
   syncConversation(conversation: NangongConversationOutDto): void {

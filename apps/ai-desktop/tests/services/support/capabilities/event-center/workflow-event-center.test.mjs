@@ -7,6 +7,7 @@ import { SqliteDatabase } from "../../../../../../../build/ai-desktop/electron/e
 import { CollaborationMemoryService } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.js";
 import { CodexConversationCorpusIngestion } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.js";
 import { CodexConversationSemanticBackfill } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-semantic-backfill.js";
+import { parseHanliSemanticExtraction } from "../../../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-semantic-extraction.runner.js";
 import { WorkflowRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.repository.js";
 import { WorkflowSupervisor } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.supervisor.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
@@ -16,10 +17,10 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1013");
+    assert.equal(fixture.database.latestSchemaVersion, "1019");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
@@ -418,6 +419,49 @@ test("所有角色事件走统一入口并区分业务异常、技术异常和�
     assert.equal(rows[1].sourceType, "launcher");
     assert.equal(rows[1].sourceId, "electron-main");
     assert.equal(rows[2].status, "observed");
+  } finally {
+    fixture.close();
+  }
+});
+
+test("韩立语义提取按用户、内容哈希和版本去重并保存可追溯关注点", () => {
+  const fixture = createFixture("hanli-semantic-memory");
+  try {
+    const memory = new CollaborationMemoryService(fixture.database);
+    fixture.database.withConnection((connection) => {
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
+        (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt)
+        VALUES ('semantic-topic-1', 'hanli', 'hanli-thread-1', 'hanli-turn-1', '减少重复提问', '用户纠正', '让韩立先调查再提问', '["韩立","提问"]', 'ai-confirmed', '2026-08-27T00:00:00.000Z', '2026-08-27T00:00:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusMessage
+        (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId, sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
+        VALUES ('semantic-message-1', 'semantic-topic-1', 'hanli', 'hanli-thread-1', 'hanli-turn-1', 'hanli-user-1', 0, 'user', '先看代码，能查明的不要再问我。', 'exact', 'primary', '2026-08-27T00:00:00.000Z', '2026-08-27T00:00:00.000Z')`).run();
+    });
+    const [candidate] = memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 1);
+    assert.equal(candidate.corpusTopicId, "semantic-topic-1");
+    assert.throws(() => parseHanliSemanticExtraction(JSON.stringify({ concerns: [{ semanticKey: "bad", name: "错误证据", description: "引用不存在消息。", category: "提问行为", scopeType: "project", scopeId: appRoot, status: "candidate", confidence: 0.5, weight: 0.5, evidence: [{ sourceMessageId: "unknown-message", evidenceType: "inference", stance: "supporting", evidenceExcerpt: "无效" }] }], trajectory: {} }), candidate), /unknown-message/);
+    memory.completeHanliCorpusExtraction(candidate, {
+      concerns: [{
+        semanticKey: "investigate-before-question", name: "先调查后提问", description: "代码可证实的问题不再询问用户。", category: "提问行为",
+        scopeType: "project", scopeId: appRoot, status: "confirmed", confidence: 0.98, weight: 0.95,
+        evidence: [{ sourceMessageId: "hanli-user-1", evidenceType: "correction", stance: "supporting", evidenceExcerpt: "先看代码，能查明的不要再问我。" }],
+      }],
+      trajectory: {
+        customerGoal: "让韩立用调查结果提高提问精度", confirmedFacts: ["用户要求先调查"], assumptions: [], conflicts: [], informationGaps: [], implicitRequirements: ["提问必须说明剩余决策缺口"],
+        selectedAction: "investigate", questionAsked: null, questionReason: null, customerAnswer: null, resultSummary: null, evolutionDirection: "减少无效提问", acceptanceEvidence: [], maturityScore: 0.8,
+        nodes: [{ nodeKey: "investigate-first", parentNodeKey: null, title: "先调查", category: "行为约束", status: "confirmed", statement: "先读取代码证据。", critical: true, evidenceMessageIds: ["hanli-user-1"] }],
+      },
+    });
+    assert.equal(memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 1).length, 0);
+    const context = memory.readHanliSemanticContext("XUNAN", appRoot, "先调查");
+    assert.equal(context.concerns[0].semanticKey, "investigate-before-question");
+    assert.equal(context.concerns[0].evidence[0].sourceMessageId, "hanli-user-1");
+    assert.equal(context.trajectories[0].nodes[0].status, "confirmed");
+    assert.equal(memory.readHanliSemanticContext("ANOTHER_USER", appRoot).concerns.length, 0);
+    fixture.database.withConnection((connection) => {
+      connection.prepare("UPDATE AiDesktopTrainingCorpusMessage SET content='先完整看代码和测试，能查明的不要再问我。' WHERE corpusMessageId='semantic-message-1'").run();
+      connection.prepare("UPDATE AiDesktopTrainingCorpusTopic SET updatedAt=$updatedAt WHERE corpusTopicId='semantic-topic-1'").run({ $updatedAt: new Date(Date.now() + 1_000).toISOString() });
+    });
+    assert.equal(memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 1).length, 1);
   } finally {
     fixture.close();
   }

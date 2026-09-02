@@ -157,6 +157,8 @@ let collaborationTimeline: EventCenterTimeline | null = null;
 let workflowSupervisor: WorkflowSupervisor | null = null;
 let collaborationMemory: EventCenterMemory | null = null;
 let codexAppCorpusWatcher: CorpusWatcher | null = null;
+// 韩立语义提取计时器必须先于 SQLite 关闭；运行时创建后替换为空操作。
+let stopHanliRuntime: () => void = () => undefined;
 // 数据库初始化前先提供稳定状态，Renderer 不会收到含义不明的 undefined。
 let aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto = {
   state: "unavailable",
@@ -183,6 +185,8 @@ function closeAiMemoryDatabase(): void {
 
 /** 停止所有可能继续写数据库的后台任务，再关闭数据库；退出和受控重启都会调用。 */
 function prepareAiMemoryShutdown(): void {
+  stopHanliRuntime();
+  stopHanliRuntime = () => undefined;
   // 文件监听器可能触发语料写入，所以必须先停止。
   codexAppCorpusWatcher?.stop();
   codexAppCorpusWatcher = null;
@@ -242,7 +246,19 @@ export async function startApplication(): Promise<void> {
   // Codex 开始任务时读取最新有效规则，避免把启动时状态永久缓存。
   const readRuleInstructions = () => rules.renderRoleInstructions("executor");
   const readNangongRuleInstructions = () => rules.renderRoleInstructions("nangong");
-  const readHanliRuleInstructions = () => rules.renderRoleInstructions("hanli");
+  const readHanliRuleInstructions = () => {
+    const instructions = rules.renderRoleInstructions("hanli");
+    if (!collaborationMemory) return instructions;
+    try {
+      const workspaceState = startupWorkspaces.read();
+      const primary = workspaceState.roots.find((root) => root.id === workspaceState.primaryId);
+      const context = collaborationMemory.readHanliSemanticContext(rules.activeUserId(), primary?.path || projectRoot, "", 12);
+      return `${instructions}\n\n# 韩立当前客户认知与需求轨迹\n${JSON.stringify(context)}`;
+    } catch {
+      // 数据库恢复或首次提取尚未完成时只使用人物规则，不能阻断韩立会话。
+      return instructions;
+    }
+  };
   // AI Desktop 自己的会话只有在数据库可用时才进入训练语料库。
   const corpusIngestion = aiMemoryDatabase
     ? createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
@@ -270,6 +286,7 @@ export async function startApplication(): Promise<void> {
   // running 防止并发扫描；requested 表示扫描期间又收到了一次触发，需要结束后再补跑。
   let corpusIngestionRunning = false;
   let corpusIngestionRequested = false;
+  let requestHanliSemanticRefresh: () => void = () => undefined;
   let latestCorpusTrigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled" = "startup";
   /** 按触发来源增量导入尚未处理的会话；本函数后台执行，不阻塞界面启动。 */
   const ingestTrainingCorpus = (trigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled"): void => {
@@ -297,6 +314,7 @@ export async function startApplication(): Promise<void> {
           skippedInternalFileCount: total.skippedInternalFileCount + current.skippedInternalFileCount,
         }), { scannedFileCount: 0, changedFileCount: 0, ingestedMessageCount: 0, skippedInternalFileCount: 0 });
         eventCenter.recordEvent("training_corpus.ingested", { trigger, ...summary });
+        requestHanliSemanticRefresh();
       } catch (error) {
         // 数据库或尾行暂不可用时保留 rollout 与旧水位；事件登记失败也不能覆盖原始会话。
         try { eventCenter.recordEvent("training_corpus.ingestion_failed", { trigger, message: error instanceof Error ? error.message : String(error) }); } catch { /* AI Memory 故障由启动状态统一回显。 */ }
@@ -418,6 +436,13 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("training_corpus.semantic_backfill.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("training_corpus.semantic_backfill.thread.lifecycle", details),
   );
+  // 历史摘要与韩立认知提取共用隔离线程；串行化模型调用，避免同一线程出现并发 writer 冲突。
+  let corpusSemanticAnalysisQueue: Promise<void> = Promise.resolve();
+  const runCorpusSemanticAnalysis = <Result>(analysis: () => Promise<Result>): Promise<Result> => {
+    const current = corpusSemanticAnalysisQueue.then(analysis, analysis);
+    corpusSemanticAnalysisQueue = current.then(() => undefined, () => undefined);
+    return current;
+  };
   // 数据库存在时才创建补齐任务；analyzer 把候选对话交给隔离 Codex，再严格解析返回协议。
   const corpusSemanticBackfill = aiMemoryDatabase ? createCodexConversationSemanticBackfill({
     database: aiMemoryDatabase,
@@ -426,12 +451,12 @@ export async function startApplication(): Promise<void> {
     analyzer: async (candidates) => {
       // 非空断言前先做运行时检查，启动装配异常时给出明确原因。
       if (!corpusSemanticBackfillCodex) throw new Error("Codex 历史语义整理服务尚未就绪。");
-      const response = await corpusSemanticBackfillCodex.send(
+      const response = await runCorpusSemanticAnalysis(() => corpusSemanticBackfillCodex!.send(
         buildCodexSemanticBackfillPrompt(prompts, candidates),
         "zh-CN",
         "read-only",
         corpusSemanticWorkspace,
-      );
+      ));
       return parseCodexSemanticBackfillResponse(response.text);
     },
   }) : null;
@@ -510,6 +535,15 @@ export async function startApplication(): Promise<void> {
       context,
       question,
     }), state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, "conversation-managed")).text,
+    analyzeCorpus: async (prompt) => {
+      if (!corpusSemanticBackfillCodex) throw new Error("韩立客户认知提取服务尚未就绪。");
+      return (await runCorpusSemanticAnalysis(() => corpusSemanticBackfillCodex!.send(prompt, "zh-CN", "read-only", corpusSemanticWorkspace))).text;
+    },
+    readStableUserId: () => rules.activeUserId(),
+    readProjectScope: () => {
+      const current = workspaces.read();
+      return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
+    },
     planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, "conversation-managed")).text,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordTimelineEvent: recordEvolutionTimelineEvent,
@@ -518,6 +552,8 @@ export async function startApplication(): Promise<void> {
     failMutation: failEvolutionMutation,
     screenshots,
   });
+  stopHanliRuntime = () => hanliRuntime.stop();
+  requestHanliSemanticRefresh = () => hanliRuntime.refreshSemanticMemory();
   // 总运行时组合南宫婉、韩立、共享专题状态和协作任务，是人物演化流程入口。
   personaEvolution = new PersonaEvolutionRuntime({
     store: evolutionStateStore,

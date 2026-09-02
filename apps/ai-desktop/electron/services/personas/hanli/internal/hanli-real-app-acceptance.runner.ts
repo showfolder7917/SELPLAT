@@ -90,6 +90,10 @@ export class HanliRealAppAcceptanceRunner {
         const visible = await targetWindow.webContents.executeJavaScript(`(${runDomOperation.toString()})({ type: "inspect", text: ${JSON.stringify(operation.text)} })`, true) as boolean;
         return result(checkId, operationIndex, operation, visible ? "passed" : "failed", visible ? `页面可见文本包含：${operation.text}` : `页面可见文本未找到：${operation.text}`);
       }
+      if (operation.type === "inspect-layout") {
+        const actual = await targetWindow.webContents.executeJavaScript(`(${runDomOperation.toString()})({ type: "inspect-layout", target: ${JSON.stringify(operation.target)} })`, true) as { passed: boolean; description: string };
+        return result(checkId, operationIndex, operation, actual.passed ? "passed" : "failed", actual.description);
+      }
       const attachment = await this.#capture(targetWindow);
       return { ...result(checkId, operationIndex, operation, "passed", `已保存“${operation.label}”真实窗口截图。`), screenshotAttachmentId: attachment.id };
     } catch (error) {
@@ -110,7 +114,7 @@ function result(checkId: string, operationIndex: number, operation: HanliAccepta
 
 function wait(milliseconds: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
 
-function runDomOperation(input: { type: "click" | "focus" | "scroll" | "inspect"; target?: string; text?: string; direction?: "up" | "down"; amount?: number }): unknown {
+function runDomOperation(input: { type: "click" | "focus" | "scroll" | "inspect" | "inspect-layout"; target?: string; text?: string; direction?: "up" | "down"; amount?: number }): unknown {
   // 此函数会被完整序列化到渲染进程；依赖必须全部保持在函数体内，避免 Electron 页面缺少主进程辅助函数。
   const isVisible = (element: Element): boolean => { const bounds = element.getBoundingClientRect(); const style = window.getComputedStyle(element); return bounds.width > 0 && bounds.height > 0 && style.display !== "none" && style.visibility !== "hidden"; };
   const describe = (element: Element): string => (element.getAttribute("aria-label") || element.getAttribute("title") || element.textContent || element.tagName).replaceAll(/\s+/gu, " ").trim().slice(0, 300);
@@ -131,6 +135,22 @@ function runDomOperation(input: { type: "click" | "focus" | "scroll" | "inspect"
   if (input.type === "inspect") {
     const expected = (input.text || "").replaceAll(/\s+/gu, " ").trim();
     return [...document.querySelectorAll("body *")].some((item) => isVisible(item) && (item.textContent || "").replaceAll(/\s+/gu, " ").includes(expected));
+  }
+  if (input.type === "inspect-layout") {
+    const expected = (input.target || "").replaceAll(/\s+/gu, " ").trim().toLocaleLowerCase();
+    const candidates = [...document.querySelectorAll("body *")].filter((item) => isVisible(item) && matchesTarget(item, input.target || ""));
+    const element = candidates.find((item) => describe(item).toLocaleLowerCase() === expected)
+      || candidates.sort((left, right) => describe(left).length - describe(right).length)[0];
+    if (!element) return { passed: false, description: `没有找到可见布局目标：${input.target || ""}` };
+    const bounds = element.getBoundingClientRect();
+    const viewportPassed = bounds.left >= 0 && bounds.top >= 0 && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
+    const contentPassed = element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1;
+    const center = document.elementFromPoint(Math.max(0, Math.min(window.innerWidth - 1, bounds.left + bounds.width / 2)), Math.max(0, Math.min(window.innerHeight - 1, bounds.top + bounds.height / 2)));
+    const unobscured = Boolean(center && (center === element || element.contains(center) || center.contains(element)));
+    return {
+      passed: viewportPassed && contentPassed && unobscured,
+      description: `${describe(element)}：边界 ${Math.round(bounds.left)},${Math.round(bounds.top)} ${Math.round(bounds.width)}×${Math.round(bounds.height)}；视口内=${viewportPassed}，无内容溢出=${contentPassed}，中心未遮挡=${unobscured}。`,
+    };
   }
   const target = input.target || "";
   const seed = target ? [...document.querySelectorAll("*")].find((item) => isVisible(item) && matchesTarget(item, target)) : document.scrollingElement;
