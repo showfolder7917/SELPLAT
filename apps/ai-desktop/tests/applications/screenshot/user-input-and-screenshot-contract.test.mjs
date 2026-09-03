@@ -6,8 +6,14 @@ const screenshotEditor = readFileSync(new URL("../../../src/features/screenshot/
 const screenshotWindow = readFileSync(new URL("../../../src/applications/screenshot/ScreenshotApplication.tsx", import.meta.url), "utf8");
 const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
   "../../../src/features/conversation/components/CodexUserInputPanel.tsx",
+  "../../../src/features/conversation/model/useCodexConversation.ts",
+  "../../../src/features/conversation/model/useCodexWorkspace.ts",
+  "../../../src/features/conversation/model/useConversationDispatch.ts",
+  "../../../src/features/hanli/components/HanliConversationWorkspace.tsx",
   "../../../src/features/nangong/components/NangongConversationWorkspace.tsx",
+  "../../../src/features/screenshot/model/useScreenshotCapture.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const codexService = readFileSync(new URL("../../../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");
 const ipc = [
@@ -33,8 +39,8 @@ test("截图编辑器使用可编辑红框并只在选中状态显示完成取�
   assert.match(screenshotEditor, /annotations\.length > 0/);
   assert.doesNotMatch(screenshotEditor, /disabled=\{saving\} onClick=\{onCancel\}/);
   assert.match(screenshotEditor, /className="screenshot-actions">[\s\S]*returnToSelection/);
-  assert.match(developerApp, /if \(hasAnnotations && screenshotDestinationRef\.current === "main"\) setInput/);
-  assert.match(developerApp, /screenshotDestinationRef\.current === "nangong" \? setNangongAttachments : screenshotDestinationRef\.current === "hanli" \? setHanliAttachments : setAttachments/);
+  assert.match(developerApp, /if \(hasAnnotations && destinationRef\.current === "main"\) currentOptions\.setMainInput/);
+  assert.match(developerApp, /currentOptions\.setAttachments\(destinationRef\.current/);
   assert.match(developerApp, /composerRef\.current\?\.focus\(\)/);
   assert.match(ipc, /hasAnnotations: request\.hasAnnotations === true/);
 });
@@ -53,7 +59,7 @@ test("macOS 截图预热返回结构化权限结果并提供可恢复入口", ()
   assert.match(developerApp, /preparation\.status === "blocked"/);
   assert.match(developerApp, /readableDesktopError/);
   assert.match(developerApp, /openScreenRecordingSettings/);
-  assert.match(developerApp, /window\.addEventListener\("focus", recheckScreenRecordingPermission\)/);
+  assert.match(developerApp, /window\.addEventListener\("focus", recheck\)/);
   assert.match(developerApp, /screenCapturePreparedRef\.current = true;[\s\S]*setScreenshotError\(""\)/);
   assert.match(developerApp, /screenRecordingRestartRequired/);
   assert.match(developerApp, /restartForScreenRecordingPermission/);
@@ -114,7 +120,7 @@ test("截图按钮状态样式绑定真实对话 footer", () => {
   assert.match(developerCss, /\.selconversation-footer \.screenshot-button:hover \{/);
   assert.match(developerCss, /\.selconversation-footer \.screenshot-button:disabled \{ cursor: wait; opacity: \.45; \}/);
   assert.doesNotMatch(developerCss, /\.composer-footer \.screenshot-button/);
-  assert.match(developerApp, /className="selconversation-footer"[\s\S]*disabled=\{screenshotBusy\}/);
+  assert.match(developerApp, /className="selconversation-footer"[\s\S]*disabled=\{screenshot\.screenshotBusy\}/);
   assert.match(developerApp, /className="selconversation-footer"[\s\S]*onScreenshot\(false\)[\s\S]*onScreenshot\(true\)/);
 });
 

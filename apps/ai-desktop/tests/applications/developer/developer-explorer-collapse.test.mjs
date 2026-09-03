@@ -4,9 +4,11 @@ import test from "node:test";
 
 const component = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
+  "../../../src/applications/developer/DeveloperWorkspaceRouter.tsx",
   "../../../src/applications/developer/layout/DeveloperShell.tsx",
   "../../../src/applications/developer/layout/DeveloperActivityBar.tsx",
   "../../../src/applications/developer/layout/DeveloperExplorer.tsx",
+  "../../../src/features/collaboration/components/CollaborationExplorerFeature.tsx",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const styles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const projectAgents = readFileSync(new URL("../../../ruleengine/AGENTS.md", import.meta.url), "utf8");
@@ -42,10 +44,11 @@ test("资源管理器宽度支持拖拽和键盘调整", () => {
 
 test("工作区与任务使用单一活动分区并让当前分区置顶占满", () => {
   assert.match(component, /activeExplorerSection/);
-  assert.match(component, /setActiveExplorerSection\(\(current\) => current === section \? null : section\)/);
+  assert.match(component, /current === "workspace" \? null : "workspace"/);
+  assert.match(component, /current === "tasks" \? null : "tasks"/);
   assert.match(component, /active-\$\{activeSection \?\? "none"\}/);
   assert.match(component, /aria-controls="developer-task-list"/);
-  assert.match(component, /aria-expanded=\{tasksSectionExpanded\}/);
+  assert.match(component, /aria-expanded=\{expanded\} aria-controls="developer-task-list"/);
   assert.match(component, /id="developer-task-list"/);
   assert.match(styles, /\.explorer-pane\.expanded\s*\{[^}]*flex:\s*1 1 auto;[^}]*order:\s*0/);
   assert.match(styles, /\.explorer-pane\.collapsed\s*\{[^}]*order:\s*1/);
@@ -66,9 +69,11 @@ test("当前用户 AI Desktop 规则已登记侧栏单区独占与标签新建�
   assert.match(workspaceRuntimeRule, /developer_sidebar_resizer_contract\.3\s*=\s*no_workspace_tasks_height_divider/);
   assert.match(workspaceRuntimeRule, /developer_sidebar_active_section_layout_contract\s*=\s*active_section_top_and_fill_available_height/);
   assert.match(workspaceRuntimeRule, /developer_sidebar_active_section_layout_contract\.2\s*=\s*inactive_section_heading_only_at_bottom/);
-  assert.match(component, /<div className=\{`dev-tab\$\{evolutionWorkspacePerspective \? " with-workspace-action" : ""\}`\}><Prompt24Regular \/><span>\{collaborationMode \? collaborationTabTitle : "Codex Chat"\}<\/span>/);
-  assert.match(component, /newCodexSession:\s*"重新建立一个 Codex 会话"/);
-  assert.match(component, /className="tab-new-task"[^>]*data-sel-tooltip=\{text\.newCodexSession\}[^>]*data-sel-tooltip-mode="always"[^>]*aria-label=\{text\.newCodexSession\}[^>]*onClick=\{\(\) => void startNewTask\(\)\}[^>]*><ArrowClockwise24Regular \/><\/button>/);
+  assert.match(component, /className="dev-tab"/);
+  assert.doesNotMatch(component, /with-workspace-action|openEvolutionWorkspace/);
+  assert.match(component, /collaboration\.collaborationMode \? tabTitle : "Codex Chat"/);
+  assert.match(component, /重新建立一个 Codex 会话/);
+  assert.match(component, /className="tab-new-task"[\s\S]*data-sel-tooltip-mode="always"[\s\S]*onClick=\{\(\) => void codex\.startNewTask\(\)\}/);
   assert.doesNotMatch(component, /className="tab-new-task"[^>]*\stitle=/);
   assert.doesNotMatch(component, /className="section-action new-task"/);
   assert.match(styles, /\.dev-tab \.tab-new-task\s*\{/);

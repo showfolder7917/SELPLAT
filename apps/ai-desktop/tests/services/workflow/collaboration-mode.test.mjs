@@ -37,6 +37,7 @@ const rendererCollaborationSources = [
   "../../../src/features/collaboration/components/CollaborationMemberPage.tsx",
   "../../../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
   "../../../src/features/conversation/components/CollaborationStatusChain.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
 ];
 const developerSource = rendererCollaborationSources.map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const coordinatorSource = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
@@ -1354,27 +1355,28 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
     "RUL_AIDesktop截图与输入规则.md",
     "RUL_AIDesktop演化持久化与发布规则.md",
     "RUL_AIDesktop韩立用户代理提问规则.md",
+    "RUL_AIDesktop架构边界与客户规则交付规则.md",
   ].map((fileName) => readFileSync(new URL(`../../../ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/${fileName}`, import.meta.url), "utf8")).join("\n");
   assert.match(rule, /^rule_version = \d+\.\d+\.\d+$/m);
-  assert.match(rule, /ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation \+ hanli_and_nangong_same_formal_exports/);
+  assert.match(rule, /ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation \+ every_persona_uses_same_generic_contract_hook_and_persona_id_parameter/);
   assert.match(rule, /nangong_distribution_planning_contract = AI_read_only_investigation/);
   assert.match(rule, /linghu_exception_intake_loop_prevention_contract = single_event_center_entry/);
-  assert.match(rule, /evolution_workspace_information_architecture_contract = one_expandable_tree_people_evolution_audit_with_groups_and_leaves/);
+  assert.match(rule, /evolution_workspace_retirement_contract = no_evolution_workspace_window_route_tree_grid_dossier_topic_group_or_manual_console/);
   assert.match(rule, /ai_desktop_test_data_reset_contract = settings_danger_action_with_SELUI_confirm/);
-  assert.match(rule, /evolution_workspace_window_contract = main_window_conversation_only/);
+  assert.match(rule, /evolution_workspace_hard_retirement_contract = remove_window_route_components_desktop_api_preload_IPC_query_preference_table_and_capability/);
   assert.match(rule, /respectful_listening_and_correction_are_nangong_personality/);
   assert.match(rule, /reflect_current_concern_not_mechanical_template/);
   assert.match(rule, /never_expand_user_intent/);
-  assert.match(rule, /codex_conversation_backfill_contract = one_training_corpus_table_with_codex_nangong_hanli_source/);
+  assert.match(rule, /character_training_corpus_ingestion_contract = main_character_visible_conversation_only \+ unified_topic_and_message_tables_with_open_source_speaker_and_evidence_tier/);
   assert.match(rule, /persona_semantic_memory_human_trigger_contract = completed_user_with_nangong_or_user_with_hanli_round_only[\s\S]*real_user_message_required[\s\S]*persona_to_persona_business_archive_only[\s\S]*no_training_topic_message_or_semantic_refresh_for_internal_persona_exchange/);
-  assert.match(rule, /hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit[\s\S]*no_unconfirmed_legacy_background_flow[\s\S]*user_confirmed_or_explicit_continuous_switch_only[\s\S]*no_internal_training_corpus_write_or_semantic_refresh/);
+  assert.match(rule, /hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit[\s\S]*no_unconfirmed_legacy_background_flow[\s\S]*standalone_1_starts_unified_continuous_runtime[\s\S]*retired_four_automation_switches_never_restored[\s\S]*no_internal_training_corpus_write_or_semantic_refresh/);
   assert.match(rule, /hanli_nangong_continuous_deliberation_contract = hanli_conversation_maturity_invitation[\s\S]*standalone_1_starts_user_anchored_read_only_deliberation[\s\S]*continuous_switch_restarts_discovery_after_completion[\s\S]*no_new_evidence_waits_and_rechecks_without_inventing_problem/);
   assert.match(rule, /workflow_event_center_single_entry_contract = EventCenterFacade_to_archive_and_main_process_SQLite/);
   assert.match(rule, /opt_in_codex_work_desktop_current_workspace_task_complete_watch_plus_startup_backfill/);
   assert.match(rule, /codex_app_ingestion_default_off_and_user_toggleable/);
   assert.match(rule, /workflow_event_center_stall_contract = independent_30_second_supervisor_plus_120_second_timeout_plus_fault_fact_dedup_plus_linghu_handoff/);
   assert.match(rule, /nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart/);
-  assert.match(rule, /nangong_one_shot_complete_evolution_contract = AI_semantic_maturity_then_canonical_visible_invitation_creates_persisted_waiting_confirmation[\s\S]*no_hidden_metadata_readiness_field[\s\S]*preserve_all_long_term_automation_switches[\s\S]*no_parallel_approval_distribution_recovery_or_acceptance_route/);
+  assert.match(rule, /nangong_one_shot_complete_evolution_contract = AI_semantic_maturity_then_canonical_visible_invitation_creates_persisted_waiting_confirmation[^\n]*exact_standalone_1_consumes_confirmation_as_conversation_to_topic_authority_and_unified_continuous_runtime_start[^\n]*no_hidden_metadata_readiness_field[^\n]*no_parallel_approval_distribution_recovery_or_acceptance_route/);
   assert.match(rule, /blocked_task_records_one_unified_failure_and_never_directly_recovers_on_state_change/);
   assert.match(rule, /collaboration_member_self_upgrade_contract = all_registered_members_same_domain_flow[\s\S]*no_display_name_business_branch/);
   assert.match(rule, /linghu_integration_release_contract = IntegrationReleaseCoordinatorFacade_single_entry[\s\S]*unified_tests_package_and_verification_run_on_candidate_root/);
@@ -1383,7 +1385,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /linghu_test_capability_upgrade_contract = TestResourceCoordinatorFacade_single_entry/);
   assert.match(rule, /linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only/);
   assert.match(rule, /collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort/);
-  assert.match(rule, /evolution_person_workspace_ui_contract = selui_formal_exports_and_theme_tokens_only/);
+  assert.match(rule, /evolution_persona_conversation_ui_contract = shared_SELUI_conversation_and_theme_tokens_only/);
   assert.match(rule, /linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint/);
   assert.match(rule, /local_change_ownership_blocks_without_automatic_retry_until_ownership_fact_changes_or_human_continue/);
   assert.match(rule, /fault_report_names_person_task_stage_finding_and_action/);

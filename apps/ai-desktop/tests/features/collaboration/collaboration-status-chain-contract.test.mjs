@@ -4,6 +4,8 @@ import test from "node:test";
 
 const developerSource = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
+  "../../../src/features/collaboration/components/CollaborationWorkspaceFeature.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
   "../../../src/features/conversation/components/CollaborationStatusChain.tsx",
   "../../../src/features/conversation/components/StreamDetails.tsx",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
@@ -50,7 +52,7 @@ test("最新等待恢复节点在卡片头提供醒目的继续执行主操作",
   assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextSameTask\.eventType !== "task\.interrupted"/);
-  assert.match(developerSource, /<TaskCollaborationGroup[\s\S]*onContinueTask=[\s\S]*continueCollaborationTask\(taskId\)/);
+  assert.match(developerSource, /<TaskCollaborationGroup[\s\S]*onContinueTask=[\s\S]*continueTask\(taskId\)/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
 });

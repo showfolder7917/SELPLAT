@@ -51,7 +51,7 @@ export function LinghuRepairProposalPanel({ state, workspaces, locale, onState, 
   };
   // 只统计仍需审批或返还执行的令狐来源方案，终态历史由专题档案展示。
   const pending = state.proposals.filter((proposal) => proposal.origin === "linghu" && ["pending-approval", "supplement-required", "approved"].includes(proposal.status));
-  // 人物页仅提供提案入口与数量，审批详情继续由演化工作台负责。
+  // 人物页仅提供修正提案入口与数量；审批由统一自动流程负责。
   return <section className="linghu-repair-proposals"><header><div><strong>修正方案审批</strong><span>持续修正 Bug 前先提交韩立审批</span></div><button type="button" onClick={() => void submit()}>提交修正方案</button></header><p>{pending.length ? `${pending.length} 个方案正在审批或等待返还执行。` : "当前没有待处理修正方案。"}</p></section>;
 }
 

@@ -19,7 +19,11 @@ const contracts = [
 const store = read("electron/services/support/platform/settings/internal/settings.store.ts");
 const service = read("electron/services/support/platform/codex/codex.facade.ts");
 const collaboration = read("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts");
-const developer = read("src/applications/developer/DeveloperApplication.tsx");
+const developer = [
+  read("src/applications/developer/DeveloperApplication.tsx"),
+  read("src/features/settings/components/DeveloperSettingsFeature.tsx"),
+  read("src/features/settings/model/useDesktopSettings.ts"),
+].join("\n");
 const interactionPreload = read("tests/interaction/isolated-preload.cjs");
 const packageManifest = read("package.json");
 const testDocumentRunner = read("scripts/test-document-runner.mjs");

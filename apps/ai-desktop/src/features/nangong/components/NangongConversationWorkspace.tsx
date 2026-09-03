@@ -99,8 +99,8 @@ export function NangongConversationWorkspace({ state, conversation, attachments,
   return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
       {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
         <strong>本轮已具备启动条件</strong>
-        <span>回复 1 将整理为演化课题，并连续进入审批、分发、测试和验收。</span>
-        <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动本轮完整流程</button>
+        <span>回复 1 将启动持续自动演化：完成当前课题后继续寻找有证据的新问题，直到暂停或停止。</span>
+        <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动持续演化</button>
       </section>}
       {conversation.messages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
       {timelineMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}><header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}

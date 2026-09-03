@@ -11,7 +11,9 @@ const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const developerApp = [
   "../../src/applications/developer/DeveloperApplication.tsx",
+  "../../src/features/conversation/components/CodexConversationWorkspace.tsx",
   "../../src/features/conversation/components/StreamDetails.tsx",
+  "../../src/features/testing/model/useAutomaticTesting.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerCss = readFileSync(new URL("../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const conversationCss = readFileSync(new URL("../../../../shared/frontend/sel-ui/src/components/conversation/selConversation.css", import.meta.url), "utf8");

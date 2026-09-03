@@ -4,6 +4,7 @@ import test from "node:test";
 
 const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
+  "../../../src/features/collaboration/model/useCollaborationWorkspace.ts",
   "../../../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const progressModel = readFileSync(new URL("../../../src/features/collaboration/model/collaboration-task-progress.ts", import.meta.url), "utf8");
@@ -19,7 +20,7 @@ test("人物页以真实五环节进度替代整页报告", () => {
   assert.match(developerApp, /setOpenStages\(new Set\(\[progress\.currentStageId\]\)\)/);
   assert.match(developerApp, /scrollIntoView\(\{ block: "nearest" \}\)/);
   assert.match(developerApp, /stage\.id === liveOutput\?\.stageId \? liveOutput\.message : null/);
-  assert.match(developerApp, /deriveCollaborationTaskCurrentStage\(task, linghuAutomationStateRef\.current\)/);
+  assert.match(developerApp, /deriveCollaborationTaskCurrentStage\(task, linghuAutomationRef\.current\)/);
   assert.match(developerApp, /existing\?\.turnId === envelope\.event\.turnId/);
   assert.match(progressModel, /automation\.lastFeedback\?\.taskId === task\.taskId/);
   assert.doesNotMatch(developerApp, /<p>\{currentTask\.snapshot\.confirmedIntent\}<\/p>/);

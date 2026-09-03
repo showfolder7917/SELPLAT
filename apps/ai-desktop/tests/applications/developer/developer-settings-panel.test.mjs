@@ -5,7 +5,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 
-const component = readFileSync(new URL("../../../src/applications/developer/DeveloperApplication.tsx", import.meta.url), "utf8");
+const component = [
+  "../../../src/applications/developer/DeveloperApplication.tsx",
+  "../../../src/features/settings/components/DeveloperSettingsFeature.tsx",
+  "../../../src/features/settings/model/useDesktopDiagnostics.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const settingsPanel = readFileSync(new URL("../../../src/features/settings/components/SettingsFloatingPanel.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const floatingPanel = readFileSync(new URL("../../../../../shared/frontend/sel-ui/src/components/floating-panel/selFloatingPanel.js", import.meta.url), "utf8");

@@ -117,8 +117,16 @@ export function HanliConversationWorkspace({ conversation, attachments, workspac
       {messages.length === 0 && <div className="dev-empty">
         <div className="dev-orb"><Code24Regular /></div>
         <h1>和韩立讨论客户真正需要什么</h1>
-        <p>可以直接描述问题。韩立会结合整理后的客户关注点、证据与历史轨迹回答，并只在确有信息缺口时追问。</p>
+        <p>可以直接描述问题。韩立会学习已整理的提问、调查和问题扩展方法，但不会按相似历史结论模仿回答。</p>
       </div>}
+
+      {/* 统计只显示本次实际读入规模，不混入会话正文或下一轮方法学习。 */}
+      {!busy && conversation.contextReadStats && <p className="hanli-context-read-stats" role="status" aria-live="polite">
+        本轮读取：方法资料 {conversation.contextReadStats.methodCharacters.toLocaleString()} 字
+        · 当前会话 {conversation.contextReadStats.recentConversationCharacters.toLocaleString()} 字
+        · 本轮问题 {conversation.contextReadStats.latestUserMessageCharacters.toLocaleString()} 字
+        · 发送上下文 {conversation.contextReadStats.promptCharacters.toLocaleString()} 字
+      </p>}
 
       {/* 每条消息渲染成一个 article，data-role 让 CSS 能区分用户、韩立和南宫婉。 */}
       {messages.map((message) => {

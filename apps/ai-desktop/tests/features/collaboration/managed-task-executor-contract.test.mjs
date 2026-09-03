@@ -27,8 +27,15 @@ const ipc = [
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
+  "../../../src/features/conversation/components/CodexApprovalDialog.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
   "../../../src/features/conversation/components/ManagedStageAction.tsx",
   "../../../src/features/conversation/components/StreamDetails.tsx",
+  "../../../src/features/conversation/model/useCodexConversation.ts",
+  "../../../src/features/conversation/model/useCodexWorkspace.ts",
+  "../../../src/features/conversation/model/useConversationDispatch.ts",
+  "../../../src/features/settings/components/DeveloperSettingsFeature.tsx",
+  "../../../src/features/settings/model/useDesktopDiagnostics.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const chatMessageModel = readFileSync(new URL("../../../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");
 
@@ -232,9 +239,9 @@ test("Harness 只使用指定版本的内置或校验下载 Codex 并公开实�
   assert.match(codexRuntime, /installVerifiedRuntime/);
   assert.match(codexService, /resolveCodexRuntime\(childEnvironment\)/);
   assert.match(codexService, /harness_runtime_selected/);
-  assert.match(developerApp, /codexStatus\.runtime\.version/);
-  assert.match(developerApp, /codexStatus\.runtime\.source/);
-  assert.doesNotMatch(developerApp, /codexStatus\.runtime\.path/);
+  assert.match(developerApp, /status\.runtime\.version/);
+  assert.match(developerApp, /status\.runtime\.source/);
+  assert.doesNotMatch(developerApp, /status\.runtime\.path/);
   assert.doesNotMatch(codexRuntime, /displayPath/);
   assert.doesNotMatch(codexService, /path: runtime\.displayPath/);
 });

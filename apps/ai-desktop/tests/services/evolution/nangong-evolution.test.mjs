@@ -10,6 +10,7 @@ import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop
 import { HanliRealAppAcceptanceRunner } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.js";
 import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.service.js";
+import { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-method-context.js";
 import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { controlledTestRoot, projectPaths } from "#test-paths";
 
@@ -64,6 +65,7 @@ const approvalServiceSource = readFileSync(new URL("../../../electron/services/p
 const hanliDeliberationSource = readFileSync(new URL("../../../prompts/personas/hanli/proposal-review.md", import.meta.url), "utf8");
 const hanliApplicationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/hanli-application.service.ts", import.meta.url), "utf8");
 const hanliConversationPromptSource = readFileSync(new URL("../../../prompts/personas/hanli/conversation.md", import.meta.url), "utf8");
+const hanliConversationWorkspaceSource = readFileSync(new URL("../../../src/features/hanli/components/HanliConversationWorkspace.tsx", import.meta.url), "utf8");
 const distributionServiceSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/nangong-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
 function evolutionPersistence(key) {
@@ -139,16 +141,16 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     assert.equal(result.state.deliberations[0].rounds[0].answer, "没有新问题时保持监测；出现新的用户证据后再继续提问。");
     assert.equal(result.state.topics[0].title, "持续人物研讨");
     assert.deepEqual(internalMessages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan", "han-li"]);
-    assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨，请回复 1。/);
+    assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("连续自动开关开启后不因单题轮数上限自行停止", async () => {
+test("回复1启动统一自动流程后不因单题轮数上限自行停止", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-nangong-continuous-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: 1, maxCorrectionRounds: 1, workspaceState, locale: "zh-CN" });
-    store.setAutomation("evolution", true);
+    store.beginOneShotRun(workspaceState, "zh-CN");
     const replies = [
       JSON.stringify({ action: "ask", question: "还缺少哪项用户证据？", reason: "需要确认真实边界" }),
       JSON.stringify({ decision: "continue", assessment: "当前证据仍不足。", nextQuestion: "用户实际期望哪项结果？", questionReason: "缺少可验收结果" }),
@@ -165,7 +167,7 @@ test("连续自动开关开启后不因单题轮数上限自行停止", async ()
     });
     const result = await service.advance({ requireProblem: false });
     assert.equal(result.activity, "questioning");
-    assert.equal(result.state.automaticEvolutionEnabled, true);
+    assert.equal(result.state.automationRuntime.status, "running");
     assert.equal(result.state.deliberations[0].status, "questioning");
     assert.equal(result.state.deliberations[0].rounds.length, 2);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -174,7 +176,7 @@ test("连续自动开关开启后不因单题轮数上限自行停止", async ()
 test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", async () => {
   let started = 0;
   let externalChatCalls = 0;
-  const messages = [{ messageId: "hanli-invite", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "需求已经可以开始调查。若确认由韩立与南宫婉开始内部研讨，请回复 1。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
+  const messages = [{ messageId: "hanli-invite", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "需求已经可以开始调查。若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
   const memory = {
     readPersonaConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
     registerPersonaRound(input) {
@@ -193,7 +195,67 @@ test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", a
   assert.equal(started, 1);
   assert.equal(externalChatCalls, 0);
   assert.equal(result.messages.at(-2).content, "1");
-  assert.match(result.messages.at(-1).content, /持续自动开关已开启/);
+  assert.match(result.messages.at(-1).content, /直到你暂停、停止或人工接管/);
+});
+
+test("韩立只学习提问调查扩展方法并回显每轮真实读入字数", async () => {
+  const trajectories = Array.from({ length: 40 }, (_, index) => ({
+    trajectoryId: `trajectory-${index}`, sourceCorpusTopicId: `topic-${index}`, projectScope: "/workspace",
+    customerGoal: `不得进入方法上下文的客户目标-${index}`,
+    confirmedFacts: [`不得进入方法上下文的证据原文-${index}`], assumptions: ["假设"], conflicts: [],
+    informationGaps: ["缺口"], implicitRequirements: ["隐含要求"],
+    selectedAction: `先核对第 ${index} 类证据，再决定是否继续调查。`,
+    questionAsked: `哪一项信息会实质改变第 ${index} 步的调查方向？`,
+    questionReason: "避免在缺少关键证据时提前做结论。",
+    resultSummary: `不得进入方法上下文的历史答案-${index}`,
+    evolutionDirection: "从新发现的信息缺口扩展下一个可验证问题。", maturityScore: 0.8, updatedAt: "2026-09-03T00:00:00.000Z",
+    nodes: [{ requirementNodeId: `node-${index}`, nodeKey: `node-${index}`, parentNodeKey: null, title: "旧业务节点", category: "业务", status: "investigate", statement: `不得进入方法上下文的节点正文-${index}`, critical: true, evidenceMessageIds: [] }],
+  }));
+  const semanticContext = { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories, inspectionExperiences: [] };
+  const methodContext = buildHanliMethodContext(semanticContext);
+  assert.ok(methodContext.length <= HANLI_METHOD_CONTEXT_CHARACTER_BUDGET);
+  assert.match(methodContext, /哪一项信息会实质改变/);
+  assert.match(methodContext, /从新发现的信息缺口扩展/);
+  assert.doesNotMatch(methodContext, /客户目标|证据原文|历史答案|节点正文/);
+
+  const fullUserMessage = `用户原话-${"甲".repeat(300)}`;
+  const recentConversation = buildHanliRecentConversation([
+    { speakerType: "user", speakerPersonaId: null, content: fullUserMessage },
+    { speakerType: "persona", speakerPersonaId: "han-li", content: `韩立长回答-${"乙".repeat(300)}` },
+  ]);
+  assert.ok(recentConversation.length <= HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET);
+  assert.match(recentConversation, new RegExp(fullUserMessage));
+  assert.doesNotMatch(recentConversation, /乙{100}/);
+
+  const events = [];
+  let sentPrompt = "";
+  const service = new HanliConversationService({
+    store: evolutionStore(path.join(controlledTestRoot, "hanli-method-context-state")), prompts,
+    memory: {
+      readPersonaConversation() { return { ownerPersonaId: "han-li", conversationId: null, messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
+      newPersonaConversation() { return { ownerPersonaId: "han-li", conversationId: "hanli-method-thread", messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
+      readHanliSemanticContext() { return semanticContext; },
+      registerPersonaRound(input) { return { ownerPersonaId: "han-li", conversationId: input.conversationId, messages: [], updatedAt: input.completedAt }; },
+    },
+    conversation: {
+      activeConversationId: () => "hanli-provider-thread",
+      async send(_request, prompt) {
+        sentPrompt = prompt;
+        return { threadId: "hanli-provider-thread", itemCount: 1, text: `我会先确认信息缺口。\nHANLI_TOPIC_META={"title":"方法学习","type":"提问方法","switchTopic":false,"userIntent":"优化调查方法","tags":["调查"],"summary":"先确认信息缺口。"}` };
+      },
+      async newChat() {},
+    },
+    recordEvent(type, payload) { events.push({ type, payload }); },
+    refreshSemanticMemory() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+  });
+  const result = await service.send({ clientMessageId: "method-user-1", message: "帮我调查当前问题", attachmentIds: [], workspaceState, locale: "zh-CN" });
+  assert.ok(result.contextReadStats.methodCharacters <= HANLI_METHOD_CONTEXT_CHARACTER_BUDGET);
+  assert.equal(result.contextReadStats.promptCharacters, sentPrompt.length);
+  assert.equal(events.at(-1).payload.contextReadStats.promptCharacters, sentPrompt.length);
+  assert.match(sentPrompt, /hanli_method_learning_context/);
+  assert.doesNotMatch(sentPrompt, /不得进入方法上下文的客户目标/);
+  assert.match(hanliConversationPromptSource, /不得把方法样本当成相似案例/);
+  assert.match(hanliConversationWorkspaceSource, /本轮读取：方法资料/);
 });
 
 test("审批、编排和分发服务不再互相代替职责", () => {
@@ -210,6 +272,9 @@ test("审批、编排和分发服务不再互相代替职责", () => {
   assert.doesNotMatch(personaEvolutionRuntimeSource, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
   assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowOrchestrator/);
   assert.match(personaEvolutionRuntimeSource, /createNangongTaskDistribution/);
+  assert.match(personaEvolutionRuntimeSource, /运行态代表用户已经确认统一托管/);
+  assert.match(personaEvolutionRuntimeSource, /暂停、停止和人工接管必须冻结当前专题/);
+  assert.doesNotMatch(personaEvolutionRuntimeSource, /automaticApprovalQueue|automaticDistributionQueue|automaticNangongApprovalEnabled|automaticLinghuApprovalEnabled|automaticExecutionEnabled/);
   assert.match(nangongApplicationSource, /class NangongApplicationService/);
   assert.doesNotMatch(personaEvolutionRuntimeSource, /parseConversationResponse|revisionInvestigationPrompt/);
 });
@@ -254,42 +319,38 @@ test("审批服务按发生顺序发布申请、决定和补充事实且不会�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("自动演化、两个来源审批和自动分发四项开关独立持久化", () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-switches-"));
+test("旧状态四项开关加载后被清除且不再进入公开状态", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-retired-switches-"));
   try {
-    const store = evolutionStore(path.join(directory, "state.json"));
-    store.setAutomation("evolution", true); store.setAutomation("nangong-approval", true);
-    const state = evolutionStore(path.join(directory, "state.json")).state();
-    assert.equal(state.automaticEvolutionEnabled, true); assert.equal(state.automaticNangongApprovalEnabled, true); assert.equal(state.automaticLinghuApprovalEnabled, false); assert.equal(state.automaticExecutionEnabled, false);
+    const key = path.join(directory, "state.json");
+    const legacy = evolutionStore(key).state();
+    writePersistedState(key, { ...legacy, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: true, automaticExecutionEnabled: false });
+    const state = evolutionStore(key).state();
+    assert.equal("automaticEvolutionEnabled" in state, false);
+    assert.equal("automaticNangongApprovalEnabled" in state, false);
+    assert.equal("automaticLinghuApprovalEnabled" in state, false);
+    assert.equal("automaticExecutionEnabled" in state, false);
+    assert.equal("automaticEvolutionEnabled" in readPersistedState(key), false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("一次性完整流程独立持久化且不改写四个长期自动开关", () => {
+test("回复1建立专题运行并同时开启统一持续自动状态", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-state-"));
   try {
     const filePath = path.join(directory, "state.json");
     const store = evolutionStore(filePath);
-    store.setAutomation("evolution", true);
-    store.setAutomation("linghu-approval", true);
-    const before = store.state();
     let state = store.beginOneShotRun(workspaceState, "zh-CN");
-    assert.deepEqual([
-      state.automaticEvolutionEnabled,
-      state.automaticNangongApprovalEnabled,
-      state.automaticLinghuApprovalEnabled,
-      state.automaticExecutionEnabled,
-    ], [before.automaticEvolutionEnabled, before.automaticNangongApprovalEnabled, before.automaticLinghuApprovalEnabled, before.automaticExecutionEnabled]);
     assert.equal(state.oneShotRun.status, "running");
+    assert.equal(state.automationRuntime.status, "running");
     state = store.finishOneShotRun();
     const restored = evolutionStore(filePath).state();
     assert.equal(restored.oneShotRun.status, "completed");
     assert.equal(restored.oneShotRun.phase, "completed");
-    assert.equal(restored.automaticEvolutionEnabled, true);
-    assert.equal(restored.automaticLinghuApprovalEnabled, true);
+    assert.equal(restored.automationRuntime.status, "running");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("一次性流程从同一专题提案卡点原位恢复且不打开长期自动开关", () => {
+test("专题流程从同一提案卡点原位恢复统一自动运行", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-resume-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -308,7 +369,7 @@ test("一次性流程从同一专题提案卡点原位恢复且不打开长期�
     assert.equal(state.oneShotRun.status, "running");
     assert.equal(state.oneShotRun.phase, "revising");
     assert.match(state.oneShotRun.action, /重新调查/);
-    assert.deepEqual([state.automaticEvolutionEnabled, state.automaticNangongApprovalEnabled, state.automaticLinghuApprovalEnabled, state.automaticExecutionEnabled], [false, false, false, false]);
+    assert.equal(state.automationRuntime.status, "running");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -317,13 +378,11 @@ test("自动控制台转人工后只观察且必须明确恢复才能继续", ()
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     let state = store.controlAutomation("start");
-    assert.equal(state.automaticEvolutionEnabled, true);
+    assert.equal(state.automationRuntime.status, "running");
     state = store.controlAutomation("handover");
-    assert.equal(state.automaticEvolutionEnabled, false);
     assert.equal(state.automationRuntime.status, "paused");
     assert.match(state.automationRuntime.stopReason, /人工接管.*仅观察/);
     state = store.controlAutomation("resume");
-    assert.equal(state.automaticEvolutionEnabled, true);
     assert.equal(state.automationRuntime.status, "running");
     assert.equal(state.automationRuntime.stopReason, null);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -336,7 +395,7 @@ test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
     writePersistedState(filePath, { version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] });
     const state = evolutionStore(filePath).state();
     assert.equal(state.version, 8);
-    assert.equal(state.automaticNangongApprovalEnabled, false);
+    assert.equal("automaticNangongApprovalEnabled" in state, false);
     assert.deepEqual(state.topics, []);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -376,7 +435,7 @@ test("清空测试数据删除专题运行历史并保留人物对话、自动�
     assert.deepEqual(state.automationSettings, { maxRoundsPerTopic: 9, maxCorrectionRounds: 4 });
     assert.equal(state.automationContext.locale, "ja");
     assert.equal(state.automationContext.workspaceState, null);
-    assert.equal(state.automaticEvolutionEnabled, false);
+    assert.equal(state.automationRuntime.status, "idle");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -574,7 +633,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
       state() { return { tasks: distributedTaskId ? [{ taskId: distributedTaskId, state: "integrated" }] : [] }; },
     };
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
-    store.setAutomation("evolution", true);
+    store.controlAutomation("start");
     let state = facade.createTopic(topicRequest("完整演化闭环"));
     state = facade.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
@@ -762,7 +821,7 @@ test("没有南宫婉明确邀请时回复 1 不启动流程或直接修改源�
     assert.equal(state.oneShotRun, null);
     assert.equal(state.oneShotConfirmation ?? null, null);
     assert.equal(state.conversation.messages.at(-2).inferredIntent, undefined);
-    assert.match(state.conversation.messages.at(-1).content, /当前没有等待确认的一次性演化/);
+    assert.match(state.conversation.messages.at(-1).content, /当前没有等待确认的自动演化/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -819,7 +878,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     const readyConversation = {
       async send(request) {
         if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "一次性演化课题", goal: "修复当前已确认问题", scope: ["AI Desktop"], evidence: ["用户和南宫婉已确认问题事实"], acceptanceCriteria: ["沿现有流程执行并完成真实验收"] }), itemCount: 1 };
-        return { text: "事实、范围和验收条件已经明确。若确认启动本轮完整演化，请回复 1。\n<!-- SELPLAT_CORPUS_META {\"title\":\"一次性演化\",\"type\":\"流程确认\",\"intent\":\"确认当前问题事实与实施范围\",\"tags\":[\"一次性流程\",\"演化课题\"],\"summary\":\"事实成熟后邀请用户启动一次完整演化流程。\"} -->", itemCount: 1 };
+        return { text: "事实、范围和验收条件已经明确。若确认启动持续自动演化，请回复 1。\n<!-- SELPLAT_CORPUS_META {\"title\":\"持续自动演化\",\"type\":\"流程确认\",\"intent\":\"确认当前问题事实与实施范围\",\"tags\":[\"持续流程\",\"演化课题\"],\"summary\":\"事实成熟后邀请用户启动持续自动演化流程。\"} -->", itemCount: 1 };
       },
       async newChat() {},
     };
@@ -843,7 +902,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     const activity = [...state.archiveRecords].reverse().find((record) => record.eventType === "one-shot.activity");
     assert.equal(activity.actor, "codex");
     assert.equal(activity.payload.actorName, "墨彩环");
-    assert.deepEqual([state.automaticEvolutionEnabled, state.automaticNangongApprovalEnabled, state.automaticLinghuApprovalEnabled, state.automaticExecutionEnabled], [false, false, false, false]);
+    assert.equal(state.automationRuntime.status, "running");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -881,7 +940,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     const readyConversation = {
       async send(request) {
         if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "集成阻塞课题", goal: "验证相同失败不重复执行", scope: ["AI Desktop"], evidence: ["已确认本地修改没有任务归属"], acceptanceCriteria: ["同一事实只登记一次并保留恢复点"] }), itemCount: 1 };
-        return { text: "事实已经成熟。若确认启动本轮完整演化，请回复 1。\n<!-- SELPLAT_CORPUS_META {\"title\":\"集成阻塞\",\"type\":\"技术治理\",\"intent\":\"阻止同一失败循环\",\"tags\":[\"集成\",\"去重\"],\"summary\":\"确认集成阻塞事实后启动一次性流程。\"} -->", itemCount: 1 };
+        return { text: "事实已经成熟。若确认启动持续自动演化，请回复 1。\n<!-- SELPLAT_CORPUS_META {\"title\":\"集成阻塞\",\"type\":\"技术治理\",\"intent\":\"阻止同一失败循环\",\"tags\":[\"集成\",\"去重\"],\"summary\":\"确认集成阻塞事实后启动持续自动流程。\"} -->", itemCount: 1 };
       },
       async newChat() {},
     };
@@ -934,7 +993,7 @@ test("一次性流程捕获的 AI JSON 解析失败仍登记为技术异常并�
     const readyConversation = {
       async send(request) {
         if (request.message.includes("仅返回 JSON")) return { text: JSON.stringify({ title: "异常登记课题", goal: "验证失败登记", scope: ["AI Desktop"], evidence: ["已确认复现事实"], acceptanceCriteria: ["失败进入统一异常中心"] }), itemCount: 1 };
-        return { text: "事实已经成熟。若确认启动本轮完整演化，请回复 1。\nNANGONG_TOPIC_META={\"title\":\"异常登记\",\"type\":\"技术治理\",\"switchTopic\":false,\"userIntent\":\"验证失败登记\",\"tags\":[\"异常中心\"],\"summary\":\"邀请启动一次性流程。\"}", itemCount: 1 };
+        return { text: "事实已经成熟。若确认启动持续自动演化，请回复 1。\nNANGONG_TOPIC_META={\"title\":\"异常登记\",\"type\":\"技术治理\",\"switchTopic\":false,\"userIntent\":\"验证失败登记\",\"tags\":[\"异常中心\"],\"summary\":\"邀请启动持续自动流程。\"}", itemCount: 1 };
       },
       async newChat() {},
     };
@@ -963,7 +1022,7 @@ test("专题群人物消息复用南宫婉会话并只向专题档案写入短�
     let state = facade.createTopic(topicRequest("专题群消息回流"));
     const topicId = state.activeTopicId;
     const originalArchiveCount = state.archiveRecords.length;
-    state = await facade.sendConversationMessage({ topicId, message: "请南宫婉说明当前专题下一步。", workspaceState, locale: "zh-CN" });
+    state = await facade.sendConversationMessage({ subject: { type: "evolution-topic", id: topicId }, message: "请南宫婉说明当前专题下一步。", workspaceState, locale: "zh-CN" });
     assert.equal(state.conversation.messages.at(-2).content, "请南宫婉说明当前专题下一步。");
     assert.equal(state.archiveRecords.length, originalArchiveCount + 1);
     const groupRecord = state.archiveRecords.at(-1);
@@ -1060,7 +1119,7 @@ test("真实应用验收执行器只执行白名单操作并阻止业务写按�
   let screenshots = 0;
   const sentKeys = [];
   const targetWindow = {
-    isDestroyed: () => false, show() {}, focus() {}, getBounds: () => ({ ...bounds }), setBounds(next) { bounds = { ...next }; }, getTitle: () => "AI Desktop · 专题演化工作台",
+    isDestroyed: () => false, show() {}, focus() {}, getBounds: () => ({ ...bounds }), setBounds(next) { bounds = { ...next }; }, getTitle: () => "AI Desktop",
     webContents: {
       async executeJavaScript(source) {
         if (source.includes('})({ type: "click"')) return { clicked: true, description: "已点击：专题执行群" };
@@ -1136,13 +1195,12 @@ test("南宫婉线程删除最终失败时保留原页面消息", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐修正与南宫提案使用独立自动审批开关并返还原提交人", async () => {
+test("令狐修正与南宫提案共用统一审批链并返还原提交人", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "linghu-approval-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json")); let submitted;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] }; }, state() { return { tasks: [] }; } };
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
-    store.setAutomation("linghu-approval", true);
     let state = facade.createLinghuRepairProposal({ title: "修正持续运行 Bug", content: "依据停点事实修正恢复逻辑", evidence: ["任务停在 test-failed"], impactScope: ["令狐恢复流程"], risks: ["重复恢复"], rollbackPlan: "恢复旧恢复点", acceptanceCriteria: ["任务恢复且不重复"], workspaceState, locale: "zh-CN" });
     const proposal = state.proposals.at(-1);
     assert.equal(proposal.submitterMemberId, "linghu-ancestor");
@@ -1217,7 +1275,7 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
         });
       },
     });
-    store.setAutomation("evolution", true);
+    store.controlAutomation("start");
     let state = facade.createLinghuRepairProposal({ title: "令狐提交具体性修正", content: "修正持续任务提交内容", evidence: ["提交内容缺少位置"], impactScope: ["令狐提案流程"], risks: ["模板兼容"], rollbackPlan: "保留旧模板", acceptanceCriteria: ["内容可审批"], workspaceState, locale: "zh-CN" });
     const original = state.proposals.at(-1);
     facade.decideProposal(original.proposalId, { mutation: mutation(facade), decision: "supplement-required", advice: "写明哪里有问题、修改哪里和预期结果。", feedbackTarget: "submitter-capability", capabilityScope: "修正方案具体性" });

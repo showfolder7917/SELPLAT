@@ -17,12 +17,12 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopPersonaConversation", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopPersonaConversation", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1023");
+    assert.equal(fixture.database.latestSchemaVersion, "1024");
     fixture.database.withConnection((connection) => {
-      for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
+      for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream", "AiDesktopEvolutionWorkbenchPreference"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
       }
       assert.ok(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaSession'").get());
@@ -82,7 +82,6 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     fixture.repository.startRuntimeSession(4321, "2026-08-28T00:00:00.000Z");
     fixture.repository.recordAuditEvent("test.recorded", { message: "待清空事件" });
     fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
-    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25" }, "2026-08-28T00:00:01.500Z");
     const memory = new CollaborationMemoryService(fixture.database);
     memory.savePersonaConversation({ ownerPersonaId: "nangong-wan", conversationId: "training-conversation", messages: [
       { messageId: "training-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "这是必须保留的训练原话。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z", completedAt: "2026-08-28T00:00:02.000Z" },
@@ -119,7 +118,6 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     }
     assert.equal(fixture.repository.tableCount("AiDesktopPersonaConversationMessage"), 1);
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT threadId FROM AiDesktopPersonaSession WHERE sessionKey='linghu'").get()).threadId, "thread-linghu");
-    assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-topic"), { perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25", updatedAt: "2026-08-28T00:00:01.500Z" });
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopCorpusIngestionCheckpoint").get()).count, 1);
     const schemaCountAfter = fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get().count));
@@ -517,8 +515,7 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
   try {
     const now = new Date().toISOString();
     fixture.repository.syncEvolutionState({
-      version: 8, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false,
-      automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "running", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: now, pausedAt: null }, automationContext: { workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN" }, preferenceSnapshotVersion: 1,
+      version: 8, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "running", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: now, pausedAt: null }, automationContext: { workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN" }, preferenceSnapshotVersion: 1,
       activeTopicId: "topic-1", updatedAt: now, conversation: { ownerPersonaId: "nangong-wan", conversationId: "conversation-1", messages: [], updatedAt: now },
       deliberations: [{
         deliberationId: "deliberation-1", topicId: "topic-1", status: "established",
@@ -577,53 +574,6 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
   } finally {
     fixture.close();
   }
-});
-
-test("专题工作台列表由 SQLite 完成搜索和真实分页且不返回原始 JSON", () => {
-  const fixture = createFixture("evolution-workbench-pagination");
-  try {
-    fixture.database.withConnection((connection) => {
-      const insert = connection.prepare(`INSERT INTO AiDesktopWorkflowRun
-        (workflowId, topicId, proposalId, origin, title, state, currentStage, currentOwnerId, recoveryPoint, nextLaunchAt, startedAt, completedAt, updatedAt)
-        VALUES ($workflowId, $topicId, $proposalId, 'nangong', $title, $state, $stage, 'nangong-wan', $recoveryPoint, NULL, $createdAt, NULL, $updatedAt)`);
-      for (let index = 1; index <= 25; index += 1) insert.run({
-        $workflowId: `evolution:proposal-${index}`, $topicId: `topic-${index}`, $proposalId: `proposal-${index}`,
-        $title: index % 2 ? `滚动条专项 ${index}` : `分页专项 ${index}`, $state: index === 25 ? "blocked" : "executing",
-        $stage: index === 25 ? "recovery" : "execution", $recoveryPoint: `checkpoint-${index}`,
-        $createdAt: `2026-08-28T00:${String(index).padStart(2, "0")}:00.000Z`, $updatedAt: `2026-08-28T00:${String(index).padStart(2, "0")}:30.000Z`,
-      });
-    });
-    const first = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 10, sortField: "updatedAt", sortDirection: "desc" });
-    const third = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 3, pageSize: 10, sortField: "updatedAt", sortDirection: "desc" });
-    const searched = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 20, keyword: "滚动条" });
-    const blocked = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 20, status: "已阻塞" });
-    assert.equal(first.total, 25);
-    assert.equal(first.rows.length, 10);
-    assert.equal(third.rows.length, 5);
-    assert.equal(searched.total, 13);
-    assert.equal(blocked.total, 1);
-    assert.equal(blocked.rows[0].status, "blocked");
-    assert.equal(first.stateVersion, "2026-08-28T00:25:30.000Z");
-    assert.equal(searched.rows[0].owner, "南宫婉");
-    const byTitle = fixture.repository.queryEvolutionWorkbench({ view: "topics", page: 1, pageSize: 10, sortField: "title", sortDirection: "asc" });
-    assert.equal(byTitle.rows[0].title, "分页专项 10");
-    assert.equal(Object.hasOwn(searched.rows[0], "payload"), false);
-    assert.equal(Object.hasOwn(searched.rows[0], "internalPath"), false);
-  } finally { fixture.close(); }
-});
-
-test("工作台树展开和列表排序偏好使用同一 SQLite 偏好表按人物视角恢复", () => {
-  const fixture = createFixture("evolution-workbench-view-preferences");
-  try {
-    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "__tree__", page: 1, pageSize: 20, keyword: "evolution|manual", status: "", selectedRowId: null }, "2026-08-29T03:00:00.000Z");
-    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-proposal::sort", page: 1, pageSize: 20, keyword: "title", status: "asc", selectedRowId: null }, "2026-08-29T03:00:01.000Z");
-    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-proposal::columns", page: 1, pageSize: 20, keyword: "title=292,status=116,stage=140,owner=112,nextStep=230,updatedAt=160", status: "", selectedRowId: null }, "2026-08-29T03:00:01.500Z");
-    fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "hanli", nodeId: "__tree__", page: 1, pageSize: 20, keyword: "audit", status: "", selectedRowId: null }, "2026-08-29T03:00:02.000Z");
-    assert.equal(fixture.repository.getEvolutionWorkbenchPreference("nangong", "__tree__").keyword, "evolution|manual");
-    assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-proposal::sort"), { perspective: "nangong", nodeId: "manual-proposal::sort", page: 1, pageSize: 20, keyword: "title", status: "asc", selectedRowId: null, updatedAt: "2026-08-29T03:00:01.000Z" });
-    assert.equal(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-proposal::columns").keyword, "title=292,status=116,stage=140,owner=112,nextStep=230,updatedAt=160");
-    assert.equal(fixture.repository.getEvolutionWorkbenchPreference("hanli", "__tree__").keyword, "audit");
-  } finally { fixture.close(); }
 });
 
 test("专题分发使用 SQLite 幂等日志、全局状态版本和单专题互斥锁", () => {
@@ -694,7 +644,7 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     now: () => now,
     readers: {
       collaboration: () => collaborationState(heartbeat),
-      evolution: () => ({ version: 5, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { ownerPersonaId: "nangong-wan", conversationId: "conversation", messages: [], updatedAt: now.toISOString() }, updatedAt: now.toISOString() }),
+      evolution: () => ({ version: 5, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { ownerPersonaId: "nangong-wan", conversationId: "conversation", messages: [], updatedAt: now.toISOString() }, updatedAt: now.toISOString() }),
       linghu: () => ({ version: 2, enabled: linghuEnabled, pollIntervalMs: 30_000, cycle: 1, currentModule: "flow-completion", activePromptId: null, activeTaskId: null, pendingRepairProposalId: null, recoveryAttemptCount: 0, currentFaultFingerprint: null, recoveryAttemptsByFingerprint: {}, detectionCursor: null, flowSnapshots: [], testResourceState: null, recoveryCheckpoint: null, lastDispatchAt: null, lastCompletedAt: null, lastCheckedAt: null, blockingReason: null, lastFeedback: null, lastModuleReport: null, prompts: [], updatedAt: now.toISOString() }),
     },
     projectCollaborationTimeline: () => undefined,

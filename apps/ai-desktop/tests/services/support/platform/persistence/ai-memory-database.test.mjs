@@ -17,7 +17,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1023");
+    assert.equal(first.status.schemaVersion, "1024");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -30,13 +30,88 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 22);
+      assert.equal(Number(row.count), 25);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1023", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1024", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
+      assert.equal(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopEvolutionWorkbenchPreference'").get(), undefined);
     } finally {
       inspection.close();
     }
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("1023 在主题已有语义提取和需求轨迹引用时原子升级并保留数据", () => {
+  const fixture = createFixture("1023-referenced-topic");
+  try {
+    installSchemaUpTo(fixture, 1022);
+    const legacy = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(legacy.status.schemaVersion, "1022");
+    legacy.database?.withConnection((connection) => {
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
+        (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt)
+        VALUES ('topic-1023', 'codex', 'conversation-1023', 'turn-1023', '迁移保留主题', 'requirement', '验证引用迁移', '[]', 'ai-confirmed', '2026-09-03T00:00:00.000Z', '2026-09-03T00:00:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusMessage
+        (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId, sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
+        VALUES ('message-1023', 'topic-1023', 'codex', 'conversation-1023', 'turn-1023', 'source-message-1023', 0, 'user', '必须保留的原始需求', 'exact', 'primary', '2026-09-03T00:00:00.000Z', '2026-09-03T00:00:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopCorpusExtractionState
+        (extractionId, corpusTopicId, stableUserId, extractorType, sourceContentHash, extractorVersion, status, attemptCount, updatedAt)
+        VALUES ('extraction-1023', 'topic-1023', 'XUNAN', 'hanli-semantic', ?, 'v1', 'completed', 1, '2026-09-03T00:00:00.000Z')`).run("a".repeat(64));
+      connection.prepare(`INSERT INTO AiDesktopRequirementTrajectory
+        (trajectoryId, stableUserId, sourceCorpusTopicId, projectScope, customerGoal, confirmedFactsJson, assumptionsJson, conflictsJson, informationGapsJson, implicitRequirementsJson, selectedAction, acceptanceEvidenceJson, maturityScore, createdAt, updatedAt)
+        VALUES ('trajectory-1023', 'XUNAN', 'topic-1023', 'selplat', '保留需求轨迹', '[]', '[]', '[]', '[]', '[]', 'continue', '[]', 0.8, '2026-09-03T00:00:00.000Z', '2026-09-03T00:00:00.000Z')`).run();
+      connection.prepare(`INSERT INTO AiDesktopRequirementNode
+        (requirementNodeId, trajectoryId, nodeKey, title, category, status, statement, critical, evidenceMessageIdsJson, createdAt, updatedAt)
+        VALUES ('requirement-node-1023', 'trajectory-1023', 'root', '保留需求节点', 'goal', 'confirmed', '需求节点正文', 1, '["message-1023"]', '2026-09-03T00:00:00.000Z', '2026-09-03T00:00:00.000Z')`).run();
+    });
+    legacy.database?.close();
+    installSchemaUpTo(fixture, 1023);
+
+    const upgraded = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(upgraded.status.state, "ready");
+    assert.equal(upgraded.status.schemaVersion, "1023");
+    upgraded.database?.withConnection((connection) => {
+      assert.equal(connection.prepare("SELECT content FROM AiDesktopTrainingCorpusMessage WHERE corpusMessageId='message-1023'").get().content, "必须保留的原始需求");
+      assert.equal(connection.prepare("SELECT status FROM AiDesktopCorpusExtractionState WHERE extractionId='extraction-1023'").get().status, "completed");
+      assert.equal(connection.prepare("SELECT customerGoal FROM AiDesktopRequirementTrajectory WHERE trajectoryId='trajectory-1023'").get().customerGoal, "保留需求轨迹");
+      assert.equal(connection.prepare("SELECT statement FROM AiDesktopRequirementNode WHERE requirementNodeId='requirement-node-1023'").get().statement, "需求节点正文");
+      assert.deepEqual(connection.prepare("PRAGMA foreign_key_check").all(), []);
+      assert.equal(Number(Object.values(connection.prepare("PRAGMA foreign_keys").get())[0]), 1);
+      assert.throws(() => connection.prepare(`INSERT INTO AiDesktopTrainingCorpusMessage
+        (corpusMessageId, corpusTopicId, source, sourceMessageId, sourceConversationId, sourceTurnId, sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
+        VALUES ('invalid-message', 'missing-topic', 'future-persona', 'invalid-source-message', 'conversation-invalid', 'turn-invalid', 0, 'future-persona', '不得写入', 'exact', 'primary', '2026-09-03T00:00:01.000Z', '2026-09-03T00:00:01.000Z')`).run(), /FOREIGN KEY constraint failed/);
+      connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
+        (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, tagsJson, definitionSource, createdAt, updatedAt)
+        VALUES ('topic-future-persona', 'future-persona', 'conversation-future', 'turn-future', '未来人物', 'discussion', '[]', 'pending', '2026-09-03T00:00:01.000Z', '2026-09-03T00:00:01.000Z')`).run();
+    });
+    upgraded.database?.close();
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("1023 两份已知等价校验和可继续启动但未知改写仍被阻断", () => {
+  const fixture = createFixture("1023-compatible-checksum");
+  try {
+    const initialized = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(initialized.status.state, "ready");
+    initialized.database?.withConnection((connection) => connection.prepare(
+      "UPDATE AiDesktopSchemaVersion SET checksum=? WHERE versionCode='1023'",
+    ).run("7288647d064d300b11d00267d99b8675fd86cd49947986d3d46dadd038ec49ac"));
+    initialized.database?.close();
+
+    const compatible = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(compatible.status.state, "ready");
+    compatible.database?.close();
+
+    const inspection = new DatabaseSync(fixture.databasePath);
+    inspection.prepare("UPDATE AiDesktopSchemaVersion SET checksum=? WHERE versionCode='1023'").run("b".repeat(64));
+    inspection.close();
+    const rejected = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(rejected.status.state, "recovery-required");
+    assert.match(rejected.status.message || "", /校验和不一致/);
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
   }
@@ -75,7 +150,13 @@ test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", 
     store.assertTestDataCleared();
     const persisted = initialized.database?.withConnection((connection) => connection.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1").get());
     assert.equal(Number(persisted.stateVersion), 8);
-    assert.equal(JSON.parse(String(persisted.stateJson)).conversation.messages[0].content, "保留的用户原话");
+    assert.equal(JSON.parse(String(persisted.stateJson)).conversation, undefined);
+    const preservedMessage = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT content FROM AiDesktopPersonaConversationMessage
+      WHERE ownerPersonaId='nangong-wan' AND speakerType='user'
+      ORDER BY sequenceNumber LIMIT 1
+    `).get());
+    assert.equal(preservedMessage.content, "保留的用户原话");
     initialized.database?.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
@@ -226,7 +307,10 @@ test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", (
     readFileSync(path.join(appRoot, "electron", "system", "preload", "preload.cts"), "utf8"),
     readFileSync(path.join(appRoot, "electron", "system", "preload", "domains", "system-bridge.cts"), "utf8"),
   ].join("\n");
-  const rendererSource = readFileSync(path.join(appRoot, "src", "applications", "developer", "DeveloperApplication.tsx"), "utf8");
+  const rendererSource = [
+    path.join(appRoot, "src", "applications", "developer", "DeveloperApplication.tsx"),
+    path.join(appRoot, "src", "features", "settings", "components", "DeveloperSettingsFeature.tsx"),
+  ].map((file) => readFileSync(file, "utf8")).join("\n");
   assert.match(mainSource, /initializeAiMemoryDatabase/);
   assert.match(mainSource, /database\?\.close\(\)/);
   assert.match(ipcSource, /desktop:get-ai-memory-database-status/);
