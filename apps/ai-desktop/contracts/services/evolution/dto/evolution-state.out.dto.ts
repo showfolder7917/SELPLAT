@@ -16,15 +16,11 @@ import type { EvolutionTopicOutDto } from "./evolution-topic.out.dto.js";
 
 export interface EvolutionStateOutDto {
   version: 8;
-  automaticEvolutionEnabled: boolean;
-  automaticNangongApprovalEnabled: boolean;
-  automaticLinghuApprovalEnabled: boolean;
-  automaticExecutionEnabled: boolean;
   automationSettings: EvolutionAutomationSettingsOutDto;
   automationRuntime: EvolutionAutomationRuntimeOutDto;
   /** 南宫婉已经在可见正文中明确邀请启动本轮流程；应用重启后仍可继续等待用户确认。 */
   oneShotConfirmation?: EvolutionOneShotConfirmationOutDto | null;
-  /** 当前对话经用户一次确认后启动的单轮托管；不改变四个长期自动开关。 */
+  /** 当前对话经用户确认后启动的单专题运行；完成后由运行状态决定是否继续发现下一问题。 */
   oneShotRun?: EvolutionOneShotRunOutDto | null;
   automationContext: { workspaceState: WorkspaceStateOutDto | null; locale: LocaleValue };
   preferenceSnapshotVersion: number;

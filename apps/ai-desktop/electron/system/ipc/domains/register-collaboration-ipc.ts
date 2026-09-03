@@ -1,10 +1,6 @@
 import type { CreateCollaborationMemberInDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../../contracts/services/workflow/index.js";
 import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, UpdateLinghuStartupPromptInDto } from "../../../../contracts/services/personas/linghu/index.js";
-import type {
-  EvolutionMutationInDto,
-  QueryEvolutionWorkbenchInDto,
-  SaveEvolutionWorkbenchPreferenceInDto,
-} from "../../../../contracts/services/evolution/index.js";
+import type { EvolutionMutationInDto } from "../../../../contracts/services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type {
@@ -61,9 +57,6 @@ export function registerCollaborationIpc(
   handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
   handle("desktop:get-nangong-evolution-state", () => evolution.state());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
-  handle("desktop:query-evolution-workbench", (_event, request: QueryEvolutionWorkbenchInDto) => evolution.queryWorkbench(request));
-  handle("desktop:get-evolution-workbench-preference", (_event, perspective: "nangong" | "hanli", nodeId: string) => evolution.getWorkbenchPreference(perspective, nodeId));
-  handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceInDto) => evolution.saveWorkbenchPreference(request));
   // 人物会话只有这三个跨进程入口。以后增加人物时注册处理器即可，不再增加人物专用 channel。
   handle("desktop:get-persona-conversation", (_event, personaId: string) => personaConversations.conversation(personaId));
   handle("desktop:send-persona-conversation-message", (_event, personaId: string, request: SendPersonaConversationMessageInDto) => personaConversations.send(personaId, request));
@@ -72,7 +65,6 @@ export function registerCollaborationIpc(
   handle("desktop:convert-nangong-conversation-to-topic", (_event, request: ConvertNangongConversationToTopicInDto) => nangong.convertConversationToTopic(request));
   handle("desktop:create-evolution-topic", (_event, request: CreateNangongTopicInDto) => evolution.createTopic(request));
   handle("desktop:update-evolution-topic", (_event, topicId: string, request: UpdateNangongTopicInDto) => nangong.updateTopic(topicId, request));
-  handle("desktop:set-nangong-automation", (_event, kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean) => personaWorkflow.setAutomation(kind, enabled === true));
   handle("desktop:configure-evolution-automation", (_event, request: ConfigurePersonaWorkflowInDto) => personaWorkflow.configureAutomation(request));
   handle("desktop:control-evolution-automation", (_event, action: PersonaWorkflowActionInDto) => personaWorkflow.controlAutomation(action));
   handle("desktop:resume-nangong-one-shot-evolution", () => personaWorkflow.resumeOneShotRun());

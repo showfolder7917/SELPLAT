@@ -77,8 +77,8 @@ export class HanliNangongDeliberationService {
     const refreshed = requireDeliberation(state, deliberation.deliberationId);
     const answeredRound = refreshed.rounds.find((item) => item.roundId === round.roundId)!;
     if (!answeredRound.assessment) {
-      // 连续开关表示持续发现与修正：它保留人工设置，但当前连续运行不因轮数上限自行停机。
-      const maximum = state.automaticEvolutionEnabled ? null : state.automationSettings.maxRoundsPerTopic;
+      // 用户确认后的统一自动流程持续追问，只有人工暂停或阻塞才停止，不再依赖独立开关。
+      const maximum = state.automationRuntime.status === "running" ? null : state.automationSettings.maxRoundsPerTopic;
       const mustConclude = maximum !== null && answeredRound.roundNumber >= maximum;
       const judgment = parseJudgment(await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.internal-assessment", {
         roundConstraint: mustConclude

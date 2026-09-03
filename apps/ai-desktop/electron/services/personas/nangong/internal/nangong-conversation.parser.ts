@@ -2,7 +2,7 @@ import type { ConversationRoundTopicDecisionInDto } from "../../../../../contrac
 import type { NangongTopicDraftOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
 
 /** 南宫婉判断本轮事实已经成熟后使用的唯一可见邀请。 */
-const NANGONG_ONE_SHOT_INVITATION = "若确认启动本轮完整演化，请回复 1。";
+const NANGONG_ONE_SHOT_INVITATION = "若确认启动持续自动演化，请回复 1。";
 const CONVERSATION_TOPIC_META_PREFIX = "NANGONG_TOPIC_META=";
 
 /** 把人物返回的结构化草稿转换为可编辑字段；缺少必要事实时明确失败。 */

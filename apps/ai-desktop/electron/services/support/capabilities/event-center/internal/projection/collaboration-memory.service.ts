@@ -13,7 +13,7 @@ import type {
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto } from "../../../../../../../contracts/services/personas/conversation/index.js";
-import { PersonaConversationRepository } from "../../../../../personas/conversation/index.js";
+import { PersonaConversationRepository } from "../../../conversation/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 import { HanliSemanticMemoryRepository } from "./hanli-semantic-memory.repository.js";
 

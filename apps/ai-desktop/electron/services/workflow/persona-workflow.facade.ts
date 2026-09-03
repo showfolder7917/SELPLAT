@@ -8,7 +8,6 @@ export interface PersonaWorkflowApplicationPort {
   stop(): void;
   notifyWorkflowChanged(): void;
   setOneShotAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>): void;
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto;
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto;
   controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto;
   resumeOneShotRun(): Promise<EvolutionStateOutDto>;
@@ -27,8 +26,6 @@ export class PersonaWorkflowFacade {
   notifyWorkflowChanged() { this.#application.notifyWorkflowChanged(); }
   /** 登记真实应用验收执行端口；Workflow 只决定调用时机。 */
   setAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>) { this.#application.setOneShotAcceptanceRunner(runner); }
-  /** 独立修改一个自动化开关，不联动其他人物审批开关。 */
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean) { return this.#application.setAutomation(kind, enabled); }
   /** 保存自动化参数；此动作不会自行推进当前流程。 */
   configureAutomation(request: ConfigurePersonaWorkflowInDto) { return this.#application.configureAutomation(request); }
   /** 执行启动、暂停、恢复或停止控制并保存恢复点。 */

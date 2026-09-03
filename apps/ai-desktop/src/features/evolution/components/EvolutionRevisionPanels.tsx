@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { CollaborationMemberOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
-import { evolutionMutationRequest } from "../model/evolution-workbench";
+import { evolutionMutationRequest } from "../model/evolution-runtime";
 
 /** 原提交人依据审批意见形成不可覆盖的新版本，继续返回韩立审批。 */
 export function MemberSelfUpgradePanel({ member, state, onState, onError }: { member: CollaborationMemberOutDto; state: EvolutionStateOutDto; onState(state: EvolutionStateOutDto): void; onError(message: string): void }) {

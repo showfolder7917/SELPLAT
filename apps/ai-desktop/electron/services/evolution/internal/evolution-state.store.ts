@@ -64,20 +64,6 @@ export class EvolutionStateStore {
     }
   }
 
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto {
-    return this.#commit(`automation.${kind}.${enabled ? "enabled" : "disabled"}`, null, null, (state) => {
-      if (kind === "evolution") {
-        state.automaticEvolutionEnabled = enabled;
-        state.automationRuntime.status = enabled ? "running" : "paused";
-        state.automationRuntime.startedAt ??= enabled ? new Date().toISOString() : null;
-        state.automationRuntime.pausedAt = enabled ? null : new Date().toISOString();
-      }
-      if (kind === "nangong-approval") state.automaticNangongApprovalEnabled = enabled;
-      if (kind === "linghu-approval") state.automaticLinghuApprovalEnabled = enabled;
-      if (kind === "execution") state.automaticExecutionEnabled = enabled;
-    });
-  }
-
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto {
     const maximum = request.maxRoundsPerTopic;
     if (maximum !== null && (!Number.isInteger(maximum) || maximum < 1 || maximum > 100)) throw new Error("专题研讨轮次必须为 1 至 100，或选择无限模式。");
@@ -93,18 +79,15 @@ export class EvolutionStateStore {
     return this.#commit(`automation.${action}`, null, null, (state) => {
       const now = new Date().toISOString();
       if (action === "start" || action === "resume") {
-        state.automaticEvolutionEnabled = true;
         state.automationRuntime.status = "running";
         state.automationRuntime.startedAt ??= now;
         state.automationRuntime.pausedAt = null;
         state.automationRuntime.stopReason = null;
       } else if (action === "pause" || action === "handover") {
-        state.automaticEvolutionEnabled = false;
         state.automationRuntime.status = "paused";
         state.automationRuntime.pausedAt = now;
         state.automationRuntime.stopReason = action === "handover" ? "当前专题已转入人工接管，自动控制台仅观察；明确恢复后才会继续推进。" : null;
       } else {
-        state.automaticEvolutionEnabled = false;
         state.automationRuntime.status = "stopped";
         state.automationRuntime.stopReason = "韩立手动停止自动演化。";
         state.automationRuntime.pausedAt = null;
@@ -113,7 +96,7 @@ export class EvolutionStateStore {
   }
 
   /**
-   * 作用：为当前一次用户确认建立独立运行实例，不改写长期自动化开关。
+   * 作用：为当前用户确认建立独立专题运行实例，并把统一自动流程置为运行态。
    * 真实传参示例：workspaceState=SELPLAT 工作区、locale=zh-CN，返回 phase=preparing-topic。
    * 真实返回示例：oneShotRun.actor=nangong-wan，界面显示“南宫婉正在整理演化课题”。
    * 异常或副作用示例：已有未结束的一次性运行时拒绝重复建立；成功后原子保存运行状态。
@@ -124,6 +107,10 @@ export class EvolutionStateStore {
     const now = new Date().toISOString();
     return this.#commit("one-shot.started", null, null, (state) => {
       state.automationContext = { workspaceState: structuredClone(workspaceState), locale };
+      state.automationRuntime.status = "running";
+      state.automationRuntime.startedAt ??= now;
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.stopReason = null;
       state.oneShotConfirmation = null;
       state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
     });
@@ -181,6 +168,8 @@ export class EvolutionStateStore {
       run.blockingReason = required(reason, "一次性运行阻塞原因", 8_000);
       run.updatedAt = now;
       run.completedAt = now;
+      state.automationRuntime.status = "blocked";
+      state.automationRuntime.stopReason = run.blockingReason;
     }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
   }
 
@@ -203,7 +192,7 @@ export class EvolutionStateStore {
   }
 
   /**
-   * 作用：从已持久化的一次性流程卡点原位恢复，不改变长期自动开关，也不新建专题或提案。
+   * 作用：从已持久化的一次性流程卡点原位恢复，并恢复统一自动运行，不新建专题或提案。
    * 真实传参示例：当前 run.status=blocked、proposalId 指向待补充提案，返回同一 runId 的 running 状态。
    * 真实返回示例：界面显示“南宫婉正在重新调查韩立退回项”，后续状态机沿原专题继续。
    * 异常或副作用示例：没有可恢复卡点时拒绝；成功后清除旧阻塞原因但保留全部审批和版本记录。
@@ -224,6 +213,9 @@ export class EvolutionStateStore {
       run.blockingReason = null;
       run.updatedAt = now;
       run.completedAt = null;
+      state.automationRuntime.status = "running";
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.stopReason = null;
     }, { phase: "revising", actor: "nangong-wan", status: "running", nextOwner: "nangong-wan" });
   }
 
@@ -442,9 +434,11 @@ export class EvolutionStateStore {
       ? this.#state.conversation.messages.find((item) => item.messageId === invitationMessageId && item.speakerType === "persona" && item.speakerPersonaId === "nangong-wan")
       : null;
     if (invitationMessageId && !message) throw new Error("一次性演化邀请消息不存在。");
+    const conversationId = this.#state.conversation.conversationId;
+    if (message && !conversationId) throw new Error("一次性演化邀请缺少统一人物会话标识。");
     return this.#commit("conversation.one-shot-confirmation-changed", null, null, (state) => {
       state.oneShotConfirmation = message
-        ? { conversationId: state.conversation.conversationId, invitationMessageId: message.messageId, status: "awaiting-user-confirmation", createdAt: message.createdAt }
+        ? { conversationId: conversationId!, invitationMessageId: message.messageId, status: "awaiting-user-confirmation", createdAt: message.createdAt }
         : null;
     });
   }
@@ -752,11 +746,10 @@ export class EvolutionStateStore {
 
   #load(): EvolutionStateOutDto {
     try {
-      const raw = this.#repository.load() as Partial<EvolutionStateOutDto> | null;
+      const raw = this.#repository.load() as (Partial<EvolutionStateOutDto> & Partial<RetiredAutomationSwitches>) | null;
       if (raw && raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
-        && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext
-        && typeof raw.automaticNangongApprovalEnabled === "boolean" && typeof raw.automaticLinghuApprovalEnabled === "boolean") {
-        const migrated = migrateDistributionValidation(raw as EvolutionStateOutDto);
+        && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext) {
+        const migrated = migrateEvolutionState(raw as EvolutionStateOutDto & Partial<RetiredAutomationSwitches>);
         if (migrated.changed) this.#repository.save(migrated.state);
         return migrated.state;
       }
@@ -770,6 +763,27 @@ export class EvolutionStateStore {
   #write(state: EvolutionStateOutDto): void {
     this.#repository.save(state);
   }
+}
+
+interface RetiredAutomationSwitches {
+  automaticEvolutionEnabled: boolean;
+  automaticNangongApprovalEnabled: boolean;
+  automaticLinghuApprovalEnabled: boolean;
+  automaticExecutionEnabled: boolean;
+}
+
+/** 旧状态中的四个独立开关只用于兼容读取；加载后立即清除，不再参与任何运行判断。 */
+function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAutomationSwitches>): { state: EvolutionStateOutDto; changed: boolean } {
+  const {
+    automaticEvolutionEnabled: _retiredEvolution,
+    automaticNangongApprovalEnabled: _retiredNangongApproval,
+    automaticLinghuApprovalEnabled: _retiredLinghuApproval,
+    automaticExecutionEnabled: _retiredExecution,
+    ...current
+  } = state;
+  const distribution = migrateDistributionValidation(current as EvolutionStateOutDto);
+  const retiredSwitchFound = [_retiredEvolution, _retiredNangongApproval, _retiredLinghuApproval, _retiredExecution].some((value) => typeof value === "boolean");
+  return { state: distribution.state, changed: retiredSwitchFound || distribution.changed };
 }
 
 /** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
@@ -802,7 +816,7 @@ function migrateDistributionValidation(state: EvolutionStateOutDto): { state: Ev
 }
 
 function createInitialState(): EvolutionStateOutDto {
-  return { version: 8, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+  return { version: 8, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
 function required(value: unknown, label: string, maximum: number): string {

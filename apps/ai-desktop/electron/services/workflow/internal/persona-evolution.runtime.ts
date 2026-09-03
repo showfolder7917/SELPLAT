@@ -1,6 +1,6 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/services/personas/linghu/index.js";
-import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionStateOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../../contracts/services/evolution/index.js";
+import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
@@ -44,16 +44,12 @@ export interface PersonaEvolutionRuntimeOptions {
   readProjectScope?: (state: EvolutionStateOutDto) => string;
   readHanliConversationId?: () => string | null;
   readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
-  queryWorkbench?: (request: QueryEvolutionWorkbenchInDto) => EvolutionWorkbenchPageOutDto;
-  getWorkbenchPreference?: (perspective: "nangong" | "hanli", nodeId: string) => EvolutionWorkbenchPreferenceOutDto | null;
-  saveWorkbenchPreference?: (request: SaveEvolutionWorkbenchPreferenceInDto) => EvolutionWorkbenchPreferenceOutDto;
   beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   completeMutation?: (idempotencyKey: string, resultStateVersion: string) => void;
   failMutation?: (idempotencyKey: string, error: unknown) => void;
   newConversationRetryDelaysMs?: number[];
 }
 
-/** 保持自动演化、自动审批和自动执行三道独立开关，并只在审批通过后调用协同分发。 */
 /**
  * 跨人物演化运行时。
  *
@@ -69,9 +65,6 @@ export class PersonaEvolutionRuntime {
   readonly #recordFailure: NonNullable<PersonaEvolutionRuntimeOptions["recordFailure"]>;
   readonly #memory: CollaborationMemoryPort | null;
   readonly #readDossier: PersonaEvolutionRuntimeOptions["readDossier"];
-  readonly #queryWorkbench: PersonaEvolutionRuntimeOptions["queryWorkbench"];
-  readonly #getWorkbenchPreference: PersonaEvolutionRuntimeOptions["getWorkbenchPreference"];
-  readonly #saveWorkbenchPreference: PersonaEvolutionRuntimeOptions["saveWorkbenchPreference"];
   readonly #mutations: EvolutionMutationPort;
   readonly #deliberation: HanliNangongDeliberationService | null;
   readonly nangongRuntime: NangongRuntime;
@@ -100,12 +93,9 @@ export class PersonaEvolutionRuntime {
     // 正常事件与异常事件分开登记，页面才能区分业务等待和技术故障。
     this.#recordEvent = options.recordEvent;
     this.#recordFailure = options.recordFailure || (() => undefined);
-    // 记忆和工作台查询属于可选读模型；数据库不可用时由公开方法给出明确说明。
+    // 记忆和专题档案属于可选读模型；数据库不可用时由公开方法安全降级。
     this.#memory = options.memory || null;
     this.#readDossier = options.readDossier;
-    this.#queryWorkbench = options.queryWorkbench;
-    this.#getWorkbenchPreference = options.getWorkbenchPreference;
-    this.#saveWorkbenchPreference = options.saveWorkbenchPreference;
     // 所有专题写动作共用同一个幂等和互斥协调器。
     this.#mutations = createEvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation });
     this.#deliberation = options.askHanliDeliberation && options.askNangongDeliberation
@@ -168,19 +158,6 @@ export class PersonaEvolutionRuntime {
     const deliberation = topic.deliberationId ? state.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
     return { topic, deliberation, proposals: state.proposals.filter((item) => item.topicId === topicId), archiveRecords: state.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic.deliberationId), executionRecords: [] };
   }
-  /** 查询演化工作台一页数据；数据库不可用时阻止返回不完整的伪结果。 */
-  queryWorkbench(request: QueryEvolutionWorkbenchInDto): EvolutionWorkbenchPageOutDto {
-    if (!this.#queryWorkbench) throw new Error("专题演化数据库读模型不可用，请检查数据库初始化状态。");
-    return this.#queryWorkbench(request);
-  }
-  /** 读取指定人物和树节点的显示偏好；未保存时返回 null。 */
-  getWorkbenchPreference(perspective: "nangong" | "hanli", nodeId: string): EvolutionWorkbenchPreferenceOutDto | null { return this.#getWorkbenchPreference?.(perspective, nodeId) || null; }
-
-  /** 保存分页或展开偏好；持久化不可用时明确失败，不只更新当前页面内存。 */
-  saveWorkbenchPreference(request: SaveEvolutionWorkbenchPreferenceInDto): EvolutionWorkbenchPreferenceOutDto {
-    if (!this.#saveWorkbenchPreference) throw new Error("专题演化视图偏好数据库不可用。");
-    return this.#saveWorkbenchPreference(request);
-  }
   /** 订阅已持久化的 Evolution 状态变化，并返回取消订阅函数。 */
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]) { return this.#store.subscribe(listener); }
 
@@ -200,12 +177,6 @@ export class PersonaEvolutionRuntime {
   notifyWorkflowChanged(): void { void this.#tick(); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto { return this.#store.createTopic(request); }
-  /** 独立开关一个自动化环节，其他审批或执行开关保持原值。 */
-  setAutomation(kind: "evolution" | "nangong-approval" | "linghu-approval" | "execution", enabled: boolean): EvolutionStateOutDto {
-    const state = this.#store.setAutomation(kind, enabled);
-    if (kind === "evolution" && enabled) this.#scheduleContinuation(0);
-    return state;
-  }
   /** 保存轮询间隔、最大轮数等受控参数，不立即推进业务状态。 */
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto { return this.#store.configureAutomation(request); }
   /** 启动、暂停、恢复或停止自动流程，并保留可恢复的当前卡点。 */
@@ -215,12 +186,12 @@ export class PersonaEvolutionRuntime {
     return state;
   }
 
-  /** 用户在韩立会话输入 1 后建立单轮完整流程；长期自动开关决定完成后是否继续发现下一问题。 */
+  /** 用户在韩立会话输入 1 后启动统一自动流程；完成当前专题后继续发现有证据的新问题。 */
   startHanliNangongDeliberation(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"]): EvolutionStateOutDto {
     if (!this.#deliberation) throw new Error("韩立与南宫婉内部研讨能力尚未接入。");
     let state = this.#store.beginOneShotRun(workspaceState, locale);
     state = this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "正在围绕用户已确认需求向南宫婉提出第一项调查问题", null, null);
-    this.#recordEvent("hanli.nangong.deliberation_confirmed", { runId: state.oneShotRun?.runId || null, continuous: state.automaticEvolutionEnabled });
+    this.#recordEvent("hanli.nangong.deliberation_confirmed", { runId: state.oneShotRun?.runId || null, continuous: true });
     this.#scheduleContinuation(0);
     return state;
   }
@@ -402,7 +373,7 @@ export class PersonaEvolutionRuntime {
       if (flowAction === "complete" || topic.status === "completed") {
         state = this.#store.finishOneShotRun();
         state = this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”已通过韩立审批、任务执行、令狐统一测试和韩立真实界面验收，全部记录已归档到专题工作台。`, []);
-        if (state.automaticEvolutionEnabled) this.#scheduleContinuation(1_000);
+        if (state.automationRuntime.status === "running") this.#scheduleContinuation(1_000);
         return state;
       }
       return state;
@@ -433,7 +404,7 @@ export class PersonaEvolutionRuntime {
     this.#running = true;
     try {
       let state = this.state();
-      if (state.automaticEvolutionEnabled) {
+      if (state.automationRuntime.status === "running") {
         for (const proposal of state.proposals.filter((item) => ["supplement-required", "rejected"].includes(item.status))) {
           if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) continue;
           if (!proposal.approvals.at(-1)?.advice.trim()) continue;
@@ -455,6 +426,8 @@ export class PersonaEvolutionRuntime {
         if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
       }
       if (state.oneShotRun?.status === "running") {
+        // 暂停、停止和人工接管必须冻结当前专题，恢复后仍沿原卡点继续。
+        if (state.automationRuntime.status !== "running") return;
         if (!state.oneShotRun.topicId) {
           if (!this.#deliberation) {
             this.#blockOneShotFailure("technical", "advance_hanli_nangong_deliberation", new Error("人物内部研讨能力尚未接入。"), "人物内部研讨能力尚未接入。");
@@ -474,10 +447,10 @@ export class PersonaEvolutionRuntime {
         await this.#advanceOneShot();
         return;
       }
-      // 自动化只推进已经由人物对话确认的专题；韩立旧式后台发问流程已经退役。
-      for (const proposal of this.#flow.automaticApprovalQueue(state)) state = this.#hanli.autoApprove(proposal.proposalId);
-      for (const proposal of this.#flow.automaticDistributionQueue(state)) state = await this.#dispatch(proposal.proposalId);
-      if (!state.automaticEvolutionEnabled) return;
+      // 运行态代表用户已经确认统一托管；审批与分发固定自动，不再读取人物专用开关。
+      if (state.automationRuntime.status !== "running") return;
+      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "await-approval")) state = this.#hanli.autoApprove(proposal.proposalId);
+      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "dispatch")) state = await this.#dispatch(proposal.proposalId);
       const hasActiveWork = state.proposals.some((item) => !["completed", "rejected"].includes(item.status))
         || state.topics.some((item) => !["completed", "rejected"].includes(item.status));
       const activeDeliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
@@ -504,9 +477,9 @@ export class PersonaEvolutionRuntime {
       const content = `课题：${topic.title}\n\n目标：${topic.goal}\n\n调查事实：\n${topic.evidence.map((item) => `- ${item}`).join("\n")}\n\n推荐方向：在已登记范围内实施，并保持排除项不变。`;
       let next = this.nangongRuntime.facade.createProposal(topic.topicId, { type: "代码修正", content, risks: ["实施结果可能与既有调用方产生兼容影响"], rollbackPlan: "保留提案版本和关联任务，失败时撤销任务分支且不覆盖历史提案。" });
       const proposal = next.proposals.at(-1)!;
-      if (next.automaticNangongApprovalEnabled) next = this.#hanli.autoApprove(proposal.proposalId);
+      next = this.#hanli.autoApprove(proposal.proposalId);
       const decided = requireProposal(next, proposal.proposalId);
-      if (next.automaticExecutionEnabled && decided.status === "approved") await this.#dispatch(proposal.proposalId);
+      if (decided.status === "approved") await this.#dispatch(proposal.proposalId);
     } catch (error) {
       const state = this.state();
       if (state.oneShotRun?.status === "running") this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);

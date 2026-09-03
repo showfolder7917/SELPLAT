@@ -20,6 +20,11 @@ type AppliedMigrationRow = {
 };
 
 const LEGACY_COLLABORATION_RETIREMENT_VERSION = "1007";
+const PERSONA_CORPUS_GENERALIZATION_VERSION = "1023";
+const PERSONA_CORPUS_COMPATIBLE_CHECKSUMS = new Set([
+  "7288647d064d300b11d00267d99b8675fd86cd49947986d3d46dadd038ec49ac",
+  "71540b875c321719608ae1b79fcc613c8f08fcd5e23ae755702a0fe341c5bd52",
+]);
 const LEGACY_COLLABORATION_TABLES = [
   "AiDesktopCollaborationStreamChunk",
   "AiDesktopCollaborationTimelineEvent",
@@ -53,14 +58,16 @@ export class SqliteMigrationRunner {
       const migration = migrations.find((candidate) => candidate.versionCode === row.versionCode);
       if (!migration) throw new Error(`数据库包含加载清单未登记的版本：${row.versionCode}`);
       if (row.successFlag !== 1) throw new Error(`数据库版本未成功完成：${row.versionCode}`);
-      if (row.checksum !== migration.checksum) throw new Error(`已发布 SQL 校验和不一致：${migration.fileName}`);
+      if (row.checksum !== migration.checksum && !isCompatiblePersonaCorpusChecksum(row, migration)) {
+        throw new Error(`已发布 SQL 校验和不一致：${migration.fileName}`);
+      }
     }
 
     const appliedVersions: string[] = [];
     for (const migration of migrations) {
       if (applied.has(migration.versionCode)) continue;
       const startedAt = Date.now();
-      runSqliteTransaction(database, () => {
+      runMigrationTransaction(database, migration.versionCode, () => {
         if (migration.versionCode === LEGACY_COLLABORATION_RETIREMENT_VERSION) {
           assertLegacyCollaborationTablesEmpty(database);
         }
@@ -108,6 +115,33 @@ export class SqliteMigrationRunner {
       .filter((fileName) => fileName.endsWith(".sql") && !fileNames.has(fileName));
     if (unregisteredSql.length > 0) throw new Error(`存在未登记的 SQLite SQL 文件：${unregisteredSql.join(", ")}`);
     return definitions;
+  }
+}
+
+/** 1023 曾产生两份等价结构的修复版本；只接受两份已知摘要，其他任何改写继续失败关闭。 */
+function isCompatiblePersonaCorpusChecksum(row: AppliedMigrationRow, migration: MigrationDefinition): boolean {
+  return row.versionCode === PERSONA_CORPUS_GENERALIZATION_VERSION
+    && PERSONA_CORPUS_COMPATIBLE_CHECKSUMS.has(row.checksum)
+    && PERSONA_CORPUS_COMPATIBLE_CHECKSUMS.has(migration.checksum);
+}
+
+/** 原始 1023 会替换被外部表引用的主题表；事务内暂停即时外键动作，提交前验证全部引用并恢复保护。 */
+function runMigrationTransaction(database: DatabaseSync, versionCode: string, operation: () => void): void {
+  if (versionCode !== PERSONA_CORPUS_GENERALIZATION_VERSION) {
+    runSqliteTransaction(database, operation);
+    return;
+  }
+  const foreignKeysEnabled = Number(Object.values(database.prepare("PRAGMA foreign_keys").get() || {})[0]) === 1;
+  if (!foreignKeysEnabled) throw new Error("AI Memory 迁移前外键保护未开启。");
+  database.exec("PRAGMA foreign_keys = OFF");
+  try {
+    runSqliteTransaction(database, () => {
+      operation();
+      const violations = database.prepare("PRAGMA foreign_key_check").all();
+      if (violations.length > 0) throw new Error(`AI Memory 迁移后外键检查失败：${violations.length}`);
+    });
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON");
   }
 }
 

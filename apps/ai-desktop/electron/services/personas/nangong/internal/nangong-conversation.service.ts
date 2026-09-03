@@ -10,7 +10,7 @@ import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nang
 type NangongConversationServiceOptions = Pick<NangongApplicationServiceOptions,
   "store" | "prompts" | "conversation" | "memory" | "recordEvent" | "recordFailure" | "oneShotWorkflow" | "newConversationRetryDelaysMs" | "refreshSemanticMemory">;
 
-/** 处理南宫人物会话、草稿判断和用户一次性确认，不实现后续跨人物状态机。 */
+/** 处理南宫人物会话、草稿判断和用户持续演化确认，不实现后续跨人物状态机。 */
 export class NangongConversationService {
   readonly #store: NangongConversationServiceOptions["store"];
   readonly #conversation: NangongConversationServiceOptions["conversation"];
@@ -35,7 +35,7 @@ export class NangongConversationService {
     this.#refreshSemanticMemory = options.refreshSemanticMemory || (() => undefined);
   }
 
-  /** 保存用户消息并生成南宫回复；独立“1”只在存在可恢复邀请时启动一次性演化。 */
+  /** 保存用户消息并生成南宫回复；独立“1”只在存在可恢复邀请时启动持续演化。 */
   async sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<EvolutionStateOutDto> {
     const current = this.#store.state();
     // 公共会话只携带通用 subject；南宫服务负责解释自己认识的专题类型。
@@ -102,13 +102,13 @@ export class NangongConversationService {
     return parseNangongTopicDraft(response.text);
   }
 
-  /** 把一次性确认转换为人物课题事实，再请求 Workflow 从已保存卡点继续。 */
+  /** 把用户确认转换为人物课题事实，再请求 Workflow 沿统一自动链路持续推进。 */
   async #startOneShotFromConversation(request: SendPersonaConversationMessageInDto, ready: boolean): Promise<EvolutionStateOutDto> {
     const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
     if (!ready) {
-      state = this.#store.completeConversationTurn(userMessage.messageId, "当前没有等待确认的一次性演化。请继续补充事实，或点击“整理为演化课题”检查内容；南宫婉明确显示本轮已可启动后，再回复 1。");
+      state = this.#store.completeConversationTurn(userMessage.messageId, "当前没有等待确认的自动演化。请继续补充事实，或点击“整理为演化课题”检查内容；南宫婉明确显示已可启动后，再回复 1。");
       this.#archiveConversationRound(state, userMessage.messageId, state.conversation.messages.at(-1)!.messageId, null);
       return state;
     }
@@ -123,9 +123,9 @@ export class NangongConversationService {
       state = this.#store.retireOrphanedOneShotRun("数据库中保留了运行标记，但协作任务中没有对应的实际执行人物；系统已结束该遗留状态并继续本次确认。");
       this.#recordEvent("nangong.evolution.orphan_run_retired", { runId: previousRun.runId, topicId: previousRun.topicId, proposalId: previousRun.proposalId, phase: previousRun.phase });
     }
-    state = this.#store.recordConversationIntent(userMessage.messageId, "确认将当前南宫婉调查对话整理为演化课题，并自动完成本轮既有审批、分发、测试与验收流程");
+    state = this.#store.recordConversationIntent(userMessage.messageId, "确认将当前南宫婉调查对话整理为演化课题，并持续自动完成发现、审批、分发、测试与验收流程，直至人工暂停或停止");
     state = this.#store.beginOneShotRun(request.workspaceState, request.locale);
-    state = this.#store.completeConversationTurn(userMessage.messageId, "已确认启动本轮一次性演化。我正在整理课题；后续韩立审批、南宫婉分发、执行、令狐测试和韩立验收会沿现有流程连续推进，当前人物和动作会实时显示。");
+    state = this.#store.completeConversationTurn(userMessage.messageId, "已确认启动持续自动演化。我正在整理当前课题；后续韩立审批、南宫婉分发、执行、令狐测试和韩立验收会连续推进，完成后继续寻找有用户证据的新问题，直到你暂停、停止或人工接管。");
     const confirmationMessage = state.conversation.messages.at(-1)!;
     this.#archiveConversationRound(state, userMessage.messageId, confirmationMessage.messageId, null);
     try {
@@ -139,7 +139,7 @@ export class NangongConversationService {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.#oneShotWorkflow.blockFailure("technical", "form_topic_from_conversation", error, reason);
-      return this.#store.appendConversation("nangong", `本轮一次性演化已保留当前进度，但遇到无法自动继续的阻塞：${reason}`, []);
+      return this.#store.appendConversation("nangong", `自动演化已保留当前进度，但遇到无法自动继续的阻塞：${reason}`, []);
     }
   }
 

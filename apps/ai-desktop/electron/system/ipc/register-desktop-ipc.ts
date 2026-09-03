@@ -13,7 +13,6 @@ import type {
 } from "../../../contracts/foundation/index.js";
 import type { EnqueueMessageInDto, SendMessageInDto } from "../../../contracts/services/support/capabilities/conversation/index.js";
 import type { RendererExceptionInDto } from "../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionWorkspaceLocationOutDto } from "../../../contracts/services/evolution/index.js";
 import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotSaveInDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
@@ -116,38 +115,6 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
   });
 }
 
-/** 将 Renderer 请求限制为可写入窗口地址的稳定工作台位置；旧的字符串视角请求直接拒绝，不保留兼容分支。 */
-function normalizeEvolutionWorkspaceLocation(value: unknown): EvolutionWorkspaceLocationOutDto {
-  if (!value || typeof value !== "object") throw new Error("专题演化工作台必须提供完整位置对象。");
-  const request = value as Partial<EvolutionWorkspaceLocationOutDto>;
-  if (request.perspective !== "nangong" && request.perspective !== "hanli") throw new Error("无效的专题演化工作台视角。");
-  const text = (candidate: unknown, maximum: number): string => typeof candidate === "string" ? candidate.trim().slice(0, maximum) : "";
-  const pageSize = Number(request.pageSize);
-  return {
-    perspective: request.perspective,
-    nodeId: text(request.nodeId, 100) || null,
-    page: Math.max(1, Math.floor(Number(request.page) || 1)),
-    pageSize: [20, 50, 100].includes(pageSize) ? pageSize : 20,
-    keyword: text(request.keyword, 120),
-    status: text(request.status, 80),
-    selectedRowId: text(request.selectedRowId, 200) || null,
-  };
-}
-
-/** 将完整位置写入独立窗口查询参数，便于复制地址、重启恢复和真实界面验收。 */
-function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocationOutDto): Record<string, string> {
-  return {
-    mode: "evolution-workspace",
-    perspective: location.perspective,
-    node: location.nodeId || "",
-    page: String(location.page),
-    pageSize: String(location.pageSize),
-    keyword: location.keyword,
-    status: location.status,
-    selected: location.selectedRowId || "",
-  };
-}
-
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
   const audit = eventCenter;
@@ -155,8 +122,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const activeAuditTasks = new Map<number, string>();
   const managedExecutor = new ManagedTaskExecutor(prompts);
   let screenCaptureAttemptId = 0;
-  let evolutionWorkspaceWindow: BrowserWindow | null = null;
-  let evolutionWorkspaceLocation: EvolutionWorkspaceLocationOutDto = { perspective: "nangong", nodeId: null, page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: null };
 
   registerRulesIpc(rules, eventCenter);
 
@@ -168,49 +133,11 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  const openEvolutionWorkspace = async (location: EvolutionWorkspaceLocationOutDto): Promise<void> => {
-    evolutionWorkspaceLocation = location;
-    if (evolutionWorkspaceWindow && !evolutionWorkspaceWindow.isDestroyed()) {
-      evolutionWorkspaceWindow.webContents.send("desktop:evolution-workspace-location", location);
-      if (evolutionWorkspaceWindow.isMinimized()) evolutionWorkspaceWindow.restore();
-      evolutionWorkspaceWindow.show();
-      evolutionWorkspaceWindow.focus();
-      audit.recordEvent("evolution.workspace.focused", { ...location });
-      return;
-    }
-    evolutionWorkspaceWindow = new BrowserWindow({
-      width: 1320,
-      height: 880,
-      minWidth: 980,
-      minHeight: 680,
-      frame: false,
-      show: false,
-      backgroundColor: "#080b12",
-      title: "AI Desktop · 专题演化工作台",
-      webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true },
-    });
-    evolutionWorkspaceWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    evolutionWorkspaceWindow.once("ready-to-show", () => {
-      evolutionWorkspaceWindow?.show();
-      evolutionWorkspaceWindow?.focus();
-    });
-    evolutionWorkspaceWindow.once("closed", () => {
-      evolutionWorkspaceWindow = null;
-      audit.recordEvent("evolution.workspace.closed", { ...evolutionWorkspaceLocation });
-    });
-    const target = path.join(rendererRoot, "index.html");
-    await evolutionWorkspaceWindow.loadFile(target, { query: evolutionWorkspaceLocationQuery(location) });
-    audit.recordEvent("evolution.workspace.opened", { ...location });
-  };
-
-  handle("desktop:open-evolution-workspace", async (_event, requestedLocation: unknown) => {
-    await openEvolutionWorkspace(normalizeEvolutionWorkspaceLocation(requestedLocation));
-  });
-
   const executeAcceptancePlan = async (plan: ReturnType<HanliFacade["acceptancePlan"]>) => {
-    if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) await openEvolutionWorkspace({ perspective: "hanli", nodeId: "manual-release", page: 1, pageSize: 20, keyword: "", status: "", selectedRowId: plan.proposalId });
-    if (!evolutionWorkspaceWindow || evolutionWorkspaceWindow.isDestroyed()) throw new Error("专题演化工作台未能打开，无法执行韩立真实界面验收。");
-    const run = await hanli.executeAcceptancePlan(plan, evolutionWorkspaceWindow);
+    // 演化工作台退役后，真实验收只操作当前正式主窗口，不创建隐藏兼容窗口。
+    const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
+    if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
+    const run = await hanli.executeAcceptancePlan(plan, targetWindow);
     audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, planId: plan.planId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
     return run;
   };

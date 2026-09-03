@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 import { parseHanliConversationResponse } from "./hanli-conversation.parser.js";
+import { buildHanliMethodContext, buildHanliRecentConversation } from "./hanli-method-context.js";
 
-const HANLI_INTERNAL_DELIBERATION_INVITATION = "若确认由韩立与南宫婉开始内部研讨，请回复 1。";
+const HANLI_INTERNAL_DELIBERATION_INVITATION = "若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。";
 
 /** 韩立自由对话只做用户代理分析；完整对话持久化后再异步刷新派生语义。 */
 export class HanliConversationService {
@@ -21,6 +22,7 @@ export class HanliConversationService {
     if (!chat || !memory) throw new Error("韩立自由对话或 AI Memory 尚未就绪。");
     const userContent = request.message.trim();
     if (!userContent) throw new Error("发送给韩立的消息不能为空。");
+    if (userContent.length > 20_000) throw new Error("发送给韩立的消息不能超过 20000 个字符。");
     if (!request.workspaceState?.roots?.length) throw new Error("韩立自由对话必须使用已登记工作区。");
     // 业务会话 ID 与 Codex threadId 分离；第一次发送时先建立统一人物会话头。
     const current = this.conversation();
@@ -30,9 +32,7 @@ export class HanliConversationService {
       if (!existing.conversationId || !this.options.startInternalDeliberation) throw new Error("韩立与南宫婉内部研讨能力尚未就绪。");
       const started = await this.options.startInternalDeliberation(request);
       const createdAt = new Date().toISOString();
-      const reply = started.continuous
-        ? "已启动韩立与南宫婉的内部研讨。当前问题满足整理条件后会自动进入下一步；持续自动开关已开启，本轮完成后还会继续寻找新的、有用户证据的问题。"
-        : "已启动韩立与南宫婉的内部研讨。韩立会逐项提问，南宫婉完成调查回答；满足整理条件后自动进入下一步。本轮结束后是否继续发现新问题由持续自动开关决定。";
+      const reply = "已启动韩立与南宫婉的内部研讨。当前问题满足整理条件后会自动进入审批、分发、测试和验收；本轮完成后继续寻找新的、有用户证据的问题，直到你暂停、停止或人工接管。";
       const next = memory.registerPersonaRound({
         ownerPersonaId: "han-li",
         responderPersonaId: "han-li",
@@ -54,14 +54,14 @@ export class HanliConversationService {
     const semanticContext = memory.readHanliSemanticContext(
       this.options.readStableUserId?.() || "",
       this.options.readProjectScope?.() || "global",
-      userContent,
+      "",
       20,
     );
-    const recentConversation = existing.messages.slice(-16)
-      .map((message) => `${message.speakerType === "user" ? "用户" : message.speakerPersonaId === "nangong-wan" ? "南宫婉" : "韩立"}：${message.content}`)
-      .join("\n\n");
+    // 历史资料只转换成提问、调查和扩展的方法样本，不把客户目标、旧答案或证据原文交给韩立模仿。
+    const methodContext = buildHanliMethodContext(semanticContext);
+    const recentConversation = buildHanliRecentConversation(existing.messages);
     const prompt = this.options.prompts.render("hanli.conversation", {
-      semanticContextJson: JSON.stringify(semanticContext),
+      methodContextJson: methodContext,
       recentConversation,
       userMessage: userContent,
     });
@@ -85,11 +85,18 @@ export class HanliConversationService {
       completedAt,
       decision: parsed.topic,
     });
+    const contextReadStats = {
+      methodCharacters: methodContext.length,
+      recentConversationCharacters: recentConversation.length,
+      latestUserMessageCharacters: userContent.length,
+      promptCharacters: prompt.length,
+    };
+    // 统计既随本轮会话返回给用户，也进入统一事件，后续可以按真实读入规模调优预算。
     this.options.recordEvent("hanli.conversation.round_archived", {
-      conversationId, messageCount: next.messages.length, topicTitle: parsed.topic.title,
+      conversationId, messageCount: next.messages.length, topicTitle: parsed.topic.title, contextReadStats,
     });
     this.options.refreshSemanticMemory?.();
-    return next;
+    return { ...next, contextReadStats };
   }
 
   async newConversation(): Promise<PersonaConversationOutDto> {

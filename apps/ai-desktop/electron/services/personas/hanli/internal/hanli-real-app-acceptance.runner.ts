@@ -15,7 +15,7 @@ export class HanliRealAppAcceptanceRunner {
   constructor(screenshots: ScreenshotStore) { this.#screenshots = screenshots; }
 
   async execute(plan: HanliAcceptancePlanOutDto, targetWindow: BrowserWindow): Promise<HanliAcceptanceRunOutDto> {
-    if (targetWindow.isDestroyed()) throw new Error("专题演化工作台已经关闭，无法执行真实界面验收。 ");
+    if (targetWindow.isDestroyed()) throw new Error("AI Desktop 主窗口已经关闭，无法执行真实界面验收。 ");
     const startedAt = new Date().toISOString();
     const initialBounds = targetWindow.getBounds();
     const stepResults: HanliAcceptanceStepResultOutDto[] = [];
@@ -46,7 +46,7 @@ export class HanliRealAppAcceptanceRunner {
     const status = stepResults.some((item) => item.status === "failed") ? "failed" : stepResults.some((item) => item.status === "blocked") ? "blocked" : "passed";
     return {
       version: 1, runId: `hanli-acceptance-run-${randomUUID()}`, planId: plan.planId, topicId: plan.topicId, proposalId: plan.proposalId,
-      status, windowTitle: targetWindow.isDestroyed() ? "专题演化工作台（执行中关闭）" : targetWindow.getTitle(), initialBounds, finalBounds,
+      status, windowTitle: targetWindow.isDestroyed() ? "AI Desktop 主窗口（执行中关闭）" : targetWindow.getTitle(), initialBounds, finalBounds,
       stepResults, evidenceAttachmentIds: [...new Set(evidenceAttachmentIds)], startedAt, completedAt: new Date().toISOString(),
     };
   }
@@ -55,7 +55,7 @@ export class HanliRealAppAcceptanceRunner {
     try {
       if (operation.type === "focus-window") {
         targetWindow.show(); targetWindow.focus();
-        return result(checkId, operationIndex, operation, "passed", "专题演化工作台已显示并获得焦点。");
+        return result(checkId, operationIndex, operation, "passed", "AI Desktop 主窗口已显示并获得焦点。");
       }
       if (operation.type === "resize-window") {
         if (operation.width < 980 || operation.width > 1_920 || operation.height < 680 || operation.height > 1_200) return result(checkId, operationIndex, operation, "blocked", "窗口尺寸超出 980×680 至 1920×1200 的安全范围。");

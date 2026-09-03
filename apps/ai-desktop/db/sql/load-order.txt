@@ -23,3 +23,4 @@
 1021|migration-1021-add-persona-conversation-speaker.sql|为人物内部研讨消息登记真实发言人物
 1022|migration-1022-unify-persona-conversations.sql|统一所有人物会话并物理退役南宫旧消息表
 1023|migration-1023-generalize-persona-corpus-source.sql|取消训练语料对固定人物来源和说话人的枚举限制
+1024|migration-1024-retire-evolution-workbench.sql|物理删除已退役演化工作台的界面偏好表

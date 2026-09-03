@@ -2,8 +2,8 @@
 
 <!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
-<!-- 2.2.0 接入用户确认启动的韩立—南宫婉内部研讨与持续发现。 -->
-rule_version = 2.2.0
+<!-- 2.4.0 将历史语义读取收敛为调查方法学习和可观测字符预算。 -->
+rule_version = 2.4.0
 <!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
 <!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->
@@ -36,9 +36,11 @@ hanli_maturity_conflict_contract = recent_explicit_correction_then_recent_repeat
 hanli_semantic_extraction_contract = active_stable_user_isolation + source_message_authority + pending_processing_completed_retryable_blocked_superseded + content_hash_and_extractor_version + lease_recovery + exponential_backoff + asynchronous_no_conversation_block
 <!-- 只有失败后修正并由韩立真实复验通过的发现才能形成项目经验；多场景治理前不得冒充稳定专业规则。 -->
 hanli_inspection_experience_contract = failed_finding_then_correction_then_linghu_gate_then_real_retest_pass + project_experience_only + counterexample_conflict_limit_supersede_retire + lifecycle_governance_before_stable_rule
-<!-- 韩立人物入口采用独立固定线程；需求成熟后显示唯一邀请，用户输入 1 才启动与南宫婉的内部研讨。 -->
-hanli_free_conversation_contract = fixed_persona_thread + direct_natural_answer + one_question_only_for_material_information_gap + canonical_internal_deliberation_invitation_when_mature + standalone_1_confirmation + read_only_no_engineering_authorization + confirmed_deliberation_required_before_topic_automation
+<!-- 韩立人物入口采用独立固定线程；需求成熟后显示唯一邀请，用户输入 1 启动与南宫婉的内部研讨和统一持续自动链路。 -->
+hanli_free_conversation_contract = fixed_persona_thread + direct_natural_answer + one_question_only_for_material_information_gap + canonical_internal_deliberation_invitation_when_mature + standalone_1_confirmation_starts_continuous_automation + existing_engineering_authority_gates_remain + confirmed_deliberation_required_before_topic_automation
 <!-- 韩立回答只读取按稳定用户和项目范围整理后的客户关注点、证据、轨迹、需求节点与验收经验；原始人物对话只负责独立留存和后续异步提取。 -->
 hanli_semantic_read_boundary_contract = derived_semantic_tables_only_for_answer_context + no_raw_conversation_snapshot_scan + stable_user_and_project_isolation + evidence_status_conflict_and_supersession_preserved
-<!-- 旧的无用户锚点后台流程不得恢复；新研讨必须由用户确认或持续自动开关触发，复用可审计轮次结构但不写训练语料。 -->
-hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit + no_unconfirmed_legacy_background_flow + user_confirmed_or_explicit_continuous_switch_only + current_question_answer_assessment_round_archive + no_internal_training_corpus_write_or_semantic_refresh
+<!-- 历史资料只提供缺口、提问、调查和扩展的方法链，不得按相似业务内容模仿旧答案；每轮必须回显真实读入字符数。 -->
+hanli_method_learning_context_contract = learn_question_investigation_gap_and_expansion_chain + no_similar_case_answer_imitation + exclude_historical_goal_evidence_answer_and_node_body + bounded_method_and_recent_conversation_characters + visible_per_turn_context_character_stats
+<!-- 旧的无用户锚点后台流程和四个独立开关不得恢复；新研讨必须由用户回复 1 确认，持续运行只处理有用户证据的问题且不写训练语料。 -->
+hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit + no_unconfirmed_legacy_background_flow + standalone_1_starts_unified_continuous_runtime + retired_four_automation_switches_never_restored + evidence_backed_problem_only + pause_stop_handover_or_block_interrupts + current_question_answer_assessment_round_archive + no_internal_training_corpus_write_or_semantic_refresh

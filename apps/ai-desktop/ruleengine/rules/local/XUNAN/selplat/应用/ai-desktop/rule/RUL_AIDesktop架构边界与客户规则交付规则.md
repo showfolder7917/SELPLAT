@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.8.0 将运行时规则升级为 AGENTS 单入口、当前用户单层加载、人物规则与任务冻结快照，并增加无源码本地工作区和异步上传接口。 -->
-rule_version = 2.8.0
+<!-- 2.9.0 在既有人物会话架构上不兼容退役演化工作台，并明确演化后端状态仍由共享运行时持有。 -->
+rule_version = 2.9.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -58,7 +58,7 @@ application_lifecycle_contract = one_startApplication + one_disposeApplication +
 <!-- 大文件必须按业务能力和状态所有权拆分，禁止只按行数机械切割。 -->
 module_split_contract = split_by_business_capability_and_state_ownership + independently_testable_boundary + no_arbitrary_line_partition
 <!-- Renderer 的真实窗口必须由 applications 独立拥有；Application 只装配布局与 feature，禁止一个文件同时定义多个窗口或人物、协作、会话业务页面。 -->
-renderer_application_structure_contract = applications/developer + applications/evolution-workspace + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner
+renderer_application_structure_contract = applications/developer + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner + no_evolution_workspace_application
 <!-- 代码分割后的每个 Application 必须显式加载自身控件注册和样式副作用，禁止依赖其他窗口或懒加载分支先执行。 -->
 renderer_application_runtime_dependency_contract = each_lazy_application_imports_own_control_registration_and_styles + no_cross_application_side_effect_dependency + interaction_test_each_production_application
 <!-- Developer 窗口按 Shell、ActivityBar、Explorer、Workspace、StatusBar 布局区域拆分；布局组件不得直接持有 DesktopApi 业务流程。 -->
@@ -91,8 +91,10 @@ contracts_protocol_role_contract = dto/in_and_out + dto/event_out + port/callabl
 contracts_public_index_traceability_contract = explicit_named_symbol_exports_with_physical_source + prohibit_export_star_and_export_type_star + one_authoritative_definition_per_public_symbol + no_forwarding_fake_DTO
 <!-- 跨模块只允许导入目标模块 index，同模块内部才允许导入自己的具体 DTO；Desktop 聚合只服务 preload 和 Renderer，主进程必须导入所属领域入口。 -->
 contracts_import_source_contract = cross_module_target_index_only + same_module_direct_DTO_allowed + desktop_aggregate_for_preload_and_renderer_only + electron_main_process_no_desktop_aggregate_import
-<!-- Renderer 的南宫和韩立输入页面进入各自 feature；Evolution 只保留共享表格、详情、档案、树和工作台模型，开发壳层只组合公开人物页面。 -->
-persona_renderer_boundary_contract = features/nangong + features/hanli + features/linghu + shared_evolution_read_models_and_navigation_only + developer_shell_composition_only
+<!-- Renderer 的人物输入页面进入各自 feature；Evolution 只保留人物会话和协作流程消费的共享运行态与变更请求模型，不保留工作台界面。 -->
+persona_renderer_boundary_contract = features/nangong + features/hanli + features/linghu + shared_evolution_runtime_and_mutation_model_only + developer_shell_composition_only + no_evolution_tree_grid_detail_dossier_or_workspace_UI
+<!-- 演化工作台采用不兼容退役：窗口、路由、组件、DesktopApi、IPC、偏好表和别名必须同时归零，禁止重定向、占位页或隐藏兼容窗口。 -->
+evolution_workspace_hard_retirement_contract = remove_window_route_components_desktop_api_preload_IPC_query_preference_table_and_capability + no_redirect_placeholder_hidden_window_alias_or_compatibility_copy + preserve_shared_evolution_workflow_state_and_persona_conversation_trigger
 <!-- 并列人物重构必须以静态边界、业务、并发、交互、构建和真实启动测试共同验收；旧平铺文件、旧公开出口和兼容别名归零后才可完成。 -->
 parallel_persona_completion_gate = boundary + business + concurrency + interaction + build + real_startup + legacy_flat_file_and_public_export_zero + controlled_legacy_state_recovery
 <!-- 令狐在 contracts、Electron 主进程和 Renderer 三个既有编译边界下分别使用同名 linghu 目录；主进程令狐根层只保留 index 和 Facade，技术测试执行与持久化通过公共能力端口注入。 -->

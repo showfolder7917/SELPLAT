@@ -266,9 +266,8 @@ export class CodexService {
     executionMode: ManagedExecutionModeValue | null = null,
   ): Promise<SendMessageOutDto> {
     const normalizedMessage = message.trim();
-    if ((!normalizedMessage && attachmentPaths.length === 0) || normalizedMessage.length > 20_000) {
-      throw new Error("Message or screenshot attachment is required, with at most 20000 text characters.");
-    }
+    // send 接收的是已经拼装好的内部提示词，用户输入长度由上层各自校验，运输层不再误拦上下文。
+    if (!normalizedMessage && attachmentPaths.length === 0) throw new Error("Message or screenshot attachment is required.");
 
     await this.#ensureReady();
     await this.cancel();
@@ -797,6 +796,7 @@ function normalizeModelOption(value: unknown): CodexModelOptionOutDto | null {
   return {
     id,
     displayName: stringValue(model.displayName) || id,
+    description: stringValue(model.description) || "",
     provider: stringValue(model.provider) || stringValue(model.modelProvider),
     supportedReasoningEfforts,
     supportedServiceTiers,

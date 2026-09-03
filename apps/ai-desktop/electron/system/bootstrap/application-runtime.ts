@@ -114,7 +114,7 @@ import {
 import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
 import { createHanliRuntime } from "../../services/personas/hanli/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
-import { buildEvolutionWorkbenchChange, createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
+import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
 import { PersonaEvolutionRuntime } from "../../services/workflow/index.js";
 // Platform 服务提供截图、设置、工作区、安全和数据库等底层能力。
 import { createAtomicJsonPersistence, type DatabasePort as SqliteDatabase } from "../../services/support/platform/persistence/index.js";
@@ -591,9 +591,6 @@ export async function startApplication(): Promise<void> {
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
     readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
-    queryWorkbench: workflowRepository ? (request) => workflowRepository!.queryEvolutionWorkbench(request) : undefined,
-    getWorkbenchPreference: workflowRepository ? (perspective, nodeId) => workflowRepository!.getEvolutionWorkbenchPreference(perspective, nodeId) : undefined,
-    saveWorkbenchPreference: workflowRepository ? (request) => workflowRepository!.saveEvolutionWorkbenchPreference(request) : undefined,
     beginMutation: beginEvolutionMutation,
     completeMutation: completeEvolutionMutation,
     failMutation: failEvolutionMutation,
@@ -609,7 +606,7 @@ export async function startApplication(): Promise<void> {
   });
   startHanliInternalDeliberation = async (request) => {
     const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale);
-    return { continuous: state.automaticEvolutionEnabled };
+    return { continuous: state.automationRuntime.status === "running" };
   };
   // 三个人物和两个共享模块分别取得受控 Facade；完整运行实例只留在组合根，不再传给 IPC。
   const nangongRuntime = personaEvolution.nangongRuntime;
@@ -624,17 +621,14 @@ export async function startApplication(): Promise<void> {
   });
   // Evolution Facade 面向专题页面，Workflow Facade 面向跨人物调度。
   const evolutionRuntime = createEvolutionRuntime(personaEvolution);
-  evolutionRuntime.facade.subscribe((state, reason, topicId, proposalId, previousState) => {
-    // 状态变化先同步持久化投影和审计，再计算发给前端的最小增量。
+  evolutionRuntime.facade.subscribe((state, reason, topicId, proposalId) => {
+    // 状态变化先同步持久化投影和审计，再把完整状态发给现有人物会话。
     try { workflowRepository?.syncEvolutionState(state); }
     catch (error) {
       eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_evolution_state", error, correlationId: topicId || proposalId || undefined, details: { reason, topicId, proposalId } });
     }
     eventCenter.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
-    const workbenchChange = buildEvolutionWorkbenchChange(previousState, state, reason, topicId, proposalId);
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
-      // 一个事件用于局部刷新工作台，另一个保留完整状态供现有页面消费。
-      window.webContents.send("desktop:evolution-workbench-changed", workbenchChange);
       window.webContents.send("desktop:evolution-state", { state, reason, topicId, proposalId });
     }
   });

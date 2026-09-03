@@ -1,5 +1,5 @@
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import { PersonaConversationRepository } from "../../personas/conversation/index.js";
+import { PersonaConversationRepository } from "../../support/capabilities/conversation/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
 
 /**

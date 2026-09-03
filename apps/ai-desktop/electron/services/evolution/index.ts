@@ -1,6 +1,5 @@
 // Evolution 是专题、提案、审批和验收共同事实的唯一逻辑所有者。
 export {
-  buildEvolutionWorkbenchChange,
   EvolutionFacade,
   createEvolutionRuntime,
   createEvolutionMutationCoordinator,

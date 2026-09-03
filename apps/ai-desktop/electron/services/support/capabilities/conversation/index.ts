@@ -5,3 +5,5 @@ export {
   CodexCollaborationSessionFactory,
   CollaborationCodexRegistry,
 } from "./internal/collaboration-codex-sessions.js";
+// 人物共享的会话持久化能力由本模块统一提供，具体人物不直接操作 SQLite。
+export { PersonaConversationRepository } from "./internal/persona-conversation.repository.js";

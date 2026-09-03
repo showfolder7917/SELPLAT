@@ -23,4 +23,11 @@ export interface PersonaConversationOutDto {
   conversationId: string | null;
   messages: PersonaConversationMessageOutDto[];
   updatedAt: string;
+  /** 只描述本次发送实际装入提示词的字符数；不写入人物消息，也不参与下一轮学习。 */
+  contextReadStats?: {
+    methodCharacters: number;
+    recentConversationCharacters: number;
+    latestUserMessageCharacters: number;
+    promptCharacters: number;
+  };
 }

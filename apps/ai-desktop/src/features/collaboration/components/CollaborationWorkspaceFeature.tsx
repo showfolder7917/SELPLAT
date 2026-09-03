@@ -3,7 +3,7 @@ import type { useEvolutionRuntime } from "../../evolution/model/useEvolutionRunt
 import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
 import type { useScreenshotCapture } from "../../screenshot/model/useScreenshotCapture";
 import { useSelUi } from "../../../theme/SelUiProvider";
-import { evolutionMutationRequest } from "../../evolution/model/evolution-workbench";
+import { evolutionMutationRequest } from "../../evolution/model/evolution-runtime";
 import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspace";
 import { CollaborationExecutionList } from "./CollaborationExecutionList";
 import { CollaborationMemberPage } from "./CollaborationMemberPage";
@@ -66,7 +66,7 @@ export function CollaborationWorkspaceFeature({ locale, workspaces, controller, 
     }
   };
 
-  if (panel === "task-group") return <>{error && <div className="composer-error" role="alert">{error}</div>}<TaskCollaborationGroup snapshot={timeline} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={continueTask} /></>;
+  if (panel === "task-group") return <>{error && <div className="composer-error" role="alert">{error}</div>}<TaskCollaborationGroup snapshot={timeline} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={async (taskId) => { await continueTask(taskId); }} /></>;
   if (panel === "execution-list") return <CollaborationExecutionList tasks={completedTasks} locale={locale} onOpen={(taskId) => { setSelectedTaskId(taskId); setPanel("task-detail"); }} />;
   if (panel === "task-detail" && selectedTask && selectedTaskMember) return <CollaborationTaskDetail task={selectedTask} member={selectedTaskMember} liveOutput={streams[selectedTask.taskId] || null} automation={linghuAutomation} locale={locale} onBack={() => { setSelectedTaskId(null); setPanel(terminalStates.has(selectedTask.state) ? "execution-list" : "member"); }} />;
   return <>{error && <div className="composer-error" role="alert">{error}</div>}<CollaborationMemberPage member={selectedMember} tasks={selectedMemberTasks} streams={streams} locale={locale} linghuAutomation={linghuAutomation} nangongEvolution={evolution.state} nangongAttachments={nangong.attachments} workspaces={workspaces} onLinghuState={setLinghuAutomation} onNangongState={evolution.setState} onNangongAttachments={nangong.setAttachments} onNangongScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "nangong")} onNangongPaste={(files) => void screenshot.pasteClipboardImages(files, "nangong")} onError={setError} onRename={() => void renameMember()} onDelete={() => void removeMember()} onContinue={(taskId) => void continueTask(taskId)} onCancel={(taskId) => void cancelTask(taskId)} onOpen={(taskId) => { setSelectedTaskId(taskId); setPanel("task-detail"); }} /></>;

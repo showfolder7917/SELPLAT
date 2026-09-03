@@ -124,14 +124,6 @@ export type {
   EvolutionTopicOutDto,
   EvolutionTopicDossierOutDto,
   EvolutionTopicStatusValue,
-  EvolutionWorkbenchChangeEventOutDto,
-  EvolutionWorkbenchPageOutDto,
-  EvolutionWorkbenchPreferenceOutDto,
-  EvolutionWorkbenchRowOutDto,
-  EvolutionWorkbenchViewValue,
-  EvolutionWorkspaceLocationOutDto,
-  QueryEvolutionWorkbenchInDto,
-  SaveEvolutionWorkbenchPreferenceInDto,
 } from "../../services/evolution/index.js";
 
 export type {

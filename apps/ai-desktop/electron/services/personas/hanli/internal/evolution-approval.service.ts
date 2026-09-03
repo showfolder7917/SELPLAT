@@ -66,7 +66,7 @@ export class EvolutionApprovalService {
 
   #publishApplication(state: EvolutionStateOutDto, proposal: EvolutionProposalOutDto): void {
     const topic = requireTopic(state, proposal.topicId);
-    const manual = !(proposal.origin === "linghu" ? state.automaticLinghuApprovalEnabled : state.automaticNangongApprovalEnabled);
+    const manual = state.automationRuntime.status !== "running" && state.oneShotRun?.status !== "running";
     this.timeline?.({
       eventId: `approval-application-${proposal.proposalId}`,
       eventType: "approval.application",
@@ -85,7 +85,7 @@ export class EvolutionApprovalService {
 
   #publishSupplementWaiting(state: EvolutionStateOutDto, proposal: EvolutionProposalOutDto, advice: string, occurredAt: string): void {
     const topic = requireTopic(state, proposal.topicId);
-    const automatic = state.automaticEvolutionEnabled || state.oneShotRun?.status === "running";
+    const automatic = state.automationRuntime.status === "running" || state.oneShotRun?.status === "running";
     this.timeline?.({
       eventId: `approval-supplement-${proposal.proposalId}-${randomUUID()}`,
       eventType: "approval.supplement_waiting",

@@ -71,6 +71,7 @@ export interface CodexUserInputRequestOutDto {
 export interface CodexModelOptionOutDto {
   id: string;
   displayName: string;
+  description: string;
   provider: string | null;
   supportedReasoningEfforts: ReasoningEffortValue[];
   supportedServiceTiers: ModelServiceTierValue[];

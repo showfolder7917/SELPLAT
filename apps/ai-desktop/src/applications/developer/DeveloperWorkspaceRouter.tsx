@@ -6,11 +6,6 @@ import {
   // 页签左侧使用提示图标，表示当前区域是人物或 Codex 对话工作区。
   Prompt24Regular,
 } from "@fluentui/react-icons";
-import {
-  // 路由仅保存“打开演化工作台失败”的页面错误，不复制任何 Feature 业务状态。
-  useState,
-} from "react";
-
 import type {
   // LocaleValue 限制当前界面只能使用 DesktopApi 支持的中文或日文区域值。
   LocaleValue,
@@ -25,8 +20,6 @@ import type { useCollaborationWorkspace } from "../../features/collaboration/mod
 import { CodexConversationWorkspace } from "../../features/conversation/components/CodexConversationWorkspace";
 // useCodexWorkspace 的返回类型提供主会话状态和“新建任务”等公开动作。
 import type { useCodexWorkspace } from "../../features/conversation/model/useCodexWorkspace";
-// defaultEvolutionWorkspaceLocation 根据韩立或南宫视角生成演化工作台的默认打开位置。
-import { defaultEvolutionWorkspaceLocation } from "../../features/evolution/model/evolution-workbench";
 // useEvolutionRuntime 的返回类型是韩立和南宫共同消费的唯一 Evolution 状态。
 import type { useEvolutionRuntime } from "../../features/evolution/model/useEvolutionRuntime";
 // HanliConversationWorkspace 显示用户与韩立的独立自由讨论页面。
@@ -50,7 +43,7 @@ type DeveloperWorkspaceRouterProps = {
   collaboration: ReturnType<typeof useCollaborationWorkspace>;
   // codex 是主会话 Feature 的控制器，路由不直接修改它的消息列表。
   codex: ReturnType<typeof useCodexWorkspace>;
-  // evolution 保存人物共同状态，并负责打开独立演化工作台窗口。
+  // evolution 保存人物共同状态，供人物会话和协作流程共享。
   evolution: ReturnType<typeof useEvolutionRuntime>;
   // hanli 只保存韩立自己的会话、附件和操作状态。
   hanli: ReturnType<typeof usePersonaConversation>;
@@ -59,14 +52,6 @@ type DeveloperWorkspaceRouterProps = {
   // screenshot 接受明确人物目标，把签发后的图片返回给对应会话所有者。
   screenshot: ReturnType<typeof useScreenshotCapture>;
 };
-
-/** 去掉 Electron invoke 包装文字，让页面只显示用户能理解的真实错误。 */
-function readableDesktopError(error: unknown, fallback: string): string {
-  // Error 对象优先显示主进程返回的信息，未知异常使用调用方提供的兜底文案。
-  const message = error instanceof Error ? error.message : fallback;
-  // Electron 会给远程异常添加固定前缀；该前缀没有业务价值，因此在展示前移除。
-  return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
-}
 
 /** Developer 工作区路由只选择公开 Feature，不实现人物、协作或主会话内部流程。 */
 export function DeveloperWorkspaceRouter({
@@ -89,9 +74,6 @@ export function DeveloperWorkspaceRouter({
   // 三个会话共同复用的截图能力。
   screenshot,
 }: DeveloperWorkspaceRouterProps) {
-  // 这个错误只属于“打开另一个演化窗口”的导航动作，所以保留在路由层。
-  const [evolutionWorkspaceOpenError, setEvolutionWorkspaceOpenError] = useState("");
-
   // 未进入协同模式时，工作区固定显示主 Codex 会话。
   const showMainConversation = !collaboration.collaborationMode;
   // 协同模式选择韩立成员页时，切换到韩立独立会话页面。
@@ -107,9 +89,6 @@ export function DeveloperWorkspaceRouter({
     && collaboration.selectedMember?.memberId === "nangong-wan"
     && evolution.state,
   );
-  // 只有韩立和南宫婉拥有演化工作台视角，普通执行成员没有该入口。
-  const perspective = showHanli ? "hanli" : showNangong ? "nangong" : null;
-
   // 页签标题跟随当前协作子页面；成员页优先显示真实人物名称。
   const tabTitle = collaboration.panel === "execution-list"
     ? (locale === "ja" ? "実行一覧" : "执行列表")
@@ -119,35 +98,14 @@ export function DeveloperWorkspaceRouter({
         ? collaboration.selectedTask?.snapshot.title || (locale === "ja" ? "タスク詳細" : "任务详情")
         : collaboration.selectedMember?.displayName || (locale === "ja" ? "協同" : "协同模式");
 
-  /** 从当前人物视角打开独立演化窗口；失败只回显错误，不修改当前专题数据。 */
-  const openEvolutionWorkspace = () => {
-    // 普通成员没有人物视角，因此不会发起无效的 DesktopApi 请求。
-    if (!perspective) return;
-    // 新尝试开始时先清掉上一次错误，避免旧消息继续误导用户。
-    setEvolutionWorkspaceOpenError("");
-    // Evolution Feature 负责真正调用 DesktopApi；路由只提供要打开的位置。
-    void evolution.openWorkspace(defaultEvolutionWorkspaceLocation(perspective))
-      // 打开失败时保留当前页面与数据，只在页签下方展示可理解错误。
-      ?.catch((error) => setEvolutionWorkspaceOpenError(readableDesktopError(error, "无法打开专题演化工作台。")));
-  };
-
   // Fragment 允许页签、错误条和实际工作区作为同一个路由结果返回。
   return <>
     {/* 页签只表达当前路由和全局入口，不承载会话内部业务。 */}
-    <div className={`dev-tab${perspective ? " with-workspace-action" : ""}`}>
+    <div className="dev-tab">
       {/* 固定图标帮助用户识别这里是对话/任务工作区。 */}
       <Prompt24Regular />
       {/* 单会话显示 Codex Chat；协同模式显示成员或任务页面的真实标题。 */}
       <span>{collaboration.collaborationMode ? tabTitle : "Codex Chat"}</span>
-
-      {/* 只有韩立或南宫婉页面可以打开对应视角的演化工作台。 */}
-      {perspective && <button
-        type="button"
-        className="open-evolution-workspace"
-        onClick={openEvolutionWorkspace}
-      >
-        {locale === "ja" ? "専門進化ワークベンチ" : "打开专题演化工作台"}
-      </button>}
 
       {/* 主 Codex 页签的新建按钮只重置主会话，不影响人物会话。 */}
       {showMainConversation && <button
@@ -190,11 +148,6 @@ export function DeveloperWorkspaceRouter({
       {/* 关闭图标目前维持既有页签外观，不绑定额外业务动作。 */}
       <Dismiss20Regular />
     </div>
-
-    {/* 打开演化窗口失败时明确说明当前数据未被修改。 */}
-    {evolutionWorkspaceOpenError && <div className="evolution-window-error" role="alert">
-      {evolutionWorkspaceOpenError} 当前数据没有被修改，请检查工作台位置参数后重试。
-    </div>}
 
     {/* 路由优先级：主 Codex → 韩立 → 南宫婉 → 其他协作页面。 */}
     {showMainConversation

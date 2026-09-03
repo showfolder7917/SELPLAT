@@ -135,6 +135,7 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
 
   const startNewTask = async () => {
     try {
+      // 只有官方确认删除后才清空页面和本地恢复信息，失败时继续保留当前任务。
       await discardChat();
       activeAssistantIdRef.current = null;
       interaction.setUserInputRequest(null);

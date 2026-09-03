@@ -14,15 +14,3 @@ export type { EvolutionStateOutDto } from "./dto/evolution-state.out.dto.js";
 export type { EvolutionTopicDossierOutDto } from "./dto/evolution-topic-dossier.out.dto.js";
 export type { EvolutionSourceMessageSnapshotOutDto, EvolutionTopicOutDto } from "./dto/evolution-topic.out.dto.js";
 export type { EvolutionProposalOriginValue, EvolutionTopicStatusValue } from "./value/evolution-topic.value.js";
-export type {
-  EvolutionWorkbenchPageOutDto,
-  EvolutionWorkbenchPreferenceOutDto,
-  EvolutionWorkbenchRowOutDto,
-  EvolutionWorkspaceLocationOutDto,
-} from "./dto/evolution-workbench.out.dto.js";
-export type { EvolutionWorkbenchChangeEventOutDto } from "./dto/evolution-workbench.event.out.dto.js";
-export type {
-  QueryEvolutionWorkbenchInDto,
-  SaveEvolutionWorkbenchPreferenceInDto,
-} from "./dto/evolution-workbench.in.dto.js";
-export type { EvolutionWorkbenchViewValue } from "./value/evolution-workbench.value.js";
