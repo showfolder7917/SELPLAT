@@ -100,6 +100,14 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);
   assert.match(macVerifier, /requirementOutput\.includes\(expectedRequirement\)/);
+  assert.match(macVerifier, /const describeHealthCheckFailure = \(health, cause = null\) => \{/);
+  assert.match(macVerifier, /const healthDiagnostics = \{/);
+  assert.match(macVerifier, /status: health\.status/);
+  assert.match(macVerifier, /signal: health\.signal/);
+  assert.match(macVerifier, /healthFileContent: existsSync\(healthFile\) \? readFileSync\(healthFile, "utf8"\) : null/);
+  assert.match(macVerifier, /候选包隔离启动失败；保留诊断目录/);
+  assert.match(macVerifier, /describeHealthCheckFailure\(health, `候选包未报告 ready 状态：/);
+  assert.match(macVerifier, /if \(healthCheckPassed\) rmSync\(healthRun/);
   assert.match(packagedBootstrap, /await import\("\.\/main\.js"\)/);
   assert.doesNotMatch(packagedBootstrap, /external runtime|runtimeRoot|pathToFileURL/);
 });
