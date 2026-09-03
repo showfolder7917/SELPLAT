@@ -1,7 +1,8 @@
 import type { CodexStreamActivityOutDto, CodexStreamEventOutDto, CodexStreamPlanStepOutDto, ManagedExecutionModeValue, ManagedExecutionUpdateEventOutDto, ScreenshotAttachmentOutDto } from "../../../../contracts/system/desktop/index";
 import type { RealtimeConversationMessage } from "./realtime-conversation";
 
-export type ComposerAttachment = ScreenshotAttachmentOutDto & { dataUrl: string };
+/** 页面只需要附件标识、名称和预览像素；文件路径与容量不应随历史消息重新暴露。 */
+export type ComposerAttachment = Pick<ScreenshotAttachmentOutDto, "id" | "name"> & { dataUrl: string };
 
 export type Message = RealtimeConversationMessage & {
   id: number;
