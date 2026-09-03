@@ -174,6 +174,8 @@ export interface DesktopApi {
   getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossierOutDto>;
   /** 读取韩立当前固定人物会话。 */
   getPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
+  /** 订阅人物会话持久消息变化；内部研讨每新增一条消息都会返回同一权威会话快照。 */
+  onPersonaConversationChanged(listener: (conversation: PersonaConversationOutDto) => void): () => void;
   /** 向韩立发送自由讨论消息；韩立只读取语义记忆并进行只读分析。 */
   sendPersonaConversationMessage(personaId: string, request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 关闭韩立当前固定线程并建立空白自由对话。 */

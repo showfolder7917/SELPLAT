@@ -4,6 +4,7 @@ import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDos
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { SendMessageOutDto } from "../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { EventCenterExceptionInDto } from "../../../../contracts/services/support/capabilities/event-center/index.js";
@@ -43,6 +44,7 @@ export interface PersonaEvolutionRuntimeOptions {
   readStableUserId?: () => string;
   readProjectScope?: (state: EvolutionStateOutDto) => string;
   readHanliConversationId?: () => string | null;
+  onPersonaConversationChanged?: (conversation: PersonaConversationOutDto) => void;
   readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
   beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   completeMutation?: (idempotencyKey: string, resultStateVersion: string) => void;
@@ -106,6 +108,7 @@ export class PersonaEvolutionRuntime {
         readStableUserId: options.readStableUserId || (() => ""),
         readProjectScope: options.readProjectScope || (() => "global"),
         readHanliConversationId: options.readHanliConversationId || (() => null),
+        onPersonaConversationChanged: options.onPersonaConversationChanged,
       })
       : null;
     // 南宫人物在自己的模块内装配业务服务；Workflow 只提供跨人物推进和成员查询端口。

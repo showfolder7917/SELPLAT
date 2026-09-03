@@ -39,7 +39,7 @@ import type {
   // 用法：IPC 查询补齐状态时约束返回结构；数据库不可用时也必须返回同样完整的失败结构。
   CorpusSemanticBackfillStatusOutDto,
 } from "../../../contracts/services/support/platform/persistence/index.js";
-import type { SendPersonaConversationMessageInDto } from "../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../contracts/services/personas/conversation/index.js";
 import type {
   // 来源：contracts/services/support/platform/workspace/index.ts → dto/workspace.out.dto.ts。
   // 含义：当前工作区快照，由 primaryId 和多个 { id、name、path、permission } 工程根组成。
@@ -587,6 +587,11 @@ export async function startApplication(): Promise<void> {
     },
     // 内部研讨关联统一业务会话 ID；Codex threadId 只属于平台会话，不再兼作人物会话主键。
     readHanliConversationId: () => collaborationMemory?.readPersonaConversation("han-li").conversationId || null,
+    onPersonaConversationChanged: (conversation: PersonaConversationOutDto) => {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
+        window.webContents.send("desktop:persona-conversation-changed", conversation);
+      }
+    },
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,

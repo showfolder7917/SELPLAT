@@ -115,6 +115,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
     const internalMessages = [];
+    const publishedConversations = [];
     const snapshots = [{
       snapshotId: "source:hanli:user-1", deliberationId: "placeholder", source: "hanli", conversationId: "hanli-thread-1",
       sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null,
@@ -122,7 +123,8 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     }];
     const hanliReplies = [
       JSON.stringify({ action: "ask", question: "持续运行在没有新问题时应如何处理？", reason: "必须明确不得为了循环而虚构问题" }),
-      JSON.stringify({ decision: "establish-topic", assessment: "目标、范围、证据和验收条件已经明确。", topic: { title: "持续人物研讨", goal: "让内部研讨成熟后自动推进", scope: ["AI Desktop"], exclusions: ["无用户证据的问题"], evidence: ["用户明确要求持续研讨"], acceptanceCriteria: ["一问一答可见且成熟后建立专题"], establishmentReason: "整理条件完整" } }),
+      JSON.stringify({ decision: "establish-topic", assessment: "后台判断不能代替聊天回复。" }),
+      JSON.stringify({ decision: "establish-topic", assessment: "目标、范围、证据和验收条件已经明确。", reply: "那就保留这个边界，没有新证据时不硬找问题。", topic: { title: "持续人物研讨", goal: "让内部研讨成熟后自动推进", scope: ["AI Desktop"], exclusions: ["无用户证据的问题"], evidence: ["用户明确要求持续研讨"], acceptanceCriteria: ["一问一答可见且成熟后建立专题"], establishmentReason: "整理条件完整" } }),
     ];
     const service = new HanliNangongDeliberationService({
       store, prompts,
@@ -133,14 +135,24 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
       },
       askHanli: async () => hanliReplies.shift(),
       askNangong: async () => "没有新问题时保持监测；出现新的用户证据后再继续提问。",
+      onPersonaConversationChanged: (conversation) => publishedConversations.push(conversation),
       recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread-1",
     });
+    await assert.rejects(service.advance({ requireProblem: true }), /缺少对南宫婉的回复正文/);
+    assert.equal(store.state().topics.length, 0);
+    assert.equal(internalMessages.length, 2);
     const result = await service.advance({ requireProblem: true });
     assert.equal(result.activity, "topic-established");
     assert.equal(result.state.deliberations[0].rounds.length, 1);
     assert.equal(result.state.deliberations[0].rounds[0].answer, "没有新问题时保持监测；出现新的用户证据后再继续提问。");
     assert.equal(result.state.topics[0].title, "持续人物研讨");
     assert.deepEqual(internalMessages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan", "han-li"]);
+    assert.equal(publishedConversations.length, 3);
+    assert.equal(internalMessages.at(-1).content, "那就保留这个边界，没有新证据时不硬找问题。");
+    assert.ok(internalMessages.at(-1).messageId.endsWith(":reply"));
+    assert.ok(internalMessages.every((message) => !message.content.startsWith("判断：")));
+    assert.equal(result.state.deliberations[0].rounds[0].assessment, "目标、范围、证据和验收条件已经明确。");
+    assert.ok(publishedConversations.every((conversation) => conversation.ownerPersonaId === "han-li"));
     assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -151,6 +163,8 @@ test("回复1启动统一自动流程后不因单题轮数上限自行停止", a
     const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: 1, maxCorrectionRounds: 1, workspaceState, locale: "zh-CN" });
     store.beginOneShotRun(workspaceState, "zh-CN");
+    const internalMessages = [];
+    const seenPrompts = [];
     const replies = [
       JSON.stringify({ action: "ask", question: "还缺少哪项用户证据？", reason: "需要确认真实边界" }),
       JSON.stringify({ decision: "continue", assessment: "当前证据仍不足。", nextQuestion: "用户实际期望哪项结果？", questionReason: "缺少可验收结果" }),
@@ -160,9 +174,9 @@ test("回复1启动统一自动流程后不因单题轮数上限自行停止", a
       memory: {
         readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "continuous-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-message", sequenceNumber: 0, role: "user", responsePhase: null, content: "请持续找出新问题并修正。", originalCreatedAt: "2026-09-02T00:00:00.000Z", capturedAt: "2026-09-02T00:00:01.000Z" }]; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
-        appendPersonaInternalMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+        appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
       },
-      askHanli: async () => replies.shift(), askNangong: async () => "目前还需要更具体的用户结果证据。", recordEvent() {},
+      askHanli: async (prompt) => { seenPrompts.push(prompt); return replies.shift(); }, askNangong: async () => "目前还需要更具体的用户结果证据。", recordEvent() {},
       readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
     });
     const result = await service.advance({ requireProblem: false });
@@ -170,6 +184,12 @@ test("回复1启动统一自动流程后不因单题轮数上限自行停止", a
     assert.equal(result.state.automationRuntime.status, "running");
     assert.equal(result.state.deliberations[0].status, "questioning");
     assert.equal(result.state.deliberations[0].rounds.length, 2);
+    assert.equal(internalMessages.length, 3);
+    assert.equal(internalMessages[2].replyToMessageId, internalMessages[1].messageId);
+    assert.equal(internalMessages[2].content, "用户实际期望哪项结果？");
+    assert.ok(internalMessages.every((message) => !message.messageId.endsWith(":assessment")));
+    assert.match(seenPrompts.at(-1), /南宫婉：目前还需要更具体的用户结果证据。/);
+    assert.match(seenPrompts.at(-1), /如果她问了你，先回应她/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

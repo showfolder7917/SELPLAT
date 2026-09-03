@@ -126,7 +126,7 @@ export function DeveloperWorkspaceRouter({
         data-sel-tooltip="重新建立韩立对话"
         data-sel-tooltip-mode="always"
         aria-label="重新建立韩立对话"
-        disabled={hanli.newConversationBusy}
+        disabled={hanli.newConversationBusy || hanli.sending}
         onClick={() => void hanli.startNewConversation()}
       >
         <ArrowClockwise24Regular className={hanli.newConversationBusy ? "screenshot-spinner" : undefined} />
@@ -139,7 +139,7 @@ export function DeveloperWorkspaceRouter({
         data-sel-tooltip={locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话"}
         data-sel-tooltip-mode="always"
         aria-label={locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话"}
-        disabled={nangong.newConversationBusy}
+        disabled={nangong.newConversationBusy || nangong.sending}
         onClick={() => void nangong.startNewConversation()}
       >
         <ArrowClockwise24Regular className={nangong.newConversationBusy ? "screenshot-spinner" : undefined} />
@@ -162,6 +162,7 @@ export function DeveloperWorkspaceRouter({
       : showHanli
         // 韩立使用自己的会话和附件；截图结果通过目标 hanli 返回给它。
         ? <HanliConversationWorkspace
+          runtime={hanli}
           key={hanli.conversation.conversationId || "new-hanli-conversation"}
           conversation={hanli.conversation}
           attachments={hanli.attachments}
@@ -178,6 +179,7 @@ export function DeveloperWorkspaceRouter({
         : showNangong && evolution.state
           // 南宫婉拥有自己的统一人物会话；专题、提案等共同流程状态仍由 Evolution 提供。
           ? <NangongConversationWorkspace
+            runtime={nangong}
             key={nangong.conversation.conversationId || "new-nangong-conversation"}
             state={evolution.state}
             conversation={nangong.conversation}

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionStatePort } from "../../evolution/index.js";
 import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
@@ -16,6 +17,7 @@ export interface HanliNangongDeliberationDependencies {
   readStableUserId(): string;
   readProjectScope(state: EvolutionStateOutDto): string;
   readHanliConversationId(): string | null;
+  onPersonaConversationChanged?(conversation: PersonaConversationOutDto): void;
 }
 
 export interface HanliNangongDeliberationAdvanceResult {
@@ -89,16 +91,17 @@ export class HanliNangongDeliberationService {
       }), state));
       if (mustConclude && !judgment.candidate) {
         state = store.blockDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, `完成 ${maximum} 轮内部研讨后仍存在证据缺口：${judgment.nextQuestion?.reason || judgment.assessment}`);
-        this.#appendInternalMessage(answeredRound.roundId, "assessment", "hanli", `判断：${judgment.assessment}`, `internal:${answeredRound.roundId}:answer`, new Date().toISOString());
+        // 阻断原因属于后台业务状态，不冒充韩立对南宫婉说过的话。
         return { state, activity: "idle" };
       }
       state = store.assessDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, judgment.nextQuestion, judgment.candidate);
       const assessed = requireDeliberation(state, refreshed.deliberationId);
       const savedRound = assessed.rounds.find((item) => item.roundId === answeredRound.roundId)!;
-      this.#appendInternalMessage(answeredRound.roundId, "assessment", "hanli", `判断：${judgment.assessment}`, `internal:${answeredRound.roundId}:answer`, savedRound.assessedAt!);
+      // 后台判断继续保存，但页面只收到模型生成的自然回复，不再插入一条判断报告。
+      if (judgment.candidate) this.#appendInternalMessage(answeredRound.roundId, "reply", "hanli", judgment.reply, `internal:${answeredRound.roundId}:answer`, savedRound.assessedAt!);
       const nextRound = assessed.rounds.at(-1)!;
       if (!judgment.candidate && nextRound.roundId !== answeredRound.roundId) {
-        this.#appendInternalMessage(nextRound.roundId, "question", "hanli", nextRound.question, `internal:${answeredRound.roundId}:assessment`, nextRound.createdAt);
+        this.#appendInternalMessage(nextRound.roundId, "question", "hanli", nextRound.question, `internal:${answeredRound.roundId}:answer`, nextRound.createdAt);
       }
       this.dependencies.recordEvent("hanli.nangong.deliberation_assessed", { deliberationId: refreshed.deliberationId, roundId: answeredRound.roundId, decision: judgment.candidate ? "establish-topic" : "continue", assessment: judgment.assessment });
     }
@@ -112,10 +115,10 @@ export class HanliNangongDeliberationService {
     return { state, activity: "topic-established" };
   }
 
-  #appendInternalMessage(roundId: string, phase: "question" | "answer" | "assessment", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
+  #appendInternalMessage(roundId: string, phase: "question" | "answer" | "reply", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
     const conversationId = this.dependencies.readHanliConversationId();
     if (!conversationId || !this.dependencies.memory) return;
-    this.dependencies.memory.appendPersonaInternalMessage({
+    const conversation = this.dependencies.memory.appendPersonaInternalMessage({
       ownerPersonaId: "han-li",
       conversationId,
       messageId: `internal:${roundId}:${phase}`,
@@ -124,6 +127,8 @@ export class HanliNangongDeliberationService {
       replyToMessageId,
       createdAt,
     });
+    // 内部研讨仍只保存一份权威消息；南宫婉页面展示内部对话，韩立页面过滤内部消息。
+    this.dependencies.onPersonaConversationChanged?.(conversation);
   }
 }
 
@@ -143,27 +148,30 @@ function parseQuestion(text: string): { question: string | null; reason: string 
   return { question, reason };
 }
 
-function parseJudgment(text: string): { assessment: string; nextQuestion: { question: string; reason: string } | null; candidate: HanliTopicCandidateOutDto | null } {
+function parseJudgment(text: string): { assessment: string; reply: string; nextQuestion: { question: string; reason: string } | null; candidate: HanliTopicCandidateOutDto | null } {
   const value = parseObject(text);
   const assessment = typeof value.assessment === "string" ? value.assessment.trim() : "";
   if (!assessment) throw new Error("韩立内部研讨判断缺少事实说明。");
   if (value.decision === "establish-topic") {
+    const reply = textValue(value.reply);
+    if (!reply) throw new Error("韩立完成研讨时缺少对南宫婉的回复正文。");
     const topic = value.topic as Partial<HanliTopicCandidateOutDto> | undefined;
     const candidate = topic && {
       title: textValue(topic.title), goal: textValue(topic.goal), scope: listValue(topic.scope), exclusions: listValue(topic.exclusions),
       evidence: listValue(topic.evidence), acceptanceCriteria: listValue(topic.acceptanceCriteria), establishmentReason: textValue(topic.establishmentReason) || assessment,
     };
     if (!candidate?.title || !candidate.goal || !candidate.scope.length || !candidate.evidence.length || !candidate.acceptanceCriteria.length) throw new Error("韩立确立的专题缺少范围、证据或验收条件。");
-    return { assessment, nextQuestion: null, candidate };
+    return { assessment, reply, nextQuestion: null, candidate };
   }
   const question = textValue(value.nextQuestion);
   const reason = textValue(value.questionReason);
   if (value.decision !== "continue" || !question || !reason) throw new Error("韩立决定继续研讨，但没有给出下一问和依据。");
-  return { assessment, nextQuestion: { question, reason }, candidate: null };
+  return { assessment, reply: "", nextQuestion: { question, reason }, candidate: null };
 }
 
 function textValue(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 function listValue(value: unknown): string[] { return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : []; }
 function requireDeliberation(state: EvolutionStateOutDto, deliberationId: string): HanliEvolutionDeliberationOutDto { const value = state.deliberations.find((item) => item.deliberationId === deliberationId); if (!value) throw new Error("人物内部研讨记录不存在。"); return value; }
-function formatDeliberationContext(deliberation: HanliEvolutionDeliberationOutDto): string { return [`研讨编号：${deliberation.deliberationId}`, ...deliberation.rounds.map((round) => [`第 ${round.roundNumber} 轮韩立问题：${round.question}`, `发问依据：${round.questionReason}`, round.answer ? `南宫婉回答：${round.answer}` : "南宫婉尚未回答", round.assessment ? `韩立判断：${round.assessment}` : ""].filter(Boolean).join("\n"))].join("\n\n"); }
+// 提供真实交谈顺序，不把后台判断及发问依据混成已经说出的聊天历史。
+function formatDeliberationContext(deliberation: HanliEvolutionDeliberationOutDto): string { return deliberation.rounds.map((round) => [`韩立：${round.question}`, round.answer ? `南宫婉：${round.answer}` : ""].filter(Boolean).join("\n")).join("\n\n"); }
 function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshotOutDto[]): string { return snapshots.slice().sort((left, right) => Date.parse(left.originalCreatedAt) - Date.parse(right.originalCreatedAt)).map((item) => `[${item.originalCreatedAt}] ${item.source}/${item.role}：${item.content}`).join("\n"); }

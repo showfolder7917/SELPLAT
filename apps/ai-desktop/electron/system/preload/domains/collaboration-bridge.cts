@@ -27,6 +27,7 @@ export function collaborationBridge() {
     getEvolutionTopicDossier: (topicId: string) => invoke("desktop:get-evolution-topic-dossier", topicId),
     // 页面只传人物 ID；增加新人物时 preload 不需要再增加方法。
     getPersonaConversation: (personaId: string) => invoke("desktop:get-persona-conversation", personaId),
+    onPersonaConversationChanged: (listener: (conversation: unknown) => void) => subscribe("desktop:persona-conversation-changed", listener),
     sendPersonaConversationMessage: (personaId: string, request: unknown) => invoke("desktop:send-persona-conversation-message", personaId, request),
     newPersonaConversation: (personaId: string) => invoke("desktop:new-persona-conversation", personaId),
     generateNangongTopicDraft: (request: unknown) => invoke("desktop:generate-nangong-topic-draft", request),

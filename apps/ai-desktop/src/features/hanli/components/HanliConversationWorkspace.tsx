@@ -3,6 +3,7 @@ import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, 
 
 import type { PersonaConversationOutDto, LocaleValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
 
@@ -16,7 +17,8 @@ function readableDesktopError(error: unknown, fallback: string): string {
 }
 
 /** 韩立自由讨论沿用统一会话外壳，只暴露讨论能力，不暴露旧托管阶段或工程写入入口。 */
-export function HanliConversationWorkspace({ conversation, attachments, workspaces, locale, newConversationBusy, error, onConversation, onAttachments, onScreenshot, onPaste, onError }: {
+export function HanliConversationWorkspace({ runtime, conversation, attachments, workspaces, locale, newConversationBusy, error, onConversation, onAttachments, onScreenshot, onPaste, onError }: {
+  runtime: ReturnType<typeof usePersonaConversation>;
   // 后端已经保存的完整韩立会话，包含用户、韩立和内部研讨消息。
   conversation: PersonaConversationOutDto;
   // 用户本轮准备发送、但尚未提交的截图附件。
@@ -42,12 +44,8 @@ export function HanliConversationWorkspace({ conversation, attachments, workspac
 }) {
   // 输入框中尚未发送的文字。
   const [text, setText] = useState("");
-  // busy 防止用户在韩立回复前连续重复发送。
-  const [busy, setBusy] = useState(false);
-  // pending 是“乐观消息”：请求尚未完成时，也先把用户消息显示在时间线上。
-  const [pending, setPending] = useState<{ messageId: string; content: string; attachments: ComposerAttachment[]; failed: boolean; createdAt: string } | null>(null);
-  // 后端只长期保存附件 ID；这里暂存浏览器可显示的 dataUrl，用来继续展示已发送截图。
-  const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, ComposerAttachment[]>>({});
+  // 控制器位于应用层，页面卸载后发送锁、待确认消息与截图预览仍保留。
+  const { sending: busy, setSending: setBusy, pendingMessage: pending, setPendingMessage: setPending, attachmentPreviews, setAttachmentPreviews } = runtime;
 
   /** 用户按发送按钮或在表单中提交时，完成一整轮韩立对话。 */
   const send = async () => {
@@ -92,8 +90,10 @@ export function HanliConversationWorkspace({ conversation, attachments, workspac
     }
   };
 
-  // 页面消息 = 后端已保存消息 + 当前尚未完成的乐观消息。
-  const messages = [...conversation.messages, ...(pending ? [{
+  // 韩立页面只承载用户与韩立的直接交流和判断纠正；内部研讨保留原始记录，仅在南宫婉页面展示。
+  const directMessages = conversation.messages.filter((message) => !message.messageId.startsWith("internal:")
+    && (message.speakerType === "user" || message.speakerPersonaId === "han-li"));
+  const messages = [...directMessages, ...(pending && !directMessages.some((message) => message.messageId === pending.messageId) ? [{
     messageId: pending.messageId,
     sequenceNumber: conversation.messages.length,
     speakerType: "user" as const,
@@ -128,7 +128,7 @@ export function HanliConversationWorkspace({ conversation, attachments, workspac
         · 发送上下文 {conversation.contextReadStats.promptCharacters.toLocaleString()} 字
       </p>}
 
-      {/* 每条消息渲染成一个 article，data-role 让 CSS 能区分用户、韩立和南宫婉。 */}
+      {/* 每条直接对话渲染成一个 article，data-role 区分用户和韩立。 */}
       {messages.map((message) => {
         // 优先读取已保存的预览；当前 pending 消息则直接使用本轮附件。
         const previews = attachmentPreviews[message.messageId]
@@ -138,9 +138,7 @@ export function HanliConversationWorkspace({ conversation, attachments, workspac
           {/* 标题同时展示说话人，以及用户消息是否仍在发送或已经失败。 */}
           <header>{message.speakerType === "user"
             ? `我${message.deliveryStatus === "sending" ? " · 发送中" : message.deliveryStatus === "failed" ? " · 发送失败" : ""}`
-            : message.speakerPersonaId === "nangong-wan"
-              ? "南宫婉 · 内部研讨"
-              : "韩立"}</header>
+            : "韩立"}</header>
 
           <div className="selconversation-message-body">
             {/* 有 dataUrl 时直接展示图片；只有后端附件 ID 时显示附件数量。 */}
