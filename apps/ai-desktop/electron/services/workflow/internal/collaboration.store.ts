@@ -355,6 +355,8 @@ export class CollaborationStore {
       // 首次启动或损坏状态都从稳定默认人物集合恢复，后续写入仍采用原子替换。
     }
     const state = loaded || createInitialState();
+    // 每次启动进入协同模式；仅重置展示模式，不改变任务、人物或恢复点。
+    state.mode = "collaboration";
     mergeDefaultMembers(state);
     recoverInterruptedState(state);
     this.#write(state);
@@ -381,7 +383,7 @@ function createInitialState(): CollaborationStateOutDto {
   const now = new Date().toISOString();
   return {
     version: 1,
-    mode: "single-conversation",
+    mode: "collaboration",
     selectedMemberId: "han-li",
     members: DEFAULT_MEMBERS.map((member) => createDefaultMember(member, now)),
     tasks: [],

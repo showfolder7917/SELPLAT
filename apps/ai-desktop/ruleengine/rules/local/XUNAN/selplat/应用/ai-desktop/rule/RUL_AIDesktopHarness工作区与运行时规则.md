@@ -1,7 +1,7 @@
 # AI Desktop Harness 工作区与运行时规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.108.0
+rule_version = 5.109.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -121,8 +121,8 @@ developer_sidebar_section_disclosure_contract = explorer_workspace_and_tasks_tit
 developer_sidebar_section_disclosure_contract.2 = aria_expanded_state
 <!-- 工作区与任务只允许一个活动分区。 -->
 developer_sidebar_section_disclosure_contract.3 = workspace_tasks_single_active
-<!-- 新建任务入口固定为 Codex Chat 标签内关闭图标左侧的刷新对话图标，悬停与键盘聚焦必须显示本地化的“重新建立一个 Codex 会话”Tip，任务标题不得保留重复入口。 -->
-developer_sidebar_section_disclosure_contract.4 = refresh_conversation_action_in_codex_chat_tab_before_close_with_localized_rebuild_session_tip
+<!-- 新建任务入口位于 SELUI 页签栏同行的会话操作区，悬停与键盘聚焦必须显示本地化的“重新建立一个 Codex 会话”Tip，任务标题不得保留重复入口。 -->
+developer_sidebar_section_disclosure_contract.4 = refresh_conversation_action_beside_selui_tabs_with_localized_rebuild_session_tip
 <!-- 新建任务动作禁止额外单独占用一行。 -->
 developer_sidebar_section_disclosure_contract.5 = no_separate_full_width_new_task_row
 <!-- 资源管理器总开关必须收起整个网格列并释放聊天宽度；活动栏文件图标始终保留恢复入口，内部工作区展开状态不得被重置。 -->
@@ -137,3 +137,6 @@ developer_sidebar_resizer_contract.3 = no_workspace_tasks_height_divider
 developer_sidebar_active_section_layout_contract = active_section_top_and_fill_available_height
 <!-- 非活动侧栏分区只在底部保留标题入口。 -->
 developer_sidebar_active_section_layout_contract.2 = inactive_section_heading_only_at_bottom
+
+<!-- 人物和任务使用正式 SELUI 多页签，关闭只影响视图，不能停止或删除后台工作。 -->
+developer_workspace_tabs_contract = formal_selTabs_component_and_styles + stable_persona_and_task_ids + repeated_navigation_focuses_existing_tab + mounted_inactive_pages_preserve_input_scroll_and_messages + working_close_button_and_keyboard + neighbor_selected_on_close + close_never_cancels_task_or_deletes_history + no_private_fake_tab

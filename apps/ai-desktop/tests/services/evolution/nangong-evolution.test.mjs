@@ -125,6 +125,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
       JSON.stringify({ action: "ask", question: "持续运行在没有新问题时应如何处理？", reason: "必须明确不得为了循环而虚构问题" }),
       JSON.stringify({ decision: "establish-topic", assessment: "后台判断不能代替聊天回复。" }),
       JSON.stringify({ decision: "establish-topic", assessment: "目标、范围、证据和验收条件已经明确。", reply: "那就保留这个边界，没有新证据时不硬找问题。", topic: { title: "持续人物研讨", goal: "让内部研讨成熟后自动推进", scope: ["AI Desktop"], exclusions: ["无用户证据的问题"], evidence: ["用户明确要求持续研讨"], acceptanceCriteria: ["一问一答可见且成熟后建立专题"], establishmentReason: "整理条件完整" } }),
+      "1",
     ];
     const service = new HanliNangongDeliberationService({
       store, prompts,
@@ -146,15 +147,49 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     assert.equal(result.state.deliberations[0].rounds.length, 1);
     assert.equal(result.state.deliberations[0].rounds[0].answer, "没有新问题时保持监测；出现新的用户证据后再继续提问。");
     assert.equal(result.state.topics[0].title, "持续人物研讨");
-    assert.deepEqual(internalMessages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan", "han-li"]);
-    assert.equal(publishedConversations.length, 3);
-    assert.equal(internalMessages.at(-1).content, "那就保留这个边界，没有新证据时不硬找问题。");
-    assert.ok(internalMessages.at(-1).messageId.endsWith(":reply"));
+    assert.deepEqual(internalMessages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan", "han-li", "nangong-wan", "han-li", "nangong-wan"]);
+    assert.equal(publishedConversations.length, 6);
+    assert.equal(internalMessages.at(-2).content, "1");
+    assert.equal(result.state.deliberations[0].rounds[0].confirmation.reply, "1");
+    assert.equal(internalMessages[2].content, "那就保留这个边界，没有新证据时不硬找问题。");
+    assert.ok(internalMessages[2].messageId.endsWith(":reply"));
     assert.ok(internalMessages.every((message) => !message.content.startsWith("判断：")));
     assert.equal(result.state.deliberations[0].rounds[0].assessment, "目标、范围、证据和验收条件已经明确。");
     assert.ok(publishedConversations.every((conversation) => conversation.ownerPersonaId === "han-li"));
     assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("成熟判断不能绕过可见确认；确认持久化且非1重新讨论", () => {
+  const key = `confirmation-gate-${Date.now()}`;
+  let store = evolutionStore(key);
+  store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+  store.beginDeliberation("confirm", [{ sourceMessageId: "user", content: "修复图片重启后消失" }], "用户重启后图片还在吗？", "用户需求");
+  const roundId = store.state().deliberations[0].rounds[0].roundId;
+  const candidate = { title: "图片恢复", goal: "重启后图片可见", scope: ["会话附件"], exclusions: ["其他功能"], evidence: ["用户反馈"], acceptanceCriteria: ["重启后可见"], establishmentReason: "范围明确" };
+  store.recordDeliberationAnswer("confirm", roundId, "需要保存附件并恢复预览。");
+  store.assessDeliberation("confirm", roundId, "成熟", null, candidate);
+  assert.throws(() => store.establishDeliberationTopic("confirm"), /确认 1/);
+  store.offerDeliberationConfirmation("confirm", "只修复图片恢复，重启验证；符合请回复1。");
+  store = evolutionStore(key);
+  assert.match(store.state().deliberations[0].rounds[0].confirmation.offer, /只修复图片/);
+  assert.throws(() => store.establishDeliberationTopic("confirm"), /确认 1/);
+  store.replyDeliberationConfirmation("confirm", "那旧图片会不会丢？");
+  assert.equal(store.state().topics.length, 0);
+  assert.equal(store.state().deliberations[0].status, "questioning");
+  const next = store.state().deliberations[0].rounds.at(-1);
+  assert.equal(next.question, "那旧图片会不会丢？");
+  store.recordDeliberationAnswer("confirm", next.roundId, "保留旧图片。");
+  store.assessDeliberation("confirm", next.roundId, "已说明保留旧图片", null, candidate);
+  store.offerDeliberationConfirmation("confirm", "保留旧图片，只补恢复，请回复1。");
+  store.replyDeliberationConfirmation("confirm", "1");
+  store = evolutionStore(key);
+  store.controlAutomation("start");
+  store.controlAutomation("pause");
+  assert.throws(() => store.establishDeliberationTopic("confirm"), /暂停/);
+  assert.equal(store.state().topics.length, 0);
+  store.controlAutomation("resume");
+  assert.equal(store.establishDeliberationTopic("confirm").topics.length, 1);
 });
 
 test("回复1启动统一自动流程后不因单题轮数上限自行停止", async () => {

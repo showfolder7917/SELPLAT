@@ -5,7 +5,7 @@ import { applyCodexStreamEvent, createAssistantMessage, type Message } from "../
 import { deriveCollaborationTaskCurrentStage } from "./collaboration-task-progress";
 import type { CollaborationLiveOutput } from "./collaboration-live-output";
 
-export type CollaborationPanel = "member" | "execution-list" | "task-group" | "task-detail";
+export type CollaborationPanel = "member" | "task-group" | "task-detail";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -19,7 +19,10 @@ export function useCollaborationWorkspace() {
   const [linghuAutomation, setLinghuAutomation] = useState<LinghuAutomationStateOutDto | null>(null);
   const [streams, setStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   const [timelineStreams, setTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
-  const [panel, setPanel] = useState<CollaborationPanel>("member");
+  const [panel, syncPanel] = useState<CollaborationPanel>("member");
+  const [navigationRevision, setNavigationRevision] = useState(0);
+  // A repeated click must focus or reopen its tab, even when the route is unchanged.
+  const setPanel = (next: CollaborationPanel) => { syncPanel(next); setNavigationRevision((value) => value + 1); };
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const stateRef = useRef<CollaborationStateOutDto | null>(null);
@@ -63,7 +66,6 @@ export function useCollaborationWorkspace() {
   const terminalStates = new Set<CollaborationTaskOutDto["state"]>(["integrated", "cancelled"]);
   const collaborationMode = state?.mode === "collaboration";
   const selectedMember = state?.members.find((member) => member.memberId === state.selectedMemberId) || null;
-  const completedTasks = state?.tasks.filter((task) => terminalStates.has(task.state)).sort((left, right) => (right.completedAt || right.updatedAt).localeCompare(left.completedAt || left.updatedAt)) || [];
   const selectedMemberTasks = state?.tasks.filter((task) => !terminalStates.has(task.state) && (
     task.initiator?.memberId === selectedMember?.memberId
     || task.executorMemberId === selectedMember?.memberId
@@ -118,8 +120,8 @@ export function useCollaborationWorkspace() {
 
   return {
     state, setState, timeline, setTimeline, linghuAutomation, setLinghuAutomation, streams, timelineStreams, panel, setPanel,
-    error, setError,
-    selectedTaskId, setSelectedTaskId, terminalStates, collaborationMode, selectedMember, completedTasks,
+    error, setError, navigationRevision, syncPanel,
+    selectedTaskId, setSelectedTaskId, terminalStates, collaborationMode, selectedMember,
     selectedMemberTasks, selectedTask, selectedTaskMember, setOperatingMode, selectMember, createMember, updateMember,
     deleteMember, submitTask, submitConversationTask, continueTask, cancelTask, refreshTimeline,
   };

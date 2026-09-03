@@ -19,6 +19,8 @@ export interface HanliDeliberationRoundOutDto {
   createdAt: string;
   answeredAt: string | null;
   assessedAt: string | null;
+  /** A persisted visible offer and Hanli's actual reply gate topic creation. */
+  confirmation?: { offer: string; offeredAt: string; reply: string | null; repliedAt: string | null };
 }
 
 export interface HanliTopicCandidateOutDto {

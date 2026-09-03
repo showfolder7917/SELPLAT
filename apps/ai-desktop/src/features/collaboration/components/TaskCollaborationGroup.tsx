@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 
-import type { CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto, CollaborationTimelineSnapshotOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
+import type { CollaborationTaskOutDto, CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto, CollaborationTimelineSnapshotOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */
-export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval, onContinueTask }: {
+export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval, onContinueTask, onOpenTask, tasks = [] }: {
   snapshot: CollaborationTimelineSnapshotOutDto | null;
+  tasks?: CollaborationTaskOutDto[];
   liveTextByNodeId: Record<string, string>;
   locale: LocaleValue;
   onManualApproval(proposalId: string, title: string, content: string): void;
   onContinueTask(taskId: string): Promise<void>;
+  onOpenTask?(taskId: string): void;
 }) {
   const groups = snapshot?.groups || [];
   const [groupOpenOverrides, setGroupOpenOverrides] = useState<Map<string, boolean>>(new Map());
@@ -31,9 +33,11 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
     window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-task-timeline-node-id="${CSS.escape(node.nodeId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
 
-  if (!groups.length) return <section className="task-collaboration-page"><div className="task-collaboration-empty"><strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong><span>{locale === "ja" ? "申請、承認、配布と実行の履歴がここに表示されます。" : "审批、分发、执行和验证会按发生顺序显示在这里。"}</span></div></section>;
+  const records = <nav aria-label="任务完整记录">{tasks.map((task) => <button type="button" key={task.taskId} onClick={() => onOpenTask?.(task.taskId)}>{task.snapshot.title}</button>)}</nav>;
+  if (!groups.length) return <section className="task-collaboration-page">{records}<div className="task-collaboration-empty"><strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong><span>{locale === "ja" ? "申請、承認、配布と実行の履歴がここに表示されます。" : "审批、分发、执行和验证会按发生顺序显示在这里。"}</span></div></section>;
 
   return <section className="task-collaboration-page" aria-label={locale === "ja" ? "タスク協同グループ" : "任务协作群"}>
+    {records}
     <header className="task-collaboration-heading"><div><h1>{locale === "ja" ? "タスク協同グループ" : "任务协作群"}</h1><p>{locale === "ja" ? "案件ごとに完全な処理履歴を確認できます。" : "一个专题一张任务卡，按真实发生顺序查看每个人正在做什么。"}</p></div><button type="button" onClick={locateCurrentStep}>{locale === "ja" ? "現在の工程へ" : "定位当前步骤"}</button><span>{groups.length}</span></header>
     <div className="task-collaboration-groups">{groups.map((group) => {
       const groupOpen = groupOpenOverrides.get(group.groupId) ?? group.groupId === currentGroupId;
@@ -46,6 +50,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
         onOpenChange={(open) => updateOpenOverride(setGroupOpenOverrides, group.groupId, open)}
         trigger={<TaskGroupHeader group={group} locale={locale} nowMs={nowMs} />}
       >
+        <nav aria-label="任务详情">{[...new Set(group.nodes.flatMap((node) => node.taskId ? [node.taskId] : []))].map((taskId) => <button type="button" key={taskId} onClick={() => onOpenTask?.(taskId)}>打开任务完整记录</button>)}</nav>
         <div className="task-timeline-list">{visibleNodes.map((node, index) => {
           const nodeOpen = nodeOpenOverrides.get(node.nodeId) ?? node.automaticOpen;
           const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] : "";

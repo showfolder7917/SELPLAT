@@ -181,7 +181,7 @@ export function projectCollaborationFlowEvent(
       nodeId: `integration-preparation:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor,
       recipients: [NANGONG], status: "failed", action: "统一测试准备失败",
       summary: presentation.summary, content: presentation.impact, detail: presentation.detail,
-      startedAt: priorEventAt(task, "integration.batch_frozen") || event.occurredAt, completedAt: event.occurredAt,
+      startedAt: priorEventAt(task, "integration.batch_frozen", event.occurredAt) || event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: true, manualApprovalProposalId: null,
     })]);
   }
@@ -191,29 +191,33 @@ export function projectCollaborationFlowEvent(
       nodeId: `integration-infrastructure:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor,
       recipients: [NANGONG], status: "waiting", action: "发布基础设施故障",
       summary: presentation.summary, content: presentation.impact, detail: presentation.detail,
-      startedAt: priorEventAt(task, "unified_test.started") || event.occurredAt, completedAt: event.occurredAt,
+      startedAt: priorEventAt(task, "unified_test.started", event.occurredAt) || event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: true, manualApprovalProposalId: null,
     })]);
   }
 
   if (event.type === "unified_test.started" || event.type === "unified_test.passed" || event.type === "unified_test.failed") {
+    const history = task.flowEvents.slice(0, task.flowEvents.findIndex((item) => item.eventId === event.eventId) + 1);
+    const starts = history.filter((item) => item.type === "unified_test.started");
+    const start = starts.at(-1);
+    const testRound = starts.length;
     const failed = event.type === "unified_test.failed";
     const completed = event.type === "unified_test.passed";
     const preparationFailure = failed && isCandidatePreparationFailure(task);
     const presentation = failed ? integrationFailurePresentation(task, preparationFailure) : null;
     const facts = [fact({
-      nodeId: `unified-test:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor, recipients: [NANGONG],
+      nodeId: `test-round:${task.taskId}:${start?.eventId || event.eventId}`, kind: "verification", actor, recipients: [],
       status: failed ? "failed" : completed ? "completed" : "current",
-      action: preparationFailure ? "统一测试准备失败" : failed ? "统一测试未通过" : completed ? "统一测试通过" : "当前正在统一测试",
+      action: preparationFailure ? "统一测试准备失败" : `第 ${testRound} 次统一测试${failed ? "未通过" : completed ? "通过" : "中"}`,
       summary: presentation?.summary || event.summary, content: presentation?.impact || event.summary,
       detail: presentation?.detail || task.integrationFailure?.detail || "",
-      startedAt: task.unifiedTest?.startedAt || event.occurredAt, completedAt: event.type === "unified_test.started" ? null : event.occurredAt,
+      startedAt: start?.occurredAt || event.occurredAt, completedAt: event.type === "unified_test.started" ? null : event.occurredAt,
       automaticOpen: !completed, manualApprovalProposalId: null,
     })];
     if (event.type === "unified_test.started") facts.unshift(fact({
-      nodeId: `integration-queue:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor: NANGONG,
-      recipients: [LINGHU], status: "completed", action: "令狐老祖已接手统一测试", summary: event.summary,
-      content: event.summary, detail: "", startedAt: priorEventAt(task, "integration.batch_frozen") || event.occurredAt,
+      nodeId: `integration-queue:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor: SYSTEM,
+      recipients: [LINGHU], status: "completed", action: "测试批次已就绪", summary: event.summary,
+      content: event.summary, detail: "", startedAt: priorEventAt(task, "integration.batch_frozen", event.occurredAt) || event.occurredAt,
       completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
     }, ":queue-completed"));
     return projection(failed ? "blocked" : completed ? "running" : "verifying", facts);
@@ -222,50 +226,52 @@ export function projectCollaborationFlowEvent(
   if (event.type.startsWith("unified_test.repair_") || event.type.startsWith("execution.repair_")) {
     const status = event.status === "failed" ? "failed" : event.status === "completed" ? "completed" : event.status === "waiting" ? "waiting" : "current";
     const started = repairStartedEvent(task, event);
+    const repairRound = task.flowEvents.slice(0, task.flowEvents.findIndex((item) => item.eventId === event.eventId) + 1).filter((item) => item.type.endsWith("repair_started")).length;
+    const direct = event.type.startsWith("unified_test.");
     const investigationNodeId = `repair-investigation:${task.taskId}:${started?.eventId || event.eventId}`;
     const executionNodeId = `repair-execution:${task.taskId}:${started?.eventId || event.eventId}`;
     const facts: ProjectedTimelineFact[] = [];
     if (event.type.endsWith("repair_started")) {
       const previous = latestOriginalExecution(task, event.occurredAt);
-      if (previous) facts.unshift(fact({
+      if (previous && !direct) facts.unshift(fact({
         nodeId: `execution:${task.taskId}:${previous.assignmentId}`, kind: "execution", actor: previous.executor, recipients: [initiator], status: "failed",
         action: "执行已结束并转交修复", summary: event.details?.failureSummary || task.repairFailureReason || task.blockingReason || event.summary,
         content: previous.result || "原执行已停止，未继续与令狐同时计时。", detail: repairDetail(event, task),
         startedAt: previous.executionStartedAt || previous.assignedAt, completedAt: event.occurredAt, automaticOpen: true, manualApprovalProposalId: null,
       }, ":original-execution-closed"));
-      facts.splice(facts.length - 1, 0, fact({
+      if (!direct) facts.splice(facts.length - 1, 0, fact({
         nodeId: `repair-handoff:${task.taskId}:${event.eventId}`, kind: "distribution", actor: initiator, recipients: [event.actor || LINGHU], status: "completed",
         action: "执行故障已转交修复", summary: event.details?.failureSummary || event.summary,
         content: event.details?.failureSummary || event.summary, detail: repairDetail(event, task), startedAt: event.occurredAt,
         completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
       }, ":failure-handoff"));
       facts.push(fact({
-        nodeId: investigationNodeId, kind: "analysis", actor: event.actor || LINGHU, recipients: [initiator], status: "current",
-        action: "当前正在调查故障", summary: event.summary, content: event.summary, detail: repairDetail(event, task),
+        nodeId: investigationNodeId, kind: "analysis", actor: event.actor || LINGHU, recipients: direct ? [] : [initiator], status: "current",
+        action: `第 ${repairRound} 次修复 · 故障调查中`, summary: event.summary, content: event.summary, detail: repairDetail(event, task),
         startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
       }));
     }
     if (event.type.endsWith("repair_investigated")) facts.push(fact({
-      nodeId: investigationNodeId, kind: "analysis", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
-      action: "故障调查完成", summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
+      nodeId: investigationNodeId, kind: "analysis", actor: event.actor || LINGHU, recipients: direct ? [] : [initiator], status: "completed",
+      action: `第 ${repairRound} 次修复 · 故障调查完成`, summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
       detail: repairDetail(event, task), startedAt: started?.occurredAt || event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: false, manualApprovalProposalId: null,
     }, ":investigation-completed"), fact({
-      nodeId: executionNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status: "current",
-      action: "当前正在修复", summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
+      nodeId: executionNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: direct ? [] : [initiator], status: "current",
+      action: `第 ${repairRound} 次修复中`, summary: event.summary, content: event.details?.repairDiagnosis || event.summary,
       detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: null,
       automaticOpen: true, manualApprovalProposalId: null,
     }, ":repair-started"));
     if (!event.type.endsWith("repair_started") && !event.type.endsWith("repair_investigated")) facts.push(fact({
-      nodeId: executionNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: [initiator], status,
-      action: status === "failed" ? "修复未完成" : status === "completed" ? "修复完成" : /授权/.test(event.summary) ? "等待用户授权" : "等待恢复条件",
+      nodeId: executionNodeId, kind: "repair", actor: event.actor || LINGHU, recipients: direct ? [] : [initiator], status,
+      action: `第 ${repairRound} 次修复 · ${status === "failed" ? "未完成" : status === "completed" ? "修复完成，等待重新测试" : "等待恢复条件"}`,
       summary: event.summary, content: event.details?.repairResult || event.summary, detail: repairDetail(event, task),
       startedAt: task.flowEvents.find((candidate) => candidate.type.endsWith("repair_investigated") && candidate.occurredAt >= (started?.occurredAt || ""))?.occurredAt || started?.occurredAt || event.occurredAt,
       completedAt: status === "completed" || status === "failed" ? event.occurredAt : null,
       automaticOpen: status !== "completed", manualApprovalProposalId: null,
     }));
-    if (event.type.endsWith("repair_completed")) facts.push(fact({
-      nodeId: `repair-result:${task.taskId}:${event.eventId}`, kind: "result", actor: event.actor || LINGHU, recipients: [initiator], status: "completed",
+    if (event.type.endsWith("repair_completed") && !direct) facts.push(fact({
+      nodeId: `repair-result:${task.taskId}:${event.eventId}`, kind: "result", actor: event.actor || LINGHU, recipients: direct ? [] : [initiator], status: "completed",
       action: "修复结果已返回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,
       detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: false, manualApprovalProposalId: null,
@@ -285,7 +291,7 @@ export function projectCollaborationFlowEvent(
   }
 
   if (event.type === "integration.batch_frozen") return projection("running", [fact({
-    nodeId: `integration-queue:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor: NANGONG,
+    nodeId: `integration-queue:${task.taskId}:${task.integrationGeneration || 0}`, kind: "verification", actor: SYSTEM,
     recipients: [LINGHU], status: "waiting", action: "等待令狐老祖统一测试", summary: event.summary,
     content: event.summary, detail: "", startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
   })]);
@@ -297,9 +303,9 @@ export function projectCollaborationFlowEvent(
     automaticOpen: false, manualApprovalProposalId: null,
   })]);
 
-  if (event.type === "release.restart_healthy") return projection("completed", [fact({
+  if (event.type === "release.restart_healthy") return projection("running", [fact({
     nodeId: `acceptance:${task.taskId}:${task.integrationGeneration || 0}`, kind: "result", actor, recipients: [NANGONG], status: "completed",
-    action: "发布验收完成", summary: event.summary, content: event.summary, detail: task.finalResult || "",
+    action: "重启健康检查通过，等待韩立验收", summary: event.summary, content: event.summary, detail: task.finalResult || "",
     startedAt: event.occurredAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
   })]);
 
@@ -343,7 +349,7 @@ export function projectCollaborationFlowEvent(
         nodeId: `integration-blocked:${task.taskId}:${task.integrationGeneration || 0}:${blockedType}`, kind: "repair",
         actor, recipients: [initiator], status: "completed", action: ownership ? "本地修改归属已确认" : "合并冲突已转入修正",
         summary: event.summary, content: event.summary, detail: task.integrationFailure.detail,
-        startedAt: priorEventAt(task, blockedType) || task.integrationFailure.occurredAt, completedAt: event.occurredAt,
+        startedAt: priorEventAt(task, blockedType, event.occurredAt) || task.integrationFailure.occurredAt, completedAt: event.occurredAt,
         automaticOpen: false, manualApprovalProposalId: null,
       }, ":integration-blocker-completed"));
     }
@@ -402,8 +408,8 @@ function assignmentAt(task: CollaborationTaskOutDto, memberId: string, occurredA
   return [...task.executionRecords].reverse().find((record) => record.executor.memberId === memberId && record.assignedAt <= occurredAt) || null;
 }
 
-function priorEventAt(task: CollaborationTaskOutDto, type: string): string | null {
-  return [...task.flowEvents].reverse().find((event) => event.type === type)?.occurredAt || null;
+function priorEventAt(task: CollaborationTaskOutDto, type: string, through: string): string | null {
+  return [...task.flowEvents].reverse().find((event) => event.type === type && event.occurredAt <= through)?.occurredAt || null;
 }
 
 function repairStartedEvent(task: CollaborationTaskOutDto, event: CollaborationFlowEventOutDto): CollaborationFlowEventOutDto | null {

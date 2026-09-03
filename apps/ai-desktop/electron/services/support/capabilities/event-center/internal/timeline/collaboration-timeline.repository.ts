@@ -78,13 +78,15 @@ export class CollaborationTimelineRepository {
           this.#upsertTopic(connection, {
             groupId, topicId: null, proposalId: task.evolutionProposalId, title: task.snapshot.title,
             status: "running", summary: task.snapshot.confirmedIntent,
-            startedAt: task.createdAt, updatedAt: task.updatedAt,
+            startedAt: task.createdAt, updatedAt: task.createdAt,
           });
           group = { groupId, topicId: null, proposalId: task.evolutionProposalId, title: task.snapshot.title, startedAt: task.createdAt };
         }
         for (const event of task.flowEvents) {
           const legacySourceFactKey = `flow:${event.eventId}`;
-          const sourceFactKey = event.type === "task.submitted"
+          const sourceFactKey = event.type.startsWith("unified_test.") || event.type.startsWith("execution.repair_") || event.type === "integration.batch_frozen" || event.type === "release.restart_healthy"
+            ? `${legacySourceFactKey}:visible-rounds-v3`
+            : event.type === "task.submitted"
             ? `${legacySourceFactKey}:submission-lifecycle-v2`
             : event.type === "unified_test.failed"
               ? `${legacySourceFactKey}:failure-semantics-v2`
@@ -100,7 +102,9 @@ export class CollaborationTimelineRepository {
             ...fact, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
             sourceFactKey: `${sourceFactKey}${sourceSuffix}`, occurredAt: event.occurredAt,
           }, committedAt)) changedGroupIds.add(String(group.groupId));
-          connection.prepare(`UPDATE AiDesktopTaskTimelineTopic SET status=$status, summary=$summary,
+          connection.prepare(`UPDATE AiDesktopTaskTimelineTopic SET
+            status=CASE WHEN updatedAt <= $updatedAt THEN $status ELSE status END,
+            summary=CASE WHEN updatedAt <= $updatedAt THEN $summary ELSE summary END,
             updatedAt=CASE WHEN updatedAt < $updatedAt THEN $updatedAt ELSE updatedAt END WHERE groupId=$groupId`).run({
             $status: projection.topicStatus, $summary: projection.facts.at(-1)?.summary || event.summary,
             $updatedAt: event.occurredAt, $groupId: String(group.groupId),
@@ -158,7 +162,8 @@ export class CollaborationTimelineRepository {
       (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
       VALUES ($groupId, $topicId, $proposalId, $title, $status, $summary, $startedAt, $updatedAt, $createdAt)
       ON CONFLICT(groupId) DO UPDATE SET proposalId=excluded.proposalId, title=excluded.title,
-        status=excluded.status, summary=excluded.summary,
+        status=CASE WHEN AiDesktopTaskTimelineTopic.updatedAt <= excluded.updatedAt THEN excluded.status ELSE AiDesktopTaskTimelineTopic.status END,
+        summary=CASE WHEN AiDesktopTaskTimelineTopic.updatedAt <= excluded.updatedAt THEN excluded.summary ELSE AiDesktopTaskTimelineTopic.summary END,
         updatedAt=CASE WHEN AiDesktopTaskTimelineTopic.updatedAt < excluded.updatedAt THEN excluded.updatedAt ELSE AiDesktopTaskTimelineTopic.updatedAt END`).run({
       $groupId: input.groupId, $topicId: input.topicId, $proposalId: input.proposalId, $title: input.title,
       $status: input.status, $summary: input.summary, $startedAt: input.startedAt,
@@ -207,7 +212,14 @@ export class CollaborationTimelineRepository {
       firstSequence.set(nodeId, firstSequence.get(nodeId) ?? Number(row.sequenceNumber));
       latestByNode.set(nodeId, row);
     }
-    const nodes = [...latestByNode.values()].map((row) => this.#node(connection, row, now))
+    const updatedTasks = new Set(rows.filter((row) => String(row.sourceFactKey).includes(":visible-rounds-v3")).map((row) => String(row.taskId)));
+    const nodes = [...latestByNode.values()].filter((row) => {
+      if (!updatedTasks.has(String(row.taskId))) return true;
+      // Keep original audit facts, but retire obsolete display projections and fabricated forwarding nodes.
+      if (String(row.nodeId).startsWith("unified-test:")) return false;
+      if (String(row.eventType).startsWith("unified_test.repair_") && /^(repair-handoff|repair-result):/.test(String(row.nodeId))) return false;
+      return true;
+    }).map((row) => this.#node(connection, row, now))
       .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || (firstSequence.get(left.nodeId) || 0) - (firstSequence.get(right.nodeId) || 0));
     const executingCount = activeTaskCount(nodes, new Set(["analysis", "execution", "repair"]));
     const verifyingCount = activeTaskCount(nodes, new Set(["verification"]));
@@ -223,7 +235,7 @@ export class CollaborationTimelineRepository {
     const updatedAt = String(topic.updatedAt);
     return {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
-      status: calculated, summary: [...nodes].reverse().find((node) => node.status === "current" || node.status === "failed")?.summary || String(topic.summary),
+      status: calculated, summary: [...nodes].reverse().find((node) => node.status === "current")?.summary || nodes.at(-1)?.summary || String(topic.summary),
       nodes, executingCount, verifyingCount, waitingCount, completedCount, startedAt: String(topic.startedAt), updatedAt,
       durationMs: durationMs(String(topic.startedAt), calculated === "completed" ? updatedAt : now), ...transition(calculated, nodes),
     };
@@ -268,16 +280,22 @@ function projectedContentText(connection: DatabaseSync, groupId: string, nodeId:
 }
 
 function transition(status: CollaborationTimelineGroupOutDto["status"], nodes: CollaborationTimelineNodeOutDto[]): Pick<CollaborationTimelineGroupOutDto, "nextStep" | "failureNextStep" | "nextOwner"> {
+  if (status === "completed") return { nextStep: "本专题已完成", failureNextStep: null, nextOwner: null };
+  if (status === "cancelled") return { nextStep: "本专题已取消", failureNextStep: null, nextOwner: null };
+  const latest = nodes.at(-1);
+  if (latest?.eventType === "release.restart_healthy") return { nextStep: "韩立 · 验收用户可见结果", failureNextStep: "未达到验收条件时继续修复", nextOwner: { memberId: "han-li", displayName: "韩立" } };
+  if (status !== "blocked" && latest?.eventType === "unified_test.passed") return { nextStep: "令狐老祖 · 等待重启健康检查，之后交韩立验收", failureNextStep: "令狐老祖 · 调查健康检查失败", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
+  if (latest?.eventType.endsWith("repair_completed")) return { nextStep: "令狐老祖 · 重新统一测试", failureNextStep: "保留本次失败证据并继续调查", nextOwner: latest.actor };
   const active = nodes.filter((node) => node.status === "current" || node.status === "waiting");
   const current = active.at(-1);
+  if (current?.status === "waiting" && current.kind === "repair") return { nextStep: `${current.actor.displayName} · ${current.action}`, failureNextStep: "满足记录中的恢复条件后从原卡点继续", nextOwner: current.actor };
   if (current?.kind === "approval-application") return { nextStep: `${current.recipients[0]?.displayName || "韩立"} · 审批申请`, failureNextStep: "韩立 → 南宫婉 · 退回补充", nextOwner: current.recipients[0] || null };
   if (current?.kind === "analysis") return { nextStep: `${current.actor.displayName} · 执行已确认方案`, failureNextStep: `${current.actor.displayName} → 南宫婉 · 返回分析阻塞`, nextOwner: current.actor };
   if (current?.kind === "execution") return { nextStep: `${current.actor.displayName} · 执行人自检`, failureNextStep: `南宫婉 → 令狐老祖 · 转交执行故障`, nextOwner: current.actor };
-  if (current?.kind === "verification") return { nextStep: `${current.actor.displayName} → 南宫婉 · 返回验证结果`, failureNextStep: `南宫婉 → 令狐老祖 · 转交验证故障`, nextOwner: current.actor };
-  if (current?.kind === "repair") return { nextStep: `令狐老祖 → 南宫婉 · 返回修复结果`, failureNextStep: `令狐老祖 · 保留真实失败并等待恢复条件`, nextOwner: current.actor };
+  if (current?.kind === "verification") return { nextStep: `${current.actor.displayName} · 完成当前验证`, failureNextStep: `令狐老祖 · 调查测试失败并修复后复测`, nextOwner: current.actor };
+  if (current?.kind === "repair") return { nextStep: `令狐老祖 · 修复完成后重新测试`, failureNextStep: `令狐老祖 · 保留真实失败并等待恢复条件`, nextOwner: current.actor };
   if (status === "waiting-approval") return { nextStep: "韩立 · 等待审批", failureNextStep: "韩立 → 南宫婉 · 退回补充", nextOwner: null };
-  if (status === "blocked") return { nextStep: "南宫婉 → 令狐老祖 · 明确故障并转交修复", failureNextStep: "等待人工解除恢复条件", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
-  if (status === "completed") return { nextStep: "本专题已完成", failureNextStep: null, nextOwner: null };
+  if (status === "blocked") return { nextStep: "令狐老祖 · 按失败证据调查与修复；解除阻塞后继续", failureNextStep: "等待人工解除恢复条件", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
   return { nextStep: "南宫婉 · 生成执行计划并分配执行人", failureNextStep: "南宫婉 · 说明无法分配的原因", nextOwner: NANGONG };
 }
 

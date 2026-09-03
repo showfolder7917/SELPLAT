@@ -178,7 +178,7 @@ test("执行、自检、南宫交接和令狐统一测试按事件顺序形成�
     assert.ok(nodes.some((node) => node.action === "执行人自检完成"));
     assert.ok(nodes.some((node) => node.action === "执行与自检结果已返回" && node.recipients[0].displayName === "南宫婉"));
     assert.ok(nodes.some((node) => node.action === "提交统一测试" && node.actor.displayName === "南宫婉"));
-    assert.ok(nodes.some((node) => node.action === "当前正在统一测试" && node.actor.displayName === "令狐老祖"));
+    assert.ok(nodes.some((node) => node.action === "第 1 次统一测试中" && node.actor.displayName === "令狐老祖"));
   } finally { fixture.close(); }
 });
 
@@ -265,7 +265,7 @@ test("集成本地修改归属阻塞生成令狐等待节点并同步专题下�
     assert.equal(ownership.actor.displayName, "令狐老祖");
     assert.equal(ownership.status, "waiting");
     assert.match(ownership.content, /未登记到任何待集成任务/);
-    assert.equal(group.nextStep, "令狐老祖 → 南宫婉 · 返回修复结果");
+    assert.equal(group.nextStep, "令狐老祖 · 等待确认本地修改归属");
     assert.match(group.failureNextStep, /恢复条件/);
     assert.equal(group.nodes.find((node) => node.kind === "execution").status, "completed");
   } finally { fixture.close(); }
@@ -302,8 +302,8 @@ test("统一测试开始后结束等待令狐接手节点", () => {
     );
     fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [testing]), [testing.taskId]);
     const nodes = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes;
-    assert.equal(nodes.find((node) => node.action === "令狐老祖已接手统一测试").status, "completed");
-    assert.equal(nodes.find((node) => node.action === "当前正在统一测试").status, "current");
+    assert.equal(nodes.find((node) => node.action === "测试批次已就绪").status, "completed");
+    assert.equal(nodes.find((node) => node.action === "第 1 次统一测试中").status, "current");
     assert.equal(nodes.some((node) => node.action === "等待令狐老祖统一测试" && node.status === "waiting"), false);
   } finally { fixture.close(); }
 });
@@ -452,6 +452,36 @@ function task(fixture, index, verifying, verified = false) {
     startedAt: fixture.at(1), codeVerifiedAt: verified ? fixture.at(5) : null, createdAt: fixture.at(1), updatedAt: fixture.at(5), completedAt: null,
   };
 }
+test("三次测试两次修复保留顺序且通过后等待健康检查而不是重新分发", () => {
+  const fixture = createFixture("round-history");
+  try {
+    const item = task(fixture, 1, true, true);
+    item.flowEvents.push(flow("verified", "task.code_verified", "execution", "completed", item.originalExecutor, "自检完成", fixture.at(5)));
+    let offset = 6;
+    for (let round = 1; round <= 3; round++) {
+      const actor = member("linghu-ancestor", "令狐老祖");
+      item.flowEvents.push(flow(`test-${round}`, "unified_test.started", "integration", "started", actor, "测试中", fixture.at(offset++)));
+      item.flowEvents.push(flow(`result-${round}`, round === 3 ? "unified_test.passed" : "unified_test.failed", "integration", round === 3 ? "completed" : "failed", actor, round === 3 ? "通过" : "失败", fixture.at(offset++)));
+      if (round < 3) for (const [suffix, status] of [["started", "started"], ["investigated", "completed"], ["completed", "completed"]]) item.flowEvents.push(flow(`repair-${round}-${suffix}`, `unified_test.repair_${suffix}`, "recovery", status, actor, suffix, fixture.at(offset++)));
+    }
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(offset), [item]), [item.taskId]);
+    const group = fixture.timeline.snapshot(fixture.at(offset)).groups[0];
+    const tests = group.nodes.filter((node) => node.nodeId.startsWith("test-round:"));
+    assert.deepEqual(tests.map((node) => node.action), ["第 1 次统一测试未通过", "第 2 次统一测试未通过", "第 3 次统一测试通过"]);
+    assert.equal(group.nodes.filter((node) => node.kind === "repair").length, 2);
+    assert.ok(group.nodes.filter((node) => node.eventType.startsWith("unified_test.repair_")).every((node) => node.actor.memberId === "linghu-ancestor" && node.recipients.length === 0));
+    assert.match(group.nextStep, /重启健康检查.*韩立验收/);
+    assert.doesNotMatch(group.nextStep, /分配执行人/);
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(offset), [item]), [item.taskId]);
+    assert.equal(fixture.timeline.snapshot().groups[0].nodes.length, group.nodes.length);
+    item.flowEvents.push(flow("healthy", "release.restart_healthy", "integration", "completed", member("linghu-ancestor", "令狐老祖"), "重启健康检查通过", fixture.at(offset + 1)));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(offset + 1), [item]), [item.taskId]);
+    const healthy = fixture.timeline.snapshot().groups[0];
+    assert.notEqual(healthy.status, "completed", "健康检查不能冒充韩立验收完成");
+    assert.match(healthy.nextStep, /韩立.*验收/);
+  } finally { fixture.close(); }
+});
+
 function flow(eventId, type, stage, status, actor, summary, occurredAt, error = false) { return { eventId, type, stage, status, actor, summary, occurredAt, error }; }
 function collaboration(updatedAt, tasks) { return { version: 1, mode: "collaboration", selectedMemberId: "han-li", members: [], tasks, integrationBatches: [], nextIntegrationGeneration: 1, updatedAt }; }
 function createFixture(suffix) {

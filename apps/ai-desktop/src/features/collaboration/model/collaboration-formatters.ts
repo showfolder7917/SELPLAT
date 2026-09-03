@@ -1,6 +1,23 @@
-import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
+import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, CollaborationTimelineSnapshotOutDto, EvolutionStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 
-export function collaborationMemberStateLabel(member: CollaborationMemberOutDto, locale: LocaleValue): string {
+export function collaborationMemberStateLabel(member: CollaborationMemberOutDto, locale: LocaleValue, timeline?: CollaborationTimelineSnapshotOutDto | null, evolution?: EvolutionStateOutDto | null): string {
+  const deliberation = evolution?.deliberations.slice().reverse().find((item) => item.status === "questioning" || item.status === "ready-to-establish");
+  if (deliberation && (member.memberId === "han-li" || member.memberId === "nangong-wan")) {
+    if (evolution?.automationRuntime.status === "paused") return "研讨已暂停";
+    if (evolution?.automationRuntime.status === "blocked") return "研讨已阻塞";
+    if (evolution?.automationRuntime.status === "stopped") return "研讨已停止";
+    const round = deliberation.rounds.at(-1)!;
+    if (deliberation.status === "ready-to-establish") return member.memberId === "nangong-wan" ? (round.confirmation ? "等待韩立确认" : "说明修复方案中") : (round.confirmation ? "确认修复内容中" : "等待修复说明");
+    return member.memberId === "nangong-wan" ? (round.answer ? "等待韩立追问" : "研讨回答中") : (round.answer ? "研讨判断中" : "等待南宫婉回答");
+  }
+  const nodes = timeline?.groups.flatMap((group) => group.nodes).filter((node) => node.actor.memberId === member.memberId) || [];
+  nodes.sort((a, b) => (b.completedAt || b.startedAt).localeCompare(a.completedAt || a.startedAt));
+  const latest = nodes[0];
+  if (latest && (member.state !== "working" || (latest.completedAt || latest.startedAt) >= member.updatedAt)) return latest.action;
+  if (member.state === "working" && member.phase) {
+    const phase = { analyzing: "技术分析中", planning: "整理方案中", implementing: "执行修改中", verifying: "自检中", finalizing: "整理结果中", ready: "等待下一步", blocked: "已阻塞", failed: "处理失败" };
+    return phase[member.phase];
+  }
   const chinese: Record<CollaborationMemberOutDto["state"], string> = { idle: "空闲", conversation: "会话中", assigned: "已分配", working: member.phase === "verifying" ? "正在验证" : member.phase === "finalizing" ? "正在收尾" : "正在执行", retiring: "正在关闭连接", recovering: "等待恢复", draining: "等待退出", offline: "离线" };
   const japanese: Record<CollaborationMemberOutDto["state"], string> = { idle: "待機", conversation: "会話中", assigned: "割当済み", working: "実行中", retiring: "接続終了中", recovering: "復旧待ち", draining: "終了待ち", offline: "オフライン" };
   return (locale === "ja" ? japanese : chinese)[member.state];

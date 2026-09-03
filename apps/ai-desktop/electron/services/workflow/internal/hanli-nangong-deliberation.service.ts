@@ -32,6 +32,7 @@ export class HanliNangongDeliberationService {
   async advance(options: { requireProblem?: boolean; forceNew?: boolean } = {}): Promise<HanliNangongDeliberationAdvanceResult> {
     const { store, memory } = this.dependencies;
     let state = store.state();
+    if (["paused", "stopped", "blocked"].includes(state.automationRuntime.status)) return { state, activity: "idle" };
     if (!state.automationContext.workspaceState?.roots?.length) throw new Error("请先为自动研讨登记实施工作区。");
     let deliberation = options.forceNew ? undefined : [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
     if (!deliberation) {
@@ -70,6 +71,7 @@ export class HanliNangongDeliberationService {
         sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
       }), state)).trim();
       if (!answer) throw new Error("南宫婉没有返回内部研讨回答。");
+      if (["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status)) return { state: store.state(), activity: "idle" };
       state = store.recordDeliberationAnswer(deliberation.deliberationId, round.roundId, answer);
       const answered = requireDeliberation(state, deliberation.deliberationId).rounds.find((item) => item.roundId === round.roundId)!;
       this.#appendInternalMessage(round.roundId, "answer", "nangong", answer, `internal:${round.roundId}:question`, answered.answeredAt!);
@@ -89,6 +91,7 @@ export class HanliNangongDeliberationService {
         deliberationContext: formatDeliberationContext(refreshed),
         semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), answeredRound.question, 12) || null),
       }), state));
+      if (["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status)) return { state: store.state(), activity: "idle" };
       if (mustConclude && !judgment.candidate) {
         state = store.blockDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, `完成 ${maximum} 轮内部研讨后仍存在证据缺口：${judgment.nextQuestion?.reason || judgment.assessment}`);
         // 阻断原因属于后台业务状态，不冒充韩立对南宫婉说过的话。
@@ -109,13 +112,47 @@ export class HanliNangongDeliberationService {
     return assessed.status === "ready-to-establish" ? this.#establish(assessed) : { state, activity: "questioning" };
   }
 
-  #establish(deliberation: HanliEvolutionDeliberationOutDto): HanliNangongDeliberationAdvanceResult {
+  async #establish(deliberation: HanliEvolutionDeliberationOutDto): Promise<HanliNangongDeliberationAdvanceResult> {
+    const { store, prompts } = this.dependencies;
+    const interrupted = () => ["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status);
+    if (interrupted()) return { state: store.state(), activity: "idle" };
+    if (!this.dependencies.memory || !this.dependencies.readHanliConversationId()) throw new Error("无法保存内部确认消息，已阻止开始执行。请先恢复会话数据库。");
+    const roundId = deliberation.rounds.at(-1)!.roundId;
+    let confirmation = deliberation.rounds.at(-1)!.confirmation;
+    if (!confirmation) {
+      const offer = (await this.dependencies.askNangong(prompts.render("nangong.internal-confirmation", {
+        candidateJson: JSON.stringify(deliberation.candidate), deliberationContext: formatDeliberationContext(deliberation),
+      }), store.state())).trim();
+      if (!offer) throw new Error("南宫婉尚未说明准备修复的内容。");
+      if (interrupted()) return { state: store.state(), activity: "idle" };
+      const saved = store.offerDeliberationConfirmation(deliberation.deliberationId, offer);
+      confirmation = requireDeliberation(saved, deliberation.deliberationId).rounds.at(-1)!.confirmation!;
+    }
+    this.#appendInternalMessage(roundId, "offer", "nangong", confirmation.offer, `internal:${roundId}:reply`, confirmation.offeredAt);
+    if (!confirmation.reply) {
+      const reply = (await this.dependencies.askHanli(prompts.render("hanli.internal-confirmation", {
+        candidateJson: JSON.stringify(deliberation.candidate), offer: confirmation.offer, sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
+      }), store.state())).trim();
+      if (!reply) throw new Error("韩立尚未回复南宫婉的修复说明。");
+      if (interrupted()) return { state: store.state(), activity: "idle" };
+      const saved = store.replyDeliberationConfirmation(deliberation.deliberationId, reply);
+      const current = requireDeliberation(saved, deliberation.deliberationId);
+      confirmation = current.rounds.find((item) => item.roundId === roundId)!.confirmation!;
+      if (reply !== "1") {
+        const followup = current.rounds.at(-1)!;
+        this.#appendInternalMessage(followup.roundId, "question", "hanli", reply, `internal:${roundId}:offer`, followup.createdAt);
+        return { state: saved, activity: "questioning" };
+      }
+    }
+    this.#appendInternalMessage(roundId, "confirm", "hanli", confirmation.reply!, `internal:${roundId}:offer`, confirmation.repliedAt!);
+    if (interrupted()) return { state: store.state(), activity: "idle" };
     const state = this.dependencies.store.establishDeliberationTopic(deliberation.deliberationId);
+    this.#appendInternalMessage(roundId, "started", "nangong", `收到 1。我现在开始整理“${deliberation.candidate!.title}”的实施提案，随后进入审批、分发、执行和验证。具体进度会在任务协作群显示。`, `internal:${roundId}:confirm`, new Date().toISOString());
     this.dependencies.recordEvent("hanli.nangong.topic_established", { deliberationId: deliberation.deliberationId, topicId: state.activeTopicId, candidate: deliberation.candidate });
     return { state, activity: "topic-established" };
   }
 
-  #appendInternalMessage(roundId: string, phase: "question" | "answer" | "reply", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
+  #appendInternalMessage(roundId: string, phase: "question" | "answer" | "reply" | "offer" | "confirm" | "started", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
     const conversationId = this.dependencies.readHanliConversationId();
     if (!conversationId || !this.dependencies.memory) return;
     const conversation = this.dependencies.memory.appendPersonaInternalMessage({

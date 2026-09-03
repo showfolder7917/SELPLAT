@@ -5,7 +5,6 @@ import type { useScreenshotCapture } from "../../screenshot/model/useScreenshotC
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { evolutionMutationRequest } from "../../evolution/model/evolution-runtime";
 import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspace";
-import { CollaborationExecutionList } from "./CollaborationExecutionList";
 import { CollaborationMemberPage } from "./CollaborationMemberPage";
 import { CollaborationTaskDetail } from "./CollaborationTaskDetail";
 import { TaskCollaborationGroup } from "./TaskCollaborationGroup";
@@ -29,11 +28,11 @@ function readableDesktopError(error: unknown, fallback: string): string {
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
 }
 
-/** 协作工作区拥有成员、任务群、执行列表和任务详情路由及其人工业务动作。 */
+/** 协作工作区拥有成员、任务群和任务详情路由及其人工业务动作。 */
 export function CollaborationWorkspaceFeature({ locale, workspaces, controller, evolution, nangong, screenshot }: CollaborationWorkspaceFeatureProps) {
   const selUi = useSelUi();
   const {
-    panel, setPanel, setSelectedTaskId, terminalStates, selectedMember, completedTasks, selectedMemberTasks,
+    panel, setPanel, setSelectedTaskId, selectedMember, selectedMemberTasks,
     selectedTask, selectedTaskMember, streams, timeline, timelineStreams, linghuAutomation, setLinghuAutomation,
     updateMember, deleteMember, continueTask, cancelTask, refreshTimeline, error, setError,
   } = controller;
@@ -66,8 +65,7 @@ export function CollaborationWorkspaceFeature({ locale, workspaces, controller, 
     }
   };
 
-  if (panel === "task-group") return <>{error && <div className="composer-error" role="alert">{error}</div>}<TaskCollaborationGroup snapshot={timeline} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={async (taskId) => { await continueTask(taskId); }} /></>;
-  if (panel === "execution-list") return <CollaborationExecutionList tasks={completedTasks} locale={locale} onOpen={(taskId) => { setSelectedTaskId(taskId); setPanel("task-detail"); }} />;
-  if (panel === "task-detail" && selectedTask && selectedTaskMember) return <CollaborationTaskDetail task={selectedTask} member={selectedTaskMember} liveOutput={streams[selectedTask.taskId] || null} automation={linghuAutomation} locale={locale} onBack={() => { setSelectedTaskId(null); setPanel(terminalStates.has(selectedTask.state) ? "execution-list" : "member"); }} />;
-  return <>{error && <div className="composer-error" role="alert">{error}</div>}<CollaborationMemberPage member={selectedMember} tasks={selectedMemberTasks} streams={streams} locale={locale} linghuAutomation={linghuAutomation} nangongEvolution={evolution.state} nangongAttachments={nangong.attachments} workspaces={workspaces} onLinghuState={setLinghuAutomation} onNangongState={evolution.setState} onNangongAttachments={nangong.setAttachments} onNangongScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "nangong")} onNangongPaste={(files) => void screenshot.pasteClipboardImages(files, "nangong")} onError={setError} onRename={() => void renameMember()} onDelete={() => void removeMember()} onContinue={(taskId) => void continueTask(taskId)} onCancel={(taskId) => void cancelTask(taskId)} onOpen={(taskId) => { setSelectedTaskId(taskId); setPanel("task-detail"); }} /></>;
+  if (panel === "task-group") return <>{error && <div className="composer-error" role="alert">{error}</div>}<TaskCollaborationGroup tasks={controller.state?.tasks || []} onOpenTask={(taskId) => { setSelectedTaskId(taskId); setPanel("task-detail"); }} snapshot={timeline} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={async (taskId) => { await continueTask(taskId); }} /></>;
+  if (panel === "task-detail" && selectedTask && selectedTaskMember) return <CollaborationTaskDetail task={selectedTask} member={selectedTaskMember} liveOutput={streams[selectedTask.taskId] || null} automation={linghuAutomation} locale={locale} onBack={() => { setSelectedTaskId(null); setPanel("task-group"); }} />;
+  return <>{error && <div className="composer-error" role="alert">{error}</div>}<CollaborationMemberPage timeline={timeline} member={selectedMember} tasks={selectedMemberTasks} streams={streams} locale={locale} linghuAutomation={linghuAutomation} nangongEvolution={evolution.state} nangongAttachments={nangong.attachments} workspaces={workspaces} onLinghuState={setLinghuAutomation} onNangongState={evolution.setState} onNangongAttachments={nangong.setAttachments} onNangongScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "nangong")} onNangongPaste={(files) => void screenshot.pasteClipboardImages(files, "nangong")} onError={setError} onRename={() => void renameMember()} onDelete={() => void removeMember()} onContinue={(taskId) => void continueTask(taskId)} onCancel={(taskId) => void cancelTask(taskId)} onOpen={(taskId) => { setSelectedTaskId(taskId); setPanel("task-detail"); }} /></>;
 }

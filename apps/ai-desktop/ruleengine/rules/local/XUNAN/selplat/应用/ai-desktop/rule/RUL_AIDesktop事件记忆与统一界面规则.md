@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.152.0
+rule_version = 5.153.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -94,6 +94,9 @@ ai_desktop_shared_conversation_stream_item_contract = turn_plus_item_or_segment_
 persona_conversation_navigation_and_internal_delivery_contract = application_owned_pending_failure_busy_and_attachment_preview + navigation_never_resets_inflight_round + persisted_message_id_dedup + internal_message_commit_then_publish_snapshot + hanli_page_user_and_hanli_direct_conversation_and_user_correction_only + internal_deliberation_visible_on_nangong_page_only + canonical_internal_records_preserved + no_duplicate_database_or_training_corpus_write
 <!-- 内部研讨是真实承接的交流，不是固定审核报告；后台成熟度判断不得冒充人物发言，历史判断报告保留但不展示。 -->
 persona_internal_dialogue_expression_contract = respond_to_previous_utterance_before_followup + allow_mutual_question_disagreement_and_self_correction + no_forced_checklist_report_or_repeated_process_announcement + assessment_and_question_reason_backend_only + continuation_replies_to_previous_answer + model_authored_closing_reply_required + no_assessment_fallback_as_dialogue + no_invented_facts_authorization_or_scope
+
+<!-- 韩立代表用户核对目标与效果，南宫婉可解释技术；成熟不等于已经授权执行。 -->
+persona_deliberation_visible_confirmation_contract = hanli_user_perspective_plain_language + nangong_technical_explanation_allowed + nangong_visible_scope_exclusions_outcome_validation_offer + hanli_actual_1_reply_persisted_before_topic_creation + non_1_continues_discussion + pause_stop_blocks_transition + recovery_reuses_confirmation + nangong_start_receipt + internal_messages_on_nangong_only
 <!-- 人物会话内仍存在的课题整理和协作修订表单统一由 selForm 承担；退役审批工作台不得保留表单副本。 -->
 ai_desktop_evolution_form_component_contract = organize_topic_and_generate_draft_are_distinct_actions + conversation_topic_draft_and_existing_collaboration_revision_use_selForm + application_owns_values_validation_and_business_callbacks_only + no_retired_approval_workspace_form_or_private_skin
 

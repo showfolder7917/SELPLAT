@@ -80,10 +80,11 @@ test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", asyn
 });
 
 test("新建任务入口位于聊天标签且不再占用任务标题", async () => {
-  const tab = page.locator(".dev-tab");
-  const title = tab.getByText("Codex Chat", { exact: true });
+  const tab = page.locator(".seltabs-panel:not([hidden]) .developer-page-actions");
+  const title = page.getByRole("tab", { name: "Codex Chat", exact: true });
   const newTask = tab.getByRole("button", { name: "重新建立一个 Codex 会话" });
-  const closeIcon = tab.locator(":scope > svg:last-child");
+  const closeIcon = page.getByRole("button", { name: "关闭Codex Chat", exact: true });
+  await expect(closeIcon).toHaveText("×");
   await expect(newTask).toBeVisible();
   await expect(newTask).toHaveAttribute("data-sel-tooltip", "重新建立一个 Codex 会话");
   await expect(newTask).not.toHaveAttribute("title", /.+/);
@@ -96,8 +97,9 @@ test("新建任务入口位于聊天标签且不再占用任务标题", async ()
     closeIcon.boundingBox(),
   ]);
   if (!titleBounds || !newTaskBounds || !closeBounds) throw new Error("聊天标签的新建任务入口缺少可视边界。");
-  expect(newTaskBounds.x).toBeGreaterThanOrEqual(titleBounds.x + titleBounds.width);
-  expect(newTaskBounds.x + newTaskBounds.width).toBeLessThanOrEqual(closeBounds.x);
+  expect(closeBounds.width).toBeGreaterThanOrEqual(20);
+  expect(closeBounds.height).toBeGreaterThanOrEqual(20);
+  expect(Math.abs(newTaskBounds.y - closeBounds.y)).toBeLessThanOrEqual(8);
 
   await newTask.hover();
   const hoverTip = page.locator("#seltooltip-shared-portal");
@@ -309,15 +311,15 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(taskList.getByRole("button", { name: /李化元/ })).toBeVisible();
 
   await taskList.getByRole("button", { name: /宋玉/ }).click();
-  await expect(page.locator(".dev-tab").getByText("宋玉", { exact: true })).toBeVisible();
-  const memberPage = page.locator(".collaboration-member-page");
+  await expect(page.getByRole("tablist").getByText("宋玉", { exact: true })).toBeVisible();
+  const memberPage = page.locator(".collaboration-member-page:visible");
   await expect(memberPage.getByText("当前空闲", { exact: true })).toBeVisible();
   await expect(memberPage.getByText("收到任务时才会创建新的 Codex。", { exact: true })).toBeVisible();
   const overflow = await memberPage.evaluate((element) => element.scrollWidth - element.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 
   await taskList.getByRole("button", { name: /韩立/ }).click();
-  await expect(page.locator(".dev-tab").getByText("韩立", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist").getByText("韩立", { exact: true })).toBeVisible();
   const hanliConversation = page.locator(".hanli-person-chat");
   await expect(hanliConversation.getByText("和韩立讨论客户真正需要什么", { exact: true })).toBeVisible();
   const hanliComposer = page.locator(".hanli-person-composer");
@@ -400,7 +402,7 @@ test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文�
   await expect(renamed).toBeVisible();
 
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
-  const overflow = await page.locator(".collaboration-member-page").evaluate((element) => element.scrollWidth - element.clientWidth);
+  const overflow = await page.locator(".collaboration-member-page:visible").evaluate((element) => element.scrollWidth - element.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
   await renamed.getByRole("button", { name: "删除" }).click();
   const deleteDialog = page.getByRole("dialog", { name: "删除启动文案" });
@@ -417,11 +419,10 @@ test("执行人物完成技术分析后直接实施且不再出现内部审批",
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
-  await taskList.getByRole("button", { name: /执行列表/ }).click();
-  const record = page.locator(".execution-record");
-  await record.locator("summary").click();
-  await record.getByRole("button", { name: "打开完整记录" }).click();
-  const detail = page.locator(".collaboration-task-detail");
+  await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
+  await taskList.getByRole("button", { name: /任务协作群/ }).click();
+  await page.getByRole("button", { name: "修复协同归档展示", exact: true }).click();
+  const detail = page.locator(".collaboration-task-detail:visible");
   const intentStage = detail.locator(".task-progress-stage").filter({ hasText: /^意图分析/ });
   await intentStage.locator("summary").click();
   await expect(intentStage.getByText("增加任务归档入口和结构化摘要。", { exact: true })).toBeVisible();
@@ -434,22 +435,16 @@ test("执行人物完成技术分析后直接实施且不再出现内部审批",
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
-test("协同执行列表归档完成任务并优先展示结构化结果摘要", async () => {
+test("执行列表退役后从协作群打开归档任务完整结果", async () => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(true));
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
-  await taskList.getByRole("button", { name: /执行列表/ }).click();
+  await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
+  await taskList.getByRole("button", { name: /任务协作群/ }).click();
 
-  const record = page.locator(".execution-record");
-  await expect(record.getByText("修复协同归档展示", { exact: true })).toBeVisible();
-  await expect(record.getByText("韩立", { exact: true })).toBeVisible();
-  await expect(record.getByText("宋玉、冰魄仙子", { exact: true })).toBeVisible();
-  await expect(record.getByText("10分钟 0秒", { exact: true })).toBeVisible();
-
-  await record.locator("summary").click();
-  await record.getByRole("button", { name: "打开完整记录" }).click();
-  const detail = page.locator(".collaboration-task-detail");
+  await page.getByRole("button", { name: "修复协同归档展示", exact: true }).click();
+  const detail = page.locator(".collaboration-task-detail:visible");
   await expect(detail.getByText("任务结果", { exact: true })).toBeVisible();
   await expect(detail.getByText("执行列表与结果摘要已完成。", { exact: true })).toBeVisible();
   await expect(detail.locator(".task-fact-strip").getByText("宋玉、冰魄仙子", { exact: true })).toBeVisible();
@@ -468,14 +463,13 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
-  const executionListEntry = taskList.getByRole("button", { name: /执行列表/ });
+  await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
   const taskGroupEntry = taskList.getByRole("button", { name: /任务协作群/ });
   await expect(taskGroupEntry).toBeVisible();
-  const [executionBounds, taskGroupBounds, hanLiBounds] = await Promise.all([
-    executionListEntry.boundingBox(), taskGroupEntry.boundingBox(), taskList.getByRole("button", { name: /韩立/ }).boundingBox(),
+  const [taskGroupBounds, hanLiBounds] = await Promise.all([
+    taskGroupEntry.boundingBox(), taskList.getByRole("button", { name: /韩立/ }).boundingBox(),
   ]);
-  if (!executionBounds || !taskGroupBounds || !hanLiBounds) throw new Error("任务协作群侧栏顺序缺少可视边界。");
-  expect(taskGroupBounds.y).toBeGreaterThan(executionBounds.y);
+  if (!taskGroupBounds || !hanLiBounds) throw new Error("任务协作群侧栏顺序缺少可视边界。");
   expect(taskGroupBounds.y).toBeLessThan(hanLiBounds.y);
   await taskGroupEntry.click();
 
@@ -677,7 +671,7 @@ test("正式最小窗口和默认窗口支持资源管理器键盘调节且没�
 });
 
 test("自动测试默认关闭，预检成功后才进入开启态", async () => {
-  const composer = page.locator(".selconversation-composer");
+  const composer = page.locator(".selconversation-composer:visible");
   const automaticTest = page.getByRole("switch", { name: "自动测试" });
   const contextTools = composer.locator(".composer-context-tools");
   const automationTools = composer.locator(".composer-automation-tools");
@@ -708,7 +702,7 @@ test("自动测试默认关闭，预检成功后才进入开启态", async () =>
 });
 
 test("多个结构化疑问逐题确认后继续原回合并重新展示完整意图", async () => {
-  const composer = page.locator(".selconversation-composer");
+  const composer = page.locator(".selconversation-composer:visible");
   await composer.locator("textarea").fill("需要确认的截图交互");
   await composer.getByRole("button", { name: "发送" }).click();
 
@@ -740,7 +734,7 @@ test("多个结构化疑问逐题确认后继续原回合并重新展示完整�
 
 test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", async () => {
   await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
-  const composer = page.locator(".selconversation-composer");
+  const composer = page.locator(".selconversation-composer:visible");
   await composer.locator("textarea").fill("multi-turn-test");
   await composer.getByRole("button", { name: "发送" }).click();
 
@@ -797,7 +791,7 @@ test("最新自动策略动作在运行中禁用并且不再显示旧模式返�
 
 test("Markdown 回答结构清晰且页面重载后恢复，主动新建才清空", async () => {
   await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
-  const composer = page.locator(".selconversation-composer");
+  const composer = page.locator(".selconversation-composer:visible");
   await composer.locator("textarea").fill("markdown-test");
   await composer.getByRole("button", { name: "发送" }).click();
 
@@ -830,6 +824,33 @@ test("屏幕录制权限已开启但当前进程仍拒绝时提供受控重启�
   await expect(restart).toBeVisible();
   await restart.click();
   await expect(alert).toContainText("正在重启 AI Desktop");
+});
+
+test("SELUI 多页签保留草稿、重复定位、关闭相邻页且不删除后台任务", async () => {
+  await page.goto(pathToFileURL(productionRendererFile).href);
+  await page.getByRole("button", { name: "展开任务" }).click();
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  await taskList.getByRole("button", { name: /韩立/ }).click();
+  const input = page.locator(".seltabs-panel:not([hidden]) textarea").first();
+  await input.fill("切换后这段用户草稿必须保留");
+  await taskList.getByRole("button", { name: /南宫婉/ }).click();
+  await expect(page.getByRole("tab", { name: "韩立", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("tab", { name: "南宫婉", exact: true })).toHaveAttribute("aria-selected", "true");
+  await taskList.getByRole("button", { name: /韩立/ }).click();
+  await expect(input).toHaveValue("切换后这段用户草稿必须保留");
+  await taskList.getByRole("button", { name: /韩立/ }).click();
+  await expect(page.getByRole("tab", { name: "韩立", exact: true })).toHaveCount(1);
+  const taskCount = () => page.evaluate(async () => (await (window as unknown as { desktop: { getCollaborationState(): Promise<{ tasks: unknown[] }> } }).desktop.getCollaborationState()).tasks.length);
+  const before = await taskCount();
+  await page.getByRole("button", { name: "关闭韩立", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "韩立", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "南宫婉", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(await taskCount()).toBe(before);
+  await taskList.getByRole("button", { name: /韩立/ }).click();
+  await expect(page.getByRole("tab", { name: "韩立", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.screenshot({ path: test.info().outputPath("selui-workspace-tabs.png"), fullPage: true });
+  await page.goto(pathToFileURL(productionRendererFile).href);
 });
 
 test("红框选中后可以移动缩放且操作按钮随焦点显示", async () => {

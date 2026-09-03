@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Code24Regular } from "@fluentui/react-icons";
 
-import type { CollaborationMemberOutDto, CollaborationStateOutDto, EvolutionStateOutDto, LinghuAutomationStateOutDto, LocaleValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
+import type { CollaborationMemberOutDto, CollaborationTimelineSnapshotOutDto, CollaborationStateOutDto, EvolutionStateOutDto, LinghuAutomationStateOutDto, LocaleValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 import type { ComposerAttachment } from "../../conversation/model/chat-message";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { MemberSelfUpgradePanel } from "../../evolution/components/EvolutionRevisionPanels";
@@ -10,8 +10,9 @@ import type { CollaborationLiveOutput } from "../model/collaboration-live-output
 import { collaborationMemberStateLabel, collaborationTaskStateLabel } from "../model/collaboration-formatters";
 import { CollaborationTaskProgressView } from "./CollaborationTaskProgressView";
 
-export function CollaborationMemberPage({ member, tasks, streams, locale, linghuAutomation, nangongEvolution, nangongAttachments, workspaces, onLinghuState, onNangongState, onNangongAttachments, onNangongScreenshot, onNangongPaste, onError, onRename, onDelete, onContinue, onCancel, onOpen }: {
+export function CollaborationMemberPage({ member, timeline, tasks, streams, locale, linghuAutomation, nangongEvolution, nangongAttachments, workspaces, onLinghuState, onNangongState, onNangongAttachments, onNangongScreenshot, onNangongPaste, onError, onRename, onDelete, onContinue, onCancel, onOpen }: {
   member: CollaborationMemberOutDto | null;
+  timeline?: CollaborationTimelineSnapshotOutDto | null;
   tasks: CollaborationStateOutDto["tasks"];
   streams: Record<string, CollaborationLiveOutput>;
   locale: LocaleValue;
@@ -37,7 +38,7 @@ export function CollaborationMemberPage({ member, tasks, streams, locale, linghu
   const liveOutput = currentTask ? streams[currentTask.taskId] : null;
   const taskInitiatorName = currentTask?.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录");
   return <section className="collaboration-member-page" aria-label={member.displayName}>
-    <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
+    <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale, timeline, nangongEvolution)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
     {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
     {member.memberId === "linghu-ancestor" && nangongEvolution && <LinghuRepairProposalPanel state={nangongEvolution} workspaces={workspaces} locale={locale} onState={onNangongState} onError={onError} />}
     {nangongEvolution && <MemberSelfUpgradePanel member={member} state={nangongEvolution} onState={onNangongState} onError={onError} />}

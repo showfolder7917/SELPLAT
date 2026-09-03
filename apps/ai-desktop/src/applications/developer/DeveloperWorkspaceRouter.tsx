@@ -1,10 +1,9 @@
+import { SelUiWorkspaceTabs } from "../../theme/SelUiWorkspaceTabs";
 import {
   // 新建会话按钮使用旋转箭头；busy 时同一图标会播放旋转动画。
   ArrowClockwise24Regular,
   // 页签右侧保留与现有桌面外观一致的关闭图标。
-  Dismiss20Regular,
   // 页签左侧使用提示图标，表示当前区域是人物或 Codex 对话工作区。
-  Prompt24Regular,
 } from "@fluentui/react-icons";
 import type {
   // LocaleValue 限制当前界面只能使用 DesktopApi 支持的中文或日文区域值。
@@ -12,7 +11,7 @@ import type {
   // WorkspaceStateOutDto 是已经登记的工作区快照，人物会话发送时必须携带它。
   WorkspaceStateOutDto,
 } from "../../../contracts/system/desktop/index";
-// CollaborationWorkspaceFeature 显示普通协作成员、任务群、执行列表或任务详情。
+// CollaborationWorkspaceFeature 显示普通协作成员、任务群或任务详情。
 import { CollaborationWorkspaceFeature } from "../../features/collaboration/components/CollaborationWorkspaceFeature";
 // useCollaborationWorkspace 的返回类型描述当前协作模式、选中成员和协作页面。
 import type { useCollaborationWorkspace } from "../../features/collaboration/model/useCollaborationWorkspace";
@@ -54,7 +53,7 @@ type DeveloperWorkspaceRouterProps = {
 };
 
 /** Developer 工作区路由只选择公开 Feature，不实现人物、协作或主会话内部流程。 */
-export function DeveloperWorkspaceRouter({
+function DeveloperWorkspacePage({
   // 当前界面语言。
   locale,
   // 主 Codex 会话展示的沙箱模式。
@@ -90,22 +89,12 @@ export function DeveloperWorkspaceRouter({
     && evolution.state,
   );
   // 页签标题跟随当前协作子页面；成员页优先显示真实人物名称。
-  const tabTitle = collaboration.panel === "execution-list"
-    ? (locale === "ja" ? "実行一覧" : "执行列表")
-    : collaboration.panel === "task-group"
-      ? (locale === "ja" ? "タスク協同グループ" : "任务协作群")
-      : collaboration.panel === "task-detail"
-        ? collaboration.selectedTask?.snapshot.title || (locale === "ja" ? "タスク詳細" : "任务详情")
-        : collaboration.selectedMember?.displayName || (locale === "ja" ? "協同" : "协同模式");
-
   // Fragment 允许页签、错误条和实际工作区作为同一个路由结果返回。
   return <>
     {/* 页签只表达当前路由和全局入口，不承载会话内部业务。 */}
-    <div className="dev-tab">
+    <div className="developer-page-actions">
       {/* 固定图标帮助用户识别这里是对话/任务工作区。 */}
-      <Prompt24Regular />
-      {/* 单会话显示 Codex Chat；协同模式显示成员或任务页面的真实标题。 */}
-      <span>{collaboration.collaborationMode ? tabTitle : "Codex Chat"}</span>
+
 
       {/* 主 Codex 页签的新建按钮只重置主会话，不影响人物会话。 */}
       {showMainConversation && <button
@@ -146,7 +135,7 @@ export function DeveloperWorkspaceRouter({
       </button>}
 
       {/* 关闭图标目前维持既有页签外观，不绑定额外业务动作。 */}
-      <Dismiss20Regular />
+
     </div>
 
     {/* 路由优先级：主 Codex → 韩立 → 南宫婉 → 其他协作页面。 */}
@@ -195,7 +184,7 @@ export function DeveloperWorkspaceRouter({
             onPaste={(files) => void screenshot.pasteClipboardImages(files, "nangong")}
             onError={nangong.setError}
           />
-          // 其余成员页、任务群、执行列表和任务详情统一由 Collaboration Feature 决定。
+          // 其余成员页、任务群和任务详情统一由 Collaboration Feature 决定。
           : <CollaborationWorkspaceFeature
             locale={locale}
             workspaces={workspaces}
@@ -205,4 +194,29 @@ export function DeveloperWorkspaceRouter({
             screenshot={screenshot}
           />}
   </>;
+}
+
+/** Each stable route has its own mounted page; selecting or closing a tab never mutates a task. */
+export function DeveloperWorkspaceRouter(props: DeveloperWorkspaceRouterProps) {
+  const c = props.collaboration;
+  const id = !c.collaborationMode ? "main" : c.panel === "task-group" ? "group" : c.panel === "task-detail" && c.selectedTaskId ? `task:${c.selectedTaskId}` : `member:${c.selectedMember?.memberId || "han-li"}`;
+  const title = id === "main" ? "Codex Chat" : id === "group" ? "任务协作群" : id.startsWith("task:") ? c.selectedTask?.snapshot.title || "任务详情" : c.selectedMember?.displayName || "韩立";
+  return <SelUiWorkspaceTabs request={c.state ? { id, label: title } : null} revision={c.navigationRevision}
+    onActivate={(key) => {
+      if (key === "main") { if (c.collaborationMode) void c.setOperatingMode("single-conversation"); return; }
+      if (!c.collaborationMode) void c.setOperatingMode("collaboration");
+      if (key === "group") c.syncPanel("task-group");
+      else if (key.startsWith("task:")) { c.setSelectedTaskId(key.slice(5)); c.syncPanel("task-detail"); }
+      else { c.syncPanel("member"); const memberId = key.slice(7); if (c.selectedMember?.memberId !== memberId) void c.selectMember(memberId); }
+    }}
+    renderPage={(key) => {
+      const member = c.state?.members.find((item) => item.memberId === key.slice(7)) || c.selectedMember;
+      const task = c.state?.tasks.find((item) => item.taskId === key.slice(5)) || null;
+      const view = { ...c, collaborationMode: key !== "main", panel: (key === "group" ? "task-group" : key.startsWith("task:") ? "task-detail" : "member") as typeof c.panel,
+        selectedMember: member, selectedTask: task, selectedTaskId: task?.taskId || null,
+        selectedTaskMember: c.state?.members.find((item) => item.memberId === (task?.executorMemberId || task?.initiator?.memberId)) || member,
+        selectedMemberTasks: c.state?.tasks.filter((item) => !c.terminalStates.has(item.state) && (item.executorMemberId === member?.memberId || item.initiator?.memberId === member?.memberId || item.executionRecords.some((record) => record.executor.memberId === member?.memberId))) || [],
+      };
+      return <DeveloperWorkspacePage {...props} collaboration={view} />;
+    }} />;
 }

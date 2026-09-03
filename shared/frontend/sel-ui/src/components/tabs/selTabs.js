@@ -293,7 +293,8 @@
                 selTabsCloseButton.type = "button";
                 selTabsCloseButton.dataset.selTabsClose = selTabsTabId;
                 selTabsCloseButton.setAttribute("aria-label", String(selTabsDefinition.closeLabel || `关闭${selTabsDefinition.label || selTabsTabId}`));
-                selTabsCloseButton.innerHTML = '<i class="ri-close-line" aria-hidden="true"></i>';
+                // 关闭是关键入口，使用本地字符，避免宿主未加载图标字体时出现空白按钮。
+                selTabsCloseButton.textContent = "×";
                 selTabsWrapper.appendChild(selTabsCloseButton);
             }
             selTabsList.appendChild(selTabsWrapper);

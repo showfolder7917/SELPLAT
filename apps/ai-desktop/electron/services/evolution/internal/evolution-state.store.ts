@@ -304,9 +304,40 @@ export class EvolutionStateStore {
     });
   }
 
-  /** 韩立确立后才通知南宫婉把研讨成果登记进长期专题池。 */
+  /** 保存南宫婉的可见修复说明；重启重试复用同一说明，不重复生成确认。 */
+  offerDeliberationConfirmation(deliberationId: string, offer: string): EvolutionStateOutDto {
+    return this.#commit("deliberation.confirmation_offered", null, null, (state) => {
+      const deliberation = requireDeliberation(state, deliberationId);
+      if (deliberation.status !== "ready-to-establish") throw new Error("研讨尚未成熟。");
+      const round = deliberation.rounds.at(-1)!;
+      round.confirmation ||= { offer: required(offer, "修复说明", 30_000), offeredAt: new Date().toISOString(), reply: null, repliedAt: null };
+    });
+  }
+
+  /** 确认不等于后台成熟判断；非 1 回复会成为下一轮真实追问。 */
+  replyDeliberationConfirmation(deliberationId: string, reply: string): EvolutionStateOutDto {
+    return this.#commit("deliberation.confirmation_replied", null, null, (state) => {
+      const deliberation = requireDeliberation(state, deliberationId);
+      const round = deliberation.rounds.at(-1)!;
+      if (!round.confirmation || deliberation.status !== "ready-to-establish") throw new Error("南宫婉尚未提出修复确认。");
+      if (round.confirmation.reply !== null) return;
+      const now = new Date().toISOString();
+      round.confirmation.reply = required(reply, "韩立确认回复", 30_000);
+      round.confirmation.repliedAt = now;
+      if (reply.trim() !== "1") {
+        deliberation.status = "questioning";
+        deliberation.candidate = null;
+        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: reply.trim(), questionReason: "韩立尚未确认修复范围", answer: null, assessment: null, decision: null, createdAt: now, answeredAt: null, assessedAt: null });
+      }
+      deliberation.updatedAt = now;
+    });
+  }
+
+  /** 仅收到韩立对南宫婉修复说明的真实 1 后，才登记长期专题。 */
   establishDeliberationTopic(deliberationId: string): EvolutionStateOutDto {
+    if (["paused", "stopped", "blocked"].includes(this.#state.automationRuntime.status)) throw new Error("自动流程已暂停、停止或阻塞，不能开始执行。");
     const current = requireDeliberation(this.#state, deliberationId);
+    if (current.rounds.at(-1)?.confirmation?.reply !== "1") throw new Error("尚未收到韩立对修复说明的确认 1。");
     if (current.status !== "ready-to-establish" || !current.candidate) throw new Error("韩立尚未完成专题确立判断。 ");
     if (!this.#state.automationContext.workspaceState?.roots?.length) throw new Error("自动演化尚未登记实施工作区。 ");
     const topicId = `evolution-topic-${randomUUID()}`;

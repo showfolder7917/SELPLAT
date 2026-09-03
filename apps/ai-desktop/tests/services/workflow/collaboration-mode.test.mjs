@@ -32,7 +32,7 @@ const activeStableUserId = readFileSync(path.join(projectRoot, "apps/ai-desktop/
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 const rendererCollaborationSources = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
-  "../../../src/features/collaboration/components/CollaborationExecutionList.tsx",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup.tsx",
   "../../../src/features/collaboration/components/CollaborationTaskDetail.tsx",
   "../../../src/features/collaboration/components/CollaborationMemberPage.tsx",
   "../../../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
@@ -129,6 +129,9 @@ test("默认人物稳定列出且韩立不能被删除", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-store-"));
   try {
     const store = new CollaborationStore(path.join(directory, "state.json"));
+    assert.equal(store.state().mode, "collaboration");
+    store.setMode("single-conversation");
+    assert.equal(new CollaborationStore(path.join(directory, "state.json")).state().mode, "collaboration", "重启忽略上次展示模式而不移除任务");
     assert.deepEqual(store.state().members.map((member) => member.displayName), [
       "韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元",
     ]);
@@ -1757,6 +1760,7 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   assert.doesNotMatch(ui, /reviewAttempts\.some|decision-unrecognized/);
   const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberStateLabel"));
   assert.doesNotMatch(memberPageSource, /durationMs|总耗时/);
-  assert.match(ui, /CollaborationExecutionList/);
-  assert.match(ui, /任务结果摘要/);
+  assert.doesNotMatch(ui, /CollaborationExecutionList/);
+  assert.match(ui, /TaskCollaborationGroup/);
+  assert.match(ui, /任务完整记录/);
 });
