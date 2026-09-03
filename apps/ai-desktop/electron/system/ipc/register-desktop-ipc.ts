@@ -624,6 +624,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     }
     return saved;
   });
+  handle("desktop:read-attachment-previews", (_event, attachmentIds: string[]) => screenshots.readAttachmentPreviews(attachmentIds));
   handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
   handle("desktop:enqueue-message", (_event, value: EnqueueMessageInDto) => {
     if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");

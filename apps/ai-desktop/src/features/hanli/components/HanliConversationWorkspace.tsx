@@ -6,6 +6,7 @@ import type { ComposerAttachment } from "../../conversation/model/chat-message";
 import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
+import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
 
 /**
  * Electron IPC 抛出的错误通常带有一段技术前缀。
@@ -45,7 +46,7 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
   // 输入框中尚未发送的文字。
   const [text, setText] = useState("");
   // 控制器位于应用层，页面卸载后发送锁、待确认消息与截图预览仍保留。
-  const { sending: busy, setSending: setBusy, pendingMessage: pending, setPendingMessage: setPending, attachmentPreviews, setAttachmentPreviews } = runtime;
+  const { sending: busy, setSending: setBusy, pendingMessage: pending, setPendingMessage: setPending, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors } = runtime;
 
   /** 用户按发送按钮或在表单中提交时，完成一整轮韩立对话。 */
   const send = async () => {
@@ -91,9 +92,10 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
   };
 
   // 韩立页面只承载用户与韩立的直接交流和判断纠正；内部研讨保留原始记录，仅在南宫婉页面展示。
-  const directMessages = conversation.messages.filter((message) => !message.messageId.startsWith("internal:")
-    && (message.speakerType === "user" || message.speakerPersonaId === "han-li"));
-  const messages = [...directMessages, ...(pending && !directMessages.some((message) => message.messageId === pending.messageId) ? [{
+  const directMessages = projectPersonaConversation(conversation.messages).direct
+    .filter((message) => message.speakerType === "user" || message.speakerPersonaId === "han-li")
+    .map((message) => ({ ...message, status: message.deliveryStatus }));
+  const messages = mergeRealtimeConversationTimeline(directMessages, pending ? [{
     messageId: pending.messageId,
     sequenceNumber: conversation.messages.length,
     speakerType: "user" as const,
@@ -101,10 +103,11 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
     content: pending.content,
     replyToMessageId: null,
     deliveryStatus: pending.failed ? "failed" as const : "sending" as const,
+    status: pending.failed ? "failed" as const : "sending" as const,
     attachmentIds: pending.attachments.map((item) => item.id),
     createdAt: pending.createdAt,
     completedAt: pending.failed ? new Date().toISOString() : null,
-  }] : [])];
+  }] : []);
 
   return <SelUiConversation
     // 固定 ID 供样式、自动化测试和页面定位使用。
@@ -147,7 +150,7 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
                 {previews.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}
               </div>
               : message.attachmentIds?.length
-                ? <small>已附 {message.attachmentIds.length} 张截图</small>
+                ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small>
                 : null}
             {/* 消息正文支持 Markdown，而不是直接显示未经格式化的纯文本。 */}
             <MarkdownMessage text={message.content} />

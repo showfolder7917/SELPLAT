@@ -46,18 +46,19 @@ export function createStartupContext(): StartupContext {
   const eventCenter = new EventCenterFacade(createBusinessAuditArchive(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot));
   eventCenter.installProcessExceptionBoundary();
 
-  const ownsApplicationInstance = app.requestSingleInstanceLock();
-  if (!ownsApplicationInstance) app.quit();
-  else app.on("second-instance", () => {
+  const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))
+    ?.slice("--ai-desktop-health-check-file=".length)
+    || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
+    || null;
+  // 候选包健康检查必须与已运行的桌面应用并存，不能被正常启动的单实例门禁提前退出。
+  const ownsApplicationInstance = healthCheckFile ? true : app.requestSingleInstanceLock();
+  if (!healthCheckFile && !ownsApplicationInstance) app.quit();
+  else if (!healthCheckFile) app.on("second-instance", () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (!window) return;
     if (window.isMinimized()) window.restore();
     window.focus();
   });
-  const healthCheckFile = process.argv.find((argument) => argument.startsWith("--ai-desktop-health-check-file="))
-    ?.slice("--ai-desktop-health-check-file=".length)
-    || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
-    || null;
   const runtimeSourceShaArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-runtime-sha="))
     ?.slice("--ai-desktop-runtime-sha=".length)
     || null;
