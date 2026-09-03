@@ -5,6 +5,7 @@ import test from "node:test";
 const runner = readFileSync(new URL("../../scripts/test-document-runner.mjs", import.meta.url), "utf8");
 const launcher = readFileSync(new URL("../../启动开发版.command", import.meta.url), "utf8");
 const appConfig = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
+const startupContext = readFileSync(new URL("../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../../electron-builder.developer.json", import.meta.url), "utf8");
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
@@ -96,6 +97,9 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(appConfig, /--selplat-root=/);
   assert.match(appConfig, /resolveAppVariant\(\): AppVariantValue \{\s+return "developer";/);
   assert.match(electronMain, /--ai-desktop-variant=developer/);
+  assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \? true : app\.requestSingleInstanceLock\(\);/);
+  assert.match(startupContext, /if \(!healthCheckFile && !ownsApplicationInstance\) app\.quit\(\);/);
+  assert.match(startupContext, /else if \(!healthCheckFile\) app\.on\("second-instance"/);
   assert.match(macVerifier, /com\.selplat\.aidesktop\.developer/);
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);
