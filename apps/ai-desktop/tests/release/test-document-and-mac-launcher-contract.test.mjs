@@ -5,9 +5,12 @@ import test from "node:test";
 const runner = readFileSync(new URL("../../scripts/test-document-runner.mjs", import.meta.url), "utf8");
 const launcher = readFileSync(new URL("../../启动开发版.command", import.meta.url), "utf8");
 const appConfig = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
+const startupContext = readFileSync(new URL("../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../../electron-builder.developer.json", import.meta.url), "utf8");
+const builderConfig = readFileSync(new URL("../../electron-builder.developer.config.cjs", import.meta.url), "utf8");
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
+const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const developerApp = [
   "../../src/applications/developer/DeveloperApplication.tsx",
@@ -80,6 +83,9 @@ test("自动测试开启前集中预检并只授权无参数固定入口", () =>
 
 test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builder, /com\.selplat\.aidesktop\.developer/);
+  assert.match(builderConfig, /const buildRoot = path\.join\(selplatRoot, "build", "ai-desktop"\);/);
+  assert.match(builderConfig, /resource\.to === "ruleengine".*path\.join\(buildRoot, "rule-bundle"\)/s);
+  assert.match(builderConfig, /resource\.to === "prompts".*path\.join\(buildRoot, "prompt-bundle"\)/s);
   assert.match(launcher, /npm run build:developer/);
   assert.match(launcher, /npm run package:mac:developer/);
   assert.match(launcher, /codesign --force --deep --sign -/);
@@ -96,10 +102,23 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(appConfig, /--selplat-root=/);
   assert.match(appConfig, /resolveAppVariant\(\): AppVariantValue \{\s+return "developer";/);
   assert.match(electronMain, /--ai-desktop-variant=developer/);
+  assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \? true : app\.requestSingleInstanceLock\(\);/);
+  assert.match(startupContext, /if \(!healthCheckFile && !ownsApplicationInstance\) app\.quit\(\);/);
+  assert.match(startupContext, /else if \(!healthCheckFile\) app\.on\("second-instance"/);
   assert.match(macVerifier, /com\.selplat\.aidesktop\.developer/);
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);
   assert.match(macVerifier, /requirementOutput\.includes\(expectedRequirement\)/);
+  assert.match(macVerifier, /const describeHealthCheckFailure = \(health, cause = null\) => \{/);
+  assert.match(macVerifier, /const healthDiagnostics = \{/);
+  assert.match(macVerifier, /status: health\.status/);
+  assert.match(macVerifier, /signal: health\.signal/);
+  assert.match(macVerifier, /healthFileContent: existsSync\(healthFile\) \? readFileSync\(healthFile, "utf8"\) : null/);
+  assert.match(macVerifier, /候选包隔离启动失败；保留诊断目录/);
+  assert.match(macVerifier, /describeHealthCheckFailure\(health, `候选包未报告 ready 状态：/);
+  assert.match(macVerifier, /if \(healthCheckPassed\) rmSync\(healthRun/);
+  assert.match(packageContentVerifier, /for \(const promptResource of \["manifest\.json", "prompts\.json"\]\)/);
+  assert.match(packageContentVerifier, /Packaged prompt resource is missing/);
   assert.match(packagedBootstrap, /await import\("\.\/main\.js"\)/);
   assert.doesNotMatch(packagedBootstrap, /external runtime|runtimeRoot|pathToFileURL/);
 });

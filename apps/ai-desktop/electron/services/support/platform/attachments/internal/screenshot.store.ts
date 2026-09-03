@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type {
   ScreenshotAttachmentOutDto,
+  ScreenshotAttachmentPreviewOutDto,
   ScreenshotSaveInDto,
   TempDirectoryInfoOutDto,
 } from "../../../../../../contracts/services/support/platform/attachments/index.js";
@@ -92,6 +93,28 @@ export class ScreenshotStore {
     return paths;
   }
 
+  /** 以已签发的附件 ID 恢复显示预览；任何失败都只返回业务状态，不暴露临时目录路径。 */
+  async readAttachmentPreviews(ids: string[]): Promise<ScreenshotAttachmentPreviewOutDto[]> {
+    if (!Array.isArray(ids) || ids.length > 5 || new Set(ids).size !== ids.length) {
+      throw new Error("Screenshot previews must contain at most five unique IDs.");
+    }
+    const index = await this.#readIndex();
+    return Promise.all(ids.map(async (id): Promise<ScreenshotAttachmentPreviewOutDto> => {
+      if (!SCREENSHOT_ID_PATTERN.test(id)) return { id, status: "unavailable", reason: "invalid-id" };
+      const record = index.items[id];
+      if (!record) return { id, status: "unavailable", reason: "not-found" };
+      try {
+        const filePath = this.#resolveInsideTemp(record.relativePath);
+        const image = await readFile(filePath);
+        if (!isPng(image)) return { id, status: "unavailable", reason: "invalid-file" };
+        return { id, status: "ready", name: record.name, dataUrl: `${PNG_DATA_URL_PREFIX}${image.toString("base64")}` };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return { id, status: "unavailable", reason: "file-unavailable" };
+        throw error;
+      }
+    }));
+  }
+
   async info(): Promise<TempDirectoryInfoOutDto> {
     await this.ensure();
     const totals = await directoryTotals(this.#tempRoot);
@@ -138,6 +161,11 @@ function decodePng(dataUrl: unknown, label: string): Buffer {
     throw new Error(`Invalid ${label} PNG signature.`);
   }
   return buffer;
+}
+
+function isPng(value: Buffer): boolean {
+  return value.byteLength > 0 && value.byteLength <= MAX_PNG_BYTES
+    && value.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
 }
 
 function publicAttachment(record: ScreenshotIndexRecord): ScreenshotAttachmentOutDto {

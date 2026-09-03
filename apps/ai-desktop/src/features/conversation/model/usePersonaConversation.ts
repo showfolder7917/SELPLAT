@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../contracts/system/desktop/index";
 import type { ComposerAttachment } from "./chat-message";
+import { projectPersonaConversation } from "./realtime-conversation";
 
 function emptyConversation(personaId: string): PersonaConversationOutDto {
   return { ownerPersonaId: personaId, conversationId: null, messages: [], updatedAt: new Date(0).toISOString() };
@@ -36,6 +37,7 @@ export function usePersonaConversation(personaId: string) {
   // 发送中消息属于人物会话控制器；切换页面只卸载视图，不再丢失消息、失败状态或附件预览。
   const [pendingMessage, setPendingMessage] = useState<PersonaPendingMessage | null>(null);
   const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, ComposerAttachment[]>>({});
+  const [attachmentPreviewErrors, setAttachmentPreviewErrors] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
   // 南宫婉页面读取韩立会话中唯一保存的内部研讨消息，不复制数据库记录。
   const [sharedInternalMessages, setSharedInternalMessages] = useState<PersonaConversationMessageOutDto[]>([]);
@@ -53,7 +55,7 @@ export function usePersonaConversation(personaId: string) {
       .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取人物会话。")); });
     if (personaId === "nangong-wan") {
       void desktop?.getPersonaConversation("han-li")
-        .then((value) => { if (active && !receivedInternalUpdate && value) setSharedInternalMessages(internalMessages(value.messages)); })
+        .then((value) => { if (active && !receivedInternalUpdate && value) setSharedInternalMessages(projectPersonaConversation(value.messages).internal); })
         .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取内部研讨消息。")); });
     }
     const removeListener = desktop?.onPersonaConversationChanged((value) => {
@@ -64,11 +66,39 @@ export function usePersonaConversation(personaId: string) {
       }
       if (personaId === "nangong-wan") {
         receivedInternalUpdate = true;
-        setSharedInternalMessages(internalMessages(value.messages));
+        setSharedInternalMessages(projectPersonaConversation(value.messages).internal);
       }
     });
     return () => { active = false; removeListener?.(); };
   }, [personaId]);
+
+  useEffect(() => {
+    let active = true;
+    const messages = [...conversation.messages, ...sharedInternalMessages];
+    const attachmentIds = [...new Set(messages.flatMap((message) => message.attachmentIds || []))];
+    if (!attachmentIds.length) return () => { active = false; };
+    void Promise.all(attachmentIds.reduce<string[][]>((groups, id, index) => {
+      if (index % 5 === 0) groups.push([]);
+      groups.at(-1)!.push(id);
+      return groups;
+    }, []).map((ids) => window.desktop?.readAttachmentPreviews(ids))).then((groups) => {
+      if (!active) return;
+      const previews = groups.flatMap((group) => group || []);
+      const readable = new Map(previews.filter((item) => item.status === "ready").map((item) => [item.id, item]));
+      const unreadable = new Map(previews.filter((item) => item.status === "unavailable").map((item) => [item.id, item.reason]));
+      setAttachmentPreviews(Object.fromEntries(messages.map((message) => [message.messageId,
+        (message.attachmentIds || []).flatMap((id) => {
+          const preview = readable.get(id);
+          return preview ? [{ id: preview.id, name: preview.name, dataUrl: preview.dataUrl }] : [];
+        }),
+      ])));
+      setAttachmentPreviewErrors(Object.fromEntries(messages.flatMap((message) => {
+        const reason = (message.attachmentIds || []).map((id) => unreadable.get(id)).find(Boolean);
+        return reason ? [[message.messageId, attachmentPreviewError(reason)]] : [];
+      })));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [conversation.messages, sharedInternalMessages]);
 
   const startNewConversation = async () => {
     if (newConversationBusy || sending) return;
@@ -90,12 +120,14 @@ export function usePersonaConversation(personaId: string) {
 
   return {
     personaId, conversation, setConversation, attachments, setAttachments,
-    pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, sending, setSending,
+    pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, error, setError, startNewConversation,
   };
 }
 
-function internalMessages(messages: PersonaConversationMessageOutDto[]): PersonaConversationMessageOutDto[] {
-  // 历史判断报告仍保留原始记录，但它不是人物说出的对话，不再混入聊天。
-  return messages.filter((message) => message.messageId.startsWith("internal:") && !message.messageId.endsWith(":assessment"));
+function attachmentPreviewError(reason: string): string {
+  return reason === "not-found" || reason === "file-unavailable"
+    ? "附件已被清理，当前无法读取预览。"
+    : reason === "invalid-file" ? "附件文件不是有效 PNG，当前无法读取预览。"
+      : "附件标识无效，当前无法读取预览。";
 }

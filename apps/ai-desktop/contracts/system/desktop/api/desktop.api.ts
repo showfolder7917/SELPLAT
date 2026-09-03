@@ -22,7 +22,7 @@ import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptanceP
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
-import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
+import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotAttachmentPreviewOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
 import type { WorkspaceEntryOutDto, WorkspaceStateOutDto } from "../../../services/support/platform/workspace/index.js";
 import type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto } from "../../../services/support/capabilities/rules/index.js";
 
@@ -116,6 +116,8 @@ export interface DesktopApi {
   endScreenshotEditing(): Promise<void>;
   /** 保存截图并返回主进程签发的附件元数据。 */
   saveScreenshot(request: ScreenshotSaveInDto): Promise<ScreenshotAttachmentOutDto>;
+  /** 按已签发附件 ID 恢复人物历史中的 PNG 预览；不可读取项返回明确业务状态。 */
+  readAttachmentPreviews(attachmentIds: string[]): Promise<ScreenshotAttachmentPreviewOutDto[]>;
   /** 订阅已完成截图附件，返回取消订阅函数。 */
   onScreenshotCompleted(listener: (event: ScreenshotCompletedEventOutDto) => void): () => void;
   /** 读取临时目录文件数量和容量摘要。 */

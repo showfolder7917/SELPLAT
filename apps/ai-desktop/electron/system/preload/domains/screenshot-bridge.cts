@@ -16,6 +16,7 @@ export function screenshotBridge() {
     returnScreenshotSelection: () => invoke("desktop:return-screenshot-selection"),
     endScreenshotEditing: () => invoke("desktop:end-screenshot-editing"),
     saveScreenshot: (request: unknown) => invoke("desktop:save-screenshot", request),
+    readAttachmentPreviews: (attachmentIds: string[]) => invoke("desktop:read-attachment-previews", attachmentIds),
     onScreenshotCompleted: (listener: (event: unknown) => void) => subscribe("desktop:screenshot-completed", listener),
   };
 }

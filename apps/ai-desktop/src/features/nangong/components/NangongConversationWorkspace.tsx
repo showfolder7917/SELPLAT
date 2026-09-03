@@ -4,7 +4,7 @@ import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, 
 import type { EvolutionStateOutDto, LocaleValue, PersonaConversationOutDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 import type { ComposerAttachment } from "../../conversation/model/chat-message";
 import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
-import { mergeRealtimeConversationTimeline } from "../../conversation/model/realtime-conversation";
+import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
 
@@ -22,7 +22,7 @@ function splitEvolutionList(value: string): string[] {
 export function NangongConversationWorkspace({ runtime, state, conversation, attachments, workspaces, locale, newConversationBusy, error, onState, onConversation, onAttachments, onScreenshot, onPaste, onError }: { runtime: ReturnType<typeof usePersonaConversation>; state: EvolutionStateOutDto; conversation: PersonaConversationOutDto; attachments: ComposerAttachment[]; workspaces: WorkspaceStateOutDto | null; locale: LocaleValue; newConversationBusy: boolean; error: string; onState(state: EvolutionStateOutDto): void; onConversation(conversation: PersonaConversationOutDto): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
   const [chatText, setChatText] = useState("");
   // 与韩立共用应用层运行态；切换人物不会销毁尚未完成的消息和发送锁。
-  const { sending: chatBusy, setSending: setChatBusy, pendingMessage: outgoingMessage, setPendingMessage: setOutgoingMessage, attachmentPreviews, setAttachmentPreviews, sharedInternalMessages } = runtime;
+  const { sending: chatBusy, setSending: setChatBusy, pendingMessage: outgoingMessage, setPendingMessage: setOutgoingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, sharedInternalMessages } = runtime;
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
   const [topicDraftBusy, setTopicDraftBusy] = useState(false);
   const [topicDraftFeedback, setTopicDraftFeedback] = useState("");
@@ -83,7 +83,7 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
     } catch (error) { onError(readableDesktopError(error, "课题草稿生成失败。")); } finally { setTopicDraftBusy(false); }
   };
   const timelineMessages = mergeRealtimeConversationTimeline(
-    conversation.messages.map((message, sequenceNumber) => ({
+    projectPersonaConversation(conversation.messages).direct.map((message, sequenceNumber) => ({
       ...message,
       sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : sequenceNumber,
       status: message.deliveryStatus || "completed" as const,
@@ -103,7 +103,7 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
         <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动持续演化</button>
       </section>}
       {timelineMessages.length === 0 && sharedInternalMessages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {timelineMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}><header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>已附 {message.attachmentIds.length} 张调查截图</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
+      {timelineMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}><header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
       {/* 只投影韩立会话中的权威内部消息，不写入南宫婉会话或用户训练语料。 */}
       {sharedInternalMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role="persona" data-internal-message-id={message.messageId}>
         <header>{message.speakerPersonaId === "han-li" ? "韩立" : "南宫婉"} · 内部研讨</header>
