@@ -3,7 +3,7 @@ import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../co
 import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
-import type { SendHanliConversationMessageInDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
 
 /** 韩立人物应用服务的装配参数；共同事实和外部对话均通过最小端口注入。 */
@@ -14,12 +14,12 @@ export interface HanliApplicationServiceOptions {
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   analyzeCorpus?: (prompt: string) => Promise<string>;
   conversation?: {
-    send(request: SendHanliConversationMessageInDto, prompt: string): Promise<SendMessageOutDto>;
+    send(request: SendPersonaConversationMessageInDto, prompt: string): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
     activeConversationId(): string | null;
   };
   refreshSemanticMemory?: () => void;
-  startInternalDeliberation?: (request: SendHanliConversationMessageInDto) => Promise<{ continuous: boolean }>;
+  startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
   readStableUserId?: () => string;
   readProjectScope?: () => string;
   planAcceptance?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;

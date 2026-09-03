@@ -225,7 +225,8 @@ test("统一对话语料不吸收专题审批任务测试与异常业务投影",
   assert.doesNotMatch(packageJson, /backfill-codex-conversation\.mjs/);
   assert.doesNotMatch(corpusMigration, /FROM AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
   assert.doesNotMatch(ingestion, /AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
-  assert.match(corpusMigration, /CREATE TABLE AiDesktopConversationMemory/);
+  assert.match(source("db/sql/migration-1022-unify-persona-conversations.sql"), /CREATE TABLE AiDesktopPersonaConversation/);
+  assert.match(source("db/sql/migration-1022-unify-persona-conversations.sql"), /DROP TABLE AiDesktopConversationMemory/);
   assert.doesNotMatch(corpusMigration, /AiDesktopConversationArchiveMessage|preview-80|legacy:/);
 });
 

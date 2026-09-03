@@ -1,7 +1,7 @@
 import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { SendNangongConversationMessageInDto } from "../../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { EventCenterExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
@@ -34,7 +34,7 @@ export interface NangongApplicationServiceOptions {
   prompts: PromptLibraryPort;
   mutations: EvolutionMutationPort;
   conversation: {
-    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
+    send(request: SendPersonaConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
   };
   memory?: CollaborationMemoryPort | null;

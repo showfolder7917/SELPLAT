@@ -4,9 +4,8 @@ import type {
   DecideHanliResultInDto,
   HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
-  HanliConversationOutDto,
-  SendHanliConversationMessageInDto,
 } from "../../../../contracts/services/personas/hanli/index.js";
+import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions } from "./internal/hanli-application.service.js";
@@ -15,9 +14,9 @@ import { HanliSemanticExtractionRunner } from "./internal/hanli-semantic-extract
 
 /** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */
 export interface HanliApplicationPort {
-  conversation(): HanliConversationOutDto;
-  sendConversationMessage(request: SendHanliConversationMessageInDto): Promise<HanliConversationOutDto>;
-  newConversation(): Promise<HanliConversationOutDto>;
+  conversation(): PersonaConversationOutDto;
+  sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
+  newConversation(): Promise<PersonaConversationOutDto>;
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
   decideProposal(proposalId: string, request: DecideHanliProposalInDto): EvolutionStateOutDto;
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
@@ -59,11 +58,11 @@ export class HanliFacade {
     this.#application = application;
     this.#acceptanceRunner = acceptanceRunner;
   }
-  /** 读取韩立固定人物线程中的自由对话。 */
+  /** 读取 ownerPersonaId=han-li 的当前业务会话；底层 Codex threadId 不对页面暴露。 */
   conversation() { return this.#application.conversation(); }
   /** 与韩立自由讨论；人物使用语义记忆精准追问，但不执行工程写入。 */
-  sendConversationMessage(request: SendHanliConversationMessageInDto) { return this.#application.sendConversationMessage(request); }
-  /** 删除当前韩立线程并返回空白人物会话。 */
+  sendConversationMessage(request: SendPersonaConversationMessageInDto) { return this.#application.sendConversationMessage(request); }
+  /** 重置韩立的模型线程并新建空白业务会话；旧业务会话只归档，不删除历史消息。 */
   newConversation() { return this.#application.newConversation(); }
   /** 接收南宫或令狐提交的提案并登记审批申请，不提前生成审批结论。 */
   requestProposalReview(proposalId: string) { return this.#application.requestProposalReview(proposalId); }

@@ -1,0 +1,12 @@
+{
+  "locale": "zh-CN",
+  "weekdays": ["一", "二", "三", "四", "五", "六", "日"],
+  "chooseTemplate": "选择{label}",
+  "calendarTemplate": "{label}月历",
+  "valueTemplate": "{label}：{value}",
+  "previousMonth": "上个月",
+  "nextMonth": "下个月",
+  "clear": "清除",
+  "today": "今天",
+  "confirm": "确定"
+}

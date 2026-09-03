@@ -3,9 +3,8 @@ import type {
   DecideHanliResultInDto,
   HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
-  HanliConversationOutDto,
-  SendHanliConversationMessageInDto,
 } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../evolution/index.js";
 import type { HanliApplicationPort } from "../hanli.facade.js";
@@ -50,9 +49,9 @@ export class HanliApplicationService implements HanliApplicationPort {
     });
   }
 
-  conversation(): HanliConversationOutDto { return this.#conversation.conversation(); }
-  sendConversationMessage(request: SendHanliConversationMessageInDto): Promise<HanliConversationOutDto> { return this.#conversation.send(request); }
-  newConversation(): Promise<HanliConversationOutDto> { return this.#conversation.newConversation(); }
+  conversation(): PersonaConversationOutDto { return this.#conversation.conversation(); }
+  sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> { return this.#conversation.send(request); }
+  newConversation(): Promise<PersonaConversationOutDto> { return this.#conversation.newConversation(); }
 
   /** 接收人物提交的提案并登记审批申请；不会提前作出审批结论。 */
   requestProposalReview(proposalId: string): EvolutionStateOutDto { return this.#approvals.recordApplication(proposalId); }

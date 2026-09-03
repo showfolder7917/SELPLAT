@@ -526,7 +526,7 @@ export class WorkflowRepository {
     });
   }
 
-  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopConversationMemory" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopTrainingCorpusTopic" | "AiDesktopTrainingCorpusMessage" | "AiDesktopCorpusIngestionCheckpoint" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask" | "AiDesktopEvolutionWorkbenchPreference" | "AiDesktopTaskTimelineTopic" | "AiDesktopTaskTimelineEvent" | "AiDesktopTaskTimelineStream"): number {
+  tableCount(table: "AiDesktopEvent" | "AiDesktopWorkflowRun" | "AiDesktopTaskExecution" | "AiDesktopApprovalRecord" | "AiDesktopApprovalGovernance" | "AiDesktopMemberRuntime" | "AiDesktopRuntimeSession" | "AiDesktopPersonaConversation" | "AiDesktopPersonaConversationMessage" | "AiDesktopConversationTopic" | "AiDesktopConversationTopicLink" | "AiDesktopTrainingCorpusTopic" | "AiDesktopTrainingCorpusMessage" | "AiDesktopCorpusIngestionCheckpoint" | "AiDesktopEvolutionDeliberation" | "AiDesktopEvolutionSourceSnapshot" | "AiDesktopEvolutionArchiveRecord" | "AiDesktopEvolutionRound" | "AiDesktopEvolutionRoundTask" | "AiDesktopEvolutionWorkbenchPreference" | "AiDesktopTaskTimelineTopic" | "AiDesktopTaskTimelineEvent" | "AiDesktopTaskTimelineStream"): number {
     return this.#database.withConnection((connection) => Number((connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number | bigint }).count));
   }
 

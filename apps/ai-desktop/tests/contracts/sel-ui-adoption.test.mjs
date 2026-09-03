@@ -145,7 +145,7 @@ test("专题执行群只读聚合 SQLite 档案并跳回既有业务页面", () 
   assert.match(evolutionTopicGroup, /重新核对数据库/);
   assert.match(evolutionTopicGroup, /按人物筛选专题群/);
   assert.match(evolutionTopicGroup, /按类型筛选专题群/);
-  assert.match(evolutionTopicGroup, /sendNangongConversationMessage/);
+  assert.match(evolutionTopicGroup, /sendPersonaConversationMessage\("nangong-wan"/);
   assert.match(evolutionTopicGroup, /topicId: topic\.topicId/);
   assert.match(evolutionTopicGroup, /完整原话保存在人物对话库/);
   assert.doesNotMatch(evolutionTopicGroup, /decideEvolutionProposal|dispatchEvolutionProposal|controlEvolutionAutomation|createEvolutionProposal/);

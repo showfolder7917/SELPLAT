@@ -127,7 +127,9 @@ export function EvolutionTopicGroupView({ topic, stateVersion, perspective, loca
     if (!workspaces?.roots.length) return onError("专题群发言前必须先登记实施工作区。");
     setMessageBusy(true);
     try {
-      const next = await window.desktop?.sendNangongConversationMessage({ message, topicId: topic.topicId, workspaceState: workspaces, locale });
+      await window.desktop?.sendPersonaConversationMessage("nangong-wan", { message, subject: { type: "evolution-topic", id: topic.topicId }, workspaceState: workspaces, locale });
+      // 通用人物接口只返回会话；专题页随后读取完整 Evolution 状态。
+      const next = await window.desktop?.getEvolutionState();
       if (next) onState(next);
       setMessageDraft("");
       setSyncMessage("人物消息已回流专题群，正在核对 SQLite 时间线");

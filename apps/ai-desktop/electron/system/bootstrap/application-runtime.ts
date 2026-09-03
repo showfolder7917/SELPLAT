@@ -39,7 +39,7 @@ import type {
   // 用法：IPC 查询补齐状态时约束返回结构；数据库不可用时也必须返回同样完整的失败结构。
   CorpusSemanticBackfillStatusOutDto,
 } from "../../../contracts/services/support/platform/persistence/index.js";
-import type { SendHanliConversationMessageInDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../contracts/services/personas/conversation/index.js";
 import type {
   // 来源：contracts/services/support/platform/workspace/index.ts → dto/workspace.out.dto.ts。
   // 含义：当前工作区快照，由 primaryId 和多个 { id、name、path、permission } 工程根组成。
@@ -113,6 +113,7 @@ import {
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
 import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
 import { createHanliRuntime } from "../../services/personas/hanli/index.js";
+import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import { buildEvolutionWorkbenchChange, createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
 import { PersonaEvolutionRuntime } from "../../services/workflow/index.js";
 // Platform 服务提供截图、设置、工作区、安全和数据库等底层能力。
@@ -288,7 +289,7 @@ export async function startApplication(): Promise<void> {
   let corpusIngestionRunning = false;
   let corpusIngestionRequested = false;
   let requestHanliSemanticRefresh: () => void = () => undefined;
-  let startHanliInternalDeliberation: (request: SendHanliConversationMessageInDto) => Promise<{ continuous: boolean }> = async () => { throw new Error("韩立与南宫婉内部研讨运行时尚未就绪。"); };
+  let startHanliInternalDeliberation: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }> = async () => { throw new Error("韩立与南宫婉内部研讨运行时尚未就绪。"); };
   let latestCorpusTrigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled" = "startup";
   /** 按触发来源增量导入尚未处理的会话；本函数后台执行，不阻塞界面启动。 */
   const ingestTrainingCorpus = (trigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled"): void => {
@@ -584,7 +585,8 @@ export async function startApplication(): Promise<void> {
       const current = workspaces.read();
       return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
     },
-    readHanliConversationId: () => hanLiCodex!.activeSession().threadId,
+    // 内部研讨关联统一业务会话 ID；Codex threadId 只属于平台会话，不再兼作人物会话主键。
+    readHanliConversationId: () => collaborationMemory?.readPersonaConversation("han-li").conversationId || null,
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
@@ -611,6 +613,15 @@ export async function startApplication(): Promise<void> {
   };
   // 三个人物和两个共享模块分别取得受控 Facade；完整运行实例只留在组合根，不再传给 IPC。
   const nangongRuntime = personaEvolution.nangongRuntime;
+  // 统一人物会话注册表是 IPC 的唯一入口。人物自己的服务仍可保留专属业务能力，但会话读写必须在这里登记。
+  const personaConversations = new PersonaConversationFacade();
+  personaConversations.register("han-li", hanliRuntime.facade);
+  personaConversations.register("nangong-wan", {
+    // 南宫婉页面状态还包含专题信息，这里只抽取统一会话 DTO 交给通用 IPC。
+    conversation: () => personaEvolution!.state().conversation,
+    sendConversationMessage: async (request) => (await nangongRuntime.facade.sendConversationMessage(request)).conversation,
+    newConversation: async () => (await nangongRuntime.facade.newConversation()).conversation,
+  });
   // Evolution Facade 面向专题页面，Workflow Facade 面向跨人物调度。
   const evolutionRuntime = createEvolutionRuntime(personaEvolution);
   evolutionRuntime.facade.subscribe((state, reason, topicId, proposalId, previousState) => {
@@ -730,6 +741,7 @@ export async function startApplication(): Promise<void> {
     linghuAutomation,
     nangong: nangongRuntime.facade,
     hanli: hanliRuntime.facade,
+    personaConversations,
     evolution: evolutionRuntime.facade,
     personaWorkflow: personaWorkflowRuntime.facade,
     // 审计、持久化状态和运行路径。

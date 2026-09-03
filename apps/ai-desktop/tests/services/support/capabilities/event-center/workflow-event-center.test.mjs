@@ -17,10 +17,10 @@ mkdirSync(controlledTestRoot, { recursive: true });
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
   const fixture = createFixture("schema");
   try {
-    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopConversationMemory", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
+    for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopPersonaConversation", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionWorkbenchPreference", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1021");
+    assert.equal(fixture.database.latestSchemaVersion, "1023");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
@@ -36,12 +36,14 @@ test("韩立自由对话原子入库并向统一语料提交用户原文和回�
   const fixture = createFixture("hanli-free-conversation");
   try {
     const memory = new CollaborationMemoryService(fixture.database);
-    const conversation = memory.registerHanliRound({
+    memory.savePersonaConversation({ ownerPersonaId: "han-li", conversationId: "hanli-thread-free", messages: [], updatedAt: "2026-09-02T00:00:00.000Z" });
+    const conversation = memory.registerPersonaRound({
+      ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli",
       conversationId: "hanli-thread-free", userMessageId: "hanli-user-free", userContent: "请先结合整理后的资料判断我真正关心什么。", attachmentIds: ["shot-1"],
-      hanliMessageId: "hanli-answer-free", hanliContent: "你更关心判断是否有证据，而不是增加流程。", createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:01.000Z",
+      personaMessageId: "hanli-answer-free", personaContent: "你更关心判断是否有证据，而不是增加流程。", createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:01.000Z",
       decision: { title: "基于证据理解用户", type: "自由讨论", switchTopic: false, userIntent: "使用整理后的资料精准判断目标", tags: ["韩立", "语义记忆"], summary: "用户要求韩立以派生语义证据提高判断精度。" },
     });
-    assert.deepEqual(conversation.messages.map((message) => message.role), ["user", "hanli"]);
+    assert.deepEqual(conversation.messages.map((message) => [message.speakerType, message.speakerPersonaId]), [["user", null], ["persona", "han-li"]]);
     assert.deepEqual(conversation.messages[0].attachmentIds, ["shot-1"]);
     assert.equal(fixture.repository.tableCount("AiDesktopPersonaConversationMessage"), 2);
     const corpus = memory.searchTrainingCorpusTopics("语义记忆");
@@ -54,19 +56,21 @@ test("人物内部消息只保留业务记录且不生成或领取语义资料",
   const fixture = createFixture("persona-internal-conversation");
   try {
     const memory = new CollaborationMemoryService(fixture.database);
-    memory.syncConversation({
+    memory.savePersonaConversation({
+      ownerPersonaId: "han-li",
       conversationId: "persona-internal-conversation",
-      messages: [{ messageId: "nangong-internal", role: "nangong", content: "韩立，这是人物内部状态同步。", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z" }],
+      messages: [{ messageId: "nangong-internal", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "韩立，这是人物内部状态同步。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }],
       updatedAt: "2026-09-02T00:00:00.000Z",
     });
-    assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1, "内部消息仍可作为业务记录查询");
+    assert.equal(fixture.repository.tableCount("AiDesktopPersonaConversationMessage"), 1, "内部消息仍可作为业务记录查询");
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
     assert.deepEqual(memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 10), []);
-    const internal = memory.appendHanliInternalMessage({ conversationId: "hanli-thread-internal", messageId: "internal-round-1-question", role: "hanli", content: "南宫婉，请核对当前范围。", createdAt: "2026-09-02T00:00:01.000Z" });
-    const answered = memory.appendHanliInternalMessage({ conversationId: "hanli-thread-internal", messageId: "internal-round-1-answer", role: "nangong", content: "当前范围只涉及 AI Desktop。", replyToMessageId: "internal-round-1-question", createdAt: "2026-09-02T00:00:02.000Z" });
-    assert.deepEqual(internal.messages.map((message) => message.role), ["hanli"]);
-    assert.deepEqual(answered.messages.map((message) => message.role), ["hanli", "nangong"]);
+    memory.savePersonaConversation({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messages: [], updatedAt: "2026-09-02T00:00:01.000Z" });
+    const internal = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messageId: "internal-round-1-question", speakerPersonaId: "han-li", content: "南宫婉，请核对当前范围。", createdAt: "2026-09-02T00:00:01.000Z" });
+    const answered = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messageId: "internal-round-1-answer", speakerPersonaId: "nangong-wan", content: "当前范围只涉及 AI Desktop。", replyToMessageId: "internal-round-1-question", createdAt: "2026-09-02T00:00:02.000Z" });
+    assert.deepEqual(internal.messages.map((message) => message.speakerPersonaId), ["han-li"]);
+    assert.deepEqual(answered.messages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan"]);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0, "内部问答不得生成训练主题");
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0, "内部问答不得生成训练消息");
   } finally { fixture.close(); }
@@ -80,8 +84,8 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
     fixture.repository.saveEvolutionWorkbenchPreference({ perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25" }, "2026-08-28T00:00:01.500Z");
     const memory = new CollaborationMemoryService(fixture.database);
-    memory.syncConversation({ conversationId: "training-conversation", messages: [
-      { messageId: "training-user", role: "user", content: "这是必须保留的训练原话。", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z" },
+    memory.savePersonaConversation({ ownerPersonaId: "nangong-wan", conversationId: "training-conversation", messages: [
+      { messageId: "training-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "这是必须保留的训练原话。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z", completedAt: "2026-08-28T00:00:02.000Z" },
     ], updatedAt: "2026-08-28T00:00:02.000Z" });
     fixture.database.withConnection((connection) => {
       connection.prepare(`INSERT INTO AiDesktopPersonaSession (sessionKey, threadId, workspaceSignature, updatedAt)
@@ -113,7 +117,7 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     for (const retired of ["AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream"]) {
       assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired)), undefined, retired);
     }
-    assert.equal(fixture.repository.tableCount("AiDesktopConversationMemory"), 1);
+    assert.equal(fixture.repository.tableCount("AiDesktopPersonaConversationMessage"), 1);
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT threadId FROM AiDesktopPersonaSession WHERE sessionKey='linghu'").get()).threadId, "thread-linghu");
     assert.deepEqual(fixture.repository.getEvolutionWorkbenchPreference("nangong", "manual-topic"), { perspective: "nangong", nodeId: "manual-topic", page: 3, pageSize: 50, keyword: "滚动条", status: "已阻塞", selectedRowId: "topic-25", updatedAt: "2026-08-28T00:00:01.500Z" });
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 2);
@@ -379,21 +383,21 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
   const memory = new CollaborationMemoryService(fixture.database);
   try {
     const firstConversation = {
+      ownerPersonaId: "nangong-wan",
       conversationId: "conversation-old",
       messages: [
-        { messageId: "user-old", role: "user", content: "我的原话必须逐字保留，包括空格  和换行\n不能拿摘要替代。", attachmentIds: [], createdAt: "2026-08-25T00:00:00.000Z" },
-        { messageId: "nangong-old", role: "nangong", content: `南宫婉完整回答：${"详细调查内容".repeat(20)}`, attachmentIds: [], createdAt: "2026-08-25T00:00:01.000Z" },
+        { messageId: "user-old", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "我的原话必须逐字保留，包括空格  和换行\n不能拿摘要替代。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:00:00.000Z", completedAt: "2026-08-25T00:00:00.000Z" },
+        { messageId: "nangong-old", sequenceNumber: 1, speakerType: "persona", speakerPersonaId: "nangong-wan", content: `南宫婉完整回答：${"详细调查内容".repeat(20)}`, replyToMessageId: "user-old", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:00:01.000Z", completedAt: "2026-08-25T00:00:01.000Z" },
       ],
       updatedAt: "2026-08-25T00:00:01.000Z",
     };
     firstConversation.messages[0].inferredIntent = "完整保存用户原话，不得由摘要替代。";
-    memory.registerRound(firstConversation, "user-old", "nangong-old", { title: "统一日志入口", type: "架构治理", switchTopic: false, userIntent: firstConversation.messages[0].inferredIntent, tags: ["日志", "架构"], summary: "南宫婉确认完整保存用户原话。" });
-    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content, contentPreview, conversationTopicId FROM AiDesktopConversationMemory WHERE messageId='nangong-old'").get());
-    const storedUser = fixture.database.withConnection((connection) => connection.prepare("SELECT content, inferredIntent FROM AiDesktopConversationMemory WHERE messageId='user-old'").get());
+    memory.registerNangongRound(firstConversation, "user-old", "nangong-old", { title: "统一日志入口", type: "架构治理", switchTopic: false, userIntent: firstConversation.messages[0].inferredIntent, tags: ["日志", "架构"], summary: "南宫婉确认完整保存用户原话。" });
+    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content FROM AiDesktopPersonaConversationMessage WHERE messageId='nangong-old'").get());
+    const storedUser = fixture.database.withConnection((connection) => connection.prepare("SELECT content, inferredIntent FROM AiDesktopPersonaConversationMessage WHERE messageId='user-old'").get());
     assert.equal(storedUser.inferredIntent, "完整保存用户原话，不得由摘要替代。");
     assert.equal(stored.content, firstConversation.messages[1].content);
-    assert.ok(Array.from(stored.contentPreview).length <= 81);
-    assert.ok(stored.conversationTopicId);
+    assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopConversationTopic").get()).count, 1);
     const firstContext = memory.buildNangongContext(firstConversation);
     assert.match(firstContext, /我的原话必须逐字保留，包括空格  和换行/);
     assert.doesNotMatch(firstContext, new RegExp(firstConversation.messages[1].content.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -401,26 +405,27 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
     const continued = {
       ...firstConversation,
       messages: [...firstConversation.messages,
-        { messageId: "user-next", role: "user", content: "继续处理这个统一入口。", attachmentIds: [], createdAt: "2026-08-25T00:01:00.000Z" },
-        { messageId: "nangong-next", role: "nangong", content: "继续调查并给出证据。", attachmentIds: [], createdAt: "2026-08-25T00:01:01.000Z" },
+        { messageId: "user-next", sequenceNumber: 2, speakerType: "user", speakerPersonaId: null, content: "继续处理这个统一入口。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:01:00.000Z", completedAt: "2026-08-25T00:01:00.000Z" },
+        { messageId: "nangong-next", sequenceNumber: 3, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "继续调查并给出证据。", replyToMessageId: "user-next", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:01:01.000Z", completedAt: "2026-08-25T00:01:01.000Z" },
       ],
       updatedAt: "2026-08-25T00:01:01.000Z",
     };
     continued.messages[2].inferredIntent = "继续完成统一入口。";
-    memory.registerRound(continued, "user-next", "nangong-next", { title: "标题可由 AI 调整", type: "自由类型", switchTopic: false, userIntent: continued.messages[2].inferredIntent, tags: ["统一入口"], summary: "继续调查统一入口并补充证据。" });
+    memory.registerNangongRound(continued, "user-next", "nangong-next", { title: "标题可由 AI 调整", type: "自由类型", switchTopic: false, userIntent: continued.messages[2].inferredIntent, tags: ["统一入口"], summary: "继续调查统一入口并补充证据。" });
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopConversationTopic").get()).count, 1);
 
     const switched = {
+      ownerPersonaId: "nangong-wan",
       conversationId: "conversation-old",
       messages: [...continued.messages,
-        { messageId: "user-new", role: "user", content: "现在切换到审批习惯分析。", attachmentIds: [], createdAt: "2026-08-26T00:00:00.000Z" },
-        { messageId: "nangong-new", role: "nangong", content: "已识别为新的话题中心。", attachmentIds: [], createdAt: "2026-08-26T00:00:01.000Z" },
+        { messageId: "user-new", sequenceNumber: 4, speakerType: "user", speakerPersonaId: null, content: "现在切换到审批习惯分析。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-26T00:00:00.000Z", completedAt: "2026-08-26T00:00:00.000Z" },
+        { messageId: "nangong-new", sequenceNumber: 5, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "已识别为新的话题中心。", replyToMessageId: "user-new", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-26T00:00:01.000Z", completedAt: "2026-08-26T00:00:01.000Z" },
       ],
       updatedAt: "2026-08-26T00:00:01.000Z",
     };
     switched.messages.at(-2).inferredIntent = "切换问题中心并分析审批习惯。";
-    memory.registerRound(switched, "user-new", "nangong-new", { title: "审批习惯分析", type: "审批偏好", switchTopic: true, userIntent: switched.messages.at(-2).inferredIntent, tags: ["审批", "习惯"], summary: "识别并分析新的审批习惯主题。" });
-    const context = memory.buildNangongContext({ conversationId: "conversation-current", messages: [], updatedAt: "2026-08-26T00:02:00.000Z" });
+    memory.registerNangongRound(switched, "user-new", "nangong-new", { title: "审批习惯分析", type: "审批偏好", switchTopic: true, userIntent: switched.messages.at(-2).inferredIntent, tags: ["审批", "习惯"], summary: "识别并分析新的审批习惯主题。" });
+    const context = memory.buildNangongContext({ ownerPersonaId: "nangong-wan", conversationId: "conversation-current", messages: [], updatedAt: "2026-08-26T00:02:00.000Z" });
     assert.match(context, /我的原话必须逐字保留，包括空格  和换行/);
     assert.match(context, /审批习惯分析|现在切换到审批习惯分析/);
     const topics = fixture.database.withConnection((connection) => connection.prepare("SELECT title, topicType, state FROM AiDesktopConversationTopic ORDER BY startedAt").all());
@@ -514,7 +519,7 @@ test("南宫婉提案和韩立审批完整投影并保留人工偏好依据", ()
     fixture.repository.syncEvolutionState({
       version: 8, automaticEvolutionEnabled: true, automaticNangongApprovalEnabled: false,
       automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "running", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: now, pausedAt: null }, automationContext: { workspaceState: { roots: [{ path: appRoot, permission: "workspace-write" }] }, locale: "zh-CN" }, preferenceSnapshotVersion: 1,
-      activeTopicId: "topic-1", updatedAt: now, conversation: { conversationId: "conversation-1", messages: [], updatedAt: now },
+      activeTopicId: "topic-1", updatedAt: now, conversation: { ownerPersonaId: "nangong-wan", conversationId: "conversation-1", messages: [], updatedAt: now },
       deliberations: [{
         deliberationId: "deliberation-1", topicId: "topic-1", status: "established",
         sourceSnapshots: [{ snapshotId: "snapshot-1", deliberationId: "deliberation-1", source: "codex", conversationId: "thread-1", sourceMessageId: "source-1", sequenceNumber: 0, role: "codex", responsePhase: "final_answer", content: "原始执行记录", originalCreatedAt: now, capturedAt: now }],
@@ -689,7 +694,7 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     now: () => now,
     readers: {
       collaboration: () => collaborationState(heartbeat),
-      evolution: () => ({ version: 5, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { conversationId: "conversation", messages: [], updatedAt: now.toISOString() }, updatedAt: now.toISOString() }),
+      evolution: () => ({ version: 5, automaticEvolutionEnabled: false, automaticNangongApprovalEnabled: false, automaticLinghuApprovalEnabled: false, automaticExecutionEnabled: false, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], conversation: { ownerPersonaId: "nangong-wan", conversationId: "conversation", messages: [], updatedAt: now.toISOString() }, updatedAt: now.toISOString() }),
       linghu: () => ({ version: 2, enabled: linghuEnabled, pollIntervalMs: 30_000, cycle: 1, currentModule: "flow-completion", activePromptId: null, activeTaskId: null, pendingRepairProposalId: null, recoveryAttemptCount: 0, currentFaultFingerprint: null, recoveryAttemptsByFingerprint: {}, detectionCursor: null, flowSnapshots: [], testResourceState: null, recoveryCheckpoint: null, lastDispatchAt: null, lastCompletedAt: null, lastCheckedAt: null, blockingReason: null, lastFeedback: null, lastModuleReport: null, prompts: [], updatedAt: now.toISOString() }),
     },
     projectCollaborationTimeline: () => undefined,

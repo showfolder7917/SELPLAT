@@ -4,9 +4,9 @@ import type {
   GenerateNangongTopicDraftInDto,
   NangongTopicDraftOutDto,
   ReviseNangongProposalInDto,
-  SendNangongConversationMessageInDto,
   UpdateNangongTopicInDto,
 } from "../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { EvolutionMutationInDto } from "../../../../contracts/services/evolution/index.js";
 import { NangongApplicationService, type NangongApplicationServiceOptions } from "./internal/nangong-application.service.js";
@@ -18,7 +18,7 @@ import { NangongApplicationService, type NangongApplicationServiceOptions } from
  * 它不会暴露韩立审批、令狐测试或 Workflow 自动轮转方法。
  */
 export interface NangongApplicationPort {
-  sendConversationMessage(request: SendNangongConversationMessageInDto): Promise<EvolutionStateOutDto>;
+  sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<EvolutionStateOutDto>;
   newConversation(): Promise<EvolutionStateOutDto>;
   generateTopicDraft(request: GenerateNangongTopicDraftInDto): Promise<NangongTopicDraftOutDto>;
   convertConversationToTopic(request: ConvertNangongConversationToTopicInDto): EvolutionStateOutDto;
@@ -52,7 +52,7 @@ export class NangongFacade {
   /** 传入已装配应用端口；构造过程不读写文件，也不启动自动流程。 */
   constructor(application: NangongApplicationPort) { this.#application = application; }
   /** 发送南宫对话；返回包含本轮人物消息的最新状态，失败时保留原发送失败语义。 */
-  sendConversationMessage(request: SendNangongConversationMessageInDto) { return this.#application.sendConversationMessage(request); }
+  sendConversationMessage(request: SendPersonaConversationMessageInDto) { return this.#application.sendConversationMessage(request); }
   /** 建立新的南宫会话；不会删除专题、提案或韩立审批记录。 */
   newConversation() { return this.#application.newConversation(); }
   /** 根据当前南宫对话生成可编辑草稿；生成结果尚未成为正式专题。 */

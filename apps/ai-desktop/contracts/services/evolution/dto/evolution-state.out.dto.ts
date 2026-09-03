@@ -7,7 +7,7 @@
 import type { LocaleValue } from "../../../foundation/index.js";
 import type { WorkspaceStateOutDto } from "../../support/platform/workspace/index.js";
 import type { HanliEvolutionDeliberationOutDto } from "../../personas/hanli/index.js";
-import type { NangongConversationOutDto } from "../../personas/nangong/index.js";
+import type { PersonaConversationOutDto } from "../../personas/conversation/index.js";
 import type { EvolutionArchiveRecordOutDto } from "./evolution-archive-record.out.dto.js";
 import type { EvolutionAutomationRuntimeOutDto, EvolutionAutomationSettingsOutDto } from "./evolution-automation.out.dto.js";
 import type { EvolutionOneShotConfirmationOutDto, EvolutionOneShotRunOutDto } from "./evolution-one-shot-run.out.dto.js";
@@ -33,6 +33,7 @@ export interface EvolutionStateOutDto {
   proposals: EvolutionProposalOutDto[];
   deliberations: HanliEvolutionDeliberationOutDto[];
   archiveRecords: EvolutionArchiveRecordOutDto[];
-  conversation: NangongConversationOutDto;
+  /** 南宫婉当前会话的运行时投影；持久化正文只存在于统一人物会话表。 */
+  conversation: PersonaConversationOutDto;
   updatedAt: string;
 }

@@ -2,7 +2,8 @@
 import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionStateOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
-import type { CreateNangongTopicInDto, SendNangongConversationMessageInDto } from "../../../../contracts/services/personas/nangong/index.js";
+import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { SendMessageOutDto } from "../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { EventCenterExceptionInDto } from "../../../../contracts/services/support/capabilities/event-center/index.js";
@@ -26,7 +27,7 @@ export interface PersonaEvolutionRuntimeOptions {
   collaboration: CollaborationWorkflowFacade;
   hanli: HanliWorkflowPort;
   conversation: {
-    send(request: SendNangongConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
+    send(request: SendPersonaConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
   };
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;

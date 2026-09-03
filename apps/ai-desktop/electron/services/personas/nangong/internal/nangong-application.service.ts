@@ -3,9 +3,9 @@ import type {
   CreateNangongProposalInDto,
   GenerateNangongTopicDraftInDto,
   ReviseNangongProposalInDto,
-  SendNangongConversationMessageInDto,
   UpdateNangongTopicInDto,
 } from "../../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { NangongApplicationPort } from "../nangong.facade.js";
 import type { EvolutionMutationInDto } from "../../../../../contracts/services/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
@@ -27,7 +27,7 @@ export class NangongApplicationService implements NangongApplicationPort {
     this.#taskDistribution = options.taskDistribution;
   }
 
-  sendConversationMessage(request: SendNangongConversationMessageInDto) { return this.#conversation.sendConversationMessage(request); }
+  sendConversationMessage(request: SendPersonaConversationMessageInDto) { return this.#conversation.sendConversationMessage(request); }
   newConversation() { return this.#conversation.newConversation(); }
   generateTopicDraft(request: GenerateNangongTopicDraftInDto) { return this.#conversation.generateTopicDraft(request); }
   convertConversationToTopic(request: ConvertNangongConversationToTopicInDto) { return this.#authoring.convertConversationToTopic(request); }

@@ -1,0 +1,42 @@
+/* selDialog.css：通用模态窗口、内容插槽和标准动作区。 */
+
+.seldialog-root {
+    width: min(var(--sel-theme-dialog-inline-size), calc(100vw - 48px));
+    max-width: none;
+    max-height: var(--sel-theme-dialog-block-size-max);
+    margin: auto;
+    padding: 0;
+    border: 0;
+    color: var(--sel-theme-text-body);
+    background: transparent;
+    font-family: var(--sel-theme-font-family);
+    font-size: var(--sel-theme-font-size-body);
+    line-height: var(--sel-theme-line-height-body);
+    overflow: visible;
+}
+
+.seldialog-root[data-sel-dialog-size="compact"] { --sel-theme-dialog-inline-size: 560px; }
+.seldialog-root::backdrop { background: var(--sel-theme-dialog-backdrop); backdrop-filter: blur(8px); }
+.seldialog-surface { max-height: var(--sel-theme-dialog-block-size-max); overflow: hidden; border: 1px solid var(--sel-theme-workspace-line-active); border-radius: var(--sel-theme-radius-panel); background: var(--sel-theme-workspace-surface-raised); box-shadow: var(--sel-theme-dialog-shadow); }
+.seldialog-heading { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px 0 20px; border-bottom: 1px solid var(--sel-theme-workspace-line); background: var(--sel-theme-control-surface-primary); }
+.seldialog-heading-copy { min-width: 0; display: grid; gap: 2px; }
+.seldialog-heading-kicker { color: var(--sel-theme-text-on-accent); font-size: var(--sel-theme-font-size-micro); font-weight: var(--sel-theme-font-weight-semibold); letter-spacing: .12em; }
+.seldialog-title { overflow: hidden; color: var(--sel-theme-text-on-accent); font-size: var(--sel-theme-font-size-heading); font-weight: var(--sel-theme-font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
+.seldialog-close { width: 32px; height: 32px; display: grid; padding: 0; border: 0; border-radius: var(--sel-theme-radius-action); color: var(--sel-theme-text-on-accent); background: transparent; cursor: pointer; place-items: center; }
+.seldialog-close:hover, .seldialog-close:focus-visible { outline: 1px solid var(--sel-theme-workspace-line-active); background: var(--sel-theme-interaction-surface-hover); }
+.seldialog-body { max-height: calc(var(--sel-theme-dialog-block-size-max) - 53px); padding: 20px; overflow: auto; }
+.seldialog-copy { margin: 0 0 12px; color: var(--sel-theme-text-muted); line-height: var(--sel-theme-line-height-body); }
+.seldialog-code { margin: 12px 0; padding: 13px; overflow: auto; border: 1px solid var(--sel-theme-workspace-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-text-body); background: var(--sel-theme-control-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
+.seldialog-detail { margin-top: 12px; color: var(--sel-theme-text-muted); }
+.seldialog-detail summary { cursor: pointer; }
+.seldialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+.seldialog-actions button { min-height: var(--sel-theme-action-height); display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--sel-theme-action-padding-inline); border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-text-body); background: var(--sel-theme-control-surface); font: inherit; cursor: pointer; }
+.seldialog-actions button[data-sel-action="primary"] { border-color: var(--sel-theme-workspace-line-active); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-control-surface-primary); font-weight: var(--sel-theme-font-weight-semibold); }
+.seldialog-status { min-height: 96px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--sel-theme-text-muted); }
+.seldialog-checks { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.seldialog-checks li { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 10px 12px; border: 1px solid var(--sel-theme-workspace-line); border-radius: var(--sel-theme-radius-control); background: var(--sel-theme-control-surface); }
+.seldialog-checks li > i { width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--sel-theme-text-muted); }
+.seldialog-checks li.passed > i { background: var(--sel-theme-semantic-success); }
+.seldialog-checks li.failed > i { background: var(--sel-theme-semantic-error); }
+.seldialog-checks small { display: block; color: var(--sel-theme-text-muted); }
+@media (prefers-reduced-motion: reduce) { .seldialog-root::backdrop { backdrop-filter: none; } }

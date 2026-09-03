@@ -18,8 +18,9 @@ import type { TestDataResetResultOutDto } from "../../../services/support/applic
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
 import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, UpdateLinghuStartupPromptInDto } from "../../../services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto, EvolutionWorkbenchChangeEventOutDto, EvolutionWorkbenchPageOutDto, EvolutionWorkbenchPreferenceOutDto, EvolutionWorkspaceLocationOutDto, QueryEvolutionWorkbenchInDto, SaveEvolutionWorkbenchPreferenceInDto } from "../../../services/evolution/index.js";
-import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliConversationOutDto, SendHanliConversationMessageInDto } from "../../../services/personas/hanli/index.js";
-import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, SendNangongConversationMessageInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
+import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
+import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
 import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
 import type { WorkspaceEntryOutDto, WorkspaceStateOutDto } from "../../../services/support/platform/workspace/index.js";
@@ -182,11 +183,11 @@ export interface DesktopApi {
   /** 订阅工作台轻量增量事件；版本断档时由 Renderer 重新查询当前数据库页。 */
   onEvolutionWorkbenchChanged(listener: (event: EvolutionWorkbenchChangeEventOutDto) => void): () => void;
   /** 读取韩立当前固定人物会话。 */
-  getHanliConversation(): Promise<HanliConversationOutDto>;
+  getPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
   /** 向韩立发送自由讨论消息；韩立只读取语义记忆并进行只读分析。 */
-  sendHanliConversationMessage(request: SendHanliConversationMessageInDto): Promise<HanliConversationOutDto>;
+  sendPersonaConversationMessage(personaId: string, request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 关闭韩立当前固定线程并建立空白自由对话。 */
-  newHanliConversation(): Promise<HanliConversationOutDto>;
+  newPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
   /** 从已确认输入建立新专题。 */
   createEvolutionTopic(request: CreateNangongTopicInDto): Promise<EvolutionStateOutDto>;
   /** 开关指定演化自动化环节。 */
@@ -198,9 +199,7 @@ export interface DesktopApi {
   /** 从一次性演化已持久化卡点恢复同一专题和提案链，不改变长期自动开关。 */
   resumeEvolutionOneShot(): Promise<EvolutionStateOutDto>;
   /** 向南宫调查会话发送消息并记录来源。 */
-  sendNangongConversationMessage(request: SendNangongConversationMessageInDto): Promise<EvolutionStateOutDto>;
   /** 清空当前南宫会话并创建新会话。 */
-  newNangongConversation(): Promise<EvolutionStateOutDto>;
   /** 根据冻结对话生成专题草案，不直接创建专题。 */
   generateNangongTopicDraft(request: GenerateNangongTopicDraftInDto): Promise<NangongTopicDraftOutDto>;
   /** 经用户确认后把南宫会话转换为正式专题。 */

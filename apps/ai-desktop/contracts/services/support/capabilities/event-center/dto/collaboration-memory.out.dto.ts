@@ -23,12 +23,13 @@ export interface ApprovalMemoryEvidenceOutDto {
 
 export interface TrainingCorpusTopicSearchResultOutDto {
   corpusTopicId: string;
-  source: "codex" | "nangong" | "hanli";
+  /** codex 或稳定人物来源标识；不枚举人物，新增人物无需修改协议。 */
+  source: string;
   title: string;
   topicType: string;
   inferredIntent: string | null;
   tags: string[];
   definitionSource: "pending" | "ai-confirmed";
   createdAt: string;
-  messages: Array<{ speakerRole: "user" | "codex" | "nangong" | "hanli"; content: string; createdAt: string }>;
+  messages: Array<{ speakerRole: string; content: string; createdAt: string }>;
 }

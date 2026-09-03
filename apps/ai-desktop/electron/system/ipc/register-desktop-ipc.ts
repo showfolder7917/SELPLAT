@@ -31,6 +31,7 @@ import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowR
 import { LinghuAutomationFacade } from "../../services/personas/linghu/index.js";
 import type { HanliFacade } from "../../services/personas/hanli/index.js";
 import type { NangongFacade } from "../../services/personas/nangong/index.js";
+import type { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../services/workflow/index.js";
 import { ManagedExecutionFacade as ManagedTaskExecutor } from "../../services/support/capabilities/execution/index.js";
@@ -54,6 +55,7 @@ interface DesktopIpcDependencies {
   linghuAutomation: LinghuAutomationFacade;
   nangong: NangongFacade;
   hanli: HanliFacade;
+  personaConversations: PersonaConversationFacade;
   evolution: EvolutionFacade;
   personaWorkflow: PersonaWorkflowFacade;
   collaborationRegistry: CollaborationCodexRegistry;
@@ -147,7 +149,7 @@ function evolutionWorkspaceLocationQuery(location: EvolutionWorkspaceLocationOut
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -342,7 +344,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, evolution, personaWorkflow, eventCenter, collaborationTimeline);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline);
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

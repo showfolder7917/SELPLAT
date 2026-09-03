@@ -390,11 +390,14 @@ export class EvolutionStateStore {
     return this.#commit("conversation.message_added", null, null, (state) => {
       if (state.conversation.messages.some((message) => message.messageId === messageId)) throw new Error("会话消息标识已存在，不能重复发送。");
       const replyToMessageId = options.replyToMessageId === undefined && role === "nangong"
-        ? [...state.conversation.messages].reverse().find((message) => message.role === "user")?.messageId || null
+        ? [...state.conversation.messages].reverse().find((message) => message.speakerType === "user")?.messageId || null
         : options.replyToMessageId || null;
       const deliveryStatus = options.deliveryStatus || "completed";
       state.conversation.messages.push({
-        messageId, sequenceNumber: state.conversation.messages.length, role,
+        messageId,
+        sequenceNumber: state.conversation.messages.length,
+        speakerType: role === "user" ? "user" : "persona",
+        speakerPersonaId: role === "user" ? null : "nangong-wan",
         content: required(content, "对话内容", 30_000), replyToMessageId, deliveryStatus,
         attachmentIds: [...new Set(attachmentIds)].slice(0, 5), createdAt: now,
         completedAt: deliveryStatus === "sending" ? null : now,
@@ -407,14 +410,14 @@ export class EvolutionStateStore {
   completeConversationTurn(userMessageId: string, content: string): EvolutionStateOutDto {
     const now = new Date().toISOString();
     return this.#commit("conversation.turn_completed", null, null, (state) => {
-      const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.role === "user");
+      const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.speakerType === "user");
       if (!userMessage) throw new Error("待完成的用户会话消息不存在。");
       if (userMessage.deliveryStatus === "failed") throw new Error("发送失败的用户消息不能追加人物回复。");
       userMessage.deliveryStatus = "completed";
       userMessage.completedAt = now;
       state.conversation.messages.push({
         messageId: `evolution-message-${randomUUID()}`, sequenceNumber: state.conversation.messages.length,
-        role: "nangong", content: required(content, "南宫婉回复", 30_000), replyToMessageId: userMessageId,
+        speakerType: "persona", speakerPersonaId: "nangong-wan", content: required(content, "南宫婉回复", 30_000), replyToMessageId: userMessageId,
         deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now,
       });
       state.conversation.updatedAt = now;
@@ -425,7 +428,7 @@ export class EvolutionStateStore {
   failConversationTurn(userMessageId: string): EvolutionStateOutDto {
     const now = new Date().toISOString();
     return this.#commit("conversation.turn_failed", null, null, (state) => {
-      const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.role === "user");
+      const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId && message.speakerType === "user");
       if (!userMessage) throw new Error("待标记失败的用户会话消息不存在。");
       userMessage.deliveryStatus = "failed";
       userMessage.completedAt = now;
@@ -436,7 +439,7 @@ export class EvolutionStateStore {
   /** 把南宫婉正文中的明确邀请登记为可恢复事实；传入 null 表示最新回答尚未具备启动条件。 */
   setOneShotConfirmation(invitationMessageId: string | null): EvolutionStateOutDto {
     const message = invitationMessageId
-      ? this.#state.conversation.messages.find((item) => item.messageId === invitationMessageId && item.role === "nangong")
+      ? this.#state.conversation.messages.find((item) => item.messageId === invitationMessageId && item.speakerType === "persona" && item.speakerPersonaId === "nangong-wan")
       : null;
     if (invitationMessageId && !message) throw new Error("一次性演化邀请消息不存在。");
     return this.#commit("conversation.one-shot-confirmation-changed", null, null, (state) => {
@@ -449,7 +452,7 @@ export class EvolutionStateStore {
   recordConversationIntent(messageId: string, inferredIntent: string): EvolutionStateOutDto {
     const now = new Date().toISOString();
     return this.#commit("conversation.intent_recorded", null, null, (state) => {
-      const message = state.conversation.messages.find((item) => item.messageId === messageId && item.role === "user");
+      const message = state.conversation.messages.find((item) => item.messageId === messageId && item.speakerType === "user");
       if (!message) throw new Error("需要登记意图的用户消息不存在。");
       message.inferredIntent = required(inferredIntent, "用户意图摘要", 2_000);
       state.conversation.updatedAt = now;
@@ -459,8 +462,8 @@ export class EvolutionStateStore {
   /** 专题群只追加人物消息引用与短预览，完整原话继续由人物会话表权威保存。 */
   recordTopicConversation(topicId: string, userMessageId: string, nangongMessageId: string): EvolutionStateOutDto {
     const topic = requireTopic(this.#state, topicId);
-    const userMessage = this.#state.conversation.messages.find((item) => item.messageId === userMessageId && item.role === "user");
-    const nangongMessage = this.#state.conversation.messages.find((item) => item.messageId === nangongMessageId && item.role === "nangong");
+    const userMessage = this.#state.conversation.messages.find((item) => item.messageId === userMessageId && item.speakerType === "user");
+    const nangongMessage = this.#state.conversation.messages.find((item) => item.messageId === nangongMessageId && item.speakerType === "persona" && item.speakerPersonaId === "nangong-wan");
     if (!userMessage || !nangongMessage) throw new Error("专题群人物消息不完整，不能登记回流记录。");
     return this.#commit("conversation.topic_group_replied", topic.topicId, null, () => undefined, {
       conversationId: this.#state.conversation.conversationId,
@@ -498,7 +501,7 @@ export class EvolutionStateStore {
     const sourceMessages = messages.slice(-20);
     const evidence = request.evidence?.length
       ? request.evidence
-      : sourceMessages.map((item) => `${item.role === "user" ? "用户提供的材料" : "南宫婉调查记录（含待验证判断）"}：${item.content}`);
+      : sourceMessages.map((item) => `${item.speakerType === "user" ? "用户提供的材料" : "南宫婉调查记录（含待验证判断）"}：${item.content}`);
     return this.createTopic({ ...request, evidence }, sourceMessages.map((item) => item.messageId));
   }
 
@@ -827,7 +830,10 @@ function assertTopicEditableBeforeProposal(state: EvolutionStateOutDto, topic: E
     throw new Error("课题已进入提案流程，不能再修改或重复提交提案。");
   }
 }
-function createConversation(): EvolutionStateOutDto["conversation"] { const now = new Date().toISOString(); return { conversationId: `nangong-conversation-${randomUUID()}`, messages: [], updatedAt: now }; }
+function createConversation(): EvolutionStateOutDto["conversation"] {
+  const now = new Date().toISOString();
+  return { ownerPersonaId: "nangong-wan", conversationId: `persona-conversation-${randomUUID()}`, messages: [], updatedAt: now };
+}
 
 function archiveCategory(reason: string): EvolutionArchiveCategoryValue {
   if (reason.startsWith("one-shot.")) return reason.includes("blocked") || reason.includes("orphan-retired") ? "recovery" : reason.includes("completed") ? "acceptance" : "execution";

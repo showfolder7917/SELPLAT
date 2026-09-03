@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import type { ConversationRoundTopicDecisionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, SendNangongConversationMessageInDto } from "../../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
+import type { GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nangong-conversation.parser.js";
 
@@ -35,8 +36,10 @@ export class NangongConversationService {
   }
 
   /** 保存用户消息并生成南宫回复；独立“1”只在存在可恢复邀请时启动一次性演化。 */
-  async sendConversationMessage(request: SendNangongConversationMessageInDto): Promise<EvolutionStateOutDto> {
+  async sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<EvolutionStateOutDto> {
     const current = this.#store.state();
+    // 公共会话只携带通用 subject；南宫服务负责解释自己认识的专题类型。
+    const topicId = request.subject?.type === "evolution-topic" ? request.subject.id : undefined;
     const confirmation = current.oneShotConfirmation;
     const ready = confirmation?.status === "awaiting-user-confirmation" && confirmation.conversationId === current.conversation.conversationId;
     if (request.message.trim() === "1") return this.#startOneShotFromConversation(request, ready);
@@ -46,15 +49,15 @@ export class NangongConversationService {
     let turnCompleted = false;
     try {
       const context = this.#memory?.buildNangongContext(state.conversation)
-        || state.conversation.messages.slice(-12).map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+        || state.conversation.messages.slice(-12).map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
       const response = await this.#conversation.send(request, context);
       const parsed = parseNangongConversationResponse(response.text);
       state = this.#store.completeConversationTurn(userMessage.messageId, parsed.reply);
       turnCompleted = true;
       if (parsed.topic.userIntent) state = this.#store.recordConversationIntent(userMessage.messageId, parsed.topic.userIntent);
       const nangongMessage = state.conversation.messages.at(-1)!;
-      state = this.#store.setOneShotConfirmation(!request.topicId && parsed.invitesOneShot ? nangongMessage.messageId : null);
-      if (request.topicId) state = this.#store.recordTopicConversation(request.topicId, userMessage.messageId, nangongMessage.messageId);
+      state = this.#store.setOneShotConfirmation(!topicId && parsed.invitesOneShot ? nangongMessage.messageId : null);
+      if (topicId) state = this.#store.recordTopicConversation(topicId, userMessage.messageId, nangongMessage.messageId);
       this.#archiveConversationRound(state, userMessage.messageId, nangongMessage.messageId, parsed.topic.userIntent ? parsed.topic : null);
       this.#recordEvent("nangong.evolution.conversation_replied", {
         conversationId: state.conversation.conversationId,
@@ -62,7 +65,7 @@ export class NangongConversationService {
         conversationTopicTitle: parsed.topic.title,
         conversationTopicType: parsed.topic.type,
         switchedTopic: parsed.topic.switchTopic,
-        topicId: request.topicId || null,
+        topicId: topicId || null,
       });
       return state;
     } catch (error) {
@@ -90,7 +93,7 @@ export class NangongConversationService {
     const messages = this.#store.state().conversation.messages.slice(-20);
     if (!messages.length) throw new Error("当前没有可整理为课题的南宫婉对话。");
     const context = this.#memory?.buildNangongContext(this.#store.state().conversation)
-      || messages.map((item) => `${item.role === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+      || messages.map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     const response = await this.#conversation.send({
       message: this.#prompts.render("nangong.topic-draft"),
       workspaceState: request.workspaceState,
@@ -100,7 +103,7 @@ export class NangongConversationService {
   }
 
   /** 把一次性确认转换为人物课题事实，再请求 Workflow 从已保存卡点继续。 */
-  async #startOneShotFromConversation(request: SendNangongConversationMessageInDto, ready: boolean): Promise<EvolutionStateOutDto> {
+  async #startOneShotFromConversation(request: SendPersonaConversationMessageInDto, ready: boolean): Promise<EvolutionStateOutDto> {
     const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
@@ -146,11 +149,11 @@ export class NangongConversationService {
     const userMessage = state.conversation.messages.find((message) => message.messageId === userMessageId);
     const nangongMessage = state.conversation.messages.find((message) => message.messageId === nangongMessageId);
     // 人物内部交流不代表客户意图；缺少真实用户参与时既不写语义语料，也不触发韩立整理。
-    if (userMessage?.role !== "user" || nangongMessage?.role !== "nangong") return;
+    if (userMessage?.speakerType !== "user" || nangongMessage?.speakerPersonaId !== "nangong-wan") return;
     queueMicrotask(() => {
       try {
-        if (decision) this.#memory?.registerRound(state.conversation, userMessageId, nangongMessageId, decision);
-        else this.#memory?.syncConversation(state.conversation);
+        if (decision) this.#memory?.registerNangongRound(state.conversation, userMessageId, nangongMessageId, decision);
+        else this.#memory?.savePersonaConversation(state.conversation);
         this.#recordEvent("training_corpus.conversation_round_archived", { conversationId: state.conversation.conversationId, userMessageId, nangongMessageId, source: "nangong" });
         this.#refreshSemanticMemory();
       } catch (error) {

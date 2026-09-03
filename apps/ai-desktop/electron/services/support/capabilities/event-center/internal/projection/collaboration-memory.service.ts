@@ -11,8 +11,9 @@ import type {
   TrainingCorpusTopicSearchResultOutDto,
 } from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
-import type { HanliAcceptanceExperienceCandidateOutDto, HanliConversationOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
-import type { NangongConversationOutDto } from "../../../../../../../contracts/services/personas/nangong/index.js";
+import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
+import type { PersonaConversationOutDto } from "../../../../../../../contracts/services/personas/conversation/index.js";
+import { PersonaConversationRepository } from "../../../../../personas/conversation/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 import { HanliSemanticMemoryRepository } from "./hanli-semantic-memory.repository.js";
 
@@ -28,10 +29,12 @@ const EVOLUTION_CODEX_AI_PREVIEW_LIMIT = 120;
 export class CollaborationMemoryService implements CollaborationMemoryPort {
   readonly #database: SqliteDatabase;
   readonly #hanliSemanticMemory: HanliSemanticMemoryRepository;
+  readonly #conversations: PersonaConversationRepository;
 
   constructor(database: SqliteDatabase) {
     this.#database = database;
     this.#hanliSemanticMemory = new HanliSemanticMemoryRepository(database);
+    this.#conversations = new PersonaConversationRepository(database);
   }
 
   /** 领取本轮尚未分析或内容版本已变化的统一语料。 */
@@ -59,100 +62,99 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     this.#hanliSemanticMemory.recordExperience(stableUserId, projectScope, candidate);
   }
 
-  /** 从固定人物当前线程恢复韩立可见对话；没有线程时返回空会话。 */
-  readHanliConversation(conversationId: string | null): HanliConversationOutDto {
-    if (!conversationId) return { conversationId: null, messages: [], updatedAt: new Date(0).toISOString() };
-    return this.#database.withConnection((connection) => {
-      const rows = connection.prepare(`SELECT messageId, sequenceNumber, role, speakerPersonaId, content, inferredIntent,
-          attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt
-        FROM AiDesktopPersonaConversationMessage
-        WHERE personaId='han-li' AND conversationId=$conversationId ORDER BY sequenceNumber`)
-        .all({ $conversationId: conversationId }) as Array<Record<string, unknown>>;
-      const messages = rows.map((row) => ({
-        messageId: String(row.messageId), sequenceNumber: Number(row.sequenceNumber),
-        role: (row.speakerPersonaId === "nangong-wan" ? "nangong" : row.role) as "user" | "hanli" | "nangong",
-        content: String(row.content), replyToMessageId: row.replyToMessageId ? String(row.replyToMessageId) : null,
-        deliveryStatus: String(row.deliveryStatus) as "sending" | "completed" | "failed",
-        ...(row.inferredIntent ? { inferredIntent: String(row.inferredIntent) } : {}),
-        attachmentIds: parseStringArray(row.attachmentIdsJson), createdAt: String(row.createdAt),
-        completedAt: row.completedAt ? String(row.completedAt) : null,
-      }));
-      return { conversationId, messages, updatedAt: messages.at(-1)?.completedAt || messages.at(-1)?.createdAt || new Date(0).toISOString() };
-    });
+  /** 所有人物通过同一个入口恢复会话；不传 conversationId 时读取该人物唯一活动会话。 */
+  readPersonaConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto {
+    return conversationId
+      ? this.#conversations.read(ownerPersonaId, conversationId)
+      : this.#conversations.readActive(ownerPersonaId);
   }
 
-  /** 把韩立与南宫婉的内部研讨投影到韩立人物会话；该入口不创建训练主题，也不触发语义整理。 */
-  appendHanliInternalMessage(input: {
-    conversationId: string; messageId: string; role: "hanli" | "nangong"; content: string;
+  /** 建立新的活动业务会话；旧会话只归档，不删除原始消息。 */
+  newPersonaConversation(ownerPersonaId: string): PersonaConversationOutDto {
+    return this.#conversations.create(ownerPersonaId);
+  }
+
+  /** 把人物内部研讨追加到所属人物会话；发言人使用稳定 personaId，不再扩充角色枚举。 */
+  appendPersonaInternalMessage(input: {
+    ownerPersonaId: string; conversationId: string; messageId: string; speakerPersonaId: string; content: string;
     replyToMessageId?: string | null; createdAt: string;
-  }): HanliConversationOutDto {
+  }): PersonaConversationOutDto {
     const content = input.content.trim();
     if (!content) throw new Error("人物内部研讨消息不能为空。");
     this.#database.transaction((connection) => {
       const maximum = connection.prepare(`SELECT COALESCE(MAX(sequenceNumber), -1) AS value
-        FROM AiDesktopPersonaConversationMessage WHERE personaId='han-li' AND conversationId=$conversationId`)
-        .get({ $conversationId: input.conversationId }) as { value: number | bigint };
+        FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`)
+        .get({ $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId }) as { value: number | bigint };
       connection.prepare(`INSERT INTO AiDesktopPersonaConversationMessage
-        (messageId, personaId, conversationId, sequenceNumber, role, speakerPersonaId, content, inferredIntent,
-         attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt)
-        VALUES ($messageId, 'han-li', $conversationId, $sequenceNumber, 'hanli', $speakerPersonaId, $content, NULL,
-          '[]', $replyToMessageId, 'completed', $createdAt, $createdAt)
+        (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
+         attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
+        VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, 'persona', $speakerPersonaId, $content, NULL,
+          '[]', $replyToMessageId, 'completed', $createdAt, $createdAt, $createdAt)
         ON CONFLICT(messageId) DO NOTHING`).run({
-        $messageId: input.messageId, $conversationId: input.conversationId,
-        $sequenceNumber: Number(maximum.value) + 1, $speakerPersonaId: input.role === "nangong" ? "nangong-wan" : "han-li", $content: content,
+        $messageId: input.messageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
+        $sequenceNumber: Number(maximum.value) + 1, $speakerPersonaId: input.speakerPersonaId, $content: content,
         $replyToMessageId: input.replyToMessageId || null, $createdAt: input.createdAt,
       });
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
+      });
     });
-    return this.readHanliConversation(input.conversationId);
+    return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
   }
 
-  /** 原子保存韩立自由对话与统一训练语料；完整回复只留在人物会话，语料层保存 AI 摘要。 */
-  registerHanliRound(input: {
+  /** 原子保存任意人物的真实用户回合与统一训练语料；人物完整回复只留在人物会话。 */
+  registerPersonaRound(input: {
+    ownerPersonaId: string; responderPersonaId: string; corpusSource: string;
     conversationId: string; userMessageId: string; userContent: string; attachmentIds: string[];
-    hanliMessageId: string; hanliContent: string; createdAt: string; completedAt: string;
+    personaMessageId: string; personaContent: string; createdAt: string; completedAt: string;
     decision: ConversationRoundTopicDecisionInDto;
-  }): HanliConversationOutDto {
+  }): PersonaConversationOutDto {
     // 语义资料必须由真实用户回合产生；人物内部交流不能伪装成用户原话进入训练语料。
-    if (!input.userContent.trim()) throw new Error("韩立回合缺少真实用户消息，不能登记人物会话或训练语料。");
+    if (!input.userContent.trim()) throw new Error("人物回合缺少真实用户消息，不能登记人物会话或训练语料。");
     this.#database.transaction((connection) => {
       const existing = connection.prepare(`SELECT 1 AS found FROM AiDesktopPersonaConversationMessage WHERE messageId=$messageId`)
         .get({ $messageId: input.userMessageId });
       // Renderer 重试同一 clientMessageId 时整轮已经原子提交，不再分配新序号或复制语料。
       if (existing) return;
       const maximum = connection.prepare(`SELECT COALESCE(MAX(sequenceNumber), -1) AS value
-        FROM AiDesktopPersonaConversationMessage WHERE personaId='han-li' AND conversationId=$conversationId`)
-        .get({ $conversationId: input.conversationId }) as { value: number | bigint };
+        FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`)
+        .get({ $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId }) as { value: number | bigint };
       const userSequence = Number(maximum.value) + 1;
       const insertMessage = connection.prepare(`INSERT INTO AiDesktopPersonaConversationMessage
-        (messageId, personaId, conversationId, sequenceNumber, role, content, inferredIntent,
-         attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt)
-        VALUES ($messageId, 'han-li', $conversationId, $sequenceNumber, $role, $content, $intent,
-          $attachments, $replyToMessageId, 'completed', $createdAt, $completedAt)
+        (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
+          attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
+        VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, $speakerType, $speakerPersonaId, $content, $intent,
+          $attachments, $replyToMessageId, 'completed', $createdAt, $completedAt, $completedAt)
         ON CONFLICT(messageId) DO NOTHING`);
       insertMessage.run({
-        $messageId: input.userMessageId, $conversationId: input.conversationId, $sequenceNumber: userSequence,
-        $role: "user", $content: input.userContent, $intent: input.decision.userIntent || null,
+        $messageId: input.userMessageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId, $sequenceNumber: userSequence,
+        $speakerType: "user", $speakerPersonaId: null, $content: input.userContent, $intent: input.decision.userIntent || null,
         $attachments: JSON.stringify(input.attachmentIds), $replyToMessageId: null,
         $createdAt: input.createdAt, $completedAt: input.completedAt,
       });
       insertMessage.run({
-        $messageId: input.hanliMessageId, $conversationId: input.conversationId, $sequenceNumber: userSequence + 1,
-        $role: "hanli", $content: input.hanliContent, $intent: null, $attachments: "[]",
+        $messageId: input.personaMessageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId, $sequenceNumber: userSequence + 1,
+        $speakerType: "persona", $speakerPersonaId: input.responderPersonaId, $content: input.personaContent, $intent: null, $attachments: "[]",
         $replyToMessageId: input.userMessageId, $createdAt: input.completedAt, $completedAt: input.completedAt,
+      });
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $updatedAt: input.completedAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
       });
 
       const confirmed = Boolean(input.decision.title && input.decision.type && input.decision.userIntent && input.decision.tags.length && input.decision.summary);
-      const corpusTopicId = `corpus-topic:hanli:${input.conversationId}:${input.userMessageId}`;
+      const corpusTopicId = `corpus-topic:${input.corpusSource}:${input.conversationId}:${input.userMessageId}`;
       connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
         (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent,
          tagsJson, definitionSource, createdAt, updatedAt)
-        VALUES ($topicId, 'hanli', $conversationId, $turnId, $title, $type, $intent, $tags,
+        VALUES ($topicId, $source, $conversationId, $turnId, $title, $type, $intent, $tags,
           $definitionSource, $createdAt, $updatedAt)
         ON CONFLICT(corpusTopicId) DO UPDATE SET title=excluded.title, topicType=excluded.topicType,
           inferredIntent=excluded.inferredIntent, tagsJson=excluded.tagsJson,
           definitionSource=excluded.definitionSource, updatedAt=excluded.updatedAt`)
         .run({
-          $topicId: corpusTopicId, $conversationId: input.conversationId, $turnId: input.userMessageId,
+          $topicId: corpusTopicId, $source: input.corpusSource, $conversationId: input.conversationId, $turnId: input.userMessageId,
           $title: confirmed ? input.decision.title : "待 AI 归类", $type: confirmed ? input.decision.type : "待归类",
           $intent: confirmed ? input.decision.userIntent : null, $tags: JSON.stringify(confirmed ? input.decision.tags : []),
           $definitionSource: confirmed ? "ai-confirmed" : "pending", $createdAt: input.createdAt, $updatedAt: input.completedAt,
@@ -160,42 +162,39 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       const insertCorpusMessage = connection.prepare(`INSERT INTO AiDesktopTrainingCorpusMessage
         (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId,
          sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
-        VALUES ($corpusMessageId, $topicId, 'hanli', $conversationId, $turnId, $sourceMessageId,
+        VALUES ($corpusMessageId, $topicId, $source, $conversationId, $turnId, $sourceMessageId,
           $sequenceNumber, $speakerRole, $content, $retention, 'primary', $createdAt, $recordedAt)
         ON CONFLICT(corpusMessageId) DO UPDATE SET content=excluded.content, recordedAt=excluded.recordedAt`);
       insertCorpusMessage.run({
-        $corpusMessageId: `corpus:hanli:${input.userMessageId}`, $topicId: corpusTopicId,
+        $corpusMessageId: `corpus:${input.corpusSource}:${input.userMessageId}`, $topicId: corpusTopicId, $source: input.corpusSource,
         $conversationId: input.conversationId, $turnId: input.userMessageId, $sourceMessageId: input.userMessageId,
         $sequenceNumber: userSequence, $speakerRole: "user", $content: input.userContent,
         $retention: "exact", $createdAt: input.createdAt, $recordedAt: input.completedAt,
       });
       if (confirmed) insertCorpusMessage.run({
-        $corpusMessageId: `corpus:hanli:${input.hanliMessageId}`, $topicId: corpusTopicId,
-        $conversationId: input.conversationId, $turnId: input.userMessageId, $sourceMessageId: input.hanliMessageId,
-        $sequenceNumber: userSequence + 1, $speakerRole: "hanli", $content: input.decision.summary,
+        $corpusMessageId: `corpus:${input.corpusSource}:${input.personaMessageId}`, $topicId: corpusTopicId, $source: input.corpusSource,
+        $conversationId: input.conversationId, $turnId: input.userMessageId, $sourceMessageId: input.personaMessageId,
+        $sequenceNumber: userSequence + 1, $speakerRole: input.responderPersonaId, $content: input.decision.summary,
         $retention: "preview-300", $createdAt: input.completedAt, $recordedAt: input.completedAt,
       });
     });
-    return this.readHanliConversation(input.conversationId);
+    return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
   }
 
-  syncConversation(conversation: NangongConversationOutDto): void {
+  /** 保存统一人物会话，并把其中真实用户消息登记成可追溯训练语料。 */
+  savePersonaConversation(conversation: PersonaConversationOutDto): void {
     const completedMessages = conversation.messages.filter((message) => message.deliveryStatus === undefined || message.deliveryStatus === "completed");
+    this.#conversations.save({ ...conversation, messages: completedMessages });
+    // 旧来源名继续服务既有语义查询；未来人物默认直接使用自己的稳定 personaId。
+    const corpusSource = conversation.ownerPersonaId === "nangong-wan" ? "nangong"
+      : conversation.ownerPersonaId === "han-li" ? "hanli"
+        : conversation.ownerPersonaId;
     this.#database.transaction((connection) => {
-      const upsert = connection.prepare(`
-        INSERT INTO AiDesktopConversationMemory
-          (messageId, conversationId, sequenceNumber, role, content, contentPreview, inferredIntent, createdAt, recordedAt)
-        VALUES ($messageId, $conversationId, $sequenceNumber, $role, $content, $contentPreview, $inferredIntent, $createdAt, $recordedAt)
-        ON CONFLICT(messageId) DO UPDATE SET
-          conversationId=excluded.conversationId, sequenceNumber=excluded.sequenceNumber,
-          role=excluded.role, content=excluded.content, contentPreview=excluded.contentPreview,
-          inferredIntent=excluded.inferredIntent, createdAt=excluded.createdAt
-      `);
       const upsertCorpusTopic = connection.prepare(`
         INSERT INTO AiDesktopTrainingCorpusTopic
           (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent,
            tagsJson, definitionSource, createdAt, updatedAt)
-        VALUES ($topicId, 'nangong', $conversationId, $turnId, '待 AI 归类', '待归类', NULL,
+        VALUES ($topicId, $source, $conversationId, $turnId, '待 AI 归类', '待归类', NULL,
           '[]', 'pending', $createdAt, $recordedAt)
         ON CONFLICT(corpusTopicId) DO NOTHING
       `);
@@ -203,32 +202,20 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         INSERT INTO AiDesktopTrainingCorpusMessage
           (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId,
            sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
-        VALUES ($corpusMessageId, $topicId, 'nangong', $conversationId, $turnId, $messageId,
+        VALUES ($corpusMessageId, $topicId, $source, $conversationId, $turnId, $messageId,
           $sequenceNumber, 'user', $content, 'exact', 'primary', $createdAt, $recordedAt)
         ON CONFLICT(corpusMessageId) DO NOTHING
       `);
-      completedMessages.forEach((message, fallbackSequenceNumber) => upsert.run({
-        $messageId: message.messageId,
-        $conversationId: conversation.conversationId,
-        $sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : fallbackSequenceNumber,
-        $role: message.role,
-        // 用户与南宫婉原文都完整保存；预览只是独立展示字段，不能替代分析原文。
-        $content: message.content,
-        $contentPreview: preview(message.content),
-        $inferredIntent: message.inferredIntent || null,
-        $createdAt: message.createdAt,
-        $recordedAt: new Date().toISOString(),
-      }));
       completedMessages.forEach((message, fallbackSequenceNumber) => {
-        if (message.role !== "user") return;
+        if (message.speakerType !== "user") return;
         const recordedAt = new Date().toISOString();
-        const topicId = `corpus-topic:nangong:${conversation.conversationId}:${message.messageId}`;
+        const topicId = `corpus-topic:${corpusSource}:${conversation.conversationId}:${message.messageId}`;
         upsertCorpusTopic.run({
-          $topicId: topicId, $conversationId: conversation.conversationId, $turnId: message.messageId,
+          $topicId: topicId, $source: corpusSource, $conversationId: conversation.conversationId, $turnId: message.messageId,
           $createdAt: message.createdAt, $recordedAt: recordedAt,
         });
         insertUserCorpus.run({
-          $corpusMessageId: `corpus:nangong:${message.messageId}`, $topicId: topicId,
+          $corpusMessageId: `corpus:${corpusSource}:${message.messageId}`, $topicId: topicId, $source: corpusSource,
           $conversationId: conversation.conversationId, $turnId: message.messageId, $messageId: message.messageId,
           $sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : fallbackSequenceNumber, $content: message.content, $createdAt: message.createdAt, $recordedAt: recordedAt,
         });
@@ -237,12 +224,12 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
   }
 
   syncEvolutionState(state: EvolutionStateOutDto): void {
-    this.syncConversation(state.conversation);
+    this.savePersonaConversation(state.conversation);
     this.#database.transaction((connection) => {
       const insert = connection.prepare(`
         INSERT OR IGNORE INTO AiDesktopConversationTopicLink (topicId, conversationId, messageId, linkedAt)
         SELECT $topicId, conversationId, messageId, $linkedAt
-        FROM AiDesktopConversationMemory
+        FROM AiDesktopPersonaConversationMessage
         WHERE messageId = $messageId
       `);
       for (const topic of state.topics) {
@@ -255,16 +242,16 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  buildNangongContext(conversation: NangongConversationOutDto): string {
+  buildNangongContext(conversation: PersonaConversationOutDto): string {
     const current = conversation.messages.slice(-CURRENT_CONVERSATION_TURN_LIMIT)
       // 用户原话是方向事实，保持完整；AI 回答使用独立预览，避免长回复挤占后续分析上下文。
-      .map((item) => item.role === "user"
+      .map((item) => item.speakerType === "user"
         ? `用户：${item.content}${item.inferredIntent ? `\nAI登记的用户意图：${item.inferredIntent}` : ""}`
         : `南宫婉：${preview(item.content)}`);
     const historical = this.#database.withConnection((connection) => connection.prepare(`
-      SELECT messageId, conversationId, sequenceNumber, role, content, contentPreview, inferredIntent, createdAt
-      FROM AiDesktopConversationMemory
-      WHERE role = 'user' AND conversationId <> $conversationId
+        SELECT messageId, conversationId, sequenceNumber, content, inferredIntent, createdAt
+        FROM AiDesktopPersonaConversationMessage
+        WHERE ownerPersonaId = 'nangong-wan' AND speakerType = 'user' AND conversationId <> $conversationId
       ORDER BY createdAt DESC
       LIMIT $limit
     `).all({ $conversationId: conversation.conversationId, $limit: HISTORICAL_USER_CONCERN_LIMIT }) as unknown as CollaborationMemoryMessageOutDto[])
@@ -392,14 +379,14 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  registerRound(conversation: NangongConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto): void {
+  registerNangongRound(conversation: PersonaConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto): void {
     const userMessage = conversation.messages.find((message) => message.messageId === userMessageId);
     const nangongMessage = conversation.messages.find((message) => message.messageId === nangongMessageId);
     // 只有真实用户与南宫婉组成的完整回合才能进入语义资料；人物间内部消息只保留业务记录。
-    if (userMessage?.role !== "user" || nangongMessage?.role !== "nangong") {
+    if (userMessage?.speakerType !== "user" || nangongMessage?.speakerType !== "persona" || nangongMessage.speakerPersonaId !== "nangong-wan") {
       throw new Error("南宫婉回合缺少真实用户或人物回复，不能登记训练主题。");
     }
-    this.syncConversation(conversation);
+    this.savePersonaConversation(conversation);
     const now = new Date().toISOString();
     this.#database.transaction((connection) => {
       const current = connection.prepare(`
@@ -435,10 +422,6 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
           WHERE conversationTopicId = $conversationTopicId
         `).run({ $title: normalizedTitle, $topicType: normalizedType, $now: now, $conversationTopicId: current.conversationTopicId });
       }
-      connection.prepare(`
-        UPDATE AiDesktopConversationMemory SET conversationTopicId = $conversationTopicId
-        WHERE messageId IN ($userMessageId, $nangongMessageId)
-      `).run({ $conversationTopicId: conversationTopicId!, $userMessageId: userMessageId, $nangongMessageId: nangongMessageId });
       const corpusTopicId = `corpus-topic:nangong:${conversation.conversationId}:${userMessageId}`;
       const confirmed = Boolean(decision.title && decision.type && decision.userIntent && decision.tags.length && decision.summary);
       connection.prepare(`
@@ -486,11 +469,4 @@ function preview(content: string): string {
 function normalizeTopicValue(value: string, fallback: string): string {
   const normalized = typeof value === "string" ? value.replaceAll(/\s+/g, " ").trim() : "";
   return normalized.slice(0, 120) || fallback;
-}
-
-function parseStringArray(value: unknown): string[] {
-  try {
-    const parsed = JSON.parse(String(value || "[]")) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
-  } catch { return []; }
 }

@@ -23,6 +23,7 @@ export type { ApprovalMemoryEvidenceOutDto, CollaborationMemoryMessageOutDto, Co
 export type { IntegrationReleaseEventTypeValue, IntegrationReleaseHolderOutDto, IntegrationReleaseInDto, ReleaseBatchDocumentOutDto, ReleaseBatchTaskSnapshotOutDto } from "../../services/support/capabilities/release/index.js";
 export type { AutomaticTestPreflightCheckOutDto, AutomaticTestPreflightResultOutDto, TestResourceCoordinatorStateOutDto, TestResourceEventTypeValue, TestResourceHolderOutDto, TestResourceInDto, TestResourceWaiterOutDto } from "../../services/support/capabilities/testing/index.js";
 export type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto, RuntimeRuleSourceValue } from "../../services/support/capabilities/rules/index.js";
+export type { PersonaConversationMessageOutDto, PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../services/personas/conversation/index.js";
 
 export type {
   ApprovalGovernanceDomainValue,
@@ -138,11 +139,8 @@ export type {
   CreateNangongProposalInDto,
   CreateNangongTopicInDto,
   GenerateNangongTopicDraftInDto,
-  NangongConversationMessageOutDto,
-  NangongConversationOutDto,
   NangongTopicDraftOutDto,
   ReviseNangongProposalInDto,
-  SendNangongConversationMessageInDto,
   UpdateNangongTopicInDto,
 } from "../../services/personas/nangong/index.js";
 
@@ -159,9 +157,6 @@ export type {
   HanliDeliberationRoundOutDto,
   HanliDeliberationStatusValue,
   HanliEvolutionDeliberationOutDto,
-  HanliConversationMessageOutDto,
-  HanliConversationOutDto,
-  SendHanliConversationMessageInDto,
   HanliTopicCandidateOutDto,
 } from "../../services/personas/hanli/index.js";
 

@@ -127,7 +127,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
       memory: {
         readHanLiEvolutionCorpus(deliberationId) { return snapshots.map((item) => ({ ...item, deliberationId })); },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
-        appendHanliInternalMessage(message) { internalMessages.push(message); return { conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+        appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
       },
       askHanli: async () => hanliReplies.shift(),
       askNangong: async () => "没有新问题时保持监测；出现新的用户证据后再继续提问。",
@@ -138,7 +138,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     assert.equal(result.state.deliberations[0].rounds.length, 1);
     assert.equal(result.state.deliberations[0].rounds[0].answer, "没有新问题时保持监测；出现新的用户证据后再继续提问。");
     assert.equal(result.state.topics[0].title, "持续人物研讨");
-    assert.deepEqual(internalMessages.map((message) => message.role), ["hanli", "nangong", "hanli"]);
+    assert.deepEqual(internalMessages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan", "han-li"]);
     assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨，请回复 1。/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -158,7 +158,7 @@ test("连续自动开关开启后不因单题轮数上限自行停止", async ()
       memory: {
         readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "continuous-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-message", sequenceNumber: 0, role: "user", responsePhase: null, content: "请持续找出新问题并修正。", originalCreatedAt: "2026-09-02T00:00:00.000Z", capturedAt: "2026-09-02T00:00:01.000Z" }]; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
-        appendHanliInternalMessage(message) { return { conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+        appendPersonaInternalMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
       },
       askHanli: async () => replies.shift(), askNangong: async () => "目前还需要更具体的用户结果证据。", recordEvent() {},
       readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
@@ -174,13 +174,13 @@ test("连续自动开关开启后不因单题轮数上限自行停止", async ()
 test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", async () => {
   let started = 0;
   let externalChatCalls = 0;
-  const messages = [{ messageId: "hanli-invite", sequenceNumber: 0, role: "hanli", content: "需求已经可以开始调查。若确认由韩立与南宫婉开始内部研讨，请回复 1。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
+  const messages = [{ messageId: "hanli-invite", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "需求已经可以开始调查。若确认由韩立与南宫婉开始内部研讨，请回复 1。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
   const memory = {
-    readHanliConversation() { return { conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
-    registerHanliRound(input) {
-      messages.push({ messageId: input.userMessageId, sequenceNumber: messages.length, role: "user", content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt });
-      messages.push({ messageId: input.hanliMessageId, sequenceNumber: messages.length, role: "hanli", content: input.hanliContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
-      return { conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: input.completedAt };
+    readPersonaConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
+    registerPersonaRound(input) {
+      messages.push({ messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt });
+      messages.push({ messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
+      return { ownerPersonaId: input.ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: input.completedAt };
     },
   };
   const service = new HanliConversationService({
@@ -707,7 +707,7 @@ test("人物实时会话按稳定消息标识和回复关系向下追加且允�
     await facade.sendConversationMessage({ clientMessageId: "client-message-1", message: "1", workspaceState, locale: "zh-CN" });
     const state = await facade.sendConversationMessage({ clientMessageId: "client-message-2", message: "1", workspaceState, locale: "zh-CN" });
     assert.deepEqual(state.conversation.messages.map((message) => message.sequenceNumber), [0, 1, 2, 3]);
-    assert.deepEqual(state.conversation.messages.filter((message) => message.role === "user").map((message) => message.messageId), ["client-message-1", "client-message-2"]);
+    assert.deepEqual(state.conversation.messages.filter((message) => message.speakerType === "user").map((message) => message.messageId), ["client-message-1", "client-message-2"]);
     assert.equal(state.conversation.messages[1].replyToMessageId, "client-message-1");
     assert.equal(state.conversation.messages[3].replyToMessageId, "client-message-2");
     assert.ok(state.conversation.messages.every((message) => message.deliveryStatus === "completed"));

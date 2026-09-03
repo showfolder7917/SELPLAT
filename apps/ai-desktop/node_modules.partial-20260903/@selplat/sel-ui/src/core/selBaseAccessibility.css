@@ -1,0 +1,32 @@
+/*
+ * selBaseAccessibility.css：基础可访问性辅助样式。
+ * 负责键盘焦点、屏幕阅读器隐藏文本和减少动画偏好；不包含业务页面视觉。
+ */
+
+/* 可访问性辅助类归入 selgrid-accessibility 组，全局焦点与减少动画规则继续作用于整页。 */
+button:focus-visible,
+select:focus-visible {
+    outline: 2px solid #79e8ff;
+    outline-offset: 3px;
+}
+
+.selgrid-accessibility-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}

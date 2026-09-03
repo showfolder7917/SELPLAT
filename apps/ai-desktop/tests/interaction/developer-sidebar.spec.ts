@@ -513,11 +513,11 @@ test("南宫婉可对话讨论并由韩立分别控制两个来源的自动审�
   await expect(evolutionPage).toHaveURL(/perspective=nangong.*node=manual-topic/);
   await expect(databaseTopicPage).toBeVisible();
   const nangongTab = page.locator(".dev-tab");
-  const newNangongConversation = nangongTab.getByRole("button", { name: "重新建立南宫婉对话" });
-  await expect(newNangongConversation).toBeVisible();
-  await expect(newNangongConversation).toHaveClass(/tab-new-task/);
+  const newPersonaConversation = nangongTab.getByRole("button", { name: "重新建立南宫婉对话" });
+  await expect(newPersonaConversation).toBeVisible();
+  await expect(newPersonaConversation).toHaveClass(/tab-new-task/);
   await expect(page.locator(".nangong-person-composer").getByRole("button", { name: "新建南宫婉对话" })).toHaveCount(0);
-  await newNangongConversation.click();
+  await newPersonaConversation.click();
   await expect(page.getByRole("status").filter({ hasText: "正在关闭当前南宫婉线程并建立新对话" })).toBeVisible();
   await expect(conversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "整理为演化课题" })).toBeDisabled();

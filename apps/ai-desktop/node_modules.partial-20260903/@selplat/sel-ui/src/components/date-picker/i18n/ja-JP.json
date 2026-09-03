@@ -1,0 +1,12 @@
+{
+  "locale": "ja-JP",
+  "weekdays": ["月", "火", "水", "木", "金", "土", "日"],
+  "chooseTemplate": "{label}を選択",
+  "calendarTemplate": "{label}カレンダー",
+  "valueTemplate": "{label}：{value}",
+  "previousMonth": "前の月",
+  "nextMonth": "次の月",
+  "clear": "クリア",
+  "today": "今日",
+  "confirm": "確定"
+}

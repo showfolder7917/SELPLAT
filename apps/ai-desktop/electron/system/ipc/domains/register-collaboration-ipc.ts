@@ -5,14 +5,14 @@ import type {
   QueryEvolutionWorkbenchInDto,
   SaveEvolutionWorkbenchPreferenceInDto,
 } from "../../../../contracts/services/evolution/index.js";
-import type { DecideHanliProposalInDto, DecideHanliResultInDto, SendHanliConversationMessageInDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type {
   ConvertNangongConversationToTopicInDto,
   CreateNangongProposalInDto,
   CreateNangongTopicInDto,
   GenerateNangongTopicDraftInDto,
   ReviseNangongProposalInDto,
-  SendNangongConversationMessageInDto,
   UpdateNangongTopicInDto,
 } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
@@ -20,6 +20,7 @@ import type { CollaborationWorkflowFacade as CollaborationCoordinator } from "..
 import type { LinghuAutomationFacade } from "../../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../../services/personas/nangong/index.js";
 import type { HanliFacade } from "../../../services/personas/hanli/index.js";
+import type { PersonaConversationFacade } from "../../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../../services/workflow/index.js";
 import type { EventCenterFacade, EventCenterTimeline as CollaborationTimelineFacade } from "../../../services/support/capabilities/event-center/index.js";
@@ -31,6 +32,7 @@ export function registerCollaborationIpc(
   linghuAutomation: LinghuAutomationFacade,
   nangong: NangongFacade,
   hanli: HanliFacade,
+  personaConversations: PersonaConversationFacade,
   evolution: EvolutionFacade,
   personaWorkflow: PersonaWorkflowFacade,
   eventCenter: EventCenterFacade,
@@ -62,11 +64,10 @@ export function registerCollaborationIpc(
   handle("desktop:query-evolution-workbench", (_event, request: QueryEvolutionWorkbenchInDto) => evolution.queryWorkbench(request));
   handle("desktop:get-evolution-workbench-preference", (_event, perspective: "nangong" | "hanli", nodeId: string) => evolution.getWorkbenchPreference(perspective, nodeId));
   handle("desktop:save-evolution-workbench-preference", (_event, request: SaveEvolutionWorkbenchPreferenceInDto) => evolution.saveWorkbenchPreference(request));
-  handle("desktop:get-han-li-conversation", () => hanli.conversation());
-  handle("desktop:send-han-li-conversation-message", (_event, request: SendHanliConversationMessageInDto) => hanli.sendConversationMessage(request));
-  handle("desktop:new-han-li-conversation", () => hanli.newConversation());
-  handle("desktop:send-nangong-conversation-message", (_event, request: SendNangongConversationMessageInDto) => nangong.sendConversationMessage(request));
-  handle("desktop:new-nangong-conversation", () => nangong.newConversation());
+  // 人物会话只有这三个跨进程入口。以后增加人物时注册处理器即可，不再增加人物专用 channel。
+  handle("desktop:get-persona-conversation", (_event, personaId: string) => personaConversations.conversation(personaId));
+  handle("desktop:send-persona-conversation-message", (_event, personaId: string, request: SendPersonaConversationMessageInDto) => personaConversations.send(personaId, request));
+  handle("desktop:new-persona-conversation", (_event, personaId: string) => personaConversations.newConversation(personaId));
   handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftInDto) => nangong.generateTopicDraft(request));
   handle("desktop:convert-nangong-conversation-to-topic", (_event, request: ConvertNangongConversationToTopicInDto) => nangong.convertConversationToTopic(request));
   handle("desktop:create-evolution-topic", (_event, request: CreateNangongTopicInDto) => evolution.createTopic(request));

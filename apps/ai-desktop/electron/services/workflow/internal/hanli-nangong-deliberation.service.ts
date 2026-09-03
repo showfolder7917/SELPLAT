@@ -115,7 +115,15 @@ export class HanliNangongDeliberationService {
   #appendInternalMessage(roundId: string, phase: "question" | "answer" | "assessment", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
     const conversationId = this.dependencies.readHanliConversationId();
     if (!conversationId || !this.dependencies.memory) return;
-    this.dependencies.memory.appendHanliInternalMessage({ conversationId, messageId: `internal:${roundId}:${phase}`, role, content, replyToMessageId, createdAt });
+    this.dependencies.memory.appendPersonaInternalMessage({
+      ownerPersonaId: "han-li",
+      conversationId,
+      messageId: `internal:${roundId}:${phase}`,
+      speakerPersonaId: role === "nangong" ? "nangong-wan" : "han-li",
+      content,
+      replyToMessageId,
+      createdAt,
+    });
   }
 }
 

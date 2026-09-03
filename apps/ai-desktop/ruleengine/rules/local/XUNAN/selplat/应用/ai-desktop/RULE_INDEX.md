@@ -1,5 +1,11 @@
 # 当前用户 SELPLAT ai-desktop 应用规则索引
 
+<!-- AI Desktop 的终局是由韩立代理用户持续发问、南宫婉依据证据分析并组织执行，直至真实验收通过的自动产品交付平台。 -->
+AI_DESKTOP_AUTOMATIC_PRODUCT_DELIVERY_PLATFORM_POSITIONING_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop自动产品交付平台终局定位规则.md
+
+<!-- 规划、评估、设计或修改 AI Desktop 产品范围、角色闭环、架构边界、商业模式和自动任务交付流程时加载终局定位规则。 -->
+load_rule_for_ai_desktop_product_strategy_architecture_commercial_or_delivery_scope = AI_DESKTOP_AUTOMATIC_PRODUCT_DELIVERY_PLATFORM_POSITIONING_RULES
+
 <!-- 韩立、南宫婉、动态执行者和令狐的长期职责从独立人物索引进入。 -->
 AI_DESKTOP_PERSONA_RULE_INDEX = local/XUNAN/selplat/应用/ai-desktop/index/人物职责/RULE_INDEX.md
 

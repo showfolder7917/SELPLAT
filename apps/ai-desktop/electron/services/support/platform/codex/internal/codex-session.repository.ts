@@ -69,11 +69,13 @@ export class CodexSessionStore implements CodexSessionPersistence {
  */
 export class SqliteCodexSessionStore implements CodexSessionPersistence {
   readonly #database: DatabasePort | null;
-  readonly #sessionKey: "nangong" | "han-li" | "linghu";
+  readonly #sessionKey: string;
 
-  constructor(database: DatabasePort | null, sessionKey: "nangong" | "han-li" | "linghu") {
+  constructor(database: DatabasePort | null, sessionKey: string) {
     this.#database = database;
-    this.#sessionKey = sessionKey;
+    const normalized = sessionKey.trim();
+    if (!normalized) throw new Error("人物 Codex 会话键不能为空。");
+    this.#sessionKey = normalized;
   }
 
   read(): StoredCodexSession | null {
