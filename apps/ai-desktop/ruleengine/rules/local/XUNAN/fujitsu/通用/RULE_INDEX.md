@@ -21,6 +21,15 @@ load_rule_for_fujitsu_offline_normal_test_or_jacoco = FUJITSU_GRADLE_OFFLINE_DEP
 <!-- 本索引只维护 Fujitsu 各二级项目可以共同复用的规则。 -->
 fujitsu_rule_root = local/XUNAN/fujitsu/通用/rule/
 
+<!-- Fujitsu 确认点结果文档的 OK、NG、要確認及证据链判定规则。 -->
+FUJITSU_CONFIRMATION_RESULT_DOCUMENT_REVIEW_RULES = local/XUNAN/fujitsu/通用/rule/RUL_Fujitsu确认点结果文档判定规则.md
+
+<!-- 复核 Fujitsu 确认点结果 Excel 时加载当前用户规则。 -->
+load_rule_for_fujitsu_confirmation_result_excel_review = FUJITSU_CONFIRMATION_RESULT_DOCUMENT_REVIEW_RULES
+
+<!-- 判定派生数值、黄色待确认行或结果根拠一致性时加载当前用户规则。 -->
+load_rule_for_fujitsu_confirmation_derived_value_pending_or_rationale_consistency = FUJITSU_CONFIRMATION_RESULT_DOCUMENT_REVIEW_RULES
+
 <!-- fujitsu_template_root 的当前独立事实为 local/XUNAN/fujitsu/通用/template/。 -->
 fujitsu_template_root = local/XUNAN/fujitsu/通用/template/
 
