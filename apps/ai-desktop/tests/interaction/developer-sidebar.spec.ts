@@ -22,48 +22,23 @@ test.beforeAll(async () => {
     env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_FILE: productionRendererFile },
   });
   page = await application.firstWindow();
-  await page.locator(".dev-section-title").getByRole("button", { name: "折叠资源管理器" }).waitFor();
+  await page.getByRole("button", { name: "折叠任务" }).waitFor();
 });
 
 test.afterAll(async () => {
   await application?.close();
 });
 
-test("切换工作区与任务时只展开当前分区并置顶占满", async () => {
-  // 永久 CONTEXT 已由人物可调业务右栏替代；侧栏分区测试不得再依赖被删除的静态版本信息。
+test("任务侧栏保留运行模式与协作入口", async () => {
   await expect(page.locator(".dev-context")).toHaveCount(0);
   await expect(page.locator(".dev-brand").getByText("AI Desktop", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "折叠工作区" })).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("#developer-workspace-list")).toBeVisible();
-  const taskToggle = page.getByRole("button", { name: "展开任务" });
+  await expect(page.locator(`#developer-${["workspace", "list"].join("-")}`)).toHaveCount(0);
+  const taskToggle = page.getByRole("button", { name: "折叠任务" });
   await expect(taskToggle).toBeVisible();
-  await expect(taskToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator("#developer-task-list")).toHaveCount(0);
-
-  await taskToggle.click();
-  await expect(page.getByRole("button", { name: "折叠任务" })).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByRole("button", { name: "展开工作区" })).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator("#developer-workspace-list")).toHaveCount(0);
   await expect(page.locator("#developer-task-list")).toBeVisible();
   await expect(page.locator("#developer-task-list").getByText("暂无任务记录", { exact: true })).toBeVisible();
-
-  const sections = page.locator("#developer-explorer-sections");
-  const tasksPane = page.locator(".tasks-pane");
-  const workspacePane = page.locator(".workspace-pane");
-  const [sectionsBounds, tasksBounds, workspaceBounds] = await Promise.all([
-    sections.boundingBox(),
-    tasksPane.boundingBox(),
-    workspacePane.boundingBox(),
-  ]);
-  if (!sectionsBounds || !tasksBounds || !workspaceBounds) throw new Error("侧栏分区缺少可视边界。");
-  expect(tasksBounds.y).toBeLessThan(workspaceBounds.y);
-  expect(Math.abs(tasksBounds.height - (sectionsBounds.height - workspaceBounds.height))).toBeLessThanOrEqual(1);
-
-  await page.getByRole("button", { name: "展开工作区" }).click();
-  await expect(page.getByRole("button", { name: "折叠工作区" })).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("#developer-workspace-list")).toBeVisible();
-  await expect(page.getByRole("button", { name: "展开任务" })).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator("#developer-task-list")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "单会话" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "协同模式" })).toBeVisible();
 });
 
 test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", async () => {
@@ -303,7 +278,6 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
 });
 
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await expect(taskList.locator(".collaboration-member")).toHaveCount(12);
@@ -357,11 +331,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   expect(preserved).toHaveLength(3);
   await page.screenshot({ path: test.info().outputPath("nangong-new-conversation-isolated.png"), fullPage: true });
   await taskList.getByRole("button", { name: "单会话" }).click();
-  await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
 test("南宫婉会话保留自动演化入口且演化工作台已不兼容退役", async () => {
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
@@ -370,11 +342,9 @@ test("南宫婉会话保留自动演化入口且演化工作台已不兼容退�
   await expect(page.locator(".evolution-control-workspace, .evolution-window-shell")).toHaveCount(0);
   expect(application.windows()).toHaveLength(1);
   await taskList.getByRole("button", { name: "单会话" }).click();
-  await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
 test("令狐人物页只保留自动开关和正式会话", async () => {
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /令狐老祖/ }).click();
@@ -400,12 +370,10 @@ test("令狐人物页只保留自动开关和正式会话", async () => {
   await expect(automation).toHaveAttribute("aria-checked", "false");
   await expect(countdown).toHaveCount(0);
   await taskList.getByRole("button", { name: "单会话" }).click();
-  await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
 test("执行人物完成技术分析后直接实施且不再出现内部审批", async () => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(true));
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
@@ -416,12 +384,10 @@ test("执行人物完成技术分析后直接实施且不再出现内部审批",
   await expect(page.locator(".collaboration-task-detail, .task-progress-stage")).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
-  await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
 test("完整任务页退役后不影响已保存任务", async () => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(true));
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
@@ -434,12 +400,10 @@ test("完整任务页退役后不影响已保存任务", async () => {
 
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
-  await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
 test("任务协作群按真实顺序追加节点并覆盖人工审批、十人并行和独立展开", async ({}, testInfo) => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(true));
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
@@ -601,66 +565,6 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
 
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
-  await page.getByRole("button", { name: "展开工作区" }).click();
-});
-
-test("资源管理器整栏与工作区分区均可折叠恢复", async () => {
-  const explorerTitleToggle = page.locator(".explorer-title").getByRole("button", { name: "折叠资源管理器" });
-  await explorerTitleToggle.click();
-  await expect(page.locator(".developer-shell")).toHaveClass(/explorer-collapsed/);
-  await expect(page.locator(".dev-explorer")).not.toBeVisible();
-
-  await page.locator(".dev-activitybar").getByRole("button", { name: "展开资源管理器" }).click();
-  await expect(page.locator(".dev-explorer")).toBeVisible();
-
-  await page.getByRole("button", { name: "折叠工作区" }).click();
-  await expect(page.locator("#developer-workspace-list")).toHaveCount(0);
-  await page.getByRole("button", { name: "展开工作区" }).click();
-  await expect(page.locator("#developer-workspace-list")).toBeVisible();
-});
-
-test("工作区目录末行完整显示且不被内层固定高度裁切", async () => {
-  const lastEntry = page.locator(".workspace-tree .dev-file").filter({ hasText: "shared" });
-  await expect(lastEntry).toBeVisible();
-  const metrics = await lastEntry.evaluate((element) => {
-    const rowBounds = element.getBoundingClientRect();
-    const tree = element.closest(".workspace-tree");
-    if (!tree) throw new Error("工作区目录树不存在。");
-    const treeBounds = tree.getBoundingClientRect();
-    const treeStyle = getComputedStyle(tree);
-    return {
-      rowHeight: rowBounds.height,
-      rowBottom: rowBounds.bottom,
-      treeBottom: treeBounds.bottom,
-      treeMaxHeight: treeStyle.maxHeight,
-      treeOverflow: treeStyle.overflow,
-    };
-  });
-  expect(metrics.rowHeight).toBeGreaterThanOrEqual(31);
-  expect(metrics.rowBottom).toBeLessThanOrEqual(metrics.treeBottom + 1);
-  expect(metrics.treeMaxHeight).toBe("none");
-  expect(metrics.treeOverflow).toBe("visible");
-});
-
-test("正式最小窗口和默认窗口支持资源管理器键盘调节且没有横向溢出", async () => {
-  const explorerResizer = page.getByRole("separator", { name: "调整资源管理器宽度" });
-
-  await explorerResizer.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(explorerResizer).toHaveAttribute("aria-valuenow", "276");
-  await page.keyboard.press("Home");
-  await expect(explorerResizer).toHaveAttribute("aria-valuenow", "260");
-  await expect(page.getByRole("separator", { name: "调整工作区与任务区域高度" })).toHaveCount(0);
-
-  const minimumSize = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getMinimumSize());
-  expect(minimumSize).toEqual([1000, 700]);
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
-  await expect(page.locator(".developer-shell")).toBeVisible();
-  const narrowOverflow = await page.locator(".workspace-list").evaluate((element) => element.scrollWidth - element.clientWidth);
-  expect(narrowOverflow).toBeLessThanOrEqual(1);
-
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
-  await expect(page.locator(".developer-shell")).toBeVisible();
 });
 
 test("自动测试默认关闭，预检成功后才进入开启态", async () => {
@@ -821,7 +725,6 @@ test("屏幕录制权限已开启但当前进程仍拒绝时提供受控重启�
 
 test("SELUI 多页签保留草稿、重复定位、关闭相邻页且不删除后台任务", async () => {
   await page.goto(pathToFileURL(productionRendererFile).href);
-  await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /韩立/ }).click();
