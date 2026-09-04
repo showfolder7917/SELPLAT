@@ -105,7 +105,6 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /node:fs|readFileSync|writeFileSync|renameSync/);
   assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(aiMemoryDatabase\)/);
   assert.doesNotMatch(source("electron/system/bootstrap/application-runtime.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
-  assert.match(source("src/features/evolution/components/EvolutionRevisionPanels.tsx"), /reviseEvolutionProposal\([^\n]+mutation:\s*evolutionMutationRequest\(state\)/);
   const apiMethods = [...source("contracts/system/desktop/api/desktop.api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
   const registryBody = source("contracts/system/desktop/value/desktop-capability-registry.value.ts").split("export const DESKTOP_CAPABILITY_DOMAINS", 2)[1];
   const registeredMethods = [...registryBody.matchAll(/"(\w+)"/g)].map((match) => match[1]);
@@ -236,9 +235,9 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(developerApp, /features\/collaboration\/model\/useCollaborationWorkspace/);
   assert.match(developerApp, /features\/settings\/components\/DeveloperSettingsFeature/);
   assert.match(codexWorkspace, /\.\/chat-message/);
-  assert.match(collaborationWorkspace, /\.\/collaboration-task-progress/);
+  assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
-  assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /evolution\/components\/EvolutionRevisionPanels/);
+  assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
   assert.match(architectureRule, /rule_version = 2\.9\.0/);
   assert.match(architectureRule, /renderer_application_structure_contract/);
   assert.match(architectureRule, /renderer_application_runtime_dependency_contract/);
@@ -290,10 +289,6 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(electronMainSource, /options\.runUnifiedTests/);
   assert.equal(existsSync(path.join(appRoot, "contracts/services/personas/linghu/index.ts")), true);
   const linghuDtoContracts = new Map([
-    ["create-startup-prompt.in.dto.ts", ["CreateLinghuStartupPromptInDto"]],
-    ["update-startup-prompt.in.dto.ts", ["UpdateLinghuStartupPromptInDto"]],
-    ["startup-prompt.out.dto.ts", ["LinghuStartupPromptOutDto"]],
-    ["repair-proposal.out.dto.ts", ["CreateLinghuRepairProposalOutDto"]],
     ["automation-state.event.out.dto.ts", ["LinghuAutomationStateEventOutDto"]],
     ["automation-state.out.dto.ts", [
       "LinghuAutomationFeedbackOutDto",

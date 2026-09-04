@@ -3,8 +3,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 // 沙箱 preload 不能加载 node:path；主进程先解析真实工程根，再通过隔离测试环境传入纯字符串。
 const projectRoot = process.env.AI_DESKTOP_INTERACTION_PROJECT_ROOT;
 if (!projectRoot) throw new Error("交互测试缺少工程根。 ");
-const linghuDefault = JSON.parse(process.env.AI_DESKTOP_INTERACTION_LINGHU_DEFAULT || "null");
-if (!linghuDefault?.title || !linghuDefault?.content) throw new Error("交互测试缺少生产令狐默认文案。 ");
 const workspace = {
   primaryId: "interaction-root",
   roots: [{ id: "interaction-root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
@@ -63,12 +61,13 @@ let collaborationState = {
 let linghuAutomationState = {
   version: 2,
   enabled: false,
-  pollIntervalMs: 30000,
+  pollIntervalMs: 60000,
+  checking: false,
+  nextCheckAt: null,
+  displayConversationStartedAt: null,
   cycle: 1,
   currentModule: "flow-completion",
-  activePromptId: "linghu-default-flow-guardian",
   activeTaskId: null,
-  pendingRepairProposalId: null,
   recoveryAttemptCount: 0,
   currentFaultFingerprint: null,
   recoveryAttemptsByFingerprint: {},
@@ -82,7 +81,6 @@ let linghuAutomationState = {
   blockingReason: "自动执行已关闭",
   lastFeedback: null,
   lastModuleReport: null,
-  prompts: [{ promptId: "linghu-default-flow-guardian", title: linghuDefault.title, content: linghuDefault.content, enabled: true, createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }],
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
 let evolutionState = { version: 8, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { ownerPersonaId: "nangong-wan", conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
@@ -346,33 +344,12 @@ contextBridge.exposeInMainWorld("desktop", {
     collaborationState.members.push({ ...collaborationState.members[1], memberId: `isolated-member-${Date.now()}`, displayName, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     return publishCollaborationState("member.created");
   },
-  updateCollaborationMember: async (memberId, request) => {
-    const member = collaborationState.members.find((item) => item.memberId === memberId);
-    if (member && request.displayName) member.displayName = request.displayName;
-    return publishCollaborationState("member.updated");
-  },
-  deleteCollaborationMember: async (memberId) => { collaborationState.members = collaborationState.members.filter((item) => item.memberId !== memberId); return publishCollaborationState("member.deleted"); },
   submitCollaborationTask: async () => publishCollaborationState("task.submitted"),
   continueCollaborationTask: async () => publishCollaborationState("task.recovery_requested"),
   cancelCollaborationTask: async () => publishCollaborationState("task.cancelled"),
   getLinghuAutomationState: async () => structuredClone(linghuAutomationState),
-  setLinghuAutomationEnabled: async (enabled) => { linghuAutomationState.enabled = enabled === true; linghuAutomationState.blockingReason = enabled ? null : "自动执行已关闭"; return publishLinghuAutomation(enabled ? "automation.enabled" : "automation.disabled"); },
-  createLinghuStartupPrompt: async ({ title, content }) => {
-    const now = new Date().toISOString();
-    const promptId = `interaction-prompt-${Date.now()}`;
-    linghuAutomationState.prompts.push({ promptId, title, content, enabled: true, createdAt: now, updatedAt: now });
-    linghuAutomationState.activePromptId = promptId;
-    return publishLinghuAutomation("prompt.created");
-  },
-  updateLinghuStartupPrompt: async (promptId, request) => {
-    const prompt = linghuAutomationState.prompts.find((item) => item.promptId === promptId);
-    if (!prompt) throw new Error("启动文案不存在。");
-    Object.assign(prompt, request, { updatedAt: new Date().toISOString() });
-    if (!prompt.enabled && linghuAutomationState.activePromptId === promptId) linghuAutomationState.activePromptId = linghuAutomationState.prompts.find((item) => item.enabled)?.promptId || null;
-    return publishLinghuAutomation("prompt.updated");
-  },
-  deleteLinghuStartupPrompt: async (promptId) => { linghuAutomationState.prompts = linghuAutomationState.prompts.filter((item) => item.promptId !== promptId); if (linghuAutomationState.activePromptId === promptId) linghuAutomationState.activePromptId = linghuAutomationState.prompts.find((item) => item.enabled)?.promptId || null; return publishLinghuAutomation("prompt.deleted"); },
-  selectLinghuStartupPrompt: async (promptId) => { linghuAutomationState.activePromptId = promptId; return publishLinghuAutomation("prompt.selected"); },
+  setLinghuAutomationEnabled: async (enabled) => { linghuAutomationState.enabled = enabled === true; linghuAutomationState.nextCheckAt = enabled ? new Date(Date.now() + 60_000).toISOString() : null; linghuAutomationState.blockingReason = enabled ? null : "自动巡检已关闭"; return publishLinghuAutomation(enabled ? "automation.enabled" : "automation.disabled"); },
+  newLinghuDisplayConversation: async () => { linghuAutomationState.displayConversationStartedAt = new Date().toISOString(); return publishLinghuAutomation("automation.display_conversation_created"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getEvolutionState: async () => structuredClone(evolutionState),
   setInteractionOneShotRun: async (run) => { evolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
@@ -412,7 +389,7 @@ contextBridge.exposeInMainWorld("desktop", {
     nangongNewConversationCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 80));
     if (nangongNewConversationCalls > 1) throw new Error("thread already has an active writer");
-    evolutionState.conversation = { ownerPersonaId: "nangong-wan", conversationId: `nangong-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() };
+    evolutionState.conversation = { ownerPersonaId: "nangong-wan", conversationId: `nangong-${Date.now()}`, createdAt: new Date().toISOString(), messages: [], updatedAt: new Date().toISOString() };
     publishNangongEvolution("conversation.created");
     return structuredClone(evolutionState.conversation);
   },
@@ -457,7 +434,6 @@ contextBridge.exposeInMainWorld("desktop", {
     evolutionState.proposals.push({ proposalId, topicId, version: topic.currentProposalVersion, title: topic.title, type: request.type, origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null, revisionFeedbackApprovalId: null, content: request.content, evidence: topic.evidence, impactScope: topic.scope, exclusions: topic.exclusions, risks: request.risks, rollbackPlan: request.rollbackPlan, acceptanceCriteria: topic.acceptanceCriteria, distributionPlan: null, status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now });
     return publishNangongEvolution("proposal.created");
   },
-  createLinghuRepairProposal: async () => publishNangongEvolution("linghu.proposal.created"),
   decideEvolutionProposal: async (proposalId, request) => {
     assertEvolutionMutation(request.mutation);
     const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId);

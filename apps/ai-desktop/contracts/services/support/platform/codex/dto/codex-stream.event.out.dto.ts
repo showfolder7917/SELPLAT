@@ -16,6 +16,8 @@ export interface ManagedExecutionUpdateEventOutDto {
   round: number;
   maximumRounds: number;
   message: string;
+  /** 桌面验证失败后的自修轮次；不把普通执行轮次误认为修复次数。 */
+  selfRepair?: boolean;
 }
 
 export interface CodexStreamEventOutDto {

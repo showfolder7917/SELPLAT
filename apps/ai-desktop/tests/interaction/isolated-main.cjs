@@ -8,15 +8,6 @@ const { MAIN_WINDOW_LAYOUT, mainWindowInitialSize } = require(path.resolve(
 ));
 
 app.whenReady().then(async () => {
-  // 交互夹具必须读取生产 Store 的唯一默认文案，避免职责升级后继续展示测试专用旧副本。
-  const linghuStore = await import(pathToFileURL(path.resolve(
-    __dirname,
-    "../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js",
-  )).href);
-  process.env.AI_DESKTOP_INTERACTION_LINGHU_DEFAULT = JSON.stringify({
-    title: linghuStore.DEFAULT_LINGHU_STARTUP_PROMPT_TITLE,
-    content: linghuStore.DEFAULT_LINGHU_STARTUP_PROMPT,
-  });
   // 主进程负责路径解析，沙箱 preload 只接收已验证的字符串，保持和生产安全边界一致。
   process.env.AI_DESKTOP_INTERACTION_PROJECT_ROOT = path.resolve(__dirname, "../../../..");
   const initialSize = mainWindowInitialSize("developer");

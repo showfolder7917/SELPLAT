@@ -84,13 +84,17 @@ export class CollaborationTimelineRepository {
         }
         for (const event of task.flowEvents) {
           const legacySourceFactKey = `flow:${event.eventId}`;
-          const sourceFactKey = event.type.startsWith("unified_test.") || event.type.startsWith("execution.repair_") || event.type === "integration.batch_frozen" || event.type === "release.restart_healthy"
+          const baseSourceFactKey = event.type === "execution.started" || event.type === "execution.repair_started"
+            ? `${legacySourceFactKey}:stage-closure-v4`
+            : event.type.startsWith("unified_test.") || event.type.startsWith("execution.repair_") || event.type === "integration.batch_frozen" || event.type === "release.restart_healthy"
             ? `${legacySourceFactKey}:visible-rounds-v3`
             : event.type === "task.submitted"
             ? `${legacySourceFactKey}:submission-lifecycle-v2`
             : event.type === "unified_test.failed"
               ? `${legacySourceFactKey}:failure-semantics-v2`
               : legacySourceFactKey;
+          // 投影升级按完整事件序列重放，不能只追加早期开始事件而覆盖已有结束事实。
+          const sourceFactKey = `${baseSourceFactKey}:lifecycle-v4`;
           if (connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: sourceFactKey })) continue;
           const legacySubmitted = event.type === "task.submitted"
             && Boolean(connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: legacySourceFactKey }));
@@ -221,8 +225,11 @@ export class CollaborationTimelineRepository {
       return true;
     }).map((row) => this.#node(connection, row, now))
       .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || (firstSequence.get(left.nodeId) || 0) - (firstSequence.get(right.nodeId) || 0));
-    const executingCount = activeTaskCount(nodes, new Set(["analysis", "execution", "repair"]));
-    const verifyingCount = activeTaskCount(nodes, new Set(["verification"]));
+    // 人数不是阶段数；同一人物旧阶段与验证并存时只计一次，验证状态优先。
+    const verifyingPeople = new Set(nodes.filter(node => node.status === "current" && node.kind === "verification").map(node => node.actor.memberId).filter(id => id !== "system"));
+    const executingPeople = new Set(nodes.filter(node => node.status === "current" && ["analysis", "execution", "repair"].includes(node.kind)).map(node => node.actor.memberId).filter(id => id !== "system" && !verifyingPeople.has(id)));
+    const executingCount = executingPeople.size;
+    const verifyingCount = verifyingPeople.size;
     const waitingCount = nodes.filter((node) => node.status === "waiting" || node.kind === "approval-application" && node.status === "current").length;
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
@@ -297,10 +304,6 @@ function transition(status: CollaborationTimelineGroupOutDto["status"], nodes: C
   if (status === "waiting-approval") return { nextStep: "韩立 · 等待审批", failureNextStep: "韩立 → 南宫婉 · 退回补充", nextOwner: null };
   if (status === "blocked") return { nextStep: "令狐老祖 · 按失败证据调查与修复；解除阻塞后继续", failureNextStep: "等待人工解除恢复条件", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
   return { nextStep: "南宫婉 · 生成执行计划并分配执行人", failureNextStep: "南宫婉 · 说明无法分配的原因", nextOwner: NANGONG };
-}
-
-function activeTaskCount(nodes: CollaborationTimelineNodeOutDto[], kinds: Set<CollaborationTimelineNodeOutDto["kind"]>): number {
-  return new Set(nodes.filter((node) => node.status === "current" && kinds.has(node.kind)).map((node) => node.taskId || node.nodeId)).size;
 }
 
 function participant(memberId: string, displayName: string): CollaborationParticipantSnapshotOutDto { return { memberId, displayName }; }

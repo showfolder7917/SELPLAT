@@ -6,11 +6,9 @@ import type {
   CollaborationMemberOutDto,
   CollaborationStateOutDto,
   CollaborationTaskOutDto,
-  CreateCollaborationMemberInDto,
   DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
   CollaborationTaskRuleContextOutDto,
-  UpdateCollaborationMemberInDto,
 } from "../../../../contracts/services/workflow/index.js";
 
 type StateListener = (state: CollaborationStateOutDto, reason: string, taskIds: string[]) => void;
@@ -97,64 +95,6 @@ export class CollaborationStore {
   selectMember(memberId: string): CollaborationStateOutDto {
     this.#member(memberId);
     return this.#commit("member.selected", (state) => { state.selectedMemberId = memberId; });
-  }
-
-  createMember(request: CreateCollaborationMemberInDto): CollaborationStateOutDto {
-    const displayName = normalizeMemberName(request?.displayName);
-    if (this.#state.members.some((member) => member.displayName === displayName)) throw new Error("协同人物名称已存在。");
-    const now = new Date().toISOString();
-    const member: CollaborationMemberOutDto = {
-      memberId: `member-${randomUUID()}`,
-      displayName,
-      kind: "worker",
-      protected: false,
-      enabled: true,
-      state: "idle",
-      role: null,
-      phase: null,
-      generation: 0,
-      currentTaskId: null,
-      blockingReason: null,
-      lastHeartbeatAt: null,
-      lastProtocolProgressAt: null,
-      lastAssignedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    return this.#commit("member.created", (state) => { state.members.push(member); });
-  }
-
-  updateMember(memberId: string, request: UpdateCollaborationMemberInDto): CollaborationStateOutDto {
-    const member = this.#member(memberId);
-    const displayName = request.displayName === undefined ? member.displayName : normalizeMemberName(request.displayName);
-    if (this.#state.members.some((candidate) => candidate.memberId !== memberId && candidate.displayName === displayName)) {
-      throw new Error("协同人物名称已存在。");
-    }
-    if (member.protected && (request.enabled === false || (request.displayName !== undefined && request.displayName !== member.displayName))) throw new Error("受保护的系统人物不能停用或重命名。");
-    return this.#commit("member.updated", (state) => {
-      const target = requireMember(state, memberId);
-      target.displayName = displayName;
-      if (request.enabled !== undefined) target.enabled = request.enabled;
-      target.updatedAt = new Date().toISOString();
-    });
-  }
-
-  deleteMember(memberId: string): CollaborationStateOutDto {
-    const member = this.#member(memberId);
-    if (member.protected) throw new Error("受保护的系统人物不能删除。");
-    if (member.currentTaskId || !["idle", "offline"].includes(member.state)) {
-      return this.#commit("member.draining", (state) => {
-        const target = requireMember(state, memberId);
-        target.enabled = false;
-        target.state = "draining";
-        target.blockingReason = "当前工作结束并释放 Codex 后删除";
-        target.updatedAt = new Date().toISOString();
-      });
-    }
-    return this.#commit("member.deleted", (state) => {
-      state.members = state.members.filter((candidate) => candidate.memberId !== memberId);
-      if (state.selectedMemberId === memberId) state.selectedMemberId = "han-li";
-    });
   }
 
   submitTask(request: SubmitCollaborationTaskInDto & { ruleContext?: CollaborationTaskRuleContextOutDto }): CollaborationTaskOutDto {
@@ -477,7 +417,8 @@ function recoverInterruptedState(state: CollaborationStateOutDto): void {
     interruptedTaskIds.add(task.taskId);
   }
   for (const batch of state.integrationBatches) {
-    if (batch.state === "frozen" || batch.state === "integrating" || batch.state === "verified") {
+    // 已验证批次正在等待新进程确认，不是异常中断；保留发布检查点。
+    if (batch.state === "frozen" || batch.state === "integrating") {
       batch.state = "failed";
       batch.completedAt = new Date().toISOString();
       batch.failureReason = "应用重建中断集成，等待用户恢复";
@@ -505,12 +446,7 @@ function recoverInterruptedState(state: CollaborationStateOutDto): void {
 }
 
 function releaseTaskMembers(state: CollaborationStateOutDto, taskId: string): void {
-  const deleteMemberIds = new Set<string>();
   for (const member of state.members.filter((candidate) => candidate.currentTaskId === taskId)) {
-    if ((member.state === "draining" || !member.enabled) && !member.protected) {
-      deleteMemberIds.add(member.memberId);
-      continue;
-    }
     member.currentTaskId = null;
     member.role = null;
     member.phase = null;
@@ -520,22 +456,12 @@ function releaseTaskMembers(state: CollaborationStateOutDto, taskId: string): vo
     member.state = member.state === "draining" ? "draining" : "idle";
     member.updatedAt = new Date().toISOString();
   }
-  if (deleteMemberIds.size > 0) {
-    state.members = state.members.filter((member) => !deleteMemberIds.has(member.memberId));
-    if (deleteMemberIds.has(state.selectedMemberId)) state.selectedMemberId = "han-li";
-  }
 }
 
 function requireMember(state: CollaborationStateOutDto, memberId: string): CollaborationMemberOutDto {
   const member = state.members.find((candidate) => candidate.memberId === memberId);
   if (!member) throw new Error("协同人物不存在。");
   return member;
-}
-
-function normalizeMemberName(value: string): string {
-  const name = typeof value === "string" ? value.trim().slice(0, 40) : "";
-  if (!name) throw new Error("人物名称不能为空。");
-  return name;
 }
 
 function sha256(value: string): string {

@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { CollaborationStateEventOutDto, CollaborationStateOutDto, CollaborationStreamEventOutDto, CollaborationTaskOutDto, CollaborationTimelineSnapshotOutDto, CreateCollaborationMemberInDto, DesktopOperatingModeValue, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, LocaleValue, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
+import type { CollaborationStateEventOutDto, CollaborationStateOutDto, CollaborationStreamEventOutDto, CollaborationTaskOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, LocaleValue, SubmitCollaborationTaskInDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 import { applyCodexStreamEvent, createAssistantMessage, type Message } from "../../conversation/model/chat-message";
-import { deriveCollaborationTaskCurrentStage } from "./collaboration-task-progress";
 import type { CollaborationLiveOutput } from "./collaboration-live-output";
 
-export type CollaborationPanel = "member" | "task-group" | "task-detail";
+export type CollaborationPanel = "member" | "task-group";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -23,7 +22,6 @@ export function useCollaborationWorkspace() {
   const [navigationRevision, setNavigationRevision] = useState(0);
   // A repeated click must focus or reopen its tab, even when the route is unchanged.
   const setPanel = (next: CollaborationPanel) => { syncPanel(next); setNavigationRevision((value) => value + 1); };
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const stateRef = useRef<CollaborationStateOutDto | null>(null);
   const linghuAutomationRef = useRef<LinghuAutomationStateOutDto | null>(null);
@@ -52,7 +50,6 @@ export function useCollaborationWorkspace() {
             ? existing
             : {
               message: createAssistantMessage(Date.now(), "task-managed"),
-              stageId: task ? deriveCollaborationTaskCurrentStage(task, linghuAutomationRef.current) : "intent",
               turnId: envelope.event.turnId,
             };
         return { ...current, [key]: { ...next, message: applyCodexStreamEvent(next.message, envelope.event) } };
@@ -71,13 +68,6 @@ export function useCollaborationWorkspace() {
     || task.executorMemberId === selectedMember?.memberId
     || task.executionRecords.some((record) => record.executor.memberId === selectedMember?.memberId)
   )) || [];
-  const selectedTask = state?.tasks.find((task) => task.taskId === selectedTaskId) || null;
-  const selectedTaskMember = selectedTask
-    ? state?.members.find((member) => member.memberId === selectedTask.executorMemberId)
-      || state?.members.find((member) => member.memberId === selectedTask.initiator?.memberId)
-      || selectedMember
-    : null;
-
   const applyState = async (request: Promise<CollaborationStateOutDto> | undefined) => {
     const next = await request;
     if (next) setState(next);
@@ -85,9 +75,6 @@ export function useCollaborationWorkspace() {
   };
   const setOperatingMode = (mode: DesktopOperatingModeValue) => applyState(window.desktop?.setDesktopOperatingMode(mode));
   const selectMember = (memberId: string) => applyState(window.desktop?.selectCollaborationMember(memberId));
-  const createMember = (request: CreateCollaborationMemberInDto) => applyState(window.desktop?.createCollaborationMember(request));
-  const updateMember = (memberId: string, request: UpdateCollaborationMemberInDto) => applyState(window.desktop?.updateCollaborationMember(memberId, request));
-  const deleteMember = (memberId: string) => applyState(window.desktop?.deleteCollaborationMember(memberId));
   const submitTask = (request: SubmitCollaborationTaskInDto) => applyState(window.desktop?.submitCollaborationTask(request));
   /** 把已确认的主会话事实冻结为协作任务，避免 Application 理解协作快照结构。 */
   const submitConversationTask = async (message: Message, messages: Message[], workspaces: WorkspaceStateOutDto, locale: LocaleValue) => {
@@ -121,8 +108,8 @@ export function useCollaborationWorkspace() {
   return {
     state, setState, timeline, setTimeline, linghuAutomation, setLinghuAutomation, streams, timelineStreams, panel, setPanel,
     error, setError, navigationRevision, syncPanel,
-    selectedTaskId, setSelectedTaskId, terminalStates, collaborationMode, selectedMember,
-    selectedMemberTasks, selectedTask, selectedTaskMember, setOperatingMode, selectMember, createMember, updateMember,
-    deleteMember, submitTask, submitConversationTask, continueTask, cancelTask, refreshTimeline,
+    terminalStates, collaborationMode, selectedMember,
+    selectedMemberTasks, setOperatingMode, selectMember,
+    submitTask, submitConversationTask, continueTask, cancelTask, refreshTimeline,
   };
 }

@@ -13,8 +13,6 @@ import type { CollaborationTaskStateValue } from "../../../workflow/index.js";
 import type { TestResourceCoordinatorStateOutDto } from "../../../support/capabilities/testing/index.js";
 import type { LinghuAutomationModuleValue, LinghuBlockingKindValue, LinghuFlowHealthValue } from "../value/automation.value.js";
 
-// 启动文案属于独立输出 DTO，状态 DTO 只通过类型组合它。
-import type { LinghuStartupPromptOutDto } from "./startup-prompt.out.dto.js";
 
 // 三个值分别代表流程完成、测试覆盖和审计完整性；新增模块必须同步 Store 中的轮转顺序。
 /** 一个令狐模块完成后向外提供的简要反馈 DTO。 */
@@ -100,18 +98,18 @@ export interface LinghuAutomationStateOutDto {
   version: 2;
   // 只有用户开关能改变 enabled，检测逻辑不能自行关闭。
   enabled: boolean;
-  // 固定 30 秒轮询间隔属于协议事实。
-  pollIntervalMs: 30_000;
+  // 每轮结束后等待一分钟；下次时间由后台调度器发布。
+  pollIntervalMs: 60_000;
+  checking: boolean;
+  nextCheckAt: string | null;
+  /** 仅控制令狐页面的消息展示边界，不重置后台任务或巡检恢复点。 */
+  displayConversationStartedAt: string | null;
   // 循环从 1 开始，三个模块完成后递增。
   cycle: number;
   // 当前模块决定本轮只处理哪一种职责。
   currentModule: LinghuAutomationModuleValue;
-  // 当前启动文案允许为空，表示尚未选择可用入口。
-  activePromptId: string | null;
   // 当前任务允许为空，表示尚未派发令狐任务。
   activeTaskId: string | null;
-  // 待处理修正提案允许为空，表示当前没有提案等待审批。
-  pendingRepairProposalId: string | null;
   // 当前故障次数用于页面显示，权威限制使用下方指纹映射。
   recoveryAttemptCount: number;
   // 当前指纹标识正在处理的真实停点。
@@ -138,8 +136,6 @@ export interface LinghuAutomationStateOutDto {
   lastFeedback: LinghuAutomationFeedbackOutDto | null;
   // 最近模块报告服务完整审计，尚无报告时为空。
   lastModuleReport: LinghuModuleCompletionReportOutDto | null;
-  // 启动文案数组保留用户历史；当前入口由 activePromptId 指向。
-  prompts: LinghuStartupPromptOutDto[];
   // 任一原子状态提交都会刷新更新时间。
   updatedAt: string;
 }

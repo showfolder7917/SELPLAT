@@ -99,7 +99,11 @@ export class VersionIntegrationPipeline {
   confirmPublishedRestart(): number[] {
     const state = this.#store.state();
     const generations = state.integrationBatches
-      .filter((batch) => batch.state === "verified"
+      .filter((batch) => (batch.state === "verified"
+        // 仅恢复被旧启动逻辑误标的发布事实，不接受普通失败或未经测试的版本。
+        || (batch.state === "failed" && batch.failureReason === "应用重建中断集成，等待用户恢复"
+          && batch.taskIds.every((id) => state.tasks.some((task) => task.taskId === id
+            && task.state === "awaiting-restart" && task.unifiedTest?.status === "passed"))))
         && Boolean(batch.integrationSha)
         && batch.integrationSha === this.#loadedRuntimeSha
         && state.tasks.some((task) => task.integrationGeneration === batch.generation && task.state === "awaiting-restart"))
@@ -110,7 +114,7 @@ export class VersionIntegrationPipeline {
       this.#store.updateTask(taskIds[0], "release.restart_healthy", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         const completedAt = new Date().toISOString();
-        if (batch) { batch.state = "completed"; batch.completedAt = completedAt; }
+        if (batch) { batch.state = "completed"; batch.completedAt = completedAt; batch.failureReason = null; }
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           task.state = "integrated";

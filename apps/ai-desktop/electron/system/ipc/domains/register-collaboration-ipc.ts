@@ -1,5 +1,4 @@
-import type { CreateCollaborationMemberInDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../../contracts/services/workflow/index.js";
-import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, UpdateLinghuStartupPromptInDto } from "../../../../contracts/services/personas/linghu/index.js";
+import type { DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionMutationInDto } from "../../../../contracts/services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
@@ -43,18 +42,12 @@ export function registerCollaborationIpc(
   });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingModeValue) => collaboration.setMode(mode));
   handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
-  handle("desktop:create-collaboration-member", (_event, request: CreateCollaborationMemberInDto) => collaboration.createMember(request));
-  handle("desktop:update-collaboration-member", (_event, memberId: string, request: UpdateCollaborationMemberInDto) => collaboration.updateMember(memberId, request));
-  handle("desktop:delete-collaboration-member", (_event, memberId: string) => collaboration.deleteMember(memberId));
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request));
   handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
   handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
   handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
   handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
-  handle("desktop:create-linghu-startup-prompt", (_event, request: CreateLinghuStartupPromptInDto) => linghuAutomation.createPrompt(request));
-  handle("desktop:update-linghu-startup-prompt", (_event, promptId: string, request: UpdateLinghuStartupPromptInDto) => linghuAutomation.updatePrompt(promptId, request));
-  handle("desktop:delete-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.deletePrompt(promptId));
-  handle("desktop:select-linghu-startup-prompt", (_event, promptId: string) => linghuAutomation.selectPrompt(promptId));
+  handle("desktop:new-linghu-display-conversation", () => linghuAutomation.newDisplayConversation());
   handle("desktop:get-nangong-evolution-state", () => evolution.state());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
   // 人物会话只有这三个跨进程入口。以后增加人物时注册处理器即可，不再增加人物专用 channel。
@@ -69,7 +62,6 @@ export function registerCollaborationIpc(
   handle("desktop:control-evolution-automation", (_event, action: PersonaWorkflowActionInDto) => personaWorkflow.controlAutomation(action));
   handle("desktop:resume-nangong-one-shot-evolution", () => personaWorkflow.resumeOneShotRun());
   handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateNangongProposalInDto) => nangong.createProposal(topicId, request));
-  handle("desktop:create-linghu-repair-proposal", (_event, request: CreateLinghuRepairProposalOutDto) => evolution.createLinghuRepairProposal(request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideHanliProposalInDto) => hanli.decideProposal(proposalId, request));
   handle("desktop:decide-evolution-result", (_event, proposalId: string, request: DecideHanliResultInDto) => hanli.decideResult(proposalId, request));
   handle("desktop:generate-han-li-acceptance-plan", (_event, proposalId: string) => hanli.generateAcceptancePlan(proposalId));

@@ -33,9 +33,7 @@ assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 const rendererCollaborationSources = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
   "../../../src/features/collaboration/components/TaskCollaborationGroup.tsx",
-  "../../../src/features/collaboration/components/CollaborationTaskDetail.tsx",
   "../../../src/features/collaboration/components/CollaborationMemberPage.tsx",
-  "../../../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
   "../../../src/features/conversation/components/CollaborationStatusChain.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
 ];
@@ -100,7 +98,7 @@ function git(cwd, ...args) {
 test("会话卡片绑定真实协作任务并完整显示修复回流与统一测试状态", () => {
   assert.match(developerSource, /collaborationTaskId/);
   assert.match(developerSource, /CollaborationStatusChain/);
-  assert.match(developerSource, /task-fact-strip.*task\.initiator\?\.displayName/s);
+  assert.match(developerSource, /node\.actor\.displayName/);
   assert.match(developerSource, /message\.collaborationTaskId[\s\S]*messageTask[\s\S]*CollaborationStatusChain/);
   assert.match(developerSource, /test-failed[\s\S]*重新测试/);
   assert.doesNotMatch(collaborationContractSource, /repairing-review|queued-reviewer/);
@@ -125,7 +123,7 @@ const workspaceState = {
   roots: [{ id: "root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
 };
 
-test("默认人物稳定列出且韩立不能被删除", () => {
+test("默认人物稳定列出，新增、重命名和删除入口退役，存量人物保留", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-store-"));
   try {
     const store = new CollaborationStore(path.join(directory, "state.json"));
@@ -135,24 +133,24 @@ test("默认人物稳定列出且韩立不能被删除", () => {
     assert.deepEqual(store.state().members.map((member) => member.displayName), [
       "韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元",
     ]);
-    assert.throws(() => store.deleteMember("han-li"), /不能删除/);
-    assert.throws(() => store.deleteMember("linghu-ancestor"), /不能删除/);
-    const created = store.createMember({ displayName: "银月" });
-    const member = created.members.find((candidate) => candidate.displayName === "银月");
-    assert.ok(member);
-    assert.equal(store.updateMember(member.memberId, { displayName: "银月仙子" }).members.some((candidate) => candidate.displayName === "银月仙子"), true);
-    assert.equal(store.deleteMember(member.memberId).members.some((candidate) => candidate.memberId === member.memberId), false);
+    const existing = store.state();
+    existing.members.push({ ...existing.members.at(-1), memberId: "legacy-yinyue", displayName: "银月" });
+    writeFileSync(path.join(directory, "state.json"), JSON.stringify(existing));
+    assert.ok(new CollaborationStore(path.join(directory, "state.json")).state().members.find((member) => member.memberId === "legacy-yinyue"));
+    assert.equal(store.createMember, undefined);
+    assert.equal(store.updateMember, undefined);
+    assert.equal(store.deleteMember, undefined);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("清空测试数据保留人物配置与令狐文案并重置全部运行态", () => {
+test("清空测试数据保留人物配置并重置令狐运行态", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "clear-test-data-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
     collaborationStore.setMode("collaboration");
-    const custom = collaborationStore.createMember({ displayName: "银月" }).members.find((member) => member.displayName === "银月");
+    const custom = collaborationStore.state().members.find((member) => member.displayName === "墨大夫");
     collaborationStore.submitTask({ title: "待清空任务", problemStatement: "验证测试数据清理", confirmedIntent: "删除运行记录并保留配置", workspaceState, locale: "zh-CN" });
     assert.ok(collaborationStore.clearTestData() > 0);
     const collaborationState = new CollaborationStore(path.join(directory, "collaboration.json")).state();
@@ -164,177 +162,89 @@ test("清空测试数据保留人物配置与令狐文案并重置全部运行�
 
     const linghuPath = path.join(directory, "linghu.json");
     const linghuStore = createTestLinghuStore(linghuPath);
-    const prompt = linghuStore.createPrompt({ title: "保留的启动文案", content: "这是用户配置，不属于测试运行历史。" });
     linghuStore.setEnabled(true);
     linghuStore.updateRuntime("test.runtime", (state) => { state.flowSnapshots.push({ sourceTaskId: "task-1", taskTitle: "旧任务", taskState: "executing", sourceGeneration: 1, sourceStage: "execution", sourceStatus: "started", sourceResultSha: null, completionConditions: [], observedAt: new Date().toISOString() }); });
     assert.ok(linghuStore.clearTestData() > 0);
     const linghuState = createTestLinghuStore(linghuPath).state();
     assert.equal(linghuState.enabled, false);
     assert.equal(linghuState.flowSnapshots.length, 0);
-    assert.ok(linghuState.prompts.some((item) => item.promptId === prompt.prompts.at(-1).promptId));
+    assert.equal("prompts" in linghuState, false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐老祖自动保障通过单一 Facade 发起任务并持久恢复启动文案", async () => {
-  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-automation-"));
+test("令狐既有保障任务恢复进度，完成后无新故障不泛化派发", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-existing-progress-"));
+  let facade;
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
-    collaborationStore.setMode("collaboration");
-    const submitted = [];
-    const collaboration = {
-      state: () => collaborationStore.state(),
-      setMode: (mode) => collaborationStore.setMode(mode),
-      submitTask: (request) => {
-        submitted.push(request);
-        collaborationStore.submitTask(request);
-        return collaborationStore.state();
-      },
-      continueTask: (taskId) => collaborationStore.continueTask(taskId),
-    };
     const storePath = path.join(directory, "linghu.json");
     const automationStore = createTestLinghuStore(storePath);
-    let restartCount = 0;
-    const facade = new LinghuAutomationFacade({
-      store: automationStore,
-      collaboration,
-      readWorkspaceState: () => workspaceState,
-      locale: () => "zh-CN",
-      recordEvent: () => undefined,
-      readTestResourceState: idleTestResourceState,
-      runUnifiedTestAndRestart: async (onVerified) => { restartCount += 1; onVerified(); },
-    });
+    const seeded = collaborationStore.submitTask({ title: "已授权保障任务", problemStatement: "已有具体故障", confirmedIntent: "沿原任务恢复并验证", workspaceState, locale: "zh-CN", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor" });
+    automationStore.updateRuntime("test.existing_task", (state) => { state.activeTaskId = seeded.taskId; });
     automationStore.setEnabled(true);
+    let dispatched = 0;
+    facade = new LinghuAutomationFacade({ store: automationStore,
+      collaboration: { state: () => collaborationStore.state(), setMode: (mode) => collaborationStore.setMode(mode), submitTask() { dispatched++; throw Error("无新故障不应派发"); } },
+      readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent() {}, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => {},
+    });
     await facade.checkNow();
-    assert.equal(submitted.length, 1);
-    assert.equal(submitted[0].initiatorMemberId, "linghu-ancestor");
-    assert.equal(submitted[0].preferredExecutorMemberId, "linghu-ancestor");
-    assert.equal(submitted[0].automationSource, "linghu-safeguard");
-    assert.match(submitted[0].confirmedIntent, /最后一道屏障/);
-    assert.match(submitted[0].confirmedIntent, /当前独立模块/);
-    assert.match(submitted[0].confirmedIntent, /测试漏点/);
-    assert.match(submitted[0].confirmedIntent, /日志审计/);
-    assert.match(submitted[0].confirmedIntent, /测试资源结构化事实/);
-    assert.doesNotMatch(submitted[0].confirmedIntent, /页面审核以客户易用为第一目标/);
-    assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
-    await facade.checkNow();
-    assert.equal(submitted.length, 1, "活动模块尚未完成时30秒检测不得重复派发");
     assert.equal(facade.state().flowSnapshots.length, 1);
-    assert.equal(facade.state().flowSnapshots[0].sourceTaskId, facade.state().activeTaskId);
-    assert.deepEqual(facade.state().flowSnapshots[0].completionConditions, ["任务完成代码级验证", "集成候选验证通过", "结果进入 integrated 终态"]);
-    assert.ok(facade.state().detectionCursor);
-
-    const created = facade.createPrompt({ title: "客户易用性巡检", content: "从客户一看就懂的角度持续检查页面。" });
-    const prompt = created.prompts.find((candidate) => candidate.title === "客户易用性巡检");
-    assert.ok(prompt);
-    facade.updatePrompt(prompt.promptId, { enabled: false });
-    assert.equal(facade.state().prompts.find((candidate) => candidate.promptId === prompt.promptId).enabled, false);
     const restored = createTestLinghuStore(storePath).state();
+    assert.equal(restored.activeTaskId, seeded.taskId);
     assert.equal(restored.enabled, true);
-    assert.equal(restored.activeTaskId, facade.state().activeTaskId);
-    assert.equal(restored.pollIntervalMs, 30_000);
-    facade.deletePrompt(prompt.promptId);
-    assert.equal(facade.state().prompts.some((candidate) => candidate.promptId === prompt.promptId), false);
-
-    const expectedModules = ["test-coverage", "audit-completeness", "flow-completion"];
-    for (const expectedModule of expectedModules) {
-      const activeTaskId = facade.state().activeTaskId;
-      collaborationStore.updateTask(activeTaskId, "test.integrated", (task) => {
-        task.state = "integrated";
-        task.completedAt = new Date().toISOString();
-        task.finalResult = "模块完成反馈";
-      });
-      await facade.checkNow();
-      assert.equal(facade.state().currentModule, expectedModule);
-      if (expectedModule === "audit-completeness") {
-        assert.equal(facade.state().lastModuleReport.module, "test-coverage");
-        assert.equal(facade.state().lastModuleReport.tests.status, "passed");
-        assert.equal(facade.state().lastModuleReport.restartRecovery.status, "passed");
-      }
-    }
-    assert.equal(facade.state().cycle, 2);
-    assert.equal(restartCount, 1);
-    assert.equal(submitted.length, 4, "每个模块完成后只派发一个下一模块任务");
-    assert.equal(facade.state().lastModuleReport.module, "audit-completeness");
-    assert.equal(facade.state().lastModuleReport.tasks[0].executorMemberId, "linghu-ancestor");
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
+    assert.equal(restored.pollIntervalMs, 60_000);
+    collaborationStore.updateTask(seeded.taskId, "test.integrated", (task) => { task.state = "integrated"; task.completedAt = new Date().toISOString(); task.finalResult = "已有任务完成"; });
+    await facade.checkNow();
+    assert.equal(dispatched, 0);
+    assert.equal(facade.state().currentModule, "test-coverage");
+    assert.equal(facade.state().lastModuleReport.module, "flow-completion");
+    assert.equal(facade.state().activeTaskId, null);
+  } finally { facade?.stop(); rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐没有具体故障时只报告检查结果，已有具体修正仍沿韩立审批返还执行", async () => {
-  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-evolution-approval-"));
+test("令狐旧审批链已退役，空闲巡检不创建泛化任务且不读取旧提案指针", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-retired-approval-"));
+  let facade;
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
-    collaborationStore.setMode("collaboration");
-    const collaboration = {
-      state: () => collaborationStore.state(),
-      setMode: (mode) => collaborationStore.setMode(mode),
-      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
-    };
-    const automationStore = createTestLinghuStore(path.join(directory, "linghu.json"));
-    automationStore.setEnabled(true);
-    let proposalState = { proposals: [] };
-    const facade = new LinghuAutomationFacade({
-      store: automationStore, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
-      recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined,
-      submitRepairProposal: (request) => {
-        proposalState = { proposals: [{ proposalId: "linghu-proposal-1", status: "pending-approval", ...request }] };
-        return proposalState;
-      },
-      readEvolutionState: () => proposalState,
-      reviseReturnedProposal: (proposalId) => {
-        const original = proposalState.proposals.find((proposal) => proposal.proposalId === proposalId);
-        proposalState.proposals.push({ ...original, proposalId: "linghu-proposal-2", version: 2, status: "pending-approval", supersedesProposalId: proposalId, approvals: [] });
-        return proposalState;
-      },
+    const statePath = path.join(directory, "linghu.json");
+    const initial = createTestLinghuStore(statePath);
+    initial.setEnabled(true);
+    writeFileSync(statePath, JSON.stringify({ ...initial.state(), pendingRepairProposalId: "retired-proposal" }));
+    const automationStore = createTestLinghuStore(statePath);
+    let submitted = 0;
+    facade = new LinghuAutomationFacade({ store: automationStore,
+      collaboration: { state: () => collaborationStore.state(), setMode: (mode) => collaborationStore.setMode(mode), submitTask() { submitted++; throw Error("不得无事实创建任务"); } },
+      readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent() {}, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => {},
     });
-    await facade.checkNow();
-    assert.equal(proposalState.proposals.length, 0);
-    assert.equal(facade.state().pendingRepairProposalId, null);
+    await facade.checkNow(); await facade.checkNow();
+    assert.equal(submitted, 0);
+    assert.equal("pendingRepairProposalId" in facade.state(), false);
+    assert.equal("pendingRepairProposalId" in JSON.parse(readFileSync(statePath, "utf8")), false);
     assert.match(facade.state().blockingReason, /没有未完成任务/);
-    assert.match(facade.state().blockingReason, /不生成泛化修正方案/);
-    assert.equal(collaborationStore.state().tasks.length, 0, "审批前不得创建修正执行任务");
-    proposalState = { proposals: [{ proposalId: "linghu-proposal-1", version: 1, status: "pending-approval", approvals: [] }] };
-    automationStore.updateRuntime("test.concrete_repair_proposal", (state) => {
-      state.pendingRepairProposalId = "linghu-proposal-1";
-      state.recoveryCheckpoint = "repair-proposal:linghu-proposal-1:flow-completion";
-      state.blockingReason = "墨彩环负责的任务停在版本集成阶段；发现：已登记的本地修改归属不明确。";
-    });
-    proposalState.proposals[0].status = "supplement-required";
-    proposalState.proposals[0].approvals = [{ advice: "补充修改位置和预期结果" }];
-    await facade.checkNow();
-    assert.equal(facade.state().pendingRepairProposalId, "linghu-proposal-2");
-    assert.match(facade.state().blockingReason, /已依据审批意见提交 v2/);
-    proposalState.proposals[1].status = "approved";
-    collaborationStore.submitTask({ title: "令狐审批后修正", problemStatement: "修正持续运行 Bug", confirmedIntent: "按审批方向修正", constraints: [], acceptanceCriteria: ["稳定运行"], workspaceState, locale: "zh-CN", mergeStrategy: "INDEPENDENT", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor", evolutionProposalId: "linghu-proposal-2" });
-    await facade.checkNow();
-    assert.equal(facade.state().pendingRepairProposalId, null);
-    assert.equal(facade.state().activeTaskId, collaborationStore.state().tasks[0].taskId);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+    assert.equal(collaborationStore.state().tasks.length, 0);
+  } finally { facade?.stop(); rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐旧四模块默认文案升级后收敛为三项职责且不覆盖用户自建文案", () => {
-  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-prompt-v2-migration-"));
+test("退役文案字段不再读回，开关和运行恢复点保持", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-retired-fields-"));
   const storePath = path.join(directory, "linghu.json");
   try {
     const original = createTestLinghuStore(storePath);
-    original.createPrompt({ title: "用户自建", content: "保留用户自己维护的具体执行约束。" });
-    const legacy = JSON.parse(readFileSync(storePath, "utf8"));
-    legacy.version = 1;
-    legacy.currentModule = "architecture-recovery";
-    legacy.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content = "页面审核以客户易用为第一目标，执行四个模块。";
-    writeFileSync(storePath, JSON.stringify(legacy), "utf8");
-    rmSync(`${storePath}.bak`, { force: true });
-
-    const migrated = createTestLinghuStore(storePath).state();
-    assert.equal(migrated.version, 2);
-    assert.equal(migrated.currentModule, "flow-completion");
-    assert.match(migrated.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content, /第二职责是检查测试漏点/);
-    assert.match(migrated.prompts.find((prompt) => prompt.promptId === "linghu-default-flow-guardian").content, /第三职责是检查日志审计完整性/);
-    assert.equal(migrated.prompts.find((prompt) => prompt.title === "用户自建").content, "保留用户自己维护的具体执行约束。");
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
+    original.setEnabled(true);
+    original.updateRuntime("test.checkpoint", state => { state.recoveryCheckpoint = "active-task:T1"; });
+    const persisted = JSON.parse(readFileSync(storePath, "utf8"));
+    persisted.prompts = [{ promptId: "retired", content: "不得执行旧文案" }];
+    persisted.activePromptId = "retired";
+    writeFileSync(storePath, JSON.stringify(persisted), "utf8");
+    const restored = createTestLinghuStore(storePath);
+    assert.equal(restored.state().enabled, true);
+    assert.equal(restored.state().recoveryCheckpoint, "active-task:T1");
+    assert.equal("prompts" in restored.state(), false);
+    assert.equal("activePromptId" in restored.state(), false);
+    restored.setEnabled(false);
+    assert.equal("prompts" in JSON.parse(readFileSync(storePath, "utf8")), false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("令狐自动状态损坏时从最近有效备份恢复开启开关和检测恢复点", () => {
@@ -401,6 +311,9 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
       runUnifiedTestAndRestart: async () => undefined,
     });
     automationStore.setEnabled(true);
+    const seeded = collaborationStore.submitTask({ title: "已授权保障任务", problemStatement: "已有具体故障", confirmedIntent: "沿原任务恢复并验证", workspaceState, locale: "zh-CN", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor" });
+    automationStore.updateRuntime("test.existing_task", (state) => { state.activeTaskId = seeded.taskId; });
+
     await facade.checkNow();
     collaborationStore.updateTask(facade.state().activeTaskId, "test.blocked", (task) => {
       task.state = "blocked";
@@ -634,7 +547,7 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐活动任务记录缺失时保留恢复点并派发同模块替代任务", async () => {
+test("令狐活动任务记录缺失时保留恢复点且不在缺少故障证据时创建泛化任务", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-missing-task-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -665,18 +578,21 @@ test("令狐活动任务记录缺失时保留恢复点并派发同模块替代�
       runUnifiedTestAndRestart: async () => undefined,
     });
     automationStore.setEnabled(true);
+    const seeded = collaborationStore.submitTask({ title: "已授权保障任务", problemStatement: "已有具体故障", confirmedIntent: "沿原任务恢复并验证", workspaceState, locale: "zh-CN", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor" });
+    automationStore.updateRuntime("test.existing_task", (state) => { state.activeTaskId = seeded.taskId; });
+
     await facade.checkNow();
     hiddenTaskId = facade.state().activeTaskId;
     await facade.checkNow();
-    assert.notEqual(facade.state().activeTaskId, hiddenTaskId);
-    assert.match(facade.state().recoveryCheckpoint, /replacement-task:missing-task:/);
-    assert.equal(collaborationStore.state().tasks.length, 2);
+    assert.equal(facade.state().activeTaskId, null);
+    assert.match(facade.state().recoveryCheckpoint, /missing-task:/);
+    assert.equal(collaborationStore.state().tasks.length, 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("令狐活动任务被取消后释放失效指针并继续派发同模块替代任务", async () => {
+test("令狐活动任务被取消后释放失效指针且不重新创建已取消任务", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-cancelled-task-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -691,6 +607,9 @@ test("令狐活动任务被取消后释放失效指针并继续派发同模块�
     const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
     store.setEnabled(true);
+    const seeded = collaborationStore.submitTask({ title: "已授权保障任务", problemStatement: "已有具体故障", confirmedIntent: "沿原任务恢复并验证", workspaceState, locale: "zh-CN", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor" });
+    store.updateRuntime("test.existing_task", (state) => { state.activeTaskId = seeded.taskId; });
+
     await facade.checkNow();
     const cancelledTaskId = facade.state().activeTaskId;
     collaborationStore.cancelTask(cancelledTaskId);
@@ -698,7 +617,7 @@ test("令狐活动任务被取消后释放失效指针并继续派发同模块�
     assert.notEqual(facade.state().activeTaskId, cancelledTaskId);
     assert.equal(facade.state().enabled, true);
     assert.equal(facade.state().flowSnapshots.some((snapshot) => snapshot.sourceTaskId === cancelledTaskId), false);
-    assert.match(facade.state().recoveryCheckpoint, /active-task:|replacement-task:/);
+    assert.match(facade.state().recoveryCheckpoint, /cancelled-task:/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -726,6 +645,9 @@ test("令狐持续检测所有自动流程，并为非活动停点执行独立�
       runUnifiedTestAndRestart: async () => undefined,
     });
     store.setEnabled(true);
+    const seeded = collaborationStore.submitTask({ title: "已授权保障任务", problemStatement: "已有具体故障", confirmedIntent: "沿原任务恢复并验证", workspaceState, locale: "zh-CN", initiatorMemberId: "linghu-ancestor", preferredExecutorMemberId: "linghu-ancestor" });
+    store.updateRuntime("test.existing_task", (state) => { state.activeTaskId = seeded.taskId; });
+
     await facade.checkNow();
     const activeTaskId = facade.state().activeTaskId;
     const secondary = collaborationStore.submitTask({
@@ -1481,16 +1403,12 @@ test("协同任务冻结真实发起人快照，两类自动发起都不回退�
 });
 
 test("人物页按阶段标注真实操作者并在阻塞后保留执行证据与恢复入口", () => {
-  assert.match(developerSource, /task\.plans\.map[\s\S]*plan\.ownerDisplayName/);
+  assert.match(developerSource, /node.actor.displayName/);
   assert.doesNotMatch(developerSource, /task\.reviewAttempts\.map|attempt\.reviewerDisplayName/);
-  assert.match(developerSource, /task\.executionRecords\.map[\s\S]*record\.executor\.displayName/);
-  assert.match(developerSource, /task-fact-strip[\s\S]*task\.initiator\?\.displayName/);
-  assert.match(developerSource, /\["recovering", "blocked", "test-failed"\]\.includes\(currentTask\.state\)/);
-  assert.match(developerSource, /record\.changedFiles/);
-  assert.match(developerSource, /currentTask\?\.initiator\?\.displayName/);
-  assert.match(developerSource, /<details key=\{currentTask\.taskId\} className="member-task-detail">/);
-  assert.match(developerSource, /任务详细 · \$\{taskInitiatorName\}/);
-  assert.doesNotMatch(developerSource, /<details[^>]*className="member-task-detail"[^>]*\sopen(?:\s|=|>)/);
+  assert.match(developerSource, /node.recipients/);
+  assert.match(developerSource, /node.detail/);
+  assert.match(developerSource, /onContinueTask/);
+  assert.doesNotMatch(developerSource, /member-task-detail|task-progress-stage/);
   assert.match(coordinatorSource, /execution\.diff_updated/);
   assert.match(coordinatorSource, /execution\.changedFiles = changedFiles/);
 });
@@ -1762,5 +1680,6 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   assert.doesNotMatch(memberPageSource, /durationMs|总耗时/);
   assert.doesNotMatch(ui, /CollaborationExecutionList/);
   assert.match(ui, /TaskCollaborationGroup/);
-  assert.match(ui, /任务完整记录/);
+  assert.doesNotMatch(ui, /任务完整记录/);
+  assert.match(ui, /SelUiConversation/);
 });

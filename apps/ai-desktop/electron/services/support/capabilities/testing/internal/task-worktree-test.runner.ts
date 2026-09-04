@@ -1,10 +1,12 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import type { CodexStreamEventOutDto } from "../../../../../../contracts/services/support/platform/codex/index.js";
 import { acquireManagedDependencyLease, releaseManagedDependencyLease } from "../../release/index.js";
 import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.facade.js";
+import { summarizeValidationFailure } from "./validation-failure-report.js";
 
 interface TaskWorktreeTestRequest {
   taskId: string;
@@ -54,6 +56,10 @@ export class TaskWorktreeTestRunner {
 
   async #runIsolated(request: TaskWorktreeTestRequest): Promise<void> {
     const safeTaskId = safeSegment(request.taskId);
+    // 每轮独立证据目录；后续复测不得覆盖执行人用来解释上次失败的报告。
+    const validationRunId = randomUUID();
+    const evidenceRoot = path.join(this.#sourceProjectRoot, "OPTION", "temp", this.#applicationName, "临时材料", "测试证据", "interaction", safeTaskId, validationRunId);
+    mkdirSync(evidenceRoot, { recursive: true });
     const desktopRoot = path.join(path.resolve(request.worktreeRoot), "apps", this.#applicationName);
     validateFixedScripts(desktopRoot);
     const dependencyLease = await acquireManagedDependencyLease(
@@ -67,6 +73,7 @@ export class TaskWorktreeTestRunner {
       ...process.env,
       ...dependencyLease.environment,
       AI_DESKTOP_TEST_TASK_ID: safeTaskId,
+      AI_DESKTOP_TEST_RUN_ID: validationRunId,
       PLAYWRIGHT_BROWSERS_PATH: path.join(this.#cacheRoot, "playwright"),
       npm_config_cache: path.join(this.#cacheRoot, "npm"),
       GIT_TERMINAL_PROMPT: "0",
@@ -84,7 +91,7 @@ export class TaskWorktreeTestRunner {
         const command = `npm run ${script.name}`;
         emitActivity(request.emit, request.taskId, script.name, "started", command, null);
         try {
-          const output = await runNpmScript(script.name, desktopRoot, environment, script.timeout);
+          const output = await runNpmScript(script.name, desktopRoot, environment, script.timeout, evidenceRoot);
           emitActivity(request.emit, request.taskId, script.name, "completed", command, output, 0);
           this.#recordEvent("collaboration.task_test.command_completed", { command, worktreeRoot: request.worktreeRoot }, request.taskId);
         } catch (error) {
@@ -113,8 +120,9 @@ function validateFixedScripts(desktopRoot: string): void {
   }
 }
 
-function runNpmScript(name: string, cwd: string, environment: NodeJS.ProcessEnv, timeout: number): Promise<string> {
+function runNpmScript(name: string, cwd: string, environment: NodeJS.ProcessEnv, timeout: number, evidenceRoot: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    const logPath = path.join(evidenceRoot, `${name.replaceAll(":", "-")}.log`);
     const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", name], {
       cwd,
       env: environment,
@@ -123,7 +131,12 @@ function runNpmScript(name: string, cwd: string, environment: NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
-    const append = (chunk: Buffer) => { output = `${output}${chunk.toString("utf8")}`.slice(-12_000); };
+    const append = (chunk: Buffer) => {
+      // 完整原始输出留档，内存尾部只用于成功摘要，失败读取结构化报告。
+      try { appendFileSync(logPath, chunk); }
+      catch (error) { child.kill(); reject(new Error(`无法保存测试证据：${String(error)}`)); }
+      output = `${output}${chunk.toString("utf8")}`.slice(-12_000);
+    };
     child.stdout.on("data", append);
     child.stderr.on("data", append);
     const timer = setTimeout(() => child.kill(), timeout);
@@ -134,7 +147,7 @@ function runNpmScript(name: string, cwd: string, environment: NodeJS.ProcessEnv,
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
       if (code === 0) resolve(output.trim().slice(-4_000));
-      else reject(new Error(`${name} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
+      else reject(new Error(`${name} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：\n${summarizeValidationFailure(path.join(evidenceRoot, "result.json"), logPath, output)}`));
     });
   });
 }

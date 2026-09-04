@@ -66,14 +66,12 @@ export type {
   CollaborationVersionWorkspaceOutDto,
   CollaborationWorkerPhaseValue,
   ConfigurePersonaWorkflowInDto,
-  CreateCollaborationMemberInDto,
   DesktopOperatingModeValue,
   PersonaCapabilityValue,
   PersonaRuntimePort,
   PersonaWorkflowActionInDto,
   StalledTaskDetectionOutDto,
   SubmitCollaborationTaskInDto,
-  UpdateCollaborationMemberInDto,
   WorkflowEventCategoryValue,
   WorkflowEventInDto,
   WorkflowEventStatusValue,
@@ -82,8 +80,6 @@ export type {
 } from "../../services/workflow/index.js";
 
 export type {
-  CreateLinghuRepairProposalOutDto,
-  CreateLinghuStartupPromptInDto,
   LinghuAutomaticFlowSnapshotOutDto,
   LinghuAutomationFeedbackOutDto,
   LinghuAutomationModuleValue,
@@ -92,8 +88,6 @@ export type {
   LinghuBlockingKindValue,
   LinghuFlowHealthValue,
   LinghuModuleCompletionReportOutDto,
-  LinghuStartupPromptOutDto,
-  UpdateLinghuStartupPromptInDto,
 } from "../../services/personas/linghu/index.js";
 
 export type {

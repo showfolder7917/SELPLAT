@@ -1250,18 +1250,21 @@ test("南宫婉线程删除最终失败时保留原页面消息", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐修正与南宫提案共用统一审批链并返还原提交人", async () => {
+test("令狐专属提案接口退役但南宫业务提案仍须审批后派发", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "linghu-approval-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json")); let submitted;
     const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] }; }, state() { return { tasks: [] }; } };
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
-    let state = facade.createLinghuRepairProposal({ title: "修正持续运行 Bug", content: "依据停点事实修正恢复逻辑", evidence: ["任务停在 test-failed"], impactScope: ["令狐恢复流程"], risks: ["重复恢复"], rollbackPlan: "恢复旧恢复点", acceptanceCriteria: ["任务恢复且不重复"], workspaceState, locale: "zh-CN" });
+    assert.equal(facade.createLinghuRepairProposal, undefined);
+    assert.equal(store.createLinghuRepairProposal, undefined);
+    let state = facade.createTopic(topicRequest("明确的业务提案"));
+    state = facade.createProposal(state.topics.at(-1).topicId, proposalRequest());
     const proposal = state.proposals.at(-1);
-    assert.equal(proposal.submitterMemberId, "linghu-ancestor");
+    assert.equal(proposal.submitterMemberId, "nangong-wan");
     state = facade.decideProposal(proposal.proposalId, { mutation: mutation(facade), decision: "approved", advice: "人工确认令狐方向" });
     state = await facade.dispatch(proposal.proposalId);
-    assert.equal(submitted.initiatorMemberId, "linghu-ancestor"); assert.equal(submitted.preferredExecutorMemberId, "linghu-ancestor");
+    assert.equal(submitted.initiatorMemberId, "nangong-wan");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1317,27 +1320,30 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
   const directory = mkdtempSync(path.join(controlledTestRoot, "automatic-self-revision-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    const members = [{ memberId: "linghu-ancestor", displayName: "令狐老祖", enabled: true, kind: "worker" }];
+    const members = [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }];
     const collaboration = { state() { return { members, tasks: [] }; } };
     const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
       async investigateRevision() {
         return JSON.stringify({
-          content: "只读检查确认令狐提案生成器缺少文件位置、修正动作和预期结果字段，修订自身生成规则并补齐三项结构。",
+          content: "只读检查确认南宫婉提案生成器缺少文件位置、修正动作和预期结果字段，修订自身生成规则并补齐三项结构。",
           evidence: ["apps/ai-desktop/electron/services/personas/linghu/linghu-automation.facade.ts 的提案生成路径未形成文件位置、修正动作和预期结果三项结构"],
-          impactScope: ["令狐提案生成规则"], exclusions: ["不修改演化方向审批线路"], risks: ["字段过严可能阻断旧输入，使用明确缺项提示缓解"],
-          rollbackPlan: "仅回退令狐提案结构校验和提示改动，保留审批及任务状态。", acceptanceCriteria: ["新提案明确包含问题文件、修正动作和可观察预期结果"],
+          impactScope: ["南宫婉提案生成规则"], exclusions: ["不修改演化方向审批线路"], risks: ["字段过严可能阻断旧输入，使用明确缺项提示缓解"],
+          rollbackPlan: "仅回退南宫婉提案结构校验和提示改动，保留审批及任务状态。", acceptanceCriteria: ["新提案明确包含问题文件、修正动作和可观察预期结果"],
         });
       },
     });
     store.controlAutomation("start");
-    let state = facade.createLinghuRepairProposal({ title: "令狐提交具体性修正", content: "修正持续任务提交内容", evidence: ["提交内容缺少位置"], impactScope: ["令狐提案流程"], risks: ["模板兼容"], rollbackPlan: "保留旧模板", acceptanceCriteria: ["内容可审批"], workspaceState, locale: "zh-CN" });
+    assert.equal(facade.createLinghuRepairProposal, undefined);
+    assert.equal(store.createLinghuRepairProposal, undefined);
+    let state = facade.createTopic(topicRequest("明确的业务提案"));
+    state = facade.createProposal(state.topics.at(-1).topicId, proposalRequest());
     const original = state.proposals.at(-1);
     facade.decideProposal(original.proposalId, { mutation: mutation(facade), decision: "supplement-required", advice: "写明哪里有问题、修改哪里和预期结果。", feedbackTarget: "submitter-capability", capabilityScope: "修正方案具体性" });
     facade.start(); await new Promise((resolve) => setTimeout(resolve, 20)); facade.stop();
     state = facade.state();
     const revisions = state.proposals.filter((proposal) => proposal.supersedesProposalId === original.proposalId);
-    assert.equal(revisions.length, 1); assert.equal(revisions[0].submitterMemberId, "linghu-ancestor");
+    assert.equal(revisions.length, 1); assert.equal(revisions[0].submitterMemberId, "nangong-wan");
     assert.equal(revisions[0].purpose, "self-capability-upgrade"); assert.match(revisions[0].content, /只读检查确认/);
     assert.doesNotMatch(revisions[0].content, /根据审批意见修订/);
     assert.equal(revisions[0].evidence.some((item) => item.startsWith("人工审批事实")), false);

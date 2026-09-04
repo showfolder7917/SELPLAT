@@ -1,5 +1,4 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
@@ -217,10 +216,6 @@ export class PersonaEvolutionRuntime {
     return collaboration.tasks
       .filter((task) => proposal.distributedTaskIds.includes(task.taskId) && !["integrated", "cancelled"].includes(task.state))
       .some((task) => collaboration.members.some((member) => member.currentTaskId === task.taskId && !["idle", "offline"].includes(member.state)));
-  }
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto {
-    const next = this.#store.createLinghuRepairProposal(request);
-    return this.#hanli.requestProposalReview(next.proposals.at(-1)!.proposalId);
   }
 
   /** 从当前持久化卡点恢复同一轮；恢复后立即沿原状态机推进，不触碰长期自动开关。 */

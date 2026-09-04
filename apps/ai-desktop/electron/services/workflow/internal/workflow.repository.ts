@@ -409,10 +409,10 @@ export class WorkflowRepository {
       ON CONFLICT(workflowId) DO UPDATE SET proposalId=excluded.proposalId, title=excluded.title, state=excluded.state,
         currentStage=excluded.currentStage, recoveryPoint=excluded.recoveryPoint, nextLaunchAt=excluded.nextLaunchAt, updatedAt=excluded.updatedAt
     `).run({
-      $workflowId: `linghu:cycle:${state.cycle}`, $proposalId: state.pendingRepairProposalId,
+      $workflowId: `linghu:cycle:${state.cycle}`, $proposalId: null,
       $title: `令狐老祖第${state.cycle}轮持续保障`, $state: state.enabled ? "running" : "disabled",
       $stage: state.currentModule, $recoveryPoint: state.recoveryCheckpoint,
-      $nextLaunchAt: state.enabled ? new Date(Date.parse(now) + state.pollIntervalMs).toISOString() : null,
+      $nextLaunchAt: state.enabled ? state.nextCheckAt : null,
       $startedAt: state.lastDispatchAt || state.lastCheckedAt || now, $updatedAt: now,
     }));
   }

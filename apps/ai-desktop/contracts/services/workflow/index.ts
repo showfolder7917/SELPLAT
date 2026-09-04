@@ -25,9 +25,7 @@ export type { CollaborationAutomationSourceValue, CollaborationExecutionStatusVa
 export type { CollaborationStateOutDto } from "./dto/collaboration-state.out.dto.js";
 export type { CollaborationStateEventOutDto } from "./dto/collaboration-state.event.out.dto.js";
 export type { CollaborationStreamEventOutDto } from "./dto/collaboration-stream.event.out.dto.js";
-export type { CreateCollaborationMemberInDto } from "./dto/create-collaboration-member.in.dto.js";
 export type { SubmitCollaborationTaskInDto } from "./dto/submit-collaboration-task.in.dto.js";
-export type { UpdateCollaborationMemberInDto } from "./dto/update-collaboration-member.in.dto.js";
 export type { CollaborationTimelineChangedEventOutDto } from "./dto/collaboration-timeline.event.out.dto.js";
 export type { CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto, CollaborationTimelineSnapshotOutDto } from "./dto/collaboration-timeline.out.dto.js";
 export type { CollaborationTimelineContentRoleValue, CollaborationTimelineDetailRoleValue } from "./value/collaboration-timeline.value.js";

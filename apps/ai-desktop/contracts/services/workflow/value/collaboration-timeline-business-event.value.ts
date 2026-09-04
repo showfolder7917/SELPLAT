@@ -1,5 +1,6 @@
 /** 非执行流的专题业务事件类型；禁止依靠展示文案反推事件语义。 */
 export type CollaborationTimelineBusinessEventTypeValue =
+  | "inspection.observation"
   | "approval.application"
   | "approval.decision"
   | "approval.supplement_waiting"

@@ -1,6 +1,5 @@
 // Evolution 门面文件集中提供共同业务数据的装配入口，不把 Repository 或 Store 实现公开给人物和 IPC。
 import type { DatabasePort } from "../support/platform/persistence/index.js";
-import type { CreateLinghuRepairProposalOutDto } from "../../../contracts/services/personas/linghu/index.js";
 import type { EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CreateNangongTopicInDto } from "../../../contracts/services/personas/nangong/index.js";
 import { EvolutionMutationCoordinator } from "./internal/evolution-mutation.coordinator.js";
@@ -29,7 +28,6 @@ export interface EvolutionApplicationPort {
   state(): EvolutionStateOutDto;
   dossier(topicId: string): EvolutionTopicDossierOutDto;
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto;
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto;
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]): () => void;
 }
 
@@ -44,8 +42,6 @@ export class EvolutionFacade {
   dossier(topicId: string) { return this.#application.dossier(topicId); }
   /** 创建共同专题；来源人物由请求事实记录，不改变状态所有权。 */
   createTopic(request: CreateNangongTopicInDto) { return this.#application.createTopic(request); }
-  /** 接收令狐修正提案；令狐不能直接调用南宫或韩立内部服务。 */
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto) { return this.#application.createLinghuRepairProposal(request); }
   /** 订阅共同状态原子提交；返回函数用于取消订阅。 */
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]) { return this.#application.subscribe(listener); }
 }

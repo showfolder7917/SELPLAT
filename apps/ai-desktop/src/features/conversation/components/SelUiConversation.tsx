@@ -6,7 +6,7 @@ import "@selplat/sel-ui/components/conversation/styles";
 import "@selplat/sel-ui/components/form/styles";
 
 type ConversationController = { destroy(): boolean };
-type ConversationApi = { mount(host: HTMLElement, options: { id: string }): ConversationController };
+type ConversationApi = { mount(host: HTMLElement, options: { id: string; readOnly: boolean }): ConversationController };
 
 /**
  * React 只把人物消息与业务动作放进 SELUI 插槽；回车、输入法合成和控件生命周期统一由 selConversation 接管。
@@ -20,6 +20,7 @@ export function SelUiConversation({ id, timeline, composer, onSubmit }: {
   const rootRef = useRef<HTMLDivElement>(null);
   const submitRef = useRef(onSubmit);
   submitRef.current = onSubmit;
+  const readOnly = composer == null;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -29,12 +30,12 @@ export function SelUiConversation({ id, timeline, composer, onSubmit }: {
       if ((event as CustomEvent<{ id?: string }>).detail?.id === id) submitRef.current();
     };
     root.addEventListener("selConversation:submit", handleSubmit);
-    const controller = api.mount(root, { id });
+    const controller = api.mount(root, { id, readOnly });
     return () => {
       root.removeEventListener("selConversation:submit", handleSubmit);
       controller.destroy();
     };
-  }, [id]);
+  }, [id, readOnly]);
 
   return <div ref={rootRef} className="selconversation-root">{timeline}{composer}</div>;
 }

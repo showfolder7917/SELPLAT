@@ -1,56 +1,58 @@
-import type { Dispatch, SetStateAction } from "react";
-import { Code24Regular } from "@fluentui/react-icons";
-
-import type { CollaborationMemberOutDto, CollaborationTimelineSnapshotOutDto, CollaborationStateOutDto, EvolutionStateOutDto, LinghuAutomationStateOutDto, LocaleValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import { useEffect, useRef } from "react";
+import type { CollaborationMemberOutDto, CollaborationTimelineSnapshotOutDto, EvolutionStateOutDto, LinghuAutomationStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
-import { MemberSelfUpgradePanel } from "../../evolution/components/EvolutionRevisionPanels";
-import { LinghuAutomationPanel, LinghuRepairProposalPanel } from "../../linghu";
-import type { CollaborationLiveOutput } from "../model/collaboration-live-output";
-import { collaborationMemberStateLabel, collaborationTaskStateLabel } from "../model/collaboration-formatters";
-import { CollaborationTaskProgressView } from "./CollaborationTaskProgressView";
+import { SelUiConversation } from "../../conversation/components/SelUiConversation";
+import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
+import { LinghuAutomationPanel } from "../../linghu";
+import { collaborationMemberStateLabel } from "../model/collaboration-formatters";
 
-export function CollaborationMemberPage({ member, timeline, tasks, streams, locale, linghuAutomation, nangongEvolution, nangongAttachments, workspaces, onLinghuState, onNangongState, onNangongAttachments, onNangongScreenshot, onNangongPaste, onError, onRename, onDelete, onContinue, onCancel, onOpen }: {
+/** 人物只展示权威时间线中与自己有关的真实发言和交接，不复制任务或伪造用户消息。 */
+export function CollaborationMemberPage({ member, timeline, liveTextByNodeId, locale, linghuAutomation, nangongEvolution, onLinghuState }: {
   member: CollaborationMemberOutDto | null;
-  timeline?: CollaborationTimelineSnapshotOutDto | null;
-  tasks: CollaborationStateOutDto["tasks"];
-  streams: Record<string, CollaborationLiveOutput>;
+  timeline: CollaborationTimelineSnapshotOutDto | null;
+  liveTextByNodeId: Record<string, string>;
   locale: LocaleValue;
   linghuAutomation: LinghuAutomationStateOutDto | null;
   nangongEvolution: EvolutionStateOutDto | null;
-  nangongAttachments: ComposerAttachment[];
-  workspaces: WorkspaceStateOutDto | null;
   onLinghuState(state: LinghuAutomationStateOutDto): void;
-  onNangongState(state: EvolutionStateOutDto): void;
-  onNangongAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;
-  onNangongScreenshot(hidden: boolean): void;
-  onNangongPaste(files: File[]): void;
-  onError(message: string): void;
-  onRename(member: CollaborationMemberOutDto): void;
-  onDelete(member: CollaborationMemberOutDto): void;
-  onContinue(taskId: string): void;
-  onCancel(taskId: string): void;
-  onOpen(taskId: string): void;
 }) {
-  if (!member) return <section className="collaboration-member-page"><p>{locale === "ja" ? "メンバーを選択してください。" : "请选择人物。"}</p></section>;
-  const orderedTasks = [...tasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  const currentTask = orderedTasks.find((task) => !["integrated", "cancelled"].includes(task.state)) || orderedTasks[0] || null;
-  const liveOutput = currentTask ? streams[currentTask.taskId] : null;
-  const taskInitiatorName = currentTask?.initiator?.displayName || (locale === "ja" ? "履歴なし" : "历史未记录");
-  return <section className="collaboration-member-page" aria-label={member.displayName}>
-    <header><div><span className={`member-presence ${member.state}`} /><div><h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale, timeline, nangongEvolution)}</p></div></div>{!member.protected && <nav><button type="button" onClick={() => onRename(member)}>{locale === "ja" ? "名前変更" : "重命名"}</button><button type="button" className="danger" onClick={() => onDelete(member)}>{member.state === "idle" ? (locale === "ja" ? "削除" : "删除") : (locale === "ja" ? "終了後に削除" : "完成后删除")}</button></nav>}</header>
-    {member.memberId === "linghu-ancestor" && linghuAutomation && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}
-    {member.memberId === "linghu-ancestor" && nangongEvolution && <LinghuRepairProposalPanel state={nangongEvolution} workspaces={workspaces} locale={locale} onState={onNangongState} onError={onError} />}
-    {nangongEvolution && <MemberSelfUpgradePanel member={member} state={nangongEvolution} onState={onNangongState} onError={onError} />}
-    {(currentTask?.blockingReason || member.blockingReason) && <div className="member-blocking-reason" role="status">{currentTask?.blockingReason || member.blockingReason}</div>}
-    {currentTask ? <article className="member-current-task">
-      <details key={currentTask.taskId} className="member-task-detail">
-        <summary>{locale === "ja" ? `タスク詳細 · ${taskInitiatorName}` : `任务详细 · ${taskInitiatorName}`}</summary>
-        <div><MarkdownMessage text={currentTask.snapshot.confirmedIntent} /></div>
-      </details>
-      <CollaborationTaskProgressView task={currentTask} member={member} liveOutput={liveOutput} automation={linghuAutomation} locale={locale} />
-      <div className="member-task-actions"><button type="button" onClick={() => onOpen(currentTask.taskId)}>{locale === "ja" ? "詳細を見る" : "查看任务详情"}</button>{["recovering", "blocked", "test-failed"].includes(currentTask.state) && <button type="button" onClick={() => onContinue(currentTask.taskId)}>{currentTask.state === "test-failed" ? (locale === "ja" ? "再テスト" : "重新测试") : (locale === "ja" ? "続行" : "继续执行")}</button>}{!["integrated", "cancelled"].includes(currentTask.state) && <button type="button" className="danger" onClick={() => onCancel(currentTask.taskId)}>{locale === "ja" ? "キャンセル" : "取消任务"}</button>}</div>
-    </article> : <div className="member-empty-task"><Code24Regular /><strong>{locale === "ja" ? "待機中" : "当前空闲"}</strong><span>{locale === "ja" ? "割り当て時に新しい Codex を作成します。" : "收到任务时才会创建新的 Codex。"}</span></div>}
-    {orderedTasks.length > 1 && <section className="member-task-history"><h2>{locale === "ja" ? "過去のタスク" : "历史任务"}</h2>{orderedTasks.slice(1).map((task) => <div key={task.taskId}><strong>{task.snapshot.title}</strong><span>{collaborationTaskStateLabel(task.state, locale)}</span></div>)}</section>}
+  const tail = useRef<HTMLDivElement>(null);
+  // 完成任务保留到下一次分配；同任务修复仍使用同一个任务 ID，不因阶段变化清屏。
+  const relatedNodes = (timeline?.groups || []).flatMap((group) => group.nodes).filter((node) => node.taskId && (node.actor.memberId === member?.memberId || node.recipients.some((recipient) => recipient.memberId === member?.memberId)));
+  const latestTaskId = member?.currentTaskId || relatedNodes.filter((node) => node.kind === "distribution").sort((left, right) => left.startedAt.localeCompare(right.startedAt)).at(-1)?.taskId || relatedNodes.at(-1)?.taskId;
+  const groups = (timeline?.groups || []).map((group) => ({ ...group,
+    nodes: group.nodes.filter((node) => node.actor.memberId === member?.memberId
+      || node.recipients.some((recipient) => recipient.memberId === member?.memberId))
+      .filter((node) => member?.memberId === "linghu-ancestor"
+        ? !linghuAutomation?.displayConversationStartedAt || node.startedAt >= linghuAutomation.displayConversationStartedAt
+        : node.taskId === latestTaskId || (node.taskId === null && node.kind === "distribution" && group.nodes.some((item) => item.taskId === latestTaskId))),
+  })).filter((group) => group.nodes.length);
+  const lastNode = groups.flatMap((group) => group.nodes).at(-1);
+  const latestText = lastNode ? liveTextByNodeId[lastNode.nodeId] || lastNode.content : "";
+  useEffect(() => { if (tail.current?.getClientRects().length) tail.current.scrollIntoView({ block: "nearest" }); }, [lastNode?.nodeId, latestText]);
+  if (!member) return <section className="collaboration-member-page">请选择人物。</section>;
+  return <section className="collaboration-member-page">
+    <header><div><span className={`member-presence ${member.state}`} /><div>
+      <h1>{member.displayName}</h1><p>{collaborationMemberStateLabel(member, locale, timeline, nangongEvolution)}</p>
+    </div></div>{member.memberId === "linghu-ancestor" && linghuAutomation
+      && <LinghuAutomationPanel state={linghuAutomation} locale={locale} onState={onLinghuState} />}</header>
+    <SelUiConversation id={`selConversationWorker${Array.from(member.memberId).map(char => char.codePointAt(0)!.toString(16).padStart(6, "0")).join("")}Id`} composer={null} onSubmit={() => undefined}
+      timeline={<section className="selconversation-timeline" aria-label={`${member.displayName}任务会话`}>
+        {!groups.length && <p role="status">当前空闲，收到任务后会在这里显示交接和执行进展。</p>}
+        {groups.map((group) => <section key={group.groupId} aria-label={group.title}>
+          <p className="selconversation-context-stats">{group.title}</p>
+          {group.nodes.map((node) => <article key={node.nodeId} className="selconversation-message" data-role="persona">
+            <header>{node.actor.displayName}{node.recipients.length > 0
+              ? ` → ${node.recipients.map((person) => person.displayName).join("、")}` : ""} · {node.action}</header>
+            <div className="selconversation-message-body">
+              <MarkdownMessage text={(node.status === "current" && liveTextByNodeId[node.nodeId]) || node.content || node.summary} />
+              {node.detail && <SelUiDisclosure idPrefix="person-task-evidence" open={false} trigger={<span>技术详情</span>}>
+                <MarkdownMessage text={node.detail} />
+              </SelUiDisclosure>}
+            </div>
+          </article>)}
+        </section>)}
+        <div ref={tail} />
+      </section>} />
   </section>;
 }

@@ -313,8 +313,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await taskList.getByRole("button", { name: /宋玉/ }).click();
   await expect(page.getByRole("tablist").getByText("宋玉", { exact: true })).toBeVisible();
   const memberPage = page.locator(".collaboration-member-page:visible");
-  await expect(memberPage.getByText("当前空闲", { exact: true })).toBeVisible();
-  await expect(memberPage.getByText("收到任务时才会创建新的 Codex。", { exact: true })).toBeVisible();
+  await expect(memberPage.getByRole("status")).toHaveText("当前空闲，收到任务后会在这里显示交接和执行进展。");
   const overflow = await memberPage.evaluate((element) => element.scrollWidth - element.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 
@@ -343,24 +342,20 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await page.screenshot({ path: test.info().outputPath("hanli-direct-conversation-only.png"), fullPage: true });
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   const nangongConversation = page.locator(".nangong-person-chat");
-  // 人物直接会话不混入内部研讨正文；研讨历史默认折叠，但可独立查看。
-  const internalHistory = nangongConversation.getByRole("button", { name: "内部研讨历史（2）" });
-  await expect(internalHistory).toBeVisible();
-  await expect(internalHistory).toHaveAttribute("aria-expanded", "false");
-  await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
-  await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
-  // 新建的是南宫婉的直接会话；旧研讨不能重新进入正文，但仍能按需展开查阅。
+  // 当前内部研讨使用连续会话气泡；新会话隔离旧消息但不删除历史事实。
+  await expect(nangongConversation.getByRole("button", { name: "内部研讨历史（2）" })).toHaveCount(0);
+  await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
   await page.getByRole("button", { name: "重新建立南宫婉对话" }).click();
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
   await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
   await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
-  await internalHistory.click();
-  await expect(internalHistory).toHaveAttribute("aria-expanded", "true");
-  await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeVisible();
-  await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
-  await expect(nangongConversation.getByText("验收时需确认内部一问一答可见，且不写入用户语义资料。", { exact: true })).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
+  const preserved = await page.evaluate(async () => (await window.desktop!.getPersonaConversation("han-li")).messages.filter((message) => message.messageId.startsWith("internal:")));
+  expect(preserved).toHaveLength(3);
+  await page.screenshot({ path: test.info().outputPath("nangong-new-conversation-isolated.png"), fullPage: true });
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
@@ -378,51 +373,32 @@ test("南宫婉会话保留自动演化入口且演化工作台已不兼容退�
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
-test("令狐老祖位于南宫婉下方并可管理持续自动保障启动文案", async () => {
-  test.setTimeout(60_000);
+test("令狐人物页只保留自动开关和正式会话", async () => {
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
-  const names = await taskList.locator(".collaboration-member > span").allTextContents();
-  expect(names.slice(0, 3).map((name) => name.trim())).toEqual(["韩立", "南宫婉", "令狐老祖"]);
-
   await taskList.getByRole("button", { name: /令狐老祖/ }).click();
-  const panel = page.locator(".linghu-automation");
-  await expect(panel.getByText("自动运行最后保障", { exact: true })).toBeVisible();
+  const panel = page.locator(".collaboration-member-page:visible");
   const automation = panel.getByRole("switch");
   await expect(automation).toHaveAttribute("aria-checked", "false");
   await automation.click();
   await expect(automation).toHaveAttribute("aria-checked", "true");
-  await expect(panel.getByText("开启后每30秒持续检测，永远不会自行停止。", { exact: true })).toBeVisible();
-  await expect(panel.getByText("自动流程完成保障", { exact: true })).toBeVisible();
-  await expect(panel).toContainText("第二职责是检查测试漏点");
-  await expect(panel).toContainText("第三职责是检查日志审计完整性");
-  await expect(panel).not.toContainText("页面审核以客户易用为第一目标");
-
-  await panel.getByRole("button", { name: "新增启动文案" }).click();
-  await panel.getByLabel("文案名称").fill("测试漏点巡检");
-  await panel.getByLabel("启动内容").fill("检查主路径、异常路径和并发路径的测试漏点，并补充审计证据。");
-  await panel.getByRole("button", { name: "保存文案" }).click();
-  const prompt = panel.locator(".linghu-prompt-list article").filter({ hasText: "测试漏点巡检" });
-  await expect(prompt).toContainText("当前使用");
-  await prompt.getByRole("button", { name: "停用" }).click();
-  await expect(prompt).toContainText("已停用");
-  await prompt.getByRole("button", { name: "启用" }).click();
-  await prompt.getByRole("button", { name: "修改" }).click();
-  await panel.getByLabel("文案名称").fill("测试与审计巡检");
-  await panel.getByRole("button", { name: "保存文案" }).click();
-  const renamed = panel.locator(".linghu-prompt-list article").filter({ hasText: "测试与审计巡检" });
-  await expect(renamed).toBeVisible();
-
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
-  const overflow = await page.locator(".collaboration-member-page:visible").evaluate((element) => element.scrollWidth - element.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
-  await renamed.getByRole("button", { name: "删除" }).click();
-  const deleteDialog = page.getByRole("dialog", { name: "删除启动文案" });
-  await expect(deleteDialog).toBeVisible();
-  await deleteDialog.getByRole("button", { name: "确认", exact: true }).click();
-  await expect(renamed).toHaveCount(0);
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+  await expect(automation).toHaveAccessibleName("自动巡检");
+  await expect(automation.locator(".selswitch-track .selswitch-thumb")).toHaveCount(1);
+  const countdown = panel.getByText(/距离下次巡检还有 \d+ 秒/);
+  await expect(countdown).toBeVisible();
+  const initialSeconds = Number((await countdown.innerText()).match(/\d+/)![0]);
+  await expect.poll(async () => Number((await countdown.innerText()).match(/\d+/)![0])).toBeLessThan(initialSeconds);
+  await panel.getByRole("button", { name: "新建会话", exact: true }).click();
+  await expect(automation).toHaveAttribute("aria-checked", "true");
+  await expect(countdown).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("linghu-inspection-countdown.png"), fullPage: true });
+  await expect(panel.locator(".selconversation-root")).toHaveCount(1);
+  for (const name of ["新增启动文案", "提交修正方案", "重命名", "完成后删除"])
+    await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
+  await automation.click();
+  await expect(automation).toHaveAttribute("aria-checked", "false");
+  await expect(countdown).toHaveCount(0);
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
@@ -434,21 +410,16 @@ test("执行人物完成技术分析后直接实施且不再出现内部审批",
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
   await taskList.getByRole("button", { name: /任务协作群/ }).click();
-  await page.getByRole("button", { name: "修复协同归档展示", exact: true }).click();
-  const detail = page.locator(".collaboration-task-detail:visible");
-  const intentStage = detail.locator(".task-progress-stage").filter({ hasText: /^意图分析/ });
-  await intentStage.locator("summary").click();
-  await expect(intentStage.getByText("增加任务归档入口和结构化摘要。", { exact: true })).toBeVisible();
-  await expect(detail.locator(".task-progress-stage").filter({ hasText: /^审批/ })).toHaveCount(0);
-  const executionStage = detail.locator(".task-progress-stage").filter({ hasText: /^执行/ });
-  await executionStage.locator("summary").click();
-  await expect(executionStage.locator(".task-stage-record header strong").filter({ hasText: /^冰魄仙子$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "修复协同归档展示", exact: true })).toHaveCount(0);
+  await taskList.getByRole("button", { name: /冰魄仙子/ }).click();
+  await expect(page.locator(".collaboration-member-page:visible .selconversation-root")).toHaveCount(1);
+  await expect(page.locator(".collaboration-task-detail, .task-progress-stage")).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
 });
 
-test("执行列表退役后从协作群打开归档任务完整结果", async () => {
+test("完整任务页退役后不影响已保存任务", async () => {
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(true));
   await page.getByRole("button", { name: "展开任务" }).click();
   const taskList = page.locator("#developer-task-list");
@@ -456,15 +427,10 @@ test("执行列表退役后从协作群打开归档任务完整结果", async ()
   await expect(taskList.getByRole("button", { name: /执行列表/ })).toHaveCount(0);
   await taskList.getByRole("button", { name: /任务协作群/ }).click();
 
-  await page.getByRole("button", { name: "修复协同归档展示", exact: true }).click();
-  const detail = page.locator(".collaboration-task-detail:visible");
-  await expect(detail.getByText("任务结果", { exact: true })).toBeVisible();
-  await expect(detail.getByText("执行列表与结果摘要已完成。", { exact: true })).toBeVisible();
-  await expect(detail.locator(".task-fact-strip").getByText("宋玉、冰魄仙子", { exact: true })).toBeVisible();
-  const executionStage = detail.locator(".task-progress-stage").filter({ hasText: /^执行/ });
-  await executionStage.locator("summary").click();
-  await expect(executionStage.locator(".task-stage-record header strong").filter({ hasText: /^宋玉$/ })).toBeVisible();
-  await expect(executionStage.locator(".task-stage-record header strong").filter({ hasText: /^冰魄仙子$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "打开任务完整记录", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "修复协同归档展示", exact: true })).toHaveCount(0);
+  const saved = await page.evaluate(async () => (await window.desktop!.getCollaborationState()).tasks);
+  expect(saved.some(task => task.snapshot.title === "修复协同归档展示")).toBe(true);
 
   await page.evaluate(() => (window as unknown as { desktop: { setInteractionCollaborationExecutionFixture(active: boolean): Promise<void> } }).desktop.setInteractionCollaborationExecutionFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
@@ -559,6 +525,20 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(group.locator(".task-timeline-position.waiting")).toHaveCount(2);
   await expect(group.getByText("当前正在验证", { exact: true })).toBeVisible();
   await expect(group.getByText(/处理耗时|已处理|已验证/).first()).toBeVisible();
+
+  // 每个人物读取同一份真实交接记录；不回到旧任务卡或虚构“我”的消息。
+  for (const name of ["令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"]) {
+    await taskList.getByRole("button", { name: new RegExp(name) }).click();
+    const person = page.locator(".collaboration-member-page:visible");
+    await expect(person.locator(".selconversation-message")).toHaveCount(2);
+    await expect(person.locator(".selconversation-message").first()).toContainText("南宫婉 →");
+    await expect(person.locator(".selconversation-message").last()).toContainText(`${name} → 南宫婉`);
+    await expect(person.locator(".task-progress-stage")).toHaveCount(0);
+    const overflow = await person.evaluate(element => element.scrollWidth - element.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
+  await page.screenshot({ path: testInfo.outputPath("persona-conversation.png"), fullPage: true });
+  await taskList.getByRole("button", { name: /任务协作群/ }).click();
 
   const nodeDisclosures = group.locator(".task-timeline-node");
   for (let index = 0; index < await nodeDisclosures.count(); index += 1) {

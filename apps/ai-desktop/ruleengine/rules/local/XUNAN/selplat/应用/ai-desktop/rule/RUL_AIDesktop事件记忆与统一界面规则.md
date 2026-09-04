@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.153.0
+rule_version = 5.155.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -107,6 +107,8 @@ workflow_event_center_exception_contract = technical_error_business_exception_st
 <!-- 卡住检测独立于执行人物，并以任务心跳事实去重后交给令狐现有恢复 Facade。 -->
 workflow_event_center_stall_contract = independent_30_second_supervisor_plus_120_second_timeout_plus_fault_fact_dedup_plus_linghu_handoff
 <!-- 应用运行会话正常关闭前必须落停止状态；残留 running 会话在下一次启动登记 interrupted 恢复事件。 -->
-workflow_runtime_session_recovery_contract = startup_marks_previous_running_interrupted_and_shutdown_stops_before_sqlite_checkpoint
+workflow_runtime_session_recovery_contract = startup_marks_previous_running_interrupted_and_shutdown_stops_before_sqlite_checkpoint + verified_release_waiting_restart_is_not_interrupted_work + shared_health_confirmation_drives_idempotent_acceptance
 <!-- 南宫婉完成验收后仅在自动演化开启时建立唯一下一轮，重启和重复检测不得重复创建。 -->
 nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart
+<!-- 南宫婉当前内部研讨与直接消息使用同一连续气泡区；新会话边界固定，消息更新不得移动边界。 -->
+nangong_continuous_conversation_contract = current_deliberation_only_on_nangong_not_hanli + shared_continuous_SELUI_message_layout + no_nested_internal_history_panel + welcome_only_when_visible_timeline_empty + stable_conversation_createdAt_boundary + preserve_archived_facts + composer_never_occludes_messages

@@ -11,7 +11,8 @@ const taskSegment = (process.env.AI_DESKTOP_TEST_TASK_ID || "standalone")
   .slice(0, 100) || "standalone";
 const appRoot = path.resolve(".");
 const projectPaths = resolveInteractionTestPaths();
-const interactionRoot = path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "interaction", taskSegment);
+const runSegment = (process.env.AI_DESKTOP_TEST_RUN_ID || "").replaceAll(/[^a-zA-Z0-9_-]/g, "");
+const interactionRoot = path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "interaction", taskSegment, runSegment);
 mkdirSync(interactionRoot, { recursive: true });
 
 export default defineConfig({

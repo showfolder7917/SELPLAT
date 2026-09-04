@@ -226,7 +226,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
   }
 
   async createExecutor(task: CollaborationTaskOutDto, member: CollaborationMemberOutDto): Promise<ExecutorSessionPort> {
-    const persistentPersona = Boolean(this.#options.personaSessionStore?.(member.memberId));
+    const persistentPersona = ["han-li", "nangong-wan", "linghu-ancestor"].includes(member.memberId) && Boolean(this.#options.personaSessionStore?.(member.memberId));
     const releasePersonaWriter = persistentPersona
       ? await this.#personaWriters.acquire(member.memberId, task.taskId, (state, activeTaskId) => {
         this.#options.recordEvent(`persona_session.writer_${state}`, {
@@ -263,8 +263,8 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
   }
 
   #createConnection(task: CollaborationTaskOutDto, member: CollaborationMemberOutDto, role: RegisteredConnection["role"], dependencyLease: ManagedDependencyLease | null, releasePersonaWriter: (() => void) | null): RegisteredConnection {
-    const persistentSessions = this.#options.personaSessionStore?.(member.memberId) || null;
-    const connectionId = persistentSessions ? `persona:${member.memberId}` : `${task.taskId}:${role}:${member.memberId}:g${member.generation}`;
+    const persistentSessions = ["han-li", "nangong-wan", "linghu-ancestor"].includes(member.memberId) ? this.#options.personaSessionStore?.(member.memberId) || null : null;
+    const connectionId = persistentSessions ? `persona:${member.memberId}` : `${task.taskId}:${role}:${member.memberId}`;
     const sessionPath = path.join(this.#options.sessionRoot, `${safeName(connectionId)}.json`);
     const sessions = persistentSessions || createFileCodexSessionRepository(sessionPath);
     const service = new CodexService(
@@ -404,10 +404,9 @@ function safeName(value: string): string {
 
 async function retireConnection(connection: RegisteredConnection, registry: CollaborationCodexRegistry): Promise<void> {
   try {
-    if (!connection.persistentPersona) await connection.service.newChat();
-  } finally {
+    // 释放进程连接不删除任务会话；同任务恢复继续原上下文，新任务由任务 ID 隔离。
     connection.service.dispose();
-    if (!connection.persistentPersona) connection.sessions.clear();
+  } finally {
     registry.unregister(connection.connectionId);
     releaseManagedDependencyLease(connection.dependencyLease);
     connection.releasePersonaWriter?.();

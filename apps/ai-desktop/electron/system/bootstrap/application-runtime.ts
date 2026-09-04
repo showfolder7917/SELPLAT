@@ -646,7 +646,10 @@ export async function startApplication(): Promise<void> {
     collaboration,
     readWorkspaceState: () => workspaces.read(),
     locale: () => settings.read().locale,
-    recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
+    recordEvent: (type, details, taskId) => {
+      eventCenter.recordEvent(type, details, taskId);
+      collaborationTimeline?.appendInspectionObservation(type, details, taskId);
+    },
     readTestResourceState: () => testResources.state(),
     unifiedTest: {
       sourceProjectRoot: projectRoot,
@@ -662,9 +665,6 @@ export async function startApplication(): Promise<void> {
         app.exit(0);
       },
     },
-    submitRepairProposal: (request) => personaEvolution!.createLinghuRepairProposal(request),
-    readEvolutionState: () => personaEvolution!.state(),
-    reviseReturnedProposal: (proposalId) => personaEvolution!.nangongRuntime.facade.investigateAndReviseReturnedProposal(proposalId),
     onStateChanged: (event) => {
       // 令狐状态同步到数据库、审计和全部窗口，保证重启恢复与界面显示一致。
       workflowRepository?.syncLinghuState(event.state);

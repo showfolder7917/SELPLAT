@@ -199,22 +199,19 @@ function DeveloperWorkspacePage({
 /** Each stable route has its own mounted page; selecting or closing a tab never mutates a task. */
 export function DeveloperWorkspaceRouter(props: DeveloperWorkspaceRouterProps) {
   const c = props.collaboration;
-  const id = !c.collaborationMode ? "main" : c.panel === "task-group" ? "group" : c.panel === "task-detail" && c.selectedTaskId ? `task:${c.selectedTaskId}` : `member:${c.selectedMember?.memberId || "han-li"}`;
-  const title = id === "main" ? "Codex Chat" : id === "group" ? "任务协作群" : id.startsWith("task:") ? c.selectedTask?.snapshot.title || "任务详情" : c.selectedMember?.displayName || "韩立";
+  const id = !c.collaborationMode ? "main" : c.panel === "task-group" ? "group" : `member:${c.selectedMember?.memberId || "han-li"}`;
+  const title = id === "main" ? "Codex Chat" : id === "group" ? "任务协作群" : c.selectedMember?.displayName || "韩立";
   return <SelUiWorkspaceTabs request={c.state ? { id, label: title } : null} revision={c.navigationRevision}
     onActivate={(key) => {
       if (key === "main") { if (c.collaborationMode) void c.setOperatingMode("single-conversation"); return; }
       if (!c.collaborationMode) void c.setOperatingMode("collaboration");
       if (key === "group") c.syncPanel("task-group");
-      else if (key.startsWith("task:")) { c.setSelectedTaskId(key.slice(5)); c.syncPanel("task-detail"); }
       else { c.syncPanel("member"); const memberId = key.slice(7); if (c.selectedMember?.memberId !== memberId) void c.selectMember(memberId); }
     }}
     renderPage={(key) => {
       const member = c.state?.members.find((item) => item.memberId === key.slice(7)) || c.selectedMember;
-      const task = c.state?.tasks.find((item) => item.taskId === key.slice(5)) || null;
-      const view = { ...c, collaborationMode: key !== "main", panel: (key === "group" ? "task-group" : key.startsWith("task:") ? "task-detail" : "member") as typeof c.panel,
-        selectedMember: member, selectedTask: task, selectedTaskId: task?.taskId || null,
-        selectedTaskMember: c.state?.members.find((item) => item.memberId === (task?.executorMemberId || task?.initiator?.memberId)) || member,
+      const view = { ...c, collaborationMode: key !== "main", panel: (key === "group" ? "task-group" : "member") as typeof c.panel,
+        selectedMember: member,
         selectedMemberTasks: c.state?.tasks.filter((item) => !c.terminalStates.has(item.state) && (item.executorMemberId === member?.memberId || item.initiator?.memberId === member?.memberId || item.executionRecords.some((record) => record.executor.memberId === member?.memberId))) || [],
       };
       return <DeveloperWorkspacePage {...props} collaboration={view} />;

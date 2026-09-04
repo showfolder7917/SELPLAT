@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import type { CreateLinghuRepairProposalOutDto } from "../../../../contracts/services/personas/linghu/index.js";
 import type { EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
@@ -530,34 +529,6 @@ export class EvolutionStateStore {
     return this.createTopic({ ...request, evidence }, sourceMessages.map((item) => item.messageId));
   }
 
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto {
-    const now = new Date().toISOString();
-    const topicId = `evolution-topic-${randomUUID()}`;
-    const proposalId = `evolution-proposal-${randomUUID()}`;
-    if (!request.workspaceState?.roots?.length) throw new Error("令狐修正方案至少需要一个已登记工作区。");
-    return this.#commit("linghu.proposal.created", topicId, proposalId, (state) => {
-      state.topics.push({
-        topicId, title: required(request.title, "修正标题", 160), goal: required(request.content, "修正内容", 30_000),
-        scope: normalizedList(request.impactScope, "影响范围"), exclusions: [], evidence: normalizedList(request.evidence, "调查证据"),
-        acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"), workspaceState: structuredClone(request.workspaceState), locale: request.locale,
-        origin: "linghu", sourceConversationMessageIds: [], deliberationId: null, status: "pending-approval", topicRevision: 1, currentProposalVersion: 1,
-        continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1,
-        recoveryPoint: "linghu-proposal-awaiting-approval", createdAt: now, updatedAt: now,
-      });
-      state.proposals.push({
-        proposalId, topicId, version: 1, title: required(request.title, "修正标题", 160), type: "Bug修复", origin: "linghu",
-        submitterMemberId: "linghu-ancestor", submitterDisplayName: "令狐老祖", content: required(request.content, "修正内容", 30_000),
-        purpose: "work-proposal", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null,
-        supersedesProposalId: null, revisionFeedbackApprovalId: null,
-        evidence: normalizedList(request.evidence, "调查证据"), impactScope: normalizedList(request.impactScope, "影响范围"), exclusions: [],
-        risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
-        acceptanceCriteria: normalizedList(request.acceptanceCriteria, "验收条件"),
-        distributionPlan: null,
-        status: "pending-approval", approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
-      });
-      state.activeTopicId = topicId;
-    });
-  }
 
   decide(proposalId: string, decision: EvolutionApprovalDecisionValue, advice: string, source: EvolutionApprovalSourceValue, referencedApprovalIds: string[], feedbackTarget: EvolutionFeedbackTargetValue = "proposal-content", capabilityScope = ""): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
@@ -877,7 +848,7 @@ function assertTopicEditableBeforeProposal(state: EvolutionStateOutDto, topic: E
 }
 function createConversation(): EvolutionStateOutDto["conversation"] {
   const now = new Date().toISOString();
-  return { ownerPersonaId: "nangong-wan", conversationId: `persona-conversation-${randomUUID()}`, messages: [], updatedAt: now };
+  return { ownerPersonaId: "nangong-wan", conversationId: `persona-conversation-${randomUUID()}`, createdAt: now, messages: [], updatedAt: now };
 }
 
 function archiveCategory(reason: string): EvolutionArchiveCategoryValue {

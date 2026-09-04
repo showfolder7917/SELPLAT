@@ -1,35 +1,32 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import test from "node:test";
-
-const developerApp = [
-  "../../../src/applications/developer/DeveloperApplication.tsx",
-  "../../../src/features/collaboration/model/useCollaborationWorkspace.ts",
-  "../../../src/features/collaboration/components/CollaborationTaskProgressView.tsx",
-].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
-const progressModel = readFileSync(new URL("../../../src/features/collaboration/model/collaboration-task-progress.ts", import.meta.url), "utf8");
-const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
-
-test("人物页以真实五环节进度替代整页报告", () => {
-  for (const stageId of ["intent", "approval", "execution", "repair", "unified-test"]) {
-    assert.match(progressModel, new RegExp(`\\"${stageId}\\"`));
-  }
-  assert.match(developerApp, /deriveCollaborationTaskProgress/);
-  assert.equal(developerApp.includes("`第 ${progress.currentStep}/${progress.totalSteps} 步`"), true);
-  assert.match(developerApp, /下一步去向/);
-  assert.match(developerApp, /setOpenStages\(new Set\(\[progress\.currentStageId\]\)\)/);
-  assert.match(developerApp, /scrollIntoView\(\{ block: "nearest" \}\)/);
-  assert.match(developerApp, /stage\.id === liveOutput\?\.stageId \? liveOutput\.message : null/);
-  assert.match(developerApp, /deriveCollaborationTaskCurrentStage\(task, linghuAutomationRef\.current\)/);
-  assert.match(developerApp, /existing\?\.turnId === envelope\.event\.turnId/);
-  assert.match(progressModel, /automation\.lastFeedback\?\.taskId === task\.taskId/);
-  assert.doesNotMatch(developerApp, /<p>\{currentTask\.snapshot\.confirmedIntent\}<\/p>/);
+const source = file => readFileSync(new URL("../../../" + file, import.meta.url), "utf8");
+test("人物会话使用正式 SELUI，显示真实交接与流式正文", () => {
+  const page = source("src/features/collaboration/components/CollaborationMemberPage.tsx");
+  assert.match(page, /SelUiConversation/);
+  assert.match(page, /selconversation-message-body/);
+  assert.match(page, /node.actor.memberId === member/);
+  assert.match(page, /node.recipients.some/);
+  assert.match(page, /liveTextByNodeId\[node.nodeId\]/);
+  assert.match(page, /SelUiDisclosure/);
+  assert.doesNotMatch(page, /重命名|完成后删除|CollaborationTaskProgress/);
 });
-
-test("状态卡固定且窄窗口收敛为单列", () => {
-  assert.match(developerStyles, /\.task-progress-card \{ position: sticky;/);
-  assert.match(developerStyles, /\.task-progress-facts \{ grid-template-columns: 1fr; \}/);
-  assert.match(developerStyles, /\.task-progress-stage\.current/);
-  assert.match(developerStyles, /\.task-progress-stage\.completed/);
-  assert.match(developerStyles, /\.task-progress-stage\.failed/);
+test("旧任务详情页面和入口整链删除，不保留跳转兼容", () => {
+  for (const file of ["CollaborationTaskDetail.tsx", "CollaborationTaskProgressView.tsx"]) {
+    assert.equal(existsSync(new URL("../../../src/features/collaboration/components/" + file, import.meta.url)), false);
+  }
+  for (const file of ["src/applications/developer/DeveloperWorkspaceRouter.tsx", "src/features/collaboration/components/TaskCollaborationGroup.tsx", "src/features/collaboration/model/useCollaborationWorkspace.ts"]) {
+    assert.doesNotMatch(source(file), /onOpenTask|selectedTaskId|setSelectedTaskId|打开任务完整记录/);
+  }
+});
+test("令狐页面只保留自动开关，后台恢复职责仍存在", () => {
+  const panel = source("src/features/linghu/components/LinghuAutomationPanel.tsx");
+  assert.match(panel, /role="switch"/);
+  assert.match(panel, /setLinghuAutomationEnabled/);
+  assert.doesNotMatch(panel, /createPrompt|启动文案|提交修正方案/);
+  const facade = source("electron/services/personas/linghu/linghu-automation.facade.ts");
+  assert.match(facade, /LINGHU_SAFEGUARD_INSTRUCTIONS/);
+  assert.doesNotMatch(facade, /submitRepairProposal|pendingRepairProposalId|reviseReturnedProposal/);
+  assert.match(facade, /repairFailedUnifiedTest/);
 });

@@ -9,10 +9,8 @@ import type {
   CollaborationStateOutDto,
   CollaborationTaskOutDto,
   CollaborationWorkerPhaseValue,
-  CreateCollaborationMemberInDto,
   DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
-  UpdateCollaborationMemberInDto,
 } from "../../../contracts/services/workflow/index.js";
 import type { CodexStreamEventOutDto } from "../../../contracts/services/support/platform/codex/index.js";
 import type { ExecutorSessionPort } from "../../../contracts/services/personas/executor/index.js";
@@ -79,9 +77,6 @@ export class CollaborationCoordinator {
   state(): CollaborationStateOutDto { return this.#store.state(); }
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
   selectMember(memberId: string): CollaborationStateOutDto { return this.#store.selectMember(memberId); }
-  createMember(request: CreateCollaborationMemberInDto): CollaborationStateOutDto { return this.#store.createMember(request); }
-  updateMember(memberId: string, request: UpdateCollaborationMemberInDto): CollaborationStateOutDto { return this.#store.updateMember(memberId, request); }
-  deleteMember(memberId: string): CollaborationStateOutDto { return this.#store.deleteMember(memberId); }
 
   submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
     const enabledWorkers = this.state().members.filter((member) => member.kind === "worker" && member.enabled).length;
@@ -563,8 +558,21 @@ export class CollaborationCoordinator {
             if (execution) execution.changedFiles = changedFiles;
           });
         }
+        // 验证/修复每轮先落业务事实，流式内容才可绑定到该轮节点，不能只更新人物阶段。
+        const update = event.type === "managed-execution" ? event.managedExecution : undefined;
+        if (update && (update.stage === "code-validation" || update.selfRepair)) {
+          const repair = Boolean(update.selfRepair);
+          const status = update.status === "blocked" ? "failed" : update.status === "completed" ? "completed" : "started";
+          this.#store.updateTask(taskId, "executor.validation_round", (current, state) => {
+            const type = repair
+              ? status === "started" ? "executor.self_repair_started" : status === "failed" ? "executor.self_repair_failed" : "executor.self_repair_completed"
+              : status === "started" ? "executor.self_test_started" : status === "failed" ? "executor.self_test_failed" : "executor.self_test_passed";
+            if (current.flowEvents.some(item => item.type === type && item.details?.assignmentId === assignmentId && item.details?.validationRound === update.round)) return;
+            appendFlow(current, type, "execution", status, update.message, requireMember(state, memberId), status === "failed", { assignmentId: assignmentId || undefined, validationRound: update.round });
+          });
+        }
         this.#emitStream(taskId, memberId, event);
-        const phase = phaseFromStreamEvent(event);
+        const phase = update?.selfRepair ? "implementing" : phaseFromStreamEvent(event);
         if (phase) {
           this.#setTaskAndMemberPhase(taskId, "executing", phase);
           if (phase === "verifying" && !verificationSpan) {
@@ -584,6 +592,18 @@ export class CollaborationCoordinator {
       if (verificationSpan) this.#durations.finish(verificationSpan, "completed", { releaseEvent: "task.code_verified" });
       changeSpan = null;
       verificationSpan = null;
+      await this.#completeVerifiedExecution(taskId, memberId, assignmentId, result);
+
+    } catch (error) {
+      if (changeSpan) this.#durations.finish(changeSpan, "failed", { error: errorMessage(error) });
+      if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { error: errorMessage(error) });
+      if (this.#store.task(taskId).state === "cancelled") return;
+      await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`);
+    }
+  }
+
+  /** 普通实施和令狐完整修复共享结果提交门，避免修复成功后重新执行整个任务。 */
+  async #completeVerifiedExecution(taskId: string, memberId: string, assignmentId: string | null, result: { text: string; pendingActions: string[] }): Promise<void> {
       this.#setTaskAndMemberPhase(taskId, "executing", "finalizing");
       const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), requireMember(this.state(), memberId).displayName);
       this.#store.updateTask(taskId, "task.integration_ready", (current, state) => {
@@ -608,7 +628,7 @@ export class CollaborationCoordinator {
           current.returnedToNangongAt = current.codeVerifiedAt;
           current.currentHandler = participantSnapshot(requireMember(state, "nangong-wan"));
         }
-        appendFlow(current, "task.code_verified", "execution", "completed", returnsToNangong ? "执行修改已完成代码级验证，结果已返回南宫婉收集" : "执行修改已完成代码级验证，等待集成", execution?.executor || null);
+        appendFlow(current, "task.code_verified", "execution", "completed", returnsToNangong ? "执行修改已完成代码级验证，结果已返回南宫婉收集" : "执行修改已完成代码级验证，等待集成", execution?.executor || participantSnapshot(requireMember(state, memberId)));
       });
       this.#durations.instant(taskId, "task.integration_ready", { memberId, resultSha });
       await this.#retireExecutor(taskId, memberId);
@@ -630,12 +650,6 @@ export class CollaborationCoordinator {
           resource: "integration-coordinator",
           resourceOwner: null,
         });
-    } catch (error) {
-      if (changeSpan) this.#durations.finish(changeSpan, "failed", { error: errorMessage(error) });
-      if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { error: errorMessage(error) });
-      if (this.#store.task(taskId).state === "cancelled") return;
-      await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`);
-    }
   }
 
   async #repairFailedExecution(taskId: string, reason: string): Promise<void> {
@@ -708,6 +722,29 @@ export class CollaborationCoordinator {
       });
       const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "修复未完成代码验证");
+      // 修复通过代码验证仍不等于原需求完成；只读核对当前源码与原验收条件。
+      const completionText = await repairSession.investigateRepair(this.#store.task(taskId),
+        `修复后的只读完成核对，不要再次实施。原需求：${task.snapshot.confirmedIntent}\n验收条件：${JSON.stringify(task.snapshot.acceptanceCriteria)}\n修复结果：${repaired.text}\n检查当前源码和验证证据。最终单独输出 REPAIR_COMPLETION={"complete":true或false,"remaining":"真实剩余工作或空串","evidence":"具体证据"}。只有全部原需求已满足且无剩余工作才允许true。`,
+        (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const completionLine = completionText.split("\n").find((line) => line.trim().startsWith("REPAIR_COMPLETION="));
+      let completion: { complete?: boolean; remaining?: string; evidence?: string } = {};
+      try { if (completionLine) completion = JSON.parse(completionLine.trim().slice("REPAIR_COMPLETION=".length)); }
+      catch { throw new Error("修复后完成核对结果无法解析，保留恢复点"); }
+      if (!completionLine || typeof completion.complete !== "boolean" || !completion.evidence?.trim()
+        || typeof completion.remaining !== "string" || completion.complete !== !completion.remaining.trim()) throw new Error("修复后缺少明确完成证据，保留恢复点");
+      if (completion.complete && !completion.remaining.trim()) {
+        this.#store.updateTask(taskId, "execution.repair_completed", (current, state) => {
+          current.repairResult = repaired.text;
+          current.repairKind = null;
+          current.recoveryTargetState = null;
+          current.blockingReason = null;
+          appendFlow(current, "execution.repair_completed", "recovery", "completed",
+            "令狐修复并核对原任务已完成，提交结果后继续统一测试", requireMember(state, LINGHU_MEMBER_ID),
+            false, flowRepairDetails(current, diagnosis, repaired.text));
+        });
+        await this.#completeVerifiedExecution(taskId, LINGHU_MEMBER_ID, null, repaired);
+        return;
+      }
       this.#store.updateTask(taskId, "execution.repair_completed", (current, state) => {
         const original = current.originalExecutor;
         current.state = "queued-executor";
@@ -716,9 +753,15 @@ export class CollaborationCoordinator {
         current.assignmentId = null;
         current.recoveryTargetState = "executing";
         current.repairKind = null;
-        current.repairResult = repaired.text;
+        current.repairResult = `${repaired.text}\n剩余工作：${completion.remaining}\n核对证据：${completion.evidence}`;
+        // 已完成工作不重新派发；续接方案只承载核对确认的剩余工作。
+        const resumeText = `仅完成以下尚未完成的工作，不重复已验证修改：\n${completion.remaining}\n核对证据：${completion.evidence}`;
+        current.currentPlanVersion += 1;
+        current.plans.push({ version: current.currentPlanVersion, ownerMemberId: current.executorMemberId!,
+          ownerDisplayName: original?.displayName || "原执行人", status: "ready-for-execution",
+          text: resumeText, contentHash: sha256(resumeText), createdAt: new Date().toISOString() });
         current.currentHandler = original || null;
-        current.blockingReason = original ? `令狐老祖修复完成，等待${original.displayName}重新执行` : "令狐老祖修复完成，等待原执行人重新执行";
+        current.blockingReason = original ? `令狐老祖修复完成，等待${original.displayName}继续剩余工作` : "令狐老祖修复完成，等待原执行人继续剩余工作";
         appendFlow(current, "execution.repair_completed", "recovery", "completed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), false, flowRepairDetails(current, diagnosis, repaired.text));
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
@@ -963,12 +1006,6 @@ function releaseMember(store: CollaborationStore, memberId: string): void {
   if (!member?.currentTaskId) return;
   store.updateTask(member.currentTaskId, "member.released", (_task, state) => {
     const target = requireMember(state, memberId);
-    const shouldDelete = target.state === "draining" || !target.enabled;
-    if (shouldDelete && !target.protected) {
-      state.members = state.members.filter((candidate) => candidate.memberId !== memberId);
-      if (state.selectedMemberId === memberId) state.selectedMemberId = "han-li";
-      return;
-    }
     target.state = "idle";
     target.role = null;
     target.phase = null;
@@ -982,12 +1019,6 @@ function releaseMember(store: CollaborationStore, memberId: string): void {
 function releaseMemberFromState(state: CollaborationStateOutDto, memberId: string): void {
   const target = state.members.find((candidate) => candidate.memberId === memberId);
   if (!target) return;
-  const shouldDelete = target.state === "draining" || !target.enabled;
-  if (shouldDelete && !target.protected) {
-    state.members = state.members.filter((candidate) => candidate.memberId !== memberId);
-    if (state.selectedMemberId === memberId) state.selectedMemberId = "han-li";
-    return;
-  }
   target.state = "idle";
   target.role = null;
   target.phase = null;

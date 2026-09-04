@@ -10,6 +10,46 @@ import { appRoot, controlledTestRoot } from "#test-paths";
 
 const member = (memberId, displayName) => ({ memberId, displayName });
 
+test("每轮自测与自修独立收尾，完成后耗时不再增长且重复同步幂等", () => {
+  const fixture = createFixture("self-repair-rounds");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    const actor = running.executionRecords[0].executor;
+    const details = (round) => ({ assignmentId: running.executionRecords[0].assignmentId, validationRound: round });
+    const events = [
+      ["executor.self_test_started", "started", 1, 5], ["executor.self_test_failed", "failed", 1, 6],
+      ["executor.self_repair_started", "started", 1, 7], ["executor.self_repair_completed", "completed", 1, 8],
+      ["executor.self_test_started", "started", 2, 9], ["executor.self_test_passed", "completed", 2, 10],
+    ];
+    for (const [type, status, round, at] of events) running.flowEvents.push({ ...flow(`${type}:${round}`, type, "execution", status, actor, `${type} 实际证据`, fixture.at(at), status === "failed"), details: details(round) });
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(11), [running]), [running.taskId]);
+    const read = (at) => fixture.timeline.snapshot(fixture.at(at)).groups.flatMap((group) => group.nodes).filter((node) => node.nodeId.startsWith("self-"));
+    const before = read(12);
+    assert.equal(before.length, 3);
+    assert.deepEqual(before.map((node) => node.status), ["failed", "completed", "completed"]);
+    assert.ok(before.every((node) => node.completedAt));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(15), [running]), [running.taskId]);
+    assert.deepEqual(read(30), before);
+  } finally { fixture.close(); }
+});
+
+test("令狐巡检问题与恢复动作落库为会话事实，重复巡检不刷屏", () => {
+  const fixture = createFixture("inspection-observation");
+  try {
+    const facade = new CollaborationTimelineFacade(fixture.database);
+    facade.appendInspectionObservation("linghu.automation.inspection_no_action_required", { report: "没有问题" });
+    facade.appendInspectionObservation("linghu.automation.issue_detected", { report: "墨大夫测试失败，正在核对失败证据", fingerprint: "failure-1" }, "task-1");
+    facade.appendInspectionObservation("linghu.automation.issue_detected", { report: "墨大夫测试失败，正在核对失败证据", fingerprint: "failure-1" }, "task-1");
+    facade.appendInspectionObservation("linghu.automation.recovery_requested", { report: "已发起第1次恢复，尚未验证通过", fingerprint: "failure-1" }, "task-1");
+    const nodes = new CollaborationTimelineFacade(fixture.database).getTimelineSnapshot().groups.flatMap((group) => group.nodes);
+    assert.equal(nodes.length, 2);
+    assert.deepEqual(nodes.map((node) => node.action), ["巡检发现问题", "已发起恢复"]);
+    assert.ok(nodes.every((node) => node.actor.memberId === "linghu-ancestor"));
+    assert.match(nodes[1].content, /尚未验证通过/);
+  } finally { fixture.close(); }
+});
+
 test("审批时间线只按显式事件追加申请、退回、补充和通过", () => {
   const fixture = createFixture("approval");
   try {

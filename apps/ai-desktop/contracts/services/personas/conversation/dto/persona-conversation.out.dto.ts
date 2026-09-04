@@ -21,6 +21,8 @@ export interface PersonaConversationMessageOutDto {
 export interface PersonaConversationOutDto {
   ownerPersonaId: string;
   conversationId: string | null;
+  /** 会话建立时刻固定不变，用于隔离新会话之前的其他消息流。 */
+  createdAt?: string;
   messages: PersonaConversationMessageOutDto[];
   updatedAt: string;
   /** 只描述本次发送实际装入提示词的字符数；不写入人物消息，也不参与下一轮学习。 */

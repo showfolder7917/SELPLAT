@@ -11,12 +11,12 @@ import type { DesktopEnvironmentOutDto } from "../dto/desktop-environment.out.dt
 import type { CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexLoginResponseOutDto, CodexModelCatalogOutDto, CodexStreamEventOutDto, CodexUserInputRequestOutDto, ResolveCodexApprovalOutDto, ResolveCodexUserInputInDto } from "../../../services/support/platform/codex/index.js";
 import type { TrustedCommandInfoOutDto } from "../../../services/support/platform/security/index.js";
 import type { AutomaticTestPreflightResultOutDto } from "../../../services/support/capabilities/testing/index.js";
-import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, CreateCollaborationMemberInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, SubmitCollaborationTaskInDto, UpdateCollaborationMemberInDto } from "../../../services/workflow/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, SubmitCollaborationTaskInDto } from "../../../services/workflow/index.js";
 import type { AuditLogInfoOutDto, RendererExceptionInDto } from "../../../services/support/capabilities/event-center/index.js";
 import type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../../services/support/capabilities/conversation/index.js";
 import type { TestDataResetResultOutDto } from "../../../services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
-import type { CreateLinghuRepairProposalOutDto, CreateLinghuStartupPromptInDto, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, UpdateLinghuStartupPromptInDto } from "../../../services/personas/linghu/index.js";
+import type { LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto } from "../../../services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto } from "../../../services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
@@ -141,11 +141,8 @@ export interface DesktopApi {
   /** 切换 Renderer 当前查看的协同成员。 */
   selectCollaborationMember(memberId: string): Promise<CollaborationStateOutDto>;
   /** 创建一个通过主进程校验的协同成员。 */
-  createCollaborationMember(request: CreateCollaborationMemberInDto): Promise<CollaborationStateOutDto>;
   /** 更新指定成员的可修改身份配置。 */
-  updateCollaborationMember(memberId: string, request: UpdateCollaborationMemberInDto): Promise<CollaborationStateOutDto>;
   /** 删除可移除成员；运行中或系统成员会被主进程拒绝。 */
-  deleteCollaborationMember(memberId: string): Promise<CollaborationStateOutDto>;
   /** 提交协同任务并返回包含新任务的状态。 */
   submitCollaborationTask(request: SubmitCollaborationTaskInDto): Promise<CollaborationStateOutDto>;
   /** 从允许恢复的阶段继续指定协同任务。 */
@@ -160,14 +157,11 @@ export interface DesktopApi {
   getLinghuAutomationState(): Promise<LinghuAutomationStateOutDto>;
   /** 启用或暂停令狐自动化轮询。 */
   setLinghuAutomationEnabled(enabled: boolean): Promise<LinghuAutomationStateOutDto>;
+  newLinghuDisplayConversation(): Promise<LinghuAutomationStateOutDto>;
   /** 新增令狐启动提示配置。 */
-  createLinghuStartupPrompt(request: CreateLinghuStartupPromptInDto): Promise<LinghuAutomationStateOutDto>;
   /** 修改指定令狐启动提示。 */
-  updateLinghuStartupPrompt(promptId: string, request: UpdateLinghuStartupPromptInDto): Promise<LinghuAutomationStateOutDto>;
   /** 删除非系统锁定的令狐启动提示。 */
-  deleteLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationStateOutDto>;
   /** 选择令狐后续自动检查使用的启动提示。 */
-  selectLinghuStartupPrompt(promptId: string): Promise<LinghuAutomationStateOutDto>;
   /** 订阅令狐自动化状态事件。 */
   onLinghuAutomationState(listener: (event: LinghuAutomationStateEventOutDto) => void): () => void;
   /** 读取专题、提案、审批和自动化运行状态。 */
@@ -201,7 +195,6 @@ export interface DesktopApi {
   /** 更新专题允许修改的元数据。 */
   updateEvolutionTopic(topicId: string, request: UpdateNangongTopicInDto): Promise<EvolutionStateOutDto>;
   /** 由令狐异常证据创建修复提案。 */
-  createLinghuRepairProposal(request: CreateLinghuRepairProposalOutDto): Promise<EvolutionStateOutDto>;
   /** 审批或退回提案方向。 */
   decideEvolutionProposal(proposalId: string, request: DecideHanliProposalInDto): Promise<EvolutionStateOutDto>;
   /** 验收或退回提案执行结果。 */

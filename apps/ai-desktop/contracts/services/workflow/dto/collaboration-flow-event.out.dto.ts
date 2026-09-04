@@ -10,6 +10,9 @@ import type { CollaborationWorkerPhaseValue } from "../value/collaboration-membe
 
 
 export interface CollaborationFlowEventDetailsOutDto {
+  /** 同一执行租约中的验证/自修序号，用于稳定关联开始与结束事实。 */
+  validationRound?: number;
+  assignmentId?: string;
   failureStage?: string;
   failureSummary?: string;
   technicalEvidence?: string[];

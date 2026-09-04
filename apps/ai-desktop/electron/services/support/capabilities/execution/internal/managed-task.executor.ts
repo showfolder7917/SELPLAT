@@ -168,12 +168,20 @@ export class ManagedTaskExecutor {
         };
       } catch (error) {
         lastFailure = error instanceof Error ? error.message : String(error);
+        emitManaged(request, "code-validation", "blocked", round, VALIDATION_ROUNDS, lastFailure);
         if (round === VALIDATION_ROUNDS) break;
         evidence.beginRound();
-        response = await request.runTurn(this.#managedPrompt("继续修复当前任务。", "execution.desktop-validation-repair", { failure: lastFailure }), (event) => {
-          evidence.record(event);
-          request.emit(event);
-        }, "task-managed");
+        emitManaged(request, "task-execution", "started", round, VALIDATION_ROUNDS, `第 ${round} 轮自修：先核对失败证据并解释上一轮结果`, true);
+        try {
+          response = await request.runTurn(this.#managedPrompt("继续修复当前任务。", "execution.desktop-validation-repair", { failure: `第 ${round} 次测试失败。${round > 1 ? "这是复测失败，必须先解释上一轮为何无效。" : ""}\n${lastFailure}` }), (event) => {
+            evidence.record(event);
+            request.emit(event);
+          }, "task-managed");
+          emitManaged(request, "task-execution", "completed", round, VALIDATION_ROUNDS, response.text || "本轮修改结束，等待复测；尚不代表修复通过", true);
+        } catch (repairError) {
+          emitManaged(request, "task-execution", "blocked", round, VALIDATION_ROUNDS, repairError instanceof Error ? repairError.message : String(repairError), true);
+          throw repairError;
+        }
         if (evidence.roundFailed) lastFailure = `${lastFailure}；修复阶段仍有失败命令：${evidence.failedCommandSummaries().join("；")}`;
       }
     }
@@ -324,8 +332,8 @@ export function isIsolatedInteractionTestCommand(command: string): boolean {
   return /(?:npm|pnpm|yarn)\s+(?:run\s+)?test:(?:interaction|document)\b|\bplaywright\s+test\b/i.test(command);
 }
 
-function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUpdateEventOutDto["stage"], status: ManagedExecutionUpdateEventOutDto["status"], round: number, maximumRounds: number, message: string): void {
-  request.emit({ type: "managed-execution", turnId: "managed", segmentId: `managed:${request.mode}:${stage}:${round}`, managedExecution: { mode: request.mode, stage, status, round, maximumRounds, message } });
+function emitManaged(request: ManagedExecutionRequest, stage: ManagedExecutionUpdateEventOutDto["stage"], status: ManagedExecutionUpdateEventOutDto["status"], round: number, maximumRounds: number, message: string, selfRepair = false): void {
+  request.emit({ type: "managed-execution", turnId: "managed", segmentId: `managed:${request.mode}:${stage}:${round}`, managedExecution: { mode: request.mode, stage, status, round, maximumRounds, message, selfRepair } });
 }
 
 /** 把职责作为后台边界附在真实用户消息之后；回复正文不得把内部阶段重新说给用户。 */

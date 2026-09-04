@@ -23,15 +23,15 @@
   /**
    * 挂载对话输入生命周期。
    * @param {HTMLElement} host 对话控件根节点。
-   * @param {{id:string,input?:HTMLTextAreaElement}} options 实例 ID 与输入节点。
+   * @param {{id:string,input?:HTMLTextAreaElement,readOnly?:boolean}} options 实例 ID、输入节点；readOnly=true 用于无输入区的消息展示。
    */
   function mount(host, options) {
     if (!(host instanceof HTMLElement)) throw new TypeError("selConversation.mount requires an HTMLElement host.");
     const id = String(options?.id || "").trim();
     if (!/^selConversation[A-Z][A-Za-z0-9]*Id$/.test(id)) throw new Error("selConversation id must match selConversation<BusinessMeaning>Id.");
     if (controllers.has(id)) throw new Error(`selConversation instance already exists: ${id}`);
-    const input = options?.input || host.querySelector("[data-sel-conversation-input]");
-    if (!(input instanceof HTMLTextAreaElement)) throw new Error("selConversation requires a textarea input.");
+    const input = options?.readOnly === true ? null : options?.input || host.querySelector("[data-sel-conversation-input]");
+    if (options?.readOnly !== true && !(input instanceof HTMLTextAreaElement)) throw new Error("selConversation requires a textarea input.");
 
     let compositionActive = false;
     const onCompositionStart = () => { compositionActive = true; };
@@ -41,15 +41,15 @@
       event.preventDefault();
       host.dispatchEvent(new CustomEvent("selConversation:submit", { bubbles: true, detail: { id } }));
     };
-    input.addEventListener("compositionstart", onCompositionStart);
-    input.addEventListener("compositionend", onCompositionEnd);
-    input.addEventListener("keydown", onKeyDown);
+    input?.addEventListener("compositionstart", onCompositionStart);
+    input?.addEventListener("compositionend", onCompositionEnd);
+    input?.addEventListener("keydown", onKeyDown);
 
     const controller = {
       destroy() {
-        input.removeEventListener("compositionstart", onCompositionStart);
-        input.removeEventListener("compositionend", onCompositionEnd);
-        input.removeEventListener("keydown", onKeyDown);
+        input?.removeEventListener("compositionstart", onCompositionStart);
+        input?.removeEventListener("compositionend", onCompositionEnd);
+        input?.removeEventListener("keydown", onKeyDown);
         controllers.delete(id);
         return true;
       },

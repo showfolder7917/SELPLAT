@@ -32,10 +32,11 @@ export class PersonaConversationRepository {
     if (!this.database) return emptyConversation(ownerPersonaId);
     return this.database.withConnection((connection) => {
       const header = connection.prepare(`
-        SELECT conversationId, updatedAt FROM AiDesktopPersonaConversation
+        SELECT conversationId, createdAt, updatedAt FROM AiDesktopPersonaConversation
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId
       `).get({ $ownerPersonaId: requiredPersonaId(ownerPersonaId), $conversationId: requiredConversationId(conversationId) }) as {
         conversationId: string;
+        createdAt: string;
         updatedAt: string;
       } | undefined;
       if (!header) return emptyConversation(ownerPersonaId);
@@ -50,6 +51,7 @@ export class PersonaConversationRepository {
       return {
         ownerPersonaId,
         conversationId: header.conversationId,
+        createdAt: header.createdAt,
         messages: rows.map(mapMessage),
         updatedAt: header.updatedAt,
       };
@@ -76,7 +78,7 @@ export class PersonaConversationRepository {
       `).run({
         $conversationId: conversationId,
         $ownerPersonaId: ownerPersonaId,
-        $createdAt: conversation.messages[0]?.createdAt || conversation.updatedAt,
+        $createdAt: conversation.createdAt || conversation.messages[0]?.createdAt || conversation.updatedAt,
         $updatedAt: conversation.updatedAt,
       });
       for (const message of conversation.messages) upsertMessage(connection, ownerPersonaId, conversationId, message);
@@ -98,7 +100,7 @@ export class PersonaConversationRepository {
         VALUES ($conversationId, $ownerPersonaId, 'active', $now, $now)
       `).run({ $conversationId: conversationId, $ownerPersonaId: owner, $now: now });
     });
-    return { ownerPersonaId: owner, conversationId, messages: [], updatedAt: now };
+    return { ownerPersonaId: owner, conversationId, createdAt: now, messages: [], updatedAt: now };
   }
 }
 

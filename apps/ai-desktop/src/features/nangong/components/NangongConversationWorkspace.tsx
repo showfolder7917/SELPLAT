@@ -7,7 +7,6 @@ import type { usePersonaConversation } from "../../conversation/model/usePersona
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
-import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -28,7 +27,6 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
   const [topicDraftBusy, setTopicDraftBusy] = useState(false);
   const [topicDraftFeedback, setTopicDraftFeedback] = useState("");
   const [topicDraft, setTopicDraft] = useState({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
-  const [internalHistoryOpen, setInternalHistoryOpen] = useState(false);
   // 新 conversationId 是唯一的新直接会话事实；页面草稿不能越过这条边界继续显示。
   useEffect(() => {
     setChatText("");
@@ -36,7 +34,6 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
     setTopicDraftBusy(false);
     setTopicDraftFeedback("");
     setTopicDraft({ title: "", goal: "", scope: "", evidence: "", acceptanceCriteria: "" });
-    setInternalHistoryOpen(false);
   }, [conversation.conversationId]);
   const updateTopicDraft = (field: keyof typeof topicDraft, value: string) => setTopicDraft((current) => ({ ...current, [field]: value }));
   const update = async (operation: () => Promise<EvolutionStateOutDto> | undefined) => {
@@ -107,6 +104,11 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
       attachments: outgoingMessage.attachments, createdAt: outgoingMessage.createdAt, completedAt: outgoingMessage.failed ? new Date().toISOString() : null,
     }] : [],
   );
+  // 跨会话序号不可比较；保留各消息身份，按真实时间合并当前会话的内部研讨。
+  const currentInternal = sharedInternalMessages.filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);
+  const internalIds = new Set(currentInternal.map((message) => message.messageId));
+  const visibleMessages = [...timelineMessages, ...currentInternal.map((message) => ({ ...message, status: message.deliveryStatus, attachments: attachmentPreviews[message.messageId] || [] }))]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
   return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
       {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
         <strong>本轮已具备启动条件</strong>
@@ -114,15 +116,8 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
         <button type="button" className="selform-action" disabled={chatBusy || !workspaces} onClick={() => void sendChat("1")}>回复 1 并启动持续演化</button>
       </section>}
       {newConversationFeedback && <div className="nangong-conversation-refresh-status" role="status">{newConversationFeedback}</div>}
-      {timelineMessages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {timelineMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}><header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
-      {sharedInternalMessages.length > 0 && <SelUiDisclosure idPrefix="nangong-internal-history" className="nangong-internal-history" open={internalHistoryOpen} onOpenChange={setInternalHistoryOpen} trigger={<span>内部研讨历史（{sharedInternalMessages.length}）</span>}>
-        {/* 只投影韩立会话中的权威内部消息；它们保留可查，但不再混入当前直接对话正文。 */}
-        {sharedInternalMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role="persona" data-internal-message-id={message.messageId}>
-          <header>{message.speakerPersonaId === "han-li" ? "韩立" : "南宫婉"} · 内部研讨</header>
-          <div className="selconversation-message-body"><MarkdownMessage text={message.content} /></div>
-        </article>)}
-      </SelUiDisclosure>}
+      {visibleMessages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
+      {visibleMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} data-internal-message-id={internalIds.has(message.messageId) ? message.messageId : undefined}><header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : internalIds.has(message.messageId) ? `${message.speakerPersonaId === "han-li" ? "韩立" : "南宫婉"} · 内部研讨` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
     </section>} composer={<form className="selconversation-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="selform-root" aria-label="整理演化课题">
         <header className="selform-header"><strong>整理为演化课题</strong><button type="button" className="selform-action" disabled={topicDraftBusy} onClick={() => setTopicDraftOpen(false)}>取消</button></header>

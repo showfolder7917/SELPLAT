@@ -5,18 +5,15 @@ import type { WorkspaceStateOutDto } from "../../../../contracts/services/suppor
 import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
 // 令狐快照、模块和完整状态使用跨进程纯协议，页面与主进程共享同一数据形状。
 import type {
-  CreateLinghuRepairProposalOutDto,
   LinghuAutomaticFlowSnapshotOutDto,
   LinghuAutomationStateOutDto,
 } from "../../../../contracts/services/personas/linghu/index.js";
 // 测试资源快照只读注入，Facade 不直接争抢端口或构建目录。
 import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/services/support/capabilities/testing/index.js";
-// 修正方案进入南宫演化状态与韩立审批链，令狐不建立旁路审批。
-import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 // 统一异常记录由 Event Center 产生，本入口只负责受理和触发检查。
 import type { WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
 // Store 持有状态，模块顺序是轮转的唯一事实。
-import { LINGHU_AUTOMATION_MODULES, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
+import { LINGHU_AUTOMATION_MODULES, LINGHU_SAFEGUARD_INSTRUCTIONS, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
 import { automaticFlowSnapshots, faultFingerprint, moduleCompletionReport, moduleInstruction, moduleLabel, taskHumanReport, testResourceContext } from "./internal/linghu-flow.analyzer.js";
 // 基础设施异常类型留在 internal，外部只能通过 Facade 的静态判断入口识别。
@@ -47,7 +44,7 @@ export interface LinghuAutomationFacadeOptions {
   store: LinghuAutomationStore;
   // Coordinator 是协同任务唯一副作用入口。
   collaboration: LinghuCollaborationPort;
-  // 工作区读取器在真正提交任务或提案时获取最新登记值。
+  // 工作区读取器在真正提交有证据的修复任务时获取最新登记值。
   readWorkspaceState(): WorkspaceStateOutDto;
   // 语言读取器保持新任务与当前用户设置一致。
   locale(): LocaleValue;
@@ -57,10 +54,6 @@ export interface LinghuAutomationFacadeOptions {
   readTestResourceState(): TestResourceCoordinatorStateOutDto;
   // 统一测试通过后由组合根安排受控重启。
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
-  // 以下三个可选端口把令狐修正接入既有演化审批链。
-  submitRepairProposal?(request: CreateLinghuRepairProposalOutDto): EvolutionStateOutDto;
-  readEvolutionState?(): EvolutionStateOutDto;
-  reviseReturnedProposal?(proposalId: string): Promise<EvolutionStateOutDto>;
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -79,11 +72,9 @@ export class LinghuAutomationFacade {
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
   readonly #readTestResourceState: LinghuAutomationFacadeOptions["readTestResourceState"];
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
-  readonly #submitRepairProposal: LinghuAutomationFacadeOptions["submitRepairProposal"];
-  readonly #readEvolutionState: LinghuAutomationFacadeOptions["readEvolutionState"];
-  readonly #reviseReturnedProposal: LinghuAutomationFacadeOptions["reviseReturnedProposal"];
   // timer 为 null 表示尚未启动或已经停止；重复 start 不会创建多重轮询。
-  #timer: ReturnType<typeof setInterval> | null = null;
+  #timer: ReturnType<typeof setTimeout> | null = null;
+  #stopped = false;
   // checking 防止定时器、异常通知和手动检查同时执行恢复副作用。
   #checking = false;
 
@@ -97,18 +88,22 @@ export class LinghuAutomationFacade {
     this.#recordEvent = options.recordEvent;
     this.#readTestResourceState = options.readTestResourceState;
     this.#runUnifiedTestAndRestart = options.runUnifiedTestAndRestart;
-    this.#submitRepairProposal = options.submitRepairProposal;
-    this.#readEvolutionState = options.readEvolutionState;
-    this.#reviseReturnedProposal = options.reviseReturnedProposal;
   }
 
   /** 返回 Store 的深复制状态快照。 */
   state(): LinghuAutomationStateOutDto { return this.#store.state(); }
+  /** 新建页面展示会话不触碰运行连接、任务进度、开关或检查时间。 */
+  newDisplayConversation(): LinghuAutomationStateOutDto {
+    return this.#store.updateRuntime("automation.display_conversation_created", (state) => {
+      state.displayConversationStartedAt = new Date().toISOString();
+    });
+  }
   /** 把状态订阅转交 Store，Facade 不维护第二套事件列表。 */
   subscribe(listener: Parameters<LinghuAutomationStore["subscribe"]>[0]) { return this.#store.subscribe(listener); }
 
   /** 响应唯一自动执行开关，并在开启后立即进行第一轮检查。 */
   setEnabled(enabled: boolean): LinghuAutomationStateOutDto {
+    this.#clearTimer();
     // 先持久化用户选择，再记录事件和触发副作用。
     const state = this.#store.setEnabled(enabled);
     // 审计事件保留开启时的循环和模块，方便恢复问题定位。
@@ -119,29 +114,26 @@ export class LinghuAutomationFacade {
       // 不等待检查完成即可向按钮返回已持久化状态，实际结果通过状态事件推送。
       void this.checkNow();
     }
-    return state;
+    return this.state();
   }
 
   // 文案 CRUD 直接委托 Store，避免 Facade 复制校验和原子持久化逻辑。
-  createPrompt(request: Parameters<LinghuAutomationStore["createPrompt"]>[0]) { return this.#store.createPrompt(request); }
-  updatePrompt(promptId: string, request: Parameters<LinghuAutomationStore["updatePrompt"]>[1]) { return this.#store.updatePrompt(promptId, request); }
-  deletePrompt(promptId: string) { return this.#store.deletePrompt(promptId); }
-  selectPrompt(promptId: string) { return this.#store.selectPrompt(promptId); }
 
   start(): void {
-    // 已存在 timer 说明检测已启动，重复调用直接返回。
-    if (this.#timer) return;
-    // 轮询间隔来自持久化协议，定时器每次只调用并发保护后的 checkNow。
-    this.#timer = setInterval(() => void this.checkNow(), this.state().pollIntervalMs);
-    // 启动后立即检查，不等待第一个 30 秒间隔。
+    if (this.#timer || this.#checking) return;
+    this.#stopped = false;
     void this.checkNow();
   }
 
   /** 停止定时器；用户 enabled 选择仍保留在 Store，供正常应用退出后恢复。 */
   stop(): void {
-    // timer 存在时先释放系统资源。
-    if (this.#timer) clearInterval(this.#timer);
-    // 归零引用允许后续安全重新 start。
+    this.#stopped = true;
+    this.#clearTimer();
+    this.#store.updateRuntime("automation.scheduler_stopped", (state) => { state.nextCheckAt = null; });
+  }
+
+  #clearTimer(): void {
+    if (this.#timer) clearTimeout(this.#timer);
     this.#timer = null;
   }
 
@@ -165,13 +157,15 @@ export class LinghuAutomationFacade {
     await this.checkNow();
   }
 
-  /** 执行一轮检测、恢复、审批衔接或模块派发。 */
+  /** 执行一轮检测、恢复或有明确故障依据的模块派发。 */
   async checkNow(): Promise<void> {
     // 已有检查运行时不排队第二份副作用，下一次定时器会读取最新状态。
-    if (this.#checking) return;
+    if (this.#checking || this.#stopped || !this.state().enabled) return;
+    this.#clearTimer();
     // 先占用检查锁，并在 finally 中无条件释放。
     this.#checking = true;
     try {
+      this.#store.updateRuntime("automation.check_started", (state) => { state.checking = true; state.nextCheckAt = null; });
       // 用户关闭自动执行后，定时器可以存在但不得读取任务或执行恢复。
       if (!this.#store.state().enabled) return;
       // 一轮检查使用同一协同快照，避免分析过程中各任务事实漂移。
@@ -192,20 +186,20 @@ export class LinghuAutomationFacade {
       if (this.#collaboration.state().mode !== "collaboration") this.#collaboration.setMode("collaboration");
 
       // 一级职责先于令狐老祖自己的演化循环：任何人物的未完成任务都必须先进入最后流程。
-      const guarded = await this.#recoverOtherFlows(collaborationState, automation.activeTaskId, automation.pendingRepairProposalId, snapshots);
+      const guarded = await this.#recoverOtherFlows(collaborationState, automation.activeTaskId, snapshots);
       if (guarded) return;
 
       if (automation.activeTaskId) {
         // 活动任务每轮重新从 Coordinator 获取，不能依赖旧快照对象执行副作用。
         const task = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === automation.activeTaskId);
         if (!task) {
-          // 任务缺失时保存恢复点并释放活动 ID，下一步重新派发同模块替代任务。
+          // 任务缺失时保存恢复点并释放活动 ID；没有具体故障证据不创建替代任务。
           automation = this.#store.updateRuntime("automation.task_missing", (state) => {
             state.recoveryCheckpoint = `missing-task:${state.activeTaskId || "unknown"}:${state.currentModule}`;
             state.activeTaskId = null;
             state.currentFaultFingerprint = null;
             state.recoveryAttemptCount = 0;
-            state.blockingReason = "关联任务记录缺失，已保存恢复点并准备派发同模块替代任务";
+            state.blockingReason = "关联任务记录缺失，已保存恢复点并继续巡检；没有具体故障证据不创建替代任务";
           });
         } else if (task.state === "integrated") {
           // 保存完成前的模块，因为 completeModule 会立即轮转 currentModule。
@@ -247,7 +241,7 @@ export class LinghuAutomationFacade {
             state.activeTaskId = null;
             state.currentFaultFingerprint = null;
             state.recoveryAttemptCount = 0;
-            state.blockingReason = "当前保障任务由用户明确取消；已释放失效任务并准备提交下一份修正方案";
+            state.blockingReason = "当前保障任务由用户明确取消；已释放失效任务，继续巡检，不自动重建已取消任务";
             state.lastFeedback = { cycle: state.cycle, module: state.currentModule, taskId: task.taskId, taskState: task.state, summary: task.blockingReason || "任务已取消", recordedAt: new Date().toISOString() };
           });
         } else if (task.state === "blocked" || task.state === "recovering") {
@@ -261,7 +255,7 @@ export class LinghuAutomationFacade {
         }
       }
 
-      // 没有活动任务时继续处理审批提案或派发当前独立模块。
+      // 没有活动任务时只依据具体故障决定是否派发当前模块，不经过旧提案链。
       if (!automation.activeTaskId) await this.#dispatchCurrentModule(automation);
     } catch (error) {
       // 任一检查异常写入状态和事件中心，但不自行关闭 enabled。
@@ -271,18 +265,24 @@ export class LinghuAutomationFacade {
     } finally {
       // 无论正常、早返回或异常都释放并发锁。
       this.#checking = false;
+      const scheduled = !this.#stopped && this.state().enabled;
+      const nextCheckAt = scheduled ? new Date(Date.now() + 60_000).toISOString() : null;
+      this.#store.updateRuntime("automation.check_finished", (state) => { state.checking = false; state.nextCheckAt = nextCheckAt; });
+      if (scheduled) {
+        this.#timer = setTimeout(() => { this.#timer = null; void this.checkNow(); }, 60_000);
+        this.#timer.unref();
+      }
     }
   }
 
   async #recoverOtherFlows(
     collaborationState: CollaborationStateOutDto,
     activeAutomationTaskId: string | null,
-    pendingRepairProposalId: string | null,
     snapshots: LinghuAutomaticFlowSnapshotOutDto[],
   ): Promise<boolean> {
     // 自身保障任务不能遮蔽其他人物的停点；每轮仍只恢复一条流程，避免恢复动作互相抢占。
     const pending = collaborationState.tasks
-      .filter((task) => task.taskId !== activeAutomationTaskId && (!pendingRepairProposalId || task.evolutionProposalId !== pendingRepairProposalId) && task.state !== "integrated" && task.state !== "cancelled")
+      .filter((task) => task.taskId !== activeAutomationTaskId && task.state !== "integrated" && task.state !== "cancelled")
       .sort((left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
     // 没有其他人物未终结任务时，允许继续令狐自己的模块循环。
     if (pending.length === 0) return false;
@@ -314,6 +314,7 @@ export class LinghuAutomationFacade {
     const checkpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
     // 人类报告用于状态、事件和等待原因保持同一事实表述。
     const report = taskHumanReport(this.#collaboration.state(), task, snapshot);
+    this.#recordEvent("linghu.automation.issue_detected", { report, fingerprint }, task.taskId);
     if (snapshot?.blockingKind === "business") {
       // 业务选择只登记异常和检查点，令狐绝不调用 continue/recover 代替用户决定。
       this.#recordEvent("business.exception", {
@@ -392,111 +393,38 @@ export class LinghuAutomationFacade {
       state.recoveryCheckpoint = checkpoint;
       state.blockingReason = `${report}。我已发起本停点第 ${attempts + 1} 次安全恢复，并会继续核对新的执行结果。`;
     });
+    this.#recordEvent("linghu.automation.recovery_requested", { report: this.state().blockingReason, fingerprint }, task.taskId);
   }
 
   async #dispatchCurrentModule(state: LinghuAutomationStateOutDto): Promise<void> {
-    // 配置了演化端口时，所有令狐修正必须先形成提案并经过韩立审批。
-    if (this.#submitRepairProposal && this.#readEvolutionState) {
-      if (state.pendingRepairProposalId) {
-        // 每轮读取最新演化与协同状态，判断提案是否已返还真实任务。
-        const evolution = this.#readEvolutionState();
-        const proposal = evolution.proposals.find((candidate) => candidate.proposalId === state.pendingRepairProposalId);
-        const task = this.#collaboration.state().tasks.find((candidate) => candidate.evolutionProposalId === state.pendingRepairProposalId);
-        if (task) {
-          // 审批执行任务出现后绑定为活动任务，并释放待审批 ID。
-          this.#store.updateRuntime("automation.approved_repair_received", (current) => {
-            current.activeTaskId = task.taskId;
-            current.pendingRepairProposalId = null;
-            current.lastDispatchAt = new Date().toISOString();
-            current.recoveryCheckpoint = `approved-repair-task:${task.taskId}:${current.currentModule}`;
-            current.blockingReason = null;
-          });
-          return;
-        }
-        if (proposal && ["pending-approval", "approved"].includes(proposal.status)) {
-          // 待审批或已批准但尚未返还任务时只等待，不重复提交方案。
-          this.#store.updateRuntime("automation.repair_awaiting_approval", (current) => { current.blockingReason = `令狐修正方案 ${proposal.proposalId} 正在等待韩立审批或审批后返还执行`; });
-          return;
-        }
-        if (proposal?.status === "supplement-required" || proposal?.status === "rejected") {
-          // 有明确审批意见时调用既有修订入口生成新版本，原提案保持不可覆盖。
-          if (this.#reviseReturnedProposal && proposal.approvals.at(-1)?.advice.trim()) {
-            const revisedState = await this.#reviseReturnedProposal(proposal.proposalId);
-            const revised = revisedState.proposals.find((candidate) => candidate.supersedesProposalId === proposal.proposalId);
-            if (revised) {
-              this.#store.updateRuntime("automation.repair_revised", (current) => {
-                current.pendingRepairProposalId = revised.proposalId;
-                current.recoveryCheckpoint = `repair-revised:${proposal.proposalId}:${revised.proposalId}`;
-                current.blockingReason = `令狐已依据审批意见提交 v${revised.version}，等待韩立再次审批`;
-              });
-              return;
-            }
-          }
-          this.#store.updateRuntime("automation.repair_requires_revision", (current) => { current.blockingReason = `令狐修正方案 ${proposal.proposalId} 状态为 ${proposal.status}，缺少明确审批意见，等待人工补充`; });
-          return;
-        }
-        this.#store.updateRuntime("automation.repair_proposal_missing", (current) => { current.pendingRepairProposalId = null; current.blockingReason = "令狐修正方案记录缺失，已保留恢复点并准备重新提交"; });
-        return;
-      }
-      // 只有真实停点或阻塞证据才允许生成修正提案。
-      const actionableSnapshots = state.flowSnapshots.filter((snapshot) => ["stalled", "recovering", "human-blocked"].includes(snapshot.health) || snapshot.blockingKind !== "none");
-      if (actionableSnapshots.length === 0) {
-        // 检查点前缀防止同一循环、模块和游标重复记录“无需操作”。
-        const inspectionPrefix = `inspection:${state.cycle}:${state.currentModule}:`;
-        if (state.recoveryCheckpoint?.startsWith(inspectionPrefix)) return;
-        const collaboration = this.#collaboration.state();
-        const running = collaboration.tasks.filter((task) => !["integrated", "cancelled"].includes(task.state));
-        const report = running.length === 0
-          ? `令狐老祖刚检查了协作执行池：当前没有未完成任务，也没有发现可提交修正的真实故障。第 ${state.cycle} 轮“${moduleLabel(state.currentModule)}”只保留检查结果，不生成泛化修正方案。`
-          : `令狐老祖刚检查了 ${running.length} 个未完成任务：它们都处于执行、排队或正常等待状态，没有发现停住、失败或缺少恢复条件的事实。本轮不生成泛化修正方案。`;
-        this.#store.updateRuntime("automation.inspection_no_action_required", (current) => {
-          current.recoveryCheckpoint = `${inspectionPrefix}${current.detectionCursor || "initial"}`;
-          current.blockingReason = `${report} 我会在任务状态变化或下一次定时检测时继续检查。`;
-        });
-        this.#recordEvent("linghu.automation.inspection_no_action_required", {
-          cycle: state.cycle,
-          module: state.currentModule,
-          unfinishedTaskCount: running.length,
-          report,
-        });
-        return;
-      }
-      // 模块说明、证据、风险、回退和验收组成完整可审批提案。
-      const moduleText = moduleInstruction(state.currentModule);
-      const proposalState = this.#submitRepairProposal({
-        title: `令狐老祖 · 第${state.cycle}轮 · ${moduleLabel(state.currentModule)}`,
-        content: `${moduleText}\n\n当前阻塞：${state.blockingReason || "无已知阻塞"}\n\n建议先依据真实运行事实完成最小修正，再进入既有协同验证与统一测试。`,
-        evidence: [state.lastFeedback?.summary || "持续检测已进入当前独立模块", `当前模块：${moduleLabel(state.currentModule)}`, `检测恢复点：${state.recoveryCheckpoint || "首次检测"}`],
-        impactScope: [moduleLabel(state.currentModule)],
-        risks: ["错误恢复可能重复触发任务或影响持续运行"],
-        rollbackPlan: "保留当前恢复点；失败时撤销修正任务分支并继续只读检测。",
-        acceptanceCriteria: ["修正方案有事实依据", "任务恢复且不重复触发", "通过既有代码验证和统一测试"],
-        workspaceState: this.#readWorkspaceState(), locale: this.#locale(),
+    // 只有真实停点或阻塞证据才允许进入现有修复任务流程，不再生成审批提案。
+    const actionableSnapshots = state.flowSnapshots.filter((snapshot) => ["stalled", "recovering", "human-blocked"].includes(snapshot.health) || snapshot.blockingKind !== "none");
+    if (actionableSnapshots.length === 0) {
+      // 检查点前缀防止同一循环、模块和游标重复记录“无需操作”。
+      const inspectionPrefix = `inspection:${state.cycle}:${state.currentModule}:`;
+      if (state.recoveryCheckpoint?.startsWith(inspectionPrefix)) return;
+      const collaboration = this.#collaboration.state();
+      const running = collaboration.tasks.filter((task) => !["integrated", "cancelled"].includes(task.state));
+      const report = running.length === 0
+        ? `令狐老祖刚检查了协作执行池：当前没有未完成任务，也没有发现可提交修正的真实故障。第 ${state.cycle} 轮“${moduleLabel(state.currentModule)}”只保留检查结果，不生成泛化修正方案。`
+        : `令狐老祖刚检查了 ${running.length} 个未完成任务：它们都处于执行、排队或正常等待状态，没有发现停住、失败或缺少恢复条件的事实。本轮不生成泛化修正方案。`;
+      this.#store.updateRuntime("automation.inspection_no_action_required", (current) => {
+        if (!current.recoveryCheckpoint?.startsWith("missing-task:") && !current.recoveryCheckpoint?.startsWith("cancelled-task:")) current.recoveryCheckpoint = `${inspectionPrefix}${current.detectionCursor || "initial"}`;
+        current.blockingReason = `${report} 我会在任务状态变化或下一次定时检测时继续检查。`;
       });
-      // Store 保证新提案追加在数组末尾，取得稳定 ID 后保存等待状态。
-      const proposal = proposalState.proposals.at(-1)!;
-      this.#store.updateRuntime("automation.repair_submitted_for_approval", (current) => {
-        current.pendingRepairProposalId = proposal.proposalId;
-        current.recoveryCheckpoint = `repair-proposal:${proposal.proposalId}:${current.currentModule}`;
-        current.blockingReason = `修正方案已提交韩立审批：${proposal.proposalId}`;
-      });
-      this.#recordEvent("linghu.automation.repair_submitted_for_approval", { proposalId: proposal.proposalId, cycle: state.cycle, module: state.currentModule });
-      return;
-    }
-    // 没有演化审批端口的隔离测试环境回退为直接协同任务派发。
-    const prompt = state.prompts.find((candidate) => candidate.promptId === state.activePromptId && candidate.enabled)
-      || state.prompts.find((candidate) => candidate.enabled);
-    if (!prompt) {
-      this.#store.updateRuntime("automation.no_prompt", (current) => {
-        current.activePromptId = null;
-        current.blockingReason = "没有已启用的启动文案；自动检测保持开启";
+      this.#recordEvent("linghu.automation.inspection_no_action_required", {
+        cycle: state.cycle,
+        module: state.currentModule,
+        unfinishedTaskCount: running.length,
+        report,
       });
       return;
     }
+    // 固定职责只有一个正式来源，不读取可编辑文案或兼容入口。
     // 当前文案与模块专属职责组合为确认意图，不能扩大到其他模块。
     const moduleText = moduleInstruction(state.currentModule);
     const confirmedIntent = [
-      prompt.content,
+      LINGHU_SAFEGUARD_INSTRUCTIONS,
       `当前循环：${state.cycle}`,
       `当前独立模块：${moduleLabel(state.currentModule)}`,
       moduleText,
@@ -526,7 +454,6 @@ export class LinghuAutomationFacade {
     if (!task) throw new Error("自动保障任务创建后没有返回任务记录。");
     this.#store.updateRuntime("automation.module_dispatched", (current) => {
       const previousCheckpoint = current.recoveryCheckpoint;
-      current.activePromptId = prompt.promptId;
       current.activeTaskId = task.taskId;
       current.lastDispatchAt = new Date().toISOString();
       current.recoveryAttemptCount = 0;
@@ -536,7 +463,7 @@ export class LinghuAutomationFacade {
         : `active-task:${task.taskId}:${current.currentModule}`;
       current.blockingReason = null;
     });
-    this.#recordEvent("linghu.automation.module_dispatched", { cycle: state.cycle, module: state.currentModule, promptId: prompt.promptId }, task.taskId);
+    this.#recordEvent("linghu.automation.module_dispatched", { cycle: state.cycle, module: state.currentModule }, task.taskId);
   }
 
   #completeModule(task: CollaborationTaskOutDto, summary: string): LinghuAutomationStateOutDto {

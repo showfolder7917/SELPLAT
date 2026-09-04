@@ -59,7 +59,7 @@ export function projectCollaborationFlowEvent(
   initiator: CollaborationParticipantSnapshotOutDto,
 ): CollaborationFlowProjection {
   const actor = event.actor || SYSTEM;
-  const assignment = assignmentAt(task, actor.memberId, event.occurredAt);
+  const assignment = task.executionRecords.find(record => record.assignmentId === event.details?.assignmentId) || assignmentAt(task, actor.memberId, event.occurredAt);
   const assignmentKey = assignment?.assignmentId || `${actor.memberId}:${event.eventId}`;
   const ids = {
     analysis: `analysis:${task.taskId}:${assignmentKey}`,
@@ -72,6 +72,23 @@ export function projectCollaborationFlowEvent(
     sourceSuffix = "",
   ): ProjectedTimelineFact => ({ ...timelineSemantics(input.kind), ...input, eventType: input.eventType || event.type, sourceSuffix });
 
+  if (event.type.startsWith("executor.self_")) {
+    const repair = event.type.startsWith("executor.self_repair_");
+    const round = event.details?.validationRound || 1;
+    const prefix = repair ? "executor.self_repair_" : "executor.self_test_";
+    const started = task.flowEvents.find(item => item.type === `${prefix}started` && item.details?.assignmentId === event.details?.assignmentId && item.details?.validationRound === round);
+    const current = event.status === "started";
+    return projection(repair ? "running" : "verifying", [fact({
+      nodeId: `${repair ? "self-repair" : "self-test"}:${task.taskId}:${assignmentKey}:${round}`,
+      kind: repair ? "repair" : "verification", actor, recipients: [initiator],
+      status: current ? "current" : event.status === "failed" ? "failed" : "completed",
+      action: repair ? `第 ${round} 轮自修${current ? "中" : event.status === "failed" ? "未完成" : "修改结束，等待复测"}` : `第 ${round} 次自测${current ? "中" : event.status === "failed" ? "未通过" : "通过"}`,
+      summary: event.summary, content: event.summary, detail: "",
+      startedAt: started?.occurredAt || event.occurredAt, completedAt: current ? null : event.occurredAt,
+      automaticOpen: current, manualApprovalProposalId: null,
+    })]);
+  }
+
   if (event.type === "task.submitted") {
     const recipient = task.originalExecutor || task.executionRecords.at(0)?.executor || EXECUTION_POOL;
     return projection("running", [fact({
@@ -83,8 +100,9 @@ export function projectCollaborationFlowEvent(
   }
 
   if (event.type === "executor.assigned" || event.type === "executor.reassigned") {
+    const resuming = event.type === "executor.reassigned";
     const facts = [fact({
-      nodeId: ids.analysis, kind: "analysis", actor, recipients: [initiator], status: "current", action: "当前正在技术分析",
+      nodeId: ids.analysis, kind: "analysis", actor, recipients: [initiator], status: resuming ? "completed" : "current", action: resuming ? "恢复任务，继续剩余工作" : "当前正在技术分析",
       summary: event.summary, content: "", detail: [...task.snapshot.constraints, ...task.snapshot.acceptanceCriteria].join("\n"),
       startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
     })];
@@ -94,8 +112,8 @@ export function projectCollaborationFlowEvent(
       startedAt: task.startedAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
     }, ":distribution-completed"));
     if (event.type === "executor.reassigned") facts.unshift(fact({
-      nodeId: `return-from-repair:${task.taskId}:${assignmentKey}`, kind: "distribution", actor: NANGONG, recipients: [actor], status: "completed",
-      action: "修复后任务已重新交回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,
+      nodeId: `return-from-repair:${task.taskId}:${assignmentKey}`, kind: "distribution", actor: LINGHU, recipients: [actor], status: "completed",
+      action: "剩余工作已交回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,
       detail: event.details?.failureSummary || task.repairFailureReason || "", startedAt: event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: false, manualApprovalProposalId: null,
     }, ":repair-returned"));
@@ -110,6 +128,11 @@ export function projectCollaborationFlowEvent(
   })]);
 
   if (event.type === "execution.started") return projection("running", [fact({
+    nodeId: ids.analysis, kind: "analysis", actor, recipients: [initiator], status: "completed", action: "技术分析结束",
+    summary: event.summary, content: task.plans.find(plan => plan.ownerMemberId === actor.memberId)?.text || "",
+    detail: "", startedAt: assignment?.assignedAt || event.occurredAt, completedAt: event.occurredAt,
+    automaticOpen: false, manualApprovalProposalId: null,
+  }, ":analysis-closed"), fact({
     nodeId: ids.execution, kind: "execution", actor, recipients: [initiator], status: "current", action: "当前正在执行",
     summary: event.summary, content: "", detail: "", startedAt: event.occurredAt, completedAt: null,
     automaticOpen: true, manualApprovalProposalId: null,
@@ -233,6 +256,12 @@ export function projectCollaborationFlowEvent(
     const facts: ProjectedTimelineFact[] = [];
     if (event.type.endsWith("repair_started")) {
       const previous = latestOriginalExecution(task, event.occurredAt);
+      if (previous && !direct) facts.push(fact({
+        nodeId: `verification:${task.taskId}:${previous.assignmentId}`, kind: "verification", actor: previous.executor, recipients: [initiator], status: "failed",
+        action: "自检未通过，已转交修复", summary: event.summary, content: event.details?.failureSummary || event.summary,
+        detail: repairDetail(event, task), startedAt: priorEventAt(task, "worker.phase.verifying", event.occurredAt) || previous.executionStartedAt || previous.assignedAt,
+        completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+      }, ":original-verification-closed"));
       if (previous && !direct) facts.unshift(fact({
         nodeId: `execution:${task.taskId}:${previous.assignmentId}`, kind: "execution", actor: previous.executor, recipients: [initiator], status: "failed",
         action: "执行已结束并转交修复", summary: event.details?.failureSummary || task.repairFailureReason || task.blockingReason || event.summary,
