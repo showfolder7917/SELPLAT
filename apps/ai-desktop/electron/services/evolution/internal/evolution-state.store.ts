@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
@@ -199,24 +199,28 @@ export class EvolutionStateStore {
    */
   resumeOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
-    if (!current || current.status !== "blocked" || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");
+    if (!current || current.status === "completed" || (current.status !== "blocked" && this.#state.automationRuntime.status !== "paused") || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");
     const proposal = requireProposal(this.#state, current.proposalId);
-    if (!["supplement-required", "rejected", "blocked"].includes(proposal.status)) throw new Error("当前提案状态不允许从调查修订点恢复。");
+    if (!["supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
+    // 依据提案的持久事实回到原阶段；验收故障不得重新分析、分发已经完成的任务。
+    const accepting = proposal.status === "pending-acceptance";
+    const executing = proposal.status === "executing" || proposal.status === "verifying";
+    const phase = accepting ? "accepting" : executing ? (proposal.status === "verifying" ? "testing" : "executing") : "revising";
     const now = new Date().toISOString();
     return this.#commit("one-shot.resumed", current.topicId, current.proposalId, (state) => {
       const run = state.oneShotRun!;
       run.status = "running";
-      run.phase = "revising";
-      run.actor = "nangong-wan";
-      run.actorName = "南宫婉";
-      run.action = "正在重新调查韩立退回项并核对可验证的新事实";
+      run.phase = phase;
+      run.actor = accepting ? "han-li" : "nangong-wan";
+      run.actorName = accepting ? "韩立" : "南宫婉";
+      run.action = accepting ? "正在从原验收卡点继续真实界面验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
       run.blockingReason = null;
       run.updatedAt = now;
       run.completedAt = null;
       state.automationRuntime.status = "running";
       state.automationRuntime.pausedAt = null;
       state.automationRuntime.stopReason = null;
-    }, { phase: "revising", actor: "nangong-wan", status: "running", nextOwner: "nangong-wan" });
+    }, { phase, actor: accepting ? "han-li" : "nangong-wan", status: "running", nextOwner: accepting ? "han-li" : "nangong-wan" });
   }
 
   createTopic(request: CreateNangongTopicInDto, sourceConversationMessageIds: string[] = []): EvolutionStateOutDto {
@@ -497,13 +501,6 @@ export class EvolutionStateStore {
     });
   }
 
-  /** 验收计划作为专题档案事实保存，不改变提案状态，也不伪装成已经执行的验收结果。 */
-  recordAcceptancePlan(plan: HanliAcceptancePlanOutDto): EvolutionStateOutDto {
-    const proposal = requireProposal(this.#state, plan.proposalId);
-    if (proposal.topicId !== plan.topicId) throw new Error("验收计划与专题不一致。 ");
-    return this.#commit("acceptance.plan_generated", plan.topicId, plan.proposalId, () => undefined, { acceptancePlan: structuredClone(plan), status: "planned", nextOwner: "han-li" });
-  }
-
   /** 真实应用操作证据与计划分开追加，失败事实交由后续结果线路处理。 */
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, run.proposalId);
@@ -566,20 +563,18 @@ export class EvolutionStateStore {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
     const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
-    if (decision === "approved" && run?.status !== "passed") throw new Error("韩立必须先完成真实应用检查且全部通过，才能验收通过。 ");
-    const plan = run ? [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "acceptance.plan_generated" && (record.payload.acceptancePlan as { planId?: string } | undefined)?.planId === run.planId)?.payload.acceptancePlan as HanliAcceptancePlanOutDto | undefined : undefined;
+    if (decision === "approved" && (run?.version !== 2 || run.status !== "passed")) throw new Error("韩立必须先完成真实应用检查且全部通过，才能验收通过。 ");
     const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed").map((step) => {
-      const check = plan?.checks.find((item) => item.checkId === step.checkId);
       return {
         evidenceId: `acceptance-failure-${run.runId}-${step.checkId}-${step.operationIndex}`,
         runId: run.runId,
-        planId: run.planId,
+
         checkId: step.checkId,
-        target: check?.target || "真实应用界面",
+        target: "真实应用界面",
         severity: step.status === "blocked" ? "blocking" : "major",
-        reproductionOperations: check?.operations ? structuredClone(check.operations.slice(0, step.operationIndex + 1)) : [structuredClone(step.operation)],
+        reproductionOperations: run.stepResults.slice(0, step.operationIndex + 1).map((item) => structuredClone(item.operation)),
         actual: step.actual,
-        expected: check?.expected || "符合专题验收条件",
+        expected: run.criteria?.[Number(step.checkId.replace("criterion-", "")) - 1] || "符合专题验收条件",
         screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
       };
     });

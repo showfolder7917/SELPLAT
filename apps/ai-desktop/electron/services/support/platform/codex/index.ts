@@ -1,4 +1,5 @@
 // Codex 门面把 app-server、审批、流事件和线程生命周期转换为稳定应用能力。
+export type { CodexDynamicToolsPort } from "./internal/dynamic-tools.port.js";
 export {
   CodexService as CodexFacade,
   createCodexChildEnvironment,

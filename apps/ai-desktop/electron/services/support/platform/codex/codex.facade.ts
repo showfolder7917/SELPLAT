@@ -19,6 +19,7 @@ import type { WorkspaceStateOutDto } from "../../../../../contracts/services/sup
 import type { CodexSessionPersistence } from "./internal/codex-session.repository.js";
 import { resolveCodexRuntime, type CodexRuntime } from "./internal/codex-runtime.resolver.js";
 import { toCodexStreamEvent } from "./internal/codex-stream-event.mapper.js";
+import type { CodexDynamicToolsPort } from "./internal/dynamic-tools.port.js";
 import { CommandGovernanceFacade as TrustedCommandStore } from "../security/index.js";
 
 type JsonObject = Record<string, unknown>;
@@ -50,6 +51,7 @@ interface BufferedNotification {
 }
 
 export interface CodexServiceOptions {
+  dynamicTools?: CodexDynamicToolsPort;
   codexHome: string | null;
   serviceName: string;
   threadSource: string;
@@ -389,6 +391,7 @@ export class CodexService {
       threadSource: this.#options.threadSource,
       // 风格与语言属于客户端开发约束，不混入用户正文或污染任务标题。
       developerInstructions,
+      ...(this.#options.dynamicTools ? { dynamicTools: this.#options.dynamicTools.definitions } : {}),
     }));
     const threadId = stringValue(asObject(result.thread).id);
     if (!threadId) throw new Error("Codex harness did not return a thread id.");
@@ -569,6 +572,16 @@ export class CodexService {
   }
 
   #handleServerRequest(id: number, method: string, params: JsonObject): void {
+    if (method === "item/tool/call") {
+      const port = this.#options.dynamicTools;
+      const tool = stringValue(params.tool);
+      if (!port || !tool || params.threadId !== this.#threadId || !this.#activeWorkspaces || !port.definitions.some((item) => item.name === tool)) {
+        this.#respond(id, { success: false, contentItems: [{ type: "inputText", text: "当前会话没有该工具的活动授权。" }] });
+        return;
+      }
+      void port.call(tool, params.arguments).then((result) => this.#respond(id, result), (error: unknown) => this.#respond(id, { success: false, contentItems: [{ type: "inputText", text: error instanceof Error ? error.message : "工具执行失败" }] }));
+      return;
+    }
     if (method === "mcpServer/elicitation/request") {
       this.#respond(id, { action: "cancel", content: null });
       return;

@@ -571,7 +571,18 @@ export async function startApplication(): Promise<void> {
       const current = workspaces.read();
       return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
     },
-    planAcceptance: async (prompt, workspaceState, locale) => (await hanLiCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, null)).text,
+    computerAcceptance: async (goal, dynamicTools) => {
+      const topic = evolutionStateStore.state().topics.find((item) => item.topicId === goal.topicId);
+      if (!topic) throw new Error("验收专题不存在。");
+      // 独立连接隔离验收工具与普通聊天；本轮结束即销毁，旧工具不回流普通会话。
+      const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
+        codexHome, serviceName: "selplat_hanli_computer_acceptance", threadSource: "ai-desktop-hanli-acceptance", migrateLegacySession: false,
+        sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions: readHanliRuleInstructions, dynamicTools,
+      }, (details) => eventCenter.recordEvent("hanli.acceptance.tool_policy", details), (details) => eventCenter.recordEvent("hanli.acceptance.thread", details));
+      const timer = setTimeout(() => service.dispose(), 180_000);
+      try { await service.send(prompts.render("hanli.computer-acceptance", { goalJson: JSON.stringify(goal) }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null); }
+      finally { clearTimeout(timer); service.dispose(); }
+    },
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordTimelineEvent: recordEvolutionTimelineEvent,
     beginMutation: beginEvolutionMutation,

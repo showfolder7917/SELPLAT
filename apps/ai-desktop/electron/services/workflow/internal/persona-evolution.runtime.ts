@@ -1,6 +1,6 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
@@ -76,7 +76,8 @@ export class PersonaEvolutionRuntime {
   #timer: ReturnType<typeof setInterval> | null = null;
   #continuationTimer: ReturnType<typeof setTimeout> | null = null;
   #running = false;
-  #oneShotAcceptanceRunner: ((plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>) | null = null;
+  #resuming = false;
+  #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>) | null = null;
 
   /**
    * 组装跨人物演化顺序以及南宫人物入口。
@@ -177,7 +178,7 @@ export class PersonaEvolutionRuntime {
     this.#continuationTimer = null;
   }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
-  setOneShotAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>): void { this.#oneShotAcceptanceRunner = runner; }
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
   /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
   notifyWorkflowChanged(): void { void this.#tick(); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
@@ -221,20 +222,28 @@ export class PersonaEvolutionRuntime {
       .some((task) => collaboration.members.some((member) => member.currentTaskId === task.taskId && !["idle", "offline"].includes(member.state)));
   }
 
-  /** 从当前持久化卡点恢复同一轮；恢复后立即沿原状态机推进，不触碰长期自动开关。 */
-  async resumeOneShotRun(): Promise<EvolutionStateOutDto> {
+  /** 校验原运行后恢复统一流程；不改变令狐独立巡检开关。 */
+  async resumeOneShotRun(expectedRunId?: string): Promise<EvolutionStateOutDto> {
+    if (this.#resuming || this.#running) throw new Error("流程正在处理中，请勿重复恢复。");
     const before = this.state();
     const run = before.oneShotRun;
-    const proposal = run?.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
-    if (proposal?.status === "blocked") {
-      const blockedTasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId) && ["blocked", "test-failed"].includes(task.state));
-      for (const task of blockedTasks) {
-        await this.#collaboration.recoverTask(task.taskId, `用户已从一次性演化卡点明确继续：${itemFailureReason(task)}`);
+    if (expectedRunId !== undefined && run?.runId !== expectedRunId) throw new Error("当前运行已变化，请刷新后恢复原任务。");
+    if (!run || (run.status !== "blocked" && before.automationRuntime.status !== "paused")) throw new Error("当前没有暂停或阻塞的运行。");
+    this.#resuming = true;
+    try {
+      const proposal = run.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
+      if (proposal?.status === "blocked") {
+        const blockedTasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId) && ["blocked", "test-failed"].includes(task.state));
+        for (const task of blockedTasks) {
+          await this.#collaboration.recoverTask(task.taskId, `用户已从一次性演化卡点明确继续：${itemFailureReason(task)}`);
+        }
       }
+      this.#store.resumeOneShotRun();
+      await this.#tick();
+      return this.state();
+    } finally {
+      this.#resuming = false;
     }
-    this.#store.resumeOneShotRun();
-    await this.#tick();
-    return this.state();
   }
 
   async #dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
@@ -358,13 +367,12 @@ export class PersonaEvolutionRuntime {
 
       if (flowAction === "accept-result") {
         this.#acceptanceHandoff.publish(proposal, "received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
-        this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在生成检查计划并验收真实应用界面", topic.topicId, proposal.proposalId);
-        if (!this.#oneShotAcceptanceRunner) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立真实应用验收执行器尚未接入。"), "韩立真实应用验收执行器尚未接入。");
+        this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
+        if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。");
         try {
-          const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanliAcceptancePlanOutDto | undefined;
-          const plan = existingPlan || await this.#hanli.generateAcceptancePlan(proposal.proposalId);
-          this.#acceptanceHandoff.publish(proposal, "started", `正在按计划 ${plan.planId} 逐项验收：${plan.checks.map((check) => `${check.target}：${check.action}；预期 ${check.expected}`).join("\n")}`);
-          const runResult = await this.#oneShotAcceptanceRunner(plan);
+          const goal: HanliComputerAcceptanceInDto = { topicId: topic.topicId, proposalId: proposal.proposalId, title: proposal.title, criteria: proposal.acceptanceCriteria };
+          this.#acceptanceHandoff.publish(proposal, "started", "韩立正在观察真实页面并逐步操作验收。");
+          const runResult = await this.#computerAcceptanceSession(goal);
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           this.#acceptanceHandoff.publish(proposal, runResult.status === "passed" ? "passed" : "failed", `实际结果：${runResult.status === "passed" ? "通过" : "未通过"}。运行记录：${runResult.runId}\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
         } catch (error) {

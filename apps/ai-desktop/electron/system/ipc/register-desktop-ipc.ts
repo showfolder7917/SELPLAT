@@ -133,20 +133,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  const executeAcceptancePlan = async (plan: ReturnType<HanliFacade["acceptancePlan"]>) => {
+  personaWorkflow.setComputerAcceptanceSession(async (goal) => {
     // 演化工作台退役后，真实验收只操作当前正式主窗口，不创建隐藏兼容窗口。
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
-    const run = await hanli.executeAcceptancePlan(plan, targetWindow);
-    audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, planId: plan.planId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
-    return run;
-  };
-  personaWorkflow.setAcceptanceRunner(executeAcceptancePlan);
-
-  handle("desktop:execute-han-li-acceptance-plan", async (_event, planId: string) => {
-    const plan = hanli.acceptancePlan(planId);
-    const run = await executeAcceptancePlan(plan);
-    hanli.recordAcceptanceRun(run);
+    const run = await hanli.executeComputerAcceptance(goal, targetWindow);
+    audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
     return run;
   });
 

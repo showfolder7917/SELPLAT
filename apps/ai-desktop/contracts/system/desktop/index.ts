@@ -133,11 +133,9 @@ export type {
 export type {
   DecideHanliProposalInDto,
   DecideHanliResultInDto,
-  HanliAcceptanceCheckOutDto,
   HanliAcceptanceExperienceCandidateOutDto,
   HanliAcceptanceFailureEvidenceOutDto,
   HanliAcceptanceOperationValue,
-  HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
   HanliAcceptanceStepResultOutDto,
   HanliDeliberationRoundOutDto,

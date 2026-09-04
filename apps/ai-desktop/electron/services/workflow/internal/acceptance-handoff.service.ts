@@ -12,11 +12,12 @@ export class AcceptanceHandoffService {
     const received = phase === "received";
     const current = phase === "started";
     const completed = phase === "passed";
+    const failed = phase === "failed";
     const actor = received ? { memberId: "nangong-wan", displayName: "南宫婉" } : { memberId: "han-li", displayName: "韩立" };
     const recipient = received ? { memberId: "han-li", displayName: "韩立" } : { memberId: "nangong-wan", displayName: "南宫婉" };
     const id = `acceptance:${proposal.proposalId}:${phase}`;
     this.options.recordTimelineEvent?.({ eventId: id, eventType: `acceptance.${phase}`,
-      group: { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status: completed ? "completed" : phase === "failed" ? "blocked" : "verifying", summary: content, startedAt: topic.createdAt, updatedAt: now },
+      group: { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status: completed ? "completed" : failed ? "blocked" : "verifying", summary: content, startedAt: topic.createdAt, updatedAt: now },
       fact: { nodeId: `acceptance:${proposal.proposalId}:${received ? "received" : "run"}`, taskId: null, proposalId: proposal.proposalId, sourceFactKey: id, kind: "verification", actor, recipients: [recipient], status: current ? "current" : phase === "failed" ? "failed" : "completed", action: received ? "已接收令狐结果，提交韩立验收" : current ? "正在真实操作验收" : completed ? "验收通过，结果已返回" : "验收未通过或未验证", summary: content, contentRole: "analysis-output", content, detailRole: "result-evidence", detail: content, startedAt: now, completedAt: current ? null : now, automaticOpen: current, manualApprovalProposalId: null, occurredAt: now },
     });
     const memory = this.options.memory;
@@ -25,7 +26,7 @@ export class AcceptanceHandoffService {
     const messageId = `internal:${id}:${received ? "question" : "answer"}`;
     const conversation = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId, messageId, speakerPersonaId: actor.memberId, content, replyToMessageId: received ? null : `internal:acceptance:${proposal.proposalId}:received:question`, createdAt: now });
     this.options.onPersonaConversationChanged?.(conversation);
-    if (phase === "passed" || phase === "failed") {
+    if (phase === "passed" || failed) {
       const result = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId, messageId: `hanli-result:${proposal.proposalId}:${phase}`, speakerPersonaId: "han-li", content: `“${topic.title}”的验收结果：\n\n${content}`, createdAt: now });
       this.options.onPersonaConversationChanged?.(result);
     }

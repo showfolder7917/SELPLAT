@@ -49,6 +49,6 @@ export function CollaborationWorkspaceFeature({ locale, workspaces, controller, 
     }
   };
 
-  if (panel === "task-group") return <>{error && <div className="composer-error" role="alert">{error}</div>}<TaskCollaborationGroup snapshot={timeline} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={async (taskId) => { await continueTask(taskId); }} /></>;
+  if (panel === "task-group") return <>{error && <div className="composer-error" role="alert">{error}</div>}<TaskCollaborationGroup evolution={evolution} snapshot={timeline} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([nodeId, output]) => [nodeId, output.message.text]))} locale={locale} onManualApproval={(proposalId, title, content) => void manuallyApproveTimelineProposal(proposalId, title, content)} onContinueTask={async (taskId) => { await continueTask(taskId); }} /></>;
   return <>{error && <div className="composer-error" role="alert">{error}</div>}<CollaborationMemberPage timeline={timeline} member={selectedMember} liveTextByNodeId={Object.fromEntries(Object.entries(timelineStreams).map(([id, value]) => [id, value.message.text]))} locale={locale} linghuAutomation={linghuAutomation} nangongEvolution={evolution.state} onLinghuState={setLinghuAutomation} /></>;
 }

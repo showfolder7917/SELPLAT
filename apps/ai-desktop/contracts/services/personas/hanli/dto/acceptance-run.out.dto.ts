@@ -1,7 +1,7 @@
 ﻿/**
  * 韩立真实应用验收运行输出协议。
- * 生产者：韩立验收 Runner；消费者：韩立验收应用服务与 Renderer 审批页。
- * 数据方向：验收 Runner -> 韩立/Renderer。
+ * 生产者：韩立交互式验收；消费者：韩立应用服务与验收事实投影。
+ * 数据方向：真实输入、截图及模型逐项判断 -> 韩立/Renderer。
  * 本文件只保存事实证据，失败不会直接改变审批结果。
  */
 import type { HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
@@ -17,11 +17,11 @@ export interface HanliAcceptanceStepResultOutDto {
 }
 
 export interface HanliAcceptanceRunOutDto {
-  version: 1;
+  version: 2;
   runId: string;
-  planId: string;
   topicId: string;
   proposalId: string;
+  criteria: string[];
   status: "passed" | "failed" | "blocked";
   windowTitle: string;
   initialBounds: { x: number; y: number; width: number; height: number };

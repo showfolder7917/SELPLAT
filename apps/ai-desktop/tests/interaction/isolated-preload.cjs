@@ -345,6 +345,23 @@ contextBridge.exposeInMainWorld("desktop", {
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getEvolutionState: async () => structuredClone(evolutionState),
   setInteractionOneShotRun: async (run) => { evolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
+  // 隔离验收恢复夹具只改变测试内存，不连接生产任务或在线模型。
+  setInteractionResumeFixture: async (mode) => {
+    const now = new Date().toISOString();
+    evolutionState.oneShotRun = { runId: "resume-fixture", topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal", status: "blocked", phase: "blocked", actor: "system", actorName: "系统", action: mode, blockingReason: "验收连接中断", startedAt: now, updatedAt: now, completedAt: now };
+    evolutionState.proposals[0].status = "pending-acceptance";
+    return publishNangongEvolution("one-shot.blocked");
+  },
+  resumeEvolutionOneShot: async (runId) => {
+    if (evolutionState.oneShotRun?.runId !== runId) throw new Error("运行已变化");
+    const mode = evolutionState.oneShotRun.action;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (mode === "failure") throw new Error("验收连接仍不可用");
+    evolutionState.oneShotRun.status = "running";
+    evolutionState.oneShotRun.phase = "accepting";
+    evolutionState.oneShotRun.blockingReason = null;
+    return publishNangongEvolution("one-shot.resumed");
+  },
   setInteractionOneShotConfirmation: async (confirmation) => { evolutionState.oneShotConfirmation = confirmation ? structuredClone(confirmation) : null; return publishNangongEvolution("conversation.one-shot-confirmation-changed"); },
   getEvolutionTopicDossier: async (topicId) => {
     const topic = evolutionState.topics.find((item) => item.topicId === topicId);
@@ -399,24 +416,6 @@ contextBridge.exposeInMainWorld("desktop", {
   configureEvolutionAutomation: async (request) => { evolutionState.automationSettings = { maxRoundsPerTopic: request.maxRoundsPerTopic, maxCorrectionRounds: request.maxCorrectionRounds }; if (request.workspaceState) evolutionState.automationContext.workspaceState = structuredClone(request.workspaceState); if (request.locale) evolutionState.automationContext.locale = request.locale; return publishNangongEvolution("automation.configured"); },
   controlEvolutionAutomation: async (action) => { evolutionState.automationRuntime.status = action === "stop" ? "stopped" : action === "pause" || action === "handover" ? "paused" : "running"; evolutionState.automationRuntime.stopReason = action === "handover" ? "当前专题已转入人工接管，自动控制台仅观察；明确恢复后才会继续推进。" : action === "stop" ? "韩立手动停止自动演化。" : null; return publishNangongEvolution(`automation.${action}`); },
   decideEvolutionResult: async (proposalId, request) => { assertEvolutionMutation(request.mutation); const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId); if (!proposal || proposal.status !== "pending-acceptance") throw new Error("尚未进入验收"); const now = new Date().toISOString(); proposal.status = request.decision === "approved" ? "completed" : "supplement-required"; proposal.approvals.push({ approvalId: `interaction-result-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", stage: "result", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: "proposal-content", capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: ++evolutionState.preferenceSnapshotVersion, createdAt: now }); const topic = evolutionState.topics.find((item) => item.topicId === proposal.topicId); if (topic) { topic.status = proposal.status; topic.recoveryPoint = request.decision === "approved" ? "han-li-result-accepted" : "han-li-result-correction-required"; } return publishNangongEvolution("proposal.result_decided"); },
-  generateHanLiAcceptancePlan: async (proposalId) => {
-    const proposal = evolutionState.proposals.find((item) => item.proposalId === proposalId);
-    if (!proposal || proposal.status !== "pending-acceptance") throw new Error("尚未进入验收");
-    const plan = { version: 1, planId: `interaction-plan-${Date.now()}`, topicId: proposal.topicId, proposalId, summary: "检查真实工作台中的执行结果和用户关注细节。", concerns: ["按钮响应", "滚动与内容可达"], checks: [{ checkId: "check-1", category: "交互", target: "审批工作台", action: "聚焦窗口并观察状态", expected: "窗口获得焦点且状态清晰", evidenceRequired: "操作截图", operations: [{ type: "focus-window" }, { type: "capture", label: "审批工作台" }] }, { checkId: "check-2", category: "可达性", target: "长内容区域", action: "缩小窗口并滚动到最后一个控件", expected: "滚动可发现且末项可达", evidenceRequired: "滚动到底部截图", operations: [{ type: "resize-window", width: 980, height: 680 }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "capture", label: "滚动结果" }] }], generatedAt: new Date().toISOString() };
-    evolutionState.archiveRecords.push({ recordId: `interaction-plan-record-${Date.now()}`, deliberationId: null, topicId: proposal.topicId, proposalId, taskId: null, sequenceNumber: evolutionState.archiveRecords.length + 1, category: "acceptance", eventType: "acceptance.plan_generated", actor: "han-li", title: "韩立生成真实界面验收计划", payload: { acceptancePlan: plan, status: "planned", nextOwner: "han-li" }, occurredAt: plan.generatedAt });
-    await publishNangongEvolution("acceptance.plan_generated");
-    return plan;
-  },
-  executeHanLiAcceptancePlan: async (planId) => {
-    const record = [...evolutionState.archiveRecords].reverse().find((item) => item.eventType === "acceptance.plan_generated" && item.payload.acceptancePlan.planId === planId);
-    if (!record) throw new Error("验收计划不存在");
-    const plan = record.payload.acceptancePlan;
-    const now = new Date().toISOString();
-    const run = { version: 1, runId: `interaction-run-${Date.now()}`, planId, topicId: plan.topicId, proposalId: plan.proposalId, status: "passed", windowTitle: "AI Desktop", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: plan.checks.flatMap((check) => check.operations.map((operation, operationIndex) => ({ checkId: check.checkId, operationIndex, operation, status: "passed", actual: operation.type === "scroll" ? "滚动位置 0 → 600，最大 1200。" : "真实窗口操作完成。", screenshotAttachmentId: operation.type === "capture" ? `interaction-shot-${operationIndex}` : null, occurredAt: now }))), evidenceAttachmentIds: ["interaction-shot-1", "interaction-shot-2"], startedAt: now, completedAt: now };
-    evolutionState.archiveRecords.push({ recordId: `interaction-run-record-${Date.now()}`, deliberationId: null, topicId: plan.topicId, proposalId: plan.proposalId, taskId: null, sequenceNumber: evolutionState.archiveRecords.length + 1, category: "acceptance", eventType: "acceptance.real_app_checked", actor: "han-li", title: "韩立完成真实应用界面检查", payload: { acceptanceRun: run, status: run.status, nextOwner: "han-li" }, occurredAt: now });
-    await publishNangongEvolution("acceptance.real_app_checked");
-    return run;
-  },
   createEvolutionProposal: async (topicId, request) => {
     const topic = evolutionState.topics.find((item) => item.topicId === topicId);
     if (!topic) throw new Error("专项课题不存在。");

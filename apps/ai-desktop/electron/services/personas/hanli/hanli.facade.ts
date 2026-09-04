@@ -2,14 +2,14 @@ import type { BrowserWindow } from "electron";
 import type {
   DecideHanliProposalInDto,
   DecideHanliResultInDto,
-  HanliAcceptancePlanOutDto,
+  HanliComputerAcceptanceInDto,
   HanliAcceptanceRunOutDto,
 } from "../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions } from "./internal/hanli-application.service.js";
-import { HanliRealAppAcceptanceRunner } from "./internal/hanli-real-app-acceptance.runner.js";
+import { HanliComputerAcceptance } from "./internal/hanli-computer-acceptance.js";
 import { HanliSemanticExtractionRunner } from "./internal/hanli-semantic-extraction.runner.js";
 
 /** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */
@@ -21,8 +21,6 @@ export interface HanliApplicationPort {
   decideProposal(proposalId: string, request: DecideHanliProposalInDto): EvolutionStateOutDto;
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
-  generateAcceptancePlan(proposalId: string): Promise<HanliAcceptancePlanOutDto>;
-  acceptancePlan(planId: string): HanliAcceptancePlanOutDto;
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto;
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto;
   decideResult(proposalId: string, request: DecideHanliResultInDto): EvolutionStateOutDto;
@@ -33,7 +31,6 @@ export interface HanliWorkflowPort {
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
-  generateAcceptancePlan(proposalId: string): Promise<HanliAcceptancePlanOutDto>;
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto;
 }
 
@@ -52,11 +49,13 @@ export interface HanliRuntime {
 /** 韩立唯一公开业务入口；调用方无法通过它修改南宫私有会话。 */
 export class HanliFacade {
   readonly #application: HanliApplicationPort;
-  readonly #acceptanceRunner: HanliRealAppAcceptanceRunner;
+  readonly #computer: HanliComputerAcceptance;
+  readonly #options: CreateHanliRuntimeOptions;
   /** 传入韩立能力端口；构造时不执行审批，也不自动判定结果。 */
-  constructor(application: HanliApplicationPort, acceptanceRunner: HanliRealAppAcceptanceRunner) {
+  constructor(application: HanliApplicationPort, computer: HanliComputerAcceptance, options: CreateHanliRuntimeOptions) {
     this.#application = application;
-    this.#acceptanceRunner = acceptanceRunner;
+    this.#computer = computer;
+    this.#options = options;
   }
   /** 读取 ownerPersonaId=han-li 的当前业务会话；底层 Codex threadId 不对页面暴露。 */
   conversation() { return this.#application.conversation(); }
@@ -72,24 +71,30 @@ export class HanliFacade {
   reviewAndDecideProposal(proposalId: string) { return this.#application.reviewAndDecideProposal(proposalId); }
   /** 根据已登记偏好执行受控自动审批；缺少事实时退回补充。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto) { return this.#application.autoApprove(proposalId, request); }
-  /** 根据当前专题和提案生成真实应用验收计划，但不会伪造执行结果。 */
-  generateAcceptancePlan(proposalId: string) { return this.#application.generateAcceptancePlan(proposalId); }
-  /** 读取已保存验收计划；不存在时抛出可理解错误。 */
-  acceptancePlan(planId: string) { return this.#application.acceptancePlan(planId); }
   /** 保存真实应用验收运行证据；计划与提案不一致时阻断写入。 */
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto) { return this.#application.recordAcceptanceRun(run); }
   /** 一次性流程提交真实运行证据；韩立据此保存自动验收判断。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string) { return this.#application.completeAutomaticAcceptance(run, idempotencyKey); }
-  /** 在真实 Electron 窗口执行白名单验收操作；危险写按钮会被 Runner 阻断。 */
-  executeAcceptancePlan(plan: HanliAcceptancePlanOutDto, targetWindow: BrowserWindow) { return this.#acceptanceRunner.execute(plan, targetWindow); }
+  /** 每次工具调用返回真实截图，韩立自行选择下一步并形成结论。 */
+  executeComputerAcceptance(goal: HanliComputerAcceptanceInDto, targetWindow: BrowserWindow) {
+    if (!this.#options.computerAcceptance) throw new Error("韩立Computer Use尚未接入");
+    const conversationId = this.#options.memory?.readPersonaConversation("han-li").conversationId;
+    return this.#computer.run(goal, targetWindow, (tools) => this.#options.computerAcceptance!(goal, tools), (content) => {
+      this.#options.recordEvent("hanli.acceptance.computer_progress", { proposalId: goal.proposalId, content });
+      if (conversationId && this.#options.memory) {
+        const next = this.#options.memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId, messageId: "computer:" + crypto.randomUUID(), speakerPersonaId: "han-li", content, createdAt: new Date().toISOString() });
+        this.#options.onPersonaConversationChanged?.(next);
+      }
+    });
+  }
   /** 审批最终执行结果；旧提案与既有验收证据不会被覆盖。 */
   decideResult(proposalId: string, request: DecideHanliResultInDto) { return this.#application.decideResult(proposalId, request); }
 }
 
 /** 创建韩立独立 Runtime；人物开关和 Workflow 自动化开关保持分离。 */
 export function createHanliRuntime(options: CreateHanliRuntimeOptions): HanliRuntime {
-  // Runner 在韩立 Runtime 内创建，IPC 只看到受控 Facade 方法，不能取得 Runner 对象。
-  const facade = new HanliFacade(new HanliApplicationService(options), new HanliRealAppAcceptanceRunner(options.screenshots));
+  // 单步交互控制器由韩立拥有；IPC只传入目标窗口，不编排动作。
+  const facade = new HanliFacade(new HanliApplicationService(options), new HanliComputerAcceptance(options.screenshots), options);
   const semanticExtraction = new HanliSemanticExtractionRunner({
     memory: options.memory || null,
     prompts: options.prompts,

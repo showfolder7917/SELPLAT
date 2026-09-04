@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 
 import type { CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto, CollaborationTimelineSnapshotOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
+import type { useEvolutionRuntime } from "../../evolution/model/useEvolutionRuntime";
+import { TaskGroupRecovery } from "./TaskGroupRecovery";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */
-export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval, onContinueTask }: {
+export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onManualApproval, onContinueTask, evolution }: {
+  evolution: ReturnType<typeof useEvolutionRuntime>;
   snapshot: CollaborationTimelineSnapshotOutDto | null;
   liveTextByNodeId: Record<string, string>;
   locale: LocaleValue;
@@ -47,6 +50,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
         onOpenChange={(open) => updateOpenOverride(setGroupOpenOverrides, group.groupId, open)}
         trigger={<TaskGroupHeader group={group} locale={locale} nowMs={nowMs} />}
       >
+        <TaskGroupRecovery group={group} evolution={evolution} />
         <div className="task-timeline-list">{visibleNodes.map((node, index) => {
           const nodeOpen = nodeOpenOverrides.get(node.nodeId) ?? node.automaticOpen;
           const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] : "";

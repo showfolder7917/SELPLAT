@@ -1,5 +1,5 @@
 import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
-import type { HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../contracts/services/workflow/index.js";
 
 /** Workflow 端口只包含跨人物轮转、分发、恢复和生命周期动作。 */
@@ -7,10 +7,10 @@ export interface PersonaWorkflowApplicationPort {
   start(): void;
   stop(): void;
   notifyWorkflowChanged(): void;
-  setOneShotAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>): void;
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>): void;
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto;
   controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto;
-  resumeOneShotRun(): Promise<EvolutionStateOutDto>;
+  resumeOneShotRun(expectedRunId?: string): Promise<EvolutionStateOutDto>;
 }
 
 /** Workflow 唯一跨人物演化门面；它负责编排，不公开任何人物内部 Service。 */
@@ -25,13 +25,13 @@ export class PersonaWorkflowFacade {
   /** 协作任务变化后立即检查下一节点，避免等待固定轮询时间。 */
   notifyWorkflowChanged() { this.#application.notifyWorkflowChanged(); }
   /** 登记真实应用验收执行端口；Workflow 只决定调用时机。 */
-  setAcceptanceRunner(runner: (plan: HanliAcceptancePlanOutDto) => Promise<HanliAcceptanceRunOutDto>) { this.#application.setOneShotAcceptanceRunner(runner); }
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>) { this.#application.setComputerAcceptanceSession(runner); }
   /** 保存自动化参数；此动作不会自行推进当前流程。 */
   configureAutomation(request: ConfigurePersonaWorkflowInDto) { return this.#application.configureAutomation(request); }
   /** 执行启动、暂停、恢复或停止控制并保存恢复点。 */
   controlAutomation(action: PersonaWorkflowActionInDto) { return this.#application.controlAutomation(action); }
   /** 从已保存卡点恢复同一轮，不创建第二条流程。 */
-  resumeOneShotRun() { return this.#application.resumeOneShotRun(); }
+  resumeOneShotRun(expectedRunId?: string) { return this.#application.resumeOneShotRun(expectedRunId); }
 }
 
 /** Workflow Runtime 暴露稳定身份和唯一门面，供人物能力注册表登记。 */

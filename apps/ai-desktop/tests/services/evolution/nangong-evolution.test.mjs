@@ -7,7 +7,6 @@ import { PersonaEvolutionRuntime as WorkflowPersonaEvolutionRuntime } from "../.
 import { EvolutionStateStore } from "../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
 import { EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
 import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/hanli-nangong-deliberation.service.js";
-import { HanliRealAppAcceptanceRunner } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.js";
 import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.service.js";
 import { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-method-context.js";
@@ -24,7 +23,6 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
       prompts,
       memory: options.memory || null,
       askHanli: options.hanLi?.send,
-      planAcceptance: options.planAcceptance,
       recordEvent: options.recordEvent,
       recordTimelineEvent: options.recordTimelineEvent,
       beginMutation: options.beginMutation,
@@ -48,8 +46,6 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
   dispatch(...args) { return this.nangongRuntime.facade.distributeProposal(...args); }
   decideProposal(...args) { return this.hanliRuntime.facade.decideProposal(...args); }
   autoApprove(...args) { return this.hanliRuntime.facade.autoApprove(...args); }
-  generateAcceptancePlan(...args) { return this.hanliRuntime.facade.generateAcceptancePlan(...args); }
-  acceptancePlan(...args) { return this.hanliRuntime.facade.acceptancePlan(...args); }
   recordAcceptanceRun(...args) { return this.hanliRuntime.facade.recordAcceptanceRun(...args); }
   decideResult(...args) { return this.hanliRuntime.facade.decideResult(...args); }
 }
@@ -113,7 +109,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-nangong-deliberation-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
     const internalMessages = [];
     const publishedConversations = [];
     const snapshots = [{
@@ -149,7 +145,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     assert.equal(result.state.topics[0].title, "持续人物研讨");
     assert.deepEqual(internalMessages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan", "han-li", "nangong-wan", "han-li", "nangong-wan"]);
     assert.equal(publishedConversations.length, 6);
-    assert.equal(internalMessages.at(-2).content, "1");
+    assert.equal(internalMessages.at(-2).content, "自动托管确认：1");
     assert.equal(result.state.deliberations[0].rounds[0].confirmation.reply, "1");
     assert.equal(internalMessages[2].content, "那就保留这个边界，没有新证据时不硬找问题。");
     assert.ok(internalMessages[2].messageId.endsWith(":reply"));
@@ -250,7 +246,7 @@ test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", a
   assert.equal(started, 1);
   assert.equal(externalChatCalls, 0);
   assert.equal(result.messages.at(-2).content, "1");
-  assert.match(result.messages.at(-1).content, /直到你暂停、停止或人工接管/);
+  assert.match(result.messages.at(-1).content, /请你确认，再进入实施/);
 });
 
 test("韩立只学习提问调查扩展方法并回显每轮真实读入字数", async () => {
@@ -405,6 +401,30 @@ test("回复1建立专题运行并同时开启统一持续自动状态", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("验收阻塞和暂停从同一提案继续，不重建任务且拒绝重复恢复", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "acceptance-resume-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const runId = store.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
+    const topicId = store.createTopic(topicRequest("恢复验收")).activeTopicId;
+    const proposalId = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉").proposals.at(-1).proposalId;
+    store.updateOneShotRun("accepting", "han-li", "韩立", "验收", topicId, proposalId);
+    store.markProgress(proposalId, "pending-acceptance", "等待验收");
+    store.blockOneShotRun("验收连接失败");
+    const before = store.state();
+    const resumed = store.resumeOneShotRun();
+    assert.equal(resumed.oneShotRun.runId, runId);
+    assert.equal(resumed.oneShotRun.phase, "accepting");
+    assert.equal(resumed.oneShotRun.actor, "han-li");
+    assert.deepEqual(resumed.proposals, before.proposals);
+    assert.throws(() => store.resumeOneShotRun(), /没有可原位恢复/);
+    store.controlAutomation("pause");
+    assert.equal(store.resumeOneShotRun().oneShotRun.phase, "accepting");
+    store.finishOneShotRun();
+    assert.throws(() => store.resumeOneShotRun(), /没有可原位恢复/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("专题流程从同一提案卡点原位恢复统一自动运行", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-resume-"));
   try {
@@ -487,7 +507,7 @@ test("清空测试数据删除专题运行历史并保留人物对话、自动�
     assert.equal(state.topics.length, 0);
     assert.equal(state.proposals.length, 0);
     assert.deepEqual(state.conversation.messages.map((message) => message.content), ["这是用于韩立训练的用户原话。", "这是南宫婉对用户原话的回答。"]);
-    assert.deepEqual(state.automationSettings, { maxRoundsPerTopic: 9, maxCorrectionRounds: 4 });
+    assert.deepEqual(state.automationSettings, { maxRoundsPerTopic: 9, maxCorrectionRounds: 4, automaticCustodyEnabled: false });
     assert.equal(state.automationContext.locale, "ja");
     assert.equal(state.automationContext.workspaceState, null);
     assert.equal(state.automationRuntime.status, "idle");
@@ -704,9 +724,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     assert.equal(state.proposals[0].status, "pending-acceptance");
     assert.equal(state.proposals[0].resultSummary, "全部关联任务已经完成，等待韩立按真实用户路径验收结果。");
     assert.equal(state.topics.length, 1);
-    const acceptancePlan = { version: 1, planId: "completed-plan", topicId: state.topics[0].topicId, proposalId, summary: "检查完成结果", concerns: ["真实操作"], checks: [{ checkId: "completed-check", category: "交互", target: "专题工作台", action: "检查结果", expected: "真实界面符合目标", evidenceRequired: "截图", operations: [{ type: "capture", label: "完成结果" }] }], generatedAt: new Date().toISOString() };
-    store.recordAcceptancePlan(acceptancePlan);
-    store.recordAcceptanceRun({ version: 1, runId: "completed-run", planId: acceptancePlan.planId, topicId: acceptancePlan.topicId, proposalId, status: "passed", windowTitle: "专题工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: [{ checkId: "completed-check", operationIndex: 0, operation: { type: "capture", label: "完成结果" }, status: "passed", actual: "截图已保存", screenshotAttachmentId: "shot-completed", occurredAt: new Date().toISOString() }], evidenceAttachmentIds: ["shot-completed"], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
+    store.recordAcceptanceRun(computerRun("completed-run", state.topics[0].topicId, proposalId, "passed", "shot-completed"));
     state = facade.decideResult(proposalId, { mutation: mutation(facade), decision: "approved", advice: "真实操作和视觉检查符合目标。" });
     assert.equal(state.proposals[0].status, "completed");
     assert.equal(state.proposals[0].approvals.at(-1).stage, "result");
@@ -1019,7 +1037,9 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     assert.match(state.oneShotRun.blockingReason, /版本集成阶段/);
     assert.match(state.oneShotRun.blockingReason, /main\.ts 未登记/);
 
-    const explicitlyResumed = await facade.resumeOneShotRun();
+    await assert.rejects(() => facade.resumeOneShotRun("stale-run"), /运行已变化/);
+    assert.equal(recoveryRequests, 0);
+    const explicitlyResumed = await facade.resumeOneShotRun(state.oneShotRun.runId);
     assert.equal(recoveryRequests, 1);
     assert.equal(explicitlyResumed.oneShotRun.status, "running");
 
@@ -1130,75 +1150,6 @@ test("南宫婉新建对话等待活动写入者释放后才清空持久消息",
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("韩立验收计划由专题语义生成并只登记为待执行档案", async () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-"));
-  try {
-    const store = evolutionStore(path.join(directory, "state.json"));
-    let receivedPrompt = "";
-    const facade = new PersonaEvolutionRuntime({
-      store, collaboration: {}, conversation, recordEvent: () => undefined,
-      async planAcceptance(prompt) {
-        receivedPrompt = prompt;
-        return JSON.stringify({
-          summary: "确认侧栏在真实窗口内可完整操作。",
-          concerns: ["侧栏内容不能被截断", "最后一个按钮必须可达"],
-          checks: [
-            { category: "滚动可达性", target: "连接与执行设置侧栏", action: "缩小窗口后滚动到侧栏底部并查看最后一个按钮", expected: "滚动能力可发现且末项可达", evidenceRequired: "缩小窗口和滚动到底部后的截图", operations: [{ type: "resize-window", width: 980, height: 680 }, { type: "scroll", target: "连接与执行设置", direction: "down", amount: 900 }, { type: "capture", label: "侧栏底部" }] },
-            { category: "状态反馈", target: "一键清空测试数据按钮", action: "确认按钮在真实设置页可见但不自动触发破坏动作", expected: "按钮文字清晰且保持未触发", evidenceRequired: "按钮可见截图", operations: [{ type: "inspect-text", text: "一键清空测试数据" }, { type: "capture", label: "危险操作保持未触发" }] },
-          ],
-        });
-      },
-    });
-    let state = facade.createTopic(topicRequest("设置侧栏滚动验收"));
-    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
-    const proposalId = state.proposals[0].proposalId;
-    store.markProgress(proposalId, "pending-acceptance", "实现与定向测试完成，等待真实界面验收。");
-    const plan = await facade.generateAcceptancePlan(proposalId);
-    state = facade.state();
-    assert.match(receivedPrompt, /设置侧栏滚动验收/);
-    assert.match(receivedPrompt, /表格分页与滚动/);
-    assert.equal(plan.checks.length, 2);
-    assert.equal(plan.checks[0].operations[0].type, "resize-window");
-    assert.equal(state.proposals[0].status, "pending-acceptance");
-    const record = state.archiveRecords.at(-1);
-    assert.equal(record.eventType, "acceptance.plan_generated");
-    assert.equal(record.category, "acceptance");
-    assert.equal(record.actor, "han-li");
-    assert.equal(record.payload.status, "planned");
-    assert.equal(record.payload.acceptancePlan.planId, plan.planId);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
-test("真实应用验收执行器只执行白名单操作并阻止业务写按钮", async () => {
-  let bounds = { x: 10, y: 20, width: 1320, height: 880 };
-  let screenshots = 0;
-  const sentKeys = [];
-  const targetWindow = {
-    isDestroyed: () => false, show() {}, focus() {}, getBounds: () => ({ ...bounds }), setBounds(next) { bounds = { ...next }; }, getTitle: () => "AI Desktop",
-    webContents: {
-      async executeJavaScript(source) {
-        if (source.includes('})({ type: "click"')) return { clicked: true, description: "已点击：专题执行群" };
-        if (source.includes('})({ type: "scroll"')) return { moved: true, description: "滚动位置 0 → 600，最大 1200。" };
-        if (source.includes('})({ type: "focus"')) return true;
-        if (source.includes('})({ type: "inspect-layout"')) return { passed: true, description: "专题工作台：视口内=true，无内容溢出=true，中心未遮挡=true。" };
-        return true;
-      },
-      sendInputEvent(event) { sentKeys.push(event); },
-      async capturePage() { return { toPNG: () => Buffer.from("png") }; },
-    },
-  };
-  const executor = new HanliRealAppAcceptanceRunner({ async save() { screenshots += 1; return { id: `shot-${screenshots}`, name: "shot.png", filePath: "/evidence/shot.png", sizeBytes: 3, createdAt: new Date().toISOString() }; } });
-  const plan = { version: 1, planId: "plan-1", topicId: "topic-1", proposalId: "proposal-1", summary: "真实检查", concerns: ["滚动"], generatedAt: new Date().toISOString(), checks: [{ checkId: "check-1", category: "真实交互", target: "专题工作台", action: "缩放、导航和截图", expected: "可操作", evidenceRequired: "截图", operations: [{ type: "focus-window" }, { type: "resize-window", width: 980, height: 680 }, { type: "click", target: "专题执行群" }, { type: "scroll", target: "真实界面验收计划", direction: "down", amount: 600 }, { type: "press-key", key: "PageDown" }, { type: "inspect-text", text: "真实界面验收计划" }, { type: "inspect-layout", target: "专题工作台" }, { type: "capture", label: "检查结果" }, { type: "click", target: "验收通过" }] }] };
-  const run = await executor.execute(plan, targetWindow);
-  assert.equal(run.status, "blocked");
-  assert.match(run.stepResults.at(-1).actual, /禁止自动点击/);
-  assert.equal(run.stepResults.filter((item) => item.status === "passed").length, 8);
-  assert.equal(run.evidenceAttachmentIds.length, 1);
-  assert.equal(screenshots, 2);
-  assert.equal(sentKeys.length, 2);
-  assert.deepEqual(bounds, { x: 10, y: 20, width: 1320, height: 880 });
-});
-
 test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫婉", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-acceptance-failure-"));
   try {
@@ -1208,15 +1159,13 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     const proposalId = state.proposals[0].proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
     assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /必须先完成真实应用检查/);
-    const plan = { version: 1, planId: "failure-plan", topicId: state.topics[0].topicId, proposalId, summary: "检查滚动", concerns: ["末项可达"], checks: [{ checkId: "scroll-check", category: "可达性", target: "设置侧栏", action: "缩小窗口并滚动", expected: "最后一个控件可达", evidenceRequired: "截图", operations: [{ type: "resize-window", width: 980, height: 680 }, { type: "scroll", target: "设置侧栏", direction: "down", amount: 600 }] }], generatedAt: new Date().toISOString() };
-    store.recordAcceptancePlan(plan);
-    store.recordAcceptanceRun({ version: 1, runId: "failure-run", planId: plan.planId, topicId: plan.topicId, proposalId, status: "failed", windowTitle: "专题工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: [{ checkId: "scroll-check", operationIndex: 0, operation: plan.checks[0].operations[0], status: "passed", actual: "窗口已缩小", screenshotAttachmentId: null, occurredAt: new Date().toISOString() }, { checkId: "scroll-check", operationIndex: 1, operation: plan.checks[0].operations[1], status: "failed", actual: "滚动位置没有变化", screenshotAttachmentId: "failure-shot", occurredAt: new Date().toISOString() }], evidenceAttachmentIds: ["failure-shot"], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
+    store.recordAcceptanceRun(computerRun("failure-run", state.topics[0].topicId, proposalId, "failed", "failure-shot"));
     state = store.decideResult(proposalId, "supplement-required", "修复设置侧栏滚动后重新提交");
     assert.equal(state.proposals[0].status, "supplement-required");
     const resultRecord = state.archiveRecords.at(-1);
     assert.equal(resultRecord.eventType, "proposal.result_decided");
     assert.equal(resultRecord.payload.nextOwner, "nangong-wan");
-    assert.equal(resultRecord.payload.failureEvidence[0].target, "设置侧栏");
+    assert.equal(resultRecord.payload.failureEvidence[0].target, "真实应用界面");
     assert.equal(resultRecord.payload.failureEvidence[0].actual, "滚动位置没有变化");
     assert.equal(resultRecord.payload.failureEvidence[0].expected, "最后一个控件可达");
     assert.deepEqual(resultRecord.payload.failureEvidence[0].screenshotAttachmentIds, ["failure-shot"]);
@@ -1224,9 +1173,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     state = store.revise(proposalId, { submitterMemberId: state.proposals[0].submitterMemberId, content: "修复设置侧栏高度与滚动容器，确保窄窗口下最后一个控件可达。", evidence: ["失败截图与滚动位置记录"], impactScope: ["设置侧栏"], risks: ["小窗口布局变化"], rollbackPlan: "回退侧栏滚动容器变更", acceptanceCriteria: ["最后一个控件可滚动到达"] }, "南宫婉");
     const correction = state.proposals.at(-1);
     store.markProgress(correction.proposalId, "pending-acceptance", "修复完成，等待复验");
-    const retestPlan = { ...plan, planId: "retest-plan", proposalId: correction.proposalId, generatedAt: new Date().toISOString() };
-    store.recordAcceptancePlan(retestPlan);
-    store.recordAcceptanceRun({ version: 1, runId: "retest-run", planId: retestPlan.planId, topicId: retestPlan.topicId, proposalId: correction.proposalId, status: "passed", windowTitle: "专题工作台", initialBounds: { x: 0, y: 0, width: 1320, height: 880 }, finalBounds: { x: 0, y: 0, width: 1320, height: 880 }, stepResults: [{ checkId: "scroll-check", operationIndex: 1, operation: retestPlan.checks[0].operations[1], status: "passed", actual: "滚动位置 0 → 600", screenshotAttachmentId: "retest-shot", occurredAt: new Date().toISOString() }], evidenceAttachmentIds: ["retest-shot"], startedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
+    store.recordAcceptanceRun(computerRun("retest-run", state.topics[0].topicId, correction.proposalId, "passed", "retest-shot"));
     state = store.decideResult(correction.proposalId, "approved", "复验通过");
     const candidate = state.archiveRecords.at(-1).payload.experienceCandidate;
     assert.equal(candidate.status, "candidate");
@@ -1237,6 +1184,14 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     assert.deepEqual(candidate.sourceFailureEvidenceIds, [resultRecord.payload.failureEvidence[0].evidenceId]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+function computerRun(runId, topicId, proposalId, status, shot) {
+ const now = new Date().toISOString();
+ return { version: 2, runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [
+ { checkId: "interaction", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", screenshotAttachmentId:shot, occurredAt:now },
+ { checkId: "criterion-1", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", screenshotAttachmentId:shot, occurredAt:now }
+ ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };
+}
 
 test("南宫婉线程删除最终失败时保留原页面消息", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-new-conversation-failed-"));

@@ -29,6 +29,32 @@ test.afterAll(async () => {
   await application?.close();
 });
 
+test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async ({}, testInfo) => {
+  await page.evaluate(async () => {
+    const api = (window as any).desktop;
+    await api.setInteractionTaskTimelineFixture(true);
+    await api.setInteractionResumeFixture("failure");
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+  const resume = page.getByRole("button", { name: "从卡点继续", exact: true });
+  await expect(resume).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("resume-button.png") });
+  await resume.click();
+  await expect(page.getByRole("button", { name: "恢复中…", exact: true })).toBeDisabled();
+  await expect(page.getByRole("alert").filter({ hasText: "验收连接仍不可用" })).toBeVisible();
+  await page.evaluate(() => (window as any).desktop.setInteractionResumeFixture("success"));
+  await resume.click();
+  await expect(page.getByText("已从原卡点继续，请查看后续流程。", { exact: true })).toBeVisible();
+  await expect(resume).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("resume-result.png") });
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionOneShotRun(null);
+    await (window as any).desktop.setInteractionTaskTimelineFixture(false);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+});
+
 test("通用侧栏折叠恢复保留任务且宽度可键盘调整", async () => {
   const sidebar = page.locator("#collaboration-sidebar");
   await expect(sidebar).toBeVisible();

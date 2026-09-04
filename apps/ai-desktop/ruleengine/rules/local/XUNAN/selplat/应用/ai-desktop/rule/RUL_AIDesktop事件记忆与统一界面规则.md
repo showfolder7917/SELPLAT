@@ -1,10 +1,10 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.156.0
+rule_version = 5.157.0
 
 <!-- 截图与聚焦不证明用户操作成功；每项必须有结果断言，交互项必须真实操作后再断言。 -->
-hanli_acceptance_evidence_gate = explicit_observation_or_interaction + default_interaction_for_legacy_plan + assertion_after_each_interaction + exact_planned_operation_and_index_match + screenshot_reference_per_check + missing_or_failed_evidence_never_passes
+hanli_acceptance_evidence_gate = model_observes_fresh_screenshot_after_each_real_input + evidence_reference_per_criterion + no_input_no_pass + missing_or_failed_evidence_never_passes + legacy_run_cannot_approve_current_proposal
 <!-- 验收交接只消费真实运行事件，禁止页面自己推断收件或编造完成。 -->
 hanli_acceptance_handoff_contract = nangong_receives_verified_results_then_submits + hanli_started_and_actual_result + internal_messages_in_nangong + direct_result_to_user + shared_timeline_and_persona_status
 <!-- 资源树退役不等于通用布局能力退役；折叠不卸载人物会话，恢复按钮始终可达。 -->
@@ -30,9 +30,9 @@ linghu_exception_intake_loop_prevention_contract = single_event_center_entry + i
 <!-- 演化工作台不兼容退役；人物自由会话继续触发共享演化流程，但不得恢复树、数据库列表、专题群投影或工作台路由。 -->
 evolution_workspace_retirement_contract = no_evolution_workspace_window_route_tree_grid_dossier_topic_group_or_manual_console + no_DesktopApi_preload_IPC_query_preference_or_compatibility_alias + persona_conversation_drives_shared_evolution_runtime
 <!-- 韩立验收计划必须由模型理解当前专题事实、用户关注点、控件风险和已验证项目经验后生成；计划只是待执行档案，不能代替真实操作或直接改变验收状态。 -->
-hanli_acceptance_plan_contract = pending_acceptance_only + AI_semantic_topic_proposal_user_concerns_control_risks_and_verified_project_experience + open_category_target_action_expected_and_evidence_checks + real_application_executable_steps + SQLite_evolution_archive_persistence + backend_workflow_consumption_without_retired_panel + plan_never_means_executed_or_passed + no_approval_distribution_or_result_state_bypass
+hanli_computer_acceptance_contract = pending_acceptance_only + goal_and_criteria_without_precomputed_operations + model_controls_next_step_using_current_screenshot + typed_real_input_and_observation_facts + preserve_SQLite_history + no_approval_distribution_or_result_state_bypass
 <!-- 韩立真实应用验收在现有 AI Desktop 主窗口执行受控白名单操作；每项检查必须保留实际结果与截图，危险业务写按钮不得自动触发。 -->
-hanli_real_application_acceptance_contract = existing_AI_Desktop_main_BrowserWindow_only + focus_resize_click_scroll_safe_key_visible_text_layout_overflow_occlusion_and_capture_whitelist + serialized_renderer_operation_is_self_contained + destructive_and_business_mutation_click_blocklist + bounded_operation_count + screenshot_after_each_check + restore_original_window_bounds + typed_run_persisted_in_SQLite_evolution_archive + execution_never_auto_changes_result_approval_state
+hanli_real_application_acceptance_contract = existing_AI_Desktop_main_BrowserWindow_only + single_mouse_or_safe_keyboard_input + no_DOM_success_assertions + fresh_screenshot_after_input + business_mutation_click_restriction + bounded_tool_calls_and_deadline + revoke_tool_scope_after_exit + typed_run_persisted_in_SQLite_evolution_archive + execution_never_auto_changes_result_approval_state
 <!-- 结果验收必须以最新真实检查为门禁；失败返还携带结构化复现证据并继续原修订、审批、分发、令狐门禁和韩立复验线路。 -->
 hanli_acceptance_failure_return_contract = result_approval_requires_latest_real_application_run_passed + failed_or_blocked_step_to_structured_target_severity_reproduction_operations_actual_expected_and_screenshot_ids + append_to_existing_result_decision_archive + next_owner_is_original_submitter + revision_supersedes_failed_proposal + existing_direction_approval_distribution_linghu_gate_and_hanli_retest_only + no_parallel_repair_or_approval_route
 <!-- 检查能力增长只从已失败、已修复且真实复验通过的完整证据链形成项目候选；候选可被反例降级或退役，未经跨场景治理不得提升为稳定规则。 -->

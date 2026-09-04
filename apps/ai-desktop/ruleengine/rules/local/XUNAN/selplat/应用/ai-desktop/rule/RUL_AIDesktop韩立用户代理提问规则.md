@@ -3,7 +3,10 @@
 <!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
 <!-- 2.4.0 将历史语义读取收敛为调查方法学习和可观测字符预算。 -->
-rule_version = 2.6.0
+rule_version = 2.7.0
+
+<!-- 验收由韩立消费真实截图后逐步调用窗口输入工具，旧整份计划、参数补正及批量执行接口不兼容退役。 -->
+hanli_computer_acceptance_contract = independent_tool_scoped_session + screenshot_then_one_model_selected_input_then_fresh_screenshot + no_batch_plan_or_DOM_assertion_proxy + screenshot_reference_per_criterion + no_input_no_pass + unsafe_action_blocked + revoke_tools_on_exit + preserve_historical_facts
 
 <!-- 核实与普通研讨分离连接，真实调用后发布等待，调查带依据回原会话；异常不冒充人物成功回复。 -->
 hanli_fact_handoff_contract = real_read_only_nangong_dispatch + isolated_inquiry_connection + evidence_required + original_conversation_anchor + request_deduplication + proactive_result_return + explicit_failure_not_completion + no_implementation_authority

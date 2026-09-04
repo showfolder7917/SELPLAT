@@ -24,7 +24,7 @@ export interface HanliApplicationServiceOptions {
   startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
   readStableUserId?: () => string;
   readProjectScope?: () => string;
-  planAcceptance?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
+  computerAcceptance?: (goal: import("../../../../../contracts/services/personas/hanli/index.js").HanliComputerAcceptanceInDto, tools: import("../../../support/platform/codex/index.js").CodexDynamicToolsPort) => Promise<void>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;
   beginMutation?: (topicId: string, action: string, request: import("../../../../../contracts/services/evolution/index.js").EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";

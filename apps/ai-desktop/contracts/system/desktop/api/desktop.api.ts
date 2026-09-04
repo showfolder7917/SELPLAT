@@ -18,7 +18,7 @@ import type { TestDataResetResultOutDto } from "../../../services/support/applic
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
 import type { LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto } from "../../../services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto } from "../../../services/evolution/index.js";
-import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
+import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
@@ -181,7 +181,7 @@ export interface DesktopApi {
   /** 启动、暂停、恢复或停止演化自动化。 */
   controlEvolutionAutomation(action: PersonaWorkflowActionInDto): Promise<EvolutionStateOutDto>;
   /** 从已持久化卡点恢复同一专题和提案链。 */
-  resumeEvolutionOneShot(): Promise<EvolutionStateOutDto>;
+  resumeEvolutionOneShot(runId: string): Promise<EvolutionStateOutDto>;
   /** 向南宫调查会话发送消息并记录来源。 */
   /** 清空当前南宫会话并创建新会话。 */
   /** 根据冻结对话生成专题草案，不直接创建专题。 */
@@ -197,10 +197,6 @@ export interface DesktopApi {
   decideEvolutionProposal(proposalId: string, request: DecideHanliProposalInDto): Promise<EvolutionStateOutDto>;
   /** 验收或退回提案执行结果。 */
   decideEvolutionResult(proposalId: string, request: DecideHanliResultInDto): Promise<EvolutionStateOutDto>;
-  /** 由韩立依据当前专题事实生成并持久化真实界面验收计划。 */
-  generateHanLiAcceptancePlan(proposalId: string): Promise<HanliAcceptancePlanOutDto>;
-  /** 在当前 AI Desktop 主窗口执行计划中的受控真实操作并保存截图证据。 */
-  executeHanLiAcceptancePlan(planId: string): Promise<HanliAcceptanceRunOutDto>;
   /** 根据审批意见修订指定提案。 */
   reviseEvolutionProposal(proposalId: string, request: ReviseNangongProposalInDto): Promise<EvolutionStateOutDto>;
   /** 在允许自动审批时执行韩立审批。 */

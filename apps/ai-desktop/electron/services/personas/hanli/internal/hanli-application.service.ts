@@ -1,7 +1,6 @@
 import type {
   DecideHanliProposalInDto,
   DecideHanliResultInDto,
-  HanliAcceptancePlanOutDto,
   HanliAcceptanceRunOutDto,
 } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
@@ -12,7 +11,6 @@ import { EvolutionApprovalService } from "./evolution-approval.service.js";
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 import { HanliDecisionService } from "./hanli-decision.service.js";
 import { HanliConversationService } from "./hanli-conversation.service.js";
-import { acceptanceEvidenceProblems } from "./acceptance-evidence-policy.js";
 
 export type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 
@@ -20,7 +18,6 @@ export type { HanliApplicationServiceOptions } from "./hanli-application.ports.j
 export class HanliApplicationService implements HanliApplicationPort {
   readonly #store: HanliApplicationServiceOptions["store"];
   readonly #memory: NonNullable<HanliApplicationServiceOptions["memory"]> | null;
-  readonly #planAcceptance: NonNullable<HanliApplicationServiceOptions["planAcceptance"]>;
   readonly #recordEvent: HanliApplicationServiceOptions["recordEvent"];
   readonly #mutations: EvolutionMutationPort;
   readonly #approvals: EvolutionApprovalService;
@@ -33,7 +30,6 @@ export class HanliApplicationService implements HanliApplicationPort {
   constructor(options: HanliApplicationServiceOptions) {
     this.#store = options.store;
     this.#memory = options.memory || null;
-    this.#planAcceptance = options.planAcceptance || (async () => { throw new Error("韩立界面验收计划能力尚未接入。"); });
     this.#recordEvent = options.recordEvent;
     this.#readStableUserId = options.readStableUserId || (() => { throw new Error("当前稳定用户尚未解析。"); });
     this.#readProjectScope = options.readProjectScope || (() => "global");
@@ -79,35 +75,8 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#mutations.run(proposal.topicId, "韩立审批", mutation, () => this.#store.state().updatedAt, () => this.#store.state(), () => this.#autoApproveOnce(proposal));
   }
 
-  /** 根据当前专题与历史发现生成可执行验收计划，但不伪造真实运行结果。 */
-  async generateAcceptancePlan(proposalId: string): Promise<HanliAcceptancePlanOutDto> {
-    const state = this.#store.state();
-    const proposal = requireProposal(state, proposalId);
-    if (proposal.status !== "pending-acceptance") throw new Error("只有等待结果验收的提案才能生成韩立界面验收计划。");
-    const topic = state.topics.find((item) => item.topicId === proposal.topicId);
-    if (!topic) throw new Error("验收计划对应的专题不存在。");
-    const semanticContext = this.#memory?.readHanliSemanticContext(this.#readStableUserId(), this.#readProjectScope(), proposal.title, 20)
-      || { stableUserId: this.#readStableUserId(), projectScope: this.#readProjectScope(), concerns: [], trajectories: [], inspectionExperiences: [] };
-    const priorFindings = semanticContext.inspectionExperiences.slice(-10) as unknown as Record<string, unknown>[];
-    const plan = await this.#decision.createAcceptancePlan(topic, proposal, priorFindings, semanticContext as unknown as Record<string, unknown>, this.#planAcceptance);
-    this.#store.recordAcceptancePlan(plan);
-    this.#recordEvent("hanli.acceptance.plan_generated", { topicId: topic.topicId, proposalId, planId: plan.planId, checkCount: plan.checks.length });
-    return plan;
-  }
-
-  /** 读取已保存的验收计划；返回副本以阻止调用方修改归档事实。 */
-  acceptancePlan(planId: string): HanliAcceptancePlanOutDto {
-    for (const record of [...this.#store.state().archiveRecords].reverse()) {
-      const value = record.eventType === "acceptance.plan_generated" ? record.payload.acceptancePlan : null;
-      if (value && typeof value === "object" && (value as HanliAcceptancePlanOutDto).planId === planId) return structuredClone(value as HanliAcceptancePlanOutDto);
-    }
-    throw new Error("韩立验收计划不存在或已清理。");
-  }
-
-  /** 保存真实应用运行证据；计划、专题和提案任一关联不一致都会阻断。 */
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
-    const plan = this.acceptancePlan(run.planId);
-    if (plan.topicId !== run.topicId || plan.proposalId !== run.proposalId) throw new Error("真实验收记录与计划关联不一致。");
+    if (run.version !== 2 || !run.stepResults.length || !run.evidenceAttachmentIds.length) throw new Error("缺少真实交互验收证据");
     return this.#store.recordAcceptanceRun(run);
   }
 
@@ -116,8 +85,6 @@ export class HanliApplicationService implements HanliApplicationPort {
 
   /** 一次性流程把真实运行结果交给韩立；韩立保存证据并形成自己的最终判断。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto {
-    const problems = acceptanceEvidenceProblems(this.acceptancePlan(run.planId), run);
-    if (run.status === "passed" && problems.length) throw new Error(`验收证据不足，禁止通过：${problems.join("；")}`);
     this.recordAcceptanceRun(run);
     const expectedStateVersion = this.#store.state().updatedAt;
     return this.#decideResult(run.proposalId, {

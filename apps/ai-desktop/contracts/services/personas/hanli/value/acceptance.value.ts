@@ -1,9 +1,5 @@
 export type HanliAcceptanceOperationValue =
-  | { type: "focus-window" }
-  | { type: "resize-window"; width: number; height: number }
-  | { type: "click"; target: string }
-  | { type: "scroll"; target: string; direction: "up" | "down"; amount: number }
-  | { type: "press-key"; target?: string; key: "Tab" | "Enter" | "Escape" | "ArrowDown" | "ArrowUp" | "PageDown" | "PageUp" }
-  | { type: "inspect-text"; text: string }
-  | { type: "inspect-layout"; target: string }
-  | { type: "capture"; label: string };
+  | { type: "click"; x: number; y: number; reason: string }
+  | { type: "scroll"; x: number; y: number; deltaY: number; reason: string }
+  | { type: "key"; key: string; reason: string }
+  | { type: "judgement"; criterionId: string };
