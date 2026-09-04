@@ -18,13 +18,6 @@ export function LinghuAutomationPanel({ state, locale, onState }: {
   }, [state.enabled, state.checking, state.nextCheckAt]);
   const seconds = state.nextCheckAt ? Math.max(0, Math.ceil((Date.parse(state.nextCheckAt) - now) / 1_000)) : 0;
   return <div>
-    <button type="button" disabled={busy} onClick={() => {
-      if (!window.desktop) { setError("请在桌面应用中操作"); return; }
-      setBusy(true); setError("");
-      void window.desktop.newLinghuDisplayConversation().then(onState)
-        .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法新建会话"))
-        .finally(() => setBusy(false));
-    }}>新建会话</button>
     <button type="button" className="selswitch" role="switch" aria-label={locale === "ja" ? "自動巡回" : "自动巡检"} aria-checked={state.enabled} disabled={busy}
       onClick={() => {
         if (!window.desktop) { setError("请在桌面应用中操作"); return; }

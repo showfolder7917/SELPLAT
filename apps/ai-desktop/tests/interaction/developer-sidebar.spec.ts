@@ -379,9 +379,10 @@ test("令狐人物页只保留自动开关和正式会话", async () => {
   await expect(countdown).toBeVisible();
   const initialSeconds = Number((await countdown.innerText()).match(/\d+/)![0]);
   await expect.poll(async () => Number((await countdown.innerText()).match(/\d+/)![0])).toBeLessThan(initialSeconds);
-  await panel.getByRole("button", { name: "新建会话", exact: true }).click();
+  await page.getByRole("button", { name: "重新建立令狐老祖对话", exact: true }).click();
   await expect(automation).toHaveAttribute("aria-checked", "true");
   await expect(countdown).toBeVisible();
+  await expect(panel.getByRole("button", { name: "新建会话", exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("linghu-inspection-countdown.png"), fullPage: true });
   await expect(panel.locator(".selconversation-root")).toHaveCount(1);
   for (const name of ["新增启动文案", "提交修正方案", "重命名", "完成后删除"])
