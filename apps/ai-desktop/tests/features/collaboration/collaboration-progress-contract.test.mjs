@@ -22,8 +22,13 @@ test("旧任务详情页面和入口整链删除，不保留跳转兼容", () =>
 });
 test("令狐页面只保留自动开关，后台恢复职责仍存在", () => {
   const panel = source("src/features/linghu/components/LinghuAutomationPanel.tsx");
+  const router = source("src/applications/developer/DeveloperWorkspaceRouter.tsx");
   assert.match(panel, /role="switch"/);
   assert.match(panel, /setLinghuAutomationEnabled/);
+  assert.doesNotMatch(panel, /newLinghuDisplayConversation/);
+  assert.match(router, /showLinghu/);
+  assert.match(router, /newLinghuDisplayConversation/);
+  assert.match(router, /重新建立令狐老祖对话/);
   assert.doesNotMatch(panel, /createPrompt|启动文案|提交修正方案/);
   const facade = source("electron/services/personas/linghu/linghu-automation.facade.ts");
   assert.match(facade, /LINGHU_SAFEGUARD_INSTRUCTIONS/);
