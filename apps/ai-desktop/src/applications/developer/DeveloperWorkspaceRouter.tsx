@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { SelUiWorkspaceTabs } from "../../theme/SelUiWorkspaceTabs";
 import {
   // 新建会话按钮使用旋转箭头；busy 时同一图标会播放旋转动画。
@@ -73,6 +75,8 @@ function DeveloperWorkspacePage({
   // 三个会话共同复用的截图能力。
   screenshot,
 }: DeveloperWorkspaceRouterProps) {
+  // 令狐的新建展示会话沿用页签动作的等待反馈，防止用户重复创建可见边界。
+  const [linghuNewConversationBusy, setLinghuNewConversationBusy] = useState(false);
   // 未进入协同模式时，工作区固定显示主 Codex 会话。
   const showMainConversation = !collaboration.collaborationMode;
   // 协同模式选择韩立成员页时，切换到韩立独立会话页面。
@@ -88,6 +92,30 @@ function DeveloperWorkspacePage({
     && collaboration.selectedMember?.memberId === "nangong-wan"
     && evolution.state,
   );
+  // 令狐仍使用协作成员页的正式会话外壳；这里只决定是否显示统一页签动作。
+  const showLinghu = Boolean(
+    collaboration.collaborationMode
+    && collaboration.panel === "member"
+    && collaboration.selectedMember?.memberId === "linghu-ancestor",
+  );
+  const startLinghuDisplayConversation = async () => {
+    if (linghuNewConversationBusy) return;
+    if (!window.desktop) {
+      collaboration.setError("请在桌面应用中操作");
+      return;
+    }
+    setLinghuNewConversationBusy(true);
+    collaboration.setError("");
+    try {
+      // 后端只推进令狐页面的可见消息边界，不触碰巡检、任务或恢复状态。
+      collaboration.setLinghuAutomation(await window.desktop.newLinghuDisplayConversation());
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "无法新建会话";
+      collaboration.setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ""));
+    } finally {
+      setLinghuNewConversationBusy(false);
+    }
+  };
   // 页签标题跟随当前协作子页面；成员页优先显示真实人物名称。
   // Fragment 允许页签、错误条和实际工作区作为同一个路由结果返回。
   return <>
@@ -132,6 +160,19 @@ function DeveloperWorkspacePage({
         onClick={() => void nangong.startNewConversation()}
       >
         <ArrowClockwise24Regular className={nangong.newConversationBusy ? "screenshot-spinner" : undefined} />
+      </button>}
+
+      {/* 令狐的新建只切换当前页面展示边界，入口和外观与其他人物页签保持一致。 */}
+      {showLinghu && <button
+        type="button"
+        className="tab-new-task"
+        data-sel-tooltip={locale === "ja" ? "令狐老祖の会話を新しく作り直す" : "重新建立令狐老祖对话"}
+        data-sel-tooltip-mode="always"
+        aria-label={locale === "ja" ? "令狐老祖の会話を新しく作り直す" : "重新建立令狐老祖对话"}
+        disabled={linghuNewConversationBusy}
+        onClick={() => void startLinghuDisplayConversation()}
+      >
+        <ArrowClockwise24Regular className={linghuNewConversationBusy ? "screenshot-spinner" : undefined} />
       </button>}
 
       {/* 关闭图标目前维持既有页签外观，不绑定额外业务动作。 */}
