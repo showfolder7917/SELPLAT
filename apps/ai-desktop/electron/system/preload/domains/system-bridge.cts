@@ -16,7 +16,6 @@ export function systemBridge() {
     updateWorkspacePermission: (id: string, permission: "read-only" | "workspace-write") => invoke("desktop:update-workspace-permission", id, permission),
     setPrimaryWorkspace: (id: string) => invoke("desktop:set-primary-workspace", id),
     removeWorkspace: (id: string) => invoke("desktop:remove-workspace", id),
-    listWorkspaceEntries: (id: string) => invoke("desktop:list-workspace-entries", id),
     openExternalUrl: (url: string) => invoke("desktop:open-external-url", url),
     getTempDirectoryInfo: () => invoke("desktop:get-temp-directory-info"),
     openTempDirectory: () => invoke("desktop:open-temp-directory"),

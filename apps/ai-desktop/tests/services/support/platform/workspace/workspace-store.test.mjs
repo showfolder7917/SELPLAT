@@ -16,7 +16,6 @@ test("workspace profiles validate, deduplicate, persist, and enforce lifecycle c
     const additionalPath = path.join(fixture, "additional");
     mkdirSync(primaryPath);
     mkdirSync(additionalPath);
-    mkdirSync(path.join(additionalPath, "folder"));
 
     const configPath = path.join(fixture, "workspace-profiles.json");
     const store = new WorkspaceStore(configPath, primaryPath);
@@ -36,7 +35,6 @@ test("workspace profiles validate, deduplicate, persist, and enforce lifecycle c
     const writable = store.updatePermission(additional.id, "workspace-write");
     assert.equal(writable.roots.find((root) => root.id === additional.id)?.permission, "workspace-write");
     assert.equal(store.setPrimary(additional.id).primaryId, additional.id);
-    assert.deepEqual(store.listEntries(additional.id), [{ name: "folder", kind: "directory" }]);
 
     const reloaded = new WorkspaceStore(configPath, primaryPath).read();
     assert.equal(reloaded.primaryId, additional.id);

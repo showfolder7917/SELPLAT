@@ -258,14 +258,6 @@ contextBridge.exposeInMainWorld("desktop", {
   updateWorkspacePermission: async () => workspace,
   setPrimaryWorkspace: async () => workspace,
   removeWorkspace: async () => workspace,
-  listWorkspaceEntries: async () => [
-    { name: "docs", kind: "directory" },
-    { name: "gradle", kind: "directory" },
-    { name: "log", kind: "directory" },
-    { name: "OPTION", kind: "directory" },
-    { name: "scripts", kind: "directory" },
-    { name: "shared", kind: "directory" },
-  ],
   getCodexStatus: async () => harnessStatus,
   setInteractionAuthenticated: async (authenticated) => {
     harnessStatus = {

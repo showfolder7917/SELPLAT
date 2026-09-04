@@ -1,19 +1,17 @@
-import type { CSSProperties, ReactNode, RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { Code24Regular, Search24Regular } from "@fluentui/react-icons";
 
 import { WindowControls } from "../../../features/shell/components/DesktopChrome";
 
 interface DeveloperShellProps {
   shellRef: RefObject<HTMLDivElement | null>;
-  explorerExpanded: boolean;
   locale: string;
-  style: CSSProperties;
   children: ReactNode;
 }
 
 /** Developer Application 的顶层网格，只定义布局区域，不持有业务状态。 */
-export function DeveloperShell({ shellRef, explorerExpanded, locale, style, children }: DeveloperShellProps) {
-  return <div ref={shellRef} className={`developer-shell ${explorerExpanded ? "" : "explorer-collapsed"}`} lang={locale} style={style}>{children}</div>;
+export function DeveloperShell({ shellRef, locale, children }: DeveloperShellProps) {
+  return <div ref={shellRef} className="developer-shell" lang={locale}>{children}</div>;
 }
 
 interface DeveloperTitleBarProps {

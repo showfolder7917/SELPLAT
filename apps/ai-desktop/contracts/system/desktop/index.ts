@@ -16,7 +16,7 @@ export type { TestDataResetResultOutDto } from "../../services/support/applicati
 export type { AiMemoryDatabaseStateValue, AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStateValue, CorpusSemanticBackfillStatusOutDto } from "../../services/support/platform/persistence/index.js";
 export type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../services/support/platform/attachments/index.js";
 export type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../services/support/platform/settings/index.js";
-export type { WorkspaceEntryOutDto, WorkspaceRootOutDto, WorkspaceStateOutDto } from "../../services/support/platform/workspace/index.js";
+export type { WorkspaceRootOutDto, WorkspaceStateOutDto } from "../../services/support/platform/workspace/index.js";
 
 export type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, ConversationQueueItemOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../services/support/capabilities/conversation/index.js";
 export type { ApprovalMemoryEvidenceOutDto, CollaborationMemoryMessageOutDto, CollaborationMemoryPort, ConversationRoundTopicDecisionInDto, TrainingCorpusTopicSearchResultOutDto } from "../../services/support/capabilities/event-center/index.js";

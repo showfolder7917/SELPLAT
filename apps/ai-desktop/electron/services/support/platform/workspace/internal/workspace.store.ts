@@ -1,17 +1,12 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  WorkspaceEntryOutDto,
-  WorkspaceRootOutDto,
-  WorkspaceStateOutDto,
-} from "../../../../../../contracts/services/support/platform/workspace/index.js";
+import type { WorkspaceRootOutDto, WorkspaceStateOutDto } from "../../../../../../contracts/services/support/platform/workspace/index.js";
 import type { WorkspacePermissionValue } from "../../../../../../contracts/foundation/index.js";
 
 const MAX_ROOTS = 24;
-const MAX_ENTRIES = 80;
 const CURRENT_PERMISSION_DEFAULTS_VERSION = 1;
 
 type StoredWorkspaceState = Partial<WorkspaceStateOutDto> & {
@@ -82,15 +77,6 @@ export class WorkspaceStore {
     if (state.roots.length === 1) throw new Error("At least one workspace is required.");
     const roots = state.roots.filter((root) => root.id !== id);
     return this.#write({ primaryId: state.primaryId === id ? roots[0].id : state.primaryId, roots });
-  }
-
-  listEntries(id: string): WorkspaceEntryOutDto[] {
-    const root = this.#requireRoot(this.read(), id);
-    return readdirSync(root.path, { withFileTypes: true })
-      .filter((entry) => !entry.name.startsWith(".") && (entry.isDirectory() || entry.isFile()))
-      .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
-      .slice(0, MAX_ENTRIES)
-      .map((entry) => ({ name: entry.name, kind: entry.isDirectory() ? "directory" : "file" }));
   }
 
   #requireRoot(state: WorkspaceStateOutDto, id: string): WorkspaceRootOutDto {
