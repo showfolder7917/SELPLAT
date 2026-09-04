@@ -42,6 +42,8 @@ export function usePersonaConversation(personaId: string) {
   // 南宫婉页面读取韩立会话中唯一保存的内部研讨消息，不复制数据库记录。
   const [sharedInternalMessages, setSharedInternalMessages] = useState<PersonaConversationMessageOutDto[]>([]);
   const [newConversationBusy, setNewConversationBusy] = useState(false);
+  // 新线程建立成功后只提示当前页面，不把旧线程的错误或等待状态带入新对话。
+  const [newConversationFeedback, setNewConversationFeedback] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export function usePersonaConversation(personaId: string) {
   const startNewConversation = async () => {
     if (newConversationBusy || sending) return;
     setNewConversationBusy(true);
+    setNewConversationFeedback("");
     setError("");
     try {
       const value = await window.desktop?.newPersonaConversation(personaId);
@@ -111,6 +114,9 @@ export function usePersonaConversation(personaId: string) {
       setAttachments([]);
       setPendingMessage(null);
       setAttachmentPreviews({});
+      setAttachmentPreviewErrors({});
+      setError("");
+      setNewConversationFeedback("已建立新的空白对话。");
     } catch (reason) {
       setError(readableDesktopError(reason, "无法新建人物会话。"));
     } finally {
@@ -121,7 +127,7 @@ export function usePersonaConversation(personaId: string) {
   return {
     personaId, conversation, setConversation, attachments, setAttachments,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
-    sharedInternalMessages, newConversationBusy, error, setError, startNewConversation,
+    sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
   };
 }
 

@@ -342,10 +342,24 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(hanliConversation.getByText("结合整理后的资料，告诉我现在最关键的目标。", { exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("hanli-direct-conversation-only.png"), fullPage: true });
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
-  await expect(page.locator(".nangong-person-chat").getByText("韩立 · 内部研讨", { exact: true })).toBeVisible();
-  await expect(page.locator(".nangong-person-chat").getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
-  await expect(page.locator(".nangong-person-chat").getByText("验收时需确认内部一问一答可见，且不写入用户语义资料。", { exact: true })).toBeVisible();
-  await expect(page.locator(".nangong-person-chat").getByText("判断：这是一条历史后台判断，不是聊天正文。", { exact: true })).toHaveCount(0);
+  const nangongConversation = page.locator(".nangong-person-chat");
+  // 人物直接会话不混入内部研讨正文；研讨历史默认折叠，但可独立查看。
+  const internalHistory = nangongConversation.getByRole("button", { name: "内部研讨历史（2）" });
+  await expect(internalHistory).toBeVisible();
+  await expect(internalHistory).toHaveAttribute("aria-expanded", "false");
+  await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
+  await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
+  // 新建的是南宫婉的直接会话；旧研讨不能重新进入正文，但仍能按需展开查阅。
+  await page.getByRole("button", { name: "重新建立南宫婉对话" }).click();
+  await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
+  await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
+  await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
+  await internalHistory.click();
+  await expect(internalHistory).toHaveAttribute("aria-expanded", "true");
+  await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("验收时需确认内部一问一答可见，且不写入用户语义资料。", { exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
   await taskList.getByRole("button", { name: "单会话" }).click();
   await page.getByRole("button", { name: "展开工作区" }).click();
@@ -357,7 +371,6 @@ test("南宫婉会话保留自动演化入口且演化工作台已不兼容退�
   await taskList.getByRole("button", { name: "协同模式" }).click();
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   const conversation = page.locator(".nangong-person-chat");
-  await expect(conversation.getByText("韩立 · 内部研讨", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "打开专题演化工作台" })).toHaveCount(0);
   await expect(page.locator(".evolution-control-workspace, .evolution-window-shell")).toHaveCount(0);
   expect(application.windows()).toHaveLength(1);
