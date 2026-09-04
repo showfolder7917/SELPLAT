@@ -29,6 +29,26 @@ test.afterAll(async () => {
   await application?.close();
 });
 
+test("通用侧栏折叠恢复保留任务且宽度可键盘调整", async () => {
+  const sidebar = page.locator("#collaboration-sidebar");
+  await expect(sidebar).toBeVisible();
+  const before = await page.locator(".workspace-stage-single").boundingBox();
+  await page.getByRole("button", { name: "折叠侧栏", exact: true }).click();
+  await expect(sidebar).toBeHidden();
+  await expect(page.locator("#developer-task-list")).toHaveCount(1);
+  const after = await page.locator(".workspace-stage-single").boundingBox();
+  expect(after!.width).toBeGreaterThan(before!.width);
+  await page.getByRole("button", { name: "展开侧栏", exact: true }).click();
+  await expect(sidebar).toBeVisible();
+  const resizer = page.getByRole("separator", { name: "调整侧栏宽度" });
+  await resizer.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(resizer).toHaveAttribute("aria-valuenow", "276");
+  await page.keyboard.press("Home");
+  await expect(resizer).toHaveAttribute("aria-valuenow", "260");
+  await page.screenshot({ path: test.info().outputPath("sidebar-restored.png") });
+});
+
 test("任务侧栏保留运行模式与协作入口", async () => {
   await expect(page.locator(".dev-context")).toHaveCount(0);
   await expect(page.locator(".dev-brand").getByText("AI Desktop", { exact: true })).toBeVisible();

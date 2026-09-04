@@ -10,6 +10,8 @@ import type { WorkspaceStateOutDto } from "../../support/platform/workspace/inde
 export interface ConfigurePersonaWorkflowInDto {
   maxRoundsPerTopic: number | null;
   maxCorrectionRounds: number;
+  /** 仅允许已查明事实的授权范围内代确认；不授予文件或命令权限。 */
+  automaticCustodyEnabled?: boolean;
   workspaceState?: WorkspaceStateOutDto;
   locale?: LocaleValue;
 }

@@ -8,6 +8,8 @@ export interface EvolutionAutomationSettingsOutDto {
   /** null 表示研讨无限模式；轮次数只控制韩立发问过程，不能代替专题确立判断。 */
   maxRoundsPerTopic: number | null;
   maxCorrectionRounds: number;
+  /** 缺省关闭；与令狐巡检和执行任务的存活状态独立。 */
+  automaticCustodyEnabled?: boolean;
 }
 
 export interface EvolutionAutomationRuntimeOutDto {

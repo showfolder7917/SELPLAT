@@ -4,12 +4,14 @@ import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } f
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 import { parseHanliConversationResponse } from "./hanli-conversation.parser.js";
 import { buildHanliMethodContext, buildHanliRecentConversation } from "./hanli-method-context.js";
+import { HanliInquiryService } from "./hanli-inquiry.service.js";
 
 const HANLI_INTERNAL_DELIBERATION_INVITATION = "若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。";
 
 /** 韩立自由对话只做用户代理分析；完整对话持久化后再异步刷新派生语义。 */
 export class HanliConversationService {
-  constructor(private readonly options: HanliApplicationServiceOptions) {}
+  readonly #inquiry: HanliInquiryService;
+  constructor(private readonly options: HanliApplicationServiceOptions) { this.#inquiry = new HanliInquiryService(options); }
 
   conversation(): PersonaConversationOutDto {
     return this.options.memory?.readPersonaConversation("han-li")
@@ -27,12 +29,20 @@ export class HanliConversationService {
     // 业务会话 ID 与 Codex threadId 分离；第一次发送时先建立统一人物会话头。
     const current = this.conversation();
     const existing = current.conversationId ? current : memory.newPersonaConversation("han-li");
-    const latestHanli = [...existing.messages].reverse().find((message) => message.speakerType === "persona" && message.speakerPersonaId === "han-li");
+    const waiting = [...this.options.store.state().deliberations].reverse().find((item) => item.status === "ready-to-establish" && item.rounds.at(-1)?.confirmation && !item.rounds.at(-1)?.confirmation?.reply);
+    const waitingRound = waiting?.rounds.at(-1);
+    // 只有当前会话已展示的那份调查说明可被确认，旧会话或后台草稿不能取得用户授权。
+    if (waiting && waitingRound && existing.messages.some((message) => message.messageId === `hanli-confirmation:${waitingRound.roundId}`)) {
+      this.options.store.replyDeliberationConfirmation(waiting.deliberationId, userContent);
+      const createdAt = new Date().toISOString();
+      return memory.registerPersonaRound({ ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli", conversationId: existing.conversationId!, userMessageId: request.clientMessageId || `hanli-user-${randomUUID()}`, userContent, attachmentIds: request.attachmentIds || [], personaMessageId: `hanli-message-${randomUUID()}`, personaContent: userContent === "1" ? "已确认这份调查范围，将交南宫婉继续推进。" : "已把你的纠正交回南宫婉重新调查；未确认前不会按旧范围开始实施。", createdAt, completedAt: createdAt, decision: { title: "调查范围确认", type: "用户确认", switchTopic: false, userIntent: userContent, tags: ["调查确认"], summary: "用户对本轮调查范围作出确认或纠正。" } });
+    }
+    const latestHanli = [...existing.messages].reverse().find((message) => !message.messageId.startsWith("internal:") && message.speakerType === "persona" && message.speakerPersonaId === "han-li");
     if (userContent === "1" && latestHanli?.content.includes(HANLI_INTERNAL_DELIBERATION_INVITATION)) {
       if (!existing.conversationId || !this.options.startInternalDeliberation) throw new Error("韩立与南宫婉内部研讨能力尚未就绪。");
       const started = await this.options.startInternalDeliberation(request);
       const createdAt = new Date().toISOString();
-      const reply = "已启动韩立与南宫婉的内部研讨。当前问题满足整理条件后会自动进入审批、分发、测试和验收；本轮完成后继续寻找新的、有用户证据的问题，直到你暂停、停止或人工接管。";
+      const reply = this.options.store.state().automationSettings.automaticCustodyEnabled === true ? "已启动韩立与南宫婉的内部研讨。自动托管已开启，将先查事实，在已授权范围内代确认并推进；范围扩大仍需你确认。" : "已启动韩立与南宫婉的内部研讨。南宫婉查清事实后，我会把修复范围和影响带回来请你确认，再进入实施。";
       const next = memory.registerPersonaRound({
         ownerPersonaId: "han-li",
         responderPersonaId: "han-li",
@@ -70,6 +80,13 @@ export class HanliConversationService {
     if (!(response.threadId || chat.activeConversationId())) throw new Error("韩立会话没有返回稳定 Codex 线程标识。");
     const conversationId = existing.conversationId!;
     const parsed = parseHanliConversationResponse(response.text);
+    if (parsed.verificationQuestion) {
+      const next = await this.#inquiry.run(request, conversationId, parsed.verificationQuestion, parsed.topic);
+      const contextReadStats = { methodCharacters: methodContext.length, recentConversationCharacters: recentConversation.length, latestUserMessageCharacters: userContent.length, promptCharacters: prompt.length };
+      this.options.recordEvent("hanli.conversation.round_archived", { conversationId, messageCount: next.messages.length, topicTitle: parsed.topic.title, contextReadStats });
+      this.options.refreshSemanticMemory?.();
+      return { ...next, contextReadStats };
+    }
     const completedAt = new Date().toISOString();
     const next = memory.registerPersonaRound({
       ownerPersonaId: "han-li",

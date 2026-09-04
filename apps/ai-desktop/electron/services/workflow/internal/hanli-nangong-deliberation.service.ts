@@ -130,11 +130,22 @@ export class HanliNangongDeliberationService {
     }
     this.#appendInternalMessage(roundId, "offer", "nangong", confirmation.offer, `internal:${roundId}:reply`, confirmation.offeredAt);
     if (!confirmation.reply) {
+      // 默认回到真实用户确认；展示用稳定消息ID去重，轮询不得伪造用户回复。
+      if (store.state().automationSettings.automaticCustodyEnabled !== true) {
+        const conversation = this.dependencies.memory.appendPersonaInternalMessage({
+          ownerPersonaId: "han-li", conversationId: this.dependencies.readHanliConversationId()!,
+          messageId: `hanli-confirmation:${roundId}`, speakerPersonaId: "han-li",
+          content: `南宫婉已完成调查，以下是她核实后的范围说明：\n\n${confirmation.offer}\n\n请确认这些范围是否符合你的真实目标；回复 1 仅确认本轮说明，有需保留的能力请直接纠正。`, createdAt: confirmation.offeredAt,
+        });
+        this.dependencies.onPersonaConversationChanged?.(conversation);
+        return { state: store.state(), activity: "idle" };
+      }
       const reply = (await this.dependencies.askHanli(prompts.render("hanli.internal-confirmation", {
         candidateJson: JSON.stringify(deliberation.candidate), offer: confirmation.offer, sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
       }), store.state())).trim();
       if (!reply) throw new Error("韩立尚未回复南宫婉的修复说明。");
       if (interrupted()) return { state: store.state(), activity: "idle" };
+      if (store.state().automationSettings.automaticCustodyEnabled !== true) return { state: store.state(), activity: "idle" };
       const saved = store.replyDeliberationConfirmation(deliberation.deliberationId, reply);
       const current = requireDeliberation(saved, deliberation.deliberationId);
       confirmation = current.rounds.find((item) => item.roundId === roundId)!.confirmation!;
@@ -144,7 +155,7 @@ export class HanliNangongDeliberationService {
         return { state: saved, activity: "questioning" };
       }
     }
-    this.#appendInternalMessage(roundId, "confirm", "hanli", confirmation.reply!, `internal:${roundId}:offer`, confirmation.repliedAt!);
+    this.#appendInternalMessage(roundId, "confirm", "hanli", store.state().automationSettings.automaticCustodyEnabled === true ? `自动托管确认：${confirmation.reply!}` : `用户确认：${confirmation.reply!}`, `internal:${roundId}:offer`, confirmation.repliedAt!);
     if (interrupted()) return { state: store.state(), activity: "idle" };
     const state = this.dependencies.store.establishDeliberationTopic(deliberation.deliberationId);
     this.#appendInternalMessage(roundId, "started", "nangong", `收到 1。我现在开始整理“${deliberation.candidate!.title}”的实施提案，随后进入审批、分发、执行和验证。具体进度会在任务协作群显示。`, `internal:${roundId}:confirm`, new Date().toISOString());

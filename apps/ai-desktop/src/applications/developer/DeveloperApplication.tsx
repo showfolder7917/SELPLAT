@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { PanelLeft24Regular } from "@fluentui/react-icons";
 
 import { CollaborationExplorerFeature } from "../../features/collaboration/components/CollaborationExplorerFeature";
 import { useCollaborationWorkspace } from "../../features/collaboration/model/useCollaborationWorkspace";
@@ -73,6 +74,21 @@ export function DeveloperApplication() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tasksExpanded, setTasksExpanded] = useState(true);
+  // 通用侧栏布局与任务、人物会话独立；收起时不卸载业务控件。
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const clampSidebarWidth = (width: number) => Math.max(220, Math.min(520, width));
+  const resizeSidebar = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget;
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    handle.setPointerCapture(event.pointerId);
+    const move = (next: PointerEvent) => setSidebarWidth(clampSidebarWidth(startWidth + next.clientX - startX));
+    const stop = () => { handle.removeEventListener("pointermove", move); handle.removeEventListener("pointerup", stop); handle.removeEventListener("pointercancel", stop); };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  };
   const settings = useDesktopSettings(settingsOpen);
   const text = labels[settings.locale];
   const diagnostics = useDesktopDiagnostics(settingsOpen, settings.locale);
@@ -111,12 +127,14 @@ export function DeveloperApplication() {
     return () => { controller?.destroy(); };
   }, []);
 
-  return <DeveloperShell shellRef={shellRef} locale={settings.locale}>
+  return <DeveloperShell shellRef={shellRef} locale={settings.locale} collapsed={sidebarCollapsed} style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
+    <button className="sidebar-toggle" type="button" aria-controls="collaboration-sidebar" aria-expanded={!sidebarCollapsed} aria-label={settings.locale === "ja" ? (sidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ") : (sidebarCollapsed ? "展开侧栏" : "折叠侧栏")} onClick={() => setSidebarCollapsed((value) => !value)}><PanelLeft24Regular /></button>
     <DeveloperTitleBar projectRoot={workspace.projectRoot} title={text.title} />
     <DeveloperActivityBar settingsControl={<DeveloperSettingsFeature open={settingsOpen} onOpenChange={setSettingsOpen} status={codex.interaction.status} loginHint={codex.interaction.loginHint} text={text} settings={settings} diagnostics={diagnostics} workspace={workspace} onLogin={() => void codex.interaction.login()} onLogout={() => void codex.interaction.logout()} onTempFilesCleared={() => codex.conversation.setAttachments([])} />} />
     <DeveloperExplorer>
       <CollaborationExplorerFeature evolution={evolution.state} expanded={tasksExpanded} locale={settings.locale} auditTask={diagnostics.auditInfo?.latestTask || null} controller={collaboration} onToggle={() => setTasksExpanded((current) => !current)} />
     </DeveloperExplorer>
+    {!sidebarCollapsed && <div className="sidebar-resizer" role="separator" aria-label={settings.locale === "ja" ? "サイドバーの幅" : "调整侧栏宽度"} aria-orientation="vertical" aria-valuemin={220} aria-valuemax={520} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={resizeSidebar} onDoubleClick={() => setSidebarWidth(260)} onKeyDown={(event) => { if (event.key === "Home") { event.preventDefault(); setSidebarWidth(260); } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); setSidebarWidth((width) => clampSidebarWidth(width + (event.key === "ArrowLeft" ? -16 : 16))); } }} />}
     <DeveloperWorkspace>
       {diagnostics.aiMemoryDatabaseStatus && diagnostics.aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${diagnostics.aiMemoryDatabaseStatus.state}`} role="alert"><strong>{settings.locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{settings.locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : diagnostics.aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
       <DeveloperWorkspaceRouter locale={settings.locale} sandboxMode={settings.sandboxMode} workspaces={workspace.workspaces} collaboration={collaboration} codex={codex} evolution={evolution} hanli={hanli} nangong={nangong} screenshot={screenshot} />

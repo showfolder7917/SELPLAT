@@ -5,6 +5,7 @@ import type { PersonaConversationOutDto, LocaleValue, WorkspaceStateOutDto } fro
 import type { ComposerAttachment } from "../../conversation/model/chat-message";
 import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
+import { HanliCustodySwitch } from "./HanliCustodySwitch";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
 
@@ -211,6 +212,7 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
 
       <div className="selconversation-footer">
         <div className="selconversation-tools">
+          <HanliCustodySwitch onError={onError} />
           {/* false：保留 AI Desktop 窗口，直接截取当前屏幕。 */}
           <button type="button" className="screenshot-button" aria-label="截取当前屏幕" onClick={() => onScreenshot(false)}>
             <Screenshot24Regular />

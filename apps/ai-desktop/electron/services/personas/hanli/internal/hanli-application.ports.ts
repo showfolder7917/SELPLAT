@@ -13,6 +13,8 @@ export interface HanliApplicationServiceOptions {
   memory?: CollaborationMemoryPort | null;
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   analyzeCorpus?: (prompt: string) => Promise<string>;
+  investigateWithNangong?: (question: string, request: SendPersonaConversationMessageInDto) => Promise<string>;
+  onPersonaConversationChanged?: (conversation: import("../../../../../contracts/services/personas/conversation/index.js").PersonaConversationOutDto) => void;
   conversation?: {
     send(request: SendPersonaConversationMessageInDto, prompt: string): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;

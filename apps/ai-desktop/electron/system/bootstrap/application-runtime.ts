@@ -139,6 +139,7 @@ const { applicationName: startupApplicationName, variant: startupVariant,
 let codex: CodexService | undefined;
 // 南宫婉与韩立各有长期会话，避免不同人物的上下文互相污染。
 let nangongCodex: CodexService | undefined;
+let nangongInquiryCodex: CodexService | undefined;
 let hanLiCodex: CodexService | undefined;
 // 研讨和分发当前复用南宫婉会话；不同变量用于表达不同业务场景。
 let nangongDeliberationCodex: CodexService | undefined;
@@ -410,6 +411,13 @@ export async function startApplication(): Promise<void> {
   // 南宫婉的聊天、研讨和分发共享同一人物线程，业务节点仍由各自领域事件区分。
   nangongDeliberationCodex = nangongCodex;
   nangongDistributionCodex = nangongCodex;
+  // 核实使用独立只读连接，避免新询问取消正在进行的研讨或分发。
+  nangongInquiryCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(aiMemoryDatabase, "nangong-inquiry"), {
+    codexHome, serviceName: "selplat_ai_desktop_nangong_inquiry", threadSource: "ai-desktop-nangong-inquiry",
+    migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
+    readSettings: () => settings.read(), readRuleInstructions: readNangongRuleInstructions,
+  }, (details) => eventCenter.recordEvent("nangong.inquiry.trusted_command.decision", details), (details) => eventCenter.recordEvent("nangong.inquiry.thread.lifecycle", details));
+  let inquiryQueue: Promise<unknown> = Promise.resolve();
   // 令狐固定会话仅服务故障兜底和统一测试修复；常规分发由南宫婉规划并交给程序做确定性冲突校验。
   const linghuSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "linghu");
   // 历史语义补齐只允许看到这个隔离的只读工作区，不能读取或修改真实工程源码。
@@ -533,6 +541,19 @@ export async function startApplication(): Promise<void> {
     store: evolutionStateStore,
     prompts,
     memory: collaborationMemory,
+    investigateWithNangong: (question, request) => {
+      const investigation = inquiryQueue.then(async () => {
+      if (!nangongInquiryCodex) throw new Error("南宫婉只读核实服务尚未就绪。");
+      const state = evolutionStateStore.state();
+      const facts = { capturedAt: new Date().toISOString(), topics: state.topics.slice(-12).map(({ topicId, title, status }) => ({ topicId, title, status })), proposals: state.proposals.slice(-12).map(({ proposalId, title, status, distributedTaskIds }) => ({ proposalId, title, status, distributedTaskIds })) };
+      return (await nangongInquiryCodex.send(prompts.render("nangong.progress-inquiry", { question, facts: JSON.stringify(facts) }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null)).text;
+      });
+      inquiryQueue = investigation.catch(() => undefined);
+      return investigation;
+    },
+    onPersonaConversationChanged: (conversation) => {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
+    },
     askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
     conversation: {
       send: async (request, prompt) => hanLiCodex!.send(prompt, request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null),
@@ -853,6 +874,7 @@ export function disposeApplication(): void {
   // 每个独立 Codex 实例都可能持有 app-server 子进程，需要分别释放。
   codex?.dispose();
   nangongCodex?.dispose();
+  nangongInquiryCodex?.dispose();
   hanLiCodex?.dispose();
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
   corpusSemanticBackfillCodex?.dispose();

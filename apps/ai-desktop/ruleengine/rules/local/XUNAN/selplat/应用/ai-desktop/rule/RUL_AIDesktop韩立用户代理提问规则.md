@@ -3,7 +3,15 @@
 <!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
 <!-- 2.4.0 将历史语义读取收敛为调查方法学习和可观测字符预算。 -->
-rule_version = 2.4.0
+rule_version = 2.6.0
+
+<!-- 核实与普通研讨分离连接，真实调用后发布等待，调查带依据回原会话；异常不冒充人物成功回复。 -->
+hanli_fact_handoff_contract = real_read_only_nangong_dispatch + isolated_inquiry_connection + evidence_required + original_conversation_anchor + request_deduplication + proactive_result_return + explicit_failure_not_completion + no_implementation_authority
+
+<!-- 托管默认关闭，研讨开始不等于实施范围获确认；只允许确认当前会话实际展示的调查说明。 -->
+hanli_user_confirmation_gate = custody_default_off + visible_investigated_scope_then_real_user_confirmation + correction_returns_to_investigation + no_implicit_or_old_conversation_authority
+<!-- 托管仅控制后续代确认，不控制正在执行的任务，也不授予危险操作或扩大范围的权限。 -->
+hanli_custody_contract = persisted_SELUI_switch + recheck_before_automatic_confirmation + label_automatic_confirmation + no_scope_expansion + no_cancel_inflight_work + independent_linghu_inspection
 <!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
 <!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->

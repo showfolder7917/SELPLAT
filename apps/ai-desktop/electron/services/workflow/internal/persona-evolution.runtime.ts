@@ -12,6 +12,7 @@ import type { CodexStreamEventOutDto } from "../../../../contracts/services/supp
 import type { CollaborationWorkflowFacade } from "../index.js";
 import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
 import { EvolutionFlowOrchestrator } from "./evolution-flow.orchestrator.js";
+import { AcceptanceHandoffService } from "./acceptance-handoff.service.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../personas/hanli/index.js";
 import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../personas/nangong/index.js";
@@ -58,6 +59,7 @@ export interface PersonaEvolutionRuntimeOptions {
  * 对外由各人物 Facade 按职责裁剪方法，不再把这一完整运行对象冒充为南宫人物能力。
  */
 export class PersonaEvolutionRuntime {
+  readonly #acceptanceHandoff: AcceptanceHandoffService;
   readonly #store: EvolutionStatePort;
   readonly #collaboration: CollaborationWorkflowFacade;
   readonly #hanli: HanliWorkflowPort;
@@ -83,6 +85,7 @@ export class PersonaEvolutionRuntime {
    * 异常或副作用示例：缺少韩立公开端口会在类型检查或启动装配时阻断，不会回退创建韩立内部服务。
    */
   constructor(options: PersonaEvolutionRuntimeOptions) {
+    this.#acceptanceHandoff = new AcceptanceHandoffService(options);
     // Evolution 是专题和提案事实的唯一所有者，南宫只通过端口读写。
     this.#store = options.store;
     // Workflow 负责把通过审批的任务交给真实执行人。
@@ -354,15 +357,19 @@ export class PersonaEvolutionRuntime {
       }
 
       if (flowAction === "accept-result") {
+        this.#acceptanceHandoff.publish(proposal, "received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
         this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在生成检查计划并验收真实应用界面", topic.topicId, proposal.proposalId);
         if (!this.#oneShotAcceptanceRunner) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立真实应用验收执行器尚未接入。"), "韩立真实应用验收执行器尚未接入。");
         try {
           const existingPlan = [...state.archiveRecords].reverse().find((record) => record.proposalId === proposal!.proposalId && record.eventType === "acceptance.plan_generated")?.payload.acceptancePlan as HanliAcceptancePlanOutDto | undefined;
           const plan = existingPlan || await this.#hanli.generateAcceptancePlan(proposal.proposalId);
+          this.#acceptanceHandoff.publish(proposal, "started", `正在按计划 ${plan.planId} 逐项验收：${plan.checks.map((check) => `${check.target}：${check.action}；预期 ${check.expected}`).join("\n")}`);
           const runResult = await this.#oneShotAcceptanceRunner(plan);
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
+          this.#acceptanceHandoff.publish(proposal, runResult.status === "passed" ? "passed" : "failed", `实际结果：${runResult.status === "passed" ? "通过" : "未通过"}。运行记录：${runResult.runId}\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
         } catch (error) {
           const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
+          this.#acceptanceHandoff.publish(proposal, "failed", reason);
           return this.#blockOneShotFailure("technical", "run_real_application_acceptance", error, reason);
         }
         continue;
@@ -452,7 +459,7 @@ export class PersonaEvolutionRuntime {
       const hasActiveWork = state.proposals.some((item) => !["completed", "rejected"].includes(item.status))
         || state.topics.some((item) => !["completed", "rejected"].includes(item.status));
       const activeDeliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
-      if (this.#deliberation && (activeDeliberation || !hasActiveWork)) {
+      if (this.#deliberation && (activeDeliberation || (!hasActiveWork && state.automationSettings.automaticCustodyEnabled === true))) {
         const result = await this.#deliberation.advance({ requireProblem: false });
         state = result.state;
         if (result.activity !== "idle") {

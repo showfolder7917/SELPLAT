@@ -1,6 +1,7 @@
 ﻿import { randomUUID } from "node:crypto";
 
 import type { BrowserWindow } from "electron";
+import { acceptanceEvidenceProblems } from "./acceptance-evidence-policy.js";
 
 import type { HanliAcceptanceOperationValue, HanliAcceptancePlanOutDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { AttachmentFacade as ScreenshotStore } from "../../../support/platform/attachments/index.js";
@@ -16,6 +17,8 @@ export class HanliRealAppAcceptanceRunner {
 
   async execute(plan: HanliAcceptancePlanOutDto, targetWindow: BrowserWindow): Promise<HanliAcceptanceRunOutDto> {
     if (targetWindow.isDestroyed()) throw new Error("AI Desktop 主窗口已经关闭，无法执行真实界面验收。 ");
+    const problems = acceptanceEvidenceProblems(plan);
+    if (problems.length) throw new Error(`验收未执行：${problems.join("；")}`);
     const startedAt = new Date().toISOString();
     const initialBounds = targetWindow.getBounds();
     const stepResults: HanliAcceptanceStepResultOutDto[] = [];

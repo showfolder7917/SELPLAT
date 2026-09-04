@@ -68,7 +68,8 @@ export class EvolutionStateStore {
     if (maximum !== null && (!Number.isInteger(maximum) || maximum < 1 || maximum > 100)) throw new Error("专题研讨轮次必须为 1 至 100，或选择无限模式。");
     if (!Number.isInteger(request.maxCorrectionRounds) || request.maxCorrectionRounds < 1 || request.maxCorrectionRounds > 20) throw new Error("纠偏轮次必须为 1 至 20。");
     return this.#commit("automation.configured", null, null, (state) => {
-      state.automationSettings = { maxRoundsPerTopic: maximum, maxCorrectionRounds: request.maxCorrectionRounds };
+      if (request.automaticCustodyEnabled !== undefined && typeof request.automaticCustodyEnabled !== "boolean") throw new Error("自动托管开关必须为布尔值。");
+      state.automationSettings = { maxRoundsPerTopic: maximum, maxCorrectionRounds: request.maxCorrectionRounds, automaticCustodyEnabled: request.automaticCustodyEnabled ?? state.automationSettings.automaticCustodyEnabled ?? false };
       if (request.workspaceState) state.automationContext.workspaceState = structuredClone(request.workspaceState);
       if (request.locale) state.automationContext.locale = request.locale;
     });

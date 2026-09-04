@@ -11,6 +11,8 @@ export interface HanliAcceptanceCheckOutDto {
   action: string;
   expected: string;
   evidenceRequired: string;
+  /** 明确区分仅观察与实际交互；未声明的旧计划按交互项从严核验。 */
+  verificationMode?: "observation" | "interaction";
   operations: HanliAcceptanceOperationValue[];
 }
 

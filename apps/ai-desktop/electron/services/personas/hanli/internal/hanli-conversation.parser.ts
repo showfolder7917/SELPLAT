@@ -3,7 +3,7 @@ import type { ConversationRoundTopicDecisionInDto } from "../../../../../contrac
 const HANLI_TOPIC_META_PREFIX = "HANLI_TOPIC_META=";
 
 /** 分离韩立可见正文和训练语义坐标；元数据异常时保留正文并等待后续补齐。 */
-export function parseHanliConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecisionInDto } {
+export function parseHanliConversationResponse(text: string): { reply: string; topic: ConversationRoundTopicDecisionInDto; verificationQuestion?: string } {
   const lines = text.trim().split(/\r?\n/u);
   let markerIndex = -1;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -13,7 +13,7 @@ export function parseHanliConversationResponse(text: string): { reply: string; t
   const marker = lines[markerIndex].trim().slice(HANLI_TOPIC_META_PREFIX.length);
   const reply = lines.filter((_line, index) => index !== markerIndex).join("\n").trim() || text.trim();
   try {
-    const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecisionInDto>;
+    const value = JSON.parse(marker) as Partial<ConversationRoundTopicDecisionInDto> & { verificationQuestion?: string };
     const title = normalizedText(value.title, 120);
     const type = normalizedText(value.type, 120);
     const userIntent = normalizedText(value.userIntent, 2_000);
@@ -22,7 +22,7 @@ export function parseHanliConversationResponse(text: string): { reply: string; t
       : [];
     const summary = typeof value.summary === "string" && Array.from(value.summary.trim()).length <= 300 ? value.summary.trim() : "";
     if (!title || !type || !userIntent || !tags.length || !summary) throw new Error("incomplete metadata");
-    return { reply, topic: { title, type, switchTopic: value.switchTopic === true, userIntent, tags, summary } };
+    return { reply, verificationQuestion: normalizedText(value.verificationQuestion, 4000) || undefined, topic: { title, type, switchTopic: value.switchTopic === true, userIntent, tags, summary } };
   } catch { return { reply, topic: pendingTopicDecision() }; }
 }
 

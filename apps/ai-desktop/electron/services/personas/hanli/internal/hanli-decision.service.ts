@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { acceptanceEvidenceProblems } from "./acceptance-evidence-policy.js";
 
 import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
@@ -74,10 +75,14 @@ function parseAcceptancePlan(text: string, topicId: string, proposalId: string):
     const expected = typeof item.expected === "string" ? item.expected.trim().slice(0, 2_000) : "";
     const evidenceRequired = typeof item.evidenceRequired === "string" ? item.evidenceRequired.trim().slice(0, 1_000) : "";
     const operations = Array.isArray(item.operations) ? item.operations.slice(0, 20).flatMap(parseAcceptanceOperation) : [];
-    return category && target && action && expected && evidenceRequired && operations.length ? [{ checkId: `check-${index + 1}`, category, target, action, expected, evidenceRequired, operations }] : [];
+    const verificationMode: "observation" | "interaction" = item.verificationMode === "observation" ? "observation" : "interaction";
+    return category && target && action && expected && evidenceRequired && operations.length ? [{ checkId: `check-${index + 1}`, category, target, action, expected, evidenceRequired, verificationMode, operations }] : [];
   });
   if (!summary || !concerns.length || checks.length < 2) throw new Error("韩立没有形成包含用户关注点和真实操作证据的有效验收计划。");
-  return { version: 1, planId: `hanli-acceptance-plan-${randomUUID()}`, topicId, proposalId, summary, concerns, checks, generatedAt: new Date().toISOString() };
+  const plan: HanliAcceptancePlanOutDto = { version: 1, planId: `hanli-acceptance-plan-${randomUUID()}`, topicId, proposalId, summary, concerns, checks, generatedAt: new Date().toISOString() };
+  const problems = acceptanceEvidenceProblems(plan);
+  if (problems.length) throw new Error(`韩立验收计划不完整：${problems.join("；")}`);
+  return plan;
 }
 
 function parseAcceptanceOperation(raw: unknown): HanliAcceptanceOperationValue[] {

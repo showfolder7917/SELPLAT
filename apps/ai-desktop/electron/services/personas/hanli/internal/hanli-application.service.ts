@@ -12,6 +12,7 @@ import { EvolutionApprovalService } from "./evolution-approval.service.js";
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 import { HanliDecisionService } from "./hanli-decision.service.js";
 import { HanliConversationService } from "./hanli-conversation.service.js";
+import { acceptanceEvidenceProblems } from "./acceptance-evidence-policy.js";
 
 export type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 
@@ -115,6 +116,8 @@ export class HanliApplicationService implements HanliApplicationPort {
 
   /** 一次性流程把真实运行结果交给韩立；韩立保存证据并形成自己的最终判断。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto {
+    const problems = acceptanceEvidenceProblems(this.acceptancePlan(run.planId), run);
+    if (run.status === "passed" && problems.length) throw new Error(`验收证据不足，禁止通过：${problems.join("；")}`);
     this.recordAcceptanceRun(run);
     const expectedStateVersion = this.#store.state().updatedAt;
     return this.#decideResult(run.proposalId, {

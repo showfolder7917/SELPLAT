@@ -1,7 +1,14 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.155.0
+rule_version = 5.156.0
+
+<!-- 截图与聚焦不证明用户操作成功；每项必须有结果断言，交互项必须真实操作后再断言。 -->
+hanli_acceptance_evidence_gate = explicit_observation_or_interaction + default_interaction_for_legacy_plan + assertion_after_each_interaction + exact_planned_operation_and_index_match + screenshot_reference_per_check + missing_or_failed_evidence_never_passes
+<!-- 验收交接只消费真实运行事件，禁止页面自己推断收件或编造完成。 -->
+hanli_acceptance_handoff_contract = nangong_receives_verified_results_then_submits + hanli_started_and_actual_result + internal_messages_in_nangong + direct_result_to_user + shared_timeline_and_persona_status
+<!-- 资源树退役不等于通用布局能力退役；折叠不卸载人物会话，恢复按钮始终可达。 -->
+collaboration_sidebar_layout_contract = no_resource_tree + independent_full_sidebar_collapse_restore + mounted_hidden_business_views + accessible_restore_button + bounded_pointer_keyboard_width_resize
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->

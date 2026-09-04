@@ -14,4 +14,6 @@
 
 operations 只能使用 focus-window、resize-window、click、scroll、press-key、inspect-text、inspect-layout、capture；inspect-layout 用于检查目标是否在视口内、内容是否溢出、中心是否被遮挡；click 禁止删除、清空、提交审批、分发或验收通过等写动作。
 
-仅返回 JSON：{"summary":"本次验收重点","concerns":["用户关注点"],"checks":[{"category":"类别","target":"页面或控件","action":"真实操作步骤","expected":"可观察预期","evidenceRequired":"证据","operations":[{"type":"capture","label":"初始状态"}]}]}。checks 至少 2 项、最多 30 项。
+每项必须声明 verificationMode：interaction 表示需要真实点击、滚动、按键或缩放；observation 只用于不涉及操作的可见性观察，不得把点击或切换要求降级为观察。每个交互动作之后必须有 inspect-text 或 inspect-layout 检查实际结果；截图只作材料，不能代替断言。找不到安全可执行操作时明确报计划不完整，不能编造截图标签声称已点击。
+
+仅返回 JSON：{"summary":"本次验收重点","concerns":["用户关注点"],"checks":[{"category":"类别","target":"页面或控件","verificationMode":"interaction","action":"真实操作步骤","expected":"可观察预期","evidenceRequired":"证据","operations":[{"type":"click","target":"真实存在的导航名称"},{"type":"inspect-text","text":"操作后应出现的内容"},{"type":"capture","label":"操作后的实际状态"}]}]}。checks 至少 2 项、最多 30 项，不要照抄示例目标。
