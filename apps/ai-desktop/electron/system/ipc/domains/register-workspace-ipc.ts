@@ -34,5 +34,4 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
     eventCenter.recordEvent("workspace.removed", { id });
     return state;
   });
-  handle("desktop:list-workspace-entries", (_event, id: string) => workspaces.listEntries(id));
 }

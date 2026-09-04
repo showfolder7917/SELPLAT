@@ -1,4 +1,4 @@
-import { Delete24Regular, FolderOpen24Regular } from "@fluentui/react-icons";
+import { Add24Regular, Delete16Regular, Delete24Regular, FolderOpen24Regular, ShieldLock16Filled, ShieldLock16Regular, Star16Filled, Star16Regular } from "@fluentui/react-icons";
 
 import type { CodexHarnessStatusOutDto, LocaleValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue } from "../../../../contracts/system/desktop/index";
 import { useSelUi } from "../../../theme/SelUiProvider";
@@ -8,9 +8,11 @@ import { SettingsFloatingPanel } from "./SettingsFloatingPanel";
 import { auditStatusText, formatBytes, reasoningEffortLabel } from "../model/settings-formatters";
 import type { useDesktopSettings } from "../model/useDesktopSettings";
 import type { useDesktopDiagnostics } from "../model/useDesktopDiagnostics";
+import type { useWorkspaceRegistry } from "../../workspace/model/useWorkspaceRegistry";
 
 type SettingsController = ReturnType<typeof useDesktopSettings>;
 type DiagnosticsController = ReturnType<typeof useDesktopDiagnostics>;
+type WorkspaceController = ReturnType<typeof useWorkspaceRegistry>;
 
 type SettingsText = {
   account: string;
@@ -30,6 +32,14 @@ type SettingsText = {
   noAuditTask: string;
   readOnly: string;
   write: string;
+  workspaces: string;
+  addWorkspace: string;
+  primary: string;
+  makePrimary: string;
+  minimumWorkspace: string;
+  remove: string;
+  readOnlyTip: string;
+  writeTip: string;
 };
 
 const testDataResetCopy = {
@@ -59,13 +69,14 @@ type DeveloperSettingsFeatureProps = {
   text: SettingsText;
   settings: SettingsController;
   diagnostics: DiagnosticsController;
+  workspace: WorkspaceController;
   onLogin: () => void;
   onLogout: () => void;
   onTempFilesCleared: () => void;
 };
 
 /** 设置浮层的完整视图边界；设置数据和桌面 API 副作用由 settings controller 统一拥有。 */
-export function DeveloperSettingsFeature({ open, onOpenChange, status, loginHint, text, settings, diagnostics, onLogin, onLogout, onTempFilesCleared }: DeveloperSettingsFeatureProps) {
+export function DeveloperSettingsFeature({ open, onOpenChange, status, loginHint, text, settings, diagnostics, workspace, onLogin, onLogout, onTempFilesCleared }: DeveloperSettingsFeatureProps) {
   const selUi = useSelUi();
   const {
     locale, sandboxMode, defaultModel, reasoningEffort, serviceTier, codexAppCorpusIngestionEnabled,
@@ -74,6 +85,7 @@ export function DeveloperSettingsFeature({ open, onOpenChange, status, loginHint
     startCorpusSemanticBackfill,
   } = settings;
   const { tempInfo, auditInfo, trustedCommandInfo, testDataResetting, testDataResetError, clearTempFiles, clearTrustedCommands, clearTestData } = diagnostics;
+  const workspaces = workspace.workspaces;
   const resetCopy = testDataResetCopy[locale];
 
   const confirmAndClearTempFiles = async () => {
@@ -109,6 +121,24 @@ export function DeveloperSettingsFeature({ open, onOpenChange, status, loginHint
     <div className="temp-card corpus-ingestion-card"><span>{locale === "ja" ? "Codex 会話の学習登録" : "Codex 聊天训练入库"}</span><strong>{codexAppCorpusIngestionEnabled ? (locale === "ja" ? "有効" : "已开启") : (locale === "ja" ? "無効" : "未开启")}</strong><small>{locale === "ja" ? "現在の SELPLAT ワークスペースに属する完了済みの各ターンだけを登録し、システム指示・ツール出力・ファイル注入は除外します。" : "只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库，排除系统指令、工具输出和文件注入内容。"}</small>{corpusSemanticBackfill?.message && <em role="status">{corpusSemanticBackfill.message}{corpusSemanticBackfill.state === "running" ? ` · ${corpusSemanticBackfill.processedCount}/${corpusSemanticBackfill.targetCount}` : ""}</em>}<div><button type="button" aria-pressed={codexAppCorpusIngestionEnabled} onClick={() => updateSettings({ codexAppCorpusIngestionEnabled: !codexAppCorpusIngestionEnabled })}>{codexAppCorpusIngestionEnabled ? (locale === "ja" ? "登録を停止" : "停止入库") : (locale === "ja" ? "登録を開始" : "开启入库")}</button><button type="button" aria-label={locale === "ja" ? "履歴の AI 要約を一括補完" : "一键补齐历史 AI 摘要"} disabled={corpusSemanticBackfill?.state === "running"} onClick={() => void startCorpusSemanticBackfill()}>{corpusSemanticBackfill?.state === "running" ? (locale === "ja" ? "補完中…" : "正在补齐…") : (locale === "ja" ? "履歴を一括補完" : "补齐历史摘要")}</button></div></div>
     <label>Language<select value={locale} onChange={(event) => updateSettings({ locale: event.target.value as LocaleValue })}><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label>
     <label>Sandbox<select value={sandboxMode} onChange={(event) => updateSettings({ sandboxMode: event.target.value as SandboxModeValue })}><option value="read-only">{text.readOnly}</option><option value="workspace-write">{text.write}</option></select></label>
+    <section className="workspace-settings-card" aria-labelledby="workspace-settings-title">
+      <header><div><span id="workspace-settings-title">{text.workspaces}</span><small>{locale === "ja" ? "Codex の作業ディレクトリと書き込み範囲を管理" : "管理 Codex 的工作目录与写入范围"}</small></div><button type="button" aria-label={text.addWorkspace} onClick={() => void workspace.addWorkspace()}><Add24Regular />{text.addWorkspace}</button></header>
+      <div className="workspace-settings-list">
+        {workspaces?.roots.map((root) => {
+          const primary = root.id === workspaces.primaryId;
+          const readOnly = root.permission === "read-only";
+          return <article className="workspace-settings-item" key={root.id}>
+            <div><strong title={root.path}>{root.name}</strong><small title={root.path}>{root.path}</small></div>
+            <div className="workspace-settings-actions">
+              <button type="button" className={readOnly ? "read-only" : "workspace-write"} data-sel-tooltip={readOnly ? text.readOnlyTip : text.writeTip} data-sel-tooltip-mode="always" aria-label={readOnly ? text.readOnlyTip : text.writeTip} aria-pressed={readOnly} onClick={() => void workspace.updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only")}>{readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}</button>
+              <button type="button" className={primary ? "primary-root" : ""} data-sel-tooltip={primary ? text.primary : text.makePrimary} data-sel-tooltip-mode="always" aria-label={primary ? text.primary : text.makePrimary} disabled={primary} onClick={() => void workspace.setPrimaryWorkspace(root.id)}>{primary ? <Star16Filled /> : <Star16Regular />}</button>
+              <button type="button" data-sel-tooltip={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} data-sel-tooltip-mode="always" aria-label={workspaces.roots.length === 1 ? text.minimumWorkspace : text.remove} disabled={workspaces.roots.length === 1} onClick={() => void workspace.removeWorkspace(root.id, root.name)}><Delete16Regular /></button>
+            </div>
+          </article>;
+        })}
+      </div>
+      {workspace.workspaceError && <em role="alert">{workspace.workspaceError}</em>}
+    </section>
     <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void confirmAndClearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
     <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void confirmAndClearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
     <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>

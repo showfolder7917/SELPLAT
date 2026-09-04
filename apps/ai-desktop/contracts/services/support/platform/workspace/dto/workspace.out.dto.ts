@@ -1,5 +1,5 @@
 /**
- * 工作区协议，描述用户已登记的工程根、权限和目录浏览结果。
+ * 工作区协议，描述用户已登记的工程根与权限。
  *
  * 生产者：Renderer 工作区操作和主进程 WorkspaceStore。
  * 消费者：preload 白名单、文件浏览器、Codex 与协作服务。
@@ -18,9 +18,4 @@ export interface WorkspaceRootOutDto {
 export interface WorkspaceStateOutDto {
   primaryId: string;
   roots: WorkspaceRootOutDto[];
-}
-
-export interface WorkspaceEntryOutDto {
-  name: string;
-  kind: "directory" | "file";
 }

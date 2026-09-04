@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { WorkspaceEntryOutDto, WorkspacePermissionValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
+import type { WorkspacePermissionValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 
 interface UseWorkspaceRegistryOptions {
   confirmRemove(name: string): Promise<boolean>;
@@ -10,8 +10,6 @@ interface UseWorkspaceRegistryOptions {
 export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOptions) {
   const [projectRoot, setProjectRoot] = useState("");
   const [workspaces, setWorkspaces] = useState<WorkspaceStateOutDto | null>(null);
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set());
-  const [workspaceEntries, setWorkspaceEntries] = useState<Record<string, WorkspaceEntryOutDto[]>>({});
   const [workspaceError, setWorkspaceError] = useState("");
 
   useEffect(() => {
@@ -20,12 +18,6 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
     void desktop.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
     void desktop.getWorkspaces().then((state) => {
       applyWorkspaceState(state);
-      setExpandedWorkspaces(new Set(state.roots.map((root) => root.id)));
-      for (const root of state.roots) {
-        void desktop.listWorkspaceEntries(root.id).then((entries) => {
-          setWorkspaceEntries((current) => ({ ...current, [root.id]: entries }));
-        });
-      }
     });
   }, []);
 
@@ -42,37 +34,29 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
       const state = await window.desktop?.addWorkspace();
       if (!state) return;
       applyWorkspaceState(state);
-      const added = state.roots.find((root) => !workspaces?.roots.some((current) => current.id === root.id));
-      if (!added) return;
-      setExpandedWorkspaces((current) => new Set(current).add(added.id));
-      const entries = await window.desktop?.listWorkspaceEntries(added.id);
-      if (entries) setWorkspaceEntries((current) => ({ ...current, [added.id]: entries }));
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "Unable to add workspace");
     }
   };
 
-  const toggleWorkspace = async (id: string) => {
-    const willOpen = !expandedWorkspaces.has(id);
-    setExpandedWorkspaces((current) => {
-      const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-    if (willOpen && !workspaceEntries[id]) {
-      const entries = await window.desktop?.listWorkspaceEntries(id);
-      if (entries) setWorkspaceEntries((current) => ({ ...current, [id]: entries }));
+  const updateWorkspacePermission = async (id: string, permission: WorkspacePermissionValue) => {
+    setWorkspaceError("");
+    try {
+      const state = await window.desktop?.updateWorkspacePermission(id, permission);
+      if (state) applyWorkspaceState(state);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Unable to update workspace permission");
     }
   };
 
-  const updateWorkspacePermission = async (id: string, permission: WorkspacePermissionValue) => {
-    const state = await window.desktop?.updateWorkspacePermission(id, permission);
-    if (state) applyWorkspaceState(state);
-  };
-
   const setPrimaryWorkspace = async (id: string) => {
-    const state = await window.desktop?.setPrimaryWorkspace(id);
-    if (state) applyWorkspaceState(state);
+    setWorkspaceError("");
+    try {
+      const state = await window.desktop?.setPrimaryWorkspace(id);
+      if (state) applyWorkspaceState(state);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "Unable to set primary workspace");
+    }
   };
 
   const removeWorkspace = async (id: string, name: string) => {
@@ -80,11 +64,6 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
     try {
       const state = await window.desktop?.removeWorkspace(id);
       if (state) applyWorkspaceState(state);
-      setExpandedWorkspaces((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "Unable to remove workspace");
     }
@@ -93,11 +72,8 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
   return {
     projectRoot,
     workspaces,
-    expandedWorkspaces,
-    workspaceEntries,
     workspaceError,
     addWorkspace,
-    toggleWorkspace,
     updateWorkspacePermission,
     setPrimaryWorkspace,
     removeWorkspace,

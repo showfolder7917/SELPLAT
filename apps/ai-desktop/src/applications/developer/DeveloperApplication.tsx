@@ -1,4 +1,4 @@
-import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { CollaborationExplorerFeature } from "../../features/collaboration/components/CollaborationExplorerFeature";
 import { useCollaborationWorkspace } from "../../features/collaboration/model/useCollaborationWorkspace";
@@ -10,7 +10,6 @@ import { useScreenshotCapture, type ScreenshotDestination } from "../../features
 import { DeveloperSettingsFeature } from "../../features/settings/components/DeveloperSettingsFeature";
 import { useDesktopDiagnostics } from "../../features/settings/model/useDesktopDiagnostics";
 import { useDesktopSettings } from "../../features/settings/model/useDesktopSettings";
-import { WorkspaceExplorerFeature } from "../../features/workspace/components/WorkspaceExplorerFeature";
 import { useWorkspaceRegistry } from "../../features/workspace/model/useWorkspaceRegistry";
 import { useSelUi } from "../../theme/SelUiProvider";
 import { DeveloperWorkspaceRouter } from "./DeveloperWorkspaceRouter";
@@ -39,15 +38,9 @@ import "../styles/desktop-applications.css";
 
 type SelTooltipController = { destroy: () => boolean };
 type SelTooltipApi = { attach: (host: Element, options: Record<string, unknown>) => SelTooltipController | null };
-type ActiveExplorerSection = "workspace" | "tasks";
-
-const DEFAULT_EXPLORER_WIDTH = 260;
-const MINIMUM_EXPLORER_WIDTH = 200;
-const MAXIMUM_EXPLORER_WIDTH = 520;
-
 const labels = {
   ja: {
-    title: "Developer", files: "EXPLORER", expand: "展開", collapse: "折りたたむ", settings: "接続と実行設定",
+    title: "Developer", settings: "接続と実行設定",
     workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定",
     remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。",
     minimumWorkspace: "ワークスペースを1つ以上残してください", readOnly: "読み取り専用", write: "ワークスペース書き込み",
@@ -61,7 +54,7 @@ const labels = {
     screenSourceUnavailable: "画面ソースを読み取れません。画面収録の権限を確認してから再試行してください。",
   },
   "zh-CN": {
-    title: "Developer", files: "资源管理器", expand: "展开", collapse: "折叠", settings: "连接与执行设置",
+    title: "Developer", settings: "连接与执行设置",
     workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除",
     removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区",
     readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", account: "ChatGPT 账号",
@@ -79,9 +72,7 @@ export function DeveloperApplication() {
   const selUi = useSelUi();
   const shellRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [explorerExpanded, setExplorerExpanded] = useState(true);
-  const [activeExplorerSection, setActiveExplorerSection] = useState<ActiveExplorerSection | null>("workspace");
-  const [explorerWidth, setExplorerWidth] = useState(DEFAULT_EXPLORER_WIDTH);
+  const [tasksExpanded, setTasksExpanded] = useState(true);
   const settings = useDesktopSettings(settingsOpen);
   const text = labels[settings.locale];
   const diagnostics = useDesktopDiagnostics(settingsOpen, settings.locale);
@@ -120,29 +111,12 @@ export function DeveloperApplication() {
     return () => { controller?.destroy(); };
   }, []);
 
-  const clampExplorerWidth = (width: number) => Math.min(MAXIMUM_EXPLORER_WIDTH, Math.max(MINIMUM_EXPLORER_WIDTH, width));
-  const startExplorerResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const handle = event.currentTarget;
-    const pointerId = event.pointerId;
-    const startX = event.clientX;
-    const startWidth = explorerWidth;
-    handle.setPointerCapture(pointerId);
-    const onPointerMove = (moveEvent: globalThis.PointerEvent) => setExplorerWidth(clampExplorerWidth(startWidth + moveEvent.clientX - startX));
-    const stopResize = () => { handle.removeEventListener("pointermove", onPointerMove); handle.removeEventListener("pointerup", stopResize); handle.removeEventListener("pointercancel", stopResize); };
-    handle.addEventListener("pointermove", onPointerMove);
-    handle.addEventListener("pointerup", stopResize);
-    handle.addEventListener("pointercancel", stopResize);
-  };
-  const shellStyle = { "--explorer-width": `${explorerWidth}px` } as CSSProperties;
-
-  return <DeveloperShell shellRef={shellRef} explorerExpanded={explorerExpanded} locale={settings.locale} style={shellStyle}>
+  return <DeveloperShell shellRef={shellRef} locale={settings.locale}>
     <DeveloperTitleBar projectRoot={workspace.projectRoot} title={text.title} />
-    <DeveloperActivityBar explorerExpanded={explorerExpanded} filesLabel={text.files} expandLabel={text.expand} collapseLabel={text.collapse} onToggleExplorer={() => setExplorerExpanded((value) => !value)} settingsControl={<DeveloperSettingsFeature open={settingsOpen} onOpenChange={setSettingsOpen} status={codex.interaction.status} loginHint={codex.interaction.loginHint} text={text} settings={settings} diagnostics={diagnostics} onLogin={() => void codex.interaction.login()} onLogout={() => void codex.interaction.logout()} onTempFilesCleared={() => codex.conversation.setAttachments([])} />} />
-    <DeveloperExplorer expanded={explorerExpanded} label={text.files} expandLabel={text.expand} collapseLabel={text.collapse} activeSection={activeExplorerSection} onToggle={() => setExplorerExpanded((value) => !value)}>
-      <WorkspaceExplorerFeature expanded={activeExplorerSection === "workspace"} text={text} workspace={workspace} onToggle={() => setActiveExplorerSection((current) => current === "workspace" ? null : "workspace")} />
-      <CollaborationExplorerFeature evolution={evolution.state} expanded={activeExplorerSection === "tasks"} locale={settings.locale} auditTask={diagnostics.auditInfo?.latestTask || null} controller={collaboration} onToggle={() => setActiveExplorerSection((current) => current === "tasks" ? null : "tasks")} />
+    <DeveloperActivityBar settingsControl={<DeveloperSettingsFeature open={settingsOpen} onOpenChange={setSettingsOpen} status={codex.interaction.status} loginHint={codex.interaction.loginHint} text={text} settings={settings} diagnostics={diagnostics} workspace={workspace} onLogin={() => void codex.interaction.login()} onLogout={() => void codex.interaction.logout()} onTempFilesCleared={() => codex.conversation.setAttachments([])} />} />
+    <DeveloperExplorer>
+      <CollaborationExplorerFeature evolution={evolution.state} expanded={tasksExpanded} locale={settings.locale} auditTask={diagnostics.auditInfo?.latestTask || null} controller={collaboration} onToggle={() => setTasksExpanded((current) => !current)} />
     </DeveloperExplorer>
-    {explorerExpanded && <div className="explorer-resizer" role="separator" aria-label={settings.locale === "ja" ? "エクスプローラーの幅を変更" : "调整资源管理器宽度"} aria-orientation="vertical" aria-valuemin={MINIMUM_EXPLORER_WIDTH} aria-valuemax={MAXIMUM_EXPLORER_WIDTH} aria-valuenow={explorerWidth} tabIndex={0} onDoubleClick={() => setExplorerWidth(DEFAULT_EXPLORER_WIDTH)} onPointerDown={startExplorerResize} onKeyDown={(event) => { if (event.key === "Home") { event.preventDefault(); setExplorerWidth(DEFAULT_EXPLORER_WIDTH); return; } if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); setExplorerWidth((width) => clampExplorerWidth(width + (event.key === "ArrowLeft" ? -16 : 16))); }} />}
     <DeveloperWorkspace>
       {diagnostics.aiMemoryDatabaseStatus && diagnostics.aiMemoryDatabaseStatus.state !== "ready" && <div className={`ai-memory-recovery ${diagnostics.aiMemoryDatabaseStatus.state}`} role="alert"><strong>{settings.locale === "ja" ? "AI Memory データベースは停止中です" : "AI Memory 数据库已停用"}</strong><span>{settings.locale === "ja" ? "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。" : diagnostics.aiMemoryDatabaseStatus.message || "请恢复数据库后重新启动。"}</span></div>}
       <DeveloperWorkspaceRouter locale={settings.locale} sandboxMode={settings.sandboxMode} workspaces={workspace.workspaces} collaboration={collaboration} codex={codex} evolution={evolution} hanli={hanli} nangong={nangong} screenshot={screenshot} />
