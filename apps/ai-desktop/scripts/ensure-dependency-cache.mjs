@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { detachDeveloperDependencyCache, repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
+import { assertDependencyLinkIsUntracked, detachDeveloperDependencyCache, repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
 
 let details = resolveDependencyCache();
+// 安装或迁移前先确认 node_modules 没有被 Git 跟踪，避免替换跨平台链接时波及共享源码。
+assertDependencyLinkIsUntracked(details);
 if (!existsSync(details.dependencyRoot)) {
   const sourceDependencyEntry = lstatSync(details.linkPath, { throwIfNoEntry: false });
   const sourceDependenciesAreReusableLink = Boolean(sourceDependencyEntry?.isSymbolicLink());

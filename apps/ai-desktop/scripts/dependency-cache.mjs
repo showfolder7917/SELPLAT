@@ -71,6 +71,35 @@ function isInsideRoot(root, candidate) {
   return Boolean(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
+/**
+ * 阻止把本机 node_modules 链接提交进 Git。
+ *
+ * 新手提示：node_modules 只是当前电脑的临时入口。若它进入 Git，另一平台在 pull 时可能把
+ * 链接当成普通文件，甚至在替换旧 Junction 时误删 Junction 指向的共享源码。
+ */
+export function assertDependencyLinkIsUntracked(details = resolveDependencyCache()) {
+  // 发布包中没有 .git；此门禁只约束源码工作树，不影响打包后的运行环境。
+  if (!existsSync(path.join(details.projectRoot, ".git"))) return;
+  const relative = path.relative(details.projectRoot, details.linkPath);
+  if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(`Application dependency link escaped the project root: ${details.linkPath}`);
+  }
+  const repositoryPath = relative.split(path.sep).join("/");
+  const tracked = spawnSync("git", ["ls-files", "--error-unmatch", "--", repositoryPath], {
+    cwd: details.projectRoot,
+    encoding: "utf8",
+    shell: false,
+  });
+  if (tracked.error) throw tracked.error;
+  if (tracked.status === 0) {
+    throw new Error(`Application dependency link must never be tracked by Git: ${repositoryPath}`);
+  }
+  // Git 用状态码 1 表示“路径未跟踪”；其他状态代表仓库本身异常，不能绕过安全检查。
+  if (tracked.status !== 1) {
+    throw new Error(`Unable to verify dependency link tracking state: ${(tracked.stderr || "").trim()}`);
+  }
+}
+
 function managedLinkTarget(details) {
   const current = lstatSync(details.linkPath, { throwIfNoEntry: false });
   if (!current) return null;
@@ -90,6 +119,7 @@ function createDependencyLink(target, linkPath) {
 
 /** 为 VS Code 保留当前锁哈希的本机开发链接；Windows 使用 Junction，macOS 与 Linux 使用目录符号链接，链接本身永不进入 Git。 */
 export function attachDeveloperDependencyCache(details = resolveDependencyCache()) {
+  assertDependencyLinkIsUntracked(details);
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
   const currentTarget = managedLinkTarget(details);
   if (currentTarget) {
@@ -105,6 +135,7 @@ export function attachDeveloperDependencyCache(details = resolveDependencyCache(
 
 /** 只解除由本应用缓存签发的开发链接；实体目录和逃出缓存根的链接必须保留现场并阻断。 */
 export function detachDeveloperDependencyCache(details = resolveDependencyCache()) {
+  assertDependencyLinkIsUntracked(details);
   const currentTarget = managedLinkTarget(details);
   if (!currentTarget) return { ...details, removed: false };
   rmSync(details.linkPath, { force: true });
@@ -140,6 +171,7 @@ export function repairLocalPackageLinks(details = resolveDependencyCache()) {
 
 export function attachDependencyCache() {
   const details = resolveDependencyCache();
+  assertDependencyLinkIsUntracked(details);
   if (!existsSync(details.dependencyRoot)) throw new Error(`Dependency cache is missing for current package-lock.json: ${details.cacheRoot}`);
   // 普通诊断、类型检查和测试只挂载已准备好的缓存；本地包链接修复仅允许由 ensure/migrate 准备阶段执行，
   // 避免每条固定命令都修改共享缓存并反复触发 Codex 人工权限审批。

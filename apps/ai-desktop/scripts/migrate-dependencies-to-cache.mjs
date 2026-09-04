@@ -1,8 +1,10 @@
 import { existsSync, lstatSync, mkdirSync, renameSync } from "node:fs";
 import path from "node:path";
-import { repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
+import { assertDependencyLinkIsUntracked, repairLocalPackageLinks, resolveDependencyCache } from "./dependency-cache.mjs";
 
 const details = resolveDependencyCache();
+// 迁移实体依赖目录前，禁止接受已经进入版本控制的跨平台链接。
+assertDependencyLinkIsUntracked(details);
 if (!existsSync(details.linkPath)) {
   if (!existsSync(details.dependencyRoot)) throw new Error("Neither source dependencies nor the lock-specific dependency cache exists.");
   repairLocalPackageLinks(details);

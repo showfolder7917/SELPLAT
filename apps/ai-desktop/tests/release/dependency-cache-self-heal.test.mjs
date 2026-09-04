@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { attachDeveloperDependencyCache, detachDeveloperDependencyCache } from "../../scripts/dependency-cache.mjs";
 
@@ -11,6 +13,23 @@ const ensure = readFileSync(new URL("../../scripts/ensure-dependency-cache.mjs",
 const linkManager = readFileSync(new URL("../../scripts/manage-dependency-link.mjs", import.meta.url), "utf8");
 const pathResolver = readFileSync(new URL("../../scripts/resolve-application-paths.mjs", import.meta.url), "utf8");
 const manifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+const projectRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+
+test("源码 node_modules 永不进入 Git，跨平台拉取不能把本机依赖链接写回工作树", () => {
+  const tracked = spawnSync("git", ["ls-files", "--error-unmatch", "--", "apps/ai-desktop/node_modules"], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    shell: false,
+  });
+  assert.equal(tracked.status, 1, "apps/ai-desktop/node_modules 必须保持未跟踪并由 .gitignore 排除");
+  const ignore = readFileSync(path.join(projectRoot, ".gitignore"), "utf8");
+  // 末尾不能带斜杠：带斜杠只忽略目录，macOS 创建的符号链接仍可能被误提交。
+  assert.match(ignore, /^\/apps\/ai-desktop\/node_modules$/mu);
+  assert.doesNotMatch(ignore, /^\/apps\/ai-desktop\/node_modules\/$/mu);
+  assert.match(cache, /assertDependencyLinkIsUntracked\(details\)/);
+  assert.match(cache, /Application dependency link must never be tracked by Git/);
+  assert.match(ensure, /assertDependencyLinkIsUntracked\(details\)/);
+});
 
 test("受控命令在锁文件哈希缓存缺失时先调用统一依赖准备入口", () => {
   assert.match(runner, /resolveDependencyCache/);
