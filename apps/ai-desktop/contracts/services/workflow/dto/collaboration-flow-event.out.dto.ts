@@ -7,6 +7,7 @@
  */
 import type { CollaborationParticipantSnapshotOutDto } from "./collaboration-member.out.dto.js";
 import type { CollaborationWorkerPhaseValue } from "../value/collaboration-member.value.js";
+import type { CollaborationCustomerActionGuidanceOutDto } from "./collaboration-task.out.dto.js";
 
 
 export interface CollaborationFlowEventDetailsOutDto {
@@ -23,6 +24,7 @@ export interface CollaborationFlowEventDetailsOutDto {
   repairResult?: string;
   returnToExecutor?: CollaborationParticipantSnapshotOutDto | null;
   waitingForTaskId?: string | null;
+  customerActionGuidance?: CollaborationCustomerActionGuidanceOutDto;
 }
 
 export interface CollaborationFlowEventOutDto {

@@ -15,6 +15,7 @@ export type {
   CollaborationExecutionRecordOutDto,
   CollaborationIntegrationBatchOutDto,
   CollaborationIntegrationFailureOutDto,
+  CollaborationCustomerActionGuidanceOutDto,
   CollaborationRepairDiagnosisOutDto,
   CollaborationRequirementPlanOutDto,
   CollaborationResultSummaryOutDto,

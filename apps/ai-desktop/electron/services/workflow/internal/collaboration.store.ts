@@ -168,6 +168,7 @@ export class CollaborationStore {
         error: false,
       }],
       versionWorkspace: null,
+      customerActionGuidance: null,
       finalResult: null,
       resultSummary: null,
       blockingReason: null,
@@ -229,6 +230,7 @@ export class CollaborationStore {
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
       if (!["recovering", "blocked", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
+      const customerGuidance = task.customerActionGuidance || null;
       if (task.state === "test-failed") {
         task.state = "ready-for-integration";
         task.blockingReason = null;
@@ -264,8 +266,12 @@ export class CollaborationStore {
       task.phase = null;
       task.blockingReason = null;
       const actor = recoveryActor ? participantSnapshot(recoveryActor) : task.initiator;
-      const summary = recoveryActor ? `${recoveryActor.displayName}正在处理流程中断，随后将任务退回原负责人重试` : "用户请求继续执行任务";
-      task.flowEvents.push({ eventId: randomUUID(), type: "task.recovery_requested", stage: "recovery", status: "started", actor, summary, occurredAt: new Date().toISOString(), error: false });
+      if (customerGuidance && actor) task.currentHandler = actor;
+      task.customerActionGuidance = null;
+      const summary = customerGuidance && recoveryActor
+        ? `${recoveryActor.displayName}正在复查客户处理结果，并从原节点恢复流程`
+        : recoveryActor ? `${recoveryActor.displayName}正在处理流程中断，随后将任务退回原负责人重试` : "用户请求继续执行任务";
+      task.flowEvents.push({ eventId: randomUUID(), type: "task.recovery_requested", stage: "recovery", status: "started", actor, summary, occurredAt: new Date().toISOString(), error: false, details: customerGuidance ? { customerActionGuidance: customerGuidance } : undefined });
     });
   }
 
@@ -394,6 +400,7 @@ function mergeDefaultMembers(state: CollaborationStateOutDto): void {
     task.selfUpgradeCapabilityScope ??= null;
     task.sourceEvolutionApprovalId ??= null;
     task.recoveryTargetState ??= null;
+    task.customerActionGuidance ??= null;
     migrateTaskHistory(task, state);
   }
   if (!state.members.some((member) => member.memberId === state.selectedMemberId)) state.selectedMemberId = "han-li";

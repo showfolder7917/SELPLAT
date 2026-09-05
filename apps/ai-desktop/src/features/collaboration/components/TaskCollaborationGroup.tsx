@@ -55,6 +55,7 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
           const nodeOpen = nodeOpenOverrides.get(node.nodeId) ?? node.automaticOpen;
           const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] : "";
           const recoveryTaskId = latestRecoveryTaskId(visibleNodes, node, index);
+          const customerAction = node.eventType === "customer.action_required";
           const continuing = recoveryTaskId === continuingTaskId;
           return <div className={`task-timeline-position ${node.status}`} data-task-timeline-node-id={node.nodeId} key={node.nodeId}>
             <span className="task-timeline-index">{index + 1}</span><i className="task-timeline-dot" aria-hidden="true" />
@@ -66,11 +67,11 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
               trigger={<TaskNodeHeader node={node} locale={locale} nowMs={nowMs} />}
               action={(node.manualApprovalProposalId || recoveryTaskId) ? <span className="task-node-actions">
                 {node.manualApprovalProposalId && <button type="button" className="task-manual-approval" onClick={() => onManualApproval(node.manualApprovalProposalId!, group.title, node.content)}>{locale === "ja" ? "手動承認" : "手动审批"}</button>}
-                {recoveryTaskId && <button type="button" className="task-recovery-continue" disabled={continuing} aria-label={locale === "ja" ? "復旧待ちタスクを続行" : "继续执行等待恢复任务"} onClick={() => {
+                {recoveryTaskId && <button type="button" className="task-recovery-continue" disabled={continuing} aria-label={customerAction ? "从卡点继续" : (locale === "ja" ? "復旧待ちタスクを続行" : "继续执行等待恢复任务")} onClick={() => {
                   setContinuingTaskId(recoveryTaskId);
                   setContinueError("");
                   void onContinueTask(recoveryTaskId).catch((error: unknown) => setContinueError(error instanceof Error ? error.message : String(error))).finally(() => setContinuingTaskId(null));
-                }}><i className={continuing ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />{continuing ? (locale === "ja" ? "続行中…" : "继续中…") : (locale === "ja" ? "実行を続ける" : "继续执行")}</button>}
+                }}><i className={continuing ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />{continuing ? (locale === "ja" ? "続行中…" : "继续中…") : customerAction ? "从卡点继续" : (locale === "ja" ? "実行を続ける" : "继续执行")}</button>}
               </span> : undefined}
             >
               <div className="task-node-content"><p>{presentTimelineText(liveText || node.content || node.summary)}</p>{liveText && <span className="task-live-caret" aria-label={locale === "ja" ? "出力中" : "流式输出中"} />}</div>
@@ -87,8 +88,9 @@ export function TaskCollaborationGroup({ snapshot, liveTextByNodeId, locale, onM
 
 /** 同一任务可能因连续重启留下多条恢复记录；只在最新等待节点提供一次主操作。 */
 function latestRecoveryTaskId(nodes: CollaborationTimelineNodeOutDto[], node: CollaborationTimelineNodeOutDto, index: number): string | null {
-  if (!node.taskId || node.eventType !== "task.interrupted" || node.status !== "waiting") return null;
-  const hasNewerRecovery = nodes.slice(index + 1).some((candidate) => candidate.taskId === node.taskId && candidate.eventType === "task.interrupted" && candidate.status === "waiting");
+  const recoveryEvent = node.eventType === "task.interrupted" || node.eventType === "customer.action_required";
+  if (!node.taskId || !recoveryEvent || node.status !== "waiting") return null;
+  const hasNewerRecovery = nodes.slice(index + 1).some((candidate) => candidate.taskId === node.taskId && candidate.eventType === node.eventType && candidate.status === "waiting");
   return hasNewerRecovery ? null : node.taskId;
 }
 

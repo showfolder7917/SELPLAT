@@ -166,6 +166,40 @@ test("卡点修复任务沿用原专题时间线而不另建分叉专题", () =>
   } finally { fixture.close(); }
 });
 
+test("客户行动指导显示在原等待节点并在点击继续后交给令狐复查", () => {
+  const fixture = createFixture("customer-action-guidance");
+  try {
+    const blocked = task(fixture, 1, false);
+    const linghu = member("linghu-ancestor", "令狐老祖");
+    const guidance = {
+      guidanceId: "customer-action:fingerprint-1", sourceFingerprint: "fingerprint-1",
+      title: "等待客户提交本地修改", problem: "当前修改尚未提交，无法继续集成。",
+      reasonCustomerMustAct: "只有客户能确认并提交自己工作区中的修改。",
+      steps: ["确认修改属于当前专题。", "提交本地修改。"],
+      completionCriteria: ["工作区不再显示未提交修改。"], resumeLabel: "从卡点继续", generatedBy: linghu,
+      createdAt: fixture.at(4),
+    };
+    blocked.state = "blocked";
+    blocked.currentHandler = linghu;
+    blocked.integrationFailure = { kind: "local-change-ownership", detail: "main.ts 未登记", conflictFiles: ["main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: fixture.at(3) };
+    blocked.flowEvents.push({ ...flow("customer-guidance", "customer.action_required", "recovery", "waiting", linghu, guidance.title, fixture.at(4)), details: { customerActionGuidance: guidance } });
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(4), [blocked]), [blocked.taskId]);
+    let node = fixture.timeline.snapshot(fixture.at(5)).groups[0].nodes.find((item) => item.nodeId === guidance.guidanceId);
+    assert.equal(node.status, "waiting");
+    assert.equal(node.eventType, "customer.action_required");
+    assert.match(node.content, /为什么需要您处理/);
+    assert.match(node.content, /1\. 确认修改属于当前专题/);
+    assert.match(node.content, /完成标准/);
+
+    blocked.flowEvents.push({ ...flow("customer-resume", "task.recovery_requested", "recovery", "started", linghu, "客户已完成操作，令狐正在复查", fixture.at(6)), details: { customerActionGuidance: guidance } });
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(6), [blocked]), [blocked.taskId]);
+    node = fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes.find((item) => item.nodeId === guidance.guidanceId);
+    assert.equal(node.status, "completed");
+    assert.match(node.action, /令狐开始复查/);
+    assert.ok(fixture.timeline.snapshot(fixture.at(7)).groups[0].nodes.some((item) => item.action === "正在恢复任务" && item.actor.memberId === "linghu-ancestor"));
+  } finally { fixture.close(); }
+});
+
 test("修改任务快照但没有新业务事件时时间线不变", () => {
   const fixture = createFixture("no-state-inference");
   try {

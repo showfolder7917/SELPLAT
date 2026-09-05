@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.129.0
+rule_version = 5.130.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -71,6 +71,8 @@ linghu_automation_flow_snapshot_contract = all_persons_non_terminal_tasks_only +
 collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort + persist_structured_failure_kind + blocked_or_application_restart_recovering_immediately_schedules_linghu_independent_from_proactive_automation_switch_or_human_continue + per_task_idempotent_correction_lock + continue_increments_task_revision_and_worker_generation + strict_preferred_linghu_executor_independent_from_regular_worker_capacity + fresh_current_mainline_signed_worktree + reuse_approved_plan + old_resultSHA_never_retried + business_ambiguity_permission_or_repeated_failure_only_waits_for_human
 <!-- 自动恢复以故障事实指纹限制重复副作用；同一事实最多三次，状态阶段、代次、心跳、协议、阻塞或依赖变化后才重新开放恢复。 -->
 linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint + same_fingerprint_max_three_side_effects + monitor_never_stops_after_limit + changed_recovery_fact_opens_new_budget + local_change_ownership_blocks_without_automatic_retry_until_ownership_fact_changes_or_human_continue + missing_task_preserves_checkpoint_without_evidence_free_replacement + explicit_human_cancel_waits_with_checkpoint
+<!-- 只有客户能解除的卡点由令狐根据结构化事实生成通俗操作指导；程序只校验结构和安全，指导及继续入口属于原专题的确切等待节点，客户提交后由令狐复查并恢复原节点。 -->
+linghu_customer_action_guidance_contract = structured_checkpoint_facts_only + linghu_readonly_analysis_generates_problem_reason_steps_and_completion_criteria + strict_structure_and_dangerous_instruction_guard + no_domain_specific_hardcoded_copy + guidance_persisted_on_original_task + exact_waiting_node_renders_guidance_and_resume_button + no_duplicate_topic_header_resume_action + customer_click_routes_to_linghu_recheck + resume_original_checkpoint + incomplete_guidance_never_shows_actionable_button
 <!-- 自动状态采用原子主文件和最近有效备份；既有状态双损坏时保持检测开启并从协同事实重建，首次安装仍由用户显式开启。 -->
 linghu_automation_state_recovery_contract = atomic_primary_plus_latest_valid_backup + restore_enabled_cycle_module_cursor_active_task_fault_and_checkpoint + primary_and_backup_both_corrupt_safely_disable_until_human_reenables + first_install_default_off
 <!-- 三个职责模块严格串行；最终流程保障始终先于令狐自己的测试与审计循环。 -->

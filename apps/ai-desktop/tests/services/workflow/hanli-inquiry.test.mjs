@@ -8,11 +8,12 @@ const customerQuestion = "长消息超过一屏后是否还会跑到输入框下
 const findings = { status: "verified", answeredQuestion: customerQuestion, summary: "源码已修改，尚未发布", evidence: [{ source: "task-1 / file.ts:12", detail: "修改存在，发布记录不存在" }], unknowns: ["当前运行版本"] };
 const understanding = { status: "ready", understoodGoal: "确认长消息滚动问题是否修复", verificationTarget: "消息时间线与输入框的滚动位置", expectedAnswer: "当前代码和运行版本是否已修复", ambiguities: [], investigationQuestion: "核对消息时间线滚动实现、相关测试和当前运行版本" };
 function fixture(investigate, explain = async () => ({ text: "简单说，源码虽然已经修改，但你当前使用的版本还没有确认更新。建议先完成发布并确认运行版本，再判断问题是否解决。" })) {
-  const messages = [], order = [];
+  const messages = [], order = [], discussionContexts = [];
   const memory = {
     readPersonaConversation: (_owner, id) => ({ conversationId: id, messages: [...messages] }),
     registerPersonaRound: (round) => { messages.push({ messageId: round.userMessageId, content: round.userContent }, { messageId: round.personaMessageId, content: round.personaContent }); return memory.readPersonaConversation("han-li", round.conversationId); },
     appendPersonaInternalMessage: (message) => { if (!messages.some((item) => item.messageId === message.messageId)) messages.push(message); order.push(message.messageId); return memory.readPersonaConversation("han-li", message.conversationId); },
+    recordRequirementDiscussionContext: (context) => { discussionContexts.push(structuredClone(context)); order.push("discussion-context-recorded"); },
   };
   const service = new HanliInquiryService({
     memory,
@@ -28,7 +29,7 @@ function fixture(investigate, explain = async () => ({ text: "简单说，源码
     recordEvent: () => {},
     investigateWithNangong: (...args) => { order.push("dispatched"); return investigate(...args); },
   });
-  return { service, messages, order };
+  return { service, messages, order, discussionContexts };
 }
 const request = { message: customerQuestion, clientMessageId: "u1", attachmentIds: ["shot1"] };
 const topic = { title: "进度核实", type: "核实", userIntent: request.message, tags: ["进度"], summary: "核实当前进度", switchTopic: false };
@@ -58,6 +59,11 @@ test("真实派发后才等待，调查返回后主动答复，内部问答保�
   const question = f.messages.find((item) => item.messageId === "internal:inquiry:u1:question");
   assert.match(question.content, new RegExp(customerQuestion));
   assert.match(question.content, /调查范围/);
+  assert.equal(f.discussionContexts.length, 1);
+  assert.equal(f.discussionContexts[0].customerQuestion, customerQuestion);
+  assert.equal(f.discussionContexts[0].findingSummary, findings.summary);
+  assert.match(f.discussionContexts[0].customerConclusion, /建议先完成发布/);
+  assert.ok(f.order.indexOf("internal:inquiry:u1:answer") < f.order.indexOf("discussion-context-recorded"));
   await f.service.run(request, "original", customerQuestion, understanding, topic);
   assert.equal(f.order.filter((item) => item === "dispatched").length, 1);
 });
@@ -142,4 +148,43 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
   await service.send({ ...request, clientMessageId: "u2", message: "我问的是当前运行版本", workspaceState, locale: "zh-CN" });
   assert.equal(dispatches, 1);
   assert.doesNotMatch(secondRecentConversation, /clarificationMessageId/);
+});
+
+test("韩立邀请内部研讨时发布当前中立上下文但不直接启动工作流", async () => {
+  const messages = [], recorded = [];
+  let starts = 0;
+  const prior = {
+    contextId: "inquiry-u1", ownerPersonaId: "han-li", conversationId: "discussion-thread", sourceRequestId: "u1",
+    customerQuestion, understoodGoal: understanding.understoodGoal, verificationTarget: understanding.verificationTarget,
+    expectedAnswer: understanding.expectedAnswer, investigationQuestion: understanding.investigationQuestion,
+    findingStatus: "verified", findingSummary: findings.summary, evidence: findings.evidence, unknowns: findings.unknowns,
+    customerConclusion: "建议按调查结果修复。", createdAt: "2026-09-05T00:00:00.000Z",
+  };
+  const snapshot = () => ({ ownerPersonaId: "han-li", conversationId: "discussion-thread", messages: [...messages], updatedAt: "2026-09-05T00:00:01.000Z" });
+  const memory = {
+    readPersonaConversation: () => snapshot(), newPersonaConversation: () => snapshot(),
+    readHanliSemanticContext: () => ({ concerns: [], trajectories: [], inspectionExperiences: [] }),
+    readLatestRequirementDiscussionContext: () => prior,
+    recordRequirementDiscussionContext: (context) => recorded.push(structuredClone(context)),
+    registerPersonaRound: (round) => { messages.push(
+      { messageId: round.userMessageId, speakerType: "user", speakerPersonaId: null, content: round.userContent },
+      { messageId: round.personaMessageId, speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent },
+    ); return snapshot(); },
+  };
+  const decision = { ...topic, userIntent: "根据已核实的长消息问题形成修正方案" };
+  const invitation = "若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。";
+  const service = new HanliConversationService({
+    store: { state: () => ({ deliberations: [] }) }, memory,
+    prompts: { render: (_id, variables) => JSON.stringify(variables) },
+    conversation: { activeConversationId: () => "provider-thread", newChat: async () => {}, send: async () => ({ threadId: "provider-thread", itemCount: 1, text: `可以按已核实结果继续确定修正。${invitation}\nHANLI_TOPIC_META=${JSON.stringify(decision)}` }) },
+    startInternalDeliberation: async () => { starts += 1; return { continuous: true }; },
+    recordEvent: () => {}, refreshSemanticMemory: () => {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+  });
+  const workspaceState = { roots: [{ id: "root-1", path: "/workspace", name: "workspace", writable: true }], primaryId: "root-1" };
+  await service.send({ message: "按这个调查结果修正", clientMessageId: "u2", attachmentIds: [], workspaceState, locale: "zh-CN" });
+  assert.equal(starts, 0);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].customerQuestion, customerQuestion);
+  assert.equal(recorded[0].findingSummary, findings.summary);
+  assert.equal(recorded[0].understoodGoal, decision.userIntent);
 });

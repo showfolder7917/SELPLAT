@@ -42,7 +42,7 @@ export class HanliConversationService {
       if (!existing.conversationId || !this.options.startInternalDeliberation) throw new Error("韩立与南宫婉内部研讨能力尚未就绪。");
       const started = await this.options.startInternalDeliberation(request);
       const createdAt = new Date().toISOString();
-      const reply = this.options.store.state().automationSettings.automaticCustodyEnabled === true ? "已启动韩立与南宫婉的内部研讨。自动托管已开启，将先查事实，在已授权范围内代确认并推进；范围扩大仍需你确认。" : "已启动韩立与南宫婉的内部研讨。南宫婉查清事实后，我会把修复范围和影响带回来请你确认，再进入实施。";
+      const reply = this.options.store.state().automationSettings.automaticCustodyEnabled === true ? "已启动韩立与南宫婉的内部研讨。自动托管已开启，我会代表你判断新发现应并入当前专题还是留到后续专题，并持续推进。" : "已启动韩立与南宫婉的内部研讨。南宫婉查清事实后，我会把修复范围和影响带回来请你确认，再进入实施。";
       const next = memory.registerPersonaRound({
         ownerPersonaId: "han-li",
         responderPersonaId: "han-li",
@@ -111,6 +111,27 @@ export class HanliConversationService {
       completedAt,
       decision: parsed.topic,
     });
+    if (parsed.reply.includes(HANLI_INTERNAL_DELIBERATION_INVITATION)) {
+      try {
+        const investigated = parsed.topic.switchTopic ? null : memory.readLatestRequirementDiscussionContext?.("han-li", conversationId) || null;
+        // 邀请只发布本次研讨事实入口；它不调用 Workflow，也不因缺少既往调查而阻止自由讨论。
+        memory.recordRequirementDiscussionContext?.({
+          contextId: `activation-${personaMessageId}`, ownerPersonaId: "han-li", conversationId,
+          sourceRequestId: request.clientMessageId || personaMessageId,
+          customerQuestion: investigated?.customerQuestion || userContent,
+          understoodGoal: parsed.topic.userIntent || investigated?.understoodGoal || userContent,
+          verificationTarget: investigated?.verificationTarget || userContent,
+          expectedAnswer: investigated?.expectedAnswer || "形成解决真实需求且可验证的修正方案",
+          investigationQuestion: investigated?.investigationQuestion || "围绕本次客户需求调查事实、影响和可行修正",
+          findingStatus: investigated?.findingStatus || "unknown", findingSummary: investigated?.findingSummary || "尚未形成独立只读调查结论",
+          evidence: investigated?.evidence || [], unknowns: investigated?.unknowns || ["需要在内部研讨中继续核实事实"],
+          customerConclusion: parsed.reply, createdAt: completedAt,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "需求研讨入口保存失败";
+        this.options.recordEvent("hanli.conversation.discussion_context_failed", { conversationId, requestId: request.clientMessageId || null, reason });
+      }
+    }
     if (parsed.inquiry?.status === "clarification-required") {
       next = memory.appendPersonaInternalMessage({
         ownerPersonaId: "han-li", conversationId,

@@ -299,13 +299,31 @@ export function projectCollaborationFlowEvent(
       completedAt: status === "completed" || status === "failed" ? event.occurredAt : null,
       automaticOpen: status !== "completed", manualApprovalProposalId: null,
     }));
-    if (event.type.endsWith("repair_completed") && !direct) facts.push(fact({
+  if (event.type.endsWith("repair_completed") && !direct) facts.push(fact({
       nodeId: `repair-result:${task.taskId}:${event.eventId}`, kind: "result", actor: event.actor || LINGHU, recipients: direct ? [] : [initiator], status: "completed",
       action: "修复结果已返回", summary: event.summary, content: event.details?.repairResult || task.repairResult || event.summary,
       detail: repairDetail(event, task), startedAt: event.occurredAt, completedAt: event.occurredAt,
       automaticOpen: false, manualApprovalProposalId: null,
     }, ":result-returned"));
     return projection(status === "failed" || status === "waiting" ? "blocked" : "running", facts);
+  }
+
+  if (event.type === "customer.action_required" && event.details?.customerActionGuidance) {
+    const guidance = event.details.customerActionGuidance;
+    const content = [
+      `遇到的问题：${guidance.problem}`,
+      `为什么需要您处理：${guidance.reasonCustomerMustAct}`,
+      "操作步骤：",
+      ...guidance.steps.map((step, index) => `${index + 1}. ${step}`),
+      "完成标准：",
+      ...guidance.completionCriteria.map((criterion) => `- ${criterion}`),
+    ].join("\n");
+    return projection("blocked", [fact({
+      nodeId: guidance.guidanceId, kind: "repair", actor: guidance.generatedBy, recipients: [initiator], status: "waiting",
+      action: guidance.title, summary: guidance.problem, content,
+      detail: task.integrationFailure?.detail || task.blockingReason || "",
+      startedAt: guidance.createdAt || event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
+    })]);
   }
 
   if (event.type === "integration.local_change_ownership_blocked" || event.type === "integration.merge_conflict") {
@@ -368,6 +386,15 @@ export function projectCollaborationFlowEvent(
       summary: event.summary, content: event.summary, detail: task.blockingReason || "", startedAt: event.occurredAt,
       completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
     })];
+    if (event.type === "task.recovery_requested" && event.details?.customerActionGuidance) {
+      const guidance = event.details.customerActionGuidance;
+      facts.unshift(fact({
+        nodeId: guidance.guidanceId, kind: "repair", actor: guidance.generatedBy, recipients: [initiator], status: "completed",
+        action: "客户操作已提交，令狐开始复查", summary: event.summary,
+        content: `客户已按“${guidance.title}”完成处理并请求继续。`, detail: guidance.completionCriteria.join("\n"),
+        startedAt: guidance.createdAt, completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+      }, ":customer-action-completed"));
+    }
     if (!waiting && (
       task.integrationFailure?.kind === "local-change-ownership"
       || task.integrationFailure?.kind === "merge-conflict"

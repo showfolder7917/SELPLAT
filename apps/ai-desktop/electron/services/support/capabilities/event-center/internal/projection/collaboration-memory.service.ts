@@ -8,6 +8,7 @@ import type {
   HanliCorpusExtractionCandidateOutDto,
   HanliSemanticContextOutDto,
   HanliSemanticExtractionInDto,
+  RequirementDiscussionContextOutDto,
   TrainingCorpusTopicSearchResultOutDto,
 } from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
@@ -24,6 +25,7 @@ const EVOLUTION_NANGONG_MESSAGE_LIMIT = 800;
 const EVOLUTION_HANLI_MESSAGE_LIMIT = 200;
 const EVOLUTION_CODEX_USER_MESSAGE_LIMIT = 600;
 const EVOLUTION_CODEX_AI_PREVIEW_LIMIT = 120;
+const REQUIREMENT_DISCUSSION_CONTEXT_PREFIX = "internal:requirement-discussion-context:";
 
 /** 保存用户与南宫婉完整原文，并通过受控查询为后续调查和韩立审批提供上下文。 */
 export class CollaborationMemoryService implements CollaborationMemoryPort {
@@ -101,6 +103,28 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       });
     });
     return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
+  }
+
+  /** 调查服务只写入中立事实包；该记录不进入训练语料，也不会直接触发内部研讨或专题。 */
+  recordRequirementDiscussionContext(context: RequirementDiscussionContextOutDto): void {
+    const normalized = normalizeRequirementDiscussionContext(context);
+    this.appendPersonaInternalMessage({
+      ownerPersonaId: normalized.ownerPersonaId,
+      conversationId: normalized.conversationId,
+      messageId: `${REQUIREMENT_DISCUSSION_CONTEXT_PREFIX}${normalized.contextId}`,
+      speakerPersonaId: normalized.ownerPersonaId,
+      content: JSON.stringify(normalized),
+      createdAt: normalized.createdAt,
+    });
+  }
+
+  /** Workflow 只通过中立记忆端口读取最近事实包，不识别韩立调查服务或其内部调用。 */
+  readLatestRequirementDiscussionContext(ownerPersonaId: string, conversationId: string): RequirementDiscussionContextOutDto | null {
+    const message = [...this.readPersonaConversation(ownerPersonaId, conversationId).messages]
+      .reverse().find((item) => item.messageId.startsWith(REQUIREMENT_DISCUSSION_CONTEXT_PREFIX));
+    if (!message) return null;
+    try { return normalizeRequirementDiscussionContext(JSON.parse(message.content) as RequirementDiscussionContextOutDto); }
+    catch { return null; }
   }
 
   /** 原子保存任意人物的真实用户回合与统一训练语料；人物完整回复只留在人物会话。 */
@@ -454,6 +478,27 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       });
     });
   }
+}
+
+/** 持久化边界只接受完整事实包，避免残缺或伪造状态进入后续自由研讨。 */
+function normalizeRequirementDiscussionContext(context: RequirementDiscussionContextOutDto): RequirementDiscussionContextOutDto {
+  const text = (value: unknown, label: string, maximum = 30_000): string => {
+    const normalized = typeof value === "string" ? value.trim().slice(0, maximum) : "";
+    if (!normalized) throw new Error(`需求研讨上下文缺少${label}。`);
+    return normalized;
+  };
+  if (!context || !["verified", "unknown"].includes(context.findingStatus) || !Array.isArray(context.evidence) || !Array.isArray(context.unknowns)) throw new Error("需求研讨上下文结构不完整。");
+  const evidence = context.evidence.map((item) => ({ source: text(item?.source, "调查依据来源", 4_000), detail: text(item?.detail, "调查依据内容", 12_000) }));
+  const unknowns = context.unknowns.map((item) => text(item, "未知项", 4_000));
+  return {
+    contextId: text(context.contextId, "标识", 500), ownerPersonaId: text(context.ownerPersonaId, "所属人物", 200),
+    conversationId: text(context.conversationId, "会话标识", 500), sourceRequestId: text(context.sourceRequestId, "来源请求", 500),
+    customerQuestion: text(context.customerQuestion, "客户原问题"), understoodGoal: text(context.understoodGoal, "客户目标"),
+    verificationTarget: text(context.verificationTarget, "核实对象"), expectedAnswer: text(context.expectedAnswer, "期望答案"),
+    investigationQuestion: text(context.investigationQuestion, "调查范围"), findingStatus: context.findingStatus,
+    findingSummary: text(context.findingSummary, "调查结论"), evidence, unknowns,
+    customerConclusion: text(context.customerConclusion, "客户可见结论"), createdAt: text(context.createdAt, "创建时间", 100),
+  };
 }
 
 function sourceSnapshot(value: Omit<EvolutionSourceMessageSnapshotOutDto, "snapshotId">): EvolutionSourceMessageSnapshotOutDto {

@@ -30,6 +30,7 @@ const nangongEvolutionListeners = new Set();
 const personaConversationListeners = new Set();
 let nangongNewConversationCalls = 0;
 let taskTimelineFixtureEnabled = false;
+let customerActionTimelineFixtureEnabled = false;
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
@@ -131,6 +132,22 @@ const publishCollaborationTimelineChanged = () => {
 };
 const interactionTimelineSnapshot = () => {
   if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
+  if (customerActionTimelineFixtureEnabled) {
+    const startedAt = "2026-08-29T00:12:00.000Z";
+    return { version: 1, groups: [{
+      groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal",
+      title: "专题任务 01 · 修订截图按钮可用态", status: "blocked", summary: "等待客户完成本地修改提交。",
+      nodes: [{
+        nodeId: "customer-action:interaction", taskId: "interaction-customer-action-task", eventType: "customer.action_required", kind: "repair",
+        actor: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }],
+        status: "waiting", action: "等待客户提交本地修改", summary: "当前修改尚未提交，无法继续集成。",
+        content: "遇到的问题：当前修改尚未提交，无法继续集成。\n为什么需要您处理：只有客户能确认并提交自己工作区中的修改。\n操作步骤：\n1. 确认修改属于当前专题。\n2. 提交本地修改。\n完成标准：\n- 工作区不再显示未提交修改。",
+        detail: "原始技术证据保留在这里。", contentRole: "analysis-output", detailRole: "recovery-conditions",
+        startedAt, completedAt: null, durationMs: 60_000, automaticOpen: true, manualApprovalProposalId: null,
+      }], executingCount: 0, verifyingCount: 0, waitingCount: 1, completedCount: 0,
+      startedAt, updatedAt: evolutionState.updatedAt, durationMs: 60_000, nextStep: "等待客户处理后由令狐复查原节点。",
+    }], updatedAt: evolutionState.updatedAt };
+  }
   const proposal = evolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
   if (!proposal) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
   const pending = proposal.status === "pending-approval";
@@ -337,7 +354,12 @@ contextBridge.exposeInMainWorld("desktop", {
     return publishCollaborationState("member.created");
   },
   submitCollaborationTask: async () => publishCollaborationState("task.submitted"),
-  continueCollaborationTask: async () => publishCollaborationState("task.recovery_requested"),
+  continueCollaborationTask: async () => {
+    customerActionTimelineFixtureEnabled = false;
+    const state = publishCollaborationState("task.recovery_requested");
+    publishCollaborationTimelineChanged();
+    return state;
+  },
   cancelCollaborationTask: async () => publishCollaborationState("task.cancelled"),
   getLinghuAutomationState: async () => structuredClone(linghuAutomationState),
   setLinghuAutomationEnabled: async (enabled) => { linghuAutomationState.enabled = enabled === true; linghuAutomationState.nextCheckAt = enabled ? new Date(Date.now() + 60_000).toISOString() : null; linghuAutomationState.blockingReason = enabled ? null : "自动巡检已关闭"; return publishLinghuAutomation(enabled ? "automation.enabled" : "automation.disabled"); },
@@ -477,10 +499,16 @@ contextBridge.exposeInMainWorld("desktop", {
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   setInteractionTaskTimelineFixture: async (active) => {
     taskTimelineFixtureEnabled = active === true;
+    if (!active) customerActionTimelineFixtureEnabled = false;
     evolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.activeTopicId = active ? "interaction-timeline" : null;
     publishNangongEvolution(active ? "interaction.timeline_fixture" : "interaction.timeline_fixture_cleared");
+    publishCollaborationTimelineChanged();
+    return structuredClone(interactionTimelineSnapshot());
+  },
+  setInteractionCustomerActionTimelineFixture: async (active) => {
+    customerActionTimelineFixtureEnabled = active === true;
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },

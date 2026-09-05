@@ -66,7 +66,7 @@ export function buildHanliRecentConversation(messages: Array<{ messageId?: strin
   const blocks: string[] = [];
   let characters = 0;
   for (const message of messages.slice(-16).reverse()) {
-    if (message.messageId?.startsWith("internal:hanli-inquiry-anchor:")) continue;
+    if (message.messageId?.startsWith("internal:hanli-inquiry-anchor:") || message.messageId?.startsWith("internal:requirement-discussion-context:")) continue;
     const speaker = message.speakerType === "user" ? "用户" : message.speakerPersonaId === "nangong-wan" ? "南宫婉" : "韩立";
     const content = message.speakerType === "user" ? message.content : message.content.slice(0, HANLI_AI_MESSAGE_PREVIEW_CHARACTERS);
     const block = `${speaker}：${content}`;

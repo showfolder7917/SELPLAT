@@ -146,6 +146,8 @@ let nangongDeliberationCodex: CodexService | undefined;
 let nangongDistributionCodex: CodexService | undefined;
 // 历史语料语义补齐使用隔离的只读 Codex，不污染主聊天和人物线程。
 let corpusSemanticBackfillCodex: CodexService | undefined;
+// 客户操作指导使用令狐独立只读线程，不污染故障修复和普通人物会话。
+let linghuGuidanceCodex: CodexService | undefined;
 // 跨人物协作协调器，负责任务状态、工作树和集成流程。
 let collaboration: CollaborationCoordinator | undefined;
 // 令狐公开门面只暴露检查、恢复和统一测试等受控能力。
@@ -420,6 +422,12 @@ export async function startApplication(): Promise<void> {
   let inquiryQueue: Promise<unknown> = Promise.resolve();
   // 令狐固定会话仅服务故障兜底和统一测试修复；常规分发由南宫婉规划并交给程序做确定性冲突校验。
   const linghuSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "linghu");
+  linghuGuidanceCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(aiMemoryDatabase, "linghu-guidance"), {
+    codexHome, serviceName: "selplat_ai_desktop_linghu_guidance", threadSource: "ai-desktop-linghu-guidance",
+    migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
+    readSettings: () => settings.read(), readRuleInstructions: () => rules.renderRoleInstructions("linghu"),
+  }, (details) => eventCenter.recordEvent("linghu.guidance.trusted_command.decision", details), (details) => eventCenter.recordEvent("linghu.guidance.thread.lifecycle", details));
+  let linghuGuidanceQueue: Promise<unknown> = Promise.resolve();
   // 历史语义补齐只允许看到这个隔离的只读工作区，不能读取或修改真实工程源码。
   const corpusSemanticWorkspaceRoot = path.join(app.getPath("userData"), "corpus-semantic-backfill-workspace");
   mkdirSync(corpusSemanticWorkspaceRoot, { recursive: true });
@@ -697,6 +705,22 @@ export async function startApplication(): Promise<void> {
       collaborationTimeline?.appendInspectionObservation(type, details, taskId);
     },
     readTestResourceState: () => testResources.state(),
+    analyzeCustomerActionGuidance: (facts) => {
+      const analysis = linghuGuidanceQueue.then(async () => {
+        if (!linghuGuidanceCodex) throw new Error("令狐客户操作指导服务尚未就绪。");
+        return (await linghuGuidanceCodex.send(
+          prompts.render("linghu.customer-action-guidance", { factsJson: JSON.stringify(facts) }),
+          settings.read().locale,
+          "read-only",
+          workspaces.read(),
+          [],
+          () => undefined,
+          null,
+        )).text;
+      });
+      linghuGuidanceQueue = analysis.catch(() => undefined);
+      return analysis;
+    },
     unifiedTest: {
       sourceProjectRoot: projectRoot,
       applicationName,
@@ -908,5 +932,6 @@ export function disposeApplication(): void {
   hanLiCodex?.dispose();
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
   corpusSemanticBackfillCodex?.dispose();
+  linghuGuidanceCodex?.dispose();
   prepareAiMemoryShutdown();
 }

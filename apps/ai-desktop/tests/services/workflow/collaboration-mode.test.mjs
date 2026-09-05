@@ -16,6 +16,7 @@ import { CollaborationStore } from "../../../../../build/ai-desktop/electron/ele
 import { LinghuAutomationFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
 import { ExecutorFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/executor/index.js";
 import { LinghuAutomationStore } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
+import { parseCustomerActionGuidance } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-customer-action-guidance.js";
 import { TestResourceCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/test-resource-coordinator.facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/integration-release.facade.js";
 import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
@@ -430,12 +431,17 @@ test("令狐遇到本地修改归属门禁时报告真实人物与阶段且不�
       task.integrationFailure = { kind: "local-change-ownership", detail: task.blockingReason, conflictFiles: ["apps/ai-desktop/electron/main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() };
     });
     let continueRequests = 0;
+    let guidanceAnalysisRequests = 0;
     const events = [];
     const collaboration = {
       state: () => collaborationStore.state(),
       setMode: (mode) => collaborationStore.setMode(mode),
       continueTask: () => { continueRequests += 1; return collaborationStore.state(); },
       recoverTask: () => { continueRequests += 1; return collaborationStore.state(); },
+      recordCustomerActionGuidance: (taskId, guidance) => collaborationStore.updateTask(taskId, "customer.action_required", (task) => {
+        task.customerActionGuidance = guidance;
+        task.flowEvents.push({ eventId: guidance.guidanceId, type: "customer.action_required", stage: "recovery", status: "waiting", actor: guidance.generatedBy, summary: guidance.title, occurredAt: guidance.createdAt, error: false, details: { customerActionGuidance: guidance } });
+      }),
     };
     const store = createTestLinghuStore(path.join(directory, "linghu.json"));
     store.setEnabled(true);
@@ -443,16 +449,39 @@ test("令狐遇到本地修改归属门禁时报告真实人物与阶段且不�
       store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
       recordEvent: (type, details) => events.push({ type, details }), readTestResourceState: idleTestResourceState,
       runUnifiedTestAndRestart: async () => undefined,
+      analyzeCustomerActionGuidance: async () => {
+        guidanceAnalysisRequests += 1;
+        return JSON.stringify({
+          title: "等待客户提交本地修改",
+          problem: "main.ts 的本地修改还没有归入可集成版本。",
+          reasonCustomerMustAct: "只有客户能确认这份本地修改的归属并提交。",
+          steps: ["确认 main.ts 属于当前专题。", "提交这份本地修改。"],
+          completionCriteria: ["工作区中不再存在未提交的 main.ts 修改。"],
+        });
+      },
     });
     await facade.checkNow();
     await facade.checkNow();
     assert.equal(continueRequests, 0);
-    assert.match(facade.state().blockingReason, /墨彩环负责/);
-    assert.match(facade.state().blockingReason, /版本集成阶段/);
-    assert.match(facade.state().blockingReason, /main\.ts 未登记/);
-    assert.match(facade.state().blockingReason, /不会把同一份本地修改反复送回集成/);
-    assert.equal(events.filter((event) => event.type === "linghu.automation.local_change_ownership_waiting").length, 1);
+    assert.equal(guidanceAnalysisRequests, 1);
+    assert.match(facade.state().blockingReason, /等待客户提交本地修改/);
+    const blockedTask = collaborationStore.task(submitted.taskId);
+    assert.equal(blockedTask.customerActionGuidance.generatedBy.memberId, "linghu-ancestor");
+    assert.deepEqual(blockedTask.customerActionGuidance.steps, ["确认 main.ts 属于当前专题。", "提交这份本地修改。"]);
+    assert.equal(blockedTask.customerActionGuidance.resumeLabel, "从卡点继续");
+    assert.equal(events.filter((event) => event.type === "linghu.automation.customer_action_guidance_created").length, 1);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("客户操作指导缺少步骤或包含破坏性操作时拒绝生成继续入口", () => {
+  const linghu = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
+  assert.throws(() => parseCustomerActionGuidance(JSON.stringify({
+    title: "等待客户处理", problem: "存在卡点", reasonCustomerMustAct: "需要客户决定", completionCriteria: ["已完成"],
+  }), "fingerprint", linghu), /缺少 steps/);
+  assert.throws(() => parseCustomerActionGuidance(JSON.stringify({
+    title: "等待客户处理", problem: "存在卡点", reasonCustomerMustAct: "需要客户决定",
+    steps: ["执行 git reset --hard"], completionCriteria: ["已完成"],
+  }), "fingerprint", linghu), /危险或越权操作/);
 });
 
 test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失败", async () => {

@@ -4,8 +4,14 @@
 
 自然区分已证实事实、合理推断和仍缺少的证据，未实际调查不得声称已经查证。不要向用户索要确认或授权，不把内部讨论冒充用户意见。只输出对韩立说的正文，不输出 JSON、后台判断、元数据或流程播报。
 
+discussion_basis 是本次客户需求和已核实事实的起点，但不限制你发现真实关联问题。可以提出新的原因、风险或改进机会，同时说明它为何影响当前需求；若只是相邻问题，也要明确不要混成当前必须修复的范围。历史资料仅作探索线索，与本次事实冲突时以本次事实为准。
+
 韩立问题：{{question}}
 发问依据：{{questionReason}}
+
+<discussion_basis data-only="true">
+{{discussionBasisJson}}
+</discussion_basis>
 
 <deliberation_context data-only="true">
 {{deliberationContext}}

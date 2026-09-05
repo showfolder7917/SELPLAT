@@ -78,6 +78,25 @@ test("人物内部消息只保留业务记录且不生成或领取语义资料",
   } finally { fixture.close(); }
 });
 
+test("中立需求研讨上下文独立保存并按人物会话读取，不进入训练语料", () => {
+  const fixture = createFixture("requirement-discussion-context");
+  try {
+    const memory = new CollaborationMemoryService(fixture.database);
+    memory.savePersonaConversation({ ownerPersonaId: "han-li", conversationId: "hanli-requirement-thread", messages: [], updatedAt: "2026-09-05T00:00:00.000Z" });
+    const context = {
+      contextId: "request-1", ownerPersonaId: "han-li", conversationId: "hanli-requirement-thread", sourceRequestId: "request-1",
+      customerQuestion: "长消息是否还会被输入框遮挡", understoodGoal: "让长消息始终可读", verificationTarget: "消息时间线和输入区域",
+      expectedAnswer: "确认当前问题和可行修正", investigationQuestion: "核对滚动区域和当前运行版本", findingStatus: "verified",
+      findingSummary: "滚动区域存在布局缺陷", evidence: [{ source: "conversation.css:2", detail: "滚动容器缺少可收缩高度" }],
+      unknowns: ["当前安装版本"], customerConclusion: "需要修复消息区域并重新验证当前版本。", createdAt: "2026-09-05T00:00:01.000Z",
+    };
+    memory.recordRequirementDiscussionContext(context);
+    assert.deepEqual(memory.readLatestRequirementDiscussionContext("han-li", "hanli-requirement-thread"), context);
+    assert.equal(memory.readLatestRequirementDiscussionContext("han-li", "another-thread"), null);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
+  } finally { fixture.close(); }
+});
+
 test("一键清空只删除运行投影并保留数据库版本与人物训练语料", () => {
   const fixture = createFixture("clear-test-data");
   try {

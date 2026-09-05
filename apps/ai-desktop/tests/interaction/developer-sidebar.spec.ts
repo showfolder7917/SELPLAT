@@ -72,6 +72,27 @@ test("从卡点继续后仍受阻会明确反馈而不是看起来没反应", as
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("客户操作方案和继续按钮只显示在对应等待节点", async () => {
+  await page.evaluate(async () => {
+    const api = (window as any).desktop;
+    await api.setInteractionTaskTimelineFixture(true);
+    await api.setInteractionCustomerActionTimelineFixture(true);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+  const waitingNode = page.locator('[data-task-timeline-node-id="customer-action:interaction"]');
+  await expect(waitingNode).toContainText("为什么需要您处理");
+  await expect(waitingNode).toContainText("1. 确认修改属于当前专题");
+  await expect(waitingNode.getByRole("button", { name: "从卡点继续", exact: true })).toBeVisible();
+  await expect(page.locator(".task-group-recovery")).toHaveCount(0);
+  await waitingNode.getByRole("button", { name: "从卡点继续", exact: true }).click();
+  await expect(waitingNode).toHaveCount(0);
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionTaskTimelineFixture(false);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+});
+
 test("卡点人物会话实时收到令狐返回与韩立验收，重复快照不重复显示", async ({}, testInfo) => {
   await page.goto(pathToFileURL(productionRendererFile).href);
   await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();

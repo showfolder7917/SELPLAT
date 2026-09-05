@@ -4,6 +4,7 @@ import type { EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from 
 import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { RequirementDiscoveryOutDto, RequirementDiscussionContextOutDto } from "../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionStatePort } from "../../evolution/index.js";
 import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
 
@@ -39,7 +40,12 @@ export class HanliNangongDeliberationService {
       if (!memory) throw new Error("AI Memory 数据库不可用，韩立无法读取用户确认的需求资料。");
       const deliberationId = `hanli-nangong-deliberation-${randomUUID()}`;
       const conversationId = this.dependencies.readHanliConversationId();
-      const snapshots = memory.readHanLiEvolutionCorpus(deliberationId, conversationId);
+      const basis = conversationId ? memory.readLatestRequirementDiscussionContext?.("han-li", conversationId) || null : null;
+      // 本次调查事实与广泛语料在 Workflow 才汇合：事实包提供方向，历史资料只提供自由探索线索。
+      const snapshots = [
+        ...(basis ? [requirementContextSnapshot(deliberationId, basis)] : []),
+        ...memory.readHanLiEvolutionCorpus(deliberationId, conversationId),
+      ];
       if (!snapshots.length) {
         if (!options.requireProblem) return { state, activity: "idle" };
         throw new Error("当前韩立会话尚未形成可供内部研讨的用户需求资料。");
@@ -47,8 +53,13 @@ export class HanliNangongDeliberationService {
       const discovery = parseQuestion(await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.internal-question", {
         discoveryMode: options.requireProblem ? "用户已经输入 1，必须围绕本次确认需求提出第一问。" : "持续自动模式：只有发现尚未处理且有用户证据的问题才发问；没有新问题时返回 wait。",
         corpus: formatEvolutionCorpus(snapshots),
+        discussionBasisJson: JSON.stringify(basis),
         semanticContextJson: JSON.stringify(memory.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), "", 20)),
-        establishedTopicsJson: JSON.stringify(state.topics.map((topic) => ({ title: topic.title, goal: topic.goal, status: topic.status }))),
+        establishedTopicsJson: JSON.stringify(state.topics.map((topic) => ({
+          title: topic.title, goal: topic.goal, status: topic.status,
+          followUpDiscoveries: state.deliberations.find((item) => item.deliberationId === topic.deliberationId)?.candidate?.discoveries
+            ?.filter((item) => item.relation === "follow-up-opportunity") || [],
+        }))),
       }), state));
       if (!discovery.question) {
         if (options.requireProblem) throw new Error(`韩立没有从已确认需求中形成有效问题：${discovery.reason}`);
@@ -67,6 +78,7 @@ export class HanliNangongDeliberationService {
       const answer = (await this.dependencies.askNangong(this.dependencies.prompts.render("nangong.internal-answer", {
         question: round.question,
         questionReason: round.questionReason,
+        discussionBasisJson: discussionBasisJson(deliberation),
         deliberationContext: formatDeliberationContext(deliberation),
         sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
       }), state)).trim();
@@ -88,7 +100,11 @@ export class HanliNangongDeliberationService {
         roundConstraint: mustConclude
           ? `当前已到第 ${maximum} 轮；证据仍不足时必须阻断，不能虚构专题。`
           : "证据不足就给出唯一下一问；事实、范围和验收条件齐备时确立专题。",
+        custodyMode: state.automationSettings.automaticCustodyEnabled === true
+          ? "自动托管已开启：你全权代理客户作业务范围判断。扩展若属于当前目标，归为 required-for-goal；若不属于当前专题但有价值，归为 follow-up-opportunity。不要把普通业务范围判断留给客户。"
+          : "自动托管未开启：会改变产品目标或扩大范围且无法从客户现有表达判断的事项，归为 customer-decision-required 并交回客户确认。",
         deliberationContext: formatDeliberationContext(refreshed),
+        discussionBasisJson: discussionBasisJson(refreshed),
         semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), answeredRound.question, 12) || null),
       }), state));
       if (["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status)) return { state: store.state(), activity: "idle" };
@@ -97,7 +113,7 @@ export class HanliNangongDeliberationService {
         // 阻断原因属于后台业务状态，不冒充韩立对南宫婉说过的话。
         return { state, activity: "idle" };
       }
-      state = store.assessDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, judgment.nextQuestion, judgment.candidate);
+      state = store.assessDeliberation(refreshed.deliberationId, answeredRound.roundId, judgment.assessment, judgment.nextQuestion, judgment.candidate, judgment.discoveries);
       const assessed = requireDeliberation(state, refreshed.deliberationId);
       const savedRound = assessed.rounds.find((item) => item.roundId === answeredRound.roundId)!;
       // 后台判断继续保存，但页面只收到模型生成的自然回复，不再插入一条判断报告。
@@ -122,6 +138,7 @@ export class HanliNangongDeliberationService {
     if (!confirmation) {
       const offer = (await this.dependencies.askNangong(prompts.render("nangong.internal-confirmation", {
         candidateJson: JSON.stringify(deliberation.candidate), deliberationContext: formatDeliberationContext(deliberation),
+        discussionBasisJson: discussionBasisJson(deliberation),
       }), store.state())).trim();
       if (!offer) throw new Error("南宫婉尚未说明准备修复的内容。");
       if (interrupted()) return { state: store.state(), activity: "idle" };
@@ -130,7 +147,7 @@ export class HanliNangongDeliberationService {
     }
     this.#appendInternalMessage(roundId, "offer", "nangong", confirmation.offer, `internal:${roundId}:reply`, confirmation.offeredAt);
     if (!confirmation.reply) {
-      // 默认回到真实用户确认；展示用稳定消息ID去重，轮询不得伪造用户回复。
+      // 托管关闭时由真实用户确认；托管开启时韩立在内部完成当前专题或后续专题判断。
       if (store.state().automationSettings.automaticCustodyEnabled !== true) {
         const conversation = this.dependencies.memory.appendPersonaInternalMessage({
           ownerPersonaId: "han-li", conversationId: this.dependencies.readHanliConversationId()!,
@@ -142,6 +159,8 @@ export class HanliNangongDeliberationService {
       }
       const reply = (await this.dependencies.askHanli(prompts.render("hanli.internal-confirmation", {
         candidateJson: JSON.stringify(deliberation.candidate), offer: confirmation.offer, sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
+        discussionBasisJson: discussionBasisJson(deliberation),
+        custodyMode: "自动托管已开启：你代表客户作出业务范围判断。若发现不属于当前专题，应明确要求留到后续讨论；不得把普通范围判断转回客户。",
       }), store.state())).trim();
       if (!reply) throw new Error("韩立尚未回复南宫婉的修复说明。");
       if (interrupted()) return { state: store.state(), activity: "idle" };
@@ -196,10 +215,11 @@ function parseQuestion(text: string): { question: string | null; reason: string 
   return { question, reason };
 }
 
-function parseJudgment(text: string): { assessment: string; reply: string; nextQuestion: { question: string; reason: string } | null; candidate: HanliTopicCandidateOutDto | null } {
+function parseJudgment(text: string): { assessment: string; reply: string; nextQuestion: { question: string; reason: string } | null; candidate: HanliTopicCandidateOutDto | null; discoveries: RequirementDiscoveryOutDto[] } {
   const value = parseObject(text);
   const assessment = typeof value.assessment === "string" ? value.assessment.trim() : "";
   if (!assessment) throw new Error("韩立内部研讨判断缺少事实说明。");
+  const discoveries = parseDiscoveries(value.discoveries);
   if (value.decision === "establish-topic") {
     const reply = textValue(value.reply);
     if (!reply) throw new Error("韩立完成研讨时缺少对南宫婉的回复正文。");
@@ -207,14 +227,28 @@ function parseJudgment(text: string): { assessment: string; reply: string; nextQ
     const candidate = topic && {
       title: textValue(topic.title), goal: textValue(topic.goal), scope: listValue(topic.scope), exclusions: listValue(topic.exclusions),
       evidence: listValue(topic.evidence), acceptanceCriteria: listValue(topic.acceptanceCriteria), establishmentReason: textValue(topic.establishmentReason) || assessment,
+      discoveries,
     };
     if (!candidate?.title || !candidate.goal || !candidate.scope.length || !candidate.evidence.length || !candidate.acceptanceCriteria.length) throw new Error("韩立确立的专题缺少范围、证据或验收条件。");
-    return { assessment, reply, nextQuestion: null, candidate };
+    return { assessment, reply, nextQuestion: null, candidate, discoveries };
   }
   const question = textValue(value.nextQuestion);
   const reason = textValue(value.questionReason);
   if (value.decision !== "continue" || !question || !reason) throw new Error("韩立决定继续研讨，但没有给出下一问和依据。");
-  return { assessment, reply: "", nextQuestion: { question, reason }, candidate: null };
+  return { assessment, reply: "", nextQuestion: { question, reason }, candidate: null, discoveries };
+}
+
+function parseDiscoveries(value: unknown): RequirementDiscoveryOutDto[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("韩立内部研讨的新问题分类不是数组。");
+  const relations = new Set(["required-for-goal", "follow-up-opportunity", "customer-decision-required", "unrelated"]);
+  return value.map((item) => {
+    const candidate = item as Partial<RequirementDiscoveryOutDto>;
+    const issue = textValue(candidate.issue), relation = textValue(candidate.relation), reason = textValue(candidate.reason);
+    const evidence = listValue(candidate.evidence), suggestedAction = textValue(candidate.suggestedAction);
+    if (!issue || !relations.has(relation) || !reason || !suggestedAction) throw new Error("韩立内部研讨的新问题缺少关系、依据或处理建议。");
+    return { issue, relation: relation as RequirementDiscoveryOutDto["relation"], reason, evidence, suggestedAction };
+  });
 }
 
 function textValue(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
@@ -222,4 +256,18 @@ function listValue(value: unknown): string[] { return Array.isArray(value) ? [..
 function requireDeliberation(state: EvolutionStateOutDto, deliberationId: string): HanliEvolutionDeliberationOutDto { const value = state.deliberations.find((item) => item.deliberationId === deliberationId); if (!value) throw new Error("人物内部研讨记录不存在。"); return value; }
 // 提供真实交谈顺序，不把后台判断及发问依据混成已经说出的聊天历史。
 function formatDeliberationContext(deliberation: HanliEvolutionDeliberationOutDto): string { return deliberation.rounds.map((round) => [`韩立：${round.question}`, round.answer ? `南宫婉：${round.answer}` : ""].filter(Boolean).join("\n")).join("\n\n"); }
-function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshotOutDto[]): string { return snapshots.slice().sort((left, right) => Date.parse(left.originalCreatedAt) - Date.parse(right.originalCreatedAt)).map((item) => `[${item.originalCreatedAt}] ${item.source}/${item.role}：${item.content}`).join("\n"); }
+function formatEvolutionCorpus(snapshots: EvolutionSourceMessageSnapshotOutDto[]): string { return snapshots.filter((item) => item.responsePhase !== "requirement-discussion-context").slice().sort((left, right) => Date.parse(left.originalCreatedAt) - Date.parse(right.originalCreatedAt)).map((item) => `[${item.originalCreatedAt}] ${item.source}/${item.role}：${item.content}`).join("\n"); }
+
+function requirementContextSnapshot(deliberationId: string, context: RequirementDiscussionContextOutDto): EvolutionSourceMessageSnapshotOutDto {
+  return {
+    snapshotId: `requirement-context:${deliberationId}:${context.contextId}`, deliberationId, source: "hanli",
+    conversationId: context.conversationId, sourceMessageId: context.sourceRequestId, sequenceNumber: -1,
+    role: "requirement-context", responsePhase: "requirement-discussion-context", content: JSON.stringify(context),
+    originalCreatedAt: context.createdAt, capturedAt: new Date().toISOString(),
+  };
+}
+
+function discussionBasisJson(deliberation: HanliEvolutionDeliberationOutDto): string {
+  const snapshot = deliberation.sourceSnapshots.find((item) => item.responsePhase === "requirement-discussion-context");
+  return snapshot?.content || "null";
+}

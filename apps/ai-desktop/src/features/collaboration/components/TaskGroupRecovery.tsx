@@ -3,6 +3,8 @@ import type { useEvolutionRuntime } from "../../evolution/model/useEvolutionRunt
 
 /** 仅当前专题的原运行提供恢复入口，历史任务和正在推进的运行不显示按钮。 */
 export function TaskGroupRecovery({ group, evolution }: { group: CollaborationTimelineGroupOutDto; evolution: ReturnType<typeof useEvolutionRuntime> }) {
+  // 客户操作卡点的入口属于具体等待节点；存在该节点时禁止在专题顶部再生成第二条恢复线路。
+  if (group.nodes.some((node) => node.eventType === "customer.action_required" && node.status === "waiting")) return null;
   const state = evolution.state;
   const run = state?.oneShotRun;
   if (!run || !run.proposalId || run.topicId !== group.topicId || run.proposalId !== group.proposalId) return null;

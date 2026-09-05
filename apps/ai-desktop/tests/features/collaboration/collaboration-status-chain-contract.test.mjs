@@ -45,10 +45,10 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
   assert.match(integrationSource, /unified_test\.failed/);
 });
 
-test("最新等待恢复节点在卡片头提供醒目的继续执行主操作", () => {
-  assert.match(taskGroupSource, /node\.eventType !== "task\.interrupted"/);
+test("最新等待恢复节点在对应行提供醒目的继续执行主操作", () => {
+  assert.match(taskGroupSource, /node\.eventType === "task\.interrupted" \|\| node\.eventType === "customer\.action_required"/);
   assert.match(taskGroupSource, /hasNewerRecovery[\s\S]*return hasNewerRecovery \? null : node\.taskId/);
-  assert.match(taskGroupSource, /className="task-recovery-continue"[\s\S]*继续执行等待恢复任务/);
+  assert.match(taskGroupSource, /customerAction \? "从卡点继续"/);
   assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextSameTask\.eventType !== "task\.interrupted"/);

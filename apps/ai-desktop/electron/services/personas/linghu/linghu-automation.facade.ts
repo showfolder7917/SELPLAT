@@ -2,7 +2,7 @@
 import type { LocaleValue } from "../../../../contracts/foundation/index.js";
 import type { WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
 // Coordinator 状态是检测、恢复和派发的权威来源。
-import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationCustomerActionGuidanceOutDto, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
 // 令狐快照、模块和完整状态使用跨进程纯协议，页面与主进程共享同一数据形状。
 import type {
   LinghuAutomaticFlowSnapshotOutDto,
@@ -14,6 +14,7 @@ import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/s
 import { LINGHU_AUTOMATION_MODULES, LINGHU_SAFEGUARD_INSTRUCTIONS, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
 import { automaticFlowSnapshots, faultFingerprint, moduleCompletionReport, moduleInstruction, moduleLabel, taskHumanReport, testResourceContext } from "./internal/linghu-flow.analyzer.js";
+import { customerActionFacts, parseCustomerActionGuidance } from "./internal/linghu-customer-action-guidance.js";
 // 基础设施异常类型留在 internal，外部只能通过 Facade 的静态判断入口识别。
 import { isUnifiedTestInfrastructureError } from "../../support/capabilities/testing/index.js";
 
@@ -34,6 +35,8 @@ export interface LinghuCollaborationPort {
   recoverTask(taskId: string, reason: string): Promise<CollaborationStateOutDto>;
   // 统一测试失败沿原工作树生成修正结果。
   repairFailedUnifiedTest(taskId: string): Promise<boolean>;
+  // 令狐生成的客户操作指导仍通过原任务工作流落库。
+  recordCustomerActionGuidance(taskId: string, guidance: CollaborationCustomerActionGuidanceOutDto): CollaborationStateOutDto;
 }
 
 /** Facade 的所有外部能力都由组合根注入，便于测试和运行边界审查。 */
@@ -52,6 +55,8 @@ export interface LinghuAutomationFacadeOptions {
   readTestResourceState(): TestResourceCoordinatorStateOutDto;
   // 统一测试通过后由组合根安排受控重启。
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
+  // 只读模型根据已确认事实生成客户能执行的指导，程序不内置具体问题文案。
+  analyzeCustomerActionGuidance?(facts: Record<string, unknown>): Promise<string>;
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -70,6 +75,7 @@ export class LinghuAutomationFacade {
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
   readonly #readTestResourceState: LinghuAutomationFacadeOptions["readTestResourceState"];
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
+  readonly #analyzeCustomerActionGuidance: NonNullable<LinghuAutomationFacadeOptions["analyzeCustomerActionGuidance"]>;
   // timer 为 null 表示尚未启动或已经停止；重复 start 不会创建多重轮询。
   #timer: ReturnType<typeof setTimeout> | null = null;
   #stopped = false;
@@ -86,6 +92,7 @@ export class LinghuAutomationFacade {
     this.#recordEvent = options.recordEvent;
     this.#readTestResourceState = options.readTestResourceState;
     this.#runUnifiedTestAndRestart = options.runUnifiedTestAndRestart;
+    this.#analyzeCustomerActionGuidance = options.analyzeCustomerActionGuidance || (async () => { throw new Error("令狐客户操作指导分析器尚未配置。"); });
   }
 
   /** 返回 Store 的深复制状态快照。 */
@@ -322,8 +329,11 @@ export class LinghuAutomationFacade {
       }, task.taskId);
       this.#store.updateRuntime("automation.business_choice_required", (state) => {
         state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = `${report}。这是业务选择，令狐老祖不会越权代替用户决定；检测继续运行。`;
+        state.blockingReason = task.customerActionGuidance?.sourceFingerprint === fingerprint
+          ? `${task.customerActionGuidance.title}：${task.customerActionGuidance.problem}`
+          : `${report}。这是业务选择，令狐老祖不会越权代替用户决定；令狐正在形成客户可执行的处理步骤。`;
       });
+      await this.#ensureCustomerActionGuidance(task, snapshot, fingerprint, report);
       return;
     }
     if (task.integrationFailure?.kind === "local-change-ownership") {
@@ -333,7 +343,9 @@ export class LinghuAutomationFacade {
         state.currentFaultFingerprint = fingerprint;
         state.recoveryAttemptCount = attempts;
         state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = `${report}。我已保留原任务和集成证据，不会把同一份本地修改反复送回集成；请先明确这些文件属于哪个任务，再从当前卡点继续。`;
+        state.blockingReason = task.customerActionGuidance?.sourceFingerprint === fingerprint
+          ? `${task.customerActionGuidance.title}：${task.customerActionGuidance.problem}`
+          : `${report}。我已保留原任务和集成证据，不会把同一份本地修改反复送回集成；令狐正在形成客户可执行的处理步骤。`;
       });
       if (!alreadyReported) {
         this.#recordEvent("linghu.automation.local_change_ownership_waiting", {
@@ -346,6 +358,7 @@ export class LinghuAutomationFacade {
           fingerprint,
         }, task.taskId);
       }
+      await this.#ensureCustomerActionGuidance(task, snapshot, fingerprint, report);
       return;
     }
     if (attempts >= 3) {
@@ -388,6 +401,33 @@ export class LinghuAutomationFacade {
       state.blockingReason = `${report}。我已发起本停点第 ${attempts + 1} 次安全恢复，并会继续核对新的执行结果。`;
     });
     this.#recordEvent("linghu.automation.recovery_requested", { report: this.state().blockingReason, fingerprint }, task.taskId);
+  }
+
+  /** 令狐按真实卡点生成可操作说明；失败时保留原卡点，绝不显示空壳按钮。 */
+  async #ensureCustomerActionGuidance(
+    task: CollaborationTaskOutDto,
+    snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined,
+    fingerprint: string,
+    report: string,
+  ): Promise<void> {
+    if (task.customerActionGuidance?.sourceFingerprint === fingerprint) return;
+    try {
+      const text = await this.#analyzeCustomerActionGuidance(customerActionFacts(task, snapshot, fingerprint));
+      const guidance = parseCustomerActionGuidance(text, fingerprint, { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" });
+      this.#collaboration.recordCustomerActionGuidance(task.taskId, guidance);
+      this.#store.updateRuntime("automation.customer_action_guidance_created", (state) => {
+        state.currentFaultFingerprint = fingerprint;
+        state.blockingReason = `${guidance.title}：${guidance.problem}`;
+      });
+      this.#recordEvent("linghu.automation.customer_action_guidance_created", { report, guidance }, task.taskId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.#store.updateRuntime("automation.customer_action_guidance_failed", (state) => {
+        state.currentFaultFingerprint = fingerprint;
+        state.blockingReason = `${report}。令狐暂未形成安全、完整的客户操作步骤，将继续分析，不显示不可执行的继续入口。`;
+      });
+      this.#recordEvent("linghu.automation.customer_action_guidance_failed", { report, detail, fingerprint }, task.taskId);
+    }
   }
 
   async #dispatchCurrentModule(state: LinghuAutomationStateOutDto): Promise<void> {

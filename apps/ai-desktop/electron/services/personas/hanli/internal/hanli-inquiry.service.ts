@@ -53,6 +53,20 @@ export class HanliInquiryService {
       publish(`internal:inquiry:${id}:answer`, "nangong-wan", report, questionId);
       // 原始技术依据只作为内部交接保存；韩立必须基于同一份证据向客户解释影响并给出下一步方案。
       const customerReply = await this.#explainForCustomer(request, inquiry, findings);
+      try {
+        // 这里只发布中立事实包，不启动研讨或创建专题；后续 Workflow 可独立决定何时消费。
+        memory.recordRequirementDiscussionContext?.({
+          contextId: id, ownerPersonaId: "han-li", conversationId, sourceRequestId: id,
+          customerQuestion: inquiry.customerQuestion, understoodGoal: inquiry.understoodGoal,
+          verificationTarget: inquiry.verificationTarget, expectedAnswer: inquiry.expectedAnswer,
+          investigationQuestion: inquiry.investigationQuestion, findingStatus: findings.status,
+          findingSummary: findings.summary, evidence: findings.evidence, unknowns: findings.unknowns,
+          customerConclusion: customerReply, createdAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "需求研讨事实包保存失败";
+        this.options.recordEvent("hanli.inquiry.discussion_context_failed", { conversationId, requestId: id, reason });
+      }
       this.options.recordEvent("hanli.inquiry.completed", { conversationId, requestId: id, status: findings.status });
       return publish(resultId, "han-li", customerReply, `inquiry:${id}:waiting`);
     } catch (error) {

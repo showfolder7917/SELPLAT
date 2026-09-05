@@ -86,6 +86,7 @@ export function createLinghuRuntime(options: CreateLinghuRuntimeOptions): Linghu
       onVerified();
       await options.unifiedTest.onVerified(executable);
     },
+    analyzeCustomerActionGuidance: options.analyzeCustomerActionGuidance,
   });
   // 所有状态变化通过一个订阅出口返回组合根，避免调用方在多个位置重复监听。
   // 订阅与 Electron 主进程同生命周期，退出时由进程统一释放，不建立无调用方的局部销毁入口。

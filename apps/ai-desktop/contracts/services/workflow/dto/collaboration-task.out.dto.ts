@@ -81,6 +81,20 @@ export interface CollaborationIntegrationFailureOutDto {
   occurredAt: string;
 }
 
+/** 令狐根据真实卡点事实生成的客户行动指导；程序只校验结构和恢复权限。 */
+export interface CollaborationCustomerActionGuidanceOutDto {
+  guidanceId: string;
+  sourceFingerprint: string;
+  title: string;
+  problem: string;
+  reasonCustomerMustAct: string;
+  steps: string[];
+  completionCriteria: string[];
+  resumeLabel: string;
+  generatedBy: CollaborationParticipantSnapshotOutDto;
+  createdAt: string;
+}
+
 export interface CollaborationTaskOutDto {
   taskId: string;
   taskRevision: number;
@@ -124,6 +138,7 @@ export interface CollaborationTaskOutDto {
   flowEvents: CollaborationFlowEventOutDto[];
   versionWorkspace: CollaborationVersionWorkspaceOutDto | null;
   integrationFailure?: CollaborationIntegrationFailureOutDto | null;
+  customerActionGuidance?: CollaborationCustomerActionGuidanceOutDto | null;
   finalResult: string | null;
   resultSummary: CollaborationResultSummaryOutDto | null;
   blockingReason: string | null;

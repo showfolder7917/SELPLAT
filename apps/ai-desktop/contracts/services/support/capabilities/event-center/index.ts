@@ -2,6 +2,11 @@
 export type { AuditLogInfoOutDto, AuditReasonOutDto, AuditTaskSummaryOutDto } from "./dto/audit.out.dto.js";
 export type { ApprovalMemoryEvidenceOutDto, CollaborationMemoryMessageOutDto, TrainingCorpusTopicSearchResultOutDto } from "./dto/collaboration-memory.out.dto.js";
 export type { ConversationRoundTopicDecisionInDto } from "./dto/conversation-round-topic-decision.in.dto.js";
+export type {
+  RequirementDiscoveryOutDto,
+  RequirementDiscoveryRelationValue,
+  RequirementDiscussionContextOutDto,
+} from "./dto/requirement-discussion-context.out.dto.js";
 export type { HanliSemanticExtractionInDto } from "./dto/hanli-semantic-extraction.in.dto.js";
 export type {
   HanliConcernStatusValue,

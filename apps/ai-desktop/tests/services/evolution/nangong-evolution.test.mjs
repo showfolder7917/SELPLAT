@@ -112,6 +112,15 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
     const internalMessages = [];
     const publishedConversations = [];
+    const seenPrompts = [];
+    const discussionBasis = {
+      contextId: "inquiry-1", ownerPersonaId: "han-li", conversationId: "hanli-thread-1", sourceRequestId: "inquiry-1",
+      customerQuestion: "自动研讨怎样避免偏离用户需求", understoodGoal: "既保留自由发现又解决真实需求",
+      verificationTarget: "内部研讨的问题发现和专题收敛", expectedAnswer: "明确自由探索与范围控制的关系",
+      investigationQuestion: "核对当前研讨如何读取资料并形成专题", findingStatus: "verified",
+      findingSummary: "已有自由讨论，但缺少新问题关系分类", evidence: [{ source: "deliberation.service.ts", detail: "当前只保存问答与成熟判断" }],
+      unknowns: [], customerConclusion: "需要保留自由讨论并增加关系分类。", createdAt: "2026-09-02T00:00:00.500Z",
+    };
     const snapshots = [{
       snapshotId: "source:hanli:user-1", deliberationId: "placeholder", source: "hanli", conversationId: "hanli-thread-1",
       sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null,
@@ -120,18 +129,22 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     const hanliReplies = [
       JSON.stringify({ action: "ask", question: "持续运行在没有新问题时应如何处理？", reason: "必须明确不得为了循环而虚构问题" }),
       JSON.stringify({ decision: "establish-topic", assessment: "后台判断不能代替聊天回复。" }),
-      JSON.stringify({ decision: "establish-topic", assessment: "目标、范围、证据和验收条件已经明确。", reply: "那就保留这个边界，没有新证据时不硬找问题。", topic: { title: "持续人物研讨", goal: "让内部研讨成熟后自动推进", scope: ["AI Desktop"], exclusions: ["无用户证据的问题"], evidence: ["用户明确要求持续研讨"], acceptanceCriteria: ["一问一答可见且成熟后建立专题"], establishmentReason: "整理条件完整" } }),
+      JSON.stringify({ decision: "establish-topic", assessment: "目标、范围、证据和验收条件已经明确。", discoveries: [
+        { issue: "缺少新问题关系分类", relation: "required-for-goal", reason: "不分类会把相邻问题混入当前修正", evidence: ["当前只保存成熟判断"], suggestedAction: "在当前专题加入关系分类" },
+        { issue: "以后支持更多关系展示", relation: "follow-up-opportunity", reason: "不影响本次正确收敛", evidence: [], suggestedAction: "保留为后续候选" },
+      ], reply: "那就保留这个边界，没有新证据时不硬找问题。", topic: { title: "持续人物研讨", goal: "让内部研讨成熟后自动推进", scope: ["AI Desktop", "新问题关系分类"], exclusions: ["无用户证据的问题", "后续关系展示"], evidence: ["用户明确要求持续研讨"], acceptanceCriteria: ["一问一答可见且成熟后建立专题"], establishmentReason: "整理条件完整" } }),
       "1",
     ];
     const service = new HanliNangongDeliberationService({
       store, prompts,
       memory: {
+        readLatestRequirementDiscussionContext() { return discussionBasis; },
         readHanLiEvolutionCorpus(deliberationId) { return snapshots.map((item) => ({ ...item, deliberationId })); },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
       },
-      askHanli: async () => hanliReplies.shift(),
-      askNangong: async () => "没有新问题时保持监测；出现新的用户证据后再继续提问。",
+      askHanli: async (prompt) => { seenPrompts.push(prompt); return hanliReplies.shift(); },
+      askNangong: async (prompt) => { seenPrompts.push(prompt); return "没有新问题时保持监测；出现新的用户证据后再继续提问。"; },
       onPersonaConversationChanged: (conversation) => publishedConversations.push(conversation),
       recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread-1",
     });
@@ -151,8 +164,90 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     assert.ok(internalMessages[2].messageId.endsWith(":reply"));
     assert.ok(internalMessages.every((message) => !message.content.startsWith("判断：")));
     assert.equal(result.state.deliberations[0].rounds[0].assessment, "目标、范围、证据和验收条件已经明确。");
+    assert.equal(result.state.deliberations[0].rounds[0].discoveries[0].relation, "required-for-goal");
+    assert.equal(result.state.deliberations[0].candidate.discoveries[1].relation, "follow-up-opportunity");
+    assert.equal(result.state.deliberations[0].sourceSnapshots[0].responsePhase, "requirement-discussion-context");
+    assert.ok(seenPrompts.some((prompt) => prompt.includes(discussionBasis.customerQuestion)));
+    assert.ok(seenPrompts.some((prompt) => prompt.includes("required-for-goal")));
     assert.ok(publishedConversations.every((conversation) => conversation.ownerPersonaId === "han-li"));
     assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("自动托管由韩立把范围扩展重新判断为当前专题或后续专题", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "deliberation-customer-decision-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
+    const internalMessages = [];
+    const seenPrompts = [];
+    const replies = [
+      JSON.stringify({ action: "ask", question: "修复当前问题是否必须调整其他页面？", reason: "需要区分必要修复和范围扩展" }),
+      JSON.stringify({ decision: "establish-topic", assessment: "当前问题已有方案，但统一改造其他页面需要客户决定。", discoveries: [{
+        issue: "统一改造其他页面", relation: "customer-decision-required", reason: "它会扩大本次产品范围", evidence: ["其他页面采用相邻实现"], suggestedAction: "交给客户决定是否另行纳入",
+      }], reply: "当前问题可以单独修复，其他页面是否统一改造需要你决定。", topic: {
+        title: "修复当前页面", goal: "解决当前页面问题", scope: ["当前页面"], exclusions: ["其他页面统一改造"], evidence: ["当前页面存在真实问题"], acceptanceCriteria: ["当前页面恢复正常"], establishmentReason: "当前修复边界已经明确",
+      } }),
+      "统一改造其他页面不属于当前专题，留到后续讨论；当前专题只修当前页面。",
+      JSON.stringify({ decision: "establish-topic", assessment: "当前专题边界明确，其他页面作为后续机会保留。", discoveries: [{
+        issue: "统一改造其他页面", relation: "follow-up-opportunity", reason: "它有价值但不阻塞当前页面修复", evidence: ["其他页面采用相邻实现"], suggestedAction: "当前专题完成后继续讨论并在成熟时建立新专题",
+      }], reply: "当前先完成当前页面，其他页面留到下一专题继续讨论。", topic: {
+        title: "修复当前页面", goal: "解决当前页面问题", scope: ["当前页面"], exclusions: ["其他页面统一改造"], evidence: ["当前页面存在真实问题"], acceptanceCriteria: ["当前页面恢复正常"], establishmentReason: "当前修复边界已经明确",
+      } }),
+      "1",
+    ];
+    const nangongReplies = ["当前页面可单独修复，其他页面只是相邻机会。", "本次只修当前页面；其他页面可留到后续。符合请回复 1。", "同意，其他页面不影响当前修复，可独立形成后续方案。", "本次只修当前页面；后续机会已经单独保留。符合请回复 1。"];
+    const service = new HanliNangongDeliberationService({
+      store, prompts,
+      memory: {
+        readLatestRequirementDiscussionContext() { return null; },
+        readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "customer-decision-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null, content: "先解决当前页面的问题。", originalCreatedAt: "2026-09-05T00:00:00.000Z", capturedAt: "2026-09-05T00:00:01.000Z" }]; },
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+      },
+      askHanli: async (prompt) => { seenPrompts.push(prompt); const reply = replies.shift(); if (!reply) throw new Error("韩立没有完成自动托管范围判断"); return reply; },
+      askNangong: async () => nangongReplies.shift(),
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
+    });
+    const first = await service.advance({ requireProblem: true });
+    assert.equal(first.activity, "questioning");
+    assert.equal(first.state.topics.length, 0);
+    assert.equal(first.state.deliberations[0].rounds.length, 2);
+    const result = await service.advance({ requireProblem: true });
+    assert.equal(result.activity, "topic-established");
+    assert.equal(result.state.topics.length, 1);
+    assert.equal(result.state.deliberations[0].candidate.discoveries[0].relation, "follow-up-opportunity");
+    assert.equal(internalMessages.some((message) => message.messageId.startsWith("hanli-confirmation:")), false);
+    assert.ok(seenPrompts.some((prompt) => prompt.includes("全权代理客户")));
+    assert.ok(seenPrompts.some((prompt) => prompt.includes("不得把普通范围判断转回客户")));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("自动托管关闭时范围扩展仍回到真实客户确认", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "deliberation-custody-off-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: false, workspaceState, locale: "zh-CN" });
+    const internalMessages = [];
+    const replies = [
+      JSON.stringify({ action: "ask", question: "是否同时改造其他页面？", reason: "这会扩大本次范围" }),
+      JSON.stringify({ decision: "establish-topic", assessment: "当前方案成熟，但扩展需要客户决定。", discoveries: [{ issue: "改造其他页面", relation: "customer-decision-required", reason: "扩大产品范围", evidence: [], suggestedAction: "询问客户" }], reply: "当前修复已明确，扩展部分请客户决定。", topic: { title: "当前页面修复", goal: "修复当前页面", scope: ["当前页面"], exclusions: ["其他页面"], evidence: ["当前页面问题"], acceptanceCriteria: ["当前页面正常"], establishmentReason: "范围明确" } }),
+    ];
+    const service = new HanliNangongDeliberationService({
+      store, prompts,
+      memory: {
+        readLatestRequirementDiscussionContext() { return null; },
+        readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "custody-off-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null, content: "修复当前页面。", originalCreatedAt: "2026-09-05T00:00:00.000Z", capturedAt: "2026-09-05T00:00:01.000Z" }]; },
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+      },
+      askHanli: async () => replies.shift(), askNangong: async (_prompt) => internalMessages.some((item) => item.messageId.endsWith(":answer")) ? "本次修复范围说明，符合请回复 1。" : "其他页面属于范围扩展。",
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
+    });
+    const result = await service.advance({ requireProblem: true });
+    assert.equal(result.activity, "idle");
+    assert.equal(result.state.topics.length, 0);
+    assert.ok(internalMessages.some((message) => message.messageId.startsWith("hanli-confirmation:")));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

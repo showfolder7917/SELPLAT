@@ -4,6 +4,7 @@ import type {
   CollaborationMemberOutDto,
   CollaborationParticipantSnapshotOutDto,
   CollaborationFlowEventDetailsOutDto,
+  CollaborationCustomerActionGuidanceOutDto,
   CollaborationRepairDiagnosisOutDto,
   CollaborationRequirementPlanOutDto,
   CollaborationStateOutDto,
@@ -91,7 +92,11 @@ export class CollaborationCoordinator {
   }
 
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {
-    const state = this.#store.continueTask(taskId, recoveryActor);
+    const current = this.#store.task(taskId);
+    const guidanceActor = current.customerActionGuidance
+      ? this.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID)
+      : undefined;
+    const state = this.#store.continueTask(taskId, recoveryActor || guidanceActor);
     const previousWait = this.#waitSpans.get(taskId);
     if (previousWait) this.#durations.finish(previousWait, "interrupted", { releaseEvent: "task.recovery_requested" });
     this.#waitSpans.delete(taskId);
@@ -110,6 +115,17 @@ export class CollaborationCoordinator {
     }
     this.#schedule();
     return state;
+  }
+
+  /** 保存令狐已经完成的客户行动分析；相同故障指纹只保留一份指导。 */
+  recordCustomerActionGuidance(taskId: string, guidance: CollaborationCustomerActionGuidanceOutDto): CollaborationStateOutDto {
+    const current = this.#store.task(taskId);
+    if (!current.integrationFailure && current.state !== "blocked") throw new Error("当前任务没有可登记的客户处理卡点。");
+    if (current.customerActionGuidance?.sourceFingerprint === guidance.sourceFingerprint) return this.state();
+    return this.#store.updateTask(taskId, "customer.action_required", (task) => {
+      task.customerActionGuidance = structuredClone(guidance);
+      appendFlow(task, "customer.action_required", "recovery", "waiting", guidance.title, guidance.generatedBy, false, { customerActionGuidance: structuredClone(guidance) });
+    });
   }
 
   /**

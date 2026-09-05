@@ -254,7 +254,7 @@ export class EvolutionStateStore {
       if (state.deliberations.some((item) => item.deliberationId === deliberationId)) return;
       state.deliberations.push({
         deliberationId, topicId: null, status: "questioning", sourceSnapshots: structuredClone(snapshots),
-        rounds: [{ roundId: `han-li-round-${randomUUID()}`, roundNumber: 1, question: required(question, "韩立问题", 30_000), questionReason: required(questionReason, "发问依据", 8_000), answer: null, assessment: null, decision: null, createdAt: now, answeredAt: null, assessedAt: null }],
+        rounds: [{ roundId: `han-li-round-${randomUUID()}`, roundNumber: 1, question: required(question, "韩立问题", 30_000), questionReason: required(questionReason, "发问依据", 8_000), answer: null, assessment: null, discoveries: [], decision: null, createdAt: now, answeredAt: null, assessedAt: null }],
         candidate: null, createdAt: now, updatedAt: now,
       });
     });
@@ -271,7 +271,7 @@ export class EvolutionStateStore {
     });
   }
 
-  assessDeliberation(deliberationId: string, roundId: string, assessment: string, nextQuestion: { question: string; reason: string } | null, candidate: HanliTopicCandidateOutDto | null): EvolutionStateOutDto {
+  assessDeliberation(deliberationId: string, roundId: string, assessment: string, nextQuestion: { question: string; reason: string } | null, candidate: HanliTopicCandidateOutDto | null, discoveries: NonNullable<HanliTopicCandidateOutDto["discoveries"]> = []): EvolutionStateOutDto {
     return this.#commit(candidate ? "deliberation.topic_ready" : "deliberation.follow_up_planned", null, null, (state) => {
       const deliberation = requireDeliberation(state, deliberationId);
       const round = requireDeliberationRound(deliberation, roundId);
@@ -279,6 +279,7 @@ export class EvolutionStateStore {
       if (round.assessment !== null) return;
       const now = new Date().toISOString();
       round.assessment = required(assessment, "韩立判断", 30_000);
+      round.discoveries = structuredClone(discoveries);
       round.assessedAt = now;
       if (candidate) {
         round.decision = "establish-topic";
@@ -287,7 +288,7 @@ export class EvolutionStateStore {
       } else {
         if (!nextQuestion) throw new Error("继续研讨必须给出韩立的下一轮问题。 ");
         round.decision = "continue";
-        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: required(nextQuestion.question, "韩立下一轮问题", 30_000), questionReason: required(nextQuestion.reason, "下一轮发问依据", 8_000), answer: null, assessment: null, decision: null, createdAt: now, answeredAt: null, assessedAt: null });
+        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: required(nextQuestion.question, "韩立下一轮问题", 30_000), questionReason: required(nextQuestion.reason, "下一轮发问依据", 8_000), answer: null, assessment: null, discoveries: [], decision: null, createdAt: now, answeredAt: null, assessedAt: null });
       }
       deliberation.updatedAt = now;
     });
@@ -331,7 +332,7 @@ export class EvolutionStateStore {
       if (reply.trim() !== "1") {
         deliberation.status = "questioning";
         deliberation.candidate = null;
-        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: reply.trim(), questionReason: "韩立尚未确认修复范围", answer: null, assessment: null, decision: null, createdAt: now, answeredAt: null, assessedAt: null });
+        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: reply.trim(), questionReason: "韩立尚未确认修复范围", answer: null, assessment: null, discoveries: [], decision: null, createdAt: now, answeredAt: null, assessedAt: null });
       }
       deliberation.updatedAt = now;
     });
@@ -831,7 +832,20 @@ function normalizeCandidate(candidate: HanliTopicCandidateOutDto): HanliTopicCan
     scope: normalizedList(candidate.scope, "演进专项范围"), exclusions: normalizedOptionalList(candidate.exclusions),
     evidence: normalizedList(candidate.evidence, "演进专项证据"), acceptanceCriteria: normalizedList(candidate.acceptanceCriteria, "演进专项验收条件"),
     establishmentReason: required(candidate.establishmentReason, "韩立确立理由", 8_000),
+    discoveries: normalizeDiscoveries(candidate.discoveries),
   };
+}
+function normalizeDiscoveries(values: HanliTopicCandidateOutDto["discoveries"]): NonNullable<HanliTopicCandidateOutDto["discoveries"]> {
+  const relations = new Set(["required-for-goal", "follow-up-opportunity", "customer-decision-required", "unrelated"]);
+  if (!Array.isArray(values)) return [];
+  return values.slice(0, 100).map((item) => {
+    if (!relations.has(item.relation)) throw new Error("新问题与客户需求的关系无效。");
+    return {
+      issue: required(item.issue, "新问题", 8_000), relation: item.relation,
+      reason: required(item.reason, "新问题关系依据", 8_000), evidence: normalizedOptionalList(item.evidence),
+      suggestedAction: required(item.suggestedAction, "新问题处理建议", 8_000),
+    };
+  });
 }
 function requireTopic(state: EvolutionStateOutDto, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
 function requireProposal(state: EvolutionStateOutDto, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
