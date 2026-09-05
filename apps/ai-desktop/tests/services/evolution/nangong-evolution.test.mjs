@@ -1317,6 +1317,8 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     assert.equal(missing.oneShotRun.status, "blocked");
     assert.equal(failures.at(-1).operation, "one_shot_task_blocked:missing-task-record");
     assert.deepEqual(failures.at(-1).details.missingTaskIds, ["blocked-integration-task"]);
+    assert.match(personaEvolutionRuntimeSource, /proposal-task-state-inconsistent/);
+    assert.doesNotMatch(personaEvolutionRuntimeSource, /missing-task-record" : "unknown/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
