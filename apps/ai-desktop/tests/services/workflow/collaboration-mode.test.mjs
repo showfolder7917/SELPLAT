@@ -1462,7 +1462,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /collaboration_merge_conflict_correction_contract = capture_unmerged_files_stdout_stderr_baseSHA_resultSHA_and_generation_before_merge_abort/);
   assert.match(rule, /evolution_persona_conversation_ui_contract = shared_SELUI_conversation_and_theme_tokens_only/);
   assert.match(rule, /linghu_automation_recovery_fingerprint_contract = task_state_phase_generation_blocking_kind_reason_and_progress_fingerprint/);
-  assert.match(rule, /local_change_ownership_blocks_without_automatic_retry_until_ownership_fact_changes_or_human_continue/);
+  assert.match(rule, /local_change_ownership_enters_linghu_investigation_before_customer_wait/);
   assert.match(rule, /fault_report_names_person_task_stage_finding_and_action/);
   assert.match(rule, /stale_current_handler_never_overrides_active_executor/);
   assert.match(rule, /linghu_automation_state_recovery_contract/);
