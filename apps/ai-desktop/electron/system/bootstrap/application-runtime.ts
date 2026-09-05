@@ -579,9 +579,18 @@ export async function startApplication(): Promise<void> {
         codexHome, serviceName: "selplat_hanli_computer_acceptance", threadSource: "ai-desktop-hanli-acceptance", migrateLegacySession: false,
         sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions: readHanliRuleInstructions, dynamicTools,
       }, (details) => eventCenter.recordEvent("hanli.acceptance.tool_policy", details), (details) => eventCenter.recordEvent("hanli.acceptance.thread", details));
-      const timer = setTimeout(() => service.dispose(), 180_000);
-      try { await service.send(prompts.render("hanli.computer-acceptance", { goalJson: JSON.stringify(goal) }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null); }
-      finally { clearTimeout(timer); service.dispose(); }
+      // 逐屏验收最多可执行 40 步；超时时先向流程返回可诊断的受阻事实，再回收隔离 harness。
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const acceptanceTimeout = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("韩立交互式验收会话超过10分钟未完成，未代替韩立给出验收结论。")), 600_000);
+      });
+      try {
+        await Promise.race([
+          service.send(prompts.render("hanli.computer-acceptance", { goalJson: JSON.stringify(goal) }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null),
+          acceptanceTimeout,
+        ]);
+      }
+      finally { if (timer) clearTimeout(timer); service.dispose(); }
     },
     recordEvent: (type, details, taskId) => eventCenter.recordEvent(type, details, taskId),
     recordTimelineEvent: recordEvolutionTimelineEvent,
