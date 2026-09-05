@@ -3,10 +3,10 @@ import test from "node:test";
 import { readFileSync, existsSync } from "node:fs";
 import { HanliComputerAcceptance } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-computer-acceptance.js";
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true) {
+function fixture(safe = true, composerLabel = "给韩立发送消息") {
   let n = 0;
   const inputs = [], progress = [];
-  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async () => safe, sendInputEvent: (event) => inputs.push(event) } };
+  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => String(script).includes("prepareAcceptanceMessage") ? composerLabel : safe, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
   return { inputs, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
 }
@@ -51,6 +51,20 @@ test("不安全点击被拒绝且可以真实报告受阻", async () => {
     await finish(tools, snapshot, "blocked");
   });
   assert.equal(result.status, "blocked");
+});
+test("受控验收消息只能准备一次，并且可作为发送后的真实截图证据", async () => {
+  const f = fixture("acceptance-send");
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const prepared = await tools.call("hanli_computer", { action: "prepare-test-message", reason: "准备验证发送后的滚动行为", observationId: first });
+    await assert.rejects(tools.call("hanli_computer", { action: "prepare-test-message", reason: "重复准备", observationId: id(prepared) }), /仅允许准备一条/);
+    const sent = await tools.call("hanli_computer", { action: "click", reason: "发送受控验收消息", observationId: id(prepared), x: 100, y: 100 });
+    assert.deepEqual(f.inputs.map((item) => item.type), ["mouseDown", "mouseUp"]);
+    await finish(tools, id(sent));
+  });
+  assert.equal(run.status, "passed");
+  assert.equal(run.stepResults[0].operation.type, "input");
+  assert.equal(run.stepResults[0].operation.target, "persona-composer");
 });
 test("普通文字回复不算验收完成，模型断线回收权限", async () => {
   const f = fixture(); let tools;
