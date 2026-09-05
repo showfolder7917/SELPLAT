@@ -331,7 +331,8 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
     const metrics = await page.locator(".dev-settings").evaluate((panel, expectedName) => {
       const triggerElement = document.querySelector<HTMLElement>(".dev-settings-control > .activity-settings");
       const title = panel.querySelector<HTMLElement>(".selfloating-heading-copy strong");
-      if (!triggerElement || !title) throw new Error(`${expectedName}窗口缺少设置入口或标题。`);
+      const content = panel.querySelector<HTMLElement>(".dev-settings-content");
+      if (!triggerElement || !title || !content) throw new Error(`${expectedName}窗口缺少设置入口、标题或内容区。`);
       const triggerBounds = triggerElement.getBoundingClientRect();
       const panelBounds = panel.getBoundingClientRect();
       const titleBounds = title.getBoundingClientRect();
@@ -356,6 +357,8 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
         titleWidth: titleBounds.width,
         titleHeight: titleBounds.height,
         titleWritingMode: window.getComputedStyle(title).writingMode,
+        contentClientHeight: content.clientHeight,
+        contentScrollHeight: content.scrollHeight,
         actionButtonsInside: actionButtons.every((button) => button.inside),
         maximumActionButtonOverflow: Math.max(0, ...actionButtons.map((button) => button.overflow)),
       };
@@ -369,8 +372,18 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
     expect(metrics.panelScrollWidth, `${size.name}窗口的设置面板不能横向溢出`).toBeLessThanOrEqual(metrics.panelClientWidth + 1);
     expect(metrics.titleWritingMode).toBe("horizontal-tb");
     expect(metrics.titleWidth, `${size.name}窗口的设置标题不能竖排`).toBeGreaterThan(metrics.titleHeight * 3);
+    expect(metrics.contentScrollHeight, `${size.name}窗口的设置内容区必须在内容超出时提供纵向滚动`).toBeGreaterThan(metrics.contentClientHeight);
     expect(metrics.actionButtonsInside, `${size.name}窗口的设置操作不能跑出面板`).toBe(true);
     expect(metrics.maximumActionButtonOverflow, `${size.name}窗口的设置操作文字不能溢出`).toBeLessThanOrEqual(1);
+    const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+    await expect(language, `${size.name}窗口的设置内容区必须保留语言选择项`).toHaveCount(1);
+    await language.evaluate((element) => {
+      const content = element.closest<HTMLElement>(".dev-settings-content");
+      if (!content) throw new Error("语言选择项没有位于设置内容区。");
+      content.scrollTop = element.offsetTop - content.offsetTop;
+    });
+    await expect(language).toBeInViewport();
+    await expect(page.locator(".dev-settings .selfloating-heading")).toBeInViewport();
     await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
   }
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
