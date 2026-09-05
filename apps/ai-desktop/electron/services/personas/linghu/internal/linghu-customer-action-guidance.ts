@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type {
   CollaborationCustomerActionGuidanceOutDto,
   CollaborationTaskOutDto,
@@ -10,6 +12,7 @@ export function customerActionFacts(
   snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined,
   sourceFingerprint: string,
 ): Record<string, unknown> {
+  const location = customerActionLocation(task);
   return {
     sourceFingerprint,
     taskId: task.taskId,
@@ -19,6 +22,9 @@ export function customerActionFacts(
     blockingKind: snapshot?.blockingKind || null,
     blockingReason: task.blockingReason || null,
     recoveryTargetState: task.recoveryTargetState || null,
+    workspaceRoot: location.workspaceRoot,
+    uncommittedFiles: location.affectedFiles,
+    absoluteFilePaths: location.absoluteFilePaths,
     integrationFailure: task.integrationFailure ? {
       kind: task.integrationFailure.kind,
       phase: task.integrationFailure.phase || null,
@@ -36,6 +42,7 @@ export function parseCustomerActionGuidance(
   text: string,
   sourceFingerprint: string,
   generatedBy: CollaborationCustomerActionGuidanceOutDto["generatedBy"],
+  location?: ReturnType<typeof customerActionLocation>,
 ): CollaborationCustomerActionGuidanceOutDto {
   const candidate = extractJsonObject(text);
   const input = JSON.parse(candidate) as Record<string, unknown>;
@@ -54,10 +61,27 @@ export function parseCustomerActionGuidance(
     reasonCustomerMustAct,
     steps,
     completionCriteria,
+    workspaceRoot: location?.workspaceRoot || null,
+    affectedFiles: location?.affectedFiles || [],
     resumeLabel: "从卡点继续",
     generatedBy,
     createdAt: new Date().toISOString(),
   };
+}
+
+/** 目录和文件来自 Git 结构化证据，不能交给模型猜测或在页面写死。 */
+export function customerActionLocation(task: CollaborationTaskOutDto): {
+  workspaceRoot: string | null;
+  affectedFiles: string[];
+  absoluteFilePaths: string[];
+} {
+  const primaryRoot = task.snapshot.workspaceState.roots.find((root) => root.id === task.snapshot.workspaceState.primaryId)?.path || null;
+  const workspaceRoot = task.integrationFailure?.workspaceRoot || primaryRoot;
+  const affectedFiles = [...new Set(task.integrationFailure?.conflictFiles || [])].filter(Boolean);
+  const absoluteFilePaths = workspaceRoot
+    ? affectedFiles.map((file) => path.isAbsolute(file) ? path.normalize(file) : path.resolve(workspaceRoot, file))
+    : affectedFiles.filter(path.isAbsolute).map((file) => path.normalize(file));
+  return { workspaceRoot, affectedFiles, absoluteFilePaths };
 }
 
 function extractJsonObject(text: string): string {

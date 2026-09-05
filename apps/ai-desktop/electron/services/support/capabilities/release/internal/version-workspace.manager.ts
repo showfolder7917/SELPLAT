@@ -33,7 +33,15 @@ export interface LocalChangeTransferResult {
 }
 
 export class LocalChangeOwnershipError extends Error {
-  constructor(message: string) { super(message); this.name = "LocalChangeOwnershipError"; }
+  readonly conflictFiles: string[];
+  readonly workspaceRoot: string;
+
+  constructor(message: string, conflictFiles: string[] = [], workspaceRoot = "") {
+    super(message);
+    this.name = "LocalChangeOwnershipError";
+    this.conflictFiles = [...new Set(conflictFiles.map(normalizeFile).filter(Boolean))].sort();
+    this.workspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : "";
+  }
 }
 
 export class MergeConflictError extends Error {
@@ -173,21 +181,22 @@ export class VersionWorkspaceManager {
       if (matching.length !== 1) {
         throw new LocalChangeOwnershipError(matching.length === 0
           ? `本地修改 ${changedFile} 未登记到任何待集成任务，禁止自动提交或合并。`
-          : `本地修改 ${changedFile} 同时属于多个待集成任务，禁止猜测归属。`);
+          : `本地修改 ${changedFile} 同时属于多个待集成任务，禁止猜测归属。`, [changedFile], this.#repositoryRoot);
       }
       owners.set(matching[0].taskId, matching[0]);
     }
-    if (owners.size !== 1) throw new LocalChangeOwnershipError("本地修改分属多个任务，必须分别回到各自任务分支后再集成。");
+    if (owners.size !== 1) throw new LocalChangeOwnershipError("本地修改分属多个任务，必须分别回到各自任务分支后再集成。", changedFiles, this.#repositoryRoot);
     const owner = [...owners.values()][0];
     const taskRoot = this.#validateManagedPath(owner.workspace.rootPath);
     this.#validateManagedBranch(owner.workspace.branchName);
-    if (await this.#git(taskRoot, ["branch", "--show-current"]) !== owner.workspace.branchName) throw new LocalChangeOwnershipError("任务工作区分支与签发记录不一致。");
-    if (await this.#git(taskRoot, ["status", "--porcelain"])) throw new LocalChangeOwnershipError("任务工作区已有未提交内容，禁止叠加本地修改。");
+    if (await this.#git(taskRoot, ["branch", "--show-current"]) !== owner.workspace.branchName) throw new LocalChangeOwnershipError("任务工作区分支与签发记录不一致。", [], taskRoot);
+    const taskChangedFiles = splitStatusPorcelain(await this.#gitRaw(taskRoot, ["status", "--porcelain", "-z"]));
+    if (taskChangedFiles.length) throw new LocalChangeOwnershipError("任务工作区已有未提交内容，禁止叠加本地修改。", taskChangedFiles, taskRoot);
 
     const previousStash = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
     await this.#git(this.#repositoryRoot, ["stash", "push", "--include-untracked", "--message", `AI Desktop 转交 ${owner.taskId}`]);
     const recoveryStashSha = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
-    if (!recoveryStashSha || recoveryStashSha === previousStash) throw new LocalChangeOwnershipError("本地修改恢复快照创建失败，未执行转交。");
+    if (!recoveryStashSha || recoveryStashSha === previousStash) throw new LocalChangeOwnershipError("本地修改恢复快照创建失败，未执行转交。", changedFiles, this.#repositoryRoot);
     try {
       await this.#git(taskRoot, ["stash", "apply", "--index", recoveryStashSha]);
       await this.#git(taskRoot, ["add", "-A"]);
@@ -201,7 +210,7 @@ export class VersionWorkspaceManager {
       if (topStash === recoveryStashSha) await this.#git(this.#repositoryRoot, ["stash", "drop", "stash@{0}"]);
       return { taskId: owner.taskId, resultSha, changedFiles, recoveryStashSha };
     } catch (error) {
-      throw new LocalChangeOwnershipError(`本地修改已保存为恢复快照 ${recoveryStashSha}，但转交任务分支失败：${errorMessage(error)}`);
+      throw new LocalChangeOwnershipError(`本地修改已保存为恢复快照 ${recoveryStashSha}，但转交任务分支失败：${errorMessage(error)}`, changedFiles, this.#repositoryRoot);
     }
   }
 

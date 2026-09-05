@@ -48,7 +48,7 @@ export class CollaborationCoordinator {
   readonly #emitStream: CollaborationCoordinatorOptions["emitStream"];
   readonly #createTaskRuleContext: CollaborationCoordinatorOptions["createTaskRuleContext"];
   readonly #activeTaskRuns = new Set<string>();
-  readonly #unifiedTestRepairRuns = new Map<string, Promise<boolean>>();
+  readonly #technicalRepairRuns = new Map<string, Promise<boolean>>();
   readonly #mergeConflictCorrectionRuns = new Set<string>();
   readonly #waitSpans = new Map<string, string>();
   readonly #heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
@@ -128,32 +128,46 @@ export class CollaborationCoordinator {
     });
   }
 
-  /**
-   * 统一测试已经提供了确定失败证据时，由令狐在原任务工作树内完成最小修正并生成新的结果版本。
-   * 该入口接受 verification 与已结构化的 infrastructure 失败；不处理人工选择、工作区归属或 Git 冲突。
-   */
+  /** 已有结构化技术失败时，令狐先只读调查，再在原任务工作树内完成最小修正并生成新结果。 */
   async repairFailedUnifiedTest(taskId: string): Promise<boolean> {
-    const existing = this.#unifiedTestRepairRuns.get(taskId);
+    return this.repairTechnicalFailure(taskId);
+  }
+
+  /** 统一处理验证、发布基础设施和本地修改来源三类已有技术证据的调查修复。 */
+  async repairTechnicalFailure(taskId: string): Promise<boolean> {
+    const existing = this.#technicalRepairRuns.get(taskId);
     if (existing) return existing;
-    const run = this.#repairFailedUnifiedTest(taskId).finally(() => this.#unifiedTestRepairRuns.delete(taskId));
-    this.#unifiedTestRepairRuns.set(taskId, run);
+    const run = this.#repairTechnicalFailure(taskId).finally(() => this.#technicalRepairRuns.delete(taskId));
+    this.#technicalRepairRuns.set(taskId, run);
     return run;
   }
 
-  async #repairFailedUnifiedTest(taskId: string): Promise<boolean> {
+  async #repairTechnicalFailure(taskId: string): Promise<boolean> {
     const failedTask = this.#store.task(taskId);
     // 冻结本轮统一测试失败事实，避免后续状态更新使可空字段与本次修复依据脱节。
     const integrationFailure = failedTask.integrationFailure;
-    const repairableFailure = integrationFailure?.kind === "verification" || integrationFailure?.kind === "infrastructure";
+    const repairableFailure = integrationFailure?.kind === "verification"
+      || integrationFailure?.kind === "infrastructure"
+      || integrationFailure?.kind === "local-change-ownership";
     if (!repairableFailure || !["test-failed", "blocked"].includes(failedTask.state)) return false;
     const originalFailureKind = integrationFailure.kind;
+    const ownershipFailure = originalFailureKind === "local-change-ownership";
+    const repairStartedEvent = ownershipFailure ? "execution.repair_started" : "unified_test.repair_started";
+    const repairInvestigatedEvent = ownershipFailure ? "execution.repair_investigated" : "unified_test.repair_investigated";
+    const repairCompletedEvent = ownershipFailure ? "execution.repair_completed" : "unified_test.repair_completed";
+    const repairFailedEvent = ownershipFailure ? "execution.repair_waiting" : "unified_test.repair_failed";
     const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
     if (linghu.state !== "idle") return false;
 
     const originalReason = failedTask.blockingReason || integrationFailure.detail;
+    const failureEvidence = [
+      integrationFailure.detail,
+      integrationFailure.workspaceRoot ? `发生目录：${integrationFailure.workspaceRoot}` : "",
+      integrationFailure.conflictFiles.length ? `涉及文件：${integrationFailure.conflictFiles.join("、")}` : "",
+    ].filter(Boolean).join("\n");
     let repairSession: ExecutorSessionPort | null = null;
     try {
-      this.#store.updateTask(taskId, "unified_test.repair_started", (current, state) => {
+      this.#store.updateTask(taskId, repairStartedEvent, (current, state) => {
         const handler = requireMember(state, LINGHU_MEMBER_ID);
         handler.generation += 1;
         handler.state = "working";
@@ -167,29 +181,31 @@ export class CollaborationCoordinator {
         current.repairKind = "execution";
         current.repairFailureReason = originalReason;
         current.currentHandler = participantSnapshot(handler);
-        current.blockingReason = `${handler.displayName}正在依据${originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试"}失败证据调查并修复真实故障`;
-        appendFlow(current, "unified_test.repair_started", "recovery", "started", current.blockingReason, handler, false, {
+        const failureSource = ownershipFailure ? "本地修改目录和文件" : originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试";
+        current.blockingReason = `${handler.displayName}正在依据${failureSource}证据调查根本原因`;
+        appendFlow(current, repairStartedEvent, "recovery", "started", current.blockingReason, handler, false, {
           failureStage: current.integrationFailure?.phase || "verification", failureSummary: originalReason,
-          technicalEvidence: [current.integrationFailure?.detail || originalReason], originalExecutor: current.originalExecutor,
+          technicalEvidence: [failureEvidence || originalReason], originalExecutor: current.originalExecutor,
           routedBy: current.initiator, repairAssignee: participantSnapshot(handler),
         });
       });
 
       const task = this.#store.task(taskId);
       repairSession = await this.#executor.createTransient(task, requireMember(this.state(), LINGHU_MEMBER_ID));
-      const diagnosisText = await repairSession.investigateRepair(task, task.integrationFailure?.detail || originalReason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosisText = await repairSession.investigateRepair(task, failureEvidence || originalReason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       const diagnosis = repairDiagnosis(task, diagnosisText, originalReason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
-      this.#store.updateTask(taskId, "unified_test.repair_investigated", (current, state) => {
+      this.#store.updateTask(taskId, repairInvestigatedEvent, (current, state) => {
         current.repairDiagnosis = diagnosis;
         current.phase = "implementing";
         requireMember(state, LINGHU_MEMBER_ID).phase = "implementing";
-        current.blockingReason = "令狐老祖已完成失败候选只读调查，正在按调查结论修复";
-        appendFlow(current, "unified_test.repair_investigated", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
+        current.blockingReason = ownershipFailure ? "令狐老祖已查明本地修改来源，正在按调查结论修复" : "令狐老祖已完成失败候选只读调查，正在按调查结论修复";
+        appendFlow(current, repairInvestigatedEvent, "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
       });
       const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
-      if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "统一测试修复未完成代码级验证");
+      if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；")
+        || (ownershipFailure ? "本地修改来源修复未完成代码级验证" : "统一测试修复未完成代码级验证"));
       const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), linghu.displayName);
-      this.#store.updateTask(taskId, "unified_test.repair_completed", (current, state) => {
+      this.#store.updateTask(taskId, repairCompletedEvent, (current, state) => {
         if (!current.versionWorkspace) throw new Error("统一测试修复后缺少版本工作区。");
         current.versionWorkspace.resultSha = resultSha;
         current.state = "ready-for-integration";
@@ -205,27 +221,31 @@ export class CollaborationCoordinator {
         current.finalResult = repaired.text;
         current.resultSummary = createCollaborationResultSummary(current, repaired.text, repaired.pendingActions);
         current.unifiedTest = { status: "pending", owner: participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), failureReason: null, startedAt: null, completedAt: null };
-        appendFlow(current, "unified_test.repair_completed", "recovery", "completed", "令狐老祖已完成失败项修复并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis, repaired.text));
+        appendFlow(current, repairCompletedEvent, "recovery", "completed", ownershipFailure
+          ? "令狐老祖已完成本地修改来源修复并生成新结果版本，等待重新集成验证"
+          : "令狐老祖已完成失败项修复并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis, repaired.text));
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
       this.#integrationPipeline.trackWaitingTask(taskId, {
         segment: "integration-wait",
         waitType: "recovery-wait",
-        reasonCode: "unified-test-repair-completed",
+        reasonCode: ownershipFailure ? "local-change-repair-completed" : "unified-test-repair-completed",
         resource: "integration-coordinator",
         resourceOwner: null,
       });
       this.#integrationPipeline.schedule();
       return true;
     } catch (error) {
-      // 修复失败保留原始测试故障指纹，让自动保障的三次上限能够真实限制重复副作用。
-      this.#store.updateTask(taskId, "unified_test.repair_failed", (current, state) => {
-        current.state = originalFailureKind === "infrastructure" ? "blocked" : "test-failed";
+      // 调查修复未解除时保留原始证据；本地归属问题随后才进入客户操作兜底。
+      this.#store.updateTask(taskId, repairFailedEvent, (current, state) => {
+        current.state = originalFailureKind === "verification" ? "test-failed" : "blocked";
         current.phase = null;
         current.repairKind = null;
         current.repairFailureReason = errorMessage(error);
         current.blockingReason = originalReason;
-        appendFlow(current, "unified_test.repair_failed", "recovery", "failed", `令狐老祖修复统一测试失败：${errorMessage(error)}`, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
+        appendFlow(current, repairFailedEvent, "recovery", ownershipFailure ? "waiting" : "failed", ownershipFailure
+          ? `令狐老祖已完成来源调查，但尚不能安全处理这些本地修改：${errorMessage(error)}`
+          : `令狐老祖修复统一测试失败：${errorMessage(error)}`, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
       return true;
@@ -314,7 +334,7 @@ export class CollaborationCoordinator {
     const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
     if (!linghu || linghu.state !== "idle") return;
     const task = state.tasks.find((candidate) => candidate.state === "test-failed" && candidate.integrationFailure?.kind === "verification");
-    if (!task || this.#unifiedTestRepairRuns.has(task.taskId)) return;
+    if (!task || this.#technicalRepairRuns.has(task.taskId)) return;
     queueMicrotask(() => {
       if (!this.#disposed) void this.repairFailedUnifiedTest(task.taskId);
     });

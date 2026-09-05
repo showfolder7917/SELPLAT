@@ -77,8 +77,8 @@ export class CheckpointCoordinator {
       return;
     }
     // 明确暂停、取消及业务授权问题不能因统一受理而变成自动放权。
-    if ((state.runId === run?.runId && ["paused", "stopped"].includes(evolution.automationRuntime.status)) || task?.state === "cancelled" || event.category === "business-exception" || task?.integrationFailure?.kind === "local-change-ownership") {
-      this.#phase(event, state, "waiting", "已保留卡点，当前为人工暂停、业务选择或归属问题，需用户明确后继续，不自动改写授权。");
+    if ((state.runId === run?.runId && ["paused", "stopped"].includes(evolution.automationRuntime.status)) || task?.state === "cancelled" || event.category === "business-exception") {
+      this.#phase(event, state, "waiting", "已保留卡点，当前为人工暂停或业务选择，需用户明确后继续，不自动改写授权。");
       return;
     }
     if (task) {

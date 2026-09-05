@@ -74,6 +74,8 @@ export interface CollaborationIntegrationFailureOutDto {
   impact?: string;
   recoveryAction?: string;
   detail: string;
+  /** 发生未提交修改的真实工作区；用于令狐调查和客户兜底定位，不作为写权限。 */
+  workspaceRoot?: string | null;
   conflictFiles: string[];
   baseSha: string | null;
   resultSha: string | null;
@@ -88,6 +90,9 @@ export interface CollaborationCustomerActionGuidanceOutDto {
   title: string;
   problem: string;
   reasonCustomerMustAct: string;
+  /** Git 证据确认的目录和相对文件；说明文字由令狐生成，定位事实不由模型猜测。 */
+  workspaceRoot?: string | null;
+  affectedFiles?: string[];
   steps: string[];
   completionCriteria: string[];
   resumeLabel: string;

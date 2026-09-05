@@ -14,7 +14,7 @@ import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/s
 import { LINGHU_AUTOMATION_MODULES, LINGHU_SAFEGUARD_INSTRUCTIONS, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
 import { automaticFlowSnapshots, faultFingerprint, moduleCompletionReport, moduleInstruction, moduleLabel, taskHumanReport, testResourceContext } from "./internal/linghu-flow.analyzer.js";
-import { customerActionFacts, parseCustomerActionGuidance } from "./internal/linghu-customer-action-guidance.js";
+import { customerActionFacts, customerActionLocation, parseCustomerActionGuidance } from "./internal/linghu-customer-action-guidance.js";
 // 基础设施异常类型留在 internal，外部只能通过 Facade 的静态判断入口识别。
 import { isUnifiedTestInfrastructureError } from "../../support/capabilities/testing/index.js";
 
@@ -33,8 +33,8 @@ export interface LinghuCollaborationPort {
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto;
   // 停滞任务通过正式协调入口进入恢复。
   recoverTask(taskId: string, reason: string): Promise<CollaborationStateOutDto>;
-  // 统一测试失败沿原工作树生成修正结果。
-  repairFailedUnifiedTest(taskId: string): Promise<boolean>;
+  // 已有结构化技术失败沿原工作树先调查再生成修正结果。
+  repairTechnicalFailure(taskId: string): Promise<boolean>;
   // 令狐生成的客户操作指导仍通过原任务工作流落库。
   recordCustomerActionGuidance(taskId: string, guidance: CollaborationCustomerActionGuidanceOutDto): CollaborationStateOutDto;
 }
@@ -347,28 +347,33 @@ export class LinghuAutomationFacade {
       return;
     }
     if (task.integrationFailure?.kind === "local-change-ownership") {
-      // 本地修改归属不明确时等待人工分配，重复轮询不重复写相同审计事件。
-      const alreadyReported = this.#store.state().currentFaultFingerprint === fingerprint;
-      this.#store.updateRuntime("automation.local_change_ownership_waiting", (state) => {
-        state.currentFaultFingerprint = fingerprint;
-        state.recoveryAttemptCount = attempts;
-        state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = task.customerActionGuidance?.sourceFingerprint === fingerprint
-          ? `${task.customerActionGuidance.title}：${task.customerActionGuidance.problem}`
-          : `${report}。我已保留原任务和集成证据，不会把同一份本地修改反复送回集成；令狐正在形成客户可执行的处理步骤。`;
-      });
-      if (!alreadyReported) {
-        this.#recordEvent("linghu.automation.local_change_ownership_waiting", {
-          taskId: task.taskId,
-          taskTitle: task.snapshot.title,
-          executorMemberId: task.executorMemberId,
-          failureKind: task.integrationFailure.kind,
-          conflictFiles: task.integrationFailure.conflictFiles,
-          detail: task.integrationFailure.detail,
-          fingerprint,
-        }, task.taskId);
+      if (task.customerActionGuidance?.sourceFingerprint === fingerprint) {
+        this.#store.updateRuntime("automation.local_change_customer_waiting", (state) => {
+          state.currentFaultFingerprint = fingerprint;
+          state.recoveryCheckpoint = checkpoint;
+          state.blockingReason = `${task.customerActionGuidance!.title}：${task.customerActionGuidance!.problem}`;
+        });
+        return;
       }
-      await this.#ensureCustomerActionGuidance(task, snapshot, fingerprint, report);
+      // 未提交修改先作为技术卡点交给令狐调查；只有调查修复仍不能解除时才生成客户操作指导。
+      const started = await this.#collaboration.repairTechnicalFailure(task.taskId);
+      if (!started) {
+        this.#store.updateRuntime("automation.local_change_investigation_waiting", (state) => {
+          state.recoveryCheckpoint = checkpoint;
+          state.blockingReason = `${report}。令狐已收到工作区和文件证据，正在等待执行容量后调查修改来源。`;
+        });
+        return;
+      }
+      const investigated = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === task.taskId);
+      if (investigated?.integrationFailure?.kind === "local-change-ownership" && investigated.state === "blocked") {
+        await this.#ensureCustomerActionGuidance(investigated, snapshot, fingerprint, report);
+      } else {
+        this.#store.updateRuntime("automation.local_change_investigation_completed", (state) => {
+          state.currentFaultFingerprint = fingerprint;
+          state.recoveryCheckpoint = checkpoint;
+          state.blockingReason = "令狐已完成本地修改来源调查和针对性修复，原任务正在重新进入集成验证。";
+        });
+      }
       return;
     }
     if (attempts >= 3) {
@@ -385,7 +390,7 @@ export class LinghuAutomationFacade {
     if ((task.state === "test-failed" && snapshot?.blockingKind === "test")
       || (task.state === "blocked" && task.integrationFailure?.kind === "infrastructure")) {
       // 测试或发布基础设施失败必须先产生新结果版本再重测；只退回队列会永久重复同一失败。
-      const started = await this.#collaboration.repairFailedUnifiedTest(task.taskId);
+      const started = await this.#collaboration.repairTechnicalFailure(task.taskId);
       if (!started) {
         // 修复容量不足不是失败，保留检查点等待令狐人物 writer 释放。
         this.#store.updateRuntime("automation.test_repair_waiting", (state) => {
@@ -423,7 +428,7 @@ export class LinghuAutomationFacade {
     if (task.customerActionGuidance?.sourceFingerprint === fingerprint) return;
     try {
       const text = await this.#analyzeCustomerActionGuidance(customerActionFacts(task, snapshot, fingerprint));
-      const guidance = parseCustomerActionGuidance(text, fingerprint, { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" });
+      const guidance = parseCustomerActionGuidance(text, fingerprint, { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" }, customerActionLocation(task));
       this.#collaboration.recordCustomerActionGuidance(task.taskId, guidance);
       this.#store.updateRuntime("automation.customer_action_guidance_created", (state) => {
         state.currentFaultFingerprint = fingerprint;

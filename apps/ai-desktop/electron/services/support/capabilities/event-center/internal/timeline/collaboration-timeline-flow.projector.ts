@@ -312,12 +312,14 @@ export function projectCollaborationFlowEvent(
     const guidance = event.details.customerActionGuidance;
     const content = [
       `遇到的问题：${guidance.problem}`,
+      guidance.workspaceRoot ? `需要处理的工作区：${guidance.workspaceRoot}` : "",
+      ...(guidance.affectedFiles?.length ? ["尚未提交的文件：", ...guidance.affectedFiles.map((file) => `- ${file}`)] : []),
       `为什么需要您处理：${guidance.reasonCustomerMustAct}`,
       "操作步骤：",
       ...guidance.steps.map((step, index) => `${index + 1}. ${step}`),
       "完成标准：",
       ...guidance.completionCriteria.map((criterion) => `- ${criterion}`),
-    ].join("\n");
+    ].filter(Boolean).join("\n");
     return projection("blocked", [fact({
       nodeId: guidance.guidanceId, kind: "repair", actor: guidance.generatedBy, recipients: [initiator], status: "waiting",
       action: guidance.title, summary: guidance.problem, content,
@@ -331,7 +333,7 @@ export function projectCollaborationFlowEvent(
     const facts = [fact({
       nodeId: `integration-blocked:${task.taskId}:${task.integrationGeneration || 0}:${event.type}`, kind: "repair",
       actor: event.actor || LINGHU, recipients: [initiator], status: "waiting",
-      action: ownership ? "等待确认本地修改归属" : "等待修正合并冲突", summary: event.summary, content: event.summary,
+      action: ownership ? "检测到本地未提交修改" : "等待修正合并冲突", summary: event.summary, content: event.summary,
       detail: task.integrationFailure?.detail || task.blockingReason || event.summary, startedAt: event.occurredAt,
       completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
     })];

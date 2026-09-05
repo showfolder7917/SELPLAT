@@ -96,6 +96,22 @@ test("执行人正常自修复不抢占，已确认心跳停滞走原任务恢�
   assert.equal(f.effects.handled.length, 1);
 });
 
+test("本地修改归属卡点先交令狐调查，不再提前转成人工等待", async () => {
+  const f = fixture();
+  f.collaboration.tasks.push({
+    taskId: "original", state: "blocked", phase: null, updatedAt: "2026-09-05T00:00:00Z",
+    executorMemberId: "mo-caihuan", integrationFailure: {
+      kind: "local-change-ownership", workspaceRoot: "/workspace/SELPLAT",
+      detail: "main.ts 未登记", conflictFiles: ["apps/ai-desktop/electron/main.ts"],
+    }, snapshot: { constraints: [] },
+  });
+  f.event.correlationId = "original";
+  f.event.payload.taskId = "original";
+  await f.run();
+  assert.deepEqual(f.effects.handled, [["original", false]]);
+  assert.equal(f.event.payload.checkpoint.phase, "repairing");
+});
+
 test("普通失败和统一测试失败不进入卡点恢复入口", async () => {
   const ordinary = fixture(); ordinary.event.flowImpact = "none"; await ordinary.run();
   assert.equal(ordinary.effects.submitted.length, 0);

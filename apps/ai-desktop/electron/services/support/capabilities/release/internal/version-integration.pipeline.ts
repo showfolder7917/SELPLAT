@@ -281,7 +281,8 @@ export class VersionIntegrationPipeline {
       const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
       const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
       const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error));
-      const conflictFiles = mergeConflict ? error.conflictFiles : [];
+      // 本地修改归属异常同样必须保留具体文件，不能在进入令狐调查前把证据清空。
+      const conflictFiles = ownershipBlocked ? error.conflictFiles : mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
       if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
       this.#durations.finish(integrationSpan, "failed", { error: errorMessage(error) });
@@ -303,7 +304,7 @@ export class VersionIntegrationPipeline {
           task.integrationFailure = {
             kind: failureKind, phase: failurePhase, summary: failurePresentation.summary,
             impact: failurePresentation.impact, recoveryAction: failurePresentation.recoveryAction,
-            detail: errorMessage(error), conflictFiles,
+            detail: errorMessage(error), workspaceRoot: ownershipBlocked ? error.workspaceRoot : null, conflictFiles,
             baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null,
             resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null,
             generation, occurredAt: new Date().toISOString(),
@@ -365,8 +366,8 @@ function integrationFailurePresentation(kind: CollaborationIntegrationFailureKin
   };
   if (kind === "local-change-ownership") return {
     summary: "合并前无法确认本地修改归属",
-    impact: "版本候选尚未建立，未确认归属的修改不会被自动提交或合并。",
-    recoveryAction: "确认修改所属任务并转回对应任务分支后，再重新进入集成准备。",
+    impact: "版本候选尚未建立，但令狐会继续调查修改来源；未确认归属的修改不会被自动提交或合并。",
+    recoveryAction: "先由令狐依据工作区、文件和任务记录调查并修复；只有仍无法确认归属时，才请客户按具体文件提示处理。",
   };
   if (kind === "merge-conflict") return {
     summary: "版本候选合并发生冲突",

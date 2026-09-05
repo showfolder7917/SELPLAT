@@ -175,6 +175,7 @@ test("客户行动指导显示在原等待节点并在点击继续后交给令�
       guidanceId: "customer-action:fingerprint-1", sourceFingerprint: "fingerprint-1",
       title: "等待客户提交本地修改", problem: "当前修改尚未提交，无法继续集成。",
       reasonCustomerMustAct: "只有客户能确认并提交自己工作区中的修改。",
+      workspaceRoot: "/workspace/SELPLAT", affectedFiles: ["apps/ai-desktop/electron/main.ts"],
       steps: ["确认修改属于当前专题。", "提交本地修改。"],
       completionCriteria: ["工作区不再显示未提交修改。"], resumeLabel: "从卡点继续", generatedBy: linghu,
       createdAt: fixture.at(4),
@@ -188,6 +189,8 @@ test("客户行动指导显示在原等待节点并在点击继续后交给令�
     assert.equal(node.status, "waiting");
     assert.equal(node.eventType, "customer.action_required");
     assert.match(node.content, /为什么需要您处理/);
+    assert.match(node.content, /需要处理的工作区：\/workspace\/SELPLAT/);
+    assert.match(node.content, /尚未提交的文件：[\s\S]*apps\/ai-desktop\/electron\/main\.ts/);
     assert.match(node.content, /1\. 确认修改属于当前专题/);
     assert.match(node.content, /完成标准/);
 
@@ -378,12 +381,12 @@ test("集成本地修改归属阻塞生成令狐等待节点并同步专题下�
     );
     fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [blocked]), [blocked.taskId]);
     const group = fixture.timeline.snapshot(fixture.at(8)).groups[0];
-    const ownership = group.nodes.find((node) => node.action === "等待确认本地修改归属");
+    const ownership = group.nodes.find((node) => node.action === "检测到本地未提交修改");
     assert.equal(group.status, "blocked");
     assert.equal(ownership.actor.displayName, "令狐老祖");
     assert.equal(ownership.status, "waiting");
     assert.match(ownership.content, /未登记到任何待集成任务/);
-    assert.equal(group.nextStep, "令狐老祖 · 等待确认本地修改归属");
+    assert.equal(group.nextStep, "令狐老祖 · 检测到本地未提交修改");
     assert.match(group.failureNextStep, /恢复条件/);
     assert.equal(group.nodes.find((node) => node.kind === "execution").status, "completed");
   } finally { fixture.close(); }
@@ -404,7 +407,7 @@ test("恢复请求结束本地修改归属等待节点并追加恢复节点", ()
     const nodes = fixture.timeline.snapshot(fixture.at(8)).groups[0].nodes;
     assert.equal(nodes.find((node) => node.action === "本地修改归属已确认").status, "completed");
     assert.equal(nodes.find((node) => node.action === "正在恢复任务").status, "current");
-    assert.equal(nodes.some((node) => node.action === "等待确认本地修改归属" && node.status === "waiting"), false);
+    assert.equal(nodes.some((node) => node.action === "检测到本地未提交修改" && node.status === "waiting"), false);
   } finally { fixture.close(); }
 });
 
@@ -422,7 +425,7 @@ test("恢复复查再次遇到归属阻塞时关闭恢复节点并回到等待",
     fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(8), [blocked]), [blocked.taskId]);
     const nodes = fixture.timeline.snapshot(fixture.at(9)).groups[0].nodes;
     assert.equal(nodes.find((node) => node.action === "恢复复查已结束").status, "completed");
-    assert.equal(nodes.find((node) => node.action === "等待确认本地修改归属").status, "waiting");
+    assert.equal(nodes.find((node) => node.action === "检测到本地未提交修改").status, "waiting");
     assert.equal(nodes.some((node) => node.action === "正在恢复任务" && node.status === "current"), false);
   } finally { fixture.close(); }
 });
