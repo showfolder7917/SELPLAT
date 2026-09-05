@@ -1,10 +1,10 @@
-import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
-import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
-import type { EventCenterExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
-import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
+import type { CollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
+import type { EventCenterExceptionInDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionMutationPort, EvolutionStatePort } from "../../../../evolution/index.js";
+import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
 
 /** 南宫向韩立申请提案审查的唯一跨人物端口；审批事实仍由韩立模块写入。 */
 export interface NangongProposalReviewPort {

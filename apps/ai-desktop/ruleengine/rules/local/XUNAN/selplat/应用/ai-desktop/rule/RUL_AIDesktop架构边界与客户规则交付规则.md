@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.9.0 在既有人物会话架构上不兼容退役演化工作台，并明确演化后端状态仍由共享运行时持有。 -->
-rule_version = 2.9.0
+<!-- 2.12.0 将南宫婉会话同步收敛为公开门面、会话聚合根和按能力分组的纵向内部模块。 -->
+rule_version = 2.12.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -40,6 +40,8 @@ typescript_grouped_import_beginner_comment_contract.2 = public_index_to_physical
 typescript_grouped_import_beginner_comment_contract.3 = runtime_or_type_role_plus_real_business_effect
 <!-- 每个导入符号的注释必须说明当前文件怎样使用；当前未使用的类型也必须明确标出，禁止让读者猜测。 -->
 typescript_grouped_import_beginner_comment_contract.4 = current_caller_usage_or_explicit_unused_status
+<!-- 公开索引的每个导出符号必须分别说明业务对象、使用方和实际含义，禁止用一条总注释覆盖整组符号。 -->
+typescript_public_export_comment_contract = one_comment_per_exported_symbol + business_object_and_consumer_and_meaning + no_group_summary_as_symbol_documentation
 
 <!-- Electron 主进程、preload 和 Renderer 必须保持单向依赖边界，Renderer 只能通过 DesktopApi 使用后端能力。 -->
 runtime_boundary_contract = renderer_to_typed_DesktopApi_to_preload_whitelist_to_registered_IPC_to_application_service_to_infrastructure
@@ -57,6 +59,12 @@ electron_system_services_layout_contract = electron/main_and_packaged_bootstrap 
 application_lifecycle_contract = one_startApplication + one_disposeApplication + idempotent_persistence_close + stop_watchers_supervisor_persona_and_codex_before_database + test_data_reset_application_service + no_cross_domain_cleanup_in_main
 <!-- 大文件必须按业务能力和状态所有权拆分，禁止只按行数机械切割。 -->
 module_split_contract = split_by_business_capability_and_state_ownership + independently_testable_boundary + no_arbitrary_line_partition
+<!-- 韩立人物模块使用领域聚合根、按能力分组的 internal、公开门面和唯一索引；会话状态不得继续以零散变量在服务间传递。 -->
+hanli_vertical_module_layout_contract = contracts_domain_values_and_ports + electron_personas_hanli_domain_aggregate + internal_application_conversation_decision_acceptance_semantic + facade_and_public_index + no_flat_internal_capability_mix + no_scattered_conversation_state_parameters
+<!-- 南宫婉与韩立采用同一可读结构，但各自聚合状态和内部能力，不抽取共享人物基类。 -->
+nangong_vertical_module_layout_contract = contracts_domain_values_and_ports + electron_personas_nangong_domain_conversation_aggregate + internal_application_conversation_inquiry_evolution_distribution + facade_and_public_index + no_flat_internal_capability_mix + no_scattered_conversation_state_parameters
+<!-- 人物领域与应用代码优先表达真实业务步骤；禁止用嵌套三元、一行多判断或长链式转换换取表面短小。 -->
+persona_code_readability_contract = business_named_intermediate_values + explicit_if_else_and_for + one_business_step_per_block + field_source_meaning_lifecycle_and_effect_comments + no_nested_ternary + no_compacted_guard_or_long_transform_chain
 <!-- Renderer 的真实窗口必须由 applications 独立拥有；Application 只装配布局与 feature，禁止一个文件同时定义多个窗口或人物、协作、会话业务页面。 -->
 renderer_application_structure_contract = applications/developer + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner + no_evolution_workspace_application
 <!-- 代码分割后的每个 Application 必须显式加载自身控件注册和样式副作用，禁止依赖其他窗口或懒加载分支先执行。 -->

@@ -8,7 +8,7 @@ const os = require("node:os");
 const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "selplat-computer-smoke-"));
 app.setPath("userData", artifactRoot);
 app.whenReady().then(async () => {
-  const { HanliComputerAcceptance } = await import(pathToFileURL(path.resolve("../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-computer-acceptance.js")));
+  const { HanliComputerAcceptance } = await import(pathToFileURL(path.resolve("../../build/ai-desktop/electron/electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.js")));
   const window = new BrowserWindow({ width: 1000, height: 800, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   await window.loadURL("data:text/html;charset=utf-8," + encodeURIComponent('<html><body style="background:#102030;color:white"><button role="tab" style="position:absolute;left:30px;top:30px;width:160px;height:60px" onclick="document.querySelector(\'h1\').textContent=\'实际点击成功\'">韩立</button><h1 style="margin-top:130px">等待点击</h1></body></html>'));
   let n = 0;

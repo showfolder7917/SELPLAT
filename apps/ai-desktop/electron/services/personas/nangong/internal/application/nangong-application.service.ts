@@ -4,13 +4,13 @@ import type {
   GenerateNangongTopicDraftInDto,
   ReviseNangongProposalInDto,
   UpdateNangongTopicInDto,
-} from "../../../../../contracts/services/personas/nangong/index.js";
-import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
-import type { NangongApplicationPort } from "../nangong.facade.js";
-import type { EvolutionMutationInDto } from "../../../../../contracts/services/evolution/index.js";
+} from "../../../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
+import type { NangongApplicationPort } from "../../nangong.facade.js";
+import type { EvolutionMutationInDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
-import { NangongConversationService } from "./nangong-conversation.service.js";
-import { NangongEvolutionAuthoringService } from "./nangong-evolution-authoring.service.js";
+import { NangongConversationService } from "../conversation/nangong-conversation.service.js";
+import { NangongEvolutionAuthoringService } from "../evolution/nangong-evolution-authoring.service.js";
 
 export type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
 

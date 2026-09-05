@@ -33,5 +33,5 @@ test("令狐页面只保留自动开关，后台恢复职责仍存在", () => {
   const facade = source("electron/services/personas/linghu/linghu-automation.facade.ts");
   assert.match(facade, /LINGHU_SAFEGUARD_INSTRUCTIONS/);
   assert.doesNotMatch(facade, /submitRepairProposal|pendingRepairProposalId|reviseReturnedProposal/);
-  assert.match(facade, /repairFailedUnifiedTest/);
+  assert.match(facade, /repairTechnicalFailure/);
 });

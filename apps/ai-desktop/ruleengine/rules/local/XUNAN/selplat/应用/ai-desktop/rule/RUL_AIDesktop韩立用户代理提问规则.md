@@ -2,8 +2,8 @@
 
 <!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
-<!-- 2.11.0 明确自动托管开启后韩立全权判断当前专题与后续专题，不因普通范围扩展打断客户。 -->
-rule_version = 2.11.0
+<!-- 2.12.0 明确韩立当前观点由会话聚合根持有，独立输入 1 直接启动研讨且不依赖固定邀请文案。 -->
+rule_version = 2.12.0
 
 <!-- 验收由韩立消费真实截图后逐步调用窗口输入工具，旧整份计划、参数补正及批量执行接口不兼容退役。 -->
 hanli_computer_acceptance_contract = independent_tool_scoped_session + screenshot_then_one_model_selected_input_then_fresh_screenshot + no_batch_plan_or_DOM_assertion_proxy + screenshot_reference_per_criterion + no_input_no_pass + unsafe_action_blocked + revoke_tools_on_exit + preserve_historical_facts
@@ -52,8 +52,8 @@ hanli_maturity_conflict_contract = recent_explicit_correction_then_recent_repeat
 hanli_semantic_extraction_contract = active_stable_user_isolation + source_message_authority + pending_processing_completed_retryable_blocked_superseded + content_hash_and_extractor_version + lease_recovery + exponential_backoff + asynchronous_no_conversation_block
 <!-- 只有失败后修正并由韩立真实复验通过的发现才能形成项目经验；多场景治理前不得冒充稳定专业规则。 -->
 hanli_inspection_experience_contract = failed_finding_then_correction_then_linghu_gate_then_real_retest_pass + project_experience_only + counterexample_conflict_limit_supersede_retire + lifecycle_governance_before_stable_rule
-<!-- 韩立人物入口采用独立固定线程；需求成熟后显示唯一邀请，用户输入 1 启动与南宫婉的内部研讨和统一持续自动链路。 -->
-hanli_free_conversation_contract = fixed_persona_thread + direct_natural_answer + one_question_only_for_material_information_gap + canonical_internal_deliberation_invitation_when_mature + standalone_1_confirmation_starts_continuous_automation + existing_engineering_authority_gates_remain + confirmed_deliberation_required_before_topic_automation
+<!-- 韩立人物入口采用独立固定线程；会话聚合根保存当前观点，用户独立输入 1 后不依赖任何可见固定文案而直接启动内部研讨。 -->
+hanli_free_conversation_contract = fixed_persona_thread + conversation_aggregate_owns_current_viewpoint_and_control_state + direct_natural_answer + one_question_only_for_material_information_gap + optional_natural_deliberation_guidance_without_phrase_routing + standalone_1_with_current_viewpoint_starts_continuous_automation + persist_viewpoint_context_before_async_dispatch + existing_deliberation_returns_existing_status_without_duplicate + empty_viewpoint_returns_visible_rejection + existing_engineering_authority_gates_remain + confirmed_deliberation_required_before_topic_automation
 <!-- 韩立回答只读取按稳定用户和项目范围整理后的客户关注点、证据、轨迹、需求节点与验收经验；原始人物对话只负责独立留存和后续异步提取。 -->
 hanli_semantic_read_boundary_contract = derived_semantic_tables_only_for_answer_context + no_raw_conversation_snapshot_scan + stable_user_and_project_isolation + evidence_status_conflict_and_supersession_preserved
 <!-- 历史资料只提供缺口、提问、调查和扩展的方法链，不得按相似业务内容模仿旧答案；每轮必须回显真实读入字符数。 -->

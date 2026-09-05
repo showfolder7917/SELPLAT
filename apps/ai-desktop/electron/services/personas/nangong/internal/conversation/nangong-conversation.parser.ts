@@ -1,5 +1,5 @@
-import type { ConversationRoundTopicDecisionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { NangongTopicDraftOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
+import type { ConversationRoundTopicDecisionInDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { NangongTopicDraftOutDto } from "../../../../../../contracts/services/personas/nangong/index.js";
 
 /** 南宫婉判断本轮事实已经成熟后使用的唯一可见邀请。 */
 const NANGONG_ONE_SHOT_INVITATION = "若确认启动持续自动演化，请回复 1。";

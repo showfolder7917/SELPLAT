@@ -1,11 +1,11 @@
 ﻿import { randomUUID } from "node:crypto";
 
-import type { CollaborationTimelineBusinessEventOutDto, CollaborationTaskOutDto } from "../../../../../contracts/services/workflow/index.js";
-import type { CodexStreamEventOutDto } from "../../../../../contracts/services/support/platform/codex/index.js";
-import type { EvolutionDistributionPlanOutDto, EvolutionDistributionUnitOutDto, EvolutionDistributionValidationOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { CollaborationWorkflowFacade } from "../../../workflow/index.js";
-import type { EvolutionMutationPort, EvolutionStatePort } from "../../../evolution/index.js";
-import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
+import type { CollaborationTimelineBusinessEventOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
+import type { CodexStreamEventOutDto } from "../../../../../../contracts/services/support/platform/codex/index.js";
+import type { EvolutionDistributionPlanOutDto, EvolutionDistributionUnitOutDto, EvolutionDistributionValidationOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
+import type { CollaborationWorkflowFacade } from "../../../../workflow/index.js";
+import type { EvolutionMutationPort, EvolutionStatePort } from "../../../../evolution/index.js";
+import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 

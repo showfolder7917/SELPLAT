@@ -96,8 +96,8 @@ test("application-private contracts are domain modules outside shared", () => {
   const mutationCoordinator = source("electron/services/evolution/internal/evolution-mutation.coordinator.ts");
   assert.match(mutationCoordinator, /class EvolutionMutationCoordinator/);
   assert.match(mutationCoordinator, /runAsync/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /mutations\.runAsync\(/);
-  assert.match(source("electron/services/personas/hanli/internal/hanli-application.service.ts"), /#mutations\.run\(/);
+  assert.match(source("electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"), /mutations\.runAsync\(/);
+  assert.match(source("electron/services/personas/hanli/internal/application/hanli-application.service.ts"), /#mutations\.run\(/);
   assert.doesNotMatch(source("electron/services/personas/nangong/nangong.facade.ts"), /decideProposal|autoApprove|generateAcceptancePlan|#mutations/);
   assert.match(source("electron/services/personas/hanli/hanli.facade.ts"), /sendConversationMessage/);
   assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /createProposal|resumeOneShotRun/);
@@ -238,7 +238,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRule, /rule_version = 2\.9\.0/);
+  assert.match(architectureRule, /rule_version = 2\.12\.0/);
   assert.match(architectureRule, /renderer_application_structure_contract/);
   assert.match(architectureRule, /renderer_application_runtime_dependency_contract/);
   assert.match(architectureRule, /renderer_layout_structure_contract/);
@@ -388,7 +388,7 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.match(source("electron/system/ipc/domains/register-collaboration-ipc.ts"), /HanliFacade/);
   assert.match(source("electron/system/ipc/domains/register-collaboration-ipc.ts"), /EvolutionFacade/);
   assert.match(source("electron/system/ipc/domains/register-collaboration-ipc.ts"), /PersonaWorkflowFacade/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /evolutionProposalId/);
+  assert.match(source("electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"), /evolutionProposalId/);
 });
 
 test("Electron entry delegates startup, persistence, collaboration, personas and IPC to bootstrap boundaries", () => {
@@ -533,11 +533,22 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.doesNotMatch(personaWorkflow, /你是韩立|parseHanLiQuestion|parseHanLiJudgment/);
   assert.match(source("prompts/personas/hanli/conversation.md"), /韩立的用户目标代理身份/);
   assert.equal(existsSync(path.join(appRoot, "electron/services/personas/hanli/internal/hanli-deliberation.service.ts")), false);
-  const hanliApplication = source("electron/services/personas/hanli/internal/hanli-application.service.ts");
+  const hanliApplication = source("electron/services/personas/hanli/internal/application/hanli-application.service.ts");
   assert.match(hanliApplication, /class HanliApplicationService/);
   assert.match(hanliApplication, /new EvolutionApprovalService/);
   assert.match(hanliApplication, /new HanliConversationService/);
   assert.match(hanliApplication, /new HanliDecisionService/);
+  const hanliAggregate = source("electron/services/personas/hanli/domain/hanli-conversation.aggregate.ts");
+  assert.match(hanliAggregate, /class HanliConversationAggregate/);
+  assert.match(hanliAggregate, /normalizedMessage !== "1"/);
+  assert.match(hanliAggregate, /return-existing-deliberation/);
+  assert.match(hanliAggregate, /reject-empty-viewpoint/);
+  const hanliConversation = source("electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts");
+  assert.match(hanliConversation, /new HanliConversationAggregate/);
+  assert.doesNotMatch(hanliConversation, /若确认由韩立与南宫婉开始内部研讨/);
+  for (const capabilityDirectory of ["application", "conversation", "decision", "acceptance", "semantic"]) {
+    assert.equal(existsSync(path.join(appRoot, `electron/services/personas/hanli/internal/${capabilityDirectory}`)), true);
+  }
   assert.doesNotMatch(personaWorkflow, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
   assert.match(source("electron/services/personas/hanli/hanli.facade.ts"), /interface HanliWorkflowPort/);
   assert.match(personaWorkflow, /hanli:\s*HanliWorkflowPort/);
@@ -546,27 +557,52 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   }
   const hanliIndex = source("electron/services/personas/hanli/index.ts");
   assert.doesNotMatch(hanliIndex, /createEvolutionApprovalService|createHanliDeliberationPort|EvolutionApprovalPort|HanliDeliberationPort/);
-  const nangongApplication = source("electron/services/personas/nangong/internal/nangong-application.service.ts");
+  const nangongApplication = source("electron/services/personas/nangong/internal/application/nangong-application.service.ts");
   assert.match(nangongApplication, /class NangongApplicationService/);
   assert.match(nangongApplication, /new NangongConversationService\(options\)/);
   assert.match(nangongApplication, /new NangongEvolutionAuthoringService\(options\)/);
   assert.doesNotMatch(nangongApplication, /#store\.(?:appendConversation|createProposal)|revisionInvestigationPrompt/);
-  const nangongPorts = source("electron/services/personas/nangong/internal/nangong-application.ports.ts");
+  const nangongPorts = source("electron/services/personas/nangong/internal/application/nangong-application.ports.ts");
   assert.match(nangongPorts, /interface NangongProposalReviewPort/);
   assert.match(nangongPorts, /interface NangongOneShotWorkflowPort/);
   assert.match(nangongPorts, /interface NangongTaskDistributionPort/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-task-distribution.service.ts"), /class NangongTaskDistributionService/);
+  assert.match(source("electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"), /class NangongTaskDistributionService/);
+  const nangongAggregate = source("electron/services/personas/nangong/domain/nangong-conversation.aggregate.ts");
+  assert.match(nangongAggregate, /class NangongConversationAggregate/);
+  assert.match(nangongAggregate, /decideUserMessage/);
+  assert.match(nangongAggregate, /reject-missing-confirmation/);
+  assert.match(nangongAggregate, /retire-orphan-and-start/);
+  for (const capabilityDirectory of ["application", "conversation", "distribution", "evolution", "inquiry"]) {
+    assert.equal(existsSync(path.join(appRoot, `electron/services/personas/nangong/internal/${capabilityDirectory}`)), true);
+  }
+  for (const retiredFile of [
+    "nangong-application.service.ts",
+    "nangong-conversation.service.ts",
+    "nangong-evolution-authoring.service.ts",
+    "nangong-task-distribution.service.ts",
+  ]) {
+    assert.equal(existsSync(path.join(appRoot, `electron/services/personas/nangong/internal/${retiredFile}`)), false);
+  }
+  const nangongConversation = source("electron/services/personas/nangong/internal/conversation/nangong-conversation.service.ts");
+  assert.match(nangongConversation, /NangongConversationAggregate\.restore/);
+  const applicationRuntime = source("electron/system/bootstrap/application-runtime.ts");
+  assert.match(applicationRuntime, /registerPersona\(\{[\s\S]*?persona-conversation:nangong-wan/);
+  assert.match(applicationRuntime, /registerPersona\(\{[\s\S]*?persona-inquiry:nangong-wan/);
+  assert.match(applicationRuntime, /registerPersona\(\{[\s\S]*?persona-conversation:han-li/);
+  const nangongActivity = source("src/features/nangong/components/NangongConversationActivity.tsx");
+  assert.match(nangongActivity, /南宫婉正在等待你的授权/);
+  assert.match(nangongActivity, /ownerMemberId === "nangong-wan"/);
   assert.equal(existsSync(path.join(appRoot, "electron/services/workflow/internal/evolution-task-distribution.service.ts")), false);
   const executorFacade = source("electron/services/personas/executor/executor.facade.ts");
   assert.match(executorFacade, /class ExecutorFacade/);
   assert.match(executorFacade, /#sessions = new Map/);
   assert.doesNotMatch(source("electron/services/workflow/collaboration-workflow.facade.ts"), /#executorSessions|CollaborationSessionFactory/);
   assert.match(source("electron/system/ipc/domains/register-collaboration-ipc.ts"), /dispatch-evolution-proposal[\s\S]*nangong\.distributeProposal/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.service.ts"), /class NangongConversationService/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-evolution-authoring.service.ts"), /class NangongEvolutionAuthoringService/);
-  assert.match(source("electron/services/personas/nangong/internal/nangong-conversation.parser.ts"), /parseNangongConversationResponse/);
+  assert.match(source("electron/services/personas/nangong/internal/conversation/nangong-conversation.service.ts"), /class NangongConversationService/);
+  assert.match(source("electron/services/personas/nangong/internal/evolution/nangong-evolution-authoring.service.ts"), /class NangongEvolutionAuthoringService/);
+  assert.match(source("electron/services/personas/nangong/internal/conversation/nangong-conversation.parser.ts"), /parseNangongConversationResponse/);
   assert.match(source("prompts/personas/nangong/revision-investigation.md"), /韩立已经退回当前提案/);
-  assert.doesNotMatch(source("electron/services/personas/nangong/internal/nangong-revision.investigator.ts"), /你是南宫婉/);
+  assert.doesNotMatch(source("electron/services/personas/nangong/internal/inquiry/nangong-revision.investigator.ts"), /你是南宫婉/);
   assert.doesNotMatch(personaWorkflow, /parseConversationResponse|revisionInvestigationPrompt|NANGONG_TOPIC_META/);
   assert.doesNotMatch(personaWorkflow, /recordProposalApplication|resolveEnabledMemberDisplayName|hasLiveOneShotOwner|advanceOneShot:/);
   for (const method of ["sendConversationMessage", "newConversation", "generateTopicDraft", "convertConversationToTopic", "createProposal", "updateTopic", "reviseProposal", "investigateAndReviseReturnedProposal"]) {

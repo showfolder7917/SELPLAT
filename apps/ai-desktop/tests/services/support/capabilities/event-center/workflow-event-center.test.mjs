@@ -7,7 +7,7 @@ import { SqliteDatabase } from "../../../../../../../build/ai-desktop/electron/e
 import { CollaborationMemoryService } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.js";
 import { CodexConversationCorpusIngestion } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.js";
 import { CodexConversationSemanticBackfill } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-semantic-backfill.js";
-import { parseHanliSemanticExtraction } from "../../../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-semantic-extraction.runner.js";
+import { parseHanliSemanticExtraction } from "../../../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/semantic/hanli-semantic-extraction.runner.js";
 import { WorkflowRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.repository.js";
 import { WorkflowSupervisor } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.supervisor.js";
 import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint-handoff.service.js";

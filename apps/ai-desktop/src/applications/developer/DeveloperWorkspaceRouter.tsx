@@ -212,6 +212,7 @@ function DeveloperWorkspacePage({
             runtime={nangong}
             key={nangong.conversation.conversationId || "new-nangong-conversation"}
             state={evolution.state}
+            approval={codex.interaction.approval}
             conversation={nangong.conversation}
             attachments={nangong.attachments}
             workspaces={workspaces}

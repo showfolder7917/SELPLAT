@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-inquiry.service.js";
+import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.js";
 import { nangongInquiryResult, nangongInquiryWithCorrection } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/index.js";
-import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.parser.js";
-import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.service.js";
+import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.parser.js";
+import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
 
 const customerQuestion = "长消息超过一屏后是否还会跑到输入框下面，这个问题是否已经修复";
 const findings = { status: "verified", answeredQuestion: customerQuestion, summary: "源码已修改，尚未发布", evidence: [{ source: "task-1 / file.ts:12", detail: "修改存在，发布记录不存在" }], unknowns: ["当前运行版本"] };
@@ -181,7 +181,7 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
   assert.doesNotMatch(secondRecentConversation, /clarificationMessageId/);
 });
 
-test("韩立邀请内部研讨时发布当前中立上下文但不直接启动工作流", async () => {
+test("韩立形成观点时发布当前中立上下文但不直接启动工作流", async () => {
   const messages = [], recorded = [];
   let starts = 0;
   const prior = {
@@ -203,11 +203,10 @@ test("韩立邀请内部研讨时发布当前中立上下文但不直接启动�
     ); return snapshot(); },
   };
   const decision = { ...topic, userIntent: "根据已核实的长消息问题形成修正方案" };
-  const invitation = "若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。";
   const service = new HanliConversationService({
     store: { state: () => ({ deliberations: [] }) }, memory,
     prompts: { render: (_id, variables) => JSON.stringify(variables) },
-    conversation: { activeConversationId: () => "provider-thread", newChat: async () => {}, send: async () => ({ threadId: "provider-thread", itemCount: 1, text: `可以按已核实结果继续确定修正。${invitation}\nHANLI_TOPIC_META=${JSON.stringify(decision)}` }) },
+    conversation: { activeConversationId: () => "provider-thread", newChat: async () => {}, send: async () => ({ threadId: "provider-thread", itemCount: 1, text: `可以按已核实结果继续确定修正。\nHANLI_TOPIC_META=${JSON.stringify(decision)}` }) },
     startInternalDeliberation: async () => { starts += 1; return { continuous: true }; },
     recordEvent: () => {}, refreshSemanticMemory: () => {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
   });

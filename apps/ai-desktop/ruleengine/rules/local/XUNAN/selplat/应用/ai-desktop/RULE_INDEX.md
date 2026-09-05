@@ -37,7 +37,7 @@ load_rule_for_ai_desktop_production_rule_bundle_customer_overlay_or_runtime_cons
 load_rule_for_ai_desktop_typescript_business_comment_review = AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES
 
 <!-- AI Desktop 统一事件、对话记忆和 SELUI 会话/表单归属的独立职责规则。 -->
-<!-- v5.159.0：监督故障稳定去重、历史孤立卡点读模型聚合，继续按钮即时唤醒协调器并明确反馈。 -->
+<!-- v5.160.0：南宫婉内部研讨显示持久轮次、实时授权等待、阻塞原因和等待韩立状态。 -->
 AI_DESKTOP_EVENT_MEMORY_UI_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop事件记忆与统一界面规则.md
 <!-- 修改统一事件、人物对话记忆或共享会话/表单控件时直接加载。 -->
 load_rule_for_ai_desktop_event_memory_or_shared_conversation_ui_change = AI_DESKTOP_EVENT_MEMORY_UI_RULES

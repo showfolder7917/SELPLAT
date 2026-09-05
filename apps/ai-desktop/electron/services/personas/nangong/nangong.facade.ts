@@ -9,8 +9,8 @@ import type {
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { EvolutionMutationInDto } from "../../../../contracts/services/evolution/index.js";
-import { NangongApplicationService, type NangongApplicationServiceOptions } from "./internal/nangong-application.service.js";
-export { nangongInquiryResult, nangongInquiryWithCorrection } from "./internal/nangong-inquiry-result.js";
+import { NangongApplicationService, type NangongApplicationServiceOptions } from "./internal/application/nangong-application.service.js";
+export { nangongInquiryResult, nangongInquiryWithCorrection } from "./internal/inquiry/nangong-inquiry-result.js";
 
 /**
  * 南宫人物所需的最小应用端口。

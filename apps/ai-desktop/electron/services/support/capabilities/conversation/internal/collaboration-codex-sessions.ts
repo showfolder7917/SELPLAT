@@ -60,6 +60,22 @@ interface RegisteredConnection {
   dependencyLease: ManagedDependencyLease | null;
 }
 
+/** 统一授权路由实际需要的最小连接属性；人物长期会话没有协作 taskId。 */
+interface RegisteredInteractionConnection {
+  /** 不同 app-server 连接之间稳定且唯一的路由标识。 */
+  connectionId: string;
+  /** 所属协作任务；人物自由会话和内部研讨没有任务时为 null。 */
+  taskId: string | null;
+  /** 发起授权的人物或执行成员标识。 */
+  memberId: string;
+  /** 授权弹窗和状态栏使用的人物显示名。 */
+  memberName: string;
+  /** 当前连接承担的业务角色，用于授权详情说明。 */
+  role: "executor" | "persona-conversation" | "persona-inquiry";
+  /** 保存局部授权请求并接收最终决定的 Codex 服务。 */
+  service: CodexService;
+}
+
 interface PersonaWriterState {
   activeTaskId: string | null;
   tail: Promise<void>;
@@ -105,7 +121,7 @@ export class PersonaSessionWriterQueue {
 
 /** 把多个 app-server 的局部请求 ID 映射为主进程唯一 ID，避免不同连接的审批互相串线。 */
 export class CollaborationCodexRegistry {
-  readonly #connections = new Map<string, RegisteredConnection>();
+  readonly #connections = new Map<string, RegisteredInteractionConnection>();
   readonly #approvalBindings = new Map<number, { connectionId: string; requestId: number }>();
   readonly #userInputBindings = new Map<number, { connectionId: string; requestId: number }>();
   readonly #approvalKeys = new Map<string, number>();
@@ -118,6 +134,16 @@ export class CollaborationCodexRegistry {
   constructor(durations: ConversationDurationPort) { this.#durations = durations; }
 
   register(connection: RegisteredConnection): void { this.#connections.set(connection.connectionId, connection); }
+
+  /**
+   * 把人物长期 Codex 连接加入统一授权与结构化提问路由。
+   * 真实传参示例：南宫婉自由会话连接、memberId=nangong-wan、taskId=null。
+   * 真实返回示例：该连接的局部请求会以全局 ID 出现在现有授权弹窗。
+   * 异常或副作用示例：同 connectionId 会替换旧连接；不会自动允许任何请求。
+   */
+  registerPersona(connection: Omit<RegisteredInteractionConnection, "taskId">): void {
+    this.#connections.set(connection.connectionId, { ...connection, taskId: null });
+  }
 
   unregister(connectionId: string): void {
     this.#connections.delete(connectionId);
@@ -137,12 +163,21 @@ export class CollaborationCodexRegistry {
     return [...this.#connections.values()].flatMap((connection) => connection.service.pendingApprovals().map((approval) => {
       const globalId = this.#globalId("approval", connection.connectionId, approval.requestId);
       this.#approvalBindings.set(globalId, { connectionId: connection.connectionId, requestId: approval.requestId });
-      if (!this.#approvalSpans.has(globalId)) this.#approvalSpans.set(globalId, this.#durations.startWait(connection.taskId, "approval-wait", "approval-wait", "codex-approval-required", "user-approval", connection.memberId));
+      if (connection.taskId && !this.#approvalSpans.has(globalId)) {
+        const spanId = this.#durations.startWait(connection.taskId, "approval-wait", "approval-wait", "codex-approval-required", "user-approval", connection.memberId);
+        this.#approvalSpans.set(globalId, spanId);
+      }
+      const connectionDetails: string[] = [];
+      if (approval.details) connectionDetails.push(approval.details);
+      if (connection.taskId) connectionDetails.push(`协同任务：${connection.taskId}`);
+      connectionDetails.push(`角色：${connection.role}`);
       return {
         ...approval,
         requestId: globalId,
         title: `${connection.memberName} · ${approval.title}`,
-        details: [approval.details, `协同任务：${connection.taskId}`, `角色：${connection.role}`].filter(Boolean).join("\n"),
+        details: connectionDetails.join("\n"),
+        ownerMemberId: connection.memberId,
+        ownerMemberName: connection.memberName,
       };
     }));
   }
@@ -161,7 +196,10 @@ export class CollaborationCodexRegistry {
     return [...this.#connections.values()].flatMap((connection) => connection.service.pendingUserInputs().map((request) => {
       const globalId = this.#globalId("input", connection.connectionId, request.requestId);
       this.#userInputBindings.set(globalId, { connectionId: connection.connectionId, requestId: request.requestId });
-      if (!this.#userInputSpans.has(globalId)) this.#userInputSpans.set(globalId, this.#durations.startWait(connection.taskId, "user-wait", "user-wait", "codex-user-input-required", "user-answer", connection.memberId));
+      if (connection.taskId && !this.#userInputSpans.has(globalId)) {
+        const spanId = this.#durations.startWait(connection.taskId, "user-wait", "user-wait", "codex-user-input-required", "user-answer", connection.memberId);
+        this.#userInputSpans.set(globalId, spanId);
+      }
       return {
         ...request,
         requestId: globalId,

@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import type { ConversationRoundTopicDecisionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
-import type { GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
-import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
+import type { ConversationRoundTopicDecisionInDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
+import type { GenerateNangongTopicDraftInDto, NangongConversationActionValue, NangongTopicDraftOutDto } from "../../../../../../contracts/services/personas/nangong/index.js";
+import type { NangongApplicationServiceOptions } from "../application/nangong-application.ports.js";
+import { NangongConversationAggregate } from "../../domain/nangong-conversation.aggregate.js";
 import { parseNangongConversationResponse, parseNangongTopicDraft } from "./nangong-conversation.parser.js";
 
 type NangongConversationServiceOptions = Pick<NangongApplicationServiceOptions,
@@ -39,10 +40,17 @@ export class NangongConversationService {
   async sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<EvolutionStateOutDto> {
     const current = this.#store.state();
     // 公共会话只携带通用 subject；南宫服务负责解释自己认识的专题类型。
-    const topicId = request.subject?.type === "evolution-topic" ? request.subject.id : undefined;
-    const confirmation = current.oneShotConfirmation;
-    const ready = confirmation?.status === "awaiting-user-confirmation" && confirmation.conversationId === current.conversation.conversationId;
-    if (request.message.trim() === "1") return this.#startOneShotFromConversation(request, ready);
+    const topicId = request.subject?.type === "evolution-topic" ? request.subject.id : null;
+    const conversation = NangongConversationAggregate.restore(current);
+    const hasRunningEvolution = current.oneShotRun?.status === "running";
+    let activeRunHasLiveOwner = false;
+    if (hasRunningEvolution) {
+      activeRunHasLiveOwner = this.#oneShotWorkflow.hasLiveOwner(current);
+    }
+    const action = conversation.decideUserMessage(request.message, topicId, activeRunHasLiveOwner);
+    if (action.kind !== "continue-conversation") {
+      return this.#handleOneShotAction(request, action);
+    }
     const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
@@ -90,9 +98,11 @@ export class NangongConversationService {
 
   /** 根据当前南宫对话生成可编辑草稿；生成动作不会直接保存专题。 */
   async generateTopicDraft(request: GenerateNangongTopicDraftInDto): Promise<NangongTopicDraftOutDto> {
-    const messages = this.#store.state().conversation.messages.slice(-20);
-    if (!messages.length) throw new Error("当前没有可整理为课题的南宫婉对话。");
-    const context = this.#memory?.buildNangongContext(this.#store.state().conversation)
+    const current = this.#store.state();
+    const conversation = NangongConversationAggregate.restore(current);
+    if (conversation.messageCount() === 0) throw new Error("当前没有可整理为课题的南宫婉对话。");
+    const messages = current.conversation.messages.slice(-20);
+    const context = this.#memory?.buildNangongContext(current.conversation)
       || messages.map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
     const response = await this.#conversation.send({
       message: this.#prompts.render("nangong.topic-draft"),
@@ -103,26 +113,36 @@ export class NangongConversationService {
   }
 
   /** 把用户确认转换为人物课题事实，再请求 Workflow 沿统一自动链路持续推进。 */
-  async #startOneShotFromConversation(request: SendPersonaConversationMessageInDto, ready: boolean): Promise<EvolutionStateOutDto> {
+  async #handleOneShotAction(request: SendPersonaConversationMessageInDto, action: NangongConversationActionValue): Promise<EvolutionStateOutDto> {
     const userMessageId = request.clientMessageId || `evolution-message-${randomUUID()}`;
     let state = this.#store.appendConversation("user", request.message, request.attachmentIds || [], { messageId: userMessageId, deliveryStatus: "sending" });
     const userMessage = state.conversation.messages.at(-1)!;
-    if (!ready) {
+    if (action.kind === "reject-missing-confirmation") {
       state = this.#store.completeConversationTurn(userMessage.messageId, "当前没有等待确认的自动演化。请继续补充事实，或点击“整理为演化课题”检查内容；南宫婉明确显示已可启动后，再回复 1。");
       this.#archiveConversationRound(state, userMessage.messageId, state.conversation.messages.at(-1)!.messageId, null);
       return state;
     }
-    const previousRun = state.oneShotRun;
-    if (previousRun?.status === "running") {
-      if (this.#oneShotWorkflow.hasLiveOwner(state)) {
-        const topic = state.topics.find((item) => item.topicId === previousRun.topicId);
-        state = this.#store.completeConversationTurn(userMessage.messageId, `上一轮${topic ? `专题“${topic.title}”` : "演化任务"}仍在处理，当前环节是“${previousRun.action}”。无需重复启动，请到任务协作群查看当前节点和后续交接。`);
-        this.#archiveConversationRound(state, userMessage.messageId, state.conversation.messages.at(-1)!.messageId, null);
-        return state;
-      }
-      state = this.#store.retireOrphanedOneShotRun("数据库中保留了运行标记，但协作任务中没有对应的实际执行人物；系统已结束该遗留状态并继续本次确认。");
-      this.#recordEvent("nangong.evolution.orphan_run_retired", { runId: previousRun.runId, topicId: previousRun.topicId, proposalId: previousRun.proposalId, phase: previousRun.phase });
+
+    if (action.kind === "report-active-run") {
+      const previousRun = state.oneShotRun;
+      const topic = state.topics.find((item) => item.topicId === previousRun?.topicId);
+      const activeAction = action.activeRunAction || "正在处理上一轮演化任务";
+      state = this.#store.completeConversationTurn(userMessage.messageId, `上一轮${topic ? `专题“${topic.title}”` : "演化任务"}仍在处理，当前环节是“${activeAction}”。无需重复启动，请到任务协作群查看当前节点和后续交接。`);
+      this.#archiveConversationRound(state, userMessage.messageId, state.conversation.messages.at(-1)!.messageId, null);
+      return state;
     }
+
+    if (action.kind === "retire-orphan-and-start") {
+      const previousRun = state.oneShotRun;
+      state = this.#store.retireOrphanedOneShotRun("数据库中保留了运行标记，但协作任务中没有对应的实际执行人物；系统已结束该遗留状态并继续本次确认。");
+      this.#recordEvent("nangong.evolution.orphan_run_retired", {
+        runId: previousRun?.runId || action.activeRunId,
+        topicId: previousRun?.topicId || null,
+        proposalId: previousRun?.proposalId || null,
+        phase: previousRun?.phase || null,
+      });
+    }
+
     state = this.#store.recordConversationIntent(userMessage.messageId, "确认将当前南宫婉调查对话整理为演化课题，并持续自动完成发现、审批、分发、测试与验收流程，直至人工暂停或停止");
     state = this.#store.beginOneShotRun(request.workspaceState, request.locale);
     state = this.#store.completeConversationTurn(userMessage.messageId, "已确认启动持续自动演化。我正在整理当前课题；后续韩立审批、南宫婉分发、执行、令狐测试和韩立验收会连续推进，完成后继续寻找有用户证据的新问题，直到你暂停、停止或人工接管。");

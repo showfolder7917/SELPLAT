@@ -1,6 +1,6 @@
 import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, CollaborationTimelineSnapshotOutDto, EvolutionStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 
-export type PersonaConversationActivity = "active" | "responding" | "investigating" | "creating";
+export type PersonaConversationActivity = "active" | "responding" | "investigating" | "creating" | "waiting-approval";
 
 /** 人物会话活动只修正页面呈现，不改写协作调度判断所使用的成员状态。 */
 export function collaborationMemberPresenceState(member: CollaborationMemberOutDto, conversationActivity?: PersonaConversationActivity | null): CollaborationMemberOutDto["state"] {
@@ -12,6 +12,7 @@ export function collaborationMemberStateLabel(member: CollaborationMemberOutDto,
   if (conversationCanOwnDisplay && conversationActivity === "responding") return locale === "ja" ? "返信中" : "正在回复";
   if (conversationCanOwnDisplay && conversationActivity === "investigating") return locale === "ja" ? "確認中" : "正在核实";
   if (conversationCanOwnDisplay && conversationActivity === "creating") return locale === "ja" ? "新しい会話を作成中" : "正在建立新会话";
+  if (conversationCanOwnDisplay && conversationActivity === "waiting-approval") return locale === "ja" ? "許可待ち" : "等待授权";
   const deliberation = evolution?.deliberations.slice().reverse().find((item) => item.status === "questioning" || item.status === "ready-to-establish");
   if (deliberation && (member.memberId === "han-li" || member.memberId === "nangong-wan")) {
     if (evolution?.automationRuntime.status === "paused") return "研讨已暂停";

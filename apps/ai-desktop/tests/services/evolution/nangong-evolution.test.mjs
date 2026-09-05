@@ -8,8 +8,9 @@ import { EvolutionStateStore } from "../../../../../build/ai-desktop/electron/el
 import { EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
 import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/hanli-nangong-deliberation.service.js";
 import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
-import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.service.js";
-import { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-method-context.js";
+import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
+import { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-method-context.js";
+import { NangongConversationAggregate } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/domain/nangong-conversation.aggregate.js";
 import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { controlledTestRoot, projectPaths } from "#test-paths";
 
@@ -55,14 +56,14 @@ const workspaceState = { primaryId: "root", roots: [{ id: "root", name: "SELPLAT
 const nangongPromptSource = readFileSync(new URL("../../../prompts/personas/nangong/conversation.md", import.meta.url), "utf8");
 const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../../../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
-const nangongApplicationSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/nangong-application.service.ts", import.meta.url), "utf8");
+const nangongApplicationSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/application/nangong-application.service.ts", import.meta.url), "utf8");
 const personaEvolutionRuntimeSource = readFileSync(new URL("../../../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");
-const approvalServiceSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/evolution-approval.service.ts", import.meta.url), "utf8");
+const approvalServiceSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/decision/evolution-approval.service.ts", import.meta.url), "utf8");
 const hanliDeliberationSource = readFileSync(new URL("../../../prompts/personas/hanli/proposal-review.md", import.meta.url), "utf8");
-const hanliApplicationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/hanli-application.service.ts", import.meta.url), "utf8");
+const hanliApplicationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/application/hanli-application.service.ts", import.meta.url), "utf8");
 const hanliConversationPromptSource = readFileSync(new URL("../../../prompts/personas/hanli/conversation.md", import.meta.url), "utf8");
 const hanliConversationWorkspaceSource = readFileSync(new URL("../../../src/features/hanli/components/HanliConversationWorkspace.tsx", import.meta.url), "utf8");
-const distributionServiceSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/nangong-task-distribution.service.ts", import.meta.url), "utf8");
+const distributionServiceSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts", import.meta.url), "utf8");
 const persistedEvolutionStates = new Map();
 function evolutionPersistence(key) {
   return {
@@ -82,6 +83,40 @@ const distributionServices = {
 };
 let mutationSequence = 0;
 function mutation(facade) { return { expectedStateVersion: facade.state().updatedAt, idempotencyKey: `nangong-test-${++mutationSequence}` }; }
+
+test("南宫婉会话聚合根把独立 1 映射为确定且幂等的研讨动作", () => {
+  const baseState = {
+    conversation: { conversationId: "conversation-current", messages: [] },
+    oneShotConfirmation: null,
+    oneShotRun: null,
+  };
+
+  let aggregate = NangongConversationAggregate.restore(baseState);
+  assert.equal(aggregate.decideUserMessage("继续说明", null, false).kind, "continue-conversation");
+  assert.equal(aggregate.decideUserMessage("1", null, false).kind, "reject-missing-confirmation");
+
+  const confirmedState = {
+    ...baseState,
+    oneShotConfirmation: {
+      invitationMessageId: "invitation-1",
+      conversationId: "conversation-current",
+    },
+  };
+  aggregate = NangongConversationAggregate.restore(confirmedState);
+  assert.equal(aggregate.decideUserMessage("1", "topic-1", false).kind, "start-confirmed-evolution");
+
+  const runningState = {
+    ...confirmedState,
+    oneShotRun: {
+      runId: "run-1",
+      status: "running",
+      action: "南宫婉正在调查",
+    },
+  };
+  aggregate = NangongConversationAggregate.restore(runningState);
+  assert.equal(aggregate.decideUserMessage("1", "topic-1", true).kind, "report-active-run");
+  assert.equal(aggregate.decideUserMessage("1", "topic-1", false).kind, "retire-orphan-and-start");
+});
 
 test("南宫婉会话直接回答且内部意图不冒充用户原话", () => {
   assert.match(nangongPromptSource, /语气克制、温和、有判断/);
@@ -170,7 +205,8 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     assert.ok(seenPrompts.some((prompt) => prompt.includes(discussionBasis.customerQuestion)));
     assert.ok(seenPrompts.some((prompt) => prompt.includes("required-for-goal")));
     assert.ok(publishedConversations.every((conversation) => conversation.ownerPersonaId === "han-li"));
-    assert.match(hanliConversationPromptSource, /若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。/);
+    assert.match(hanliConversationPromptSource, /独立输入 1 会以当前观点启动/);
+    assert.match(hanliConversationPromptSource, /不依赖你是否说出某句固定文案/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -361,10 +397,11 @@ test("回复1启动统一自动流程后不因单题轮数上限自行停止", a
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", async () => {
+test("韩立会话已有当前观点时收到独立1直接启动内部研讨", async () => {
   let started = 0;
   let externalChatCalls = 0;
-  const messages = [{ messageId: "hanli-invite", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "需求已经可以开始调查。若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
+  const recordedContexts = [];
+  const messages = [{ messageId: "hanli-viewpoint", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "我的观点是：只保留右侧边框拖拽调宽，并移除左侧拖拽入口。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
   const memory = {
     readPersonaConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
     registerPersonaRound(input) {
@@ -372,18 +409,86 @@ test("韩立会话只有在成熟邀请后收到独立1才启动内部研讨", a
       messages.push({ messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
       return { ownerPersonaId: input.ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: input.completedAt };
     },
+    readLatestRequirementDiscussionContext() { return null; },
+    recordRequirementDiscussionContext(context) { recordedContexts.push(structuredClone(context)); },
   };
   const service = new HanliConversationService({
     store: evolutionStore(path.join(controlledTestRoot, "hanli-confirmation-state")), prompts, memory,
     conversation: { activeConversationId: () => "hanli-thread-1", async send() { externalChatCalls += 1; throw new Error("不应调用普通聊天"); }, async newChat() {} },
-    async startInternalDeliberation() { started += 1; return { continuous: true }; },
+    async startInternalDeliberation() {
+      assert.equal(recordedContexts.length, 1, "启动异步研讨前必须先保存当前观点");
+      started += 1;
+      return { continuous: true };
+    },
     recordEvent() {}, refreshSemanticMemory() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
   });
   const result = await service.send({ clientMessageId: "confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
   assert.equal(started, 1);
+  assert.equal(recordedContexts[0].customerConclusion, "我的观点是：只保留右侧边框拖拽调宽，并移除左侧拖拽入口。");
   assert.equal(externalChatCalls, 0);
   assert.equal(result.messages.at(-2).content, "1");
   assert.match(result.messages.at(-1).content, /请你确认，再进入实施/);
+});
+
+test("韩立会话没有当前观点时输入1不创建空研讨", async () => {
+  let started = 0;
+  const messages = [];
+  const memory = {
+    readPersonaConversation(ownerPersonaId) {
+      return { ownerPersonaId, conversationId: "hanli-empty-viewpoint", messages: structuredClone(messages), updatedAt: "2026-09-02T00:00:00.000Z" };
+    },
+    registerPersonaRound(input) {
+      messages.push({ messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt });
+      messages.push({ messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
+      return { ownerPersonaId: input.ownerPersonaId, conversationId: "hanli-empty-viewpoint", messages: structuredClone(messages), updatedAt: input.completedAt };
+    },
+  };
+  const service = new HanliConversationService({
+    store: { state: () => ({ deliberations: [], oneShotRun: null }) },
+    prompts,
+    memory,
+    conversation: { activeConversationId: () => "hanli-empty-viewpoint", async send() { throw new Error("不应调用普通聊天"); }, async newChat() {} },
+    async startInternalDeliberation() { started += 1; return { continuous: true }; },
+    recordEvent() {},
+    readStableUserId: () => "XUNAN",
+    readProjectScope: () => "/workspace",
+  });
+
+  const result = await service.send({ clientMessageId: "empty-confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
+
+  assert.equal(started, 0);
+  assert.match(result.messages.at(-1).content, /还没有形成可供研讨的韩立观点/);
+  assert.match(result.messages.at(-1).messageId, /^hanli-control:/);
+});
+
+test("韩立会话已有活动研讨时重复输入1只返回原流程", async () => {
+  let started = 0;
+  const messages = [{ messageId: "hanli-viewpoint", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点应先核实运行窗口，再决定修改范围。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
+  const memory = {
+    readPersonaConversation(ownerPersonaId) {
+      return { ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt };
+    },
+    registerPersonaRound(input) {
+      messages.push({ messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt });
+      messages.push({ messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
+      return { ownerPersonaId: input.ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: input.completedAt };
+    },
+  };
+  const service = new HanliConversationService({
+    store: { state: () => ({ deliberations: [], oneShotRun: { runId: "existing-run", status: "running" } }) },
+    prompts,
+    memory,
+    conversation: { activeConversationId: () => "hanli-active-deliberation", async send() { throw new Error("不应调用普通聊天"); }, async newChat() {} },
+    async startInternalDeliberation() { started += 1; return { continuous: true }; },
+    recordEvent() {},
+    readStableUserId: () => "XUNAN",
+    readProjectScope: () => "/workspace",
+  });
+
+  const result = await service.send({ clientMessageId: "duplicate-confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
+
+  assert.equal(started, 0);
+  assert.match(result.messages.at(-1).content, /已经进入内部研讨，无需重复启动/);
 });
 
 test("韩立只学习提问调查扩展方法并回显每轮真实读入字数", async () => {

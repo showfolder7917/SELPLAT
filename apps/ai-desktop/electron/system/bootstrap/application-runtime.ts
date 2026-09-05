@@ -526,6 +526,28 @@ export async function startApplication(): Promise<void> {
   });
   const { collaborationStore, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
   collaboration = collaborationContext.collaboration;
+  // 人物长期线程和临时执行线程共用同一全局授权路由；否则人物请求会停在主进程内存中，Renderer 永远看不到弹窗。
+  collaborationRegistry.registerPersona({
+    connectionId: "persona-conversation:nangong-wan",
+    memberId: "nangong-wan",
+    memberName: "南宫婉",
+    role: "persona-conversation",
+    service: nangongCodex,
+  });
+  collaborationRegistry.registerPersona({
+    connectionId: "persona-inquiry:nangong-wan",
+    memberId: "nangong-wan",
+    memberName: "南宫婉",
+    role: "persona-inquiry",
+    service: nangongInquiryCodex,
+  });
+  collaborationRegistry.registerPersona({
+    connectionId: "persona-conversation:han-li",
+    memberId: "han-li",
+    memberName: "韩立",
+    role: "persona-conversation",
+    service: hanLiCodex,
+  });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
   // 当前专题演化状态以 SQLite 为唯一生产来源。
   const evolutionStateStore = createEvolutionState(aiMemoryDatabase);

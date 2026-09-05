@@ -108,6 +108,35 @@ test("卡点人物会话实时收到令狐返回与韩立验收，重复快照�
   await page.goto(pathToFileURL(productionRendererFile).href);
 });
 
+test("南宫婉调查需要 Codex 授权时同时显示页面状态和授权窗口", async () => {
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /南宫婉/ }).click();
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionCodexApproval({
+      requestId: 1_000_101,
+      kind: "command",
+      title: "南宫婉 · 执行调查命令",
+      reason: "需要读取当前进程状态以核实断线原因。",
+      command: "ps -p 100",
+      cwd: "/workspace",
+      details: "角色：persona-inquiry",
+      trustEligible: false,
+      ownerMemberId: "nangong-wan",
+      ownerMemberName: "南宫婉",
+    });
+  });
+
+  await expect(page.getByRole("status", { name: "南宫婉等待授权" })).toContainText("南宫婉正在等待你的授权");
+  const approvalDialog = page.getByRole("dialog", { name: "南宫婉 · 执行调查命令" });
+  await expect(approvalDialog).toBeVisible();
+  await expect(approvalDialog).toContainText("需要读取当前进程状态以核实断线原因。");
+  await approvalDialog.getByRole("button", { name: "允许", exact: true }).click();
+  await expect(approvalDialog).toBeHidden();
+  await expect(page.getByRole("status", { name: "南宫婉等待授权" })).toHaveCount(0);
+
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+});
+
 test("通用侧栏折叠恢复保留任务且宽度可键盘调整", async () => {
   const sidebar = page.locator("#collaboration-sidebar");
   await expect(sidebar).toBeVisible();
@@ -418,7 +447,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(hanliConversation.getByText("我 · 发送中", { exact: true })).toBeVisible();
   await expect(hanliComposer.getByRole("button", { name: "思考中" })).toBeDisabled();
   await expect(hanliConversation.getByText("我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", { exact: true })).toBeVisible();
-  await expect(hanliConversation.getByText("若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", { exact: true })).toBeVisible();
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("1");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(hanliComposer.getByRole("button", { name: "发送给韩立" })).toBeVisible();

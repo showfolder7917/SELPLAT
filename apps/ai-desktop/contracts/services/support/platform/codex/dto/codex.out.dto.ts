@@ -36,14 +36,26 @@ export interface CodexLoginResponseOutDto {
 }
 
 export interface CodexApprovalOutDto {
+  /** 主进程分配的全局请求标识；不同 Codex 连接之间不得重复。 */
   requestId: number;
+  /** 授权针对命令执行还是文件修改。 */
   kind: "command" | "fileChange";
+  /** 授权弹窗标题；人物连接会带上真实人物名称。 */
   title: string;
+  /** Codex 提供的申请原因；没有原因时为 null。 */
   reason: string | null;
+  /** 等待执行的命令；文件修改请求没有命令时为 null。 */
   command: string | null;
+  /** 命令工作目录；无法确定或文件修改请求时允许为 null。 */
   cwd: string | null;
+  /** 供用户核对的命令动作、文件变化或所属任务信息。 */
   details: string | null;
+  /** 当前命令是否满足项目精确信任条件。 */
   trustEligible: boolean;
+  /** 发起授权的人物或协作成员标识；主 Codex 会话没有人物时为 null。 */
+  ownerMemberId?: string | null;
+  /** 发起授权的人物显示名；主 Codex 会话没有人物时为 null。 */
+  ownerMemberName?: string | null;
 }
 
 export interface ResolveCodexApprovalOutDto {

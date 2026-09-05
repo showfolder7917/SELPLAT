@@ -1,7 +1,7 @@
 # AI Desktop Harness 工作区与运行时规则
 
-<!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.110.0
+<!-- 5.111.0 要求人物长期 Codex 连接的授权与提问进入现有全局交互路由。 -->
+rule_version = 5.111.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -49,6 +49,8 @@ harness_execution_approval_policy = on_request_never_bypass
 harness_approvals_reviewer = user_never_inherit_auto_review
 <!-- 文件修改与首次命令请求必须显示真实原因、命令或变更信息；符合精确信任条件的后续同一命令可按用户既有授权自动允许。 -->
 harness_approval_ui_requires = reason + command_or_file_change_details + explicit_first_accept_or_decline + exact_trusted_command_auto_response
+<!-- 韩立、南宫婉及其调查连接不得丢弃待授权事件；局部请求 ID 映射为全局唯一 ID，并在现有弹窗标明真实人物。 -->
+persona_harness_interaction_routing_contract = every_long_lived_persona_conversation_and_inquiry_codex_connection_registered + globally_unique_request_id_mapping + existing_approval_and_structured_input_dialogs + owner_persona_projection + no_discarded_pending_request
 <!-- 点击普通项目命令的允许按钮等价于允许并信任；信任只绑定真实项目根、cwd、逐字命令和 npm/pnpm/yarn 脚本正文签名，任何一项变化都重新审批。 -->
 trusted_project_command_identity_contract = explicit_allow_and_trust + electron_userData_persistence + exact_project_root_cwd_command_and_package_script_signature + changed_identity_requires_new_approval
 <!-- 删除、提权、权限扩张、破坏 Git 状态和文件变更请求永不进入命令信任；设置必须显示登记数量、支持确认后统一清除，并记录首次信任与自动允许业务日志。 -->

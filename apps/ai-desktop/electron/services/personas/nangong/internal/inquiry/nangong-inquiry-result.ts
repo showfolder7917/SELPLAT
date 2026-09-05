@@ -1,5 +1,5 @@
-import type { NangongInquiryResultOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
-import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { NangongInquiryResultOutDto } from "../../../../../../contracts/services/personas/nangong/index.js";
+import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 
 /** 南宫婉只从一条独立最终消息建立调查结果，过程说明和多条消息不会混进机器合同。 */
 export function nangongInquiryResult(response: SendMessageOutDto, customerQuestion: string): NangongInquiryResultOutDto {

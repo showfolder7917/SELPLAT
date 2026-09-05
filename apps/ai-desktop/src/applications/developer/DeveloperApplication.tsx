@@ -120,9 +120,32 @@ export function DeveloperApplication() {
   const screenshot = useScreenshotCapture({ locale: settings.locale, screenSourceUnavailable: text.screenSourceUnavailable, setMainInput: codex.conversation.setInput, closeSettings: () => setSettingsOpen(false), refreshTempInfo: diagnostics.refreshTempInfo, getAttachments, setAttachments });
   // 当前人物页和后台未完成回复共同决定会话显示状态；协作调度仍使用后端成员状态。
   const activePersonaId = collaboration.collaborationMode && collaboration.panel === "member" ? collaboration.selectedMember?.memberId : null;
+  let hanliActivity: "active" | "responding" | "creating" | "waiting-approval" | null = null;
+  if (codex.interaction.approval?.ownerMemberId === "han-li") {
+    hanliActivity = "waiting-approval";
+  } else if (hanli.newConversationBusy) {
+    hanliActivity = "creating";
+  } else if (hanli.sending) {
+    hanliActivity = "responding";
+  } else if (activePersonaId === "han-li") {
+    hanliActivity = "active";
+  }
+
+  let nangongActivity: "active" | "responding" | "investigating" | "creating" | "waiting-approval" | null = null;
+  if (codex.interaction.approval?.ownerMemberId === "nangong-wan") {
+    nangongActivity = "waiting-approval";
+  } else if (nangong.newConversationBusy) {
+    nangongActivity = "creating";
+  } else if (nangong.sending) {
+    nangongActivity = "responding";
+  } else if (hanli.delegatedResponderPersonaId === "nangong-wan") {
+    nangongActivity = "investigating";
+  } else if (activePersonaId === "nangong-wan") {
+    nangongActivity = "active";
+  }
   const personaConversationActivities = {
-    "han-li": hanli.newConversationBusy ? "creating" as const : hanli.sending ? "responding" as const : activePersonaId === "han-li" ? "active" as const : null,
-    "nangong-wan": nangong.newConversationBusy ? "creating" as const : nangong.sending ? "responding" as const : hanli.delegatedResponderPersonaId === "nangong-wan" ? "investigating" as const : activePersonaId === "nangong-wan" ? "active" as const : null,
+    "han-li": hanliActivity,
+    "nangong-wan": nangongActivity,
   };
 
   useEffect(() => {

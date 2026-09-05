@@ -3,10 +3,10 @@ import type {
   CreateNangongProposalInDto,
   ReviseNangongProposalInDto,
   UpdateNangongTopicInDto,
-} from "../../../../../contracts/services/personas/nangong/index.js";
-import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { NangongApplicationServiceOptions } from "./nangong-application.ports.js";
-import { hasMaterialRevisionEvidence, parseRevisionInvestigation } from "./nangong-revision.investigator.js";
+} from "../../../../../../contracts/services/personas/nangong/index.js";
+import type { EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
+import type { NangongApplicationServiceOptions } from "../application/nangong-application.ports.js";
+import { hasMaterialRevisionEvidence, parseRevisionInvestigation } from "../inquiry/nangong-revision.investigator.js";
 
 type NangongEvolutionAuthoringServiceOptions = Pick<NangongApplicationServiceOptions,
   "store" | "prompts" | "mutations" | "investigateRevision" | "recordEvent" | "recordFailure" | "proposalReview" | "memberDirectory" | "oneShotWorkflow">;

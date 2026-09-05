@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, existsSync } from "node:fs";
-import { HanliComputerAcceptance } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-computer-acceptance.js";
+import { HanliComputerAcceptance } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.js";
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
   let n = 0;

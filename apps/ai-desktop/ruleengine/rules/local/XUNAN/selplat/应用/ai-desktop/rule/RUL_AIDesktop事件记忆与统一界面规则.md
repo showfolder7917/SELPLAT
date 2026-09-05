@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
-<!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.159.0
+<!-- 5.160.0 补充南宫婉内部研讨的持久进度、授权等待与阻塞原因页面投影。 -->
+rule_version = 5.160.0
 
 <!-- 截图与聚焦不证明用户操作成功；每项必须有结果断言，交互项必须真实操作后再断言。 -->
 hanli_acceptance_evidence_gate = model_observes_fresh_screenshot_after_each_real_input + evidence_reference_per_criterion + no_input_no_pass + missing_or_failed_evidence_never_passes + legacy_run_cannot_approve_current_proposal
@@ -125,3 +125,5 @@ workflow_runtime_session_recovery_contract = startup_marks_previous_running_inte
 nangong_next_evolution_launcher_contract = completed_and_accepted_plus_automatic_evolution_enabled_plus_reciprocal_topic_ids_plus_idempotent_restart
 <!-- 南宫婉当前内部研讨与直接消息使用同一连续气泡区；新会话边界固定，消息更新不得移动边界。 -->
 nangong_continuous_conversation_contract = current_deliberation_only_on_nangong_not_hanli + shared_continuous_SELUI_message_layout + no_nested_internal_history_panel + welcome_only_when_visible_timeline_empty + stable_conversation_createdAt_boundary + preserve_archived_facts + composer_never_occludes_messages
+<!-- 南宫婉页面必须从持久演化轮次和实时授权所有者显示当前动作，不能只在后台保持 running。 -->
+nangong_internal_activity_projection_contract = persisted_deliberation_round_and_one_shot_action + live_approval_owner + visible_investigating_waiting_approval_blocked_and_waiting_hanli_states + existing_global_approval_dialog + no_false_running_or_silent_pause

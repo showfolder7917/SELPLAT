@@ -1,13 +1,14 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 
-import type { EvolutionStateOutDto, LocaleValue, PersonaConversationOutDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
+import type { CodexApprovalOutDto, EvolutionStateOutDto, LocaleValue, PersonaConversationOutDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 import type { ComposerAttachment } from "../../conversation/model/chat-message";
 import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
 import { usePersonaConversationTailFollow } from "../../conversation/model/usePersonaConversationTailFollow";
+import { NangongConversationActivity } from "./NangongConversationActivity";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -20,7 +21,7 @@ function splitEvolutionList(value: string): string[] {
 }
 
 /** 南宫婉沿用韩立主会话的消息区和输入区，只替换人物文案与专项演化发送链路。 */
-export function NangongConversationWorkspace({ runtime, state, conversation, attachments, workspaces, locale, newConversationBusy, error, onState, onConversation, onAttachments, onScreenshot, onPaste, onError }: { runtime: ReturnType<typeof usePersonaConversation>; state: EvolutionStateOutDto; conversation: PersonaConversationOutDto; attachments: ComposerAttachment[]; workspaces: WorkspaceStateOutDto | null; locale: LocaleValue; newConversationBusy: boolean; error: string; onState(state: EvolutionStateOutDto): void; onConversation(conversation: PersonaConversationOutDto): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
+export function NangongConversationWorkspace({ runtime, state, approval, conversation, attachments, workspaces, locale, newConversationBusy, error, onState, onConversation, onAttachments, onScreenshot, onPaste, onError }: { runtime: ReturnType<typeof usePersonaConversation>; state: EvolutionStateOutDto; approval: CodexApprovalOutDto | null; conversation: PersonaConversationOutDto; attachments: ComposerAttachment[]; workspaces: WorkspaceStateOutDto | null; locale: LocaleValue; newConversationBusy: boolean; error: string; onState(state: EvolutionStateOutDto): void; onConversation(conversation: PersonaConversationOutDto): void; onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>; onScreenshot(hidden: boolean): void; onPaste(files: File[]): void; onError(message: string): void }) {
   const [chatText, setChatText] = useState("");
   // 与韩立共用应用层运行态；切换人物不会销毁尚未完成的消息和发送锁。
   const { sending: chatBusy, setSending: setChatBusy, pendingMessage: outgoingMessage, setPendingMessage: setOutgoingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, sharedInternalMessages, newConversationFeedback } = runtime;
@@ -113,6 +114,7 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
   const timelineRef = usePersonaConversationTailFollow(visibleMessages.map((message) => `${message.messageId}:${message.status}:${message.content}`).join("|"));
   return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section ref={timelineRef} className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
+      <NangongConversationActivity state={state} approval={approval} />
       {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
         <strong>本轮已具备启动条件</strong>
         <span>回复 1 将启动持续自动演化：完成当前课题后继续寻找有证据的新问题，直到暂停或停止。</span>

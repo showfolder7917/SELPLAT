@@ -14,6 +14,7 @@ let harnessStatus = {
   runtime: { source: "bundled", version: "0.149.0" },
 };
 let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-terra", reasoningEffort: "medium", serviceTier: "default", codexAppCorpusIngestionEnabled: false };
+let pendingCodexApproval = null;
 let pendingUserInput = null;
 let finishManagedTurn = null;
 let clarificationAnswers = {};
@@ -288,8 +289,17 @@ contextBridge.exposeInMainWorld("desktop", {
   getActiveCodexSession: async () => ({ threadId: activeThreadId }),
   loginWithChatGPT: async () => ({ loginId: "test", authUrl: "https://chatgpt.com" }),
   logoutCodex: async () => harnessStatus,
-  getCodexApprovals: async () => [],
-  resolveCodexApproval: async () => ({ status: "resolved", trusted: false }),
+  getCodexApprovals: async () => pendingCodexApproval ? [pendingCodexApproval] : [],
+  setInteractionCodexApproval: async (approval) => {
+    pendingCodexApproval = approval;
+  },
+  resolveCodexApproval: async (requestId) => {
+    if (!pendingCodexApproval || pendingCodexApproval.requestId !== requestId) {
+      return { status: "expired", trusted: false };
+    }
+    pendingCodexApproval = null;
+    return { status: "resolved", trusted: false };
+  },
   getTrustedCommandInfo: async () => ({ count: 0 }),
   clearTrustedCommands: async () => ({ count: 0 }),
   prepareAutomaticTesting: async () => ({
@@ -417,7 +427,7 @@ contextBridge.exposeInMainWorld("desktop", {
       hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:assessment`, sequenceNumber: sequenceNumber + 4, speakerType: "persona", speakerPersonaId: "han-li", content: "判断：这是一条历史后台判断，不是聊天正文。", replyToMessageId: `internal:${sequenceNumber}:answer`, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
     } else {
       hanliConversation.messages.push({ messageId: `hanli-answer-${Date.now()}`, sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
-      hanliConversation.messages.push({ messageId: `hanli-invitation-${Date.now()}`, sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "若确认由韩立与南宫婉开始内部研讨并持续自动演化，请回复 1。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `hanli-viewpoint-${Date.now()}`, sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
     }
     hanliConversation.updatedAt = now;
     for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
