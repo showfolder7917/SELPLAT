@@ -139,7 +139,7 @@ export class LinghuAutomationFacade {
   async handleTaskCheckpoint(taskId: string, stalled = false): Promise<void> {
     if (this.#checking || this.#stopped) return;
     const task = this.#collaboration.state().tasks.find((item) => item.taskId === taskId);
-    if (!task || (!stalled && !["blocked", "recovering", "test-failed"].includes(task.state)) || ["integrated", "cancelled"].includes(task.state)) return;
+    if (!task || (!stalled && !["blocked", "recovering"].includes(task.state)) || ["integrated", "cancelled"].includes(task.state)) return;
     this.#checking = true;
     try { await this.#recoverFlow(task, automaticFlowSnapshots(this.#collaboration.state(), this.state().activeTaskId, new Date().toISOString()).find((item) => item.sourceTaskId === taskId)); }
     finally { this.#checking = false; }

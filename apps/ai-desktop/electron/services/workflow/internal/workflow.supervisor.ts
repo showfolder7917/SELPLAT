@@ -68,12 +68,12 @@ export class WorkflowSupervisor {
         // 补收仅持久为blocked但没有异常事件的旧卡点，不要求用户再次点击才能进入受理。
         const evolution = this.#readers.evolution();
         const run = evolution.oneShotRun;
-        if (run?.status === "blocked" && !this.#repository.listUnhandledExceptions(200).some((event) => event.payload.runId === run.runId)) {
+        if (run?.status === "blocked" && !this.#repository.listWorkflowBlockages(200).some((event) => event.payload.runId === run.runId)) {
           this.#repository.recordEvent({ sourceType: "system", sourceId: "evolution-runtime", eventType: "workflow.checkpoint.blocked", category: "technical-error", status: "open", severity: "error", correlationId: run.topicId,
-            message: run.blockingReason || run.action, fingerprint: `checkpoint-run:${run.runId}:${run.updatedAt}`, payload: { runId: run.runId, proposalId: run.proposalId, topicId: run.topicId, phase: run.phase } });
+            flowImpact: "blocked", message: run.blockingReason || run.action, fingerprint: `checkpoint-run:${run.runId}:${run.updatedAt}`, payload: { runId: run.runId, proposalId: run.proposalId, topicId: run.topicId, phase: run.phase, recoveryPoint: run.action } });
         }
         // 卡点接收独立于巡检开关；处理器仍必须尊重原流程暂停和业务授权边界。
-        const pending = this.#repository.listUnhandledExceptions();
+        const pending = this.#repository.listWorkflowBlockages();
         const open = pending.filter((event) => event.status === "open");
         const claimedIds = this.#repository.claimExceptions(open.map((event) => event.eventId), "linghu-ancestor", now);
         const claimed = open.filter((event) => claimedIds.includes(event.eventId)).map((event) => ({

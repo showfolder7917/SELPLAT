@@ -3,7 +3,7 @@ import type { CheckpointState } from "./checkpoint-state.js";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { EventSeverityValue } from "../../../../contracts/foundation/index.js";
-import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto, WorkflowFlowImpactValue } from "../../../../contracts/services/workflow/index.js";
 import type { LinghuAutomationStateOutDto } from "../../../../contracts/services/personas/linghu/index.js";
 import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
@@ -125,6 +125,7 @@ export class WorkflowRepository {
       category: classified.category,
       severity,
       status: classified.status,
+      flowImpact: workflowFlowImpact(details.flowImpact),
       message: stringValue(details.message) || stringValue(details.reason) || type,
       payload: details,
       fingerprint: stringValue(details.fingerprint),
@@ -199,15 +200,36 @@ export class WorkflowRepository {
         ORDER BY recordedAt ASC, occurredAt ASC
         LIMIT $limit
       `).all({ $limit: Math.max(1, Math.min(1000, limit)) }) as Array<Record<string, unknown>>;
-      return rows.map((row) => ({
-        eventId: String(row.eventId), correlationId: nullableString(row.correlationId),
-        sourceType: row.sourceType as WorkflowExceptionRecordOutDto["sourceType"], sourceId: String(row.sourceId),
-        eventType: String(row.eventType), category: row.category as WorkflowExceptionRecordOutDto["category"],
-        severity: row.severity as WorkflowExceptionRecordOutDto["severity"], status: row.status as WorkflowExceptionRecordOutDto["status"],
-        message: String(row.message), payload: parsePayload(row.payloadJson), fingerprint: nullableString(row.fingerprint),
-        occurredAt: String(row.occurredAt), handlingOwnerId: nullableString(row.handlingOwnerId),
-        handlingStartedAt: nullableString(row.handlingStartedAt),
-      }));
+      return rows.map((row) => {
+        const payload = parsePayload(row.payloadJson);
+        return {
+          eventId: String(row.eventId), correlationId: nullableString(row.correlationId),
+          sourceType: row.sourceType as WorkflowExceptionRecordOutDto["sourceType"], sourceId: String(row.sourceId),
+          eventType: String(row.eventType), category: row.category as WorkflowExceptionRecordOutDto["category"],
+          severity: row.severity as WorkflowExceptionRecordOutDto["severity"], status: row.status as WorkflowExceptionRecordOutDto["status"],
+          flowImpact: workflowFlowImpact(payload.flowImpact), message: String(row.message), payload, fingerprint: nullableString(row.fingerprint),
+          occurredAt: String(row.occurredAt), handlingOwnerId: nullableString(row.handlingOwnerId),
+          handlingStartedAt: nullableString(row.handlingStartedAt),
+        };
+      });
+    });
+  }
+
+  /** 只有生产者明确声明为 blocked 的异常才能进入令狐卡点恢复；普通失败仍保留在审计查询中。 */
+  listWorkflowBlockages(limit = 50): WorkflowExceptionRecordOutDto[] {
+    return this.#database.withConnection((connection) => {
+      const rows = connection.prepare(`
+        SELECT eventId, correlationId, sourceType, sourceId, eventType, category, severity, status,
+          message, payloadJson, fingerprint, occurredAt, handlingOwnerId, handlingStartedAt
+        FROM AiDesktopEvent
+        WHERE category IN ('technical-error', 'business-exception', 'stalled')
+          AND status IN ('open', 'processing')
+          AND eventType NOT IN ('linghu.unified_exception.accepted', 'linghu.unified_issue.accepted')
+          AND json_extract(payloadJson, '$.flowImpact') = 'blocked'
+        ORDER BY recordedAt ASC, occurredAt ASC
+        LIMIT $limit
+      `).all({ $limit: Math.max(1, Math.min(1000, limit)) }) as Array<Record<string, unknown>>;
+      return rows.map(workflowExceptionRecord);
     });
   }
 
@@ -450,6 +472,7 @@ export class WorkflowRepository {
           category: "stalled",
           severity: "error",
           status: "open",
+          flowImpact: "blocked",
           message: `任务 ${row.taskId} 超过心跳期限，等待令狐老祖安全恢复。`,
           payload: row as unknown as Record<string, unknown>,
           fingerprint: `task-stalled:${row.taskId}:${row.lastHeartbeatAt}`,
@@ -490,6 +513,7 @@ export class WorkflowRepository {
     const category = input.category || "audit";
     const severity = input.severity || defaultSeverity(category);
     const status = input.status || defaultStatus(category);
+    const payload = { ...(input.payload || {}), flowImpact: input.flowImpact || workflowFlowImpact(input.payload?.flowImpact) };
     if (input.fingerprint) {
       const existing = connection.prepare("SELECT eventId, status FROM AiDesktopEvent WHERE fingerprint = $fingerprint").get({ $fingerprint: input.fingerprint }) as { eventId: string; status: WorkflowEventStatusValue } | undefined;
       if (existing) {
@@ -507,7 +531,7 @@ export class WorkflowRepository {
           $eventId: existing.eventId, $correlationId: input.correlationId || null, $sourceType: input.sourceType || "system",
           $sourceId: input.sourceId || "ai-desktop", $eventType: input.eventType, $category: category,
           $severity: severity, $status: reopenedStatus, $message: input.message || input.eventType,
-          $payloadJson: JSON.stringify(input.payload || {}), $occurredAt: occurredAt, $recordedAt: new Date().toISOString(),
+          $payloadJson: JSON.stringify(payload), $occurredAt: occurredAt, $recordedAt: new Date().toISOString(),
         });
         return existing.eventId;
       }
@@ -519,7 +543,7 @@ export class WorkflowRepository {
       $eventId: eventId, $correlationId: input.correlationId || null, $sourceType: input.sourceType || "system",
       $sourceId: input.sourceId || "ai-desktop", $eventType: input.eventType, $category: category,
       $severity: severity, $status: status, $message: input.message || input.eventType,
-      $payloadJson: JSON.stringify(input.payload || {}), $fingerprint: input.fingerprint || null,
+      $payloadJson: JSON.stringify(payload), $fingerprint: input.fingerprint || null,
       $occurredAt: occurredAt, $recordedAt: new Date().toISOString(), $resolvedAt: status === "resolved" ? occurredAt : null,
     });
     return eventId;
@@ -679,6 +703,19 @@ function workflowSourceType(value: unknown): WorkflowEventInDto["sourceType"] | 
 }
 function workflowSeverity(value: unknown): EventSeverityValue | null {
   return value === "info" || value === "warning" || value === "error" || value === "critical" ? value : null;
+}
+function workflowFlowImpact(value: unknown): WorkflowFlowImpactValue { return value === "blocked" ? "blocked" : "none"; }
+function workflowExceptionRecord(row: Record<string, unknown>): WorkflowExceptionRecordOutDto {
+  const payload = parsePayload(row.payloadJson);
+  return {
+    eventId: String(row.eventId), correlationId: nullableString(row.correlationId),
+    sourceType: row.sourceType as WorkflowExceptionRecordOutDto["sourceType"], sourceId: String(row.sourceId),
+    eventType: String(row.eventType), category: row.category as WorkflowExceptionRecordOutDto["category"],
+    severity: row.severity as WorkflowExceptionRecordOutDto["severity"], status: row.status as WorkflowExceptionRecordOutDto["status"],
+    flowImpact: workflowFlowImpact(payload.flowImpact), message: String(row.message), payload, fingerprint: nullableString(row.fingerprint),
+    occurredAt: String(row.occurredAt), handlingOwnerId: nullableString(row.handlingOwnerId),
+    handlingStartedAt: nullableString(row.handlingStartedAt),
+  };
 }
 function nullableString(value: unknown): string | null { return typeof value === "string" && value ? value : null; }
 function parsePayload(value: unknown): Record<string, unknown> { try { const parsed = JSON.parse(String(value)); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}; } catch { return {}; } }

@@ -335,6 +335,8 @@ test("异常从统一队列受理并在相关流程恢复后进入已解决终�
     const open = fixture.repository.listUnhandledExceptions();
     assert.equal(open.length, 1);
     assert.equal(open[0].status, "open");
+    assert.equal(open[0].flowImpact, "none");
+    assert.equal(fixture.repository.listWorkflowBlockages().length, 0, "普通技术失败只能留在审计异常中");
     assert.deepEqual(fixture.repository.claimExceptions([open[0].eventId], "linghu-ancestor", "2026-08-26T00:00:00.000Z"), [open[0].eventId]);
     assert.equal(fixture.repository.listUnhandledExceptions()[0].status, "processing");
     fixture.repository.recordAuditEvent("nangong.evolution.state_changed", { correlationId: "round-1", reason: "blocked" });
@@ -697,14 +699,15 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     await supervisor.checkNow();
     assert.deepEqual(handedOff, ["task-1"]);
     assert.ok(handedOffExceptions.length > 0);
-    assert.ok(fixture.repository.listUnhandledExceptions().every((event) => event.status === "processing"));
+    assert.ok(fixture.repository.listWorkflowBlockages().every((event) => event.status === "processing"));
     const firstCount = handedOffExceptions.length;
     linghuEnabled = true;
     // 已在处理的记录仍需继续核对，不能认领一次后永久丢失。
     await supervisor.checkNow();
     assert.ok(handedOffExceptions.length > firstCount);
     assert.ok(handedOffExceptions.some((event) => event.category === "stalled" && event.handlingOwnerId === "linghu-ancestor"));
-    assert.ok(handedOffExceptions.some((event) => event.eventType === "workflow.supervisor.evolution_sync_failed" && event.handlingOwnerId === "linghu-ancestor"));
+    assert.ok(!handedOffExceptions.some((event) => event.eventType === "workflow.supervisor.evolution_sync_failed"), "普通监督失败不得伪装成卡点");
+    assert.equal(fixture.repository.listUnhandledExceptions().find((event) => event.eventType === "workflow.supervisor.evolution_sync_failed")?.flowImpact, "none");
     const repeatedSyncErrors = fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS value FROM AiDesktopEvent WHERE eventType='workflow.supervisor.evolution_sync_failed'").get());
     assert.equal(Number(repeatedSyncErrors.value), 1, "相同监督器故障不得每轮创建新卡点");
   } finally {

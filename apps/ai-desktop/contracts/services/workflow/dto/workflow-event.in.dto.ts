@@ -1,5 +1,5 @@
 import type { EventSeverityValue } from "../../../foundation/index.js";
-import type { WorkflowEventCategoryValue, WorkflowEventStatusValue } from "../value/workflow-event.value.js";
+import type { WorkflowEventCategoryValue, WorkflowEventStatusValue, WorkflowFlowImpactValue } from "../value/workflow-event.value.js";
 
 /**
  * 进入 Workflow 持久化和监督边界的事件事实。
@@ -18,6 +18,8 @@ export interface WorkflowEventInDto {
   category?: WorkflowEventCategoryValue;
   severity?: EventSeverityValue;
   status?: WorkflowEventStatusValue;
+  /** 只有明确阻断原流程且具备恢复上下文的事件才能设为 blocked。 */
+  flowImpact?: WorkflowFlowImpactValue;
   message?: string;
   payload?: Record<string, unknown>;
   fingerprint?: string | null;

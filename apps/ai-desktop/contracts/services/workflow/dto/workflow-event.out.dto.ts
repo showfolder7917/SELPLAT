@@ -1,5 +1,5 @@
 import type { EventSeverityValue } from "../../../foundation/index.js";
-import type { WorkflowEventCategoryValue, WorkflowEventStatusValue } from "../value/workflow-event.value.js";
+import type { WorkflowEventCategoryValue, WorkflowEventStatusValue, WorkflowFlowImpactValue } from "../value/workflow-event.value.js";
 
 /**
  * Workflow 输出给异常接手流程的未处理事件记录。
@@ -18,6 +18,7 @@ export interface WorkflowExceptionRecordOutDto {
   category: Extract<WorkflowEventCategoryValue, "technical-error" | "business-exception" | "stalled">;
   severity: EventSeverityValue;
   status: Extract<WorkflowEventStatusValue, "open" | "processing">;
+  flowImpact: WorkflowFlowImpactValue;
   message: string;
   payload: Record<string, unknown>;
   fingerprint: string | null;

@@ -140,6 +140,32 @@ test("旧执行节点先失败结束，令狐修复作为新事件追加", () =>
   } finally { fixture.close(); }
 });
 
+test("卡点修复任务沿用原专题时间线而不另建分叉专题", () => {
+  const fixture = createFixture("checkpoint-original-topic");
+  try {
+    fixture.append(approvalApplication(fixture, "proposal-1", 1, "审批申请"));
+    const repair = task(fixture, 9, false);
+    repair.taskId = "checkpoint-repair-task";
+    repair.snapshot.title = "修复原专题卡点";
+    repair.originalExecutor = member("linghu-ancestor", "令狐老祖");
+    repair.currentHandler = repair.originalExecutor;
+    repair.executorMemberId = repair.originalExecutor.memberId;
+    repair.executionRecords[0].executor = repair.originalExecutor;
+    repair.flowEvents = [
+      flow("checkpoint-repair-assigned", "executor.assigned", "analysis", "started", repair.originalExecutor, "已接手原专题卡点", fixture.at(2)),
+      flow("checkpoint-repair-investigated", "execution.repair_investigated", "recovery", "completed", repair.originalExecutor, "已确认卡点原因", fixture.at(3)),
+    ];
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(4), [repair]), [repair.taskId]);
+
+    const snapshot = fixture.timeline.snapshot(fixture.at(5));
+    assert.equal(snapshot.groups.length, 1);
+    assert.equal(snapshot.groups[0].groupId, "topic:topic-1");
+    assert.equal(snapshot.groups[0].proposalId, "proposal-1");
+    assert.ok(snapshot.groups[0].nodes.some((node) => node.taskId === repair.taskId && node.actor.memberId === "linghu-ancestor"));
+    assert.ok(snapshot.groups.every((group) => group.groupId !== `task:${repair.taskId}`));
+  } finally { fixture.close(); }
+});
+
 test("修改任务快照但没有新业务事件时时间线不变", () => {
   const fixture = createFixture("no-state-inference");
   try {

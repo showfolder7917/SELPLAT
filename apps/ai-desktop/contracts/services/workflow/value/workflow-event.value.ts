@@ -12,3 +12,6 @@ export type WorkflowEventCategoryValue = "state-change" | "approval" | "executio
 
 /** Workflow 监督和恢复流程维护的处理状态。 */
 export type WorkflowEventStatusValue = "observed" | "open" | "processing" | "resolved" | "ignored";
+
+/** 事件对业务流程的真实影响；失败本身不等于流程阻塞。 */
+export type WorkflowFlowImpactValue = "none" | "blocked";

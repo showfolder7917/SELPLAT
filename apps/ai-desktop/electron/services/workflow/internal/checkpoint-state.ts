@@ -9,6 +9,15 @@ export interface CheckpointState {
   taskId: string | null;
   sourceMemberId: string;
   conversations: Record<string, string>;
+  sourcePhase?: string;
+  recoveryPoint?: string;
+  issue?: string;
+  blockedImpact?: string;
+  repairGoal?: string;
+  latestProgress?: string;
+  investigation?: string;
+  repairResult?: string;
+  testResult?: string;
   exhausted?: boolean;
   resumedRound?: number;
 }

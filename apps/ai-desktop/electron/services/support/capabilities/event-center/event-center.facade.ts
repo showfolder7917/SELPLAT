@@ -56,6 +56,7 @@ export class EventCenterFacade {
       severity: input.severity || (input.kind === "business" ? "warning" : "error"),
       fingerprint: input.fingerprint || null,
       ...input.details,
+      flowImpact: input.flowImpact || "none",
     }, input.correlationId || undefined);
   }
 

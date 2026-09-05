@@ -18,4 +18,6 @@ export interface EventCenterExceptionInDto {
   details?: Record<string, unknown>;
   severity?: EventSeverityValue;
   fingerprint?: string | null;
+  /** 普通异常默认不阻断流程；仅真实恢复点可以显式标记 blocked。 */
+  flowImpact?: "none" | "blocked";
 }

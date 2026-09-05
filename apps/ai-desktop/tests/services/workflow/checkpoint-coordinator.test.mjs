@@ -6,7 +6,7 @@ import { AcceptanceHandoffService } from "../../../../../build/ai-desktop/electr
 
 // 端口夹具只模拟已发生的任务状态，不调用真实服务、不修改生产运行。
 function fixture() {
-  const event = { eventId: "issue-1", correlationId: "topic-1", category: "technical-error", message: "真实点击被工具拒绝", occurredAt: "2026-09-05T00:00:00Z", payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting" } };
+  const event = { eventId: "issue-1", correlationId: "topic-1", category: "technical-error", flowImpact: "blocked", message: "真实点击被工具拒绝", occurredAt: "2026-09-05T00:00:00Z", payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", recoveryPoint: "真实界面验收" } };
   const evolution = { automationRuntime: { status: "idle" }, oneShotRun: { runId: "run-1", proposalId: "proposal-1", status: "blocked" }, topics: [{ topicId: "topic-1", title: "验收", workspaceState: { roots: [] }, locale: "zh-CN" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1", title: "原验收" }] };
   const collaboration = { tasks: [], members: [] };
   const effects = { submitted: [], resumed: [], handled: [], resolved: [], phases: [] };
@@ -27,6 +27,8 @@ test("卡点真实派发、重启去重、返回原点后才允许解除", async
   await f.run(); await f.run();
   assert.equal(f.effects.submitted.length, 1);
   assert.equal(f.effects.submitted[0].preferredExecutorMemberId, "linghu-ancestor");
+  assert.equal(f.effects.submitted[0].evolutionProposalId, "proposal-1");
+  assert.equal(f.effects.submitted[0].evolutionRoundId, "proposal-1");
   assert.deepEqual(f.effects.resolved, []);
   f.collaboration.tasks[0].state = "integrated";
   f.options.resume = async (id) => { f.effects.resumed.push(id); f.evolution.oneShotRun.status = "running"; return f.evolution; };
@@ -93,6 +95,15 @@ test("执行人正常自修复不抢占，已确认心跳停滞走原任务恢�
   assert.equal(f.effects.handled.length, 1);
 });
 
+test("普通失败和统一测试失败不进入卡点恢复入口", async () => {
+  const ordinary = fixture(); ordinary.event.flowImpact = "none"; await ordinary.run();
+  assert.equal(ordinary.effects.submitted.length, 0);
+  const unified = fixture();
+  unified.collaboration.tasks.push({ taskId: "original", state: "test-failed", phase: "unified-testing", updatedAt: "2026-09-05T00:00:00Z", snapshot: { constraints: [] } });
+  unified.event.correlationId = "original"; unified.event.payload.taskId = "original"; await unified.run();
+  assert.equal(unified.effects.handled.length, 0); assert.equal(unified.effects.submitted.length, 0);
+});
+
 test("派发失败保留原卡点，下一次继续，不报告完成", async () => {
   const f = fixture(); const submit = f.options.submitRepair;
   f.options.submitRepair = () => { throw new Error("runtime offline"); };
@@ -114,6 +125,9 @@ test("卡点双方人物会话和令狐时间线幂等留痕，不覆盖专题�
   for (let repeat = 0; repeat < 2; repeat++) service.publish(fixture().event, state, "received", "接收事实");
   assert.equal(f.messages.size, 2); assert.equal(f.events.size, 1);
   assert.equal([...f.events.values()][0].group.title, "原任务");
+  assert.match([...f.events.values()][0].fact.content, /发生位置：accepting/);
+  assert.match([...f.events.values()][0].fact.content, /遇到的问题：真实点击被工具拒绝/);
+  assert.match([...f.events.values()][0].fact.detail, /原提案：proposal-1/);
   state.round = 2; service.publish(fixture().event, state, "received", "第二轮");
   assert.equal(f.messages.size, 4); assert.equal(f.events.size, 2);
 });

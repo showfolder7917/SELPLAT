@@ -415,6 +415,7 @@ export class PersonaEvolutionRuntime {
       error,
       correlationId: topicId || run?.runId || null,
       fingerprint: `nangong-one-shot:${run?.runId || "unknown"}:${operation}:${run?.proposalId || "none"}`,
+      flowImpact: "blocked",
       details: { runId: run?.runId || null, topicId: topicId || null, proposalId: run?.proposalId || null, phase: run?.phase || null, recoveryPoint: run?.action || null, ...details },
     });
     return this.#store.blockOneShotRun(reason);

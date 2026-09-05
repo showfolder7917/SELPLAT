@@ -41,7 +41,7 @@ export function createPersonaApplicationContext(options: PersonaBootstrapOptions
   const repository = options.workflowRepository;
   const checkpoints = repository ? createCheckpointCoordinator({
     evolution: () => options.personaEvolution.state(), collaboration: () => options.collaboration.state(),
-    pending: () => repository.listUnhandledExceptions(1000),
+    pending: () => repository.listWorkflowBlockages(1000),
     save: (id, state) => repository.saveCheckpoint(id, state), resolve: (id, reason) => repository.resolveException(id, reason),
     resume: (id) => options.personaEvolution.resumeOneShotRun(id),
     handleTask: (id, stalled) => linghuAutomation.handleTaskCheckpoint(id, stalled), submitRepair: (request) => linghuAutomation.submitCheckpointRepair(request),

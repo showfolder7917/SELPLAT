@@ -24,7 +24,7 @@ export class CheckpointCoordinator {
     if (this.#busy) return;
     this.#busy = true;
     try {
-      for (const event of events) {
+      for (const event of events.filter((item) => item.flowImpact === "blocked")) {
         try { await this.#advance(event); }
         catch (error) {
           const state = this.#state(event);
@@ -38,18 +38,25 @@ export class CheckpointCoordinator {
     if (event.payload.checkpoint) {
       const saved = event.payload.checkpoint as CheckpointState;
       if (!Number.isInteger(saved.round) || saved.round < 1 || typeof saved.phase !== "string" || !saved.conversations || typeof saved.sourceMemberId !== "string") throw new Error("卡点持久状态不完整，禁止猜测恢复位置");
-      return structuredClone(saved);
+      return { ...structuredClone(saved), sourcePhase: saved.sourcePhase || text(event.payload.phase) || "未知节点", recoveryPoint: saved.recoveryPoint || text(event.payload.recoveryPoint) || "等待恢复原步骤", issue: saved.issue || event.message };
     }
     const evolution = this.options.evolution();
     const task = this.options.collaboration().tasks.find((item) => item.taskId === event.correlationId || item.taskId === event.payload.taskId);
     const proposal = evolution.proposals.find((item) => item.proposalId === event.payload.proposalId || item.proposalId === task?.evolutionProposalId);
     return { round: 1, phase: "", repairTaskId: null, runId: typeof event.payload.runId === "string" ? event.payload.runId : null,
       proposalId: proposal?.proposalId || null, topicId: proposal?.topicId || null, taskId: task?.taskId || null,
-      sourceMemberId: event.payload.phase === "accepting" || event.payload.operation === "run_real_application_acceptance" ? "han-li" : task?.executorMemberId || "nangong-wan", conversations: {} };
+      sourceMemberId: event.payload.phase === "accepting" || event.payload.operation === "run_real_application_acceptance" ? "han-li" : task?.executorMemberId || "nangong-wan", conversations: {},
+      sourcePhase: text(event.payload.phase) || task?.phase || "未知节点", recoveryPoint: text(event.payload.recoveryPoint) || "等待恢复原步骤", issue: event.message,
+      blockedImpact: `原流程停在${text(event.payload.recoveryPoint) || text(event.payload.phase) || task?.phase || "当前步骤"}，尚不能继续完成专题。`,
+      repairGoal: "查明并修复已确认的阻塞原因，完成针对性验证后回到原节点复验。" };
   }
 
   #phase(event: WorkflowExceptionRecordOutDto, state: CheckpointState, phase: string, content: string): void {
-    if (state.phase === phase) return;
+    state.latestProgress = content;
+    if (state.phase === phase) {
+      this.options.save(event.eventId, state);
+      return;
+    }
     this.options.handoff.publish(event, state, phase, content);
     state.phase = phase;
     this.options.save(event.eventId, state);
@@ -79,7 +86,7 @@ export class CheckpointCoordinator {
       const heartbeat = [member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt].filter((value): value is string => Boolean(value)).sort().at(-1);
       const stalled = event.category === "stalled" && heartbeat === event.payload.lastHeartbeatAt;
       // 原执行人的自修复和正常测试不抢占；只把真正停住的任务送给既有令狐恢复能力。
-      if (["blocked", "recovering", "test-failed"].includes(task.state) || stalled) {
+      if (["blocked", "recovering"].includes(task.state) || stalled) {
         this.#phase(event, state, "repairing", "已交给令狐核对原任务恢复条件，沿既有任务修复链处理。");
         await this.options.handleTask(task.taskId, stalled);
       } else this.#phase(event, state, "resuming", `原任务正在${task.phase}，继续观察，不抢占执行人自修复。`);
@@ -117,6 +124,9 @@ export class CheckpointCoordinator {
     const repair = this.options.collaboration().tasks.find((item) => item.taskId === state.repairTaskId || item.snapshot.constraints.includes(marker));
     if (repair) {
       state.repairTaskId = repair.taskId;
+      state.investigation = repair.repairDiagnosis ? `${repair.repairDiagnosis.failureSummary}\n修复方案：${repair.repairDiagnosis.repairInstruction}` : state.investigation;
+      state.repairResult = repair.resultSummary ? `${repair.resultSummary.solvedProblem}\n具体改变：${repair.resultSummary.changes}\n遗留：${repair.resultSummary.remaining || "无"}` : repair.repairResult || state.repairResult;
+      state.testResult = repair.unifiedTest ? `统一测试：${repair.unifiedTest.status}${repair.unifiedTest.failureReason ? `；${repair.unifiedTest.failureReason}` : ""}` : state.testResult;
       if (repair.state === "integrated") {
         this.#phase(event, state, "returned", `令狐修复任务 ${repair.taskId} 已完成测试与集成，交回原步骤重新验证。`);
         // 先持久化返回点；失败或重启仍会重试恢复，不把返回当作解除。
@@ -130,7 +140,7 @@ export class CheckpointCoordinator {
       } else if (repair.state === "cancelled") {
         state.exhausted = true;
         this.#phase(event, state, "exhausted", "修复任务已取消，保留原卡点，不自动重新派发。");
-      } else if (["test-failed", "blocked", "recovering"].includes(repair.state)) {
+      } else if (["blocked", "recovering"].includes(repair.state)) {
         this.#phase(event, state, "waiting", `令狐修复任务仍受阻：${repair.blockingReason || repair.state}；沿此修复任务处理，不重复创建。`);
         await this.options.handleTask(repair.taskId);
       } else this.#phase(event, state, ["unified-testing", "awaiting-restart", "integrating", "queued-integration"].includes(repair.state) ? "testing" : "repairing", `令狐修复任务 ${repair.taskId}：${repair.state}。${repair.blockingReason || "正在沿调查、执行、自检和统一测试流程处理。"}`);
@@ -141,9 +151,12 @@ export class CheckpointCoordinator {
       confirmedIntent: `调查并修复原流程卡点，完成后回到 ${proposal.title} 原步骤，不代替韩立验收。\n故障事实：${JSON.stringify(event.payload, (key, value) => key === "checkpoint" ? undefined : value)}`,
       constraints: [marker, "仅修复已确认目标范围内的技术故障；先调查再修改，保留原任务历史和恢复点。", "不得修改生产数据库、跳过测试、扩大业务范围或关闭权限门禁；需要用户授权时报告受阻。"],
       acceptanceCriteria: ["复现并解释具体阻塞原因", "修复有针对性回归测试且不绕过权限和原验收条件", "提交真实修复与验证证据供原流程重新验收"],
-      workspaceState: topic.workspaceState, locale: topic.locale, initiatorMemberId: "nangong-wan", preferredExecutorMemberId: "linghu-ancestor", automationSource: "linghu-safeguard" });
+      workspaceState: topic.workspaceState, locale: topic.locale, initiatorMemberId: "nangong-wan", preferredExecutorMemberId: "linghu-ancestor", automationSource: "linghu-safeguard",
+      evolutionProposalId: proposal.proposalId, evolutionRoundId: proposal.proposalId });
     state.repairTaskId = result.tasks.find((item) => item.snapshot.constraints.includes(marker))?.taskId || null;
     if (!state.repairTaskId) throw new Error("未获得真实修复任务标识，不能报告派发完成");
     this.#phase(event, state, "repairing", `令狐已接收第 ${state.round} 轮真实调查修复任务 ${state.repairTaskId}。`);
   }
 }
+
+function text(value: unknown): string | null { return typeof value === "string" && value.trim() ? value.trim() : null; }

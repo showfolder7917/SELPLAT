@@ -37,4 +37,4 @@ export type { PersonaRuntimePort } from "./port/persona-runtime.port.js";
 export type { WorkflowStateReaderPort } from "./port/workflow-state-reader.port.js";
 export type { ApprovalGovernanceDomainValue } from "./value/approval-governance-domain.value.js";
 export type { PersonaCapabilityValue } from "./value/persona-capability.value.js";
-export type { WorkflowEventCategoryValue, WorkflowEventStatusValue } from "./value/workflow-event.value.js";
+export type { WorkflowEventCategoryValue, WorkflowEventStatusValue, WorkflowFlowImpactValue } from "./value/workflow-event.value.js";
