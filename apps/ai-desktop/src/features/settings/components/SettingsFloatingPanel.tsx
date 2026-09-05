@@ -54,7 +54,8 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
     const closeIconRoot = closeButton ? createRoot(closeButton) : null;
     closeIconRoot?.render(<Dismiss20Regular />);
     controller.panel.style.width = `${DEFAULT_WIDTH}px`;
-    setPortalBody(controller.body);
+    // 业务内容必须进入专属滚动节点；不能直接挂到会裁剪溢出的 SELUI body。
+    setPortalBody(content);
     if (openRef.current) controller.open();
     return () => {
       setPortalBody(null);
@@ -63,6 +64,10 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
       controller.destroy();
     };
   }, [locale, onOpenChange]);
+
+  useEffect(() => {
+    if (open) portalBody?.scrollTo({ top: 0 });
+  }, [open, portalBody]);
 
   return <div ref={hostRef} className="dev-settings-host">{portalBody && open && createPortal(children, portalBody)}</div>;
 }
