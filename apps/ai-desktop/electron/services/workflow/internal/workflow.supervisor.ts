@@ -64,13 +64,25 @@ export class WorkflowSupervisor {
       this.#syncDomain("linghu", () => this.#repository.syncLinghuState(this.#readers.linghu()), now);
       const stalled = this.#repository.detectStalledTasks(now);
       if (stalled.length > 0) await this.#onStalledTasks(stalled.map((item) => item.taskId));
-      if (this.#onUnhandledExceptions && this.#readers.linghu().enabled) {
-        const open = this.#repository.listUnhandledExceptions().filter((event) => event.status === "open");
+      if (this.#onUnhandledExceptions) {
+        // 补收仅持久为blocked但没有异常事件的旧卡点，不要求用户再次点击才能进入受理。
+        const evolution = this.#readers.evolution();
+        const run = evolution.oneShotRun;
+        if (run?.status === "blocked" && !this.#repository.listUnhandledExceptions(200).some((event) => event.payload.runId === run.runId)) {
+          this.#repository.recordEvent({ sourceType: "system", sourceId: "evolution-runtime", eventType: "workflow.checkpoint.blocked", category: "technical-error", status: "open", severity: "error", correlationId: run.topicId,
+            message: run.blockingReason || run.action, fingerprint: `checkpoint-run:${run.runId}:${run.updatedAt}`, payload: { runId: run.runId, proposalId: run.proposalId, topicId: run.topicId, phase: run.phase } });
+        }
+        // 卡点接收独立于巡检开关；处理器仍必须尊重原流程暂停和业务授权边界。
+        const pending = this.#repository.listUnhandledExceptions();
+        const open = pending.filter((event) => event.status === "open");
         const claimedIds = this.#repository.claimExceptions(open.map((event) => event.eventId), "linghu-ancestor", now);
         const claimed = open.filter((event) => claimedIds.includes(event.eventId)).map((event) => ({
           ...event, status: "processing" as const, handlingOwnerId: "linghu-ancestor", handlingStartedAt: now,
         }));
-        if (claimed.length) await this.#onUnhandledExceptions(claimed);
+        const processing = pending.filter((event) => event.status === "processing" && event.handlingOwnerId === "linghu-ancestor");
+        const batch = [...claimed, ...processing];
+        if (batch.length) await this.#onUnhandledExceptions(batch);
+        for (const event of batch) this.#repository.touchException(event.eventId);
       }
     } catch (error) {
       try {

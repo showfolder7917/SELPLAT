@@ -370,6 +370,16 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   getPersonaConversation: async (personaId) => structuredClone(personaId === "nangong-wan" ? evolutionState.conversation : hanliConversation),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },
+  setInteractionCheckpointMessages: async () => {
+    const now = new Date().toISOString();
+    const messages = [
+      { messageId: "checkpoint:fixture:1:returned", speakerPersonaId: "linghu-ancestor", content: "第1轮修复结果已返回，交回原步骤复验。", replyToMessageId: null },
+      { messageId: "internal:acceptance:fixture:attempt1:received:question", speakerPersonaId: "nangong-wan", content: "请韩立实际操作复验。", replyToMessageId: null },
+      { messageId: "internal:acceptance:fixture:attempt1:passed:answer", speakerPersonaId: "han-li", content: "实际操作复验通过，结果已返回南宫婉。", replyToMessageId: "internal:acceptance:fixture:attempt1:received:question" },
+    ];
+    evolutionState.conversation.messages = messages.map((message, sequenceNumber) => ({ ...message, sequenceNumber, speakerType: "persona", deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now }));
+    for (const listener of personaConversationListeners) listener(structuredClone(evolutionState.conversation));
+  },
   sendPersonaConversationMessage: async (personaId, request) => {
     if (personaId !== "han-li") return sendNangongTestConversation(request);
     await new Promise((resolve) => setTimeout(resolve, 1500));

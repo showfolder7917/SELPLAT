@@ -1,10 +1,13 @@
 import type { EventCenterTimeline } from "../../services/support/capabilities/event-center/index.js";
+import type { CollaborationMemoryPort } from "../../../contracts/services/support/capabilities/event-center/index.js";
+import type { PersonaConversationOutDto } from "../../../contracts/services/personas/conversation/index.js";
 import type { createHanliRuntime } from "../../services/personas/hanli/index.js";
 import type { LinghuRuntime } from "../../services/personas/linghu/index.js";
 import {
   createPersonaCapabilityRegistry,
   createPersonaWorkflowRuntime,
   createWorkflowSupervisor,
+  createCheckpointCoordinator,
   type CollaborationWorkflowFacade,
   type PersonaEvolutionRuntime,
   type WorkflowRepositoryPort,
@@ -18,6 +21,8 @@ export interface PersonaBootstrapOptions {
   workflowRepository: WorkflowRepositoryPort | null;
   linghuRuntime: LinghuRuntime;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
+  memory?: CollaborationMemoryPort | null;
+  onConversationChanged?(conversation: PersonaConversationOutDto): void;
 }
 
 /** 连接人物公开能力、Evolution/Workflow Facade 和持久化监督器。 */
@@ -33,6 +38,19 @@ export function createPersonaApplicationContext(options: PersonaBootstrapOptions
   personaRegistry.requireCapability("proposal-review");
   personaRegistry.requireCapability("unified-test");
 
+  const repository = options.workflowRepository;
+  const checkpoints = repository ? createCheckpointCoordinator({
+    evolution: () => options.personaEvolution.state(), collaboration: () => options.collaboration.state(),
+    pending: () => repository.listUnhandledExceptions(1000),
+    save: (id, state) => repository.saveCheckpoint(id, state), resolve: (id, reason) => repository.resolveException(id, reason),
+    resume: (id) => options.personaEvolution.resumeOneShotRun(id),
+    handleTask: (id, stalled) => linghuAutomation.handleTaskCheckpoint(id, stalled), submitRepair: (request) => linghuAutomation.submitCheckpointRepair(request),
+  }, {
+    memory: options.memory || null, changed: (conversation) => options.onConversationChanged?.(conversation),
+    topic: (id) => { const topic = options.personaEvolution.state().topics.find((item) => item.topicId === id); return topic ? { title: topic.title, createdAt: topic.createdAt, completed: topic.status === "completed" } : null; },
+    publish: (event) => options.collaborationTimeline?.appendTimelineEvent(event),
+    name: (id) => options.collaboration.state().members.find((member) => member.memberId === id)?.displayName || id,
+  }) : null;
   const workflowSupervisor = options.workflowRepository ? createWorkflowSupervisor({
     repository: options.workflowRepository,
     readers: {
@@ -43,9 +61,8 @@ export function createPersonaApplicationContext(options: PersonaBootstrapOptions
     projectCollaborationTimeline: (state) => options.collaborationTimeline?.appendTaskFlowEvents(state, state.tasks.map((task) => task.taskId)),
     onStalledTasks: async (taskIds) => {
       options.recordEvent("workflow.stalled_tasks_detected", { taskIds, count: taskIds.length });
-      await linghuAutomation.checkNow();
     },
-    onUnhandledExceptions: (events) => linghuAutomation.handleUnifiedExceptions(events),
+    onUnhandledExceptions: (events) => checkpoints!.process(events),
   }) : null;
 
   return {

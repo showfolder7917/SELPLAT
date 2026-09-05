@@ -162,7 +162,10 @@ test("登录主操作完整消费 SEL UI 令牌并保留可读文字节点", () 
   assert.match(themeContract, /selThemeTokens\.css\?v=20260823-action-control-1/);
   assert.match(sharedTokens, /--sel-theme-action-height:\s*32px/);
   assert.match(sharedTokens, /--sel-theme-action-padding-inline:\s*13px/);
-  const accountRule = developerStyles.match(/\.chatgpt-login-action, \.dev-account button[\s\S]*?\.status-card\.offline/)?.[0] || "";
+  // 只校验登录操作所属规则；后续新增设置卡不能被误算成登录按钮样式。
+  const accountRule = [...developerStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((match) => match[1].includes(".chatgpt-login-action") || match[1].includes(".dev-account button"))
+    .map((match) => match[0]).join("\n");
   for (const token of [
     "--sel-theme-action-height",
     "--sel-theme-action-padding-inline",

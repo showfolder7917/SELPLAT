@@ -707,6 +707,10 @@ export async function startApplication(): Promise<void> {
   // 业务调用方只持有 Facade；测试清理通过 Runtime 受控能力完成，Store 不离开令狐边界。
   linghuAutomation = linghuRuntime.facade;
   const personaContext = createPersonaApplicationContext({
+    memory: collaborationMemory,
+    onConversationChanged: (conversation) => {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
+    },
     personaEvolution,
     hanliRuntime,
     linghuRuntime,

@@ -55,6 +55,21 @@ test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("卡点人物会话实时收到令狐返回与韩立验收，重复快照不重复显示", async ({}, testInfo) => {
+  await page.goto(pathToFileURL(productionRendererFile).href);
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /南宫婉/ }).click();
+  await page.evaluate(() => (window as any).desktop.setInteractionCheckpointMessages());
+  const conversation = page.getByRole("region", { name: "与南宫婉讨论演化课题" });
+  await expect(conversation.getByText("第1轮修复结果已返回，交回原步骤复验。", { exact: true })).toBeVisible();
+  await expect(conversation.locator("header").getByText("令狐老祖", { exact: true })).toBeVisible();
+  await expect(conversation.getByText("实际操作复验通过，结果已返回南宫婉。", { exact: true })).toBeVisible();
+  await page.evaluate(() => (window as any).desktop.setInteractionCheckpointMessages());
+  await expect(conversation.getByText("实际操作复验通过，结果已返回南宫婉。", { exact: true })).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath("checkpoint-conversation.png") });
+  await page.goto(pathToFileURL(productionRendererFile).href);
+});
+
 test("通用侧栏折叠恢复保留任务且宽度可键盘调整", async () => {
   const sidebar = page.locator("#collaboration-sidebar");
   await expect(sidebar).toBeVisible();

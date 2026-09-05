@@ -61,12 +61,12 @@ export function usePersonaConversation(personaId: string) {
         .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取内部研讨消息。")); });
     }
     const removeListener = desktop?.onPersonaConversationChanged((value) => {
-      if (!active || value.ownerPersonaId !== "han-li") return;
-      if (personaId === "han-li") {
+      if (!active) return;
+      if (value.ownerPersonaId === personaId) {
         receivedOwnUpdate = true;
         setConversation((current) => ({ ...value, contextReadStats: value.contextReadStats || current.contextReadStats }));
       }
-      if (personaId === "nangong-wan") {
+      if (personaId === "nangong-wan" && value.ownerPersonaId === "han-li") {
         receivedInternalUpdate = true;
         setSharedInternalMessages(projectPersonaConversation(value.messages).internal);
       }

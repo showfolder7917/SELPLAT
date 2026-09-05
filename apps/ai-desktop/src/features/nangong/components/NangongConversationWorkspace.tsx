@@ -105,7 +105,8 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
     }] : [],
   );
   // 跨会话序号不可比较；保留各消息身份，按真实时间合并当前会话的内部研讨。
-  const currentInternal = sharedInternalMessages.filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);
+  const currentInternal = [...new Map([...sharedInternalMessages.filter((message) => !message.messageId.startsWith("internal:acceptance:")), ...projectPersonaConversation(conversation.messages).internal].map((message) => [message.messageId, message])).values()]
+    .filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);
   const internalIds = new Set(currentInternal.map((message) => message.messageId));
   const visibleMessages = [...timelineMessages, ...currentInternal.map((message) => ({ ...message, status: message.deliveryStatus, attachments: attachmentPreviews[message.messageId] || [] }))]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
@@ -117,7 +118,10 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
       </section>}
       {newConversationFeedback && <div className="nangong-conversation-refresh-status" role="status">{newConversationFeedback}</div>}
       {visibleMessages.length === 0 && <div className="dev-empty"><div className="dev-orb"><Code24Regular /></div><h1>和南宫婉讨论演化方向</h1><p>先说现状、问题和不能改变的约束，调查成熟后再形成课题。</p></div>}
-      {visibleMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} data-internal-message-id={internalIds.has(message.messageId) ? message.messageId : undefined}><header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : internalIds.has(message.messageId) ? `${message.speakerPersonaId === "han-li" ? "韩立" : "南宫婉"} · 内部研讨` : "南宫婉"}</header><div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small> : null}<MarkdownMessage text={message.content} /></div></article>)}
+      {visibleMessages.map((message) => <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} data-internal-message-id={internalIds.has(message.messageId) ? message.messageId : undefined}>
+        <header>{message.speakerType === "user" ? `我${message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : ""}` : `${({ "han-li": "韩立", "nangong-wan": "南宫婉", "linghu-ancestor": "令狐老祖" } as Record<string, string>)[message.speakerPersonaId || "nangong-wan"] || message.speakerPersonaId}${internalIds.has(message.messageId) ? message.messageId.startsWith("internal:acceptance:") ? " · 内部交接" : " · 内部研讨" : ""}`}</header>
+        <div className="selconversation-message-body">{message.attachments.length ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div> : message.attachmentIds?.length ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small> : null}<MarkdownMessage text={message.content} /></div>
+      </article>)}
     </section>} composer={<form className="selconversation-composer nangong-person-composer" onSubmit={(event) => { event.preventDefault(); void sendChat(); }}>
       {topicDraftOpen && <section className="selform-root" aria-label="整理演化课题">
         <header className="selform-header"><strong>整理为演化课题</strong><button type="button" className="selform-action" disabled={topicDraftBusy} onClick={() => setTopicDraftOpen(false)}>取消</button></header>

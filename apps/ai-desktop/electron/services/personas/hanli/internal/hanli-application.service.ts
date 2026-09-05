@@ -86,6 +86,8 @@ export class HanliApplicationService implements HanliApplicationPort {
   /** 一次性流程把真实运行结果交给韩立；韩立保存证据并形成自己的最终判断。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto {
     this.recordAcceptanceRun(run);
+    // 工具受阻不是产品验收失败，保留原提案待验收，交统一卡点处理后原位复验。
+    if (run.status === "blocked") return this.#store.state();
     const expectedStateVersion = this.#store.state().updatedAt;
     return this.#decideResult(run.proposalId, {
       mutation: { expectedStateVersion, idempotencyKey },

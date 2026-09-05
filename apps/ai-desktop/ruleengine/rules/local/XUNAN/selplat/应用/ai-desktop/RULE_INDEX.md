@@ -37,7 +37,7 @@ load_rule_for_ai_desktop_production_rule_bundle_customer_overlay_or_runtime_cons
 load_rule_for_ai_desktop_typescript_business_comment_review = AI_DESKTOP_ARCHITECTURE_BOUNDARY_RULES
 
 <!-- AI Desktop 统一事件、对话记忆和 SELUI 会话/表单归属的独立职责规则。 -->
-<!-- v5.157.0：Computer Use逐步观察操作验收，整份计划及代执行不兼容退役；韩立规则2.7.0同步交互证据和工具作用域。 -->
+<!-- v5.158.0：卡点统一受理与原点复验解耦；持久轮次去重、双方实时交接和每轮验收身份，保留权限边界。 -->
 AI_DESKTOP_EVENT_MEMORY_UI_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop事件记忆与统一界面规则.md
 <!-- 修改统一事件、人物对话记忆或共享会话/表单控件时直接加载。 -->
 load_rule_for_ai_desktop_event_memory_or_shared_conversation_ui_change = AI_DESKTOP_EVENT_MEMORY_UI_RULES

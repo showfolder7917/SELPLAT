@@ -1,5 +1,6 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
@@ -366,18 +367,25 @@ export class PersonaEvolutionRuntime {
       }
 
       if (flowAction === "accept-result") {
-        this.#acceptanceHandoff.publish(proposal, "received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
+        const attemptId = randomUUID();
+        const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
+        publishAcceptance("received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
         this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
         if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。");
         try {
           const goal: HanliComputerAcceptanceInDto = { topicId: topic.topicId, proposalId: proposal.proposalId, title: proposal.title, criteria: proposal.acceptanceCriteria };
-          this.#acceptanceHandoff.publish(proposal, "started", "韩立正在观察真实页面并逐步操作验收。");
+          publishAcceptance("started", "韩立正在观察真实页面并逐步操作验收。");
           const runResult = await this.#computerAcceptanceSession(goal);
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
-          this.#acceptanceHandoff.publish(proposal, runResult.status === "passed" ? "passed" : "failed", `实际结果：${runResult.status === "passed" ? "通过" : "未通过"}。运行记录：${runResult.runId}\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
+          if (runResult.status === "blocked") {
+            const reason = runResult.stepResults.filter((step) => step.status === "blocked").map((step) => `${step.checkId}：${step.actual}`).join("\n");
+            publishAcceptance("failed", `验收受阻，已上报令狐处理：\n${reason}`);
+            return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error(reason), reason, { evidenceAttachmentIds: runResult.evidenceAttachmentIds, acceptanceRunId: runResult.runId });
+          }
+          publishAcceptance(runResult.status === "passed" ? "passed" : "failed", `实际结果：${runResult.status === "passed" ? "通过" : "未通过"}。运行记录：${runResult.runId}\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
         } catch (error) {
           const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
-          this.#acceptanceHandoff.publish(proposal, "failed", reason);
+          publishAcceptance("failed", reason);
           return this.#blockOneShotFailure("technical", "run_real_application_acceptance", error, reason);
         }
         continue;

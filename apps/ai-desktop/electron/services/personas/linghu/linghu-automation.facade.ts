@@ -10,8 +10,6 @@ import type {
 } from "../../../../contracts/services/personas/linghu/index.js";
 // 测试资源快照只读注入，Facade 不直接争抢端口或构建目录。
 import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/services/support/capabilities/testing/index.js";
-// 统一异常记录由 Event Center 产生，本入口只负责受理和触发检查。
-import type { WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
 // Store 持有状态，模块顺序是轮转的唯一事实。
 import { LINGHU_AUTOMATION_MODULES, LINGHU_SAFEGUARD_INSTRUCTIONS, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
@@ -137,24 +135,20 @@ export class LinghuAutomationFacade {
     this.#timer = null;
   }
 
-  /** 统一异常队列只交给令狐一个入口；受理本身不冒充修复完成，实际恢复仍走既有有限重试流程。 */
-  async handleUnifiedExceptions(events: WorkflowExceptionRecordOutDto[]): Promise<void> {
-    // 每条异常先记录令狐受理事实，不能把批次摘要代替原事件关联。
-    for (const event of events) this.#recordEvent("linghu.unified_issue.accepted", {
-      sourceEventId: event.eventId,
-      sourceEventType: event.eventType,
-      category: event.category,
-      sourceCorrelationId: event.correlationId,
-      message: event.message,
-      fingerprint: `linghu-intake:${event.eventId}`,
-    });
-    // 批次状态只说明已受理和最近游标，不冒充调查或修复完成。
-    this.#store.updateRuntime("automation.unified_exceptions_received", (state) => {
-      state.blockingReason = `令狐已从统一入口受理 ${events.length} 条异常；正在按任务、测试和审计职责检查恢复条件。`;
-      state.detectionCursor = events.at(-1)?.occurredAt || state.detectionCursor;
-    });
-    // 立即进入统一检查；并发保护会与正在运行的定时检查安全合并。
-    await this.checkNow();
+  /** 已确认卡点的显式任务交接不依赖定时巡检开关，仍复用原任务有限恢复与权限判断。 */
+  async handleTaskCheckpoint(taskId: string, stalled = false): Promise<void> {
+    if (this.#checking || this.#stopped) return;
+    const task = this.#collaboration.state().tasks.find((item) => item.taskId === taskId);
+    if (!task || (!stalled && !["blocked", "recovering", "test-failed"].includes(task.state)) || ["integrated", "cancelled"].includes(task.state)) return;
+    this.#checking = true;
+    try { await this.#recoverFlow(task, automaticFlowSnapshots(this.#collaboration.state(), this.state().activeTaskId, new Date().toISOString()).find((item) => item.sourceTaskId === taskId)); }
+    finally { this.#checking = false; }
+  }
+
+  /** 只接受有原卡点事实和限定工作区的修复任务，实际调查执行沿既有令狐执行会话完成。 */
+  submitCheckpointRepair(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
+    if (this.#stopped) throw new Error("令狐运行时已停止");
+    return this.#collaboration.submitTask({ ...request, preferredExecutorMemberId: LINGHU_MEMBER_ID, automationSource: "linghu-safeguard" });
   }
 
   /** 执行一轮检测、恢复或有明确故障依据的模块派发。 */

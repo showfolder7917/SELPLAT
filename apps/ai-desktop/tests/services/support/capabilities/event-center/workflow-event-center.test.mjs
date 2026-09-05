@@ -10,6 +10,8 @@ import { CodexConversationSemanticBackfill } from "../../../../../../../build/ai
 import { parseHanliSemanticExtraction } from "../../../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-semantic-extraction.runner.js";
 import { WorkflowRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.repository.js";
 import { WorkflowSupervisor } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.supervisor.js";
+import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint-handoff.service.js";
+import { AcceptanceHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance-handoff.service.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -631,6 +633,45 @@ test("非正常退出在下一次启动被识别并留下恢复事件", () => {
   }
 });
 
+test("真实SQLite的全局消息主键不吞掉另一人物的交接", () => {
+  const fixture = createFixture("checkpoint-messages");
+  try {
+    const memory = new CollaborationMemoryService(fixture.database);
+    const hanli = memory.newPersonaConversation("han-li");
+    const nangong = memory.newPersonaConversation("nangong-wan");
+    const checkpoint = new CheckpointHandoffService({ memory, publish: () => {}, changed: () => {}, name: id => id, topic: () => null });
+    const state = { round: 1, sourceMemberId: "han-li", conversations: {} };
+    checkpoint.publish({ eventId: "issue", message: "受阻", occurredAt: new Date().toISOString() }, state, "returned", "修复返回");
+    const acceptance = new AcceptanceHandoffService({ memory, store: { state: () => ({ topics: [{ topicId: "topic", title: "原任务" }] }) }, readHanliConversationId: () => hanli.conversationId });
+    for (let repeat = 0; repeat < 2; repeat++) {
+      acceptance.publish({ proposalId: "proposal", topicId: "topic" }, "received", "提交验收", "attempt");
+      acceptance.publish({ proposalId: "proposal", topicId: "topic" }, "passed", "验收通过", "attempt");
+    }
+    assert.equal(memory.readPersonaConversation("han-li", hanli.conversationId).messages.length, 4);
+    assert.equal(memory.readPersonaConversation("nangong-wan", nangong.conversationId).messages.length, 3);
+    assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
+  } finally { fixture.close(); }
+});
+
+test("卡点重复上报和进度回流保留处理状态，仅原点验证可解除", () => {
+  const fixture = createFixture("checkpoint-persistence");
+  try {
+    const input = { sourceType: "system", sourceId: "test", eventType: "test.checkpoint", category: "technical-error", status: "open", correlationId: "original", fingerprint: "same-fault", message: "受阻" };
+    const id = fixture.repository.recordEvent(input);
+    fixture.repository.claimExceptions([id], "linghu-ancestor");
+    const checkpoint = { round: 2, phase: "repairing", repairTaskId: "repair-2", conversations: { "han-li": "original-conversation" } };
+    fixture.repository.saveCheckpoint(id, checkpoint);
+    fixture.repository.recordEvent({ ...input, message: "重复上报" });
+    assert.deepEqual(fixture.repository.listUnhandledExceptions()[0].payload.checkpoint, checkpoint);
+    fixture.repository.resolveCorrelatedExceptions("original", "普通进度回流");
+    assert.equal(fixture.repository.listUnhandledExceptions().length, 1);
+    fixture.repository.startRuntimeSession(123);
+    assert.deepEqual(fixture.repository.listUnhandledExceptions()[0].payload.checkpoint, checkpoint);
+    fixture.repository.resolveException(id, "原点复验通过");
+    assert.equal(fixture.repository.listUnhandledExceptions().length, 0);
+  } finally { fixture.close(); }
+});
+
 test("独立监督器同步全流程后把卡住任务交给令狐入口", async () => {
   const fixture = createFixture("supervisor");
   const now = new Date("2026-08-26T00:10:00.000Z");
@@ -652,14 +693,16 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     onUnhandledExceptions: (events) => handedOffExceptions.push(...events),
   });
   try {
-    // 令狐关闭时异常保持 open，不能先认领为 processing 后失去实际处理者。
+    // 显式卡点受理独立于定时巡检开关，已受理但未解决项下一轮必须继续交接。
     await supervisor.checkNow();
     assert.deepEqual(handedOff, ["task-1"]);
-    assert.equal(handedOffExceptions.length, 0);
-    assert.ok(fixture.repository.listUnhandledExceptions().every((event) => event.status === "open"));
+    assert.ok(handedOffExceptions.length > 0);
+    assert.ok(fixture.repository.listUnhandledExceptions().every((event) => event.status === "processing"));
+    const firstCount = handedOffExceptions.length;
     linghuEnabled = true;
-    // 开启后才由统一入口原子认领并交给令狐。
+    // 已在处理的记录仍需继续核对，不能认领一次后永久丢失。
     await supervisor.checkNow();
+    assert.ok(handedOffExceptions.length > firstCount);
     assert.ok(handedOffExceptions.some((event) => event.category === "stalled" && event.handlingOwnerId === "linghu-ancestor"));
     assert.ok(handedOffExceptions.some((event) => event.eventType === "workflow.supervisor.evolution_sync_failed" && event.handlingOwnerId === "linghu-ancestor"));
   } finally {

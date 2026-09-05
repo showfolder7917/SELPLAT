@@ -290,6 +290,7 @@ function transition(status: CollaborationTimelineGroupOutDto["status"], nodes: C
   if (status === "completed") return { nextStep: "本专题已完成", failureNextStep: null, nextOwner: null };
   if (status === "cancelled") return { nextStep: "本专题已取消", failureNextStep: null, nextOwner: null };
   const latest = nodes.at(-1);
+  if (latest?.eventType === "checkpoint.progress") return { nextStep: latest.content, failureNextStep: "保留卡点证据，按当前处理结果继续", nextOwner: latest.actor };
   if (latest?.eventType === "release.restart_healthy") return { nextStep: "韩立 · 验收用户可见结果", failureNextStep: "未达到验收条件时继续修复", nextOwner: { memberId: "han-li", displayName: "韩立" } };
   if (status !== "blocked" && latest?.eventType === "unified_test.passed") return { nextStep: "令狐老祖 · 等待重启健康检查，之后交韩立验收", failureNextStep: "令狐老祖 · 调查健康检查失败", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
   if (latest?.eventType.endsWith("repair_completed")) return { nextStep: "令狐老祖 · 重新统一测试", failureNextStep: "保留本次失败证据并继续调查", nextOwner: latest.actor };

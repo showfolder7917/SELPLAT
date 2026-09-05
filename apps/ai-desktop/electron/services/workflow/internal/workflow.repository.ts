@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { CheckpointState } from "./checkpoint-state.js";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { EventSeverityValue } from "../../../../contracts/foundation/index.js";
@@ -195,9 +196,9 @@ export class WorkflowRepository {
         WHERE category IN ('technical-error', 'business-exception', 'stalled')
           AND status IN ('open', 'processing')
           AND eventType NOT IN ('linghu.unified_exception.accepted', 'linghu.unified_issue.accepted')
-        ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, occurredAt ASC
+        ORDER BY recordedAt ASC, occurredAt ASC
         LIMIT $limit
-      `).all({ $limit: Math.max(1, Math.min(200, limit)) }) as Array<Record<string, unknown>>;
+      `).all({ $limit: Math.max(1, Math.min(1000, limit)) }) as Array<Record<string, unknown>>;
       return rows.map((row) => ({
         eventId: String(row.eventId), correlationId: nullableString(row.correlationId),
         sourceType: row.sourceType as WorkflowExceptionRecordOutDto["sourceType"], sourceId: String(row.sourceId),
@@ -226,6 +227,18 @@ export class WorkflowRepository {
     });
   }
 
+  /** 卡点状态附着原异常，重启保留轮次和真实修复任务；不创建第二份任务数据库。 */
+  saveCheckpoint(eventId: string, checkpoint: CheckpointState): void {
+    this.#database.withConnection((connection) => connection.prepare(`UPDATE AiDesktopEvent
+      SET payloadJson=json_set(payloadJson, '$.checkpoint', json($checkpoint)), recordedAt=$now
+      WHERE eventId=$eventId AND status IN ('open', 'processing')`).run({ $checkpoint: JSON.stringify(checkpoint), $now: new Date().toISOString(), $eventId: eventId }));
+  }
+
+  /** 已检查但待外部条件的事件轮转到队尾，不饿死后续卡点。 */
+  touchException(eventId: string): void {
+    this.#database.withConnection((connection) => connection.prepare("UPDATE AiDesktopEvent SET recordedAt=$now WHERE eventId=$eventId").run({ $now: new Date().toISOString(), $eventId: eventId }));
+  }
+
   resolveException(eventId: string, resolutionSummary: string, now = new Date().toISOString()): void {
     this.#database.withConnection((connection) => connection.prepare(`
       UPDATE AiDesktopEvent SET status = 'resolved', resolvedAt = $now, resolutionSummary = $summary
@@ -237,6 +250,7 @@ export class WorkflowRepository {
     this.#database.withConnection((connection) => connection.prepare(`
       UPDATE AiDesktopEvent SET status = 'resolved', resolvedAt = $now, resolutionSummary = $summary
       WHERE correlationId = $correlationId AND category IN ('technical-error', 'business-exception', 'stalled')
+        AND json_extract(payloadJson, '$.checkpoint') IS NULL
         AND status IN ('open', 'processing')
     `).run({ $now: now, $summary: resolutionSummary.slice(0, 2_000), $correlationId: correlationId }));
   }
@@ -481,7 +495,9 @@ export class WorkflowRepository {
       if (existing) {
         const reopenedStatus = existing.status === "processing" && status === "open" ? "processing" : status;
         connection.prepare(`UPDATE AiDesktopEvent SET correlationId=$correlationId, sourceType=$sourceType, sourceId=$sourceId,
-          eventType=$eventType, category=$category, severity=$severity, status=$status, message=$message, payloadJson=$payloadJson,
+          eventType=$eventType, category=$category, severity=$severity, status=$status, message=$message,
+          payloadJson=CASE WHEN status IN ('open','processing') AND json_type(payloadJson,'$.checkpoint')='object'
+            THEN json_set($payloadJson,'$.checkpoint',json_extract(payloadJson,'$.checkpoint')) ELSE $payloadJson END,
           occurredAt=$occurredAt, recordedAt=$recordedAt,
           resolvedAt=CASE WHEN $status='resolved' THEN $occurredAt ELSE NULL END,
           resolutionSummary=CASE WHEN $status='resolved' THEN resolutionSummary ELSE NULL END,

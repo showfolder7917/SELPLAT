@@ -8,6 +8,8 @@ import { EvolutionFlowOrchestrator } from "./internal/evolution-flow.orchestrato
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
 import { WorkflowRepository } from "./internal/workflow.repository.js";
 import { WorkflowSupervisor } from "./internal/workflow.supervisor.js";
+import { CheckpointCoordinator } from "./internal/checkpoint-coordinator.js";
+import { CheckpointHandoffService } from "./internal/checkpoint-handoff.service.js";
 import { PersonaCapabilityRegistry } from "./internal/persona-capability.registry.js";
 
 // 以下 Port 只用于组合根和 IPC 的类型约束，不公开 internal 构造器或文件路径。
@@ -37,6 +39,11 @@ export function createWorkflowRepository(database: DatabasePort): WorkflowReposi
 // Supervisor 观察异常退出和心跳停滞，只通过正式恢复入口通知令狐。
 export function createWorkflowSupervisor(...arguments_: ConstructorParameters<typeof WorkflowSupervisor>): WorkflowSupervisorPort {
   return new WorkflowSupervisor(...arguments_);
+}
+
+/** 组合根仅提供端口；卡点状态、分流与交接均留在Workflow内部。 */
+export function createCheckpointCoordinator(options: Omit<ConstructorParameters<typeof CheckpointCoordinator>[0], "handoff">, handoff: ConstructorParameters<typeof CheckpointHandoffService>[0]): Pick<CheckpointCoordinator, "process"> {
+  return new CheckpointCoordinator({ ...options, handoff: new CheckpointHandoffService(handoff) });
 }
 
 // 南宫通过公开工厂取得流程判断器，不直接依赖 Workflow 的 internal 目录。

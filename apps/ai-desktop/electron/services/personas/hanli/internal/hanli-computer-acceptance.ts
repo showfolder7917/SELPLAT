@@ -59,7 +59,7 @@ export class HanliComputerAcceptance {
             verdict = findings.some((item) => item.status === "failed") ? "failed" : findings.some((item) => item.status === "blocked") ? "blocked" : "passed";
             for (const item of findings) steps.push({ checkId: String(item.criterionId), operationIndex: steps.length, operation: { type: "judgement", criterionId: String(item.criterionId) }, status: item.status as "passed" | "failed" | "blocked", actual: String(item.actual), screenshotAttachmentId: String(item.evidenceId), occurredAt: new Date().toISOString() });
             completed = true;
-            progress(`韩立已逐项返回验收判断：${verdict}。`);
+            progress(`韩立验收${verdict === "passed" ? "通过" : verdict === "failed" ? "未通过" : "受阻"}：\n${findings.map((item) => `${item.criterionId}：${item.actual}`).join("\n")}`);
             return { success: true, contentItems: [{ type: "inputText", text: "验收判断已归档，工具权限已收回。" }] };
           }
           if (steps.length >= 40) throw new Error("本轮达到40步操作上限，需保留证据并说明未完成项。");
