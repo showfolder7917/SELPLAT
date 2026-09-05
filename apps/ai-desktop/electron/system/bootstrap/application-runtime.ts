@@ -541,12 +541,17 @@ export async function startApplication(): Promise<void> {
     store: evolutionStateStore,
     prompts,
     memory: collaborationMemory,
-    investigateWithNangong: (question, request) => {
+    investigateWithNangong: (inquiry, request) => {
       const investigation = inquiryQueue.then(async () => {
       if (!nangongInquiryCodex) throw new Error("南宫婉只读核实服务尚未就绪。");
       const state = evolutionStateStore.state();
       const facts = { capturedAt: new Date().toISOString(), topics: state.topics.slice(-12).map(({ topicId, title, status }) => ({ topicId, title, status })), proposals: state.proposals.slice(-12).map(({ proposalId, title, status, distributedTaskIds }) => ({ proposalId, title, status, distributedTaskIds })) };
-      return (await nangongInquiryCodex.send(prompts.render("nangong.progress-inquiry", { question, facts: JSON.stringify(facts) }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null)).text;
+      return (await nangongInquiryCodex.send(prompts.render("nangong.progress-inquiry", {
+        customerQuestion: inquiry.customerQuestion,
+        understandingJson: JSON.stringify({ understoodGoal: inquiry.understoodGoal, verificationTarget: inquiry.verificationTarget, expectedAnswer: inquiry.expectedAnswer }),
+        investigationQuestion: inquiry.investigationQuestion,
+        facts: JSON.stringify(facts),
+      }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null)).text;
       });
       inquiryQueue = investigation.catch(() => undefined);
       return investigation;

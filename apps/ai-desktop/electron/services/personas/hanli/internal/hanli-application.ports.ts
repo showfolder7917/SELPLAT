@@ -6,6 +6,25 @@ import type { PromptLibraryPort } from "../../../support/capabilities/prompts/in
 import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
 
+/** 模型只能声明理解结果和调查范围；客户原问题由程序另行固定，不能由模型生成或覆盖。 */
+export interface HanliInquiryUnderstanding {
+  status: "ready" | "clarification-required";
+  understoodGoal: string;
+  verificationTarget: string;
+  expectedAnswer: string;
+  ambiguities: string[];
+  investigationQuestion?: string;
+}
+
+/** 交给南宫婉的只读调查合同同时携带权威原问题和韩立补充范围。 */
+export interface HanliInvestigationRequest {
+  customerQuestion: string;
+  understoodGoal: string;
+  verificationTarget: string;
+  expectedAnswer: string;
+  investigationQuestion: string;
+}
+
 /** 韩立人物应用服务的装配参数；共同事实和外部对话均通过最小端口注入。 */
 export interface HanliApplicationServiceOptions {
   store: EvolutionStatePort;
@@ -13,7 +32,7 @@ export interface HanliApplicationServiceOptions {
   memory?: CollaborationMemoryPort | null;
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   analyzeCorpus?: (prompt: string) => Promise<string>;
-  investigateWithNangong?: (question: string, request: SendPersonaConversationMessageInDto) => Promise<string>;
+  investigateWithNangong?: (inquiry: HanliInvestigationRequest, request: SendPersonaConversationMessageInDto) => Promise<string>;
   onPersonaConversationChanged?: (conversation: import("../../../../../contracts/services/personas/conversation/index.js").PersonaConversationOutDto) => void;
   conversation?: {
     send(request: SendPersonaConversationMessageInDto, prompt: string): Promise<SendMessageOutDto>;

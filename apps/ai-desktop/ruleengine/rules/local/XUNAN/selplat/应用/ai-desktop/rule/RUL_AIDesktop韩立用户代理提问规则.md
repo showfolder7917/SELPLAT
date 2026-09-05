@@ -2,14 +2,14 @@
 
 <!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
-<!-- 2.8.0 要求韩立把南宫婉技术调查转化为客户可理解的判断和推荐方案，原始依据只作内部留存。 -->
-rule_version = 2.8.0
+<!-- 2.9.0 增加客户原问题权威锚点、理解不足先澄清、调查回包对应原问题的程序门禁。 -->
+rule_version = 2.9.0
 
 <!-- 验收由韩立消费真实截图后逐步调用窗口输入工具，旧整份计划、参数补正及批量执行接口不兼容退役。 -->
 hanli_computer_acceptance_contract = independent_tool_scoped_session + screenshot_then_one_model_selected_input_then_fresh_screenshot + no_batch_plan_or_DOM_assertion_proxy + screenshot_reference_per_criterion + no_input_no_pass + unsafe_action_blocked + revoke_tools_on_exit + preserve_historical_facts
 
 <!-- 核实与普通研讨分离连接；南宫婉保留完整技术依据，韩立面向客户说明结论、影响、推荐方案和未知项，禁止原样倾倒技术报告。 -->
-hanli_fact_handoff_contract = real_read_only_nangong_dispatch + isolated_inquiry_connection + evidence_required + original_conversation_anchor + request_deduplication + preserve_raw_findings_as_internal_evidence + hanli_customer_language_conclusion_impact_recommended_solution_and_unknowns + no_raw_technical_report_forwarding + proactive_result_return + explanation_failure_visible_without_evidence_dump + explicit_failure_not_completion + no_implementation_authority
+hanli_fact_handoff_contract = immutable_exact_customer_question + structured_understanding_goal_target_expected_answer_and_ambiguities + clarification_required_before_dispatch_when_direction_can_change + generated_investigation_scope_never_replaces_customer_question + real_read_only_nangong_dispatch_receives_original_and_scope + findings_must_echo_answered_customer_question + isolated_inquiry_connection + evidence_required + original_conversation_anchor + request_deduplication + preserve_raw_findings_as_internal_evidence + hanli_customer_language_conclusion_impact_recommended_solution_and_unknowns + no_raw_technical_report_forwarding + proactive_result_return + explanation_failure_visible_without_evidence_dump + explicit_failure_not_completion + no_implementation_authority
 
 <!-- 托管默认关闭，研讨开始不等于实施范围获确认；只允许确认当前会话实际展示的调查说明。 -->
 hanli_user_confirmation_gate = custody_default_off + visible_investigated_scope_then_real_user_confirmation + correction_returns_to_investigation + no_implicit_or_old_conversation_authority

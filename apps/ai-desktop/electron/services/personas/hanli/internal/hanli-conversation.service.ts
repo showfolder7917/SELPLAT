@@ -70,9 +70,11 @@ export class HanliConversationService {
     // 历史资料只转换成提问、调查和扩展的方法样本，不把客户目标、旧答案或证据原文交给韩立模仿。
     const methodContext = buildHanliMethodContext(semanticContext);
     const recentConversation = buildHanliRecentConversation(existing.messages);
+    const pendingCustomerQuestion = clarificationCustomerQuestion(existing.messages);
     const prompt = this.options.prompts.render("hanli.conversation", {
       methodContextJson: methodContext,
       recentConversation,
+      customerQuestionAnchor: pendingCustomerQuestion || userContent,
       userMessage: userContent,
     });
     const createdAt = new Date().toISOString();
@@ -80,15 +82,22 @@ export class HanliConversationService {
     if (!(response.threadId || chat.activeConversationId())) throw new Error("韩立会话没有返回稳定 Codex 线程标识。");
     const conversationId = existing.conversationId!;
     const parsed = parseHanliConversationResponse(response.text);
-    if (parsed.verificationQuestion) {
-      const next = await this.#inquiry.run(request, conversationId, parsed.verificationQuestion, parsed.topic);
+    const customerQuestion = parsed.topic.switchTopic ? userContent : pendingCustomerQuestion || userContent;
+    if (parsed.inquiry?.status === "ready") {
+      const next = await this.#inquiry.run(request, conversationId, customerQuestion, parsed.inquiry, parsed.topic);
       const contextReadStats = { methodCharacters: methodContext.length, recentConversationCharacters: recentConversation.length, latestUserMessageCharacters: userContent.length, promptCharacters: prompt.length };
       this.options.recordEvent("hanli.conversation.round_archived", { conversationId, messageCount: next.messages.length, topicTitle: parsed.topic.title, contextReadStats });
       this.options.refreshSemanticMemory?.();
       return { ...next, contextReadStats };
     }
+    if (parsed.inquiry?.status === "clarification-required") {
+      this.options.recordEvent("hanli.inquiry.clarification_requested", {
+        conversationId, requestId: request.clientMessageId || null, ambiguities: parsed.inquiry.ambiguities,
+      });
+    }
     const completedAt = new Date().toISOString();
-    const next = memory.registerPersonaRound({
+    const personaMessageId = parsed.inquiry?.status === "clarification-required" ? `hanli-clarification:${randomUUID()}` : `hanli-message-${randomUUID()}`;
+    let next = memory.registerPersonaRound({
       ownerPersonaId: "han-li",
       responderPersonaId: "han-li",
       corpusSource: "hanli",
@@ -96,12 +105,21 @@ export class HanliConversationService {
       userMessageId: request.clientMessageId || `hanli-user-${randomUUID()}`,
       userContent,
       attachmentIds: request.attachmentIds || [],
-      personaMessageId: `hanli-message-${randomUUID()}`,
+      personaMessageId,
       personaContent: parsed.reply,
       createdAt,
       completedAt,
       decision: parsed.topic,
     });
+    if (parsed.inquiry?.status === "clarification-required") {
+      next = memory.appendPersonaInternalMessage({
+        ownerPersonaId: "han-li", conversationId,
+        messageId: `internal:hanli-inquiry-anchor:${request.clientMessageId || randomUUID()}`,
+        speakerPersonaId: "han-li", replyToMessageId: personaMessageId,
+        content: JSON.stringify({ version: 1, customerQuestion, clarificationMessageId: personaMessageId }),
+        createdAt: completedAt,
+      });
+    }
     const contextReadStats = {
       methodCharacters: methodContext.length,
       recentConversationCharacters: recentConversation.length,
@@ -123,4 +141,16 @@ export class HanliConversationService {
     await chat.newChat();
     return memory.newPersonaConversation("han-li");
   }
+}
+
+/** 只有最新可见回复仍是韩立的澄清问题时才延续原问题；调查完成或后续新话题不会误复用旧锚点。 */
+function clarificationCustomerQuestion(messages: PersonaConversationOutDto["messages"]): string | null {
+  const latestDirect = [...messages].reverse().find((message) => !message.messageId.startsWith("internal:"));
+  const marker = [...messages].reverse().find((message) => message.messageId.startsWith("internal:hanli-inquiry-anchor:"));
+  if (!latestDirect || !marker) return null;
+  try {
+    const value = JSON.parse(marker.content) as { customerQuestion?: unknown; clarificationMessageId?: unknown };
+    return value.clarificationMessageId === latestDirect.messageId && typeof value.customerQuestion === "string" && value.customerQuestion.trim()
+      ? value.customerQuestion.trim() : null;
+  } catch { return null; }
 }

@@ -62,10 +62,11 @@ export function buildHanliMethodContext(context: HanliSemanticContextOutDto): st
 }
 
 /** 后续会话保留完整用户原话，人物长回答只提供八十字预览，并从最新消息向前装入固定预算。 */
-export function buildHanliRecentConversation(messages: Array<{ speakerType: string; speakerPersonaId: string | null; content: string }>): string {
+export function buildHanliRecentConversation(messages: Array<{ messageId?: string; speakerType: string; speakerPersonaId: string | null; content: string }>): string {
   const blocks: string[] = [];
   let characters = 0;
   for (const message of messages.slice(-16).reverse()) {
+    if (message.messageId?.startsWith("internal:hanli-inquiry-anchor:")) continue;
     const speaker = message.speakerType === "user" ? "用户" : message.speakerPersonaId === "nangong-wan" ? "南宫婉" : "韩立";
     const content = message.speakerType === "user" ? message.content : message.content.slice(0, HANLI_AI_MESSAGE_PREVIEW_CHARACTERS);
     const block = `${speaker}：${content}`;
