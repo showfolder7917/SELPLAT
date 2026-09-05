@@ -42,6 +42,7 @@ export interface HanliApplicationServiceOptions {
   };
   refreshSemanticMemory?: () => void;
   startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
+  replyInternalDeliberationConfirmation?: (reply: string) => Promise<{ customerReply: string }>;
   readStableUserId?: () => string;
   readProjectScope?: () => string;
   computerAcceptance?: (goal: import("../../../../../contracts/services/personas/hanli/index.js").HanliComputerAcceptanceInDto, tools: import("../../../support/platform/codex/index.js").CodexDynamicToolsPort) => Promise<void>;

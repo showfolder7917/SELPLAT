@@ -46,6 +46,12 @@ export function usePersonaConversation(personaId: string) {
   const [newConversationFeedback, setNewConversationFeedback] = useState("");
   const [error, setError] = useState("");
 
+  // 韩立只读核实使用稳定进度/结果消息对表达生命周期；页面据此显示南宫婉真实活动，不改写协作任务占用状态。
+  const delegatedResponderPersonaId = personaId === "han-li" && sending && conversation.messages.some((message) => {
+    const match = /^inquiry:(.+):progress$/u.exec(message.messageId);
+    return Boolean(match && !conversation.messages.some((candidate) => candidate.messageId === `inquiry:${match[1]}:result`));
+  }) ? "nangong-wan" : null;
+
   useEffect(() => {
     let active = true;
     let receivedOwnUpdate = false;
@@ -128,6 +134,7 @@ export function usePersonaConversation(personaId: string) {
     personaId, conversation, setConversation, attachments, setAttachments,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
+    delegatedResponderPersonaId,
   };
 }
 

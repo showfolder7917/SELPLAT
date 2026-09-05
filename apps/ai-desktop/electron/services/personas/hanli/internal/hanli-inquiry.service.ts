@@ -39,14 +39,13 @@ export class HanliInquiryService {
       return next;
     };
     const createdAt = new Date().toISOString();
-    const registered = memory.registerPersonaRound({ ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli", conversationId, userMessageId: id, userContent: request.message, attachmentIds: request.attachmentIds || [], personaMessageId: `inquiry:${id}:received`, personaContent: "收到，正在准备只读核实请求。", createdAt, completedAt: createdAt, decision });
+    const registered = memory.registerPersonaRound({ ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli", conversationId, userMessageId: id, userContent: request.message, attachmentIds: request.attachmentIds || [], personaMessageId: `inquiry:${id}:progress`, personaContent: "南宫婉正在核实事实；她返回后，我会继续判断并整理成清楚的结论和解决方案。", createdAt, completedAt: createdAt, decision });
     this.options.onPersonaConversationChanged?.(registered);
     publish(questionId, "han-li", `客户原问题：${inquiry.customerQuestion}\n\n调查范围：${inquiry.investigationQuestion}`);
     try {
       if (!this.options.investigateWithNangong) throw new Error("南宫婉只读核实服务尚未接入");
-      // 先真实调用端口，再发布等待提示；立即接住拒绝，避免未处理异步错误。
+      // 单一进度消息已经随用户请求原子登记；这里真实调用端口并立即接住拒绝，避免重复等待气泡和未处理异步错误。
       const pending = this.options.investigateWithNangong(inquiry, request).then((text) => ({ text }), (error: unknown) => ({ error }));
-      publish(`inquiry:${id}:waiting`, "han-li", "正在请南宫婉核实，请稍等。");
       const response = await pending;
       if ("error" in response) throw response.error;
       // 南宫婉端口已经完成模型文本边界识别、格式纠正和字段校验；韩立只消费结构化调查事实。
@@ -70,7 +69,7 @@ export class HanliInquiryService {
         this.options.recordEvent("hanli.inquiry.discussion_context_failed", { conversationId, requestId: id, reason });
       }
       this.options.recordEvent("hanli.inquiry.completed", { correlationId: conversationId, conversationId, requestId: id, status: findings.status, resolvesFailure: true });
-      return publish(resultId, "han-li", customerReply, `inquiry:${id}:waiting`);
+      return publish(resultId, "han-li", customerReply, `inquiry:${id}:progress`);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "调查服务没有返回有效结果";
       this.options.recordEvent("hanli.inquiry.failed", { correlationId: conversationId, conversationId, requestId: id, reason, flowImpact: "none" });

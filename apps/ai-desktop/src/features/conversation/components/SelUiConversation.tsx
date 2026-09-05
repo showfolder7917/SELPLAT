@@ -37,5 +37,35 @@ export function SelUiConversation({ id, timeline, composer, onSubmit }: {
     };
   }, [id, readOnly]);
 
+  useEffect(() => {
+    const root = rootRef.current;
+    const timeline = root?.querySelector<HTMLElement>(".selconversation-timeline");
+    const composerElement = root?.querySelector<HTMLElement>(".selconversation-composer");
+    if (!root || !timeline || !composerElement) return;
+    const observed = new Set<Element>();
+    const notifyGeometry = () => {
+      // 输入框可因附件、错误或人物专属表单增高；时间线必须按真实高度留白，不能依赖固定像素猜测。
+      timeline.style.setProperty("--selconversation-composer-reserve", `${Math.ceil(composerElement.getBoundingClientRect().height) + 48}px`);
+      timeline.dispatchEvent(new Event("selConversation:geometry"));
+    };
+    const resizeObserver = new ResizeObserver(notifyGeometry);
+    const observeTimelineChildren = () => {
+      for (const child of timeline.children) if (!observed.has(child)) {
+        observed.add(child);
+        resizeObserver.observe(child);
+      }
+      notifyGeometry();
+    };
+    resizeObserver.observe(composerElement);
+    const mutationObserver = new MutationObserver(observeTimelineChildren);
+    mutationObserver.observe(timeline, { childList: true });
+    observeTimelineChildren();
+    return () => {
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+      timeline.style.removeProperty("--selconversation-composer-reserve");
+    };
+  }, [id, readOnly]);
+
   return <div ref={rootRef} className="selconversation-root">{timeline}{composer}</div>;
 }

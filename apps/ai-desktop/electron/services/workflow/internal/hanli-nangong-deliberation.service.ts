@@ -26,9 +26,44 @@ export interface HanliNangongDeliberationAdvanceResult {
   activity: "idle" | "questioning" | "topic-established";
 }
 
+interface CustomerCorrectionInterpretation {
+  action: "discuss-with-nangong" | "clarify-with-customer";
+  customerReply: string;
+  question: string | null;
+  reason: string | null;
+}
+
 /** 用户确认后推进韩立与南宫婉的一轮内部研讨；轮次进入业务档案，但不进入用户训练语料。 */
 export class HanliNangongDeliberationService {
+  readonly #publishedMessageIds = new Set<string>();
   constructor(private readonly dependencies: HanliNangongDeliberationDependencies) {}
+
+  /**
+   * 让韩立先理解客户对修复说明的纠正，再决定继续询问客户或向南宫婉提出新的研讨问题。
+   * 真实传参示例：replyToConfirmation("我只要边缘直接拖动，不要按钮")。
+   * 真实返回示例：返回“我理解你要恢复无感边缘拖动……”供韩立会话直接展示。
+   * 异常或副作用示例：缺少等待确认轮次时抛错；形成研讨问题时会保存原话、问题与消息关系。
+   */
+  async replyToConfirmation(customerCorrection: string): Promise<{ customerReply: string }> {
+    const state = this.dependencies.store.state();
+    const deliberation = [...state.deliberations].reverse().find((item) => item.status === "ready-to-establish" && item.rounds.at(-1)?.confirmation && !item.rounds.at(-1)?.confirmation?.reply);
+    if (!deliberation) throw new Error("当前没有等待韩立确认的修复说明。");
+    if (customerCorrection.trim() === "1") {
+      this.#recordConfirmationReply(deliberation, "1", null);
+      return { customerReply: "已确认这份调查范围，将交南宫婉继续推进。" };
+    }
+    const memory = this.dependencies.memory;
+    const interpretation = parseCustomerCorrection(await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.customer-correction", {
+      customerCorrection,
+      previousOffer: deliberation.rounds.at(-1)!.confirmation!.offer,
+      deliberationContext: formatDeliberationContext(deliberation),
+      discussionBasisJson: discussionBasisJson(deliberation),
+      semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), customerCorrection, 12) || null),
+    }), state));
+    if (interpretation.action === "clarify-with-customer") return { customerReply: interpretation.customerReply };
+    this.#recordConfirmationReply(deliberation, customerCorrection, { question: interpretation.question!, reason: interpretation.reason! });
+    return { customerReply: interpretation.customerReply };
+  }
 
   async advance(options: { requireProblem?: boolean; forceNew?: boolean } = {}): Promise<HanliNangongDeliberationAdvanceResult> {
     const { store, memory } = this.dependencies;
@@ -74,6 +109,8 @@ export class HanliNangongDeliberationService {
     if (deliberation.status === "ready-to-establish") return this.#establish(deliberation);
 
     const round = deliberation.rounds.at(-1)!;
+    // 先幂等补齐问题消息；这样旧版本已经保存回答、但曾因父消息缺失而失败的轮次也能从原处恢复。
+    this.#ensureRoundMessages(deliberation, round, false);
     if (!round.answer) {
       const answer = (await this.dependencies.askNangong(this.dependencies.prompts.render("nangong.internal-answer", {
         question: round.question,
@@ -92,6 +129,8 @@ export class HanliNangongDeliberationService {
 
     const refreshed = requireDeliberation(state, deliberation.deliberationId);
     const answeredRound = refreshed.rounds.find((item) => item.roundId === round.roundId)!;
+    // 回答可能已由旧版本写入演化状态但尚未写入会话；幂等补写后才能继续韩立判断。
+    this.#ensureRoundMessages(refreshed, answeredRound, true);
     if (!answeredRound.assessment) {
       // 用户确认后的统一自动流程持续追问，只有人工暂停或阻塞才停止，不再依赖独立开关。
       const maximum = state.automationRuntime.status === "running" ? null : state.automationSettings.maxRoundsPerTopic;
@@ -165,12 +204,10 @@ export class HanliNangongDeliberationService {
       if (!reply) throw new Error("韩立尚未回复南宫婉的修复说明。");
       if (interrupted()) return { state: store.state(), activity: "idle" };
       if (store.state().automationSettings.automaticCustodyEnabled !== true) return { state: store.state(), activity: "idle" };
-      const saved = store.replyDeliberationConfirmation(deliberation.deliberationId, reply);
+      const saved = this.#recordConfirmationReply(deliberation, reply, reply === "1" ? null : { question: reply, reason: "韩立代表客户判断后要求南宫婉继续核实" });
       const current = requireDeliberation(saved, deliberation.deliberationId);
       confirmation = current.rounds.find((item) => item.roundId === roundId)!.confirmation!;
       if (reply !== "1") {
-        const followup = current.rounds.at(-1)!;
-        this.#appendInternalMessage(followup.roundId, "question", "hanli", reply, `internal:${roundId}:offer`, followup.createdAt);
         return { state: saved, activity: "questioning" };
       }
     }
@@ -182,18 +219,34 @@ export class HanliNangongDeliberationService {
     return { state, activity: "topic-established" };
   }
 
+  #recordConfirmationReply(deliberation: HanliEvolutionDeliberationOutDto, rawReply: string, followup: { question: string; reason: string } | null): EvolutionStateOutDto {
+    const saved = this.dependencies.store.replyDeliberationConfirmation(deliberation.deliberationId, rawReply, followup || undefined);
+    if (followup) this.#ensureRoundMessages(requireDeliberation(saved, deliberation.deliberationId), requireDeliberation(saved, deliberation.deliberationId).rounds.at(-1)!, false);
+    return saved;
+  }
+
+  #ensureRoundMessages(deliberation: HanliEvolutionDeliberationOutDto, round: HanliEvolutionDeliberationOutDto["rounds"][number], includeAnswer: boolean): void {
+    const roundIndex = deliberation.rounds.findIndex((item) => item.roundId === round.roundId);
+    const previous = roundIndex > 0 ? deliberation.rounds[roundIndex - 1] : null;
+    this.#appendInternalMessage(round.roundId, "question", "hanli", round.question, previous?.confirmation ? `internal:${previous.roundId}:offer` : null, round.createdAt);
+    if (includeAnswer && round.answer && round.answeredAt) this.#appendInternalMessage(round.roundId, "answer", "nangong", round.answer, `internal:${round.roundId}:question`, round.answeredAt);
+  }
+
   #appendInternalMessage(roundId: string, phase: "question" | "answer" | "reply" | "offer" | "confirm" | "started", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
     const conversationId = this.dependencies.readHanliConversationId();
     if (!conversationId || !this.dependencies.memory) return;
+    const messageId = `internal:${roundId}:${phase}`;
+    if (this.#publishedMessageIds.has(messageId)) return;
     const conversation = this.dependencies.memory.appendPersonaInternalMessage({
       ownerPersonaId: "han-li",
       conversationId,
-      messageId: `internal:${roundId}:${phase}`,
+      messageId,
       speakerPersonaId: role === "nangong" ? "nangong-wan" : "han-li",
       content,
       replyToMessageId,
       createdAt,
     });
+    this.#publishedMessageIds.add(messageId);
     // 内部研讨仍只保存一份权威消息；南宫婉页面展示内部对话，韩立页面过滤内部消息。
     this.dependencies.onPersonaConversationChanged?.(conversation);
   }
@@ -213,6 +266,18 @@ function parseQuestion(text: string): { question: string | null; reason: string 
   const question = typeof value.question === "string" ? value.question.trim() : "";
   if (value.action !== "ask" || !question || !reason) throw new Error("韩立内部研讨缺少问题正文或发问依据。");
   return { question, reason };
+}
+
+function parseCustomerCorrection(text: string): CustomerCorrectionInterpretation {
+  const value = parseObject(text);
+  const action = value.action;
+  const customerReply = textValue(value.customerReply);
+  if (!customerReply) throw new Error("韩立没有向客户说明对纠正内容的理解。");
+  if (action === "clarify-with-customer") return { action, customerReply, question: null, reason: null };
+  const question = textValue(value.question);
+  const reason = textValue(value.reason);
+  if (action !== "discuss-with-nangong" || !question || !reason) throw new Error("韩立没有把客户纠正整理成可研讨的问题。");
+  return { action, customerReply, question, reason };
 }
 
 function parseJudgment(text: string): { assessment: string; reply: string; nextQuestion: { question: string; reason: string } | null; candidate: HanliTopicCandidateOutDto | null; discoveries: RequirementDiscoveryOutDto[] } {

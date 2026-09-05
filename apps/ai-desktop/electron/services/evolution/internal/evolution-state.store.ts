@@ -320,7 +320,7 @@ export class EvolutionStateStore {
   }
 
   /** 确认不等于后台成熟判断；非 1 回复会成为下一轮真实追问。 */
-  replyDeliberationConfirmation(deliberationId: string, reply: string): EvolutionStateOutDto {
+  replyDeliberationConfirmation(deliberationId: string, reply: string, followupQuestion?: { question: string; reason: string }): EvolutionStateOutDto {
     return this.#commit("deliberation.confirmation_replied", null, null, (state) => {
       const deliberation = requireDeliberation(state, deliberationId);
       const round = deliberation.rounds.at(-1)!;
@@ -332,7 +332,7 @@ export class EvolutionStateStore {
       if (reply.trim() !== "1") {
         deliberation.status = "questioning";
         deliberation.candidate = null;
-        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: reply.trim(), questionReason: "韩立尚未确认修复范围", answer: null, assessment: null, discoveries: [], decision: null, createdAt: now, answeredAt: null, assessedAt: null });
+        deliberation.rounds.push({ roundId: `han-li-round-${randomUUID()}`, roundNumber: round.roundNumber + 1, question: required(followupQuestion?.question || reply, "韩立研讨问题", 30_000), questionReason: required(followupQuestion?.reason || "韩立尚未确认修复范围", "韩立发问依据", 8_000), answer: null, assessment: null, discoveries: [], decision: null, createdAt: now, answeredAt: null, assessedAt: null });
       }
       deliberation.updatedAt = now;
     });

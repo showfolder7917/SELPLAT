@@ -283,6 +283,48 @@ test("成熟判断不能绕过可见确认；确认持久化且非1重新讨论"
   assert.equal(store.establishDeliberationTopic("confirm").topics.length, 1);
 });
 
+test("客户纠正先由韩立理解并补齐内部问题关系后再交南宫婉", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "customer-correction-deliberation-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: false, workspaceState, locale: "zh-CN" });
+    store.beginDeliberation("customer-correction", [{ sourceMessageId: "user", content: "我要拖动后看清整个面板" }], "怎样恢复原来的拖动？", "核实真实使用目的");
+    const firstRound = store.state().deliberations[0].rounds[0];
+    const candidate = { title: "恢复边缘拖动", goal: "拖动后看清整个面板", scope: ["右边缘拖动"], exclusions: ["新增按钮"], evidence: ["客户明确要拖动查看整体"], acceptanceCriteria: ["右边缘可以直接拖动"], establishmentReason: "目标明确" };
+    store.recordDeliberationAnswer("customer-correction", firstRound.roundId, "可以恢复透明边缘拖动区域。");
+    store.assessDeliberation("customer-correction", firstRound.roundId, "方案成熟", null, candidate);
+    store.offerDeliberationConfirmation("customer-correction", "增加一个右侧手柄按钮，符合请回复1。");
+    const messageIds = new Set([
+      `internal:${firstRound.roundId}:question`, `internal:${firstRound.roundId}:answer`,
+      `internal:${firstRound.roundId}:reply`, `internal:${firstRound.roundId}:offer`,
+    ]);
+    const internalMessages = [];
+    const service = new HanliNangongDeliberationService({
+      store, prompts,
+      memory: {
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendPersonaInternalMessage(message) {
+          if (message.replyToMessageId && !messageIds.has(message.replyToMessageId)) throw new Error("FOREIGN KEY constraint failed");
+          messageIds.add(message.messageId); internalMessages.push(message);
+          return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt };
+        },
+      },
+      askHanli: async () => JSON.stringify({ action: "discuss-with-nangong", customerReply: "我理解你要的是直接拖动边缘看清整个面板，不是增加按钮。我会按这个目标继续核实。", question: "客户要恢复无感的右边缘直接拖动，以便看清面板整体；请核实如何恢复透明命中区域且不增加按钮。", reason: "需要确认修复真正服务于查看完整面板的目的" }),
+      askNangong: async () => "应恢复透明边缘命中区域，不显示按钮。", recordEvent() {},
+      readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
+    });
+    const correction = "不是显示开启，我只想拖动看清面板整体，为什么要按钮？";
+    const result = await service.replyToConfirmation(correction);
+    assert.match(result.customerReply, /直接拖动边缘看清整个面板/);
+    const saved = store.state().deliberations[0];
+    assert.equal(saved.rounds[0].confirmation.reply, correction);
+    assert.notEqual(saved.rounds[1].question, correction);
+    assert.match(saved.rounds[1].question, /透明命中区域/);
+    const questionMessage = internalMessages.find((item) => item.messageId === `internal:${saved.rounds[1].roundId}:question`);
+    assert.equal(questionMessage.replyToMessageId, `internal:${firstRound.roundId}:offer`);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("回复1启动统一自动流程后不因单题轮数上限自行停止", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-nangong-continuous-"));
   try {

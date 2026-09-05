@@ -294,6 +294,7 @@ export async function startApplication(): Promise<void> {
   let corpusIngestionRequested = false;
   let requestHanliSemanticRefresh: () => void = () => undefined;
   let startHanliInternalDeliberation: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }> = async () => { throw new Error("韩立与南宫婉内部研讨运行时尚未就绪。"); };
+  let replyHanliInternalDeliberation: (reply: string) => Promise<{ customerReply: string }> = async () => { throw new Error("韩立与南宫婉确认研讨运行时尚未就绪。"); };
   let latestCorpusTrigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled" = "startup";
   /** 按触发来源增量导入尚未处理的会话；本函数后台执行，不阻塞界面启动。 */
   const ingestTrainingCorpus = (trigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled"): void => {
@@ -587,6 +588,7 @@ export async function startApplication(): Promise<void> {
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request) => startHanliInternalDeliberation(request),
+    replyInternalDeliberationConfirmation: (reply) => replyHanliInternalDeliberation(reply),
     analyzeCorpus: async (prompt) => {
       if (!corpusSemanticBackfillCodex) throw new Error("韩立客户认知提取服务尚未就绪。");
       return (await runCorpusSemanticAnalysis(() => corpusSemanticBackfillCodex!.send(prompt, "zh-CN", "read-only", corpusSemanticWorkspace))).text;
@@ -679,6 +681,7 @@ export async function startApplication(): Promise<void> {
     const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale);
     return { continuous: state.automationRuntime.status === "running" };
   };
+  replyHanliInternalDeliberation = (reply) => personaEvolution!.replyHanliNangongConfirmation(reply);
   // 三个人物和两个共享模块分别取得受控 Facade；完整运行实例只留在组合根，不再传给 IPC。
   const nangongRuntime = personaEvolution.nangongRuntime;
   // 统一人物会话注册表是 IPC 的唯一入口。人物自己的服务仍可保留专属业务能力，但会话读写必须在这里登记。

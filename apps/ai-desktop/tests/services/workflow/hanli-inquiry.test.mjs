@@ -45,7 +45,9 @@ test("真实派发后才等待，调查返回后主动答复，内部问答保�
   });
   const pending = f.service.run(request, "original", customerQuestion, understanding, topic);
   assert.equal(f.service.run(request, "original", customerQuestion, understanding, topic), pending);
-  assert.ok(f.order.indexOf("dispatched") < f.order.indexOf("inquiry:u1:waiting"));
+  assert.equal(f.messages.filter((item) => item.messageId === "inquiry:u1:progress").length, 1);
+  assert.equal(f.messages.some((item) => item.messageId === "inquiry:u1:received" || item.messageId === "inquiry:u1:waiting"), false);
+  assert.match(f.messages.find((item) => item.messageId === "inquiry:u1:progress").content, /南宫婉正在核实事实/);
   assert.equal(f.messages.some((item) => item.messageId === "inquiry:u1:result"), false);
   resolve(findings);
   const result = await pending;
@@ -56,6 +58,7 @@ test("真实派发后才等待，调查返回后主动答复，内部问答保�
   assert.doesNotMatch(result.messages.at(-1).content, /file.ts:12/);
   assert.match(result.messages.at(-1).content, /建议先完成发布/);
   assert.equal(result.messages.at(-1).speakerPersonaId, "han-li");
+  assert.equal(result.messages.at(-1).replyToMessageId, "inquiry:u1:progress");
   assert.ok(f.order.indexOf("internal:inquiry:u1:answer") < f.order.indexOf("explained"));
   const question = f.messages.find((item) => item.messageId === "internal:inquiry:u1:question");
   assert.match(question.content, new RegExp(customerQuestion));

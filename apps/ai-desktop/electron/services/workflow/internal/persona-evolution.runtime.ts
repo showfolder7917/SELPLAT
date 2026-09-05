@@ -203,6 +203,19 @@ export class PersonaEvolutionRuntime {
     return state;
   }
 
+  /**
+   * 把客户对修复说明的确认或纠正交给统一人物研讨服务。
+   * 真实传参示例：replyHanliNangongConfirmation("不要按钮，只恢复边缘拖动")。
+   * 真实返回示例：返回韩立理解后的客户说明，而不是南宫婉的技术原文。
+   * 异常或副作用示例：没有等待确认轮次时抛错；有效纠正会建立下一轮可恢复研讨。
+   */
+  async replyHanliNangongConfirmation(reply: string): Promise<{ customerReply: string }> {
+    if (!this.#deliberation) throw new Error("韩立与南宫婉内部研讨能力尚未接入。");
+    const result = await this.#deliberation.replyToConfirmation(reply);
+    this.#scheduleContinuation(0);
+    return result;
+  }
+
   #scheduleContinuation(delayMs = 1_000): void {
     if (this.#continuationTimer) return;
     this.#continuationTimer = setTimeout(() => {

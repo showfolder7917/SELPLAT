@@ -122,7 +122,7 @@ export function DeveloperApplication() {
   const activePersonaId = collaboration.collaborationMode && collaboration.panel === "member" ? collaboration.selectedMember?.memberId : null;
   const personaConversationActivities = {
     "han-li": hanli.newConversationBusy ? "creating" as const : hanli.sending ? "responding" as const : activePersonaId === "han-li" ? "active" as const : null,
-    "nangong-wan": nangong.newConversationBusy ? "creating" as const : nangong.sending ? "responding" as const : activePersonaId === "nangong-wan" ? "active" as const : null,
+    "nangong-wan": nangong.newConversationBusy ? "creating" as const : nangong.sending ? "responding" as const : hanli.delegatedResponderPersonaId === "nangong-wan" ? "investigating" as const : activePersonaId === "nangong-wan" ? "active" as const : null,
   };
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 /** selConversation：对话时间线、消息卡、附件与输入工具栏的统一主题外观。 */
 .selconversation-root { position: relative; min-width: 0; min-height: 0; display: contents; }
-.selconversation-timeline { min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 38px max(36px, 8vw) 160px; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track); }
+.selconversation-timeline { min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 38px max(36px, 8vw) var(--selconversation-composer-reserve, 160px); scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--sel-theme-scrollbar-thumb) var(--sel-theme-scrollbar-track); }
 .selconversation-timeline::-webkit-scrollbar { width: 12px; }
 .selconversation-timeline::-webkit-scrollbar-track { background: var(--sel-theme-scrollbar-track); }
 .selconversation-timeline::-webkit-scrollbar-thumb { min-height: 42px; border: 3px solid var(--sel-theme-scrollbar-track); border-radius: 8px; background: var(--sel-theme-scrollbar-thumb); }

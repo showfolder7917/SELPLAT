@@ -669,7 +669,8 @@ test("真实SQLite的全局消息主键不吞掉另一人物的交接", () => {
       acceptance.publish({ proposalId: "proposal", topicId: "topic" }, "passed", "验收通过", "attempt");
     }
     assert.equal(memory.readPersonaConversation("han-li", hanli.conversationId).messages.length, 4);
-    assert.equal(memory.readPersonaConversation("nangong-wan", nangong.conversationId).messages.length, 3);
+    // 卡点只在原处理人与令狐之间流转；南宫婉这里只接收两条验收交接，且不得因全局 messageId 冲突被吞掉。
+    assert.equal(memory.readPersonaConversation("nangong-wan", nangong.conversationId).messages.length, 2);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
   } finally { fixture.close(); }
 });

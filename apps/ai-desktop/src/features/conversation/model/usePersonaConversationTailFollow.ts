@@ -12,13 +12,26 @@ export function usePersonaConversationTailFollow(updateKey: string): RefObject<H
   useEffect(() => {
     const timeline = timelineRef.current;
     if (!timeline) return;
+    let geometryFrame = 0;
     const updateFollowState = () => {
       const remaining = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight;
       followsTailRef.current = remaining <= BOTTOM_TOLERANCE_PX;
     };
+    const followGeometryChange = () => {
+      if (!followsTailRef.current) return;
+      window.cancelAnimationFrame(geometryFrame);
+      geometryFrame = window.requestAnimationFrame(() => {
+        if (followsTailRef.current) timeline.scrollTo({ top: timeline.scrollHeight });
+      });
+    };
     updateFollowState();
     timeline.addEventListener("scroll", updateFollowState, { passive: true });
-    return () => timeline.removeEventListener("scroll", updateFollowState);
+    timeline.addEventListener("selConversation:geometry", followGeometryChange);
+    return () => {
+      window.cancelAnimationFrame(geometryFrame);
+      timeline.removeEventListener("scroll", updateFollowState);
+      timeline.removeEventListener("selConversation:geometry", followGeometryChange);
+    };
   }, []);
 
   useLayoutEffect(() => {

@@ -33,9 +33,11 @@ export class HanliConversationService {
     const waitingRound = waiting?.rounds.at(-1);
     // 只有当前会话已展示的那份调查说明可被确认，旧会话或后台草稿不能取得用户授权。
     if (waiting && waitingRound && existing.messages.some((message) => message.messageId === `hanli-confirmation:${waitingRound.roundId}`)) {
-      this.options.store.replyDeliberationConfirmation(waiting.deliberationId, userContent);
+      if (!this.options.replyInternalDeliberationConfirmation) throw new Error("韩立与南宫婉的确认研讨入口尚未接入。");
+      // 用户纠正必须先经过韩立的需求理解，再由 Workflow 保存为新的研讨问题；人物会话不再直接改写共享演化状态。
+      const confirmation = await this.options.replyInternalDeliberationConfirmation(userContent);
       const createdAt = new Date().toISOString();
-      return memory.registerPersonaRound({ ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli", conversationId: existing.conversationId!, userMessageId: request.clientMessageId || `hanli-user-${randomUUID()}`, userContent, attachmentIds: request.attachmentIds || [], personaMessageId: `hanli-message-${randomUUID()}`, personaContent: userContent === "1" ? "已确认这份调查范围，将交南宫婉继续推进。" : "已把你的纠正交回南宫婉重新调查；未确认前不会按旧范围开始实施。", createdAt, completedAt: createdAt, decision: { title: "调查范围确认", type: "用户确认", switchTopic: false, userIntent: userContent, tags: ["调查确认"], summary: "用户对本轮调查范围作出确认或纠正。" } });
+      return memory.registerPersonaRound({ ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli", conversationId: existing.conversationId!, userMessageId: request.clientMessageId || `hanli-user-${randomUUID()}`, userContent, attachmentIds: request.attachmentIds || [], personaMessageId: `hanli-message-${randomUUID()}`, personaContent: confirmation.customerReply, createdAt, completedAt: createdAt, decision: { title: "调查范围确认", type: "用户确认", switchTopic: false, userIntent: userContent, tags: ["调查确认"], summary: "用户对本轮调查范围作出确认或纠正。" } });
     }
     const latestHanli = [...existing.messages].reverse().find((message) => !message.messageId.startsWith("internal:") && message.speakerType === "persona" && message.speakerPersonaId === "han-li");
     if (userContent === "1" && latestHanli?.content.includes(HANLI_INTERNAL_DELIBERATION_INVITATION)) {
