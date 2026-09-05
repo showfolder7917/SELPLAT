@@ -326,13 +326,17 @@ export class PersonaEvolutionRuntime {
       if (flowAction === "monitor-execution") {
         const collaborationState = this.#collaboration.state();
         const tasks = collaborationState.tasks.filter((task) => proposal!.distributedTaskIds.includes(task.taskId));
+        const knownTaskIds = new Set(tasks.map((task) => task.taskId));
+        const missingTaskIds = proposal.distributedTaskIds.filter((taskId) => !knownTaskIds.has(taskId));
         if (proposal.status === "blocked") {
-          const blockedTasks = tasks.filter((item) => ["blocked", "test-failed"].includes(item.state));
+          const blockedTasks = tasks.filter((item) => ["blocked", "cancelled", "test-failed"].includes(item.state));
           const blockedTask = blockedTasks[0];
           const reason = blockedTask
             ? `${taskOwnerName(collaborationState, blockedTask)}负责的“${blockedTask.snapshot.title}”停在${taskStageName(blockedTask)}；发现：${itemFailureReason(blockedTask)}`
-            : `提案“${proposal.title}”已经进入阻塞态，但没有找到对应的阻塞任务记录。`;
-          const failureKind = blockedTask?.integrationFailure?.kind || blockedTask?.state || "unknown";
+            : missingTaskIds.length
+              ? `提案“${proposal.title}”关联的任务记录缺失：${missingTaskIds.join("、")}。`
+              : `提案“${proposal.title}”已经进入阻塞态，但没有找到对应的阻塞任务记录。`;
+          const failureKind = blockedTask?.integrationFailure?.kind || blockedTask?.state || (missingTaskIds.length ? "missing-task-record" : "unknown");
           const details = {
             taskId: blockedTask?.taskId || null,
             taskTitle: blockedTask?.snapshot.title || null,
@@ -342,8 +346,9 @@ export class PersonaEvolutionRuntime {
             integrationFailureKind: blockedTask?.integrationFailure?.kind || null,
             conflictFiles: blockedTask?.integrationFailure?.conflictFiles || [],
             blockedTaskCount: blockedTasks.length,
+            missingTaskIds,
           };
-          if (!blockedTask || blockedTask.integrationFailure?.kind === "local-change-ownership") {
+          if (!blockedTask || missingTaskIds.length || blockedTask.state === "cancelled" || blockedTask.integrationFailure?.kind === "local-change-ownership") {
             return this.#blockOneShotFailure(
               "technical",
               `one_shot_task_blocked:${failureKind}`,
@@ -448,8 +453,9 @@ export class PersonaEvolutionRuntime {
       }
       for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying", "blocked"].includes(item.status))) {
         let tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
-        if (tasks.length !== proposal.distributedTaskIds.length) continue;
-        const blocked = tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
+        const knownTaskIds = new Set(tasks.map((task) => task.taskId));
+        const missingTaskIds = proposal.distributedTaskIds.filter((taskId) => !knownTaskIds.has(taskId));
+        const blocked = missingTaskIds.length > 0 || tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
         const allReturned = tasks.every((task) => task.state === "returned-to-nangong");
         if (!blocked && allReturned) {
           this.#collaboration.sealEvolutionRound(proposal.proposalId, proposal.distributedTaskIds);
@@ -458,7 +464,7 @@ export class PersonaEvolutionRuntime {
         const completed = tasks.every((task) => task.state === "integrated");
         const verifying = tasks.some((task) => ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state));
         const status = blocked ? "blocked" : completed ? "pending-acceptance" : verifying ? "verifying" : "executing";
-        if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
+        if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : missingTaskIds.length ? `关联任务记录缺失：${missingTaskIds.join("、")}。` : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
       }
       if (state.oneShotRun?.status === "running") {
         // 暂停、停止和人工接管必须冻结当前专题，恢复后仍沿原卡点继续。
