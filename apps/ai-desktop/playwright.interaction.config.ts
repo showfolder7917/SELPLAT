@@ -14,6 +14,7 @@ const projectPaths = resolveInteractionTestPaths();
 const runSegment = (process.env.AI_DESKTOP_TEST_RUN_ID || "").replaceAll(/[^a-zA-Z0-9_-]/g, "");
 const interactionRoot = path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "interaction", taskSegment, runSegment);
 mkdirSync(interactionRoot, { recursive: true });
+process.env.AI_DESKTOP_INTERACTION_USER_DATA_ROOT = path.join(interactionRoot, "user-data");
 
 export default defineConfig({
   testDir: "./tests/interaction",

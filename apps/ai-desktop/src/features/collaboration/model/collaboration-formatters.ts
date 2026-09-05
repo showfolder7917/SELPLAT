@@ -1,6 +1,16 @@
 import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, CollaborationTimelineSnapshotOutDto, EvolutionStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 
-export function collaborationMemberStateLabel(member: CollaborationMemberOutDto, locale: LocaleValue, timeline?: CollaborationTimelineSnapshotOutDto | null, evolution?: EvolutionStateOutDto | null): string {
+export type PersonaConversationActivity = "active" | "responding" | "creating";
+
+/** 人物会话活动只修正页面呈现，不改写协作调度判断所使用的成员状态。 */
+export function collaborationMemberPresenceState(member: CollaborationMemberOutDto, conversationActivity?: PersonaConversationActivity | null): CollaborationMemberOutDto["state"] {
+  return conversationActivity && (member.state === "idle" || member.state === "conversation") ? "conversation" : member.state;
+}
+
+export function collaborationMemberStateLabel(member: CollaborationMemberOutDto, locale: LocaleValue, timeline?: CollaborationTimelineSnapshotOutDto | null, evolution?: EvolutionStateOutDto | null, conversationActivity?: PersonaConversationActivity | null): string {
+  const conversationCanOwnDisplay = member.state === "idle" || member.state === "conversation";
+  if (conversationCanOwnDisplay && conversationActivity === "responding") return locale === "ja" ? "返信中" : "正在回复";
+  if (conversationCanOwnDisplay && conversationActivity === "creating") return locale === "ja" ? "新しい会話を作成中" : "正在建立新会话";
   const deliberation = evolution?.deliberations.slice().reverse().find((item) => item.status === "questioning" || item.status === "ready-to-establish");
   if (deliberation && (member.memberId === "han-li" || member.memberId === "nangong-wan")) {
     if (evolution?.automationRuntime.status === "paused") return "研讨已暂停";
@@ -10,6 +20,7 @@ export function collaborationMemberStateLabel(member: CollaborationMemberOutDto,
     if (deliberation.status === "ready-to-establish") return member.memberId === "nangong-wan" ? (round.confirmation ? "等待韩立确认" : "说明修复方案中") : (round.confirmation ? "确认修复内容中" : "等待修复说明");
     return member.memberId === "nangong-wan" ? (round.answer ? "等待韩立追问" : "研讨回答中") : (round.answer ? "研讨判断中" : "等待南宫婉回答");
   }
+  if (conversationCanOwnDisplay && conversationActivity === "active") return locale === "ja" ? "会話中" : "会话中";
   const nodes = timeline?.groups.flatMap((group) => group.nodes).filter((node) => node.actor.memberId === member.memberId) || [];
   nodes.sort((a, b) => (b.completedAt || b.startedAt).localeCompare(a.completedAt || a.startedAt));
   const latest = nodes[0];

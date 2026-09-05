@@ -45,14 +45,36 @@ export class HanliInquiryService {
       const findings = parseInquiryFindings(response.text);
       const report = `${findings.status === "verified" ? "核实结果" : "尚未完全核实"}：${findings.summary}\n\n${findings.evidence.map((item) => `依据：${item.source}\n${item.detail}`).join("\n\n")}${findings.unknowns.length ? `\n\n尚未核实：${findings.unknowns.join("；")}` : ""}`;
       publish(`internal:inquiry:${id}:answer`, "nangong-wan", report, questionId);
-      // 确定性转述保留完整依据，不再让二次生成把调查结果改写为无依据结论。
+      // 原始技术依据只作为内部交接保存；韩立必须基于同一份证据向客户解释影响并给出下一步方案。
+      const customerReply = await this.#explainForCustomer(request, question, findings);
       this.options.recordEvent("hanli.inquiry.completed", { conversationId, requestId: id, status: findings.status });
-      return publish(resultId, "han-li", `南宫婉已返回调查结果。\n\n${report}\n\n本轮只读核实，没有修改或删除。`, `inquiry:${id}:waiting`);
+      return publish(resultId, "han-li", customerReply, `inquiry:${id}:waiting`);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "调查服务没有返回有效结果";
       this.options.recordEvent("hanli.inquiry.failed", { conversationId, requestId: id, reason });
       publish(`internal:inquiry:${id}:failure`, "han-li", `本次核实未完成：${reason}`, questionId);
       return publish(resultId, "han-li", `本次向南宫婉核实未完成：${reason}。目前没有足够事实判断进度，不能据此认定已完成。`);
+    }
+  }
+
+  async #explainForCustomer(request: SendPersonaConversationMessageInDto, question: string, findings: ReturnType<typeof parseInquiryFindings>): Promise<string> {
+    try {
+      const conversation = this.options.conversation;
+      if (!conversation) throw new Error("韩立客户解释能力尚未接入");
+      const prompt = this.options.prompts.render("hanli.inquiry-response", {
+        userMessage: request.message,
+        question,
+        findingsJson: JSON.stringify(findings),
+      });
+      // 调查截图已经由南宫婉核实；二次解释只消费结构化事实，避免韩立绕过调查自行猜测。
+      const response = await conversation.send({ ...request, attachmentIds: [] }, prompt);
+      const reply = response.text.trim();
+      if (!reply) throw new Error("韩立没有返回客户解释");
+      return reply;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "韩立没有返回客户解释";
+      this.options.recordEvent("hanli.inquiry.explanation_failed", { requestId: request.clientMessageId || null, reason });
+      return "南宫婉已经完成调查，原始依据也已保存，但我这次没有成功把技术结果整理成清楚的解决方案。请稍后重试；我不会把难懂的技术报告直接丢给你，也不会在解释完成前擅自开始修改。";
     }
   }
 }

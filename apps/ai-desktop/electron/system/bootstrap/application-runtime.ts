@@ -784,6 +784,7 @@ export async function startApplication(): Promise<void> {
     eventCenter,
     workflowRepository,
     collaborationTimeline,
+    refreshWorkflowCheckpoints: async () => { await workflowSupervisor?.checkNow(); },
     aiMemoryDatabaseStatus,
     projectRoot,
     appRoot,

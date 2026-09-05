@@ -1,7 +1,7 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.158.0
+rule_version = 5.159.0
 
 <!-- 截图与聚焦不证明用户操作成功；每项必须有结果断言，交互项必须真实操作后再断言。 -->
 hanli_acceptance_evidence_gate = model_observes_fresh_screenshot_after_each_real_input + evidence_reference_per_criterion + no_input_no_pass + missing_or_failed_evidence_never_passes + legacy_run_cannot_approve_current_proposal
@@ -59,6 +59,8 @@ workflow_exception_lifecycle_contract = process_startup_plus_IPC_plus_renderer_p
 workflow_checkpoint_closed_loop_contract = one_coordinator_routes_persisted_exceptions + task_self_repair_not_preempted + bounded_scoped_linghu_repair_for_confirmed_technical_checkpoint + same_run_and_round_deduplicated + original_resume_before_resolution + asynchronous_reblock_starts_next_round + cancellation_and_retry_exhaustion_never_auto_reset + unknown_scope_and_business_authority_wait_visible
 <!-- 人物交接由真实副作用驱动，并与纯显示解耦；同轮重放不重复，不同修复及验收轮次不可覆盖。 -->
 workflow_checkpoint_conversation_contract = real_task_dispatch_and_original_resume_ports + shared_event_round_phase_identity_in_timeline_and_relevant_persona_messages + nangong_receives_own_live_updates + actual_speaker_not_hardcoded_nangong + acceptance_attempt_identity + result_to_hanli_and_nangong + no_projection_claims_unverified_success
+<!-- 相同监督错误不得按轮询次数生卡；历史孤立异常只在读模型聚合，手动继续必须即时唤醒统一协调器并反馈实际结果。 -->
+workflow_checkpoint_recovery_ui_contract = stable_supervisor_error_fingerprint + repeated_active_fault_updates_original_event + unlinked_historical_checkpoints_one_aggregate_card_without_database_deletion + one_topic_one_card_with_round_nodes + resume_original_run_then_immediately_refresh_checkpoint_coordinator + same_blocking_reason_returns_explicit_checked_but_not_recovered_feedback + no_silent_button
 <!-- 完整对话原文与读取预览分离；用户原话不可截断，AI 长回答在后续上下文中只取前八十个 Unicode 字符。 -->
 persona_conversation_memory_contract = one_owner_persona_id_namespaced_SQLite_header_and_message_model + full_user_persona_and_internal_persona_source_text + generic_speaker_type_and_optional_speaker_persona_id + stable_sequence_reply_attachment_and_delivery_identity + user_exact_context + preview_never_replaces_source + adding_persona_never_requires_new_table_or_IPC_channel
 <!-- 每轮由 AI 自由生成主题、类型和用户意图；问题中心改变时关闭旧主题并新建，禁止枚举限制。 -->

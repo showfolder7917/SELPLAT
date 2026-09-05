@@ -118,6 +118,12 @@ export function DeveloperApplication() {
     else codex.conversation.setAttachments(updater);
   };
   const screenshot = useScreenshotCapture({ locale: settings.locale, screenSourceUnavailable: text.screenSourceUnavailable, setMainInput: codex.conversation.setInput, closeSettings: () => setSettingsOpen(false), refreshTempInfo: diagnostics.refreshTempInfo, getAttachments, setAttachments });
+  // 当前人物页和后台未完成回复共同决定会话显示状态；协作调度仍使用后端成员状态。
+  const activePersonaId = collaboration.collaborationMode && collaboration.panel === "member" ? collaboration.selectedMember?.memberId : null;
+  const personaConversationActivities = {
+    "han-li": hanli.newConversationBusy ? "creating" as const : hanli.sending ? "responding" as const : activePersonaId === "han-li" ? "active" as const : null,
+    "nangong-wan": nangong.newConversationBusy ? "creating" as const : nangong.sending ? "responding" as const : activePersonaId === "nangong-wan" ? "active" as const : null,
+  };
 
   useEffect(() => {
     const host = shellRef.current;
@@ -132,7 +138,7 @@ export function DeveloperApplication() {
     <DeveloperTitleBar projectRoot={workspace.projectRoot} title={text.title} />
     <DeveloperActivityBar settingsControl={<DeveloperSettingsFeature open={settingsOpen} onOpenChange={setSettingsOpen} status={codex.interaction.status} loginHint={codex.interaction.loginHint} text={text} settings={settings} diagnostics={diagnostics} workspace={workspace} onLogin={() => void codex.interaction.login()} onLogout={() => void codex.interaction.logout()} onTempFilesCleared={() => codex.conversation.setAttachments([])} />} />
     <DeveloperExplorer>
-      <CollaborationExplorerFeature evolution={evolution.state} expanded={tasksExpanded} locale={settings.locale} auditTask={diagnostics.auditInfo?.latestTask || null} controller={collaboration} onToggle={() => setTasksExpanded((current) => !current)} />
+      <CollaborationExplorerFeature evolution={evolution.state} expanded={tasksExpanded} locale={settings.locale} auditTask={diagnostics.auditInfo?.latestTask || null} personaConversationActivities={personaConversationActivities} controller={collaboration} onToggle={() => setTasksExpanded((current) => !current)} />
     </DeveloperExplorer>
     {!sidebarCollapsed && <div className="sidebar-resizer" role="separator" aria-label={settings.locale === "ja" ? "サイドバーの幅" : "调整侧栏宽度"} aria-orientation="vertical" aria-valuemin={220} aria-valuemax={520} aria-valuenow={sidebarWidth} tabIndex={0} onPointerDown={resizeSidebar} onDoubleClick={() => setSidebarWidth(260)} onKeyDown={(event) => { if (event.key === "Home") { event.preventDefault(); setSidebarWidth(260); } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); setSidebarWidth((width) => clampSidebarWidth(width + (event.key === "ArrowLeft" ? -16 : 16))); } }} />}
     <DeveloperWorkspace>

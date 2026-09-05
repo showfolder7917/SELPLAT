@@ -153,7 +153,7 @@ export class CollaborationTimelineRepository {
     return this.#database.withConnection((connection) => {
       const topics = connection.prepare(`SELECT groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt
         FROM AiDesktopTaskTimelineTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;
-      const groups = topics.map((topic) => this.#group(connection, topic, now));
+      const groups = aggregateUnlinkedCheckpoints(topics.map((topic) => this.#group(connection, topic, now)), now);
       return { version: 1, groups, updatedAt: groups.map((group) => group.updatedAt).sort().at(-1) || now };
     });
   }
@@ -264,6 +264,30 @@ export class CollaborationTimelineRepository {
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),
     };
   }
+}
+
+/** 旧异常仍逐条保存在SQLite；读模型只把缺少专题关联的卡点合成一张卡，避免审计事实淹没真实任务。 */
+function aggregateUnlinkedCheckpoints(groups: CollaborationTimelineGroupOutDto[], now: string): CollaborationTimelineGroupOutDto[] {
+  const orphaned = groups.filter((group) => !group.topicId && group.nodes.some((node) => node.eventType === "checkpoint.progress"));
+  if (orphaned.length <= 1) return groups;
+  const retained = groups.filter((group) => !orphaned.includes(group));
+  const uniqueNodes = [...new Map(orphaned.flatMap((group) => group.nodes).map((node) => [`${node.action}\n${node.summary}`, node])).values()]
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.nodeId.localeCompare(right.nodeId));
+  const startedAt = orphaned.map((group) => group.startedAt).sort()[0] || now;
+  const updatedAt = orphaned.map((group) => group.updatedAt).sort().at(-1) || now;
+  const aggregate: CollaborationTimelineGroupOutDto = {
+    groupId: "checkpoint:unlinked-history", topicId: null, proposalId: null,
+    title: `未关联历史卡点（${orphaned.length}项）`, status: "blocked",
+    summary: "这些历史异常缺少原任务或授权工作区，已汇总展示；原始审计记录仍完整保留。",
+    nodes: uniqueNodes, executingCount: 0, verifyingCount: 0,
+    waitingCount: uniqueNodes.filter((node) => node.status === "waiting" || node.status === "failed").length,
+    completedCount: uniqueNodes.filter((node) => node.status === "completed").length,
+    startedAt, updatedAt, durationMs: durationMs(startedAt, now),
+    nextStep: "等待确认原任务或授权工作区后再恢复，不自动猜测范围。",
+    failureNextStep: "保留原始异常证据，不重复创建卡片或无范围修复任务。",
+    nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" },
+  };
+  return [...retained, aggregate].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.groupId.localeCompare(right.groupId));
 }
 
 /** 只投影人物产生的业务正文；managed-execution 等运行状态保留在原始流表，但绝不拼入可读内容。 */

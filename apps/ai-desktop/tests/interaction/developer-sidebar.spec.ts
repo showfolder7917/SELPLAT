@@ -55,6 +55,23 @@ test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("从卡点继续后仍受阻会明确反馈而不是看起来没反应", async () => {
+  await page.evaluate(async () => {
+    const api = (window as any).desktop;
+    await api.setInteractionTaskTimelineFixture(true);
+    await api.setInteractionResumeFixture("blocked");
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+  await page.getByRole("button", { name: "从卡点继续", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "已检查但仍未恢复：验收连接中断" })).toBeVisible();
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionOneShotRun(null);
+    await (window as any).desktop.setInteractionTaskTimelineFixture(false);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+});
+
 test("卡点人物会话实时收到令狐返回与韩立验收，重复快照不重复显示", async ({}, testInfo) => {
   await page.goto(pathToFileURL(productionRendererFile).href);
   await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
@@ -359,7 +376,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   const hanliComposer = page.locator(".hanli-person-composer");
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("结合整理后的资料，告诉我现在最关键的目标。");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
+  await expect(taskList.getByRole("button", { name: /韩立/ })).toContainText("正在回复");
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("会话中");
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(hanliConversation.getByText("结合整理后的资料，告诉我现在最关键的目标。", { exact: true })).toBeVisible();
   await expect(hanliConversation.getByText("我 · 发送中", { exact: true })).toBeVisible();
@@ -383,7 +402,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
-  await page.getByRole("button", { name: "重新建立南宫婉对话" }).click();
+  const newNangongConversation = page.getByRole("button", { name: "重新建立南宫婉对话" });
+  await newNangongConversation.click();
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("正在建立新会话");
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
   await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
@@ -687,7 +708,7 @@ test("多个结构化疑问逐题确认后继续原回合并重新展示完整�
   await secondQuestion.getByRole("button", { name: "确认" }).click();
 
   await expect(panel).toHaveCount(0);
-  await expect(page.getByText("完整意图已根据两个答案重新整理。")).toBeVisible();
+  await expect(page.getByText("完整意图已根据两个答案重新整理。").last()).toBeVisible();
   await expect(page.getByRole("button", { name: "就是这意思" })).toBeVisible();
 });
 
@@ -715,6 +736,21 @@ test("托管内部新回合向下新增回复卡且不覆盖上一轮文字", as
 });
 
 test("最新自动策略动作在运行中禁用并且不再显示旧模式返回入口", async () => {
+  // 本用例必须自行建立可确认的最新回复，不能借用上一用例留下的消息；否则其他
+  // 流式回复成为最新消息后，旧按钮会按产品规则保持禁用并造成跨用例污染。
+  await page.getByRole("button", { name: "重新建立一个 Codex 会话" }).click();
+  const composer = page.locator(".selconversation-composer:visible");
+  await composer.locator("textarea").fill("需要确认的自动策略动作");
+  await composer.getByRole("button", { name: "发送" }).click();
+  const initialPanel = page.locator(".codex-user-input");
+  await initialPanel.getByRole("radio", { name: /原对话框/ }).click();
+  await initialPanel.getByRole("button", { name: "确认" }).click();
+  await expect(initialPanel.getByText("无红色标注时使用什么提示？")).toBeVisible();
+  await initialPanel.getByRole("radio", { name: /不追加提示/ }).click();
+  await initialPanel.getByRole("button", { name: "确认" }).click();
+  await expect(initialPanel).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "就是这意思" })).toBeEnabled();
+
   await page.getByRole("button", { name: "就是这意思" }).click();
   const execute = page.getByRole("button", { name: "按这个方案执行" });
   await expect(execute).toBeVisible();

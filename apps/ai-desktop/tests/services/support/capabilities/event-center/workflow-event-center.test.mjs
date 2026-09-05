@@ -705,6 +705,8 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
     assert.ok(handedOffExceptions.length > firstCount);
     assert.ok(handedOffExceptions.some((event) => event.category === "stalled" && event.handlingOwnerId === "linghu-ancestor"));
     assert.ok(handedOffExceptions.some((event) => event.eventType === "workflow.supervisor.evolution_sync_failed" && event.handlingOwnerId === "linghu-ancestor"));
+    const repeatedSyncErrors = fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS value FROM AiDesktopEvent WHERE eventType='workflow.supervisor.evolution_sync_failed'").get());
+    assert.equal(Number(repeatedSyncErrors.value), 1, "相同监督器故障不得每轮创建新卡点");
   } finally {
     supervisor.stop();
     fixture.close();

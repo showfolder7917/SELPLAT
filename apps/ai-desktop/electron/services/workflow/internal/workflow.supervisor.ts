@@ -86,6 +86,7 @@ export class WorkflowSupervisor {
       }
     } catch (error) {
       try {
+        const message = error instanceof Error ? error.message : String(error);
         this.#repository.recordEvent({
           sourceType: "launcher",
           sourceId: "workflow-supervisor",
@@ -93,7 +94,8 @@ export class WorkflowSupervisor {
           category: "technical-error",
           severity: "error",
           status: "open",
-          message: error instanceof Error ? error.message : String(error),
+          message,
+          fingerprint: `workflow-supervisor:failed:${message.slice(0, 500)}`,
         });
       } catch {
         // 数据库自身不可用时不能递归写入同一数据库；启动状态和文件审计仍保留真实失败。
@@ -109,6 +111,7 @@ export class WorkflowSupervisor {
       operation();
     } catch (error) {
       try {
+        const message = error instanceof Error ? error.message : String(error);
         this.#repository.recordEvent({
           sourceType: "launcher",
           sourceId: "workflow-supervisor",
@@ -116,7 +119,8 @@ export class WorkflowSupervisor {
           category: "technical-error",
           severity: "error",
           status: "open",
-          message: error instanceof Error ? error.message : String(error),
+          message,
+          fingerprint: `workflow-supervisor:${domain}:${message.slice(0, 500)}`,
           payload: { domain },
           occurredAt: now,
         });

@@ -5,7 +5,7 @@ import ts from "typescript";
 
 const source = readFileSync(new URL("../../../src/features/collaboration/model/collaboration-formatters.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { collaborationMemberStateLabel: label } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const { collaborationMemberPresenceState: presence, collaborationMemberStateLabel: label } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 
 test("每个人的工作中间阶段显示真实阶段而不是笼统正在执行", () => {
   for (const memberId of ["mo-caihuan", "song-yu", "linghu-ancestor"]) {
@@ -24,4 +24,16 @@ test("人物使用协作群最新事实和研讨确认阶段，暂停不显示�
   assert.equal(label({ memberId: "nangong-wan" }, "zh-CN", null, evolution), "等待韩立确认");
   evolution.automationRuntime.status = "paused";
   assert.equal(label({ memberId: "han-li" }, "zh-CN", null, evolution), "研讨已暂停");
+});
+
+test("人物直接会话覆盖空闲显示但不覆盖真实执行状态", () => {
+  const nangong = { memberId: "nangong-wan", state: "idle", phase: null };
+  assert.equal(label(nangong, "zh-CN", null, null, "active"), "会话中");
+  assert.equal(label(nangong, "zh-CN", null, null, "responding"), "正在回复");
+  assert.equal(label(nangong, "zh-CN", null, null, "creating"), "正在建立新会话");
+  assert.equal(presence(nangong, "responding"), "conversation");
+  const working = { ...nangong, state: "working", phase: "implementing" };
+  assert.equal(presence(working, "active"), "working");
+  assert.equal(label(working, "zh-CN", null, null, "active"), "执行修改中");
+  assert.equal(label(working, "zh-CN", null, null, "responding"), "执行修改中");
 });

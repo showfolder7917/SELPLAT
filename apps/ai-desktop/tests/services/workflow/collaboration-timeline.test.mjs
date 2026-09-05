@@ -50,6 +50,24 @@ test("令狐巡检问题与恢复动作落库为会话事实，重复巡检不�
   } finally { fixture.close(); }
 });
 
+test("缺少专题关联的历史卡点只显示一张汇总卡且原始事实仍保留", () => {
+  const fixture = createFixture("unlinked-checkpoints");
+  try {
+    for (let index = 1; index <= 4; index++) fixture.append({
+      eventId: `checkpoint:issue-${index}:1:waiting`, eventType: "checkpoint.progress",
+      group: { groupId: `checkpoint:issue-${index}`, topicId: null, proposalId: null, title: "第 1 轮卡点处理", status: "blocked", summary: "无法确认原任务或授权工作区", startedAt: fixture.at(index), updatedAt: fixture.at(index) },
+      fact: { nodeId: `checkpoint:issue-${index}:1:waiting`, sourceFactKey: `checkpoint:issue-${index}:1:waiting`, taskId: null, proposalId: null, kind: "repair", actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "completed", action: "第 1 轮卡点处理 · 卡点待处理", summary: "无法确认原任务或授权工作区", contentRole: "analysis-output", content: "等待核实", detailRole: "recovery-conditions", detail: `原始事件 issue-${index}`, startedAt: fixture.at(index), completedAt: fixture.at(index), automaticOpen: false, manualApprovalProposalId: null, occurredAt: fixture.at(index) },
+    });
+    const snapshot = fixture.timeline.snapshot(fixture.at(8));
+    assert.equal(snapshot.groups.length, 1);
+    assert.equal(snapshot.groups[0].groupId, "checkpoint:unlinked-history");
+    assert.equal(snapshot.groups[0].title, "未关联历史卡点（4项）");
+    assert.equal(snapshot.groups[0].nodes.length, 1, "相同等待原因只展示一次");
+    const persisted = fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS value FROM AiDesktopTaskTimelineTopic").get());
+    assert.equal(Number(persisted.value), 4, "汇总只改变读模型，不删除审计事实");
+  } finally { fixture.close(); }
+});
+
 test("审批时间线只按显式事件追加申请、退回、补充和通过", () => {
   const fixture = createFixture("approval");
   try {

@@ -34,7 +34,7 @@ export function useEvolutionRuntime() {
       setState(next);
       const run = next.oneShotRun;
       const blocked = run?.status === "blocked";
-      setResumeFeedback({ runId, error: blocked, message: blocked ? run.blockingReason || "仍有阻塞，尚未恢复。" : run?.status === "completed" ? "本轮已完成。" : "已从原卡点继续，请查看后续流程。" });
+      setResumeFeedback({ runId, error: blocked, message: blocked ? `已检查但仍未恢复：${run.blockingReason || "仍有阻塞，尚未满足恢复条件。"}` : run?.status === "completed" ? "本轮已完成。" : "已从原卡点继续，请查看后续流程。" });
     } catch (error) {
       setResumeFeedback({ runId, error: true, message: (error instanceof Error ? error.message : String(error)).replace(/^Error invoking remote method '[^']+':\s*/, "") });
     } finally {

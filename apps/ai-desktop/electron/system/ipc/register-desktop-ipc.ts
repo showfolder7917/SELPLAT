@@ -61,6 +61,7 @@ interface DesktopIpcDependencies {
   eventCenter: EventCenterFacade;
   workflowRepository: WorkflowRepository | null;
   collaborationTimeline: CollaborationTimelineFacade | null;
+  refreshWorkflowCheckpoints: () => Promise<void>;
   projectRoot: string;
   appRoot: string;
   variant: AppVariantValue;
@@ -116,7 +117,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -263,7 +264,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

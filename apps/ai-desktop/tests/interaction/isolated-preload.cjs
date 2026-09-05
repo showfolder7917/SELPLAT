@@ -357,6 +357,7 @@ contextBridge.exposeInMainWorld("desktop", {
     const mode = evolutionState.oneShotRun.action;
     await new Promise((resolve) => setTimeout(resolve, 500));
     if (mode === "failure") throw new Error("验收连接仍不可用");
+    if (mode === "blocked") return publishNangongEvolution("one-shot.blocked");
     evolutionState.oneShotRun.status = "running";
     evolutionState.oneShotRun.phase = "accepting";
     evolutionState.oneShotRun.blockingReason = null;
@@ -406,7 +407,8 @@ contextBridge.exposeInMainWorld("desktop", {
       return structuredClone(hanliConversation);
     }
     nangongNewConversationCalls += 1;
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    // 保留足够长的确定性窗口，让真实页面能够观察“正在建立新会话”的过渡状态。
+    await new Promise((resolve) => setTimeout(resolve, 300));
     if (nangongNewConversationCalls > 1) throw new Error("thread already has an active writer");
     evolutionState.conversation = { ownerPersonaId: "nangong-wan", conversationId: `nangong-${Date.now()}`, createdAt: new Date().toISOString(), messages: [], updatedAt: new Date().toISOString() };
     publishNangongEvolution("conversation.created");

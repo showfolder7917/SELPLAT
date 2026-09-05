@@ -32,6 +32,7 @@ export function registerCollaborationIpc(
   personaWorkflow: PersonaWorkflowFacade,
   eventCenter: EventCenterFacade,
   collaborationTimeline: CollaborationTimelineFacade | null,
+  refreshWorkflowCheckpoints?: () => Promise<void>,
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-collaboration-state", () => collaboration.state());
@@ -60,9 +61,12 @@ export function registerCollaborationIpc(
   handle("desktop:update-evolution-topic", (_event, topicId: string, request: UpdateNangongTopicInDto) => nangong.updateTopic(topicId, request));
   handle("desktop:configure-evolution-automation", (_event, request: ConfigurePersonaWorkflowInDto) => personaWorkflow.configureAutomation(request));
   handle("desktop:control-evolution-automation", (_event, action: PersonaWorkflowActionInDto) => personaWorkflow.controlAutomation(action));
-  handle("desktop:resume-nangong-one-shot-evolution", (_event, runId: string) => {
+  handle("desktop:resume-nangong-one-shot-evolution", async (_event, runId: string) => {
     if (typeof runId !== "string" || !runId.trim()) throw new Error("恢复请求缺少运行标识，请刷新任务状态。");
-    return personaWorkflow.resumeOneShotRun(runId);
+    const resumed = await personaWorkflow.resumeOneShotRun(runId);
+    // 用户点击恢复后立即唤醒统一卡点入口；不能再等待下一轮后台巡检才把真实阻塞交给令狐。
+    await refreshWorkflowCheckpoints?.();
+    return resumed;
   });
   handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateNangongProposalInDto) => nangong.createProposal(topicId, request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideHanliProposalInDto) => hanli.decideProposal(proposalId, request));
