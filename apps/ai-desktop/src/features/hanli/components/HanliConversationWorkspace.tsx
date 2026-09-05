@@ -8,6 +8,7 @@ import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { HanliCustodySwitch } from "./HanliCustodySwitch";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
+import { usePersonaConversationTailFollow } from "../../conversation/model/usePersonaConversationTailFollow";
 
 /**
  * Electron IPC 抛出的错误通常带有一段技术前缀。
@@ -109,6 +110,7 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
     createdAt: pending.createdAt,
     completedAt: pending.failed ? new Date().toISOString() : null,
   }] : []);
+  const timelineRef = usePersonaConversationTailFollow(messages.map((message) => `${message.messageId}:${message.deliveryStatus}:${message.content}`).join("|"));
 
   return <SelUiConversation
     // 固定 ID 供样式、自动化测试和页面定位使用。
@@ -116,7 +118,7 @@ export function HanliConversationWorkspace({ runtime, conversation, attachments,
     // 统一会话外壳也可以触发提交，最终仍复用上面的 send 函数。
     onSubmit={() => void send()}
     // timeline 是会话上半部分，负责展示空页面提示和历史消息。
-    timeline={<section className="selconversation-timeline hanli-person-chat" aria-label="与韩立自由讨论">
+    timeline={<section ref={timelineRef} className="selconversation-timeline hanli-person-chat" aria-label="与韩立自由讨论">
       {/* 没有任何消息时显示使用说明。 */}
       {messages.length === 0 && <div className="dev-empty">
         <div className="dev-orb"><Code24Regular /></div>

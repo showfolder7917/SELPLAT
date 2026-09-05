@@ -382,6 +382,7 @@ button { color: inherit; }
 .workspace-stage-single { width: 100%; height: 100%; }
 
 /* 南宫婉主区复用韩立消息和输入外观，只保留少量人物专属动作。 */
+.hanli-person-chat, .nangong-person-chat { flex: 1 1 0; min-height: 0; }
 .nangong-person-chat .dev-empty p { max-width: 520px; text-align: center; line-height: 1.5; }
 .nangong-one-shot-confirmation { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--sel-theme-accent) 55%, transparent); border-radius: var(--sel-theme-radius-control); background: color-mix(in srgb, var(--sel-theme-accent) 8%, var(--sel-theme-workbench-surface)); }
 .nangong-one-shot-confirmation strong { color: var(--sel-theme-workbench-text); }
