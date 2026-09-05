@@ -336,7 +336,7 @@ export class PersonaEvolutionRuntime {
             : missingTaskIds.length
               ? `提案“${proposal.title}”关联的任务记录缺失：${missingTaskIds.join("、")}。`
               : `提案“${proposal.title}”已经进入阻塞态，但没有找到对应的阻塞任务记录。`;
-          const failureKind = blockedTask?.integrationFailure?.kind || blockedTask?.state || (missingTaskIds.length ? "missing-task-record" : "unknown");
+          const failureKind = blockedTask?.integrationFailure?.kind || blockedTask?.state || (missingTaskIds.length ? "missing-task-record" : "proposal-task-state-inconsistent");
           const details = {
             taskId: blockedTask?.taskId || null,
             taskTitle: blockedTask?.snapshot.title || null,
