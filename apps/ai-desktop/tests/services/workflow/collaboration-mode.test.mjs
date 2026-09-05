@@ -6,13 +6,13 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { CollaborationDurationLog } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration-duration.log.js";
+import { CollaborationDurationLog } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/collaboration-duration.log.js";
 import { CollaborationCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/collaboration-workflow.facade.js";
 import { PersonaSessionWriterQueue, collaborationWorkspaceState } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.js";
 import { createCollaborationResultSummary } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/result/result-summary.js";
 import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/integration.verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/verified-package.release.js";
-import { CollaborationStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration.store.js";
+import { CollaborationStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/collaboration.store.js";
 import { LinghuAutomationFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
 import { ExecutorFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/executor/index.js";
 import { LinghuAutomationStore } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
@@ -1475,7 +1475,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
 });
 
 test("自动恢复保留令狐老祖负责人和回流说明", () => {
-  const store = readFileSync(new URL("../../../electron/services/workflow/internal/collaboration.store.ts", import.meta.url), "utf8");
+  const store = readFileSync(new URL("../../../electron/services/workflow/internal/collaboration/collaboration.store.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../../../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   assert.match(store, /continueTask\(taskId: string, recoveryActor\?: Pick<CollaborationMemberOutDto/);
   assert.match(store, /正在处理流程中断，随后将任务退回原负责人重试/);

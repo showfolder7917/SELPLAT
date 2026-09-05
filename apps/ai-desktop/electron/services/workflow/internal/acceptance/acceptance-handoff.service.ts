@@ -1,9 +1,31 @@
-import type { PersonaEvolutionRuntimeOptions } from "./persona-evolution.runtime.js";
-import type { EvolutionProposalOutDto } from "../../../../contracts/services/evolution/index.js";
+// 从事件中心读取人物会话与记忆端口，验收交接不依赖具体数据库实现。
+import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+// 从人物会话契约读取回显对象。
+import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
+// 从 Workflow 契约读取类型化时间线事实。
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../contracts/services/workflow/index.js";
+// 从 Evolution 模块读取最小状态端口，避免反向依赖整个 Runtime 配置。
+import type { EvolutionStatePort } from "../../../evolution/index.js";
+import type { EvolutionProposalOutDto } from "../../../../../contracts/services/evolution/index.js";
+
+/** 验收交接服务需要的最小外部端口。 */
+export interface AcceptanceHandoffOptions {
+  /** Evolution 状态读取端口，用于定位提案所属专题。 */
+  store: EvolutionStatePort;
+  /** 类型化时间线发布端口；未配置时只保存人物会话事实。 */
+  recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;
+  /** 人物会话记忆端口；数据库不可用时允许为空。 */
+  memory?: CollaborationMemoryPort | null;
+  /** 读取当前韩立会话标识，验收消息必须回到同一用户会话。 */
+  readHanliConversationId?: () => string | null;
+  /** 人物会话变化通知端口，用于刷新已提交的界面消息。 */
+  onPersonaConversationChanged?: (conversation: PersonaConversationOutDto) => void;
+}
 
 /** 只投递真实验收阶段的交接事实；不执行验收、不读取页面状态、不作通过判断。 */
 export class AcceptanceHandoffService {
-  constructor(private readonly options: PersonaEvolutionRuntimeOptions) {}
+  /** 使用最小交接端口创建服务，不持有 PersonaEvolutionRuntime。 */
+  constructor(private readonly options: AcceptanceHandoffOptions) {}
 
   publish(proposal: EvolutionProposalOutDto, phase: "received" | "started" | "passed" | "failed", content: string, attemptId = proposal.proposalId): void {
     const topic = this.options.store.state().topics.find((item) => item.topicId === proposal.topicId);

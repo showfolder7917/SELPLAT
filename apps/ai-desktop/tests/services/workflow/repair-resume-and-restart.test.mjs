@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { controlledTestRoot, projectRoot } from "#test-paths";
-import { CollaborationStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration.store.js";
+import { CollaborationStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/collaboration.store.js";
 import { CollaborationCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/collaboration-workflow.facade.js";
 import { ExecutorFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/executor/index.js";
 import { VersionIntegrationPipeline } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-integration.pipeline.js";

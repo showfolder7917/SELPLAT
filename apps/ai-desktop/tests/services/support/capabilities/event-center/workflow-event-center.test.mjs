@@ -8,10 +8,10 @@ import { CollaborationMemoryService } from "../../../../../../../build/ai-deskto
 import { CodexConversationCorpusIngestion } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.js";
 import { CodexConversationSemanticBackfill } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-semantic-backfill.js";
 import { parseHanliSemanticExtraction } from "../../../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/semantic/hanli-semantic-extraction.runner.js";
-import { WorkflowRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.repository.js";
-import { WorkflowSupervisor } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/workflow.supervisor.js";
-import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint-handoff.service.js";
-import { AcceptanceHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance-handoff.service.js";
+import { WorkflowRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/workflow.repository.js";
+import { WorkflowSupervisor } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/workflow.supervisor.js";
+import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.js";
+import { AcceptanceHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance/acceptance-handoff.service.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });

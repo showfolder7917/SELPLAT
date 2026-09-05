@@ -1,5 +1,5 @@
-import type { CollaborationStateOutDto } from "../../../../contracts/services/workflow/index.js";
-import type { WorkflowExceptionRecordOutDto, WorkflowStateReaderPort } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationStateOutDto } from "../../../../../contracts/services/workflow/index.js";
+import type { WorkflowExceptionRecordOutDto, WorkflowStateReaderPort } from "../../../../../contracts/services/workflow/index.js";
 import type { WorkflowRepository } from "./workflow.repository.js";
 
 export interface WorkflowSupervisorOptions {

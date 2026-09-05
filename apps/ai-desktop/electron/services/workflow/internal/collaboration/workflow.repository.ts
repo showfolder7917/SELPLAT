@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { CheckpointState } from "./checkpoint-state.js";
+// Repository 只持久化卡点聚合快照，不自行解释卡点阶段。
+import type { WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { EventSeverityValue } from "../../../../contracts/foundation/index.js";
-import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto, WorkflowFlowImpactValue } from "../../../../contracts/services/workflow/index.js";
-import type { LinghuAutomationStateOutDto } from "../../../../contracts/services/personas/linghu/index.js";
-import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
+import type { EventSeverityValue } from "../../../../../contracts/foundation/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto, WorkflowFlowImpactValue } from "../../../../../contracts/services/workflow/index.js";
+import type { LinghuAutomationStateOutDto } from "../../../../../contracts/services/personas/linghu/index.js";
+import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../../support/platform/persistence/index.js";
 
 const STALE_AFTER_MS = 120_000;
 const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);
@@ -250,7 +251,7 @@ export class WorkflowRepository {
   }
 
   /** 卡点状态附着原异常，重启保留轮次和真实修复任务；不创建第二份任务数据库。 */
-  saveCheckpoint(eventId: string, checkpoint: CheckpointState): void {
+  saveCheckpoint(eventId: string, checkpoint: WorkflowCheckpointState): void {
     this.#database.withConnection((connection) => connection.prepare(`UPDATE AiDesktopEvent
       SET payloadJson=json_set(payloadJson, '$.checkpoint', json($checkpoint)), recordedAt=$now
       WHERE eventId=$eventId AND status IN ('open', 'processing')`).run({ $checkpoint: JSON.stringify(checkpoint), $now: new Date().toISOString(), $eventId: eventId }));

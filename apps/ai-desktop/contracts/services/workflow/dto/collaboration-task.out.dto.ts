@@ -132,6 +132,8 @@ export interface CollaborationTaskOutDto {
   automationSource: CollaborationAutomationSourceValue | null;
   evolutionProposalId: string | null;
   evolutionRoundId: string | null;
+  /** 本任务明确替代的失败任务标识；旧持久数据和普通任务允许为空。 */
+  replacementForTaskId?: string | null;
   returnedToNangongAt: string | null;
   selfUpgradeTargetMemberId: string | null;
   selfUpgradeCapabilityScope: string | null;

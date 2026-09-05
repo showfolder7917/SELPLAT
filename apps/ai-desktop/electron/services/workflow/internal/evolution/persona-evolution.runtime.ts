@@ -1,55 +1,85 @@
-﻿import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
-import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../contracts/services/personas/hanli/index.js";
-import type { CreateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
-import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
-import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
-import type { SendMessageOutDto } from "../../../../contracts/services/support/capabilities/conversation/index.js";
-import type { EventCenterExceptionInDto } from "../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
-import type { CodexStreamEventOutDto } from "../../../../contracts/services/support/platform/codex/index.js";
-import type { CollaborationWorkflowFacade } from "../index.js";
-import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
-import { EvolutionFlowOrchestrator } from "./evolution-flow.orchestrator.js";
-import { AcceptanceHandoffService } from "./acceptance-handoff.service.js";
+import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
+import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../../contracts/services/workflow/index.js";
+import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { EventCenterExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../contracts/services/workflow/index.js";
+import type { CodexStreamEventOutDto } from "../../../../../contracts/services/support/platform/codex/index.js";
+import type { CollaborationWorkflowFacade } from "../../index.js";
+import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
+// 提案执行聚合统一解释原任务、修复任务和验收状态，Runtime 不再拼装零散布尔值。
+import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggregate.js";
+// 单任务聚合统一解释人物是否仍真实占用任务。
+import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
+import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
+import { AcceptanceHandoffService } from "../acceptance/acceptance-handoff.service.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
-import type { HanliWorkflowPort } from "../../personas/hanli/index.js";
-import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../personas/nangong/index.js";
+import type { HanliWorkflowPort } from "../../../personas/hanli/index.js";
+import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../../personas/nangong/index.js";
 import {
   createEvolutionMutationCoordinator,
   type EvolutionMutationPort,
   type EvolutionStatePort,
-} from "../../evolution/index.js";
+} from "../../../evolution/index.js";
 
 export interface PersonaEvolutionRuntimeOptions {
+  /** Evolution 专题、研讨和提案的唯一状态端口。 */
   store: EvolutionStatePort;
+  /** 人物提示词读取与渲染端口。 */
   prompts: PromptLibraryPort;
+  /** 协作任务执行、恢复、测试和集成公开门面。 */
   collaboration: CollaborationWorkflowFacade;
+  /** 韩立审批、会话和结果验收公开端口。 */
   hanli: HanliWorkflowPort;
+  /** 南宫婉人物会话所需的最小发送和新会话端口。 */
   conversation: {
+    /** 发送一条人物消息并返回官方会话结果。 */
     send(request: SendPersonaConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
+    /** 创建新的南宫婉展示会话，不清除业务流程。 */
     newChat(): Promise<void>;
   };
+  /** 对韩立退回提案执行只读调查的可选模型端口。 */
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
+  /** 把已批准提案拆成结构化任务计划的可选模型端口。 */
   planDistribution?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEventOutDto) => void) => Promise<string>;
+  /** 记录普通演化业务事件的统一入口。 */
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
+  /** 记录阻塞或技术异常的统一事件中心入口。 */
   recordFailure?(input: EventCenterExceptionInDto): void;
+  /** 发布跨人物类型化时间线事实的可选端口。 */
   recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;
+  /** 发布任务流式进度到确定时间线节点的可选端口。 */
   recordTimelineStream?: (taskId: string, memberId: string, event: CodexStreamEventOutDto) => void;
+  /** 人物共享记忆端口；数据库不可用时允许为空。 */
   memory?: CollaborationMemoryPort | null;
+  /** 人物消息变化后刷新语义记忆的可选通知。 */
   refreshSemanticMemory?: () => void;
+  /** 韩立内部研讨模型调用端口。 */
   askHanliDeliberation?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
+  /** 南宫婉内部研讨模型调用端口。 */
   askNangongDeliberation?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
+  /** 读取当前稳定用户标识，供语义记忆隔离。 */
   readStableUserId?: () => string;
+  /** 根据 Evolution 工作区读取项目作用域。 */
   readProjectScope?: (state: EvolutionStateOutDto) => string;
+  /** 读取当前韩立展示会话标识。 */
   readHanliConversationId?: () => string | null;
+  /** 人物会话提交后通知界面刷新。 */
   onPersonaConversationChanged?: (conversation: PersonaConversationOutDto) => void;
+  /** 从统一数据库读取专题完整档案的可选端口。 */
   readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
+  /** 在 Evolution 写动作前登记幂等事务。 */
   beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
+  /** Evolution 写动作成功后提交新的状态版本。 */
   completeMutation?: (idempotencyKey: string, resultStateVersion: string) => void;
+  /** Evolution 写动作失败后释放幂等事务并记录原因。 */
   failMutation?: (idempotencyKey: string, error: unknown) => void;
+  /** 新会话建立失败时允许使用的受控重试间隔。 */
   newConversationRetryDelaysMs?: number[];
 }
 
@@ -60,24 +90,41 @@ export interface PersonaEvolutionRuntimeOptions {
  * 对外由各人物 Facade 按职责裁剪方法，不再把这一完整运行对象冒充为南宫人物能力。
  */
 export class PersonaEvolutionRuntime {
+  /** 验收交接应用服务，只负责时间线和人物消息副作用。 */
   readonly #acceptanceHandoff: AcceptanceHandoffService;
+  /** Evolution 唯一状态端口。 */
   readonly #store: EvolutionStatePort;
+  /** 协作任务唯一公开门面。 */
   readonly #collaboration: CollaborationWorkflowFacade;
+  /** 韩立人物最小公开端口。 */
   readonly #hanli: HanliWorkflowPort;
+  /** 南宫婉任务拆分模型端口。 */
   readonly #planDistribution: NonNullable<PersonaEvolutionRuntimeOptions["planDistribution"]>;
+  /** 普通业务事件记录入口。 */
   readonly #recordEvent: PersonaEvolutionRuntimeOptions["recordEvent"];
+  /** 技术和业务阻塞事件记录入口。 */
   readonly #recordFailure: NonNullable<PersonaEvolutionRuntimeOptions["recordFailure"]>;
+  /** 可选共享人物记忆端口。 */
   readonly #memory: CollaborationMemoryPort | null;
+  /** 可选专题完整档案读取端口。 */
   readonly #readDossier: PersonaEvolutionRuntimeOptions["readDossier"];
+  /** Evolution 写动作幂等协调端口。 */
   readonly #mutations: EvolutionMutationPort;
+  /** 韩立—南宫婉研讨应用服务；模型端口未装配时为空。 */
   readonly #deliberation: HanliNangongDeliberationService | null;
+  /** 南宫婉公开人物运行时，由 Workflow 组合根统一装配。 */
   readonly nangongRuntime: NangongRuntime;
-  // 流程判断器只根据已保存事实决定下一步，不替人物作审批决定。
-  readonly #flow = new EvolutionFlowOrchestrator();
+  /** 流程策略只根据已保存事实决定下一步，不替人物作审批决定。 */
+  readonly #flow = new EvolutionFlowPolicy();
+  /** 三十秒监督轮询计时器；未启动时为 null。 */
   #timer: ReturnType<typeof setInterval> | null = null;
+  /** 当前一次性流程的短间隔继续计时器。 */
   #continuationTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 当前是否正在执行主推进循环，防止重入。 */
   #running = false;
+  /** 当前是否正在执行人工恢复，防止重复继续。 */
   #resuming = false;
+  /** Electron 窗口层注入的真实应用验收执行器。 */
   #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>) | null = null;
 
   /**
@@ -231,9 +278,25 @@ export class PersonaEvolutionRuntime {
     const proposal = run.proposalId ? state.proposals.find((item) => item.proposalId === run.proposalId) : null;
     if (!proposal?.distributedTaskIds.length) return false;
     const collaboration = this.#collaboration.state();
-    return collaboration.tasks
-      .filter((task) => proposal.distributedTaskIds.includes(task.taskId) && !["integrated", "cancelled"].includes(task.state))
-      .some((task) => collaboration.members.some((member) => member.currentTaskId === task.taskId && !["idle", "offline"].includes(member.state)));
+    // 聚合会沿替代链返回当前真正生效的任务，旧失败任务不会持续占用流程。
+    const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
+    // 逐项核对当前有效任务是否仍有真实工作人物。
+    for (const task of execution.effectiveTasks) {
+      // 已完成或取消的任务不能阻止用户重新启动研讨。
+      if (task.state === "integrated" || task.state === "cancelled") {
+        // 继续检查其他并行任务。
+        continue;
+      }
+      // 单任务聚合根据权威成员占用事实判断活动所有者。
+      const taskAggregate = new CollaborationTaskAggregate({ task });
+      // 任一有效任务仍被工作人物持有即可确认流程仍在运行。
+      if (taskAggregate.hasLiveOwner(collaboration.members)) {
+        // 返回真实活动结论。
+        return true;
+      }
+    }
+    // 没有有效任务被工作人物持有时，旧 running 状态不能继续拦截用户。
+    return false;
   }
 
   /** 校验原运行后恢复统一流程；不改变令狐独立巡检开关。 */
@@ -247,7 +310,12 @@ export class PersonaEvolutionRuntime {
     try {
       const proposal = run.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
       if (proposal?.status === "blocked") {
-        const blockedTasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId) && ["blocked", "test-failed"].includes(task.state));
+        // 只恢复提案聚合解析出的当前有效任务，不重新运行已经被替代的旧任务。
+        const collaboration = this.#collaboration.state();
+        // 领域聚合统一解析修复替代链。
+        const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
+        // 只有当前有效且可恢复的任务进入恢复入口。
+        const blockedTasks = execution.effectiveTasks.filter((task) => ["blocked", "test-failed"].includes(task.state));
         for (const task of blockedTasks) {
           await this.#collaboration.recoverTask(task.taskId, `用户已从一次性演化卡点明确继续：${itemFailureReason(task)}`);
         }
@@ -325,10 +393,14 @@ export class PersonaEvolutionRuntime {
 
       if (flowAction === "monitor-execution") {
         const collaborationState = this.#collaboration.state();
-        const tasks = collaborationState.tasks.filter((task) => proposal!.distributedTaskIds.includes(task.taskId));
-        const knownTaskIds = new Set(tasks.map((task) => task.taskId));
-        const missingTaskIds = proposal.distributedTaskIds.filter((taskId) => !knownTaskIds.has(taskId));
-        if (proposal.status === "blocked") {
+        // 聚合统一解析原任务和令狐修复任务之间的有效执行链。
+        const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaborationState.tasks }).view();
+        // 后续人物状态和页面动作只读取当前有效任务。
+        const tasks = execution.effectiveTasks;
+        // 缺失标识由聚合按稳定身份计算。
+        const missingTaskIds = execution.missingTaskIds;
+        // 只按当前有效执行链判断阻塞；提案旧状态不能覆盖已经集成的修复事实。
+        if (execution.blocked) {
           const blockedTasks = tasks.filter((item) => ["blocked", "cancelled", "test-failed"].includes(item.state));
           const blockedTask = blockedTasks[0];
           const reason = blockedTask
@@ -452,19 +524,23 @@ export class PersonaEvolutionRuntime {
         }
       }
       for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying", "blocked"].includes(item.status))) {
-        let tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
-        const knownTaskIds = new Set(tasks.map((task) => task.taskId));
-        const missingTaskIds = proposal.distributedTaskIds.filter((taskId) => !knownTaskIds.has(taskId));
-        const blocked = missingTaskIds.length > 0 || tasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
-        const allReturned = tasks.every((task) => task.state === "returned-to-nangong");
-        if (!blocked && allReturned) {
+        // 每轮只读取一次协作快照，避免同一状态核对跨越两次异步变化。
+        let collaborationState = this.#collaboration.state();
+        // 提案执行聚合统一给出当前有效任务和下一状态。
+        let execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaborationState.tasks }).view();
+        // 全部交回且没有阻塞时才封存本轮并进入集成。
+        if (!execution.blocked && execution.allReturned) {
           this.#collaboration.sealEvolutionRound(proposal.proposalId, proposal.distributedTaskIds);
-          tasks = this.#collaboration.state().tasks.filter((task) => proposal.distributedTaskIds.includes(task.taskId));
+          // 封存会改变任务状态，因此重新取得一次权威协作快照。
+          collaborationState = this.#collaboration.state();
+          // 使用新快照重新建立执行视图，禁止沿用封存前的结论。
+          execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaborationState.tasks }).view();
         }
-        const completed = tasks.every((task) => task.state === "integrated");
-        const verifying = tasks.some((task) => ["returned-to-nangong", "ready-for-integration", "queued-integration", "integrating", "unified-testing", "awaiting-restart"].includes(task.state));
-        const status = blocked ? "blocked" : completed ? "pending-acceptance" : verifying ? "verifying" : "executing";
-        if (proposal.status !== status) state = this.#store.markProgress(proposal.proposalId, status, completed ? "全部关联任务已经完成，等待韩立按真实用户路径验收结果。" : missingTaskIds.length ? `关联任务记录缺失：${missingTaskIds.join("、")}。` : blocked ? "至少一个关联任务阻塞，等待恢复条件。" : "关联任务正在执行或验证。" );
+        // 只有状态真实变化时才写 Evolution，避免轮询产生重复事实。
+        if (proposal.status !== execution.nextStatus) {
+          // 状态和摘要来自同一聚合视图，不会发生完成状态配阻塞文案。
+          state = this.#store.markProgress(proposal.proposalId, execution.nextStatus, execution.summary);
+        }
       }
       if (state.oneShotRun?.status === "running") {
         // 暂停、停止和人工接管必须冻结当前专题，恢复后仍沿原卡点继续。

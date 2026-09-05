@@ -1,41 +1,61 @@
 import { randomUUID } from "node:crypto";
 
-import type { EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
-import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
-import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { RequirementDiscoveryOutDto, RequirementDiscussionContextOutDto } from "../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionStatePort } from "../../evolution/index.js";
-import type { PromptLibraryPort } from "../../support/capabilities/prompts/index.js";
+import type { EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
+import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { RequirementDiscoveryOutDto, RequirementDiscussionContextOutDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionStatePort } from "../../../evolution/index.js";
+import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
+// 研讨聚合统一解释确认、回答和建立专题状态，应用服务只负责模型与持久化副作用。
+import { HanliNangongDeliberationAggregate } from "../../domain/hanli-nangong-deliberation.aggregate.js";
 
 export interface HanliNangongDeliberationDependencies {
+  /** Evolution 研讨、专题和提案唯一状态端口。 */
   store: EvolutionStatePort;
+  /** 韩立和南宫婉提示词读取端口。 */
   prompts: PromptLibraryPort;
+  /** 需求语料和人物会话记忆端口；数据库不可用时允许为空。 */
   memory: CollaborationMemoryPort | null;
+  /** 调用韩立完成提问、判断和客户纠正解释。 */
   askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
+  /** 调用南宫婉完成事实调查和范围说明。 */
   askNangong(prompt: string, state: EvolutionStateOutDto): Promise<string>;
+  /** 保存内部研讨业务事件。 */
   recordEvent(type: string, details: Record<string, unknown>): void;
+  /** 读取当前稳定用户标识，隔离人物语义记忆。 */
   readStableUserId(): string;
+  /** 读取本次研讨所属项目范围。 */
   readProjectScope(state: EvolutionStateOutDto): string;
+  /** 读取当前韩立展示会话标识。 */
   readHanliConversationId(): string | null;
+  /** 内部消息提交后通知人物界面刷新。 */
   onPersonaConversationChanged?(conversation: PersonaConversationOutDto): void;
 }
 
 export interface HanliNangongDeliberationAdvanceResult {
+  /** 本轮推进完成后的 Evolution 状态。 */
   state: EvolutionStateOutDto;
+  /** 本轮真实发生的最高业务动作。 */
   activity: "idle" | "questioning" | "topic-established";
 }
 
 interface CustomerCorrectionInterpretation {
+  /** 韩立判断应继续内部调查还是先向客户澄清。 */
   action: "discuss-with-nangong" | "clarify-with-customer";
+  /** 韩立面向客户形成的自然回复。 */
   customerReply: string;
+  /** 继续调查时交给南宫婉的唯一问题。 */
   question: string | null;
+  /** 韩立提出该问题的业务原因。 */
   reason: string | null;
 }
 
 /** 用户确认后推进韩立与南宫婉的一轮内部研讨；轮次进入业务档案，但不进入用户训练语料。 */
 export class HanliNangongDeliberationService {
+  /** 本进程已经发布的内部消息标识，用于同一轮幂等回显。 */
   readonly #publishedMessageIds = new Set<string>();
+  /** 使用最小模型、状态、记忆和事件端口创建应用服务。 */
   constructor(private readonly dependencies: HanliNangongDeliberationDependencies) {}
 
   /**
@@ -48,20 +68,25 @@ export class HanliNangongDeliberationService {
     const state = this.dependencies.store.state();
     const deliberation = [...state.deliberations].reverse().find((item) => item.status === "ready-to-establish" && item.rounds.at(-1)?.confirmation && !item.rounds.at(-1)?.confirmation?.reply);
     if (!deliberation) throw new Error("当前没有等待韩立确认的修复说明。");
-    if (customerCorrection.trim() === "1") {
-      this.#recordConfirmationReply(deliberation, "1", null);
+    // 由领域聚合解释独立 1 和客户纠正，应用服务不再读取字符串决定流程状态。
+    const aggregate = new HanliNangongDeliberationAggregate(deliberation);
+    // 得到本轮唯一确认动作。
+    const decision = aggregate.decideConfirmation(customerCorrection);
+    // 明确确认时保存原始回复并继续建立专题。
+    if (decision.kind === "confirm") {
+      this.#recordConfirmationReply(deliberation, decision.customerReply, null);
       return { customerReply: "已确认这份调查范围，将交南宫婉继续推进。" };
     }
     const memory = this.dependencies.memory;
     const interpretation = parseCustomerCorrection(await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.customer-correction", {
-      customerCorrection,
-      previousOffer: deliberation.rounds.at(-1)!.confirmation!.offer,
+      customerCorrection: decision.customerReply,
+      previousOffer: aggregate.currentRound().confirmation!.offer,
       deliberationContext: formatDeliberationContext(deliberation),
       discussionBasisJson: discussionBasisJson(deliberation),
       semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), customerCorrection, 12) || null),
     }), state));
     if (interpretation.action === "clarify-with-customer") return { customerReply: interpretation.customerReply };
-    this.#recordConfirmationReply(deliberation, customerCorrection, { question: interpretation.question!, reason: interpretation.reason! });
+    this.#recordConfirmationReply(deliberation, decision.customerReply, { question: interpretation.question!, reason: interpretation.reason! });
     return { customerReply: interpretation.customerReply };
   }
 
@@ -106,12 +131,16 @@ export class HanliNangongDeliberationService {
       this.#appendInternalMessage(deliberation.rounds[0].roundId, "question", "hanli", discovery.question, null, deliberation.rounds[0].createdAt);
       this.dependencies.recordEvent("hanli.nangong.deliberation_started", { deliberationId, question: discovery.question, sourceMessageCount: snapshots.length });
     }
-    if (deliberation.status === "ready-to-establish") return this.#establish(deliberation);
+    // 研讨聚合同时核对状态和候选事实，避免只凭状态字符串建立空专题。
+    const deliberationAggregate = new HanliNangongDeliberationAggregate(deliberation);
+    // 已形成完整候选时进入范围说明和确认阶段。
+    if (deliberationAggregate.isReadyToEstablish()) return this.#establish(deliberation);
 
-    const round = deliberation.rounds.at(-1)!;
+    // 当前轮由聚合返回冻结副本，异步模型调用不会跨到下一轮。
+    const round = deliberationAggregate.currentRound();
     // 先幂等补齐问题消息；这样旧版本已经保存回答、但曾因父消息缺失而失败的轮次也能从原处恢复。
     this.#ensureRoundMessages(deliberation, round, false);
-    if (!round.answer) {
+    if (deliberationAggregate.needsNangongAnswer()) {
       const answer = (await this.dependencies.askNangong(this.dependencies.prompts.render("nangong.internal-answer", {
         question: round.question,
         questionReason: round.questionReason,
@@ -164,7 +193,15 @@ export class HanliNangongDeliberationService {
       this.dependencies.recordEvent("hanli.nangong.deliberation_assessed", { deliberationId: refreshed.deliberationId, roundId: answeredRound.roundId, decision: judgment.candidate ? "establish-topic" : "continue", assessment: judgment.assessment });
     }
     const assessed = requireDeliberation(state, refreshed.deliberationId);
-    return assessed.status === "ready-to-establish" ? this.#establish(assessed) : { state, activity: "questioning" };
+    // 使用新的持久快照重建聚合，保证韩立判断后的状态参与最终决定。
+    const assessedAggregate = new HanliNangongDeliberationAggregate(assessed);
+    // 完整候选进入建立阶段，否则保留当前研讨继续提问。
+    if (assessedAggregate.isReadyToEstablish()) {
+      // 建立动作仍由应用服务完成外部写入。
+      return this.#establish(assessed);
+    }
+    // 尚未形成候选时明确返回研讨中状态。
+    return { state, activity: "questioning" };
   }
 
   async #establish(deliberation: HanliEvolutionDeliberationOutDto): Promise<HanliNangongDeliberationAdvanceResult> {
@@ -172,8 +209,12 @@ export class HanliNangongDeliberationService {
     const interrupted = () => ["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status);
     if (interrupted()) return { state: store.state(), activity: "idle" };
     if (!this.dependencies.memory || !this.dependencies.readHanliConversationId()) throw new Error("无法保存内部确认消息，已阻止开始执行。请先恢复会话数据库。");
-    const roundId = deliberation.rounds.at(-1)!.roundId;
-    let confirmation = deliberation.rounds.at(-1)!.confirmation;
+    // 建立阶段仍通过聚合取得冻结的最后一轮事实。
+    const aggregate = new HanliNangongDeliberationAggregate(deliberation);
+    // 稳定轮次标识用于内部消息幂等键。
+    const roundId = aggregate.currentRound().roundId;
+    // 已经展示过的确认说明可以在重启后继续使用。
+    let confirmation = aggregate.currentRound().confirmation;
     if (!confirmation) {
       const offer = (await this.dependencies.askNangong(prompts.render("nangong.internal-confirmation", {
         candidateJson: JSON.stringify(deliberation.candidate), deliberationContext: formatDeliberationContext(deliberation),

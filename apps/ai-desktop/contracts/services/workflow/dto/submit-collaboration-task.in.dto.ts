@@ -26,6 +26,8 @@ export interface SubmitCollaborationTaskInDto {
   automationSource?: CollaborationAutomationSourceValue;
   evolutionProposalId?: string;
   evolutionRoundId?: string;
+  /** 本任务明确替代的失败任务标识；仅恢复链使用，普通分发任务不填写。 */
+  replacementForTaskId?: string;
   selfUpgradeTargetMemberId?: string;
   selfUpgradeCapabilityScope?: string;
   sourceEvolutionApprovalId?: string;

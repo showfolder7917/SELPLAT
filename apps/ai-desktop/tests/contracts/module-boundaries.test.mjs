@@ -92,7 +92,7 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.doesNotMatch(source("electron/system/ipc/register-desktop-ipc.ts"), /normalizeEvolutionWorkspaceLocation|evolutionWorkspaceWindow/);
   assert.doesNotMatch(source("contracts/system/desktop/api/desktop.api.ts"), /EvolutionWorkbench|EvolutionWorkspace|openEvolutionWorkspace/);
   assert.match(source("src/features/evolution/model/evolution-runtime.ts"), /expectedStateVersion:\s*state\.updatedAt/);
-  assert.match(source("electron/services/workflow/internal/workflow.repository.ts"), /evolution\.mutation/);
+  assert.match(source("electron/services/workflow/internal/collaboration/workflow.repository.ts"), /evolution\.mutation/);
   const mutationCoordinator = source("electron/services/evolution/internal/evolution-mutation.coordinator.ts");
   assert.match(mutationCoordinator, /class EvolutionMutationCoordinator/);
   assert.match(mutationCoordinator, /runAsync/);
@@ -179,7 +179,7 @@ test("人物训练语料通过主会话完成钩子和启动补录闭环且清�
   const main = source("electron/system/bootstrap/application-runtime.ts");
   const codexService = source("electron/services/support/platform/codex/codex.facade.ts");
   const ingestion = source("electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.ts");
-  const repository = source("electron/services/workflow/internal/workflow.repository.ts");
+  const repository = source("electron/services/workflow/internal/collaboration/workflow.repository.ts");
   assert.match(main, /ingestTrainingCorpus\("startup"\)/);
   assert.match(main, /onConversationTurnCompleted:\s*\(\) => ingestTrainingCorpus\("turn-completed"\)/);
   assert.match(codexService, /await this\.#options\.onConversationTurnCompleted\?\.\(\)/);
@@ -238,7 +238,10 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRule, /rule_version = 2\.12\.0/);
+  assert.match(architectureRule, /rule_version = 2\.13\.0/);
+  assert.match(architectureRule, /workflow_vertical_module_layout_contract/);
+  assert.match(architectureRule, /workflow_aggregate_boundary_contract/);
+  assert.match(architectureRule, /workflow_repair_replacement_contract/);
   assert.match(architectureRule, /renderer_application_structure_contract/);
   assert.match(architectureRule, /renderer_application_runtime_dependency_contract/);
   assert.match(architectureRule, /renderer_layout_structure_contract/);
@@ -526,11 +529,25 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
     }
   }
 
-  const registry = source("electron/services/workflow/internal/persona-capability.registry.ts");
+  const registry = source("electron/services/workflow/domain/persona-capability.registry.ts");
   assert.match(registry, /class PersonaCapabilityRegistry/);
   assert.match(registry, /requireCapability/);
-  const personaWorkflow = source("electron/services/workflow/internal/persona-evolution.runtime.ts");
+  const personaWorkflow = source("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts");
   assert.doesNotMatch(personaWorkflow, /你是韩立|parseHanLiQuestion|parseHanLiJudgment/);
+  // Workflow 必须把有身份且跨步骤变化的业务状态收回领域聚合。
+  for (const aggregateFile of [
+    "collaboration-task.aggregate.ts",
+    "proposal-execution.aggregate.ts",
+    "workflow-checkpoint.aggregate.ts",
+    "hanli-nangong-deliberation.aggregate.ts",
+  ]) {
+    assert.equal(existsSync(path.join(appRoot, "electron/services/workflow/domain", aggregateFile)), true);
+  }
+  // Runtime、Store 和应用服务必须消费聚合，不能只建立未接线的空壳文件。
+  assert.match(personaWorkflow, /new ProposalExecutionAggregate/);
+  assert.match(source("electron/services/workflow/internal/collaboration/collaboration.store.ts"), /new CollaborationTaskAggregate/);
+  assert.match(source("electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts"), /new WorkflowCheckpointAggregate/);
+  assert.match(source("electron/services/workflow/internal/evolution/hanli-nangong-deliberation.service.ts"), /new HanliNangongDeliberationAggregate/);
   assert.match(source("prompts/personas/hanli/conversation.md"), /韩立的用户目标代理身份/);
   assert.equal(existsSync(path.join(appRoot, "electron/services/personas/hanli/internal/hanli-deliberation.service.ts")), false);
   const hanliApplication = source("electron/services/personas/hanli/internal/application/hanli-application.service.ts");

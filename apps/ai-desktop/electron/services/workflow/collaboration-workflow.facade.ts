@@ -15,8 +15,8 @@ import type {
 } from "../../../contracts/services/workflow/index.js";
 import type { CodexStreamEventOutDto } from "../../../contracts/services/support/platform/codex/index.js";
 import type { ExecutorSessionPort } from "../../../contracts/services/personas/executor/index.js";
-import { CollaborationDurationLog } from "./internal/collaboration-duration.log.js";
-import { CollaborationStore } from "./internal/collaboration.store.js";
+import { CollaborationDurationLog } from "./internal/collaboration/collaboration-duration.log.js";
+import { CollaborationStore } from "./internal/collaboration/collaboration.store.js";
 import type {
   VersionIntegrationPort as VersionIntegrationPipeline,
   VersionWorkspacePort as VersionWorkspaceManager,

@@ -9,7 +9,9 @@ import type {
   DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
   CollaborationTaskRuleContextOutDto,
-} from "../../../../contracts/services/workflow/index.js";
+} from "../../../../../contracts/services/workflow/index.js";
+// 单任务聚合统一解释是否允许恢复，Store 只执行已经通过的状态写入。
+import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
 
 type StateListener = (state: CollaborationStateOutDto, reason: string, taskIds: string[]) => void;
 
@@ -137,6 +139,8 @@ export class CollaborationStore {
       automationSource: request.automationSource || null,
       evolutionProposalId: request.evolutionProposalId?.trim() || null,
       evolutionRoundId: request.evolutionRoundId?.trim() || null,
+      // 修复任务保存明确替代关系，重启后提案聚合不再只读取失败的原任务。
+      replacementForTaskId: request.replacementForTaskId?.trim() || null,
       returnedToNangongAt: null,
       selfUpgradeTargetMemberId: request.selfUpgradeTargetMemberId?.trim() || null,
       selfUpgradeCapabilityScope: request.selfUpgradeCapabilityScope?.trim() || null,
@@ -229,7 +233,10 @@ export class CollaborationStore {
 
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
-      if (!["recovering", "blocked", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
+      // 使用任务聚合核对当前权威状态，历史时间线按钮不能直接推动 Store。
+      const aggregate = new CollaborationTaskAggregate({ task });
+      // 只有聚合明确允许的失败状态可以进入恢复分支。
+      if (!aggregate.canRequestRecovery()) throw new Error("当前任务不需要恢复。");
       const customerGuidance = task.customerActionGuidance || null;
       // 本地修改归属是客户前置条件。只有令狐已经给出可执行指导、客户从该等待节点确认完成后，
       // 才能进入复查；历史通用“继续”入口不得把未解决条件伪装成恢复中。
@@ -492,6 +499,8 @@ function migrateTaskHistory(task: CollaborationTaskOutDto, state: CollaborationS
   task.historyCompleteness ??= legacy ? "legacy-partial" : "complete";
   task.initiator ??= null;
   task.automationSource ??= null;
+  // 升级前任务没有显式替代关系，统一恢复为空值并由提案聚合执行受控兼容。
+  task.replacementForTaskId ??= null;
   task.startedAt ??= task.createdAt;
   task.codeVerifiedAt ??= task.finalResult ? task.completedAt : null;
   task.originalExecutor ??= task.executionRecords?.[0]?.executor || null;

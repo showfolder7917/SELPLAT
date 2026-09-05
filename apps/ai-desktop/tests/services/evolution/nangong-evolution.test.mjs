@@ -3,10 +3,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { PersonaEvolutionRuntime as WorkflowPersonaEvolutionRuntime } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/persona-evolution.runtime.js";
+import { PersonaEvolutionRuntime as WorkflowPersonaEvolutionRuntime } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution/persona-evolution.runtime.js";
 import { EvolutionStateStore } from "../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
-import { EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution-flow.orchestrator.js";
-import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/hanli-nangong-deliberation.service.js";
+import { EvolutionFlowPolicy as EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/evolution-flow.policy.js";
+import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution/hanli-nangong-deliberation.service.js";
 import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
 import { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-method-context.js";
@@ -57,7 +57,7 @@ const nangongPromptSource = readFileSync(new URL("../../../prompts/personas/nang
 const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const evolutionFacadeSource = readFileSync(new URL("../../../electron/services/personas/nangong/nangong.facade.ts", import.meta.url), "utf8");
 const nangongApplicationSource = readFileSync(new URL("../../../electron/services/personas/nangong/internal/application/nangong-application.service.ts", import.meta.url), "utf8");
-const personaEvolutionRuntimeSource = readFileSync(new URL("../../../electron/services/workflow/internal/persona-evolution.runtime.ts", import.meta.url), "utf8");
+const personaEvolutionRuntimeSource = readFileSync(new URL("../../../electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", import.meta.url), "utf8");
 const approvalServiceSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/decision/evolution-approval.service.ts", import.meta.url), "utf8");
 const hanliDeliberationSource = readFileSync(new URL("../../../prompts/personas/hanli/proposal-review.md", import.meta.url), "utf8");
 const hanliApplicationSource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/application/hanli-application.service.ts", import.meta.url), "utf8");
@@ -563,7 +563,7 @@ test("审批、编排和分发服务不再互相代替职责", () => {
   assert.match(hanliApplicationSource, /new HanliConversationService/);
   assert.match(hanliApplicationSource, /new HanliDecisionService/);
   assert.doesNotMatch(personaEvolutionRuntimeSource, /createEvolutionApprovalService|createHanliDeliberationPort|#approvals|#hanliDecisions/);
-  assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowOrchestrator/);
+  assert.match(personaEvolutionRuntimeSource, /new EvolutionFlowPolicy/);
   assert.match(personaEvolutionRuntimeSource, /createNangongTaskDistribution/);
   assert.match(personaEvolutionRuntimeSource, /运行态代表用户已经确认统一托管/);
   assert.match(personaEvolutionRuntimeSource, /暂停、停止和人工接管必须冻结当前专题/);

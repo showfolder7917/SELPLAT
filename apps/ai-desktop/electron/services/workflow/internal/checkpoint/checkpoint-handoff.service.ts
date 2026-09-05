@@ -1,7 +1,8 @@
-import type { CollaborationTimelineBusinessEventOutDto, WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
-import type { CollaborationMemoryPort } from "../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { PersonaConversationOutDto } from "../../../../contracts/services/personas/conversation/index.js";
-import type { CheckpointState } from "./checkpoint-state.js";
+import type { CollaborationTimelineBusinessEventOutDto, WorkflowExceptionRecordOutDto } from "../../../../../contracts/services/workflow/index.js";
+import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
+// 卡点交接只接收领域聚合输出的稳定快照，不维护第二套内部状态接口。
+import type { WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
 
 export interface CheckpointHandoffOptions {
   memory: CollaborationMemoryPort | null;
@@ -15,7 +16,7 @@ export interface CheckpointHandoffOptions {
 export class CheckpointHandoffService {
   constructor(private readonly options: CheckpointHandoffOptions) {}
 
-  publish(event: WorkflowExceptionRecordOutDto, checkpoint: CheckpointState, phase: string, content: string): void {
+  publish(event: WorkflowExceptionRecordOutDto, checkpoint: WorkflowCheckpointState, phase: string, content: string): void {
     const now = new Date().toISOString();
     const id = `checkpoint:${event.eventId}:${checkpoint.round}:${phase}`;
     const source = checkpoint.sourceMemberId;

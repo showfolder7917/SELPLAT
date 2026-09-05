@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CheckpointCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint-coordinator.js";
-import { CheckpointHandoffService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint-handoff.service.js";
-import { AcceptanceHandoffService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance-handoff.service.js";
+import { CheckpointCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint/checkpoint-coordinator.js";
+import { CheckpointHandoffService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.js";
+import { AcceptanceHandoffService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance/acceptance-handoff.service.js";
 
 // 端口夹具只模拟已发生的任务状态，不调用真实服务、不修改生产运行。
 function fixture() {

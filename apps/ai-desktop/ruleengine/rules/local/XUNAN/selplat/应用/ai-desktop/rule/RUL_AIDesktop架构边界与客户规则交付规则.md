@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.12.0 将南宫婉会话同步收敛为公开门面、会话聚合根和按能力分组的纵向内部模块。 -->
-rule_version = 2.12.0
+<!-- 2.13.0 将 Workflow 的协作任务、提案执行、卡点和跨人物研讨状态收敛为领域聚合，并按职责整理内部模块。 -->
+rule_version = 2.13.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -63,6 +63,12 @@ module_split_contract = split_by_business_capability_and_state_ownership + indep
 hanli_vertical_module_layout_contract = contracts_domain_values_and_ports + electron_personas_hanli_domain_aggregate + internal_application_conversation_decision_acceptance_semantic + facade_and_public_index + no_flat_internal_capability_mix + no_scattered_conversation_state_parameters
 <!-- 南宫婉与韩立采用同一可读结构，但各自聚合状态和内部能力，不抽取共享人物基类。 -->
 nangong_vertical_module_layout_contract = contracts_domain_values_and_ports + electron_personas_nangong_domain_conversation_aggregate + internal_application_conversation_inquiry_evolution_distribution + facade_and_public_index + no_flat_internal_capability_mix + no_scattered_conversation_state_parameters
+<!-- Workflow 使用领域聚合、无状态领域策略、按职责分组的 internal、两个公开门面和唯一索引；Store、Repository、Runtime 与 Service 不得重复拥有聚合状态判断。 -->
+workflow_vertical_module_layout_contract = contracts_workflow_DTO_values_and_ports + electron_services_workflow_domain_collaboration_task_proposal_execution_checkpoint_and_deliberation_aggregates + domain_evolution_flow_policy_and_persona_capability_registry + internal_acceptance_checkpoint_collaboration_evolution_and_result + collaboration_and_persona_facades + public_index_and_README + no_flat_internal_capability_mix + no_scattered_state_transition_arrays
+<!-- 聚合只维护有稳定身份、跨步骤变化且必须共同保持一致的状态与决定；跨聚合长流程由 Runtime 或 Coordinator 通过稳定标识协调，禁止建立包含人物会话、协作任务、卡点和提案的超级聚合。 -->
+workflow_aggregate_boundary_contract = aggregate_owns_identity_state_transition_invariants_and_structured_decision + runtime_or_coordinator_owns_cross_aggregate_sequence_and_side_effect_dispatch + store_and_repository_persist_aggregate_snapshot_only + service_owns_model_message_and_external_IO_only + aggregate_relation_by_stable_ID + no_super_aggregate
+<!-- 修复任务必须保存明确替代的原任务标识；提案执行聚合沿替代链选择当前有效任务，修复完成后旧失败任务不得继续把提案投影为阻塞或触发重复派发。 -->
+workflow_repair_replacement_contract = repair_task_replacementForTaskId + proposal_execution_aggregate_resolves_effective_task_chain + integrated_replacement_advances_pending_acceptance + restart_never_redispatches_from_superseded_failure + legacy_single_task_repair_compatibility_only_with_same_proposal_linghu_source_and_integrated_fact
 <!-- 人物领域与应用代码优先表达真实业务步骤；禁止用嵌套三元、一行多判断或长链式转换换取表面短小。 -->
 persona_code_readability_contract = business_named_intermediate_values + explicit_if_else_and_for + one_business_step_per_block + field_source_meaning_lifecycle_and_effect_comments + no_nested_ternary + no_compacted_guard_or_long_transform_chain
 <!-- Renderer 的真实窗口必须由 applications 独立拥有；Application 只装配布局与 feature，禁止一个文件同时定义多个窗口或人物、协作、会话业务页面。 -->

@@ -54,7 +54,7 @@
     "test:workspace": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/platform/workspace/workspace-store.test.mjs",
     "test:audit": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/capabilities/event-center/business-audit-log.test.mjs",
     "test:dispatch": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/application/conversation-dispatch-store.test.mjs",
-    "test:collaboration": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/workflow/collaboration-mode.test.mjs tests/services/workflow/collaboration-timeline.test.mjs",
+    "test:collaboration": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/workflow/collaboration-mode.test.mjs tests/services/workflow/collaboration-timeline.test.mjs tests/services/workflow/workflow-domain-aggregates.test.mjs",
     "test:collaboration-timeline": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/workflow/collaboration-timeline.test.mjs",
     "test:nangong-evolution": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/evolution/nangong-evolution.test.mjs",
     "test:explorer": "node --test tests/applications/developer/developer-explorer-collapse.test.mjs",
