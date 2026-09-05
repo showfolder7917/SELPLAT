@@ -501,6 +501,17 @@ function migrateTaskHistory(task: CollaborationTaskOutDto, state: CollaborationS
   task.repairDiagnosis ??= null;
   task.repairResult ??= null;
   task.unifiedTest ??= null;
+  // 旧版本把令狐卡点修复误当成南宫婉分发任务，代码验证后会永久停在返回南宫婉。
+  // 保留原结果和专题关联，只把真实已验证结果恢复到应进入的集成节点。
+  if (
+    task.automationSource === "linghu-safeguard"
+    && task.state === "returned-to-nangong"
+    && task.versionWorkspace?.resultSha
+  ) {
+    task.state = "ready-for-integration";
+    task.phase = "ready";
+    task.currentHandler = null;
+  }
   if (task.state === "integrated" && task.integrationGeneration !== null) {
     task.completedAt = state.integrationBatches.find((batch) => batch.generation === task.integrationGeneration)?.completedAt || task.completedAt;
   }

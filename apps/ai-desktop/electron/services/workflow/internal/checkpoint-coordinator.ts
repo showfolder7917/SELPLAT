@@ -151,7 +151,7 @@ export class CheckpointCoordinator {
       confirmedIntent: `调查并修复原流程卡点，完成后回到 ${proposal.title} 原步骤，不代替韩立验收。\n故障事实：${JSON.stringify(event.payload, (key, value) => key === "checkpoint" ? undefined : value)}`,
       constraints: [marker, "仅修复已确认目标范围内的技术故障；先调查再修改，保留原任务历史和恢复点。", "不得修改生产数据库、跳过测试、扩大业务范围或关闭权限门禁；需要用户授权时报告受阻。"],
       acceptanceCriteria: ["复现并解释具体阻塞原因", "修复有针对性回归测试且不绕过权限和原验收条件", "提交真实修复与验证证据供原流程重新验收"],
-      workspaceState: topic.workspaceState, locale: topic.locale, initiatorMemberId: "nangong-wan", preferredExecutorMemberId: "linghu-ancestor", automationSource: "linghu-safeguard",
+      workspaceState: topic.workspaceState, locale: topic.locale, initiatorMemberId: state.sourceMemberId, preferredExecutorMemberId: "linghu-ancestor", automationSource: "linghu-safeguard",
       evolutionProposalId: proposal.proposalId, evolutionRoundId: proposal.proposalId });
     state.repairTaskId = result.tasks.find((item) => item.snapshot.constraints.includes(marker))?.taskId || null;
     if (!state.repairTaskId) throw new Error("未获得真实修复任务标识，不能报告派发完成");

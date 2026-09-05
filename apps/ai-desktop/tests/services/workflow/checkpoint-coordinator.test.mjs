@@ -27,6 +27,7 @@ test("卡点真实派发、重启去重、返回原点后才允许解除", async
   await f.run(); await f.run();
   assert.equal(f.effects.submitted.length, 1);
   assert.equal(f.effects.submitted[0].preferredExecutorMemberId, "linghu-ancestor");
+  assert.equal(f.effects.submitted[0].initiatorMemberId, "han-li");
   assert.equal(f.effects.submitted[0].evolutionProposalId, "proposal-1");
   assert.equal(f.effects.submitted[0].evolutionRoundId, "proposal-1");
   assert.deepEqual(f.effects.resolved, []);
@@ -118,18 +119,19 @@ function memoryFixture() {
   return { messages, events, memory };
 }
 
-test("卡点双方人物会话和令狐时间线幂等留痕，不覆盖专题名和上一轮", () => {
+test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南宫婉", () => {
   const f = memoryFixture();
   const service = new CheckpointHandoffService({ ...f, publish: event => f.events.set(event.eventId, event), changed: () => {}, name: id => id, topic: () => ({ title: "原任务", createdAt: "2026-09-05T00:00:00Z", completed: false }) });
   const state = { round: 1, sourceMemberId: "han-li", conversations: {}, topicId: "topic-1" };
   for (let repeat = 0; repeat < 2; repeat++) service.publish(fixture().event, state, "received", "接收事实");
-  assert.equal(f.messages.size, 2); assert.equal(f.events.size, 1);
+  assert.equal(f.messages.size, 1); assert.equal(f.events.size, 1);
+  assert.deepEqual([...f.messages.values()].map((message) => message.ownerPersonaId), ["han-li"]);
   assert.equal([...f.events.values()][0].group.title, "原任务");
   assert.match([...f.events.values()][0].fact.content, /发生位置：accepting/);
   assert.match([...f.events.values()][0].fact.content, /遇到的问题：真实点击被工具拒绝/);
   assert.match([...f.events.values()][0].fact.detail, /原提案：proposal-1/);
   state.round = 2; service.publish(fixture().event, state, "received", "第二轮");
-  assert.equal(f.messages.size, 4); assert.equal(f.events.size, 2);
+  assert.equal(f.messages.size, 2); assert.equal(f.events.size, 2);
 });
 
 test("验收每轮独立身份，结果返回韩立及南宫婉", () => {

@@ -625,7 +625,13 @@ export class CollaborationCoordinator {
       this.#store.updateTask(taskId, "task.integration_ready", (current, state) => {
         if (!current.versionWorkspace) throw new Error("任务缺少版本工作区。");
         current.versionWorkspace.resultSha = resultSha;
-        const returnsToNangong = Boolean(current.evolutionProposalId && current.evolutionRoundId);
+        // 令狐卡点修复虽然保留原专题/提案关联，但不是南宫婉分发的业务实施任务。
+        // 代码验证完成后必须直接进入集成，集成完成再由卡点协调器交回原处理人。
+        const returnsToNangong = Boolean(
+          current.evolutionProposalId
+          && current.evolutionRoundId
+          && current.automationSource !== "linghu-safeguard",
+        );
         current.state = returnsToNangong ? "returned-to-nangong" : "ready-for-integration";
         current.phase = "ready";
         // 新工作区已经形成新结果后，旧候选的冲突证据完成职责，避免下一轮仍把已修正版识别为失败任务。

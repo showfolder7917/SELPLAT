@@ -20,7 +20,8 @@ export class CheckpointHandoffService {
     const id = `checkpoint:${event.eventId}:${checkpoint.round}:${phase}`;
     const source = checkpoint.sourceMemberId;
     const actorId = phase === "reported" ? source : phase === "resolved" ? source : "linghu-ancestor";
-    const participants = [...new Set([source, "nangong-wan", "linghu-ancestor"])];
+    // 卡点只在原处理人与令狐之间闭环；南宫婉不是固定中转站。
+    const participants = [...new Set([source, "linghu-ancestor"])];
     const actor = { memberId: actorId, displayName: this.options.name(actorId) };
     const recipients = participants.filter((id) => id !== actorId).map((memberId) => ({ memberId, displayName: this.options.name(memberId) }));
     const title = `第 ${checkpoint.round} 轮卡点处理`;

@@ -112,6 +112,7 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(integrationPipelineSource, /currentActor\.displayName\}正在统一测试/);
   assert.match(coordinatorSource, /sealEvolutionRound/);
   assert.match(coordinatorSource, /结果已返回南宫婉收集/);
+  assert.match(coordinatorSource, /current\.automationSource !== "linghu-safeguard"/);
   assert.match(coordinatorSource, /ORCHESTRATOR_MEMBER_IDS/);
   assert.match(integrationPipelineSource, /release\.awaiting_restart/);
   assert.match(integrationPipelineSource, /release\.restart_healthy/);
@@ -144,6 +145,39 @@ test("默认人物稳定列出，新增、重命名和删除入口退役，存�
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("旧令狐卡点修复结果从返回南宫婉迁回集成队列", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "checkpoint-repair-migration-"));
+  try {
+    const filePath = path.join(directory, "collaboration.json");
+    const store = new CollaborationStore(filePath);
+    const seeded = store.submitTask({
+      title: "修复验收卡点",
+      problemStatement: "真实界面验收受阻。",
+      confirmedIntent: "令狐修复后回到韩立原验收步骤。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "han-li",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+      evolutionProposalId: "proposal-1",
+      evolutionRoundId: "proposal-1",
+    });
+    const persisted = store.state();
+    const task = persisted.tasks.find((item) => item.taskId === seeded.taskId);
+    task.state = "returned-to-nangong";
+    task.phase = "ready";
+    task.currentHandler = { memberId: "nangong-wan", displayName: "南宫婉" };
+    task.versionWorkspace = { taskId: task.taskId, root: directory, branch: "task", baseSha: "base", resultSha: "result", createdAt: task.createdAt };
+    writeFileSync(filePath, JSON.stringify(persisted));
+
+    const migrated = new CollaborationStore(filePath).state().tasks.find((item) => item.taskId === seeded.taskId);
+    assert.equal(migrated.state, "ready-for-integration");
+    assert.equal(migrated.phase, "ready");
+    assert.equal(migrated.currentHandler, null);
+    assert.equal(migrated.versionWorkspace.resultSha, "result");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("清空测试数据保留人物配置并重置令狐运行态", () => {
