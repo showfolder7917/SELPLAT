@@ -22,6 +22,7 @@ import { IntegrationReleaseCoordinatorFacade } from "../../../../../build/ai-des
 import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
 import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-workspace.manager.js";
 import { ManagedTaskExecutor } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/internal/managed-task.executor.js";
+import { TaskRepairScopeAggregate, TaskRepairScopeViolationError } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/index.js";
 import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { createAtomicJsonPersistence } from "../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/index.js";
 import { controlledTestRoot, projectPaths, projectRoot } from "#test-paths";
@@ -1814,12 +1815,84 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
       });
       return { text: "源码修改完成", itemCount: 1 };
     },
-    runCodeValidation: async () => { desktopValidationCount += 1; },
+    runCodeValidation: async (authorizedFiles) => {
+      desktopValidationCount += 1;
+      assert.deepEqual(authorizedFiles, ["apps/ai-desktop/src/example.ts"]);
+    },
   });
   assert.equal(turnCount, 1);
   assert.equal(desktopValidationCount, 1);
   assert.equal(result.managedStatus, "code-verified");
+  assert.deepEqual(result.authorizedFiles, ["apps/ai-desktop/src/example.ts"]);
   assert.equal(events.some((event) => event.managedExecution?.message.includes("当前任务分支隔离 Playwright 已通过")), true);
+});
+
+test("自动自修只能继续修改首次实施已经冻结的文件", () => {
+  const scope = TaskRepairScopeAggregate.freeze([
+    "apps/ai-desktop/src/features/settings/SettingsPanel.tsx",
+    "apps/ai-desktop/tests/settings-panel.test.mjs",
+  ]);
+  const accepted = scope.check([
+    "apps/ai-desktop/tests/settings-panel.test.mjs",
+    "apps/ai-desktop/src/features/settings/SettingsPanel.tsx",
+  ]);
+  assert.equal(accepted.accepted, true);
+  assert.deepEqual(accepted.unexpectedFiles, []);
+  assert.throws(() => scope.assertContainsOnlyAuthorizedFiles([
+    "apps/ai-desktop/src/features/settings/SettingsPanel.tsx",
+    "apps/ai-desktop/scripts/build-prompt-bundle.mjs",
+  ]), (error) => {
+    assert.ok(error instanceof TaskRepairScopeViolationError);
+    assert.deepEqual(error.unexpectedFiles, ["apps/ai-desktop/scripts/build-prompt-bundle.mjs"]);
+    return true;
+  });
+});
+
+test("任务结果提交前通过真实 Git 状态阻断自修新增的范围外文件", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "repair-scope-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  const taskRoot = path.join(managedRoot, "task-scope");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "allowed.ts"), "export const allowed = 1;\n");
+    writeFileSync(path.join(repositoryRoot, "outside.ts"), "export const outside = 1;\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    mkdirSync(managedRoot, { recursive: true });
+    git(repositoryRoot, "worktree", "add", "-b", "codex/collab/task-scope/worker/r1", taskRoot, "HEAD");
+    writeFileSync(path.join(taskRoot, "allowed.ts"), "export const allowed = 2;\n");
+    writeFileSync(path.join(taskRoot, "outside.ts"), "export const outside = 2;\n");
+    const baseSha = git(taskRoot, "rev-parse", "HEAD");
+    const task = {
+      taskId: "TASK-SCOPE",
+      versionWorkspace: {
+        workspaceId: "worktree:TASK-SCOPE:r1",
+        rootPath: taskRoot,
+        branchName: "codex/collab/task-scope/worker/r1",
+        baseSha,
+        resultSha: null,
+        createdAt: new Date().toISOString(),
+        retiredAt: null,
+      },
+    };
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    await assert.rejects(
+      () => manager.commitTaskResult(task, "张铁", ["allowed.ts"]),
+      (error) => {
+        assert.ok(error instanceof TaskRepairScopeViolationError);
+        assert.deepEqual(error.unexpectedFiles, ["outside.ts"]);
+        return true;
+      },
+    );
+    assert.equal(git(taskRoot, "rev-parse", "HEAD"), baseSha, "越界任务不得生成结果提交");
+    assert.match(git(taskRoot, "status", "--porcelain"), /outside\.ts/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
@@ -1832,6 +1905,7 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.match(runner, /worktreeRoot/);
   assert.match(runner, /test-cache|PLAYWRIGHT_BROWSERS_PATH/);
   assert.match(runner, /AI_DESKTOP_TEST_TASK_ID/);
+  assert.match(runner, /SELPLAT_ROOT: this\.#sourceProjectRoot/);
   assert.match(runner, /acquireManagedDependencyLease/);
   assert.match(runner, /dependencyLease\.environment/);
   assert.match(runner, /npm run/);
@@ -1868,6 +1942,8 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   assert.match(workspaces, /codex\/collab\/integration-g\$\{generation\}/);
   assert.doesNotMatch(workspaces, /codex\/collab\/integration\/g\$\{generation\}/);
   assert.match(workspaces, /resultSha/);
+  assert.match(workspaces, /validateTaskChangeScope/);
+  assert.match(workspaces, /TaskRepairScopeAggregate/);
   assert.match(integrationVerifier, /ensureBuildDependencyLink\(candidateDesktopRoot, sourceModules\)/);
   assert.match(integrationVerifier, /releaseManagedDependencyLease\(dependencyLease\)/);
   assert.doesNotMatch(ui, /reviewAttempts\.some|decision-unrecognized/);

@@ -243,7 +243,7 @@ export interface CodexCollaborationSessionFactoryOptions {
   trustedCommands: TrustedCommandStore;
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
-  runCodeValidation(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<void>;
+  runCodeValidation(task: CollaborationTaskOutDto, authorizedFiles: readonly string[], emit: (event: CodexStreamEventOutDto) => void): Promise<void>;
   readSettings: CodexServiceOptions["readSettings"];
   readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
   readRuleInstructionsForMember?: (memberId: string, task: CollaborationTaskOutDto) => string;
@@ -386,10 +386,21 @@ class CodexExecutorSession implements ExecutorSessionPort {
       message,
       restartRequired: false,
       emit,
-      runCodeValidation: (onEvent) => this.#runCodeValidation(task, onEvent),
+      runCodeValidation: (authorizedFiles, onEvent) => this.#runCodeValidation(task, authorizedFiles, onEvent),
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
-    return { status: result.managedStatus === "code-verified" ? "code-verified" : "incomplete", text: result.text, pendingActions: result.pendingActions, changedFiles: result.changedFiles, successfulCommands: result.successfulCommands };
+    let status: ExecutorExecutionResultOutDto["status"] = "incomplete";
+    if (result.managedStatus === "code-verified") {
+      status = "code-verified";
+    }
+    return {
+      status,
+      text: result.text,
+      pendingActions: result.pendingActions,
+      changedFiles: result.changedFiles,
+      authorizedFiles: result.authorizedFiles,
+      successfulCommands: result.successfulCommands,
+    };
   }
 
   async investigateRepair(task: CollaborationTaskOutDto, failure: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {

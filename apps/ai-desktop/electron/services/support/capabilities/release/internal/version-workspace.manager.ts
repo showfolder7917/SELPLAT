@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import type { CollaborationTaskOutDto, CollaborationVersionWorkspaceOutDto } from "../../../../../../contracts/services/workflow/index.js";
+import { TaskRepairScopeAggregate } from "../../execution/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -148,10 +149,26 @@ export class VersionWorkspaceManager {
     return rootPath;
   }
 
-  async commitTaskResult(task: CollaborationTaskOutDto, memberName: string): Promise<string> {
+  /** 使用 Git 真实状态核对自修范围，不能只相信执行人物流式上报的文件列表。 */
+  async validateTaskChangeScope(task: CollaborationTaskOutDto, authorizedFiles: readonly string[]): Promise<string[]> {
+    const workspace = task.versionWorkspace;
+    if (!workspace) {
+      throw new Error("任务尚未建立独立版本工作区。");
+    }
+    const rootPath = this.#validateManagedPath(workspace.rootPath);
+    const status = await this.#gitRaw(rootPath, ["status", "--porcelain", "-z"]);
+    const observedFiles = splitStatusPorcelain(status);
+    const repairScope = TaskRepairScopeAggregate.freeze(authorizedFiles);
+    repairScope.assertContainsOnlyAuthorizedFiles(observedFiles);
+    return observedFiles;
+  }
+
+  async commitTaskResult(task: CollaborationTaskOutDto, memberName: string, authorizedFiles: readonly string[]): Promise<string> {
     const workspace = task.versionWorkspace;
     if (!workspace) throw new Error("任务尚未建立独立版本工作区。");
     const rootPath = this.#validateManagedPath(workspace.rootPath);
+    // 最终提交与复测前检查使用同一聚合；任何晚到的越界修改都不能进入结果提交。
+    await this.validateTaskChangeScope(task, authorizedFiles);
     const status = await this.#git(rootPath, ["status", "--porcelain"]);
     const beforeSha = await this.#git(rootPath, ["rev-parse", "HEAD"]);
     if (status) {

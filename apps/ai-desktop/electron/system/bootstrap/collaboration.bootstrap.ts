@@ -67,8 +67,10 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     trustedCommands,
     registry: collaborationRegistry,
     resolveAttachmentPaths: (attachmentIds) => screenshots.resolveAttachmentPaths(attachmentIds),
-    runCodeValidation: async (task, emit) => {
+    runCodeValidation: async (task, authorizedFiles, emit) => {
       const worktreeRoot = await versionWorkspaces.validateTaskWorkspace(task);
+      // 每次复测前都读取真实 Git 状态；模型未上报的范围外修改同样会被阻断。
+      await versionWorkspaces.validateTaskChangeScope(task, authorizedFiles);
       await taskTests.run({ taskId: task.taskId, worktreeRoot, emit });
     },
     readSettings: () => settings.read(),

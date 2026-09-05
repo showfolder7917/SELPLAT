@@ -204,7 +204,11 @@ export class CollaborationCoordinator {
       const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；")
         || (ownershipFailure ? "本地修改来源修复未完成代码级验证" : "统一测试修复未完成代码级验证"));
-      const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), linghu.displayName);
+      const resultSha = await this.#workspaces.commitTaskResult(
+        this.#store.task(taskId),
+        linghu.displayName,
+        repaired.authorizedFiles,
+      );
       this.#store.updateTask(taskId, repairCompletedEvent, (current, state) => {
         if (!current.versionWorkspace) throw new Error("统一测试修复后缺少版本工作区。");
         current.versionWorkspace.resultSha = resultSha;
@@ -639,9 +643,19 @@ export class CollaborationCoordinator {
   }
 
   /** 普通实施和令狐完整修复共享结果提交门，避免修复成功后重新执行整个任务。 */
-  async #completeVerifiedExecution(taskId: string, memberId: string, assignmentId: string | null, result: { text: string; pendingActions: string[] }): Promise<void> {
+  async #completeVerifiedExecution(
+    taskId: string,
+    memberId: string,
+    assignmentId: string | null,
+    result: { text: string; pendingActions: string[]; authorizedFiles: string[] },
+  ): Promise<void> {
       this.#setTaskAndMemberPhase(taskId, "executing", "finalizing");
-      const resultSha = await this.#workspaces.commitTaskResult(this.#store.task(taskId), requireMember(this.state(), memberId).displayName);
+      // 提交前再次读取真实 Git 状态，避免最后一次复测后出现未上报的范围外文件。
+      const resultSha = await this.#workspaces.commitTaskResult(
+        this.#store.task(taskId),
+        requireMember(this.state(), memberId).displayName,
+        result.authorizedFiles,
+      );
       this.#store.updateTask(taskId, "task.integration_ready", (current, state) => {
         if (!current.versionWorkspace) throw new Error("任务缺少版本工作区。");
         current.versionWorkspace.resultSha = resultSha;

@@ -74,6 +74,8 @@ export class TaskWorktreeTestRunner {
       ...dependencyLease.environment,
       AI_DESKTOP_TEST_TASK_ID: safeTaskId,
       AI_DESKTOP_TEST_RUN_ID: validationRunId,
+      // 候选工作树只提供源码；提示词、规则、证据和运行数据始终写回用户选择的稳定工程根。
+      SELPLAT_ROOT: this.#sourceProjectRoot,
       PLAYWRIGHT_BROWSERS_PATH: path.join(this.#cacheRoot, "playwright"),
       npm_config_cache: path.join(this.#cacheRoot, "npm"),
       GIT_TERMINAL_PROMPT: "0",

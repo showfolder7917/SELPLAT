@@ -6,6 +6,7 @@ import type {
 import type { ManagedExecutionModeValue } from "../../../../../../contracts/foundation/index.js";
 import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { PromptLibraryPort, PromptVariables } from "../../prompts/index.js";
+import { TaskRepairScopeAggregate } from "../domain/task-repair-scope.aggregate.js";
 
 type RunTurn = (
   message: string,
@@ -18,15 +19,23 @@ export interface ManagedExecutionRequest {
   message: string;
   restartRequired: boolean;
   runTurn: RunTurn;
-  runCodeValidation?: (emit: (event: CodexStreamEventOutDto) => void) => Promise<void>;
+  /** 使用首次实施冻结的文件范围执行应用拥有的真实代码验证。 */
+  runCodeValidation?: (authorizedFiles: readonly string[], emit: (event: CodexStreamEventOutDto) => void) => Promise<void>;
   emit(event: CodexStreamEventOutDto): void;
 }
 
 export interface ManagedExecutionResult extends SendMessageOutDto {
+  /** 当前阶段是否满足继续进入协作流程的验证门槛。 */
   managedStatus: "conversation-ready" | "requirement-ready" | "code-verified" | "test-verified" | "incomplete";
+  /** 尚未完成或已被门禁阻断的具体动作。 */
   pendingActions: string[];
+  /** 当前结果是否需要由宿主执行受控重启。 */
   restartRequired: boolean;
+  /** 整个受管执行期间观察到的全部源码变更。 */
   changedFiles: string[];
+  /** 首次实施结束时冻结的文件边界；自动自修不得向外扩张。 */
+  authorizedFiles: string[];
+  /** 当前执行期间已经成功完成的验证命令。 */
   successfulCommands: string[];
 }
 
@@ -51,7 +60,7 @@ export class ManagedTaskExecutor {
     const response = await request.runTurn(this.#managedPrompt(request.message, "execution.conversation"), request.emit, "conversation-managed");
     emitManaged(request, "conversation", "completed", 1, 1, "已经整理好你的完整意图");
     emitManaged(request, "completed", "completed", 1, 1, "确认无误后可以继续调查和分析");
-    return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后自动分析方案"], restartRequired: false, changedFiles: [], successfulCommands: [] };
+    return { ...response, managedStatus: "conversation-ready", pendingActions: ["确认意图后自动分析方案"], restartRequired: false, changedFiles: [], authorizedFiles: [], successfulCommands: [] };
   }
 
   async #runRequirementAnalysis(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -59,7 +68,7 @@ export class ManagedTaskExecutor {
     const response = await request.runTurn(this.#managedPrompt(request.message, "execution.requirement-analysis"), request.emit, "requirement-managed");
     emitManaged(request, "requirement-analysis", "completed", 1, 1, "原因和修正方案已经整理完成");
     emitManaged(request, "completed", "completed", 1, 1, "确认方案后可以开始修改");
-    return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后执行修改"], restartRequired: false, changedFiles: [], successfulCommands: [] };
+    return { ...response, managedStatus: "requirement-ready", pendingActions: ["确认方案后执行修改"], restartRequired: false, changedFiles: [], authorizedFiles: [], successfulCommands: [] };
   }
 
   async #runTask(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -87,13 +96,17 @@ export class ManagedTaskExecutor {
         pendingActions: [evidence.changedFiles.size === 0 ? "任务要求修改源码，但未观察到文件变更" : evidence.failedCommandSummaries().join("；") || "处理任务阶段未解决错误"],
         restartRequired: false,
         changedFiles: [...evidence.changedFiles],
+        authorizedFiles: [],
         successfulCommands: evidence.successfulCommands(),
       };
     }
     emitManaged(request, "task-execution", "completed", Math.min(taskRound, TASK_ROUNDS), TASK_ROUNDS, "源码任务阶段完成");
 
+    // 首次实施已经结束；从这一刻冻结文件边界，测试失败只能在既有文件中修正。
+    const repairScope = TaskRepairScopeAggregate.freeze(evidence.changedFiles);
+
     if (request.runCodeValidation) {
-      return this.#runDesktopOwnedCodeValidation(request, evidence, response);
+      return this.#runDesktopOwnedCodeValidation(request, evidence, response, repairScope);
     }
 
     let validationMessage = this.#managedPrompt("继续验证本次修改。", "execution.code-validation", {
@@ -124,6 +137,7 @@ export class ManagedTaskExecutor {
           pendingActions: ["按需验证结果：构建、构建后测试和必要重启"],
           restartRequired: false,
           changedFiles: [...evidence.changedFiles],
+          authorizedFiles: repairScope.authorizedFiles(),
           successfulCommands: evidence.successfulCommands(),
         };
       }
@@ -136,7 +150,7 @@ export class ManagedTaskExecutor {
 
     const gate = evidence.codeValidationGate();
     emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, gate.missing.join("；"));
-    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
+    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], authorizedFiles: repairScope.authorizedFiles(), successfulCommands: evidence.successfulCommands() };
   }
 
   /** 协同 worktree 的固定测试由桌面主进程执行，Codex 只在失败后接收事实并修复源码。 */
@@ -144,6 +158,7 @@ export class ManagedTaskExecutor {
     request: ManagedExecutionRequest,
     evidence: ExecutionEvidence,
     initialResponse: SendMessageOutDto,
+    repairScope: TaskRepairScopeAggregate,
   ): Promise<ManagedExecutionResult> {
     const runCodeValidation = request.runCodeValidation;
     if (!runCodeValidation) throw new Error("AI Desktop 内部验证入口未配置。");
@@ -154,7 +169,7 @@ export class ManagedTaskExecutor {
         round === 1 ? "AI Desktop 正在当前任务分支执行静态检查" : "源码修复后正在当前任务分支重新检查");
       emitManaged(request, "interaction-validation", "started", round, VALIDATION_ROUNDS, "AI Desktop 正在当前任务分支执行隔离 Playwright");
       try {
-        await runCodeValidation(request.emit);
+        await runCodeValidation(repairScope.authorizedFiles(), request.emit);
         emitManaged(request, "code-validation", "completed", round, VALIDATION_ROUNDS, "当前任务分支静态检查已通过");
         emitManaged(request, "interaction-validation", "completed", round, VALIDATION_ROUNDS, "当前任务分支隔离 Playwright 已通过");
         emitManaged(request, "completed", "completed", 1, 1, "代码级验证完成；需要时可以继续构建和运行测试");
@@ -164,6 +179,7 @@ export class ManagedTaskExecutor {
           pendingActions: ["按需验证结果：构建、构建后测试和必要重启"],
           restartRequired: false,
           changedFiles: [...evidence.changedFiles],
+          authorizedFiles: repairScope.authorizedFiles(),
           successfulCommands: evidence.successfulCommands(),
         };
       } catch (error) {
@@ -173,7 +189,10 @@ export class ManagedTaskExecutor {
         evidence.beginRound();
         emitManaged(request, "task-execution", "started", round, VALIDATION_ROUNDS, `第 ${round} 轮自修：先核对失败证据并解释上一轮结果`, true);
         try {
-          response = await request.runTurn(this.#managedPrompt("继续修复当前任务。", "execution.desktop-validation-repair", { failure: `第 ${round} 次测试失败。${round > 1 ? "这是复测失败，必须先解释上一轮为何无效。" : ""}\n${lastFailure}` }), (event) => {
+          response = await request.runTurn(this.#managedPrompt("继续修复当前任务。", "execution.desktop-validation-repair", {
+            failure: `第 ${round} 次测试失败。${round > 1 ? "这是复测失败，必须先解释上一轮为何无效。" : ""}\n${lastFailure}`,
+            allowedFiles: repairScope.authorizedFiles().join("\n"),
+          }), (event) => {
             evidence.record(event);
             request.emit(event);
           }, "task-managed");
@@ -187,7 +206,7 @@ export class ManagedTaskExecutor {
     }
     emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, lastFailure || "当前任务分支验证失败");
     emitManaged(request, "interaction-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, "Playwright 未通过，未进入集成队列");
-    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
+    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false, changedFiles: [...evidence.changedFiles], authorizedFiles: repairScope.authorizedFiles(), successfulCommands: evidence.successfulCommands() };
   }
 
   async #runBuildValidation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -210,7 +229,7 @@ export class ManagedTaskExecutor {
           emitManaged(request, "runtime-restart", "started", 1, 1, "当前应用将在本轮返回后只重启一次");
         }
         emitManaged(request, "completed", "completed", 1, 1, request.restartRequired ? "测试完成，接下来会受控重启一次" : "测试完成，本次不需要重启");
-        return { ...response, managedStatus: "test-verified", pendingActions: [], restartRequired: request.restartRequired, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
+        return { ...response, managedStatus: "test-verified", pendingActions: [], restartRequired: request.restartRequired, changedFiles: [...evidence.changedFiles], authorizedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
       }
       message = this.#managedPrompt("继续完成同一任务的构建和测试。", "execution.build-validation-repair", {
         missing: gate.missing.join("；"),
@@ -219,7 +238,7 @@ export class ManagedTaskExecutor {
     }
     const gate = evidence.buildValidationGate();
     emitManaged(request, "build-validation", "blocked", BUILD_ROUNDS, BUILD_ROUNDS, gate.missing.join("；"));
-    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
+    return { ...response, managedStatus: "incomplete", pendingActions: gate.missing, restartRequired: false, changedFiles: [...evidence.changedFiles], authorizedFiles: [...evidence.changedFiles], successfulCommands: evidence.successfulCommands() };
   }
 
   /** 公共外壳保留不可隐藏的后台边界，具体阶段行为从提示词库按 ID 取得。 */
