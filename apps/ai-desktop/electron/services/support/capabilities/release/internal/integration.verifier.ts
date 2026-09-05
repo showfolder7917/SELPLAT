@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
@@ -13,6 +14,8 @@ export interface ManagedDependencyLease {
   workspaceDesktopRoot: string;
   /** 本轮租约建立的临时链接；释放时只能回收这些路径，不能删除 Git 已检出的链接。 */
   temporaryLinkPaths: readonly string[];
+  /** 工作树专属依赖覆盖层；最后一位租约持有者释放时一并回收。 */
+  temporaryDirectoryPaths: readonly string[];
   environment: Readonly<{ AI_DESKTOP_DEPENDENCY_LEASE_ID: string }>;
   released: boolean;
 }
@@ -20,6 +23,7 @@ export interface ManagedDependencyLease {
 const activeDependencyLeases = new Map<string, Map<string, number>>();
 // 同一工作树可由多个校验共享租约，临时链接归工作树所有，不能依赖最后释放的是哪份租约。
 const activeTemporaryLinkPaths = new Map<string, Set<string>>();
+const activeTemporaryDirectoryPaths = new Map<string, Set<string>>();
 
 /**
  * 主进程为 Git 已登记的隔离工作树签发共享依赖租约；缓存来源只能是同一公共仓库的主工程锁哈希目录。
@@ -40,11 +44,14 @@ export async function acquireManagedDependencyLease(
   const workspaceDesktopRoot = path.join(resolvedWorkspaceRoot, "apps", applicationName);
   const sourceDesktopRoot = path.join(resolvedSourceRoot, "apps", applicationName);
   const sourceLockPath = path.join(sourceDesktopRoot, "package-lock.json");
+  const workspaceLockPath = path.join(workspaceDesktopRoot, "package-lock.json");
+  const workspaceLockContent = readFileSync(workspaceLockPath);
   const sourcePaths = resolveApplicationDataPaths({ selplatRoot: resolvedSourceRoot, applicationName });
   const sourceModules = resolveLockSpecificDependencyPaths(sourcePaths.dependencyCacheRoot, readFileSync(sourceLockPath)).nodeModulesRoot;
+  const dependencyOverlayModules = managedDependencyOverlayModules(resolvedWorkspaceRoot, applicationName, workspaceLockContent);
   // 候选检出时可能已有受 Git 跟踪的依赖链接；它不属于本轮租约，必须在结束时保留。
   const existingLinkPaths = new Set(existingIntegrationDependencyLinkPaths(workspaceDesktopRoot));
-  const dependencyMode = await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot);
+  const dependencyMode = await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot, dependencyOverlayModules);
   const temporaryLinkPaths = existingIntegrationDependencyLinkPaths(workspaceDesktopRoot)
     .filter((linkPath) => !existingLinkPaths.has(linkPath));
   if (dependencyMode !== "linked") {
@@ -57,11 +64,15 @@ export async function acquireManagedDependencyLease(
   const ownedLinks = activeTemporaryLinkPaths.get(workspaceDesktopRoot) || new Set<string>();
   for (const linkPath of temporaryLinkPaths) ownedLinks.add(linkPath);
   activeTemporaryLinkPaths.set(workspaceDesktopRoot, ownedLinks);
+  const ownedDirectories = activeTemporaryDirectoryPaths.get(workspaceDesktopRoot) || new Set<string>();
+  ownedDirectories.add(dependencyOverlayModules);
+  activeTemporaryDirectoryPaths.set(workspaceDesktopRoot, ownedDirectories);
   return {
     leaseId: safeLeaseId,
     workspaceProjectRoot: resolvedWorkspaceRoot,
     workspaceDesktopRoot,
     temporaryLinkPaths,
+    temporaryDirectoryPaths: [dependencyOverlayModules],
     environment: { AI_DESKTOP_DEPENDENCY_LEASE_ID: safeLeaseId },
     released: false,
   };
@@ -80,6 +91,9 @@ export function releaseManagedDependencyLease(lease: ManagedDependencyLease | nu
   const temporaryLinkPaths = activeTemporaryLinkPaths.get(lease.workspaceDesktopRoot) || new Set(lease.temporaryLinkPaths);
   activeTemporaryLinkPaths.delete(lease.workspaceDesktopRoot);
   cleanupIntegrationDependencyLinks(lease.workspaceDesktopRoot, [...temporaryLinkPaths]);
+  const temporaryDirectoryPaths = activeTemporaryDirectoryPaths.get(lease.workspaceDesktopRoot) || new Set(lease.temporaryDirectoryPaths);
+  activeTemporaryDirectoryPaths.delete(lease.workspaceDesktopRoot);
+  cleanupManagedDependencyOverlays(lease.workspaceProjectRoot, [...temporaryDirectoryPaths]);
 }
 
 /** 集成批次只运行代码级组合检查；正式构建和当前应用重启仍需用户明确触发结果验证。 */
@@ -122,17 +136,33 @@ export async function ensureIntegrationDependencies(
   sourceModules: string,
   sourceLockPath: string,
   npmCacheRoot?: string,
+  dependencyOverlayModules?: string,
 ): Promise<"ready" | "linked" | "installed"> {
   const candidateModules = path.join(candidateDesktopRoot, "node_modules");
+  const localPackages = localPackageLinks(candidateDesktopRoot);
+  const locksMatch = sameFile(
+    path.join(candidateDesktopRoot, "package-lock.json"),
+    sourceLockPath,
+  );
+  if (dependencyOverlayModules && localPackages.length && locksMatch && hasUsableDesktopDependencies(sourceModules)) {
+    const current = lstatSync(candidateModules, { throwIfNoEntry: false });
+    if (current?.isSymbolicLink() && existsSync(dependencyOverlayModules)
+      && realpathSync(candidateModules) === realpathSync(dependencyOverlayModules)
+      && hasUsableDesktopDependencies(candidateModules)) {
+      ensureBuildDependencyLink(candidateDesktopRoot, dependencyOverlayModules);
+      return "linked";
+    }
+    if (current) rmSync(candidateModules, { recursive: !current.isSymbolicLink(), force: true });
+    prepareManagedDependencyOverlay(candidateDesktopRoot, sourceModules, dependencyOverlayModules, localPackages);
+    symlinkSync(dependencyOverlayModules, candidateModules, process.platform === "win32" ? "junction" : "dir");
+    ensureBuildDependencyLink(candidateDesktopRoot, dependencyOverlayModules);
+    return "linked";
+  }
   if (hasUsableDesktopDependencies(candidateModules)) {
     ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
     return lstatSync(candidateModules).isSymbolicLink() ? "linked" : "ready";
   }
 
-  const locksMatch = sameFile(
-    path.join(candidateDesktopRoot, "package-lock.json"),
-    sourceLockPath,
-  );
   if (existsSync(candidateModules)) rmSync(candidateModules, { recursive: true, force: true });
   if (locksMatch && hasUsableDesktopDependencies(sourceModules)) {
     symlinkSync(sourceModules, candidateModules, process.platform === "win32" ? "junction" : "dir");
@@ -154,6 +184,79 @@ export async function ensureIntegrationDependencies(
   if (!hasUsableDesktopDependencies(candidateModules)) throw new Error("集成依赖自愈失败：补齐依赖后仍缺少 TypeScript 或 Electron 运行时。");
   ensureBuildDependencyLink(candidateDesktopRoot, candidateModules);
   return "installed";
+}
+
+type LocalPackageLink = Readonly<{ packagePath: string; targetPath: string }>;
+
+/** 读取锁文件声明的仓库内本地包；这些包必须重新连接当前工作树，不能继承共享缓存中的主工程绝对链接。 */
+function localPackageLinks(candidateDesktopRoot: string): LocalPackageLink[] {
+  try {
+    const lock = JSON.parse(readFileSync(path.join(candidateDesktopRoot, "package-lock.json"), "utf8")) as { packages?: Record<string, { link?: boolean; resolved?: string }> };
+    const projectRoot = path.resolve(candidateDesktopRoot, "../..");
+    return Object.entries(lock.packages || {}).flatMap(([packagePath, metadata]) => {
+      if (!packagePath.startsWith("node_modules/") || metadata.link !== true || typeof metadata.resolved !== "string") return [];
+      const targetPath = path.resolve(candidateDesktopRoot, metadata.resolved);
+      const relative = path.relative(projectRoot, targetPath);
+      if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !existsSync(targetPath)) {
+        throw new Error(`工作树本地依赖越界或不存在：${metadata.resolved}`);
+      }
+      return [{ packagePath: packagePath.slice("node_modules/".length), targetPath }];
+    });
+  } catch (error) {
+    if (error instanceof SyntaxError) return [];
+    throw error;
+  }
+}
+
+/** 创建工作树依赖覆盖层：普通包链接共享缓存，本地包链接当前工作树。 */
+function prepareManagedDependencyOverlay(candidateDesktopRoot: string, sourceModules: string, overlayModules: string, localPackages: readonly LocalPackageLink[]): void {
+  const overlayRoot = path.dirname(overlayModules);
+  const projectRoot = path.resolve(candidateDesktopRoot, "../..");
+  const relativeOverlay = path.relative(projectRoot, overlayRoot);
+  if (!relativeOverlay || relativeOverlay === ".." || relativeOverlay.startsWith(`..${path.sep}`) || path.isAbsolute(relativeOverlay)) {
+    throw new Error("工作树依赖覆盖层越出候选工程。");
+  }
+  rmSync(overlayRoot, { recursive: true, force: true });
+  mkdirSync(overlayModules, { recursive: true });
+  const localByPath = new Map(localPackages.map((entry) => [entry.packagePath, entry.targetPath]));
+  const scopes = new Set(localPackages.filter((entry) => entry.packagePath.includes("/")).map((entry) => entry.packagePath.split("/")[0]));
+  for (const entry of readdirSync(sourceModules)) {
+    if (scopes.has(entry)) {
+      const sourceScope = path.join(sourceModules, entry);
+      const overlayScope = path.join(overlayModules, entry);
+      mkdirSync(overlayScope, { recursive: true });
+      for (const child of readdirSync(sourceScope)) linkDependencyEntry(path.join(sourceScope, child), path.join(overlayScope, child));
+      continue;
+    }
+    if (!localByPath.has(entry)) linkDependencyEntry(path.join(sourceModules, entry), path.join(overlayModules, entry));
+  }
+  for (const [packagePath, targetPath] of localByPath) {
+    const linkPath = path.join(overlayModules, packagePath);
+    rmSync(linkPath, { recursive: true, force: true });
+    mkdirSync(path.dirname(linkPath), { recursive: true });
+    linkDependencyEntry(targetPath, linkPath);
+  }
+}
+
+function linkDependencyEntry(targetPath: string, linkPath: string): void {
+  if (existsSync(linkPath)) return;
+  const type = process.platform === "win32" && statSync(targetPath).isDirectory() ? "junction" : undefined;
+  symlinkSync(targetPath, linkPath, type);
+}
+
+function managedDependencyOverlayModules(projectRoot: string, applicationName: string, lockContent: Buffer): string {
+  const lockHash = createHash("sha256").update(lockContent).digest("hex");
+  return path.join(projectRoot, "cache", applicationName, "dependency-overlays", lockHash, "node_modules");
+}
+
+/** 只清理租约在当前工作树 cache 下创建的覆盖层，拒绝任意目录删除。 */
+function cleanupManagedDependencyOverlays(workspaceProjectRoot: string, overlayModules: readonly string[]): void {
+  const allowedRoot = path.join(path.resolve(workspaceProjectRoot), "cache");
+  for (const directory of overlayModules) {
+    const resolved = path.resolve(directory);
+    if (!resolved.startsWith(`${allowedRoot}${path.sep}`)) throw new Error(`依赖覆盖层不属于当前工作树：${resolved}`);
+    rmSync(path.dirname(resolved), { recursive: true, force: true });
+  }
 }
 
 async function verifyRegisteredWorktree(workspaceProjectRoot: string, sourceProjectRoot: string): Promise<void> {

@@ -16,9 +16,14 @@ export function resolveDependencyCache() {
   const cacheProjectRoot = lease?.sourceProjectRoot || projectRoot;
   const dependencyCacheRoot = path.join(cacheProjectRoot, "cache", applicationName, "dependencies");
   const cacheRoot = path.join(dependencyCacheRoot, lockHash);
+  const sharedDependencyRoot = path.join(cacheRoot, "node_modules");
+  // 第三方包继续复用主工程缓存；工作树通过自己的覆盖层重新连接仓库内本地包，禁止本地包链接回流主源码。
+  const dependencyRoot = lease
+    ? path.join(projectRoot, "cache", applicationName, "dependency-overlays", lockHash, "node_modules")
+    : sharedDependencyRoot;
   return {
     appRoot, projectRoot, cacheProjectRoot, applicationName, lockHash, dependencyCacheRoot, cacheRoot,
-    dependencyRoot: path.join(cacheRoot, "node_modules"),
+    sharedDependencyRoot, dependencyRoot,
     linkPath: path.join(appRoot, "node_modules"),
     buildLinkPath: path.join(projectRoot, "build", applicationName, "node_modules"),
     dependencyLeaseId: lease?.leaseId || null,

@@ -150,6 +150,8 @@ test("共享依赖租约从 Git 公共仓库解析缓存根并核对两份锁文
   assert.match(cache, /rev-parse", "--path-format=absolute", "--git-common-dir/);
   assert.match(cache, /worktree", "list", "--porcelain/);
   assert.match(cache, /sourceLockHash !== lockHash/);
+  assert.match(cache, /dependency-overlays/);
+  assert.match(cache, /sharedDependencyRoot, dependencyRoot/);
   assert.match(cache, /link target does not match the registered repository cache/);
   assert.doesNotMatch(cache, /AI_DESKTOP_DEPENDENCY_SOURCE_ROOT|AI_DESKTOP_DEPENDENCY_LOCK_HASH/);
 });

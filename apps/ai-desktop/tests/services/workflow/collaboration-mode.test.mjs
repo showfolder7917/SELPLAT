@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { CollaborationDurationLog } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration-duration.log.js";
 import { CollaborationCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/collaboration-workflow.facade.js";
-import { PersonaSessionWriterQueue } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.js";
+import { PersonaSessionWriterQueue, collaborationWorkspaceState } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.js";
 import { createCollaborationResultSummary } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/result/result-summary.js";
 import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/integration.verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/verified-package.release.js";
@@ -1633,25 +1633,22 @@ test("集成工作区锁文件一致时自动复用主工作区依赖", async ()
   }
 });
 
-test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束时只解除链接", async () => {
+test("开发人物工作树共享第三方依赖但把仓库内本地包连接回自己的源码", async () => {
   const repository = mkdtempSync(path.join(controlledTempRoot, "collaboration-dependency-lease-"));
   const worktree = path.join(controlledTempRoot, `collaboration-dependency-lease-worktree-${Date.now()}`);
   const desktopRoot = path.join(repository, "apps", "ai-desktop");
-  const trackedModules = path.join(repository, "tracked-node-modules");
-  const lockContent = "managed-shared-lock";
+  const lockContent = JSON.stringify({ packages: {
+    "": {},
+    "node_modules/@selplat/sel-ui": { resolved: "../../shared/frontend/sel-ui", link: true },
+  } });
   try {
     mkdirSync(desktopRoot, { recursive: true });
     mkdirSync(path.join(desktopRoot, "scripts"), { recursive: true });
-    mkdirSync(path.join(trackedModules, ".bin"), { recursive: true });
-    mkdirSync(path.join(trackedModules, "electron", "dist"), { recursive: true });
+    mkdirSync(path.join(repository, "shared", "frontend", "sel-ui"), { recursive: true });
     writeFileSync(path.join(desktopRoot, "package-lock.json"), lockContent, "utf8");
     writeFileSync(path.join(desktopRoot, "package.json"), JSON.stringify({ name: "ai-desktop" }), "utf8");
-    writeFileSync(path.join(trackedModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
+    writeFileSync(path.join(repository, "shared", "frontend", "sel-ui", "package.json"), JSON.stringify({ name: "@selplat/sel-ui" }), "utf8");
     const electronExecutable = process.platform === "win32" ? "electron.exe" : "Electron";
-    writeFileSync(path.join(trackedModules, "electron", "path.txt"), electronExecutable, "utf8");
-    writeFileSync(path.join(trackedModules, "electron", "dist", electronExecutable), "ready", "utf8");
-    // 模拟候选工作树检出时已有的受跟踪依赖链接，释放租约后必须保持它不被删除。
-    symlinkSync(trackedModules, path.join(desktopRoot, "node_modules"), process.platform === "win32" ? "junction" : "dir");
     writeFileSync(
       path.join(desktopRoot, "scripts", "dependency-cache.mjs"),
       readFileSync(new URL("../../../scripts/dependency-cache.mjs", import.meta.url), "utf8"),
@@ -1668,14 +1665,18 @@ test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束
     const sourceModules = path.join(repository, "cache", "ai-desktop", "dependencies", lockHash, "node_modules");
     mkdirSync(path.join(sourceModules, ".bin"), { recursive: true });
     mkdirSync(path.join(sourceModules, "electron", "dist"), { recursive: true });
+    mkdirSync(path.join(sourceModules, "@selplat"), { recursive: true });
     writeFileSync(path.join(sourceModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "ready", "utf8");
     writeFileSync(path.join(sourceModules, "electron", "path.txt"), electronExecutable, "utf8");
     writeFileSync(path.join(sourceModules, "electron", "dist", electronExecutable), "ready", "utf8");
+    symlinkSync(path.join(repository, "shared", "frontend", "sel-ui"), path.join(sourceModules, "@selplat", "sel-ui"), process.platform === "win32" ? "junction" : "dir");
 
     const lease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "executor-song-yu-g1");
     const validationLease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "task-validation-1");
     assert.deepEqual(lease.environment, { AI_DESKTOP_DEPENDENCY_LEASE_ID: "executor-song-yu-g1" });
-    assert.equal(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), realpathSync(trackedModules));
+    assert.notEqual(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), realpathSync(sourceModules));
+    assert.equal(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules", "@selplat", "sel-ui")), realpathSync(path.join(worktree, "shared", "frontend", "sel-ui")));
+    assert.equal(realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules", "electron")), realpathSync(path.join(sourceModules, "electron")));
     const probeModule = pathToFileURL(path.join(worktree, "apps", "ai-desktop", "scripts", "dependency-cache.mjs")).href;
     const probe = JSON.parse(execFileSync(process.execPath, [
       "--input-type=module",
@@ -1685,11 +1686,13 @@ test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束
     assert.equal(probe.projectRoot, worktree);
     assert.equal(probe.cacheProjectRoot, repository);
     assert.equal(probe.dependencyCacheRoot, path.join(repository, "cache", "ai-desktop", "dependencies"));
+    assert.equal(probe.sharedDependencyRoot, sourceModules);
+    assert.equal(probe.dependencyRoot, realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")));
     assert.equal(probe.dependencyLeaseId, "executor-song-yu-g1");
     releaseManagedDependencyLease(lease);
     assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), true);
     releaseManagedDependencyLease(validationLease);
-    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), true);
+    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), false);
     assert.equal(git(worktree, "status", "--porcelain"), "");
     assert.equal(existsSync(path.join(worktree, "build", "ai-desktop", "node_modules")), false);
     assert.equal(existsSync(sourceModules), true);
@@ -1698,6 +1701,24 @@ test("开发人物工作树通过 Git 登记签发共享依赖租约并在结束
     rmSync(repository, { recursive: true, force: true });
     rmSync(worktree, { recursive: true, force: true });
   }
+});
+
+test("执行人物只有任务工作树和当前测试记录目录可写", () => {
+  const sourceRoot = path.join(controlledTempRoot, "source-workspace");
+  const worktreeRoot = path.join(controlledTempRoot, "task-worktree");
+  const task = {
+    taskId: "task-write-boundary",
+    versionWorkspace: { workspaceId: "task-worktree", rootPath: worktreeRoot },
+    snapshot: { workspaceState: { primaryId: "source", roots: [{ id: "source", name: "source", path: sourceRoot, permission: "workspace-write" }] } },
+  };
+  const state = collaborationWorkspaceState(task, task.snapshot.workspaceState);
+  assert.equal(state.primaryId, "task-worktree");
+  assert.equal(state.roots.find((root) => root.path === worktreeRoot)?.permission, "workspace-write");
+  assert.equal(state.roots.find((root) => root.path === sourceRoot)?.permission, "read-only");
+  assert.deepEqual(
+    state.roots.filter((root) => root.permission === "workspace-write").map((root) => root.path),
+    [worktreeRoot, path.join(sourceRoot, "OPTION", "temp", "ai-desktop", "执行日志", "待执行", "测试", "task-write-boundary")],
+  );
 });
 
 test("令狐候选统一测试把外层受控依赖链接传给全部固定脚本", () => {

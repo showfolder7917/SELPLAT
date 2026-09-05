@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.131.0
+rule_version = 5.132.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -118,7 +118,9 @@ harness_runtime_recovery_verification = exact_registry_https_url + pinned_sha512
 <!-- 协同执行人只修改和修复源码；固定代码验证由桌面主进程在任务签发 worktree 内完成，避免 Harness 反复申请 Playwright 权限。 -->
 collaboration_task_worktree_validation_owner = ai_desktop_main_process + validate_task_id_workspace_id_managed_root_branch_and_base_sha + run_inside_each_executor_worktree + fixed_typecheck_then_isolated_playwright + codex_direct_validation_request_declined_without_user_approval
 <!-- 多任务可以复用应用私有依赖下载缓存，但源码、执行目录、报告、截图和结果必须保持任务隔离。 -->
-collaboration_task_test_cache_and_artifact_scope = shared_private_npm_and_playwright_dependency_cache + lockfile_identical_node_modules_temporary_reuse + per_task_worktree_execution + per_task_temp_interaction_task_id + remove_dependency_link_before_commit + serialized_local_interaction_port
+collaboration_task_test_cache_and_artifact_scope = shared_private_npm_and_playwright_third_party_dependency_cache + worktree_local_package_overlay_for_every_lockfile_link + per_task_worktree_execution + per_task_temp_interaction_task_id + remove_dependency_link_and_overlay_before_commit + serialized_local_interaction_port
+<!-- 执行人物的源码写权限只能覆盖当前任务工作树；主工作区与其他登记工程统一只读，只有当前任务测试记录目录可以窄范围回写；业务含义是模型无法通过绝对路径把候选源码提前同步到主分支。 -->
+collaboration_executor_worktree_write_boundary_contract = current_task_worktree_only_for_source_write + registered_source_workspaces_read_only + current_task_test_record_directory_only_write_exception + main_workspace_source_written_by_verified_integration_only
 <!-- 隔离 Playwright 使用确定性测试画面，不得借此申请真实屏幕录制；真实屏幕只能由稳定签名的 AI Desktop 能力验证。 -->
 isolated_playwright_permission_boundary = no_harness_command_approval + no_macos_screen_recording_requirement + localhost_only + stable_ai_desktop_identity_for_separate_real_screen_validation
 <!-- 自动策略的意图理解和方案分析阶段强制只读，拒绝文件修改及命令提权。 -->

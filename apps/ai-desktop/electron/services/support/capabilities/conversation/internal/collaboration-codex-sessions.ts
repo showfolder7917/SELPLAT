@@ -387,11 +387,23 @@ class CodexExecutorSession implements ExecutorSessionPort {
 
 }
 
-function collaborationWorkspaceState(task: CollaborationTaskOutDto, configured?: WorkspaceStateOutDto): WorkspaceStateOutDto {
+export function collaborationWorkspaceState(task: CollaborationTaskOutDto, configured?: WorkspaceStateOutDto): WorkspaceStateOutDto {
   const workspace = task.versionWorkspace;
   const base = configured || task.snapshot.workspaceState;
   if (!workspace) return structuredClone(base);
-  const roots = base.roots.filter((root) => path.resolve(root.path) !== path.resolve(workspace.rootPath));
+  // 执行人物只能写自己的任务工作树；主工作区和其他登记工程保留只读调查能力，不能被绝对路径补丁绕过。
+  const roots: WorkspaceStateOutDto["roots"] = base.roots
+    .filter((root) => path.resolve(root.path) !== path.resolve(workspace.rootPath))
+    .map((root) => ({ ...root, permission: "read-only" as const }));
+  const originalPrimary = task.snapshot.workspaceState.roots.find((root) => root.id === task.snapshot.workspaceState.primaryId);
+  const testRecordPath = originalPrimary
+    ? path.join(originalPrimary.path, "OPTION", "temp", "ai-desktop", "执行日志", "待执行", "测试", safeName(task.taskId))
+    : null;
+  // 测试文档是唯一允许回写主工程的数据；目录收窄到当前任务，不能借此取得主工程源码写权限。
+  if (testRecordPath) {
+    mkdirSync(testRecordPath, { recursive: true });
+    roots.push({ id: `collaboration-test-record-${safeName(task.taskId)}`, name: "当前任务测试记录", path: testRecordPath, permission: "workspace-write" });
+  }
   return {
     primaryId: workspace.workspaceId,
     roots: [{ id: workspace.workspaceId, name: path.basename(workspace.rootPath), path: workspace.rootPath, permission: "workspace-write" }, ...roots],
