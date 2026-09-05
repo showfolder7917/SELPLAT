@@ -80,6 +80,9 @@ function flowHealth(task: CollaborationTaskOutDto, stale: boolean): LinghuFlowHe
   if (task.state === "integrated") return "completed";
   if (task.state === "cancelled") return "human-blocked";
   // 结构化失败和恢复态分别映射到停点或恢复中。
+  // 需要客户先处理的本地归属问题是明确等待，不是心跳停滞；令狐仍可依据 blockingKind 生成指导，
+  // 但监督器不会把等待时间当成新的执行超时。
+  if (task.state === "blocked" && task.integrationFailure?.kind === "local-change-ownership") return "waiting";
   if (task.state === "blocked") return "stalled";
   if (task.state === "recovering") return "recovering";
   if (task.state === "test-failed") return "stalled";

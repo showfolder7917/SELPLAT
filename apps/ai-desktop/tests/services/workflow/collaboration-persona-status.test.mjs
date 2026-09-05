@@ -15,10 +15,19 @@ test("每个人的工作中间阶段显示真实阶段而不是笼统正在执�
   }
 });
 
-test("人物使用协作群最新事实和研讨确认阶段，暂停不显示仍在讨论", () => {
+test("空闲人物不被历史节点占用，工作人物只显示当前节点", () => {
   const member = { memberId: "linghu-ancestor", state: "idle" };
   const timeline = { groups: [{ nodes: [{ actor: member, action: "第 2 次修复中", startedAt: "2026-09-04T01:00:00Z", completedAt: null }] }] };
-  assert.equal(label(member, "zh-CN", timeline), "第 2 次修复中");
+  assert.equal(label(member, "zh-CN", timeline), "空闲");
+  const working = { ...member, state: "working", updatedAt: "2026-09-04T00:59:00Z" };
+  const activeTimeline = { groups: [{ nodes: [
+    { actor: member, status: "completed", action: "历史卡点已上报", startedAt: "2026-09-04T01:00:00Z", completedAt: "2026-09-04T01:01:00Z" },
+    { actor: member, status: "current", action: "正在复查", startedAt: "2026-09-04T01:02:00Z", completedAt: null },
+  ] }] };
+  assert.equal(label(working, "zh-CN", activeTimeline), "正在复查");
+});
+
+test("研讨确认阶段由实时研讨事实显示，暂停不显示仍在讨论", () => {
   const evolution = { automationRuntime: { status: "running" }, deliberations: [{ status: "ready-to-establish", rounds: [{ confirmation: { offer: "只修复图片恢复" } }] }] };
   assert.equal(label({ memberId: "han-li" }, "zh-CN", null, evolution), "确认修复内容中");
   assert.equal(label({ memberId: "nangong-wan" }, "zh-CN", null, evolution), "等待韩立确认");

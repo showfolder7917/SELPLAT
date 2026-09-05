@@ -2,7 +2,7 @@
 import type { LocaleValue } from "../../../../contracts/foundation/index.js";
 import type { WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
 // Coordinator 状态是检测、恢复和派发的权威来源。
-import type { CollaborationCustomerActionGuidanceOutDto, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationCustomerActionGuidanceOutDto, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
 // 令狐快照、模块和完整状态使用跨进程纯协议，页面与主进程共享同一数据形状。
 import type {
   LinghuAutomaticFlowSnapshotOutDto,
@@ -57,6 +57,10 @@ export interface LinghuAutomationFacadeOptions {
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
   // 只读模型根据已确认事实生成客户能执行的指导，程序不内置具体问题文案。
   analyzeCustomerActionGuidance?(facts: Record<string, unknown>): Promise<string>;
+  // 普通运行异常只进入巡检修复，不伪装成阻断原任务的“卡点”。
+  readUnhandledExceptions?(): WorkflowExceptionRecordOutDto[];
+  // 派发成功后才领取异常，防止同一运行错误被重复建任务。
+  claimUnhandledExceptions?(eventIds: string[]): string[];
 }
 
 /** 令狐老祖自动保障的唯一入口；界面和定时器只调用本 Facade，不直接依赖调度、恢复与持久化实现。 */
@@ -76,6 +80,8 @@ export class LinghuAutomationFacade {
   readonly #readTestResourceState: LinghuAutomationFacadeOptions["readTestResourceState"];
   readonly #runUnifiedTestAndRestart: LinghuAutomationFacadeOptions["runUnifiedTestAndRestart"];
   readonly #analyzeCustomerActionGuidance: NonNullable<LinghuAutomationFacadeOptions["analyzeCustomerActionGuidance"]>;
+  readonly #readUnhandledExceptions: NonNullable<LinghuAutomationFacadeOptions["readUnhandledExceptions"]>;
+  readonly #claimUnhandledExceptions: NonNullable<LinghuAutomationFacadeOptions["claimUnhandledExceptions"]>;
   // timer 为 null 表示尚未启动或已经停止；重复 start 不会创建多重轮询。
   #timer: ReturnType<typeof setTimeout> | null = null;
   #stopped = false;
@@ -93,6 +99,8 @@ export class LinghuAutomationFacade {
     this.#readTestResourceState = options.readTestResourceState;
     this.#runUnifiedTestAndRestart = options.runUnifiedTestAndRestart;
     this.#analyzeCustomerActionGuidance = options.analyzeCustomerActionGuidance || (async () => { throw new Error("令狐客户操作指导分析器尚未配置。"); });
+    this.#readUnhandledExceptions = options.readUnhandledExceptions || (() => []);
+    this.#claimUnhandledExceptions = options.claimUnhandledExceptions || (() => []);
   }
 
   /** 返回 Store 的深复制状态快照。 */
@@ -177,6 +185,8 @@ export class LinghuAutomationFacade {
       const snapshots = automaticFlowSnapshots(collaborationState, this.#store.state().activeTaskId, checkedAt);
       // 测试资源快照和流程快照在同一状态提交中持久化。
       const testResourceState = this.#readTestResourceState();
+      // 只读取已明确接入的普通技术异常；flowImpact=none 不改写原任务状态。
+      const ordinaryIssues = this.#readUnhandledExceptions().filter((event) => event.status === "open" && event.flowImpact === "none" && event.eventType === "hanli.inquiry.failed");
       let automation = this.#store.updateRuntime("automation.checked", (state) => {
         state.lastCheckedAt = checkedAt;
         state.detectionCursor = checkedAt;
@@ -257,7 +267,7 @@ export class LinghuAutomationFacade {
       }
 
       // 没有活动任务时只依据具体故障决定是否派发当前模块，不经过旧提案链。
-      if (!automation.activeTaskId) await this.#dispatchCurrentModule(automation);
+      if (!automation.activeTaskId) await this.#dispatchCurrentModule(automation, ordinaryIssues);
     } catch (error) {
       // 任一检查异常写入状态和事件中心，但不自行关闭 enabled。
       const detail = error instanceof Error ? error.message : String(error);
@@ -430,10 +440,10 @@ export class LinghuAutomationFacade {
     }
   }
 
-  async #dispatchCurrentModule(state: LinghuAutomationStateOutDto): Promise<void> {
+  async #dispatchCurrentModule(state: LinghuAutomationStateOutDto, ordinaryIssues: WorkflowExceptionRecordOutDto[] = []): Promise<void> {
     // 只有真实停点或阻塞证据才允许进入现有修复任务流程，不再生成审批提案。
     const actionableSnapshots = state.flowSnapshots.filter((snapshot) => ["stalled", "recovering", "human-blocked"].includes(snapshot.health) || snapshot.blockingKind !== "none");
-    if (actionableSnapshots.length === 0) {
+    if (actionableSnapshots.length === 0 && ordinaryIssues.length === 0) {
       // 检查点前缀防止同一循环、模块和游标重复记录“无需操作”。
       const inspectionPrefix = `inspection:${state.cycle}:${state.currentModule}:`;
       if (state.recoveryCheckpoint?.startsWith(inspectionPrefix)) return;
@@ -457,6 +467,14 @@ export class LinghuAutomationFacade {
     // 固定职责只有一个正式来源，不读取可编辑文案或兼容入口。
     // 当前文案与模块专属职责组合为确认意图，不能扩大到其他模块。
     const moduleText = moduleInstruction(state.currentModule);
+    const ordinaryIssueContext = ordinaryIssues.map((event) => ({
+      eventId: event.eventId,
+      eventType: event.eventType,
+      correlationId: event.correlationId,
+      message: event.message,
+      occurredAt: event.occurredAt,
+      requestId: event.payload.requestId,
+    }));
     const confirmedIntent = [
       LINGHU_SAFEGUARD_INSTRUCTIONS,
       `当前循环：${state.cycle}`,
@@ -465,14 +483,15 @@ export class LinghuAutomationFacade {
       state.blockingReason ? `上一轮持续检测到的阻塞：${state.blockingReason}` : "当前没有已知阻塞。",
       state.lastFeedback ? `上一模块反馈：${state.lastFeedback.summary}` : "当前没有上一模块反馈。",
       testResourceContext(state.testResourceState),
+      ordinaryIssueContext.length ? `本轮已发现的普通运行异常（不是卡点，不改写原任务状态）：${JSON.stringify(ordinaryIssueContext)}` : "本轮没有额外的普通运行异常。",
       "职责范围固定为：保障所有人物最终完成、补测试漏点与升级测试能力、完善日志审计。启动文案不能扩大为页面演化、主动改版或无关架构优化。",
       "本轮只处理当前独立模块。需要多个修正时按模块和类型拆分，记录实际执行者；不要把其他模块混入同一任务。",
       "自动执行开启后检测永远不能停止。明确阻塞或需要人工业务选择时保留恢复点并反馈，但不得自行关闭自动执行。",
     ].join("\n\n");
     // 任务由令狐稳定身份发起并优先交给令狐人物 writer。
     const next = this.#collaboration.submitTask({
-      title: `令狐老祖 · 第${state.cycle}轮 · ${moduleLabel(state.currentModule)}`,
-      problemStatement: `保障自动流程持续完成：${moduleLabel(state.currentModule)}`,
+      title: ordinaryIssueContext.length ? `令狐老祖 · 运行异常修复 · ${ordinaryIssues[0].eventType}` : `令狐老祖 · 第${state.cycle}轮 · ${moduleLabel(state.currentModule)}`,
+      problemStatement: ordinaryIssueContext.length ? `修复已记录的运行异常：${ordinaryIssues.map((event) => event.message).join("；")}` : `保障自动流程持续完成：${moduleLabel(state.currentModule)}`,
       confirmedIntent,
       constraints: ["只处理当前独立模块", "使用单一入口 + Facade", "失败必须修正并复测", "自动检测保持开启"],
       acceptanceCriteria: ["给出可审计反馈", "流程中断已恢复或明确记录阻塞", "修改后无回退", "实际执行者记录完整"],
@@ -486,6 +505,7 @@ export class LinghuAutomationFacade {
     // Coordinator 返回新状态，最后一条必须是刚创建的保障任务。
     const task = next.tasks.at(-1);
     if (!task) throw new Error("自动保障任务创建后没有返回任务记录。");
+    const claimedIssueIds = ordinaryIssueContext.length ? this.#claimUnhandledExceptions(ordinaryIssues.map((event) => event.eventId)) : [];
     this.#store.updateRuntime("automation.module_dispatched", (current) => {
       const previousCheckpoint = current.recoveryCheckpoint;
       current.activeTaskId = task.taskId;
@@ -497,7 +517,7 @@ export class LinghuAutomationFacade {
         : `active-task:${task.taskId}:${current.currentModule}`;
       current.blockingReason = null;
     });
-    this.#recordEvent("linghu.automation.module_dispatched", { cycle: state.cycle, module: state.currentModule }, task.taskId);
+    this.#recordEvent("linghu.automation.module_dispatched", { cycle: state.cycle, module: state.currentModule, ordinaryIssueIds: claimedIssueIds }, task.taskId);
   }
 
   #completeModule(task: CollaborationTaskOutDto, summary: string): LinghuAutomationStateOutDto {

@@ -408,6 +408,25 @@ test("恢复请求结束本地修改归属等待节点并追加恢复节点", ()
   } finally { fixture.close(); }
 });
 
+test("恢复复查再次遇到归属阻塞时关闭恢复节点并回到等待", () => {
+  const fixture = createFixture("integration-ownership-reblocked");
+  try {
+    const blocked = task(fixture, 1, true, true);
+    blocked.integrationGeneration = 2;
+    blocked.state = "blocked";
+    blocked.integrationFailure = { kind: "local-change-ownership", detail: "main.ts 仍未提交", conflictFiles: ["main.ts"], baseSha: null, resultSha: null, generation: 2, occurredAt: fixture.at(8) };
+    blocked.flowEvents.push(
+      flow("recovery-again", "task.recovery_requested", "recovery", "started", member("linghu-ancestor", "令狐老祖"), "复查客户处理结果", fixture.at(7)),
+      flow("ownership-again", "integration.local_change_ownership_blocked", "integration", "waiting", member("linghu-ancestor", "令狐老祖"), "main.ts 仍未提交", fixture.at(8)),
+    );
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(8), [blocked]), [blocked.taskId]);
+    const nodes = fixture.timeline.snapshot(fixture.at(9)).groups[0].nodes;
+    assert.equal(nodes.find((node) => node.action === "恢复复查已结束").status, "completed");
+    assert.equal(nodes.find((node) => node.action === "等待确认本地修改归属").status, "waiting");
+    assert.equal(nodes.some((node) => node.action === "正在恢复任务" && node.status === "current"), false);
+  } finally { fixture.close(); }
+});
+
 test("统一测试开始后结束等待令狐接手节点", () => {
   const fixture = createFixture("integration-queue-started");
   try {

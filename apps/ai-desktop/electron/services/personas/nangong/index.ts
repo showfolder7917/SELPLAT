@@ -5,6 +5,8 @@ export {
   type CreateNangongRuntimeOptions,
   type NangongApplicationPort,
   type NangongRuntime,
+  nangongInquiryResult,
+  nangongInquiryWithCorrection,
 } from "./nangong.facade.js";
 import { NangongTaskDistributionService, type NangongTaskDistributionServiceOptions } from "./internal/nangong-task-distribution.service.js";
 import type { NangongTaskDistributionPort } from "./internal/nangong-application.ports.js";

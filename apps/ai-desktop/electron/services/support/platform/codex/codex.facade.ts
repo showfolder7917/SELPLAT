@@ -722,14 +722,15 @@ export class CodexService {
       waiter.reject(new Error(stringValue(asObject(turn.error).message) || "Codex turn failed."));
       return;
     }
-    const streamedText = [...waiter.messageParts.values()].join("\n").trim();
+    const agentMessages = [...waiter.messageParts.values()].map((value) => value.trim()).filter(Boolean);
+    const streamedText = agentMessages.join("\n").trim();
     const finalItem = Array.isArray(turn.items)
       ? turn.items.map(asObject).find((item) => item.type === "agentMessage")
       : undefined;
     const text = streamedText
       || stringValue(finalItem?.text)
       || (status === "interrupted" ? "Turn interrupted." : "");
-    waiter.resolve({ text, itemCount: waiter.itemCount });
+    waiter.resolve({ text, agentMessages, itemCount: waiter.itemCount });
   }
 
   #handleExit(code: number | null, signal: string | null): void {

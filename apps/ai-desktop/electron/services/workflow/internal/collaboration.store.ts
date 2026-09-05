@@ -231,6 +231,11 @@ export class CollaborationStore {
     return this.updateTask(taskId, "task.recovery_requested", (task, state) => {
       if (!["recovering", "blocked", "test-failed"].includes(task.state)) throw new Error("当前任务不需要恢复。");
       const customerGuidance = task.customerActionGuidance || null;
+      // 本地修改归属是客户前置条件。只有令狐已经给出可执行指导、客户从该等待节点确认完成后，
+      // 才能进入复查；历史通用“继续”入口不得把未解决条件伪装成恢复中。
+      if (task.integrationFailure?.kind === "local-change-ownership" && !customerGuidance) {
+        throw new Error("请先按等待节点中的操作步骤处理本地修改；令狐给出完成标准后，才能从该卡点继续。");
+      }
       if (task.state === "test-failed") {
         task.state = "ready-for-integration";
         task.blockingReason = null;
@@ -410,7 +415,7 @@ function recoverInterruptedState(state: CollaborationStateOutDto): void {
   const interruptedTaskIds = new Set<string>();
   for (const task of state.tasks) {
     // 已在恢复态的任务保持原恢复点；重复启动不能再次追加相同的中断事实。
-    if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "returned-to-nangong" || task.state === "ready-for-integration" || task.state === "awaiting-restart" || task.state === "recovering") continue;
+    if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "returned-to-nangong" || task.state === "ready-for-integration" || task.state === "awaiting-restart" || task.state === "recovering" || task.state === "blocked" || task.state === "test-failed") continue;
     task.recoveryTargetState ??= task.state;
     task.state = "recovering";
     task.phase = null;

@@ -316,6 +316,18 @@ export class VersionIntegrationPipeline {
             "integration", ownershipBlocked || mergeConflict || infrastructureFailure ? "waiting" : "failed", failurePresentation.summary, currentActor,
             !ownershipBlocked && !mergeConflict && !infrastructureFailure,
           );
+          // 集成已经重新落到等待或失败终点，此时没有人物在执行任务。释放上一次恢复留下的占用，
+          // 防止侧栏继续显示南宫婉或令狐正在恢复。
+          for (const member of mutable.members.filter((candidate) => candidate.currentTaskId === task.taskId)) {
+            member.currentTaskId = null;
+            member.role = null;
+            member.phase = null;
+            member.blockingReason = null;
+            member.lastHeartbeatAt = null;
+            member.lastProtocolProgressAt = null;
+            member.state = member.state === "draining" ? "draining" : "idle";
+            member.updatedAt = new Date().toISOString();
+          }
         }
       });
       this.#durations.writeGenerationReport(generation, taskIds);

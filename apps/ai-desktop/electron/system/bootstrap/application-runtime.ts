@@ -113,6 +113,7 @@ import {
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
 import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
 import { createHanliRuntime } from "../../services/personas/hanli/index.js";
+import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
 import { PersonaEvolutionRuntime } from "../../services/workflow/index.js";
@@ -551,15 +552,26 @@ export async function startApplication(): Promise<void> {
     memory: collaborationMemory,
     investigateWithNangong: (inquiry, request) => {
       const investigation = inquiryQueue.then(async () => {
-      if (!nangongInquiryCodex) throw new Error("南宫婉只读核实服务尚未就绪。");
+      const inquiryCodex = nangongInquiryCodex;
+      if (!inquiryCodex) throw new Error("南宫婉只读核实服务尚未就绪。");
       const state = evolutionStateStore.state();
       const facts = { capturedAt: new Date().toISOString(), topics: state.topics.slice(-12).map(({ topicId, title, status }) => ({ topicId, title, status })), proposals: state.proposals.slice(-12).map(({ proposalId, title, status, distributedTaskIds }) => ({ proposalId, title, status, distributedTaskIds })) };
-      return (await nangongInquiryCodex.send(prompts.render("nangong.progress-inquiry", {
+      const prompt = prompts.render("nangong.progress-inquiry", {
         customerQuestion: inquiry.customerQuestion,
         understandingJson: JSON.stringify({ understoodGoal: inquiry.understoodGoal, verificationTarget: inquiry.verificationTarget, expectedAnswer: inquiry.expectedAnswer }),
         investigationQuestion: inquiry.investigationQuestion,
         facts: JSON.stringify(facts),
-      }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null)).text;
+      });
+      const workspace = mergeWorkspaceState(workspaces.read(), request.workspaceState);
+      const attachments = await screenshots.resolveAttachmentPaths(request.attachmentIds || []);
+      return nangongInquiryWithCorrection(
+        () => inquiryCodex.send(prompt, request.locale, "read-only", workspace, attachments, () => undefined, null),
+        (error) => inquiryCodex.send(prompts.render("nangong.progress-inquiry-correction", {
+          customerQuestion: inquiry.customerQuestion,
+          error,
+        }), request.locale, "read-only", workspace, [], () => undefined, null),
+        inquiry.customerQuestion,
+      );
       });
       inquiryQueue = investigation.catch(() => undefined);
       return investigation;
@@ -705,6 +717,8 @@ export async function startApplication(): Promise<void> {
       collaborationTimeline?.appendInspectionObservation(type, details, taskId);
     },
     readTestResourceState: () => testResources.state(),
+    readUnhandledExceptions: () => workflowRepository?.listUnhandledExceptions(50) || [],
+    claimUnhandledExceptions: (eventIds) => workflowRepository?.claimExceptions(eventIds, "linghu-ancestor") || [],
     analyzeCustomerActionGuidance: (facts) => {
       const analysis = linghuGuidanceQueue.then(async () => {
         if (!linghuGuidanceCodex) throw new Error("令狐客户操作指导服务尚未就绪。");

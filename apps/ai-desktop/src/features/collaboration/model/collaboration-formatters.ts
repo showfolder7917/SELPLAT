@@ -21,10 +21,15 @@ export function collaborationMemberStateLabel(member: CollaborationMemberOutDto,
     return member.memberId === "nangong-wan" ? (round.answer ? "等待韩立追问" : "研讨回答中") : (round.answer ? "研讨判断中" : "等待南宫婉回答");
   }
   if (conversationCanOwnDisplay && conversationActivity === "active") return locale === "ja" ? "会話中" : "会话中";
-  const nodes = timeline?.groups.flatMap((group) => group.nodes).filter((node) => node.actor.memberId === member.memberId) || [];
+  // 时间线是审计历史，不是人物占用表。只有人物当前确实处于工作态时，才允许“当前节点”细化侧栏文案；
+  // 等待节点和已完成节点都不能把已经释放的人物重新显示成正在处理。
+  const timelineOwnsDisplay = ["assigned", "working", "recovering", "retiring", "draining"].includes(member.state);
+  const nodes = timelineOwnsDisplay
+    ? timeline?.groups.flatMap((group) => group.nodes).filter((node) => node.actor.memberId === member.memberId && node.status === "current") || []
+    : [];
   nodes.sort((a, b) => (b.completedAt || b.startedAt).localeCompare(a.completedAt || a.startedAt));
   const latest = nodes[0];
-  if (latest && (member.state !== "working" || (latest.completedAt || latest.startedAt) >= member.updatedAt)) return latest.action;
+  if (latest && (!member.updatedAt || latest.startedAt >= member.updatedAt)) return latest.action;
   if (member.state === "working" && member.phase) {
     const phase = { analyzing: "技术分析中", planning: "整理方案中", implementing: "执行修改中", verifying: "自检中", finalizing: "整理结果中", ready: "等待下一步", blocked: "已阻塞", failed: "处理失败" };
     return phase[member.phase];

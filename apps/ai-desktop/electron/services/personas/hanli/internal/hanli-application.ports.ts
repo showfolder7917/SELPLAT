@@ -5,6 +5,7 @@ import type { EvolutionStatePort } from "../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
+import type { NangongInquiryResultOutDto } from "../../../../../contracts/services/personas/nangong/index.js";
 
 /** 模型只能声明理解结果和调查范围；客户原问题由程序另行固定，不能由模型生成或覆盖。 */
 export interface HanliInquiryUnderstanding {
@@ -32,7 +33,7 @@ export interface HanliApplicationServiceOptions {
   memory?: CollaborationMemoryPort | null;
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   analyzeCorpus?: (prompt: string) => Promise<string>;
-  investigateWithNangong?: (inquiry: HanliInvestigationRequest, request: SendPersonaConversationMessageInDto) => Promise<string>;
+  investigateWithNangong?: (inquiry: HanliInvestigationRequest, request: SendPersonaConversationMessageInDto) => Promise<NangongInquiryResultOutDto>;
   onPersonaConversationChanged?: (conversation: import("../../../../../contracts/services/personas/conversation/index.js").PersonaConversationOutDto) => void;
   conversation?: {
     send(request: SendPersonaConversationMessageInDto, prompt: string): Promise<SendMessageOutDto>;

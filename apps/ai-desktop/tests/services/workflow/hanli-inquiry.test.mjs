@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HanliInquiryService, parseInquiryFindings } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-inquiry.service.js";
+import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-inquiry.service.js";
+import { nangongInquiryResult, nangongInquiryWithCorrection } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/index.js";
 import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.parser.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/hanli-conversation.service.js";
 
@@ -46,7 +47,7 @@ test("真实派发后才等待，调查返回后主动答复，内部问答保�
   assert.equal(f.service.run(request, "original", customerQuestion, understanding, topic), pending);
   assert.ok(f.order.indexOf("dispatched") < f.order.indexOf("inquiry:u1:waiting"));
   assert.equal(f.messages.some((item) => item.messageId === "inquiry:u1:result"), false);
-  resolve(JSON.stringify(findings));
+  resolve(findings);
   const result = await pending;
   assert.equal(result.conversationId, "original");
   const answer = f.messages.find((item) => item.messageId === "internal:inquiry:u1:answer");
@@ -68,7 +69,7 @@ test("真实派发后才等待，调查返回后主动答复，内部问答保�
   assert.equal(f.order.filter((item) => item === "dispatched").length, 1);
 });
 test("韩立解释失败时保留内部证据但不向用户倾倒技术报告", async () => {
-  const f = fixture(async () => JSON.stringify(findings), async () => { throw new Error("解释服务暂时不可用"); });
+  const f = fixture(async () => findings, async () => { throw new Error("解释服务暂时不可用"); });
   const result = await f.service.run(request, "original", customerQuestion, understanding, topic);
   const internal = f.messages.find((item) => item.messageId === "internal:inquiry:u1:answer");
   assert.match(internal.content, /file.ts:12/);
@@ -76,22 +77,49 @@ test("韩立解释失败时保留内部证据但不向用户倾倒技术报告",
   assert.match(result.messages.at(-1).content, /没有成功把技术结果整理成清楚的解决方案/);
 });
 test("调用失败和不合格调查不得变成完成结论", async () => {
-  for (const invoke of [async () => { throw new Error("服务断线"); }, async () => "已经完成", async () => JSON.stringify({ ...findings, evidence: [] })]) {
+  for (const invoke of [async () => { throw new Error("服务断线"); }, async () => null]) {
     const f = fixture(invoke);
     const result = await f.service.run(request, "original", customerQuestion, understanding, topic);
     assert.match(result.messages.at(-1).content, /核实未完成/);
     assert.equal(f.messages.some((item) => item.speakerPersonaId === "nangong-wan"), false);
   }
 });
-test("允许明确未知但禁止无证据的已核实", () => {
-  assert.throws(() => parseInquiryFindings(JSON.stringify({ ...findings, evidence: [] }), customerQuestion));
-  assert.equal(parseInquiryFindings(JSON.stringify({ ...findings, status: "unknown", evidence: [] }), customerQuestion).status, "unknown");
+test("南宫婉从独立最终消息直返结构化结果而忽略过程说明", () => {
+  const result = nangongInquiryResult({
+    text: `我会严格按只读范围核实\n${JSON.stringify(findings)}`,
+    agentMessages: ["我会严格按只读范围核实", JSON.stringify(findings)], itemCount: 2,
+  }, customerQuestion);
+  assert.deepEqual(result, findings);
 });
-test("调查结果没有对应客户原问题时不得进入客户解释", async () => {
-  const f = fixture(async () => JSON.stringify({ ...findings, answeredQuestion: "发送按钮为什么禁用" }));
-  const result = await f.service.run(request, "original", customerQuestion, understanding, topic);
-  assert.match(result.messages.at(-1).content, /核实未完成/);
-  assert.equal(f.order.includes("explained"), false);
+test("南宫婉拒绝无证据已核实和不对应客户原问题的结果", () => {
+  assert.throws(() => nangongInquiryResult({ text: JSON.stringify({ ...findings, evidence: [] }), itemCount: 1 }, customerQuestion), /未提供可定位/);
+  assert.equal(nangongInquiryResult({ text: JSON.stringify({ ...findings, status: "unknown", evidence: [] }), itemCount: 1 }, customerQuestion).status, "unknown");
+  assert.throws(() => nangongInquiryResult({ text: JSON.stringify({ ...findings, answeredQuestion: "发送按钮为什么禁用" }), itemCount: 1 }, customerQuestion), /没有对应客户原问题/);
+});
+test("南宫婉结果不合格时只纠正一次并可返回结构化结果", async () => {
+  let corrections = 0;
+  const result = await nangongInquiryWithCorrection(
+    async () => ({ text: "我会严格按只读范围核实", itemCount: 1 }),
+    async (reason) => { corrections += 1; assert.match(reason, /独立、完整/); return { text: JSON.stringify(findings), itemCount: 1 }; },
+    customerQuestion,
+  );
+  assert.deepEqual(result, findings);
+  assert.equal(corrections, 1);
+});
+test("南宫婉第二次仍不合格时明确失败，且传输失败不进行格式纠正", async () => {
+  let corrections = 0;
+  await assert.rejects(() => nangongInquiryWithCorrection(
+    async () => ({ text: "过程说明", itemCount: 1 }),
+    async () => { corrections += 1; return { text: "仍然不合格", itemCount: 1 }; },
+    customerQuestion,
+  ), /连续两次未通过校验/);
+  assert.equal(corrections, 1);
+  await assert.rejects(() => nangongInquiryWithCorrection(
+    async () => { throw new Error("服务断线"); },
+    async () => { corrections += 1; return { text: JSON.stringify(findings), itemCount: 1 }; },
+    customerQuestion,
+  ), /服务断线/);
+  assert.equal(corrections, 1);
 });
 test("结构化理解与可见回复分离，理解不足时保留澄清门禁", () => {
   const parsed = parseHanliConversationResponse(`先核实\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}`);
@@ -137,7 +165,7 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
         return { threadId: "provider-thread", itemCount: 1, text: `我会按最初问题核实当前运行版本。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` };
       },
     },
-    investigateWithNangong: async (inquiry) => { dispatches += 1; assert.equal(inquiry.customerQuestion, customerQuestion); return JSON.stringify(findings); },
+    investigateWithNangong: async (inquiry) => { dispatches += 1; assert.equal(inquiry.customerQuestion, customerQuestion); return findings; },
     recordEvent: () => {}, refreshSemanticMemory: () => {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
   });
   const workspaceState = { roots: [{ id: "root-1", path: "/workspace", name: "workspace", writable: true }], primaryId: "root-1" };

@@ -1077,6 +1077,36 @@ test("版本冲突恢复签发新修订而不重复集成旧 resultSha", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("本地修改归属未形成客户操作指导时禁止进入虚假恢复", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "ownership-recovery-gate-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const submitted = store.submitTask({ title: "本地修改归属", problemStatement: "等待客户提交本地修改", confirmedIntent: "客户完成后由令狐复查。", workspaceState, locale: "zh-CN" });
+    store.updateTask(submitted.taskId, "fixture.ownership_blocked", (task) => {
+      task.state = "blocked";
+      task.integrationFailure = { kind: "local-change-ownership", detail: "main.ts 尚未提交", conflictFiles: ["main.ts"], baseSha: null, resultSha: null, generation: 1, occurredAt: new Date().toISOString() };
+      task.blockingReason = "等待客户提交本地修改";
+    });
+    assert.throws(() => store.continueTask(submitted.taskId), /先按等待节点中的操作步骤/);
+    const blocked = store.state().tasks.find((task) => task.taskId === submitted.taskId);
+    assert.equal(blocked.state, "blocked");
+    assert.equal(blocked.flowEvents.some((event) => event.type === "task.recovery_requested"), false);
+
+    store.updateTask(submitted.taskId, "fixture.customer_guidance", (task) => {
+      task.customerActionGuidance = {
+        guidanceId: "customer-action:ownership", sourceFingerprint: "ownership", title: "请提交本地修改",
+        problem: "本地文件尚未提交。", reasonCustomerMustAct: "只有客户能确认文件归属。", steps: ["提交本地文件。"],
+        completionCriteria: ["工作区不再显示未提交文件。"], resumeLabel: "从卡点继续",
+        generatedBy: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, createdAt: new Date().toISOString(),
+      };
+    });
+    const continued = store.continueTask(submitted.taskId, { memberId: "linghu-ancestor", displayName: "令狐老祖" }).tasks.find((task) => task.taskId === submitted.taskId);
+    assert.equal(continued.state, "queued-executor");
+    assert.equal(continued.customerActionGuidance, null);
+    assert.match(continued.flowEvents.at(-1).summary, /令狐老祖正在复查客户处理结果/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("重启后的恢复态合并冲突不依赖主动巡检或人工点击并自动交给令狐修正", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "merge-conflict-auto-correction-"));
   try {
@@ -1400,6 +1430,30 @@ test("进程中断后任务显式进入恢复态，继续时重新排队且不�
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("应用重启保留客户等待状态并释放人物，不把卡点改成恢复中", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "blocked-restart-preserved-"));
+  try {
+    const statePath = path.join(directory, "state.json");
+    const store = new CollaborationStore(statePath);
+    const submitted = store.submitTask({ title: "等待客户提交", problemStatement: "本地文件未提交", confirmedIntent: "等待客户处理后复查。", workspaceState, locale: "zh-CN" });
+    store.updateTask(submitted.taskId, "fixture.customer_wait", (task, state) => {
+      task.state = "blocked";
+      task.blockingReason = "等待客户提交本地文件";
+      task.integrationFailure = { kind: "local-change-ownership", detail: "main.ts 未提交", conflictFiles: ["main.ts"], baseSha: null, resultSha: null, generation: 1, occurredAt: new Date().toISOString() };
+      const member = state.members.find((candidate) => candidate.memberId === "mo-caihuan");
+      member.state = "working";
+      member.currentTaskId = task.taskId;
+    });
+    const restored = new CollaborationStore(statePath).state();
+    const task = restored.tasks.find((candidate) => candidate.taskId === submitted.taskId);
+    const member = restored.members.find((candidate) => candidate.memberId === "mo-caihuan");
+    assert.equal(task.state, "blocked");
+    assert.equal(task.flowEvents.some((event) => event.type === "task.interrupted"), false);
+    assert.equal(member.state, "idle");
+    assert.equal(member.currentTaskId, null);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("协同任务冻结真实发起人快照，两类自动发起都不回退成韩立", () => {

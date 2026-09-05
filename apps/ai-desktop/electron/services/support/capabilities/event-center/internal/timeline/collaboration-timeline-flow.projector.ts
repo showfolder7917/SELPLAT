@@ -328,13 +328,26 @@ export function projectCollaborationFlowEvent(
 
   if (event.type === "integration.local_change_ownership_blocked" || event.type === "integration.merge_conflict") {
     const ownership = event.type === "integration.local_change_ownership_blocked";
-    return projection("blocked", [fact({
+    const facts = [fact({
       nodeId: `integration-blocked:${task.taskId}:${task.integrationGeneration || 0}:${event.type}`, kind: "repair",
       actor: event.actor || LINGHU, recipients: [initiator], status: "waiting",
       action: ownership ? "等待确认本地修改归属" : "等待修正合并冲突", summary: event.summary, content: event.summary,
       detail: task.integrationFailure?.detail || task.blockingReason || event.summary, startedAt: event.occurredAt,
       completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
-    })]);
+    })];
+    // 一次恢复复查若再次命中阻塞，恢复动作已经结束，必须关闭其“正在恢复”节点；
+    // 新的等待节点继续承载问题，不能让页面同时显示有人执行和等待客户。
+    const recovery = [...task.flowEvents]
+      .reverse()
+      .find((candidate) => candidate.type === "task.recovery_requested" && candidate.occurredAt < event.occurredAt);
+    if (recovery) facts.unshift(fact({
+      nodeId: `recovery:${task.taskId}:${task.taskRevision}:${recovery.eventId}`, kind: "repair",
+      actor: recovery.actor || LINGHU, recipients: [initiator], status: "completed", action: "恢复复查已结束",
+      summary: "恢复复查仍检测到阻塞条件，已回到等待节点。", content: recovery.summary,
+      detail: task.integrationFailure?.detail || event.summary, startedAt: recovery.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: false, manualApprovalProposalId: null,
+    }, ":reblocked"));
+    return projection("blocked", facts);
   }
 
   if (event.type === "integration.batch_frozen") return projection("running", [fact({
