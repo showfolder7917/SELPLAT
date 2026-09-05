@@ -38,5 +38,6 @@ test("韩立核实消息生命周期驱动南宫婉真实核实状态", () => {
   assert.match(personaConversation, /delegatedResponderPersonaId/);
   assert.match(personaConversation, /inquiry:\(\.\+\):progress/);
   assert.match(personaConversation, /inquiry:\$\{match\[1\]\}:result/);
-  assert.match(developer, /hanli\.delegatedResponderPersonaId === "nangong-wan" \? "investigating"/);
+  assert.match(developer, /else if \(hanli\.delegatedResponderPersonaId === "nangong-wan"\)/);
+  assert.match(developer, /nangongActivity = "investigating"/);
 });

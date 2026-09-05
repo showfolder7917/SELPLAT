@@ -394,8 +394,8 @@ button { color: inherit; }
 .nangong-conversation-activity { display: grid; gap: 7px; margin: 0 0 12px; padding: 13px 15px; border: 1px solid color-mix(in srgb, var(--sel-theme-accent) 42%, transparent); border-radius: var(--sel-theme-radius-control); background: color-mix(in srgb, var(--sel-theme-accent) 8%, var(--sel-theme-workbench-surface)); color: var(--sel-theme-workbench-text); }
 .nangong-conversation-activity span, .nangong-conversation-activity small { color: var(--sel-theme-workbench-text-muted); }
 .nangong-conversation-activity code { overflow-wrap: anywhere; white-space: pre-wrap; }
-.nangong-conversation-activity.waiting { border-color: color-mix(in srgb, #f5b942 70%, transparent); }
-.nangong-conversation-activity.blocked { border-color: color-mix(in srgb, #ef6b73 70%, transparent); }
+.nangong-conversation-activity.waiting { border-color: color-mix(in srgb, var(--sel-theme-semantic-warning) 70%, transparent); }
+.nangong-conversation-activity.blocked { border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 70%, transparent); }
 .nangong-person-composer button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* 任务协作群只定义业务排版，展开行为和基础控件状态由 SELUI Disclosure 统一提供。 */
