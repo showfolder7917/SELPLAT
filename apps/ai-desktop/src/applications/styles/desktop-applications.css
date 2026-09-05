@@ -37,16 +37,16 @@ button { color: inherit; }
 .dev-activitybar .dev-settings-control > .activity-settings { width: 52px; height: 52px; border: 0; border-left: 2px solid transparent; border-radius: 0; color: var(--sel-theme-workbench-text-subtle); background: transparent; box-shadow: none; }
 .dev-activitybar .dev-settings-control > .activity-settings:hover, .dev-activitybar .dev-settings-control > .activity-settings:focus-visible, .dev-activitybar .dev-settings-control > .activity-settings[aria-expanded="true"] { border-color: transparent; border-left-color: var(--sel-theme-workbench-accent); color: var(--sel-theme-workbench-text-strong); background: var(--sel-theme-workbench-surface); box-shadow: none; }
 .dev-activitybar .dev-settings-control > .activity-settings svg { width: 24px; }
-.dev-activitybar .dev-settings { position: fixed; z-index: 5; top: auto; right: auto; bottom: 0; left: 58px; min-width: 320px; width: 390px; max-width: min(720px, calc(100vw - 70px)); max-height: calc(100vh - 60px); padding: 0; overflow: visible; border: 1px solid var(--sel-theme-line); border-radius: 10px; background: var(--sel-theme-workbench-surface); box-shadow: 0 20px 70px color-mix(in srgb, var(--sel-theme-workbench-canvas) 73.33%, transparent); }
+.dev-activitybar .dev-settings { position: fixed; z-index: 5; top: auto; right: auto; bottom: 0; left: 58px; min-width: 320px; width: 390px; max-width: min(720px, calc(100vw - 70px)); height: min(720px, calc(100vh - 60px)); max-height: calc(100vh - 60px); padding: 0; overflow: visible; border: 1px solid var(--sel-theme-line); border-radius: 10px; background: var(--sel-theme-workbench-surface); box-shadow: 0 20px 70px color-mix(in srgb, var(--sel-theme-workbench-canvas) 73.33%, transparent); }
 .dev-activitybar .dev-settings::before, .dev-activitybar .dev-settings::after { display: none; }
-.dev-activitybar .dev-settings .selfloating-heading { min-height: 54px; grid-template-columns: minmax(0, 1fr) 32px; padding: 0 18px; border-bottom: 1px solid var(--sel-theme-line); }
+.dev-activitybar .dev-settings .selfloating-heading { min-height: 54px; flex: 0 0 54px; grid-template-columns: minmax(0, 1fr) 32px; padding: 0 18px; border-bottom: 1px solid var(--sel-theme-line); }
 .dev-activitybar .dev-settings .selfloating-heading-icon, .dev-activitybar .dev-settings .selfloating-heading-copy small { display: none; }
 .dev-activitybar .dev-settings .selfloating-heading-copy strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-title); }
 .dev-activitybar .dev-settings .selfloating-close { width: 32px; height: 32px; border: 0; color: var(--sel-theme-workbench-text-muted); background: transparent; }
 .dev-activitybar .dev-settings .selfloating-close:hover, .dev-activitybar .dev-settings .selfloating-close:focus-visible { color: var(--sel-theme-workbench-accent); background: var(--sel-theme-workbench-surface-hover); }
 .dev-activitybar .dev-settings .selfloating-close svg { width: 20px; }
 .dev-activitybar .dev-settings .selfloating-body { overflow: hidden; }
-.dev-activitybar .dev-settings-content { min-width: 0; padding: 14px 18px 18px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--sel-theme-scrollbar-thumb) transparent; }
+.dev-activitybar .dev-settings-content { min-width: 0; min-height: 0; flex: 1 1 auto; padding: 14px 18px 18px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--sel-theme-scrollbar-thumb) transparent; }
 /* 当前设置只允许调宽；SELUI 左侧手柄保留拖拽、键盘和双击复位语义。 */
 .dev-activitybar .dev-settings .selfloating-resize-bottom, .dev-activitybar .dev-settings .selfloating-resize-corner { display: none; }
 /* 运行路径可能很长；所有账号项必须收敛在面板网格内，避免按钮中心和文字被推到可视区之外。 */
