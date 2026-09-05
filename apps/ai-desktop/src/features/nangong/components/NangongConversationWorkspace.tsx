@@ -7,6 +7,7 @@ import type { usePersonaConversation } from "../../conversation/model/usePersona
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
+import { usePersonaConversationTailFollow } from "../../conversation/model/usePersonaConversationTailFollow";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -110,7 +111,8 @@ export function NangongConversationWorkspace({ runtime, state, conversation, att
   const internalIds = new Set(currentInternal.map((message) => message.messageId));
   const visibleMessages = [...timelineMessages, ...currentInternal.map((message) => ({ ...message, status: message.deliveryStatus, attachments: attachmentPreviews[message.messageId] || [] }))]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
-  return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
+  const timelineRef = usePersonaConversationTailFollow(visibleMessages.map((message) => `${message.messageId}:${message.status}:${message.content}`).join("|"));
+  return <SelUiConversation id="selConversationNangongWanId" onSubmit={() => void sendChat()} timeline={<section ref={timelineRef} className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
       {state.oneShotConfirmation?.status === "awaiting-user-confirmation" && state.oneShotRun?.status !== "running" && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
         <strong>本轮已具备启动条件</strong>
         <span>回复 1 将启动持续自动演化：完成当前课题后继续寻找有证据的新问题，直到暂停或停止。</span>
