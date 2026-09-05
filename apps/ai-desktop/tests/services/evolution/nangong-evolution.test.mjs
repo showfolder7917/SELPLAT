@@ -1299,6 +1299,24 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     assert.equal(recoveryRequests, 1);
     assert.equal(failures.length, 2);
     assert.equal(failures[1].operation, "one_shot_task_waiting_for_linghu:verification");
+
+    tasks[0].state = "cancelled";
+    tasks[0].phase = null;
+    tasks[0].blockingReason = "任务已取消，等待重新分发。";
+    tasks[0].integrationFailure = null;
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    const cancelled = facade.state();
+    assert.equal(cancelled.oneShotRun.status, "blocked");
+    assert.equal(failures.at(-1).operation, "one_shot_task_blocked:cancelled");
+    assert.equal(failures.at(-1).details.taskId, "blocked-integration-task");
+
+    tasks.length = 0;
+    const missing = await facade.resumeOneShotRun(cancelled.oneShotRun.runId);
+    assert.equal(missing.oneShotRun.status, "blocked");
+    assert.equal(failures.at(-1).operation, "one_shot_task_blocked:missing-task-record");
+    assert.deepEqual(failures.at(-1).details.missingTaskIds, ["blocked-integration-task"]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
