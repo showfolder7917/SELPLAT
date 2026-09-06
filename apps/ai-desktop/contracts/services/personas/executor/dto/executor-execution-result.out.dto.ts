@@ -12,4 +12,6 @@ export interface ExecutorExecutionResultOutDto {
   authorizedFiles: string[];
   /** 本轮已经成功完成的验证命令。 */
   successfulCommands: string[];
+  /** 范围确认表示现有授权不足，恢复流程必须等待确认而不是继续自动重试。 */
+  failureKind?: "scope-confirmation";
 }

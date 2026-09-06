@@ -149,17 +149,34 @@ export class VersionWorkspaceManager {
     return rootPath;
   }
 
-  /** 使用 Git 真实状态核对自修范围，不能只相信执行人物流式上报的文件列表。 */
-  async validateTaskChangeScope(task: CollaborationTaskOutDto, authorizedFiles: readonly string[]): Promise<string[]> {
+  /** 读取任务工作区的真实 Git 变更，首次冻结和后续核对共用这一事实来源。 */
+  async readTaskChangedFiles(task: CollaborationTaskOutDto): Promise<string[]> {
+    // 每个协同任务都必须拥有已经签发的隔离工作区。
     const workspace = task.versionWorkspace;
+    // 缺少工作区时不能退回人物文字猜测文件范围。
     if (!workspace) {
+      // 明确抛错并保留任务恢复点。
       throw new Error("任务尚未建立独立版本工作区。");
     }
+    // 先验证路径仍位于受控工作树根内。
     const rootPath = this.#validateManagedPath(workspace.rootPath);
+    // 使用零字符分隔读取完整状态，文件名包含空格时也不会被拆错。
     const status = await this.#gitRaw(rootPath, ["status", "--porcelain", "-z"]);
+    // 把 Git 状态统一转换为稳定排序的工程相对路径。
     const observedFiles = splitStatusPorcelain(status);
+    // 调用方只能读取副本，不能修改工作区管理器内部状态。
+    return [...observedFiles];
+  }
+
+  /** 使用 Git 真实状态核对自修范围，不能只相信执行人物流式上报的文件列表。 */
+  async validateTaskChangeScope(task: CollaborationTaskOutDto, authorizedFiles: readonly string[]): Promise<string[]> {
+    // 后续复测再次读取同一工作区事实，确认自动自修没有新增文件。
+    const observedFiles = await this.readTaskChangedFiles(task);
+    // 聚合只负责比较允许范围和当前范围，不负责执行 Git 命令。
     const repairScope = TaskRepairScopeAggregate.freeze(authorizedFiles);
+    // 发现范围外文件时抛出结构化错误，阻止复测和提交。
     repairScope.assertContainsOnlyAuthorizedFiles(observedFiles);
+    // 验证成功后返回本次真实观察结果供调用方留痕。
     return observedFiles;
   }
 

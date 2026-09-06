@@ -16,6 +16,7 @@ const codexStreamMapper = readFileSync(new URL("../../../electron/services/suppo
 const codexRuntime = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-runtime.resolver.ts", import.meta.url), "utf8");
 const codexSessionStore = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-session.repository.ts", import.meta.url), "utf8");
 const taskWorktreeTestRunner = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
+const collaborationSessions = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const electronMain = [
   "../../../electron/system/bootstrap/application-runtime.ts",
   "../../../electron/system/bootstrap/capabilities.bootstrap.ts",
@@ -88,6 +89,8 @@ test("任务托管使用后台隔离 Electron 交互测试并最多自动修复�
   assert.match(executionPrompts, /npm run test:interaction/);
   assert.match(executor, /后台隔离 Electron 交互测试已通过/);
   assert.match(audit, /isolated_interaction_test_not_observed/);
+  assert.match(executor, /failureKind: "scope-confirmation"/);
+  assert.match(collaborationSessions, /failureKind: result\.failureKind/);
 });
 
 test("会话与需求托管只读运行并由确认动作逐级推进", () => {

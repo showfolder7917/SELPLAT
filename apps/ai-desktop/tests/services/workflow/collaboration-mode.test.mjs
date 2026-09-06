@@ -127,6 +127,34 @@ const workspaceState = {
   roots: [{ id: "root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
 };
 
+function createExecutionResultCoordinator(directory, store, executionResult) {
+  const workspace = { workspaceId: "worktree:execution-result", rootPath: directory, branchName: "codex/execution-result", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+  return new CollaborationCoordinator({
+    store,
+    durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+    workspaces: { prepareTask: async () => workspace, resumeTask: async () => workspace, commitTaskResult: async () => "result" },
+    executor: new ExecutorFacade({
+      createExecutor: async () => ({
+        isAlive: () => true,
+        analyze: async () => "只修改已确认文件并执行针对性验证",
+        optimize: async () => "",
+        execute: async () => executionResult,
+        investigateRepair: async () => "已核对失败事实",
+        executeRepair: async () => executionResult,
+        dispose: async () => undefined,
+      }),
+    }),
+    integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+    createTaskRuleContext: () => ({
+      activeUserId: "XUNAN", role: "executor", ruleRevision: "revision-one",
+      mandatoryRoleRuleIds: ["AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES"], matchedTaskRuleIds: [],
+      dependencyRuleIds: [], loadedRuleHashes: {}, loadedRuleContents: {}, agentsContent: "# AGENTS", indexCatalog: "# index", ruleReceipt: [],
+    }),
+    emitState: () => undefined,
+    emitStream: () => undefined,
+  });
+}
+
 test("默认人物稳定列出，新增、重命名和删除入口退役，存量人物保留", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-store-"));
   try {
@@ -365,9 +393,15 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
     assert.match(facade.state().blockingReason, /检测仍保持运行/);
     collaborationStore.updateTask(facade.state().activeTaskId, "test.phase_changed", (task) => {
       task.phase = "reviewing";
+      task.workerGeneration += 1;
     });
     await facade.checkNow();
-    assert.equal(recoveryRequests, 4);
+    assert.equal(recoveryRequests, 3, "阶段和执行代数变化不能重置同一故障的恢复预算");
+    collaborationStore.updateTask(facade.state().activeTaskId, "test.new_failure", (task) => {
+      task.blockingReason = "新的依赖文件缺失故障";
+    });
+    await facade.checkNow();
+    assert.equal(recoveryRequests, 4, "新的失败事实应获得独立恢复预算");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -660,6 +694,73 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
     assert.equal(waiting.actor.displayName, "令狐老祖");
     assert.equal(waiting.status, "waiting");
     assert.equal(task.flowEvents.some((event) => event.type === "task.blocked"), false);
+    await coordinator.dispose();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("文件范围冲突立即等待用户确认且令狐不会排队等待自己", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "scope-confirmation-waiting-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const result = {
+      status: "incomplete",
+      text: "真实 Git 发现新增契约文件",
+      pendingActions: ["自动自修越过首次实施范围：contracts/acceptance.value.ts"],
+      changedFiles: ["contracts/acceptance.value.ts", "acceptance.ts"],
+      authorizedFiles: ["contracts/acceptance.value.ts", "acceptance.ts"],
+      successfulCommands: [],
+      failureKind: "scope-confirmation",
+    };
+    const coordinator = createExecutionResultCoordinator(directory, store, result);
+    const submitted = coordinator.submitTask({
+      title: "修复验收工具范围",
+      problemStatement: "验收工具缺少拖拽契约",
+      confirmedIntent: "保留现有修改并重新确认真实文件范围",
+      workspaceState,
+      locale: "zh-CN",
+      preferredExecutorMemberId: "linghu-ancestor",
+    });
+    const taskId = submitted.tasks.at(-1).taskId;
+    for (let attempt = 0; attempt < 100 && store.task(taskId).state !== "recovering"; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    const task = store.task(taskId);
+    assert.equal(task.state, "recovering");
+    assert.equal(task.repairRequiresUserConfirmation, true);
+    assert.match(task.blockingReason, /需要用户重新确认本次真实文件范围/);
+    assert.equal(task.flowEvents.some((event) => event.type === "execution.repair_queued"), false);
+    assert.equal(store.state().members.find((member) => member.memberId === "linghu-ancestor").state, "idle");
+    await coordinator.dispose();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("令狐自己的普通执行失败保留恢复点而不生成自等待任务", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-self-recovery-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const result = {
+      status: "incomplete",
+      text: "当前修复仍未完成",
+      pendingActions: ["固定测试仍然失败"],
+      changedFiles: ["acceptance.ts"],
+      authorizedFiles: ["acceptance.ts"],
+      successfulCommands: [],
+    };
+    const coordinator = createExecutionResultCoordinator(directory, store, result);
+    const submitted = coordinator.submitTask({
+      title: "令狐继续修复",
+      problemStatement: "固定测试仍然失败",
+      confirmedIntent: "沿同一恢复点继续修复但禁止自等待",
+      workspaceState,
+      locale: "zh-CN",
+      preferredExecutorMemberId: "linghu-ancestor",
+    });
+    const taskId = submitted.tasks.at(-1).taskId;
+    for (let attempt = 0; attempt < 100 && store.task(taskId).state !== "recovering"; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    const task = store.task(taskId);
+    assert.equal(task.state, "recovering");
+    assert.equal(task.repairRequiresUserConfirmation, false);
+    assert.match(task.blockingReason, /本次恢复未完成/);
+    assert.equal(task.flowEvents.some((event) => event.type === "execution.repair_queued"), false);
+    assert.doesNotMatch(task.blockingReason, /等待令狐老祖完成当前任务/);
     await coordinator.dispose();
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -1816,16 +1917,54 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
       });
       return { text: "源码修改完成", itemCount: 1 };
     },
+    readChangedFiles: async () => [
+      "apps/ai-desktop/contracts/example.ts",
+      "apps/ai-desktop/src/example.ts",
+    ],
     runCodeValidation: async (authorizedFiles) => {
       desktopValidationCount += 1;
-      assert.deepEqual(authorizedFiles, ["apps/ai-desktop/src/example.ts"]);
+      assert.deepEqual(authorizedFiles, [
+        "apps/ai-desktop/contracts/example.ts",
+        "apps/ai-desktop/src/example.ts",
+      ]);
     },
   });
   assert.equal(turnCount, 1);
   assert.equal(desktopValidationCount, 1);
   assert.equal(result.managedStatus, "code-verified");
-  assert.deepEqual(result.authorizedFiles, ["apps/ai-desktop/src/example.ts"]);
+  assert.deepEqual(result.authorizedFiles, [
+    "apps/ai-desktop/contracts/example.ts",
+    "apps/ai-desktop/src/example.ts",
+  ]);
   assert.equal(events.some((event) => event.managedExecution?.message.includes("当前任务分支隔离 Playwright 已通过")), true);
+});
+
+test("首次文件范围使用真实 Git 快照且范围冲突立即等待确认", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  let turnCount = 0;
+  let validationCount = 0;
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修改当前任务分支",
+    restartRequired: false,
+    emit: () => undefined,
+    runTurn: async (_message, emit) => {
+      turnCount += 1;
+      emit({ type: "diff-updated", turnId: "task-turn", changedFiles: ["reported.ts"] });
+      return { text: "已完成实现", itemCount: 1 };
+    },
+    readChangedFiles: async () => ["actual-contract.ts", "reported.ts"],
+    runCodeValidation: async (authorizedFiles) => {
+      validationCount += 1;
+      assert.deepEqual(authorizedFiles, ["actual-contract.ts", "reported.ts"]);
+      throw new TaskRepairScopeViolationError(["late-file.ts"]);
+    },
+  });
+  assert.equal(turnCount, 1, "范围确认类失败不能继续调用执行人物重复自修");
+  assert.equal(validationCount, 1, "确定性范围冲突只允许检查一次");
+  assert.equal(result.managedStatus, "incomplete");
+  assert.equal(result.failureKind, "scope-confirmation");
+  assert.deepEqual(result.authorizedFiles, ["actual-contract.ts", "reported.ts"]);
 });
 
 test("自动自修只能继续修改首次实施已经冻结的文件", () => {

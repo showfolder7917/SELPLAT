@@ -73,6 +73,8 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
       await versionWorkspaces.validateTaskChangeScope(task, authorizedFiles);
       await taskTests.run({ taskId: task.taskId, worktreeRoot, emit });
     },
+    // 首次实施结束时由版本工作区提供真实文件列表，不能依赖执行人物流上报。
+    readTaskChangedFiles: (task) => versionWorkspaces.readTaskChangedFiles(task),
     readSettings: () => settings.read(),
     readRuleInstructions: () => "",
     readRuleInstructionsForMember: options.readRuleInstructions,

@@ -368,7 +368,13 @@ export class CollaborationCoordinator {
     if (this.#disposed || state.mode !== "collaboration") return;
     const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
     if (!linghu || linghu.state !== "idle") return;
-    const task = state.tasks.find((candidate) => candidate.state === "recovering" && candidate.repairKind === "execution" && candidate.repairFailureReason);
+    const task = state.tasks.find((candidate) => candidate.state === "recovering"
+      // 普通技术失败可以自动接续。
+      && candidate.repairKind === "execution"
+      // 必须保留原始失败事实才能发起调查。
+      && candidate.repairFailureReason
+      // 文件范围确认属于用户决策，令狐释放后也不能自动越权继续。
+      && !candidate.repairRequiresUserConfirmation);
     if (!task) return;
     queueMicrotask(() => {
       if (!this.#disposed) void this.#repairFailedExecution(task.taskId, task.repairFailureReason || "执行故障等待恢复");
@@ -626,7 +632,14 @@ export class CollaborationCoordinator {
       if (result.status !== "code-verified") {
         if (changeSpan) this.#durations.finish(changeSpan, "failed", { pendingActions: result.pendingActions.join("；") });
         if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { pendingActions: result.pendingActions.join("；") });
-        return this.#repairFailedExecution(taskId, result.pendingActions.join("；") || "当前修改尚未完成代码验证");
+        return this.#repairFailedExecution(
+          // 原任务标识保持不变，恢复过程继续沿同一任务历史记录。
+          taskId,
+          // 执行结果必须保留具体失败正文，不能只显示“失败”。
+          result.pendingActions.join("；") || "当前修改尚未完成代码验证",
+          // 结构化失败类别决定是否需要等待用户重新确认文件范围。
+          result.failureKind === "scope-confirmation",
+        );
       }
       if (changeSpan) this.#durations.finish(changeSpan, "completed", { releaseEvent: "task.code_verified" });
       if (verificationSpan) this.#durations.finish(verificationSpan, "completed", { releaseEvent: "task.code_verified" });
@@ -708,11 +721,30 @@ export class CollaborationCoordinator {
         });
   }
 
-  async #repairFailedExecution(taskId: string, reason: string): Promise<void> {
+  async #repairFailedExecution(taskId: string, reason: string, requiresScopeConfirmation = false): Promise<void> {
+    // 每次处理都重新读取任务，避免使用失败发生前的旧状态。
     const failedTask = this.#store.task(taskId);
+    // 保存本次真实执行人，后续恢复仍能回到正确负责人。
     const originalId = failedTask.executorMemberId;
+    // 失败会话已经结束，先释放底层连接，避免下一次恢复复用坏会话。
     await this.#executor.close(taskId);
+    // 文件范围不足是授权边界，不属于能够自动尝试解决的代码错误。
+    if (requiresScopeConfirmation) {
+      // 把任务放入稳定等待节点；用户继续后会按真实 Git 重新冻结范围。
+      this.#holdForScopeConfirmation(taskId, reason);
+      // 终止当前恢复分支，禁止继续派给令狐。
+      return;
+    }
+    // 获取令狐的实时占用状态，判断是否需要排队。
     const currentLinghu = requireMember(this.state(), LINGHU_MEMBER_ID);
+    // 令狐就是当前任务执行人时不能生成“等待自己完成自己”的循环依赖。
+    if (originalId === LINGHU_MEMBER_ID && currentLinghu.currentTaskId === taskId) {
+      // 保留同一任务恢复点，交给跨会话故障预算决定后续最多恢复次数。
+      this.#holdForLinghuRecovery(taskId, reason);
+      // 当前任务已经进入稳定恢复态，不再创建自等待队列节点。
+      return;
+    }
+    // 只有令狐确实在处理另一项任务时，当前任务才进入容量等待队列。
     if (currentLinghu.state !== "idle") {
       this.#store.updateTask(taskId, "execution.repair_queued", (current, state) => {
         if (originalId && originalId !== LINGHU_MEMBER_ID) current.originalExecutor ??= participantSnapshot(requireMember(state, originalId));
@@ -724,6 +756,8 @@ export class CollaborationCoordinator {
         current.phase = "blocked";
         current.repairKind = "execution";
         current.repairFailureReason = reason;
+        // 普通技术失败不需要用户重新确认范围。
+        current.repairRequiresUserConfirmation = false;
         current.currentHandler = null;
         current.blockingReason = `等待令狐老祖完成当前任务 ${currentLinghu.currentTaskId || "后续故障"} 后接续修复：${reason}`;
         appendFlow(current, "execution.repair_queued", "recovery", "waiting", current.blockingReason, current.initiator, true, {
@@ -758,6 +792,8 @@ export class CollaborationCoordinator {
         current.phase = "analyzing";
         current.repairKind = "execution";
         current.repairFailureReason = reason;
+        // 进入自动调查说明当前失败属于可自动处理的技术问题。
+        current.repairRequiresUserConfirmation = false;
         current.currentHandler = participantSnapshot(linghu);
         current.blockingReason = `执行失败：${reason}；令狐老祖正在修复`;
         appendFlow(current, "execution.repair_started", "recovery", "started", current.blockingReason, linghu, false, {
@@ -792,6 +828,8 @@ export class CollaborationCoordinator {
         this.#store.updateTask(taskId, "execution.repair_completed", (current, state) => {
           current.repairResult = repaired.text;
           current.repairKind = null;
+          // 修复成功后清除等待确认标记。
+          current.repairRequiresUserConfirmation = false;
           current.recoveryTargetState = null;
           current.blockingReason = null;
           appendFlow(current, "execution.repair_completed", "recovery", "completed",
@@ -809,6 +847,8 @@ export class CollaborationCoordinator {
         current.assignmentId = null;
         current.recoveryTargetState = "executing";
         current.repairKind = null;
+        // 修复已经完成，后续剩余工作不再继承旧范围等待标记。
+        current.repairRequiresUserConfirmation = false;
         current.repairResult = `${repaired.text}\n剩余工作：${completion.remaining}\n核对证据：${completion.evidence}`;
         // 已完成工作不重新派发；续接方案只承载核对确认的剩余工作。
         const resumeText = `仅完成以下尚未完成的工作，不重复已验证修改：\n${completion.remaining}\n核对证据：${completion.evidence}`;
@@ -842,6 +882,8 @@ export class CollaborationCoordinator {
       current.recoveryTargetState = "executing";
       current.repairKind = "execution";
       current.repairFailureReason = detail;
+      // 本入口只保存普通修复失败；范围确认使用独立入口。
+      current.repairRequiresUserConfirmation = false;
       current.currentHandler = participantSnapshot(linghu);
       current.blockingReason = waitingForPermission
         ? `等待用户授权后由令狐老祖从恢复点继续：${detail}`
@@ -853,6 +895,50 @@ export class CollaborationCoordinator {
       linghu.blockingReason = current.blockingReason;
       linghu.updatedAt = new Date().toISOString();
       appendFlow(current, "execution.repair_waiting", "recovery", "waiting", current.blockingReason, linghu, true);
+    });
+  }
+
+  /** 文件范围不足时停止自动修复，等待用户从同一任务节点确认后继续。 */
+  #holdForScopeConfirmation(taskId: string, detail: string): void {
+    // 用任务 Store 一次完成任务与人物状态变更，避免出现半更新状态。
+    this.#store.updateTask(taskId, "execution.scope_confirmation_required", (current, state) => {
+      // 当前执行人已经结束失败会话，可以释放人物去处理其他任务。
+      if (current.executorMemberId) releaseMemberFromState(state, current.executorMemberId);
+      // 任务进入可恢复状态，已有工作区和代码修改全部保留。
+      current.state = "recovering";
+      // blocked 阶段让页面明确显示当前不能自动继续。
+      current.phase = "blocked";
+      // 恢复后仍回到执行步骤，不跳过代码验证。
+      current.recoveryTargetState = "executing";
+      // 令狐是确认范围后的首选修复人。
+      current.executorMemberId = LINGHU_MEMBER_ID;
+      // 调度器恢复时继续选择令狐，不随机改派其他人物。
+      current.preferredExecutorMemberId = LINGHU_MEMBER_ID;
+      // 当前没有人物正在处理，避免界面显示虚假的活动负责人。
+      current.currentHandler = null;
+      // 保留执行修复类型，用户继续后仍沿原任务恢复。
+      current.repairKind = "execution";
+      // 保存原始范围冲突，恢复预算和页面都引用同一事实。
+      current.repairFailureReason = detail;
+      // 结构化标记阻止自动调度器和令狐巡检自行恢复。
+      current.repairRequiresUserConfirmation = true;
+      // 给用户说明为什么停止，以及继续后会发生什么。
+      current.blockingReason = `需要用户重新确认本次真实文件范围后继续：${detail}`;
+      // 时间线复用既有等待事件，界面无需认识新的临时状态类型。
+      appendFlow(current, "execution.repair_waiting", "recovery", "waiting", current.blockingReason, current.initiator, true, {
+        // 失败阶段明确为执行范围核对。
+        failureStage: "scope-confirmation",
+        // 完整保留原始范围冲突。
+        failureSummary: detail,
+        // 技术证据至少包含同一条确定性门禁结果。
+        technicalEvidence: [detail],
+        // 保存原执行人，方便用户继续后审计负责人变化。
+        originalExecutor: current.originalExecutor,
+        // 发起人物负责把等待事实展示给客户。
+        routedBy: current.initiator,
+        // 用户确认后仍由令狐完成本次修复。
+        repairAssignee: participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)),
+      });
     });
   }
 

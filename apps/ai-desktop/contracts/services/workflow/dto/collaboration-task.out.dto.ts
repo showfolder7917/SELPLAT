@@ -113,6 +113,8 @@ export interface CollaborationTaskOutDto {
   currentHandler?: CollaborationParticipantSnapshotOutDto | null;
   repairKind?: "execution" | null;
   repairFailureReason?: string | null;
+  /** true 表示当前失败需要重新确认文件范围，自动保障只能等待用户继续。 */
+  repairRequiresUserConfirmation?: boolean;
   repairDiagnosis?: CollaborationRepairDiagnosisOutDto | null;
   repairResult?: string | null;
   unifiedTest?: {

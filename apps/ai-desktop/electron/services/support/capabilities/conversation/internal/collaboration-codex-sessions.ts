@@ -244,6 +244,8 @@ export interface CodexCollaborationSessionFactoryOptions {
   registry: CollaborationCodexRegistry;
   resolveAttachmentPaths(attachmentIds: string[]): Promise<string[]>;
   runCodeValidation(task: CollaborationTaskOutDto, authorizedFiles: readonly string[], emit: (event: CodexStreamEventOutDto) => void): Promise<void>;
+  /** 从签发给任务的工作区读取真实 Git 变更，供首次实施冻结范围。 */
+  readTaskChangedFiles(task: CollaborationTaskOutDto): Promise<string[]>;
   readSettings: CodexServiceOptions["readSettings"];
   readRuleInstructions?: CodexServiceOptions["readRuleInstructions"];
   readRuleInstructionsForMember?: (memberId: string, task: CollaborationTaskOutDto) => string;
@@ -290,6 +292,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
         this.#options.registry,
         this.#options.resolveAttachmentPaths,
         this.#options.runCodeValidation,
+        this.#options.readTaskChangedFiles,
         this.#options.readWorkspaceState,
         this.#options.prompts,
       );
@@ -337,6 +340,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
   readonly #registry: CollaborationCodexRegistry;
   readonly #resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"];
   readonly #runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"];
+  /** 保存工作区只读端口，执行人物不直接依赖 Git 实现。 */
+  readonly #readTaskChangedFiles: CodexCollaborationSessionFactoryOptions["readTaskChangedFiles"];
   readonly #readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"];
   readonly #prompts: PromptLibraryPort;
   readonly #managed: ManagedTaskExecutor;
@@ -346,6 +351,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
     registry: CollaborationCodexRegistry,
     resolveAttachmentPaths: CodexCollaborationSessionFactoryOptions["resolveAttachmentPaths"],
     runCodeValidation: CodexCollaborationSessionFactoryOptions["runCodeValidation"],
+    readTaskChangedFiles: CodexCollaborationSessionFactoryOptions["readTaskChangedFiles"],
     readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"],
     prompts: PromptLibraryPort,
   ) {
@@ -353,6 +359,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
     this.#registry = registry;
     this.#resolveAttachmentPaths = resolveAttachmentPaths;
     this.#runCodeValidation = runCodeValidation;
+    // 保存真实文件读取端口，首次冻结范围时由 ManagedTaskExecutor 调用。
+    this.#readTaskChangedFiles = readTaskChangedFiles;
     this.#readWorkspaceState = readWorkspaceState;
     this.#prompts = prompts;
     this.#managed = new ManagedTaskExecutor(prompts);
@@ -387,6 +395,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
       restartRequired: false,
       emit,
       runCodeValidation: (authorizedFiles, onEvent) => this.#runCodeValidation(task, authorizedFiles, onEvent),
+      // 每次执行会话都绑定当前任务，不允许人物传入其他工作区路径。
+      readChangedFiles: () => this.#readTaskChangedFiles(task),
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
     let status: ExecutorExecutionResultOutDto["status"] = "incomplete";
@@ -400,6 +410,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
       changedFiles: result.changedFiles,
       authorizedFiles: result.authorizedFiles,
       successfulCommands: result.successfulCommands,
+      // 把结构化范围失败传给 Workflow，避免下游重新解析错误文字。
+      failureKind: result.failureKind,
     };
   }
 

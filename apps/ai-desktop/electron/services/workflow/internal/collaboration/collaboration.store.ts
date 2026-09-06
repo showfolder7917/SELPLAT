@@ -128,6 +128,8 @@ export class CollaborationStore {
       currentHandler: participantSnapshot(initiatorMember),
       repairKind: null,
       repairFailureReason: null,
+      // 新任务默认没有需要用户重新确认的修复边界。
+      repairRequiresUserConfirmation: false,
       unifiedTest: null,
       currentPlanVersion: 0,
       infrastructureFailureCount: 0,
@@ -277,6 +279,8 @@ export class CollaborationStore {
       }
       task.phase = null;
       task.blockingReason = null;
+      // 用户从等待节点继续，表示允许流程按真实工作区重新建立本轮范围。
+      task.repairRequiresUserConfirmation = false;
       const actor = recoveryActor ? participantSnapshot(recoveryActor) : task.initiator;
       if (customerGuidance && actor) task.currentHandler = actor;
       task.customerActionGuidance = null;
@@ -507,6 +511,8 @@ function migrateTaskHistory(task: CollaborationTaskOutDto, state: CollaborationS
   task.currentHandler ??= null;
   task.repairKind ??= null;
   task.repairFailureReason ??= null;
+  // 旧任务没有结构化范围等待字段，迁移时按非等待状态兼容。
+  task.repairRequiresUserConfirmation ??= false;
   task.repairDiagnosis ??= null;
   task.repairResult ??= null;
   task.unifiedTest ??= null;

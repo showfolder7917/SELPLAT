@@ -2,8 +2,8 @@
 
 <!-- 本规则只约束 AI Desktop 动态执行者的源码实施责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/executor
-<!-- 1.1.0 增加首次实施范围冻结、复测前检查和提交前 Git 硬门禁。 -->
-rule_version = 1.1.0
+<!-- 1.2.0 明确首次冻结的 Git 事实来源、范围冲突终止态和跨恢复防循环边界。 -->
+rule_version = 1.2.0
 <!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
 <!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->
@@ -27,8 +27,17 @@ executor_test_contract = register_test_document + pending_until_explicit_unified
 <!-- 首次实施结束时必须冻结真实变更文件；自动自修只能继续修改该集合中的文件。 -->
 executor_self_repair_scope_contract = freeze_initial_changed_files_before_validation + repair_must_remain_within_frozen_files
 
+<!-- 首次冻结也必须由桌面工作区读取真实 Git 状态；模型上报只作说明，不能决定授权文件集合。 -->
+executor_initial_scope_fact_contract = desktop_owned_git_observation + model_report_is_non_authoritative_description
+
 <!-- 测试失败指向冻结范围外时必须停止自修并重新分析任务范围；禁止执行人顺手修补构建、测试或运行基础设施。 -->
 executor_out_of_scope_failure_contract = stop_repair + report_reanalysis_required + no_adjacent_infrastructure_patch
+
+<!-- 范围冲突属于等待重新确认的终止型停点；禁止把相同冲突投入普通自修或自动复测。 -->
+executor_scope_confirmation_contract = structured_scope_failure + stop_current_validation + wait_for_explicit_resume
+
+<!-- 同一故障的恢复预算跨阶段、执行代数和会话持续生效；修复人物不得建立等待自身的任务关系。 -->
+executor_recovery_loop_guard_contract = stable_failure_fingerprint_across_resumes + no_self_wait_dependency
 
 <!-- 每次自动复测前必须读取任务工作树真实 Git 状态核对范围，禁止只相信模型流式上报。 -->
 executor_pre_validation_scope_gate = git_observed_changed_files_subset_of_frozen_scope

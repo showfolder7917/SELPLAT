@@ -113,6 +113,8 @@ function waitingPoint(task: CollaborationTaskOutDto, health: LinghuFlowHealthVal
 
 /** 优先根据结构化失败类型判定阻塞类别，最后才使用旧自由文本兼容。 */
 function blockingKind(task: CollaborationTaskOutDto): LinghuBlockingKindValue {
+  // 文件范围需要重新确认时属于人工决策，自动保障不能把它当作技术失败重试。
+  if (task.repairRequiresUserConfirmation) return "business";
   // 状态与结构化集成失败比自由文本可靠；测试输出可能引用“用户选择”等规则正文，不能因此误判为业务选择。
   if (task.integrationFailure?.kind === "infrastructure") return "infrastructure";
   if (task.state === "test-failed" || task.integrationFailure?.kind === "verification") return "test";
@@ -139,10 +141,20 @@ function latestTime(...values: Array<string | null | undefined>): string {
 
 /** 生成只随真实故障事实变化的稳定指纹，用于限制重复恢复副作用。 */
 export function faultFingerprint(task: CollaborationTaskOutDto, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
-  // 任务恢复动作本身会更新 updatedAt，不能把它作为新事实，否则三次上限会被每次副作用自行清零。
-  const lastProgressVersion = latestTime(snapshot?.lastHeartbeatAt, snapshot?.lastProtocolProgressAt, task.codeVerifiedAt);
-  // 同一状态下的阶段推进同样是新事实，例如失败测试转入修正或验证阶段后应获得新的恢复预算。
-  return [task.taskId, task.state, task.phase || "none", task.workerGeneration, blockingKind(task), task.blockingReason || "none", lastProgressVersion].join("|");
+  // 快照只用于保持公开函数签名一致；故障预算不再依赖会变化的心跳和阶段。
+  void snapshot;
+  // 优先使用结构化修复原因；等待提示会随流程变化，不能作为新的故障事实。
+  const failureIdentity = task.repairFailureReason
+    // 集成失败已经持久保存原始技术事实，可以稳定区分另一种故障。
+    || task.integrationFailure?.detail
+    // 旧任务没有结构化原因时才兼容使用页面阻塞说明。
+    || task.blockingReason
+    // 完全没有失败正文时仍生成稳定占位值。
+    || "none";
+  // 只有代码真正验证完成才是新的结果版本；心跳、阶段和执行代数都不能重置预算。
+  const verifiedResultVersion = task.codeVerifiedAt || "unverified";
+  // 指纹绑定任务、失败类别、原始原因和验证结果，跨恢复会话保持稳定。
+  return [task.taskId, blockingKind(task), failureIdentity, verifiedResultVersion].join("|");
 }
 
 /** 把已完成任务整理为模块级审计报告。 */
