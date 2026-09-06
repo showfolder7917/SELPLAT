@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { AutomaticTestPreflightResultOutDto, CodexApprovalOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
-import type { Message } from "../../conversation/model/chat-message";
+import type { Message } from "../../conversation";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;

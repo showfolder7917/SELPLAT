@@ -12,7 +12,7 @@ import {
 } from "react";
 
 // 共享演化状态方法（useEvolutionRuntime）用于读取并刷新自动托管设置。
-import { useEvolutionRuntime } from "../../../evolution/model/useEvolutionRuntime";
+import { useEvolutionRuntime } from "../../../evolution";
 
 /** 韩立自动托管开关需要由父页面提供的数据结构。 */
 interface HanliCustodySwitchProps {

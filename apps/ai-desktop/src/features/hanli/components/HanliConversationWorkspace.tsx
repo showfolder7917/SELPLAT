@@ -8,8 +8,7 @@
 
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 
-import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
-import { SelUiConversation } from "../../conversation/components/SelUiConversation";
+import { MarkdownMessage, SelUiConversation } from "../../conversation";
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 import { HanliCustodySwitch } from "./HanliConversationWorkspace/HanliCustodySwitch";
 import { useHanliConversationWorkspace } from "./useHanliConversationWorkspace";

@@ -16,9 +16,9 @@ import {
 
 // 实时消息合并方法（mergeRealtimeConversationTimeline）合并数据库消息和前端临时消息。
 // 人物消息分类方法（projectPersonaConversation）把直接问答与内部研讨消息分开。
-import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
+import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让消息区在新增内容后跟随到最新位置。
-import { usePersonaConversationTailFollow } from "../../conversation/model/usePersonaConversationTailFollow";
+import { usePersonaConversationTailFollow } from "../../conversation";
 import type {
   // 南宫婉页面参数类型（NangongConversationWorkspaceProps）描述父页面交给控制逻辑的数据。
   NangongConversationWorkspaceProps,

@@ -21,9 +21,9 @@ import type {
   WorkspaceStateOutDto,
 } from "../../../../contracts/system/desktop/index";
 // 待发送附件类型（ComposerAttachment）表示发送前保存在输入区中的截图。
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import type { ComposerAttachment } from "../../conversation";
 // 人物会话控制方法（usePersonaConversation）提供共用状态；本文件只读取它的返回类型。
-import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
+import type { usePersonaConversation } from "../../conversation";
 
 /** 韩立会话 View 由父工作区路由传入的全部数据和操作。 */
 export interface HanliConversationWorkspaceProps {

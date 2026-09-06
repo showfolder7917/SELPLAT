@@ -1,7 +1,7 @@
 import { ArrowClockwise24Regular } from "@fluentui/react-icons";
 
 import type { CollaborationTaskOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
-import { collaborationTaskStateLabel } from "../../collaboration/model/collaboration-formatters";
+import { collaborationTaskStateLabel } from "../../collaboration";
 import { MarkdownMessage } from "./MarkdownMessage";
 
 export function CollaborationStatusChain({ task, locale, onRetry }: { task: CollaborationTaskOutDto; locale: LocaleValue; onRetry(taskId: string): Promise<void> }) {

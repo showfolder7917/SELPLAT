@@ -1,9 +1,9 @@
 import { useEffect, useMemo } from "react";
 
 import type { ConversationQueueItemOutDto, LocaleValue, ManagedExecutionModeValue, SandboxModeValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
-import type { useCollaborationWorkspace } from "../../collaboration/model/useCollaborationWorkspace";
+import type { useCollaborationWorkspace } from "../../collaboration";
 import { clearStoredChat, createAssistantMessage, createUserMessage, managedModeForCommand, type Message } from "./chat-message";
-import { useAutomaticTesting } from "../../testing/model/useAutomaticTesting";
+import { useAutomaticTesting } from "../../testing";
 import { useCodexConversation } from "./useCodexConversation";
 import { useCodexInteractionRequests } from "./useCodexInteractionRequests";
 import { useConversationDispatch } from "./useConversationDispatch";

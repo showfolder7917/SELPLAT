@@ -1,4 +1,4 @@
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import type { ComposerAttachment } from "../../conversation";
 
 /** 将剪贴板图片规范化为 PNG，避免各人物输入区重复维护浏览器图片转换逻辑。 */
 export async function imageFileToPngDataUrl(file: File): Promise<string> {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { CollaborationStateEventOutDto, CollaborationStateOutDto, CollaborationStreamEventOutDto, CollaborationTaskOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue, LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto, LocaleValue, SubmitCollaborationTaskInDto, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
-import { applyCodexStreamEvent, createAssistantMessage, type Message } from "../../conversation/model/chat-message";
+import { applyCodexStreamEvent, createAssistantMessage, type Message } from "../../conversation";
 import type { CollaborationLiveOutput } from "./collaboration-live-output";
 
 export type CollaborationPanel = "member" | "task-group";

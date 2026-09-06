@@ -5,7 +5,7 @@ import type {
   ScreenCaptureOutDto,
   ScreenCaptureFrameInDto,
 } from "../../../contracts/system/desktop/index";
-import { ScreenshotEditor } from "../../features/screenshot/components/ScreenshotEditor";
+import { ScreenshotEditor } from "../../features/screenshot";
 import "../styles/desktop-applications.css";
 
 /** 独立截图窗口只负责选择、标注和保存主进程取得的 macOS 原生无光标 PNG。 */

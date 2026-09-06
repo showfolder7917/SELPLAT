@@ -20,9 +20,9 @@ import {
 } from "@fluentui/react-icons";
 
 // 消息正文组件（MarkdownMessage）把人物消息渲染成统一格式。
-import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
+import { MarkdownMessage } from "../../conversation";
 // 统一会话外壳（SelUiConversation）提供人物会话共用的时间线和输入区结构。
-import { SelUiConversation } from "../../conversation/components/SelUiConversation";
+import { SelUiConversation } from "../../conversation";
 // 南宫婉页面参数类型（NangongConversationWorkspaceProps）描述父路由传入的全部数据和操作。
 import type { NangongConversationWorkspaceProps } from "./NangongConversationWorkspace.types";
 // 后台动作子组件（NangongConversationActivity）展示本页面专属的调查与授权状态。

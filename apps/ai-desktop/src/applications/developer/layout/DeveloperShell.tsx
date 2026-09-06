@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { Code24Regular, Search24Regular } from "@fluentui/react-icons";
 
-import { WindowControls } from "../../../features/shell/components/DesktopChrome";
+import { WindowControls } from "../../../features/shell";
 
 interface DeveloperShellProps {
   shellRef: RefObject<HTMLDivElement | null>;

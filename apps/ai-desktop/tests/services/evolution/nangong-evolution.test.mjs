@@ -964,7 +964,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     facade.stop();
     state = facade.state();
     assert.equal(state.proposals[0].status, "pending-acceptance");
-    assert.equal(state.proposals[0].resultSummary, "全部关联任务已经完成，等待韩立按真实用户路径验收结果。");
+    assert.equal(state.proposals[0].resultSummary, "全部当前有效任务已经完成，等待韩立按真实用户路径验收结果。");
     assert.equal(state.topics.length, 1);
     store.recordAcceptanceRun(computerRun("completed-run", state.topics[0].topicId, proposalId, "passed", "shot-completed"));
     state = facade.decideResult(proposalId, { mutation: mutation(facade), decision: "approved", advice: "真实操作和视觉检查符合目标。" });

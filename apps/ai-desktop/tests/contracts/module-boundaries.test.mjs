@@ -231,14 +231,14 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   const architectureRule = source(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md`);
   assert.doesNotMatch(developerApp, /function applyCodexStreamEvent/);
   assert.doesNotMatch(developerApp, /function readStoredChat/);
-  assert.match(developerApp, /features\/conversation\/model\/useCodexWorkspace/);
-  assert.match(developerApp, /features\/collaboration\/model\/useCollaborationWorkspace/);
-  assert.match(developerApp, /features\/settings\/components\/DeveloperSettingsFeature/);
+  assert.match(developerApp, /features\/conversation["']/);
+  assert.match(developerApp, /features\/collaboration["']/);
+  assert.match(developerApp, /features\/settings["']/);
   assert.match(codexWorkspace, /\.\/chat-message/);
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRule, /rule_version = 2\.13\.0/);
+  assert.match(architectureRule, /rule_version = 2\.18\.0/);
   assert.match(architectureRule, /workflow_vertical_module_layout_contract/);
   assert.match(architectureRule, /workflow_aggregate_boundary_contract/);
   assert.match(architectureRule, /workflow_repair_replacement_contract/);
@@ -248,7 +248,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(architectureRule, /renderer_feature_control_ownership_contract/);
   assert.match(architectureRule, /test_owner_structure_contract/);
   assert.match(architectureRule, /test_owner_execution_contract/);
-  assert.equal(sourceFilesUnder("src/variants/developer").length, 0, "variants/developer 不得继续拥有生产源码");
+  assert.equal(existsSync(path.join(appRoot, "src/variants")), false, "退役且已经为空的 variants 目录应完全删除");
   for (const application of ["developer/DeveloperApplication.tsx", "screenshot/ScreenshotApplication.tsx"]) {
     assert.equal(existsSync(path.join(appRoot, "src/applications", application)), true, `缺少 Renderer Application：${application}`);
   }
@@ -339,6 +339,13 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.doesNotMatch(developerApp, /const EVOLUTION_STATUS_LABELS/);
   assert.equal(existsSync(path.join(appRoot, "src/features/screenshot/geometry/annotation-geometry.ts")), true);
   assert.equal(existsSync(path.join(appRoot, "src/features/screenshot/canvas/annotation-renderer.ts")), true);
+  // Renderer 应用和跨 Feature 调用只依赖每个功能根层的公开 index，不穿透实现目录。
+  for (const sourceFile of sourceFilesUnder("src")) {
+    const applicationInternalImport = /from ["'][^"']*features\/[^/"']+\/(?:components|model)\//u;
+    const siblingInternalImport = /from ["'](?:\.\.\/)+(?:collaboration|conversation|evolution|hanli|linghu|nangong|rules|screenshot|settings|shell|testing|workspace)\/(?:components|model)\//u;
+    assert.doesNotMatch(source(sourceFile), applicationInternalImport, `${sourceFile} must use a feature public index`);
+    assert.doesNotMatch(source(sourceFile), siblingInternalImport, `${sourceFile} must use a sibling feature public index`);
+  }
 });
 
 test("tests mirror production owners and the full runner discovers them recursively", () => {

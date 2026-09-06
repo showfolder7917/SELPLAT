@@ -4,8 +4,6 @@ import { SelUiWorkspaceTabs } from "../../theme/SelUiWorkspaceTabs";
 import {
   // 新建会话按钮使用旋转箭头；busy 时同一图标会播放旋转动画。
   ArrowClockwise24Regular,
-  // 页签右侧保留与现有桌面外观一致的关闭图标。
-  // 页签左侧使用提示图标，表示当前区域是人物或 Codex 对话工作区。
 } from "@fluentui/react-icons";
 import type {
   // LocaleValue 限制当前界面只能使用 DesktopApi 支持的中文或日文区域值。
@@ -14,23 +12,23 @@ import type {
   WorkspaceStateOutDto,
 } from "../../../contracts/system/desktop/index";
 // CollaborationWorkspaceFeature 显示普通协作成员、任务群或任务详情。
-import { CollaborationWorkspaceFeature } from "../../features/collaboration/components/CollaborationWorkspaceFeature";
+import { CollaborationWorkspaceFeature } from "../../features/collaboration";
 // useCollaborationWorkspace 的返回类型描述当前协作模式、选中成员和协作页面。
-import type { useCollaborationWorkspace } from "../../features/collaboration/model/useCollaborationWorkspace";
+import type { useCollaborationWorkspace } from "../../features/collaboration";
 // CodexConversationWorkspace 是单会话模式下完整的主 Codex 对话页面。
-import { CodexConversationWorkspace } from "../../features/conversation/components/CodexConversationWorkspace";
+import { CodexConversationWorkspace } from "../../features/conversation";
 // useCodexWorkspace 的返回类型提供主会话状态和“新建任务”等公开动作。
-import type { useCodexWorkspace } from "../../features/conversation/model/useCodexWorkspace";
+import type { useCodexWorkspace } from "../../features/conversation";
 // useEvolutionRuntime 的返回类型是韩立和南宫共同消费的唯一 Evolution 状态。
-import type { useEvolutionRuntime } from "../../features/evolution/model/useEvolutionRuntime";
+import type { useEvolutionRuntime } from "../../features/evolution";
 // HanliConversationWorkspace 显示用户与韩立的独立自由讨论页面。
-import { HanliConversationWorkspace } from "../../features/hanli/components/HanliConversationWorkspace";
+import { HanliConversationWorkspace } from "../../features/hanli";
 // usePersonaConversation 的返回类型统一提供人物会话、附件、错误和新建动作。
-import type { usePersonaConversation } from "../../features/conversation/model/usePersonaConversation";
+import type { usePersonaConversation } from "../../features/conversation";
 // NangongConversationWorkspace 显示南宫婉会话和专题整理入口。
-import { NangongConversationWorkspace } from "../../features/nangong/components/NangongConversationWorkspace";
+import { NangongConversationWorkspace } from "../../features/nangong";
 // useScreenshotCapture 的返回类型提供截图和粘贴图片能力，但不持有各会话附件。
-import type { useScreenshotCapture } from "../../features/screenshot/model/useScreenshotCapture";
+import type { useScreenshotCapture } from "../../features/screenshot";
 
 /** Application 传给工作区路由的公开 Feature 模型；路由只读状态并选择页面。 */
 type DeveloperWorkspaceRouterProps = {
@@ -53,6 +51,28 @@ type DeveloperWorkspaceRouterProps = {
   // screenshot 接受明确人物目标，把签发后的图片返回给对应会话所有者。
   screenshot: ReturnType<typeof useScreenshotCapture>;
 };
+
+/** 协作工作区模型：缩短后续辅助方法的参数声明。 */
+type CollaborationWorkspace = ReturnType<typeof useCollaborationWorkspace>;
+
+/**
+ * 页签标识：根据当前模式生成稳定的主会话、任务群或成员页签键。
+ * 传参示例：选中韩立成员时传入当前协作模型。
+ * 返回示例：`member:han-li`。
+ * 异常或副作用：成员信息尚未加载时回退到韩立键，不修改协作状态。
+ */
+function workspaceTabId(collaboration: CollaborationWorkspace): string {
+  if (!collaboration.collaborationMode) return "main";
+  if (collaboration.panel === "task-group") return "group";
+  return `member:${collaboration.selectedMember?.memberId || "han-li"}`;
+}
+
+/** 页签标题：把稳定键转成客户可读文字，成员页优先显示真实姓名。 */
+function workspaceTabTitle(tabId: string, collaboration: CollaborationWorkspace): string {
+  if (tabId === "main") return "Codex Chat";
+  if (tabId === "group") return "任务协作群";
+  return collaboration.selectedMember?.displayName || "韩立";
+}
 
 /** Developer 工作区路由只选择公开 Feature，不实现人物、协作或主会话内部流程。 */
 function DeveloperWorkspacePage({
@@ -116,6 +136,69 @@ function DeveloperWorkspacePage({
       setLinghuNewConversationBusy(false);
     }
   };
+  // 工作区内容按明确的路由优先级选择，避免让新手追踪多层三元表达式。
+  let workspaceContent;
+  if (showMainConversation) {
+    workspaceContent = (
+      <CodexConversationWorkspace
+        locale={locale}
+        sandboxMode={sandboxMode}
+        controller={codex}
+        screenshot={screenshot}
+        collaboration={collaboration}
+      />
+    );
+  } else if (showHanli) {
+    workspaceContent = (
+      <HanliConversationWorkspace
+        runtime={hanli}
+        key={hanli.conversation.conversationId || "new-hanli-conversation"}
+        conversation={hanli.conversation}
+        attachments={hanli.attachments}
+        workspaces={workspaces}
+        locale={locale}
+        newConversationBusy={hanli.newConversationBusy}
+        error={hanli.error}
+        onConversation={hanli.setConversation}
+        onAttachments={hanli.setAttachments}
+        onScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "hanli")}
+        onPaste={(files) => void screenshot.pasteClipboardImages(files, "hanli")}
+        onError={hanli.setError}
+      />
+    );
+  } else if (showNangong && evolution.state) {
+    workspaceContent = (
+      <NangongConversationWorkspace
+        runtime={nangong}
+        key={nangong.conversation.conversationId || "new-nangong-conversation"}
+        state={evolution.state}
+        approval={codex.interaction.approval}
+        conversation={nangong.conversation}
+        attachments={nangong.attachments}
+        workspaces={workspaces}
+        locale={locale}
+        newConversationBusy={nangong.newConversationBusy}
+        error={nangong.error}
+        onState={evolution.setState}
+        onConversation={nangong.setConversation}
+        onAttachments={nangong.setAttachments}
+        onScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "nangong")}
+        onPaste={(files) => void screenshot.pasteClipboardImages(files, "nangong")}
+        onError={nangong.setError}
+      />
+    );
+  } else {
+    workspaceContent = (
+      <CollaborationWorkspaceFeature
+        locale={locale}
+        workspaces={workspaces}
+        controller={collaboration}
+        evolution={evolution}
+        nangong={nangong}
+        screenshot={screenshot}
+      />
+    );
+  }
   // 页签标题跟随当前协作子页面；成员页优先显示真实人物名称。
   // Fragment 允许页签、错误条和实际工作区作为同一个路由结果返回。
   return <>
@@ -179,83 +262,68 @@ function DeveloperWorkspacePage({
 
     </div>
 
-    {/* 路由优先级：主 Codex → 韩立 → 南宫婉 → 其他协作页面。 */}
-    {showMainConversation
-      // 单会话模式把主会话、截图和协作引用交给 Codex Feature 自己处理。
-      ? <CodexConversationWorkspace
-        locale={locale}
-        sandboxMode={sandboxMode}
-        controller={codex}
-        screenshot={screenshot}
-        collaboration={collaboration}
-      />
-      : showHanli
-        // 韩立使用自己的会话和附件；截图结果通过目标 hanli 返回给它。
-        ? <HanliConversationWorkspace
-          runtime={hanli}
-          key={hanli.conversation.conversationId || "new-hanli-conversation"}
-          conversation={hanli.conversation}
-          attachments={hanli.attachments}
-          workspaces={workspaces}
-          locale={locale}
-          newConversationBusy={hanli.newConversationBusy}
-          error={hanli.error}
-          onConversation={hanli.setConversation}
-          onAttachments={hanli.setAttachments}
-          onScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "hanli")}
-          onPaste={(files) => void screenshot.pasteClipboardImages(files, "hanli")}
-          onError={hanli.setError}
-        />
-        : showNangong && evolution.state
-          // 南宫婉拥有自己的统一人物会话；专题、提案等共同流程状态仍由 Evolution 提供。
-          ? <NangongConversationWorkspace
-            runtime={nangong}
-            key={nangong.conversation.conversationId || "new-nangong-conversation"}
-            state={evolution.state}
-            approval={codex.interaction.approval}
-            conversation={nangong.conversation}
-            attachments={nangong.attachments}
-            workspaces={workspaces}
-            locale={locale}
-            newConversationBusy={nangong.newConversationBusy}
-            error={nangong.error}
-            onState={evolution.setState}
-            onConversation={nangong.setConversation}
-            onAttachments={nangong.setAttachments}
-            onScreenshot={(hidden) => void screenshot.startScreenshot(hidden, "nangong")}
-            onPaste={(files) => void screenshot.pasteClipboardImages(files, "nangong")}
-            onError={nangong.setError}
-          />
-          // 其余成员页、任务群和任务详情统一由 Collaboration Feature 决定。
-          : <CollaborationWorkspaceFeature
-            locale={locale}
-            workspaces={workspaces}
-            controller={collaboration}
-            evolution={evolution}
-            nangong={nangong}
-            screenshot={screenshot}
-          />}
+    {/* 实际工作区：已在上方用显式分支选好，此处只负责放入布局。 */}
+    {workspaceContent}
   </>;
 }
 
-/** Each stable route has its own mounted page; selecting or closing a tab never mutates a task. */
+/** 工作区页签路由：每个稳定路由拥有独立页面，切换页签不修改任务事实。 */
 export function DeveloperWorkspaceRouter(props: DeveloperWorkspaceRouterProps) {
-  const c = props.collaboration;
-  const id = !c.collaborationMode ? "main" : c.panel === "task-group" ? "group" : `member:${c.selectedMember?.memberId || "han-li"}`;
-  const title = id === "main" ? "Codex Chat" : id === "group" ? "任务协作群" : c.selectedMember?.displayName || "韩立";
-  return <SelUiWorkspaceTabs request={c.state ? { id, label: title } : null} revision={c.navigationRevision}
-    onActivate={(key) => {
-      if (key === "main") { if (c.collaborationMode) void c.setOperatingMode("single-conversation"); return; }
-      if (!c.collaborationMode) void c.setOperatingMode("collaboration");
-      if (key === "group") c.syncPanel("task-group");
-      else { c.syncPanel("member"); const memberId = key.slice(7); if (c.selectedMember?.memberId !== memberId) void c.selectMember(memberId); }
-    }}
-    renderPage={(key) => {
-      const member = c.state?.members.find((item) => item.memberId === key.slice(7)) || c.selectedMember;
-      const view = { ...c, collaborationMode: key !== "main", panel: (key === "group" ? "task-group" : "member") as typeof c.panel,
-        selectedMember: member,
-        selectedMemberTasks: c.state?.tasks.filter((item) => !c.terminalStates.has(item.state) && (item.executorMemberId === member?.memberId || item.initiator?.memberId === member?.memberId || item.executionRecords.some((record) => record.executor.memberId === member?.memberId))) || [],
-      };
-      return <DeveloperWorkspacePage {...props} collaboration={view} />;
-    }} />;
+  const collaboration = props.collaboration;
+  const tabId = workspaceTabId(collaboration);
+  const tabTitle = workspaceTabTitle(tabId, collaboration);
+  const requestedTab = collaboration.state ? { id: tabId, label: tabTitle } : null;
+
+  /** 页签切换：只更新操作模式或当前面板，不改动任务内容。 */
+  function activateWorkspaceTab(key: string) {
+    if (key === "main") {
+      if (collaboration.collaborationMode) {
+        void collaboration.setOperatingMode("single-conversation");
+      }
+      return;
+    }
+    if (!collaboration.collaborationMode) {
+      void collaboration.setOperatingMode("collaboration");
+    }
+    if (key === "group") {
+      collaboration.syncPanel("task-group");
+      return;
+    }
+    collaboration.syncPanel("member");
+    const memberId = key.slice("member:".length);
+    if (collaboration.selectedMember?.memberId !== memberId) {
+      void collaboration.selectMember(memberId);
+    }
+  }
+
+  /** 页签页面：为目标页签派生独立的只读协作视图。 */
+  function renderWorkspacePage(key: string) {
+    const memberId = key.slice("member:".length);
+    const selectedMember = collaboration.state?.members.find((item) => item.memberId === memberId)
+      || collaboration.selectedMember;
+    const selectedMemberTasks = collaboration.state?.tasks.filter((task) => {
+      if (collaboration.terminalStates.has(task.state)) return false;
+      if (task.executorMemberId === selectedMember?.memberId) return true;
+      if (task.initiator?.memberId === selectedMember?.memberId) return true;
+      return task.executionRecords.some((record) => record.executor.memberId === selectedMember?.memberId);
+    }) || [];
+    const panel = key === "group" ? "task-group" : "member";
+    const collaborationView = {
+      ...collaboration,
+      collaborationMode: key !== "main",
+      panel: panel as typeof collaboration.panel,
+      selectedMember,
+      selectedMemberTasks,
+    };
+    return <DeveloperWorkspacePage {...props} collaboration={collaborationView} />;
+  }
+
+  return (
+    <SelUiWorkspaceTabs
+      request={requestedTab}
+      revision={collaboration.navigationRevision}
+      onActivate={activateWorkspaceTab}
+      renderPage={renderWorkspacePage}
+    />
+  );
 }

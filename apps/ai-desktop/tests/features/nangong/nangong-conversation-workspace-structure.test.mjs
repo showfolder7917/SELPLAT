@@ -26,8 +26,8 @@ test("南宫婉页面的新手说明覆盖真实页面区域和主要控制状�
   assert.match(view, /课题草稿区/);
   assert.match(view, /待发送截图区/);
   assert.match(view, /问答输入区/);
-  assert.match(controller, /chatText 保存问答输入框/);
-  assert.match(controller, /topicDraft 保存客户确认前/);
+  assert.match(controller, /待发送文字（chatText）保存问答输入框/);
+  assert.match(controller, /课题草稿（topicDraft）保存客户确认前/);
   assert.match(controller, /返回页面结构真正需要的数据和具名操作/);
 });
 

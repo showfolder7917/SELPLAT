@@ -1,7 +1,7 @@
 import { type ClipboardEvent, type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 
 import type { LocaleValue } from "../../../../contracts/system/desktop/index";
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import type { ComposerAttachment } from "../../conversation";
 import { appendComposerAttachment, imageFileToPngDataUrl } from "./prepareComposerImage";
 
 export type ScreenshotDestination = "main" | "nangong" | "hanli";

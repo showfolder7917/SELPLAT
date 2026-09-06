@@ -13,12 +13,12 @@ import {
 } from "react";
 
 // 截图附件类型（ComposerAttachment）表示一张已经保存、可以发送和预览的图片。
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import type { ComposerAttachment } from "../../conversation";
 // 实时消息合并方法（mergeRealtimeConversationTimeline）把数据库消息与发送中的临时消息合并为一条时间线。
 // 人物消息分类方法（projectPersonaConversation）把韩立会话拆成直接对话和内部研讨两类消息。
-import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
+import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让会话区在新增消息后跟随到最新内容。
-import { usePersonaConversationTailFollow } from "../../conversation/model/usePersonaConversationTailFollow";
+import { usePersonaConversationTailFollow } from "../../conversation";
 // 韩立页面参数类型（HanliConversationWorkspaceProps）描述页面结构交给控制逻辑的全部数据和操作。
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 

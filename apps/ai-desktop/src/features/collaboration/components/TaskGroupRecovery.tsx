@@ -1,5 +1,5 @@
 import type { CollaborationTimelineGroupOutDto } from "../../../../contracts/system/desktop/index";
-import type { useEvolutionRuntime } from "../../evolution/model/useEvolutionRuntime";
+import type { useEvolutionRuntime } from "../../evolution";
 
 /** 仅当前专题的原运行提供恢复入口，历史任务和正在推进的运行不显示按钮。 */
 export function TaskGroupRecovery({ group, evolution }: { group: CollaborationTimelineGroupOutDto; evolution: ReturnType<typeof useEvolutionRuntime> }) {

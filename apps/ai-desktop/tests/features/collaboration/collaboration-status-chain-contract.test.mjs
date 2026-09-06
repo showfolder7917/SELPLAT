@@ -6,6 +6,7 @@ const developerSource = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
   "../../../src/features/collaboration/components/CollaborationWorkspaceFeature.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline.tsx",
   "../../../src/features/conversation/components/CollaborationStatusChain.tsx",
   "../../../src/features/conversation/components/StreamDetails.tsx",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");

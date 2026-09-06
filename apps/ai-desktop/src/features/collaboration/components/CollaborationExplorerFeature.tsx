@@ -1,7 +1,7 @@
 import { Branch24Regular, ChevronDown16Regular, ChevronRight16Regular } from "@fluentui/react-icons";
 
 import type { AuditTaskSummaryOutDto, EvolutionStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
-import { auditStatusText } from "../../settings/model/settings-formatters";
+import { auditStatusText } from "../../settings";
 import { collaborationMemberPresenceState, collaborationMemberStateLabel, type PersonaConversationActivity } from "../model/collaboration-formatters";
 import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspace";
 

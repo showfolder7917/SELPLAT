@@ -1,9 +1,9 @@
 import type { LocaleValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
-import type { useEvolutionRuntime } from "../../evolution/model/useEvolutionRuntime";
-import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
-import type { useScreenshotCapture } from "../../screenshot/model/useScreenshotCapture";
+import type { useEvolutionRuntime } from "../../evolution";
+import type { usePersonaConversation } from "../../conversation";
+import type { useScreenshotCapture } from "../../screenshot";
 import { useSelUi } from "../../../theme/SelUiProvider";
-import { evolutionMutationRequest } from "../../evolution/model/evolution-runtime";
+import { evolutionMutationRequest } from "../../evolution";
 import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspace";
 import { CollaborationMemberPage } from "./CollaborationMemberPage";
 import { TaskCollaborationGroup } from "./TaskCollaborationGroup";

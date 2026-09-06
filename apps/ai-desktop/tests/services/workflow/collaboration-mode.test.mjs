@@ -38,6 +38,7 @@ const rendererCollaborationSources = [
   "../../../src/features/collaboration/components/CollaborationMemberPage.tsx",
   "../../../src/features/conversation/components/CollaborationStatusChain.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline.tsx",
 ];
 const developerSource = rendererCollaborationSources.map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const coordinatorSource = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");

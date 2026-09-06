@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { CollaborationTimelineGroupOutDto, CollaborationTimelineNodeOutDto, CollaborationTimelineSnapshotOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
-import type { useEvolutionRuntime } from "../../evolution/model/useEvolutionRuntime";
+import type { useEvolutionRuntime } from "../../evolution";
 import { TaskGroupRecovery } from "./TaskGroupRecovery";
 
 /** 新任务协作群只消费主进程时间线投影；旧四阶段视图保留回退但不再参与本页排序和人物推断。 */

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CollaborationMemberOutDto, CollaborationTimelineSnapshotOutDto, EvolutionStateOutDto, LinghuAutomationStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
-import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
-import { SelUiConversation } from "../../conversation/components/SelUiConversation";
+import { MarkdownMessage, SelUiConversation } from "../../conversation";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 import { LinghuAutomationPanel } from "../../linghu";
 import { collaborationMemberStateLabel } from "../model/collaboration-formatters";

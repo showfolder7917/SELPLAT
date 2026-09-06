@@ -29,6 +29,7 @@ const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
   "../../../src/features/conversation/components/CodexApprovalDialog.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer.tsx",
   "../../../src/features/conversation/components/ManagedStageAction.tsx",
   "../../../src/features/conversation/components/StreamDetails.tsx",
   "../../../src/features/conversation/model/useCodexConversation.ts",

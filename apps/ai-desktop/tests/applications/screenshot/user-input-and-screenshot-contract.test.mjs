@@ -7,6 +7,7 @@ const screenshotWindow = readFileSync(new URL("../../../src/applications/screens
 const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
+  "../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer.tsx",
   "../../../src/features/conversation/components/CodexUserInputPanel.tsx",
   "../../../src/features/conversation/model/useCodexConversation.ts",
   "../../../src/features/conversation/model/useCodexWorkspace.ts",
@@ -123,7 +124,8 @@ test("截图按钮状态样式绑定真实对话 footer", () => {
   assert.match(developerCss, /\.selconversation-footer \.screenshot-button:disabled \{ cursor: wait; opacity: \.45; \}/);
   assert.doesNotMatch(developerCss, /\.composer-footer \.screenshot-button/);
   assert.match(developerApp, /className="selconversation-footer"[\s\S]*disabled=\{screenshot\.screenshotBusy\}/);
-  assert.match(developerApp, /className="selconversation-footer"[\s\S]*onScreenshot\(false\)[\s\S]*onScreenshot\(true\)/);
+  assert.match(developerApp, /function captureCurrentScreen\(\)[\s\S]*startScreenshot\(\)/);
+  assert.match(developerApp, /function captureScreenWithoutDesktop\(\)[\s\S]*startScreenshot\(true\)/);
 });
 
 test("官方 requestUserInput 保持原回合等待逐题答案并通过白名单 IPC 回传", () => {

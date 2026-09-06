@@ -2,13 +2,13 @@ import { Add24Regular, Delete16Regular, Delete24Regular, FolderOpen24Regular, Sh
 
 import type { CodexHarnessStatusOutDto, LocaleValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue } from "../../../../contracts/system/desktop/index";
 import { useSelUi } from "../../../theme/SelUiProvider";
-import { RuleManagementFeature } from "../../rules/components/RuleManagementFeature";
-import { ChatGPTLoginAction } from "../../shell/components/DesktopChrome";
+import { RuleManagementFeature } from "../../rules";
+import { ChatGPTLoginAction } from "../../shell";
 import { SettingsFloatingPanel } from "./SettingsFloatingPanel";
 import { auditStatusText, formatBytes, reasoningEffortLabel } from "../model/settings-formatters";
 import type { useDesktopSettings } from "../model/useDesktopSettings";
 import type { useDesktopDiagnostics } from "../model/useDesktopDiagnostics";
-import type { useWorkspaceRegistry } from "../../workspace/model/useWorkspaceRegistry";
+import type { useWorkspaceRegistry } from "../../workspace";
 
 type SettingsController = ReturnType<typeof useDesktopSettings>;
 type DiagnosticsController = ReturnType<typeof useDesktopDiagnostics>;

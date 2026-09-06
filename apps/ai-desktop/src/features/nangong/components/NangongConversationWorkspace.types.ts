@@ -26,9 +26,9 @@ import type {
 } from "../../../../contracts/system/desktop/index";
 
 // 待发送附件类型（ComposerAttachment）表示输入区中尚未发送的截图。
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
+import type { ComposerAttachment } from "../../conversation";
 // 人物会话控制方法（usePersonaConversation）提供公共运行状态；本文件只读取它的返回类型。
-import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
+import type { usePersonaConversation } from "../../conversation";
 
 /** “整理为演化课题”表单中尚未保存的数据。 */
 export interface NangongTopicDraft {

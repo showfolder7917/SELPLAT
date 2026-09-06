@@ -75,9 +75,9 @@ export class CheckpointCoordinator {
     // 单任务提案即使原任务记录缺失，也能使用持久分发标识建立明确替代关系。
     let proposalTaskId: string | null = null;
     // 只有唯一分发任务时才能从提案确定原任务身份。
-    if (proposal?.distributedTaskIds.length === 1) {
+    if (proposal?.distributedTaskIds?.length === 1) {
       // 保存唯一原任务标识，禁止在多任务提案中猜测替代对象。
-      proposalTaskId = proposal.distributedTaskIds[0];
+      proposalTaskId = proposal.distributedTaskIds[0] || null;
     }
     // 原阶段优先使用异常事实，其次使用任务阶段。
     const sourcePhase = text(event.payload.phase) || task?.phase || "未知节点";
