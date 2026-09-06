@@ -381,6 +381,10 @@ function safeNavigationClick(x: number, y: number): boolean {
   if (/删除|清空|移除|提交|保存|确认|通过|退回|分发|发布|重启|自动巡检|自动托管/u.test(label)) {
     return false;
   }
+  // 设置入口只负责打开固定浮层；必须同时命中外层容器，避免放行设置内容中的业务按钮。
+  if (node.classList.contains("activity-settings") && node.closest(".dev-settings-control")) {
+    return true;
+  }
   if (node.classList.contains("collaboration-member")) {
     return true;
   }

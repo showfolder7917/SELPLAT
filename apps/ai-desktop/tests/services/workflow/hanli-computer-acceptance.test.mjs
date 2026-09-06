@@ -52,6 +52,11 @@ test("不安全点击被拒绝且可以真实报告受阻", async () => {
   });
   assert.equal(result.status, "blocked");
 });
+test("设置浮层触发器是唯一允许的设置导航入口", () => {
+  const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(source, /node\.classList\.contains\("activity-settings"\) && node\.closest\("\.dev-settings-control"\)/);
+  assert.ok(source.indexOf("删除|清空|移除") < source.indexOf('node.classList.contains("activity-settings")'));
+});
 test("受控验收消息发送后可作为真实截图证据，悬停也形成独立输入记录", async () => {
   const f = fixture();
   const run = await f.run(async (tools) => {
