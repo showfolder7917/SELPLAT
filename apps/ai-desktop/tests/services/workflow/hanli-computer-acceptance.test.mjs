@@ -16,7 +16,7 @@ const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: [
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
   let n = 0;
   const inputs = [], progress = [];
-  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => String(script).includes("sendAcceptanceMessage") ? sendResult : safe, sendInputEvent: (event) => inputs.push(event) } };
+  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => /sendAcceptanceMessage|sendAcceptanceScreenshot/.test(String(script)) ? sendResult : safe, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
   return { inputs, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
 }
@@ -73,6 +73,28 @@ test("图片预览只放行消息缩略图、预览控件和预览区域拖拽",
   assert.match(source, /selimagepreview-action, \.seldialog-close/);
   assert.match(source, /safeImagePreviewDrag/);
   assert.match(source, /图片预览状态不可读取，证据不足/);
+  assert.match(source, /getComputedStyle\(viewport\)\.cursor/);
+  assert.match(source, /withinBounds/);
+  assert.match(source, /imagePreviewDuringDrag/);
+});
+test("预览拖拽与受控截图发送都形成受限交互记录", async () => {
+  const f = fixture();
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const dragged = await tools.call("hanli_computer", { action: "drag", reason: "验证溢出图片的受限拖拽", observationId: first, x: 100, y: 100, endX: 180, endY: 120 });
+    assert.deepEqual(f.inputs.map((item) => item.type), ["mouseMove", "mouseDown", "mouseMove", "mouseUp"]);
+    const sent = await tools.call("hanli_computer", { action: "send-test-screenshot", reason: "验证当前人物截图附件发送", observationId: id(dragged) });
+    await finish(tools, id(sent));
+  });
+  assert.equal(run.status, "passed");
+  assert.equal(run.stepResults[0].operation.type, "drag");
+  assert.equal(run.stepResults[1].operation.type, "send");
+});
+test("截图发送只允许当前人物固定截图按钮", () => {
+  const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(source, /send-test-screenshot/);
+  assert.match(source, /button\.screenshot-button\[aria-label="截取当前屏幕"\]/);
+  assert.match(source, /截图附件未进入当前人物发送区/);
 });
 test("受控验收消息发送后可作为真实截图证据，悬停也形成独立输入记录", async () => {
   const f = fixture();
