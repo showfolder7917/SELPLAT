@@ -72,6 +72,8 @@
         const selFloatingPanelResizeMaximumWidth = selFloatingPanelResizeNumber(selFloatingPanelResizeConfig.maxWidth, Number.POSITIVE_INFINITY);
         const selFloatingPanelResizeMaximumHeight = selFloatingPanelResizeNumber(selFloatingPanelResizeConfig.maxHeight, Number.POSITIVE_INFINITY);
         const selFloatingPanelResizeLabels = selFloatingPanelResizeConfig.labels || {};
+        // 右侧单向加宽必须由调用方显式开启，避免为既有浮层新增热区。
+        const selFloatingPanelResizeRightEnabled = selFloatingPanelResizeConfig.right === true;
 
         // 标题栏采用图标、两级文案和关闭按钮三轨结构。
         const selFloatingPanelHeading = document.createElement("header");
@@ -104,12 +106,13 @@
             selFloatingPanelBody.innerHTML = selFloatingPanelOptions.contentHtml;
         }
         selFloatingPanelPanel.append(selFloatingPanelHeading, selFloatingPanelBody);
-        // 左边、底边与左下角分别承担单轴和双轴缩放；按钮语义同时支持键盘微调。
+        // 左边、底边与左下角保持既有缩放；右边单向加宽只在调用方明确启用时出现。
         const selFloatingPanelResizeHandles = [];
         if (selFloatingPanelResizeEnabled) {
             selFloatingPanelPanel.dataset.selFloatingResizable = "true";
             [
                 ["left", selFloatingPanelResizeLabels.left || "调整面板宽度"],
+                ...(selFloatingPanelResizeRightEnabled ? [["right", selFloatingPanelResizeLabels.right || "从右侧调整面板宽度"]] : []),
                 ["bottom", selFloatingPanelResizeLabels.bottom || "调整面板高度"],
                 ["corner", selFloatingPanelResizeLabels.corner || "同时调整面板宽度和高度"]
             ].forEach(([selFloatingPanelResizeDirection, selFloatingPanelResizeLabel]) => {
@@ -129,8 +132,20 @@
         // 当前拖拽只在按下手柄后存在；切换主题和标签不会重建面板或丢失尺寸。
         let selFloatingPanelResizeInteraction = null;
 
-        // 面板右上锚点保持不变，最大尺寸始终限制在当前浏览器可视区域内。
-        function selFloatingPanelResizeBounds() {
+        // 右侧热区采用视口坐标，既保持在面板外沿，又不计入面板自身的横向滚动宽度。
+        function selFloatingPanelPositionRightResizeHandle() {
+            const selFloatingPanelRightResizeHandle = selFloatingPanelResizeHandles.find((selFloatingPanelResizeHandle) => selFloatingPanelResizeHandle.dataset.selFloatingResize === "right");
+            if (!selFloatingPanelRightResizeHandle || selFloatingPanelPanel.hidden) return;
+            const selFloatingPanelRect = selFloatingPanelPanel.getBoundingClientRect();
+            const selFloatingPanelHeadingRect = selFloatingPanelHeading.getBoundingClientRect();
+            const selFloatingPanelRightResizeTop = selFloatingPanelHeadingRect.bottom;
+            selFloatingPanelRightResizeHandle.style.left = `${Math.round(selFloatingPanelRect.right - 7)}px`;
+            selFloatingPanelRightResizeHandle.style.top = `${Math.round(selFloatingPanelRightResizeTop)}px`;
+            selFloatingPanelRightResizeHandle.style.height = `${Math.max(0, Math.round(selFloatingPanelRect.bottom - selFloatingPanelRightResizeTop))}px`;
+        }
+
+        // 左侧手柄沿既有右锚点边界收敛；右侧手柄以面板左边界为基准向右扩展。
+        function selFloatingPanelResizeBounds(selFloatingPanelResizeDirection) {
             const selFloatingPanelRect = selFloatingPanelPanel.getBoundingClientRect();
             const selFloatingPanelViewportGap = 12;
             // 语言切换后的内存快照会在浮层重新打开前恢复；hidden 元素没有可用 rect，
@@ -138,19 +153,23 @@
             const selFloatingPanelAvailableRight = selFloatingPanelRect.right > 0
                 ? selFloatingPanelRect.right
                 : window.innerWidth - selFloatingPanelViewportGap;
+            const selFloatingPanelMaximumWidthByViewport = selFloatingPanelResizeDirection === "right" && selFloatingPanelRect.left >= 0
+                ? window.innerWidth - selFloatingPanelRect.left - selFloatingPanelViewportGap
+                : selFloatingPanelAvailableRight - selFloatingPanelViewportGap;
             return {
-                maxWidth: Math.max(selFloatingPanelResizeMinimumWidth, Math.min(selFloatingPanelResizeMaximumWidth, selFloatingPanelAvailableRight - selFloatingPanelViewportGap)),
+                maxWidth: Math.max(selFloatingPanelResizeMinimumWidth, Math.min(selFloatingPanelResizeMaximumWidth, selFloatingPanelMaximumWidthByViewport)),
                 maxHeight: Math.max(selFloatingPanelResizeMinimumHeight, Math.min(selFloatingPanelResizeMaximumHeight, window.innerHeight - selFloatingPanelRect.top - selFloatingPanelViewportGap))
             };
         }
 
         // 单一入口应用宽高并做双重边界校验，指针、键盘和窗口变化共享同一规则。
-        function selFloatingPanelApplySize(selFloatingPanelWidth, selFloatingPanelHeight) {
+        function selFloatingPanelApplySize(selFloatingPanelWidth, selFloatingPanelHeight, selFloatingPanelResizeDirection) {
             if (!selFloatingPanelResizeEnabled) return false;
-            const selFloatingPanelBounds = selFloatingPanelResizeBounds();
+            const selFloatingPanelBounds = selFloatingPanelResizeBounds(selFloatingPanelResizeDirection);
             if (Number.isFinite(selFloatingPanelWidth)) {
                 const selFloatingPanelNextWidth = Math.min(selFloatingPanelBounds.maxWidth, Math.max(selFloatingPanelResizeMinimumWidth, selFloatingPanelWidth));
                 selFloatingPanelPanel.style.width = `${Math.round(selFloatingPanelNextWidth)}px`;
+                selFloatingPanelPositionRightResizeHandle();
             }
             if (Number.isFinite(selFloatingPanelHeight)) {
                 const selFloatingPanelNextHeight = Math.min(selFloatingPanelBounds.maxHeight, Math.max(selFloatingPanelResizeMinimumHeight, selFloatingPanelHeight));
@@ -191,15 +210,16 @@
 
         function selFloatingPanelHandleResizePointerMove(selFloatingPanelEvent) {
             if (!selFloatingPanelResizeInteraction || selFloatingPanelResizeInteraction.pointerId !== selFloatingPanelEvent.pointerId) return;
-            const selFloatingPanelResizeHorizontal = ["left", "corner"].includes(selFloatingPanelResizeInteraction.direction);
+            const selFloatingPanelResizeHorizontal = ["left", "right", "corner"].includes(selFloatingPanelResizeInteraction.direction);
             const selFloatingPanelResizeVertical = ["bottom", "corner"].includes(selFloatingPanelResizeInteraction.direction);
             selFloatingPanelApplySize(
                 selFloatingPanelResizeHorizontal
-                    ? selFloatingPanelResizeInteraction.startWidth - (selFloatingPanelEvent.clientX - selFloatingPanelResizeInteraction.startX)
+                    ? selFloatingPanelResizeInteraction.startWidth + (selFloatingPanelResizeInteraction.direction === "right" ? 1 : -1) * (selFloatingPanelEvent.clientX - selFloatingPanelResizeInteraction.startX)
                     : Number.NaN,
                 selFloatingPanelResizeVertical
                     ? selFloatingPanelResizeInteraction.startHeight + (selFloatingPanelEvent.clientY - selFloatingPanelResizeInteraction.startY)
-                    : Number.NaN
+                    : Number.NaN,
+                selFloatingPanelResizeInteraction.direction
             );
             selFloatingPanelEvent.preventDefault();
         }
@@ -215,11 +235,15 @@
             const selFloatingPanelDirection = selFloatingPanelEvent.currentTarget.dataset.selFloatingResize;
             const selFloatingPanelRect = selFloatingPanelPanel.getBoundingClientRect();
             const selFloatingPanelStep = selFloatingPanelEvent.shiftKey ? 32 : 12;
-            const selFloatingPanelWidthDelta = selFloatingPanelEvent.key === "ArrowLeft" ? selFloatingPanelStep : selFloatingPanelEvent.key === "ArrowRight" ? -selFloatingPanelStep : 0;
+            const selFloatingPanelResizeFromRight = selFloatingPanelDirection === "right";
+            const selFloatingPanelWidthDelta = selFloatingPanelEvent.key === "ArrowLeft"
+                ? (selFloatingPanelResizeFromRight ? -selFloatingPanelStep : selFloatingPanelStep)
+                : selFloatingPanelEvent.key === "ArrowRight" ? (selFloatingPanelResizeFromRight ? selFloatingPanelStep : -selFloatingPanelStep) : 0;
             const selFloatingPanelHeightDelta = selFloatingPanelEvent.key === "ArrowDown" ? selFloatingPanelStep : selFloatingPanelEvent.key === "ArrowUp" ? -selFloatingPanelStep : 0;
             selFloatingPanelApplySize(
-                ["left", "corner"].includes(selFloatingPanelDirection) ? selFloatingPanelRect.width + selFloatingPanelWidthDelta : Number.NaN,
-                ["bottom", "corner"].includes(selFloatingPanelDirection) ? selFloatingPanelRect.height + selFloatingPanelHeightDelta : Number.NaN
+                ["left", "right", "corner"].includes(selFloatingPanelDirection) ? selFloatingPanelRect.width + selFloatingPanelWidthDelta : Number.NaN,
+                ["bottom", "corner"].includes(selFloatingPanelDirection) ? selFloatingPanelRect.height + selFloatingPanelHeightDelta : Number.NaN,
+                selFloatingPanelDirection
             );
             selFloatingPanelEvent.preventDefault();
         }
@@ -229,7 +253,7 @@
             const selFloatingPanelInlineWidth = Number.parseFloat(selFloatingPanelPanel.style.width);
             const selFloatingPanelInlineHeight = Number.parseFloat(selFloatingPanelPanel.style.height);
             if (Number.isFinite(selFloatingPanelInlineWidth) || Number.isFinite(selFloatingPanelInlineHeight)) {
-                selFloatingPanelApplySize(selFloatingPanelInlineWidth, selFloatingPanelInlineHeight);
+                selFloatingPanelApplySize(selFloatingPanelInlineWidth, selFloatingPanelInlineHeight, selFloatingPanelResizeRightEnabled ? "right" : "left");
             }
         }
 
@@ -265,6 +289,7 @@
             if (selFloatingPanelIsOpen()) return false;
             selFloatingPanelPanel.hidden = false;
             selFloatingPanelTrigger.setAttribute("aria-expanded", "true");
+            selFloatingPanelPositionRightResizeHandle();
             selFloatingPanelOptions.onOpenChange?.(true);
             return true;
         }

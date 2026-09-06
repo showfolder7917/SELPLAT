@@ -41,6 +41,8 @@ test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () =
   assert.match(settingsPanel, /resizable:\s*\{/);
   assert.match(settingsPanel, /minWidth:\s*MINIMUM_WIDTH/);
   assert.match(settingsPanel, /maxWidth:\s*MAXIMUM_WIDTH/);
+  assert.match(settingsPanel, /right:\s*true/);
+  assert.match(settingsPanel, /right: locale === "ja"/);
   assert.match(settingsPanel, /resetLabel:/);
   assert.doesNotMatch(component, /SettingsWidthResizer/);
   assert.match(settingsPanel, /setPortalBody\(content\)/);
@@ -58,6 +60,12 @@ test("设置业务内容区具有稳定剩余高度并独立纵向滚动", () =>
 
 test("SELUI 浮动面板提供宽度约束、键盘、双击与关闭交互", () => {
   assert.match(floatingPanel, /selFloatingPanelResizeBounds/);
+  assert.match(floatingPanel, /selFloatingPanelResizeConfig\.right === true/);
+  assert.match(floatingPanel, /\["left", "right", "corner"\]/);
+  assert.match(floatingPanel, /selFloatingPanelResizeInteraction\.startWidth \+ \(selFloatingPanelResizeInteraction\.direction === "right" \? 1 : -1\)/);
+  assert.match(floatingPanel, /function selFloatingPanelPositionRightResizeHandle\(\)/);
+  assert.match(floatingPanel, /selFloatingPanelHeadingRect\.bottom/);
+  assert.match(floatingPanel, /selFloatingPanelRect\.right - 7/);
   assert.match(floatingPanel, /pointerdown/);
   assert.match(floatingPanel, /\["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"\]/);
   assert.match(floatingPanel, /dblclick/);
