@@ -13,12 +13,17 @@ test("发布、签名、验证和规则构建共用所选工作区门面", () =>
     "scripts/sign-mac-developer-app.mjs",
     "scripts/interaction-test-paths.mjs",
     "scripts/test-document-runner.mjs",
-    "scripts/resolve-application-paths.mjs",
     "scripts/verify-mac-developer-app.mjs",
     "scripts/verify-package-content.mjs",
   ]) {
     assert.match(readFileSync(path.join(appRoot, relative), "utf8"), /resolveSelectedWorkspaceRoot|output:\s*path\.join\(selplatRoot/u, relative);
   }
+});
+
+test("路径诊断入口只读取候选工作树，不提升为运行数据工作区", () => {
+  const source = readFileSync(path.join(appRoot, "scripts/resolve-application-paths.mjs"), "utf8");
+  assert.match(source, /resolvePathDiagnosticWorkspaceRoot\(sourceProjectRoot\)/);
+  assert.match(source, /source-worktree-diagnostic-only/);
 });
 
 test("发布候选源码始终使用显式选择工作区作为数据根", { concurrency: false }, () => {
