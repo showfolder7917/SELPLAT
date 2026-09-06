@@ -15,6 +15,8 @@ const ROLE_RULES = {
   executor: "AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES",
   linghu: "AI_DESKTOP_LINGHU_FAILURE_TEST_RULES",
 } as const;
+// 所有人物共用同一份协作与传达规则，避免四份人物规则分别漂移。
+const SHARED_ROLE_RULES = ["AI_DESKTOP_COLLABORATION_AUTOMATION_RULES"] as const;
 
 export type AiDesktopRuleRole = keyof typeof ROLE_RULES;
 export interface TaskRuleSnapshot {
@@ -94,7 +96,7 @@ export class ActiveUserRuleFacade {
   /** 兼容主会话；默认按执行者职责加载，不再拼接全部规则正文。 */
   renderDeveloperInstructions(): string { return this.renderRoleInstructions("executor"); }
 
-  /** 返回 AGENTS、人物规则和用户索引目录；专项规则由任务按逻辑 ID追加。 */
+  /** 返回 AGENTS、共通协作规则、人物规则和用户索引目录；专项规则由任务按逻辑 ID追加。 */
   renderRoleInstructions(role: AiDesktopRuleRole, taskRuleIds: string[] = []): string {
     const snapshot = this.createTaskRuleSnapshot(role, taskRuleIds);
     return this.renderTaskRuleSnapshot(snapshot);
@@ -117,8 +119,12 @@ export class ActiveUserRuleFacade {
   createTaskRuleSnapshot(role: AiDesktopRuleRole, taskRuleIds: string[] = []): TaskRuleSnapshot {
     this.#refreshIfChanged();
     if (this.#diagnostic) throw new Error(this.#diagnostic);
-    const roleRuleId = ROLE_RULES[role];
-    const selected = [roleRuleId, ...taskRuleIds];
+    // 人物专属职责和所有人物共通职责共同构成每次会话的强制规则。
+    const mandatoryRoleRuleIds = [...SHARED_ROLE_RULES, ROLE_RULES[role]];
+    // 专项规则去重，并排除已经强制加载的共通或人物规则。
+    const matchedTaskRuleIds = [...new Set(taskRuleIds)].filter((id) => !mandatoryRoleRuleIds.includes(id as typeof mandatoryRoleRuleIds[number]));
+    // 当前任务专项规则只在强制规则之后追加，不覆盖共通传达要求。
+    const selected = [...mandatoryRoleRuleIds, ...matchedTaskRuleIds];
     for (const id of selected) if (!this.#rules.has(id)) throw new Error(`当前用户规则未登记：${id}`);
     const hashes = Object.fromEntries(selected.map((id) => [id, this.#rules.get(id)!.sha256]));
     const contents = Object.fromEntries(selected.map((id) => [id, this.#rules.get(id)!.content]));
@@ -126,8 +132,8 @@ export class ActiveUserRuleFacade {
       activeUserId: this.#activeUserId,
       role,
       ruleRevision: this.#revision,
-      mandatoryRoleRuleIds: [roleRuleId],
-      matchedTaskRuleIds: [...new Set(taskRuleIds)],
+      mandatoryRoleRuleIds,
+      matchedTaskRuleIds,
       dependencyRuleIds: [],
       loadedRuleHashes: hashes,
       loadedRuleContents: contents,

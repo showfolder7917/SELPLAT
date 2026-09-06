@@ -17,6 +17,7 @@ import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggr
 // 单任务聚合统一解释人物是否仍真实占用任务。
 import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
 import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
+import { AcceptanceFailureScopePolicy } from "../../domain/acceptance-failure-scope.policy.js";
 import { AcceptanceHandoffService } from "../acceptance/acceptance-handoff.service.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../../personas/hanli/index.js";
@@ -116,6 +117,8 @@ export class PersonaEvolutionRuntime {
   readonly nangongRuntime: NangongRuntime;
   /** 流程策略只根据已保存事实决定下一步，不替人物作审批决定。 */
   readonly #flow = new EvolutionFlowPolicy();
+  /** 验收失败范围策略只比较原提案条件与本轮真实失败证据。 */
+  readonly #acceptanceFailureScope = new AcceptanceFailureScopePolicy();
   /** 三十秒监督轮询计时器；未启动时为 null。 */
   #timer: ReturnType<typeof setInterval> | null = null;
   /** 当前一次性流程的短间隔继续计时器。 */
@@ -472,7 +475,29 @@ export class PersonaEvolutionRuntime {
             publishAcceptance("failed", `验收受阻，已上报令狐处理：\n${reason}`);
             return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error(reason), reason, { evidenceAttachmentIds: runResult.evidenceAttachmentIds, acceptanceRunId: runResult.runId });
           }
-          publishAcceptance(runResult.status === "passed" ? "passed" : "failed", `实际结果：${runResult.status === "passed" ? "通过" : "未通过"}。运行记录：${runResult.runId}\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
+          if (runResult.status === "failed") {
+            // 先提取本轮真实新缺陷，再决定能否沿原验收范围自动修复。
+            const scopeReview = this.#acceptanceFailureScope.review(proposal, runResult);
+            // 可见传达点名具体条件、实际结果、期望结果和范围判断。
+            const failureMessage = `韩立验收未通过。\n本轮真实新缺陷：\n${scopeReview.summary}\n范围判断：${scopeReview.reason}`;
+            publishAcceptance("failed", failureMessage);
+            // 范围不明确时保留原验收点等待确认，不能把相邻问题自动写入修复任务。
+            if (scopeReview.decision !== "within-original-acceptance") {
+              return this.#blockOneShotFailure("business", "review_acceptance_failure_scope", new Error(scopeReview.reason), failureMessage, {
+                acceptanceRunId: runResult.runId,
+                evidenceAttachmentIds: runResult.evidenceAttachmentIds,
+                acceptanceFailureScope: scopeReview,
+              });
+            }
+            // 范围内失败进入统一卡点入口，由令狐建立新的修复任务并在完成后回到韩立复验。
+            return this.#blockOneShotFailure("technical", "repair_failed_real_application_acceptance", new Error(scopeReview.summary), failureMessage, {
+              acceptanceRunId: runResult.runId,
+              evidenceAttachmentIds: runResult.evidenceAttachmentIds,
+              acceptanceFailureScope: scopeReview,
+            });
+          }
+          // 通过结果仍完整保留运行记录、逐步结论和截图证据。
+          publishAcceptance("passed", `韩立真实界面验收通过。运行记录：${runResult.runId}\n逐步结果：\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
         } catch (error) {
           const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
           publishAcceptance("failed", reason);

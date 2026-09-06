@@ -139,23 +139,19 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#decideResult(proposalId, request, "manual-user");
   }
 
-  /** 一次性流程把真实运行结果交给韩立；韩立保存证据并形成自己的最终判断。 */
+  /** 一次性流程把真实运行结果交给韩立；失败先保留证据，由 Workflow 判断修复范围。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto {
     this.recordAcceptanceRun(run);
-    // 工具受阻不是产品验收失败，保留原提案待验收，交统一卡点处理后原位复验。
-    if (run.status === "blocked") {
+    // 工具受阻和产品失败都要保留原提案待验收，不能退回南宫婉重做原提案。
+    if (run.status !== "passed") {
+      // Workflow 会先提取本轮真实缺陷并判断是否仍属于原验收范围。
       return this.#store.state();
     }
     const expectedStateVersion = this.#store.state().updatedAt;
-    let decision: DecideHanliResultInDto["decision"];
-    let advice: string;
-    if (run.status === "passed") {
-      decision = "approved";
-      advice = "韩立已按真实用户路径完成检查，全部适用项目通过。";
-    } else {
-      decision = "supplement-required";
-      advice = "真实应用检查未通过，已携带复现步骤、实际结果、期望结果和截图证据返还南宫婉修订。";
-    }
+    // 全部验收条件通过后，韩立才能作出最终通过决定。
+    const decision: DecideHanliResultInDto["decision"] = "approved";
+    // 可见说明明确指出通过依据来自真实用户路径。
+    const advice = "韩立已按真实用户路径完成检查，全部适用项目通过。";
     return this.#decideResult(run.proposalId, {
       mutation: {
         expectedStateVersion,

@@ -92,7 +92,7 @@ export class CheckpointCoordinator {
     }
     let sourceMemberId = task?.executorMemberId || "nangong-wan";
     // 验收阶段卡点必须归回韩立而不是当前执行人。
-    if (event.payload.phase === "accepting" || event.payload.operation === "run_real_application_acceptance") {
+    if (event.payload.phase === "accepting" || isAcceptanceOperation(event.payload.operation)) {
       // 保存韩立稳定人物标识。
       sourceMemberId = "han-li";
     }
@@ -160,7 +160,7 @@ export class CheckpointCoordinator {
     // 直接关联 taskId 的异常属于任务自身；只有真实应用验收或没有任务直连的验收阶段才归韩立复验。
     const directlyTargetsTask = Boolean(task && (event.correlationId === task.taskId || event.payload.taskId === task.taskId));
     // 韩立验收发生在开发任务集成之后；此时 integrated 只能说明代码已交付，不能说明真实界面复验通过。
-    const isAcceptanceCheckpoint = event.payload.operation === "run_real_application_acceptance" || (state.sourcePhase === "accepting" && !directlyTargetsTask);
+    const isAcceptanceCheckpoint = isAcceptanceOperation(event.payload.operation) || (state.sourcePhase === "accepting" && !directlyTargetsTask);
     // 一次性原流程明确 completed，才是验收卡点已经通过复验的权威事实。
     const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.status === "completed");
     // 非验收任务仍沿用原规则：任务完成集成即可确认对应执行卡点已经解除。
@@ -321,13 +321,13 @@ export class CheckpointCoordinator {
       // 标题明确这是流程卡点修复而不是原专题重新实施。
       title: `修复流程卡点：${topic.title}`,
       // 原异常正文作为问题事实。
-      problemStatement: event.message,
+      problemStatement: `原专题“${topic.title}”在韩立真实界面验收中未通过。\n${event.message}`,
       // 修复目标必须返回原提案步骤，不代替韩立验收。
-      confirmedIntent: `调查并修复原流程卡点，完成后回到 ${proposal.title} 原步骤，不代替韩立验收。\n故障事实：${JSON.stringify(event.payload, omitCheckpointSnapshot)}`,
+      confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立真实界面验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(event.payload, omitCheckpointSnapshot)}`,
       // 限制修复只能处理已经确认的技术故障。
-      constraints: [marker, "仅修复已确认目标范围内的技术故障；先调查再修改，保留原任务历史和恢复点。", "不得修改生产数据库、跳过测试、扩大业务范围或关闭权限门禁；需要用户授权时报告受阻。"],
+      constraints: [marker, "仅修复 acceptanceFailureScope 中已经判定属于原验收范围的真实新缺陷；先调查再修改，保留原任务历史和恢复点。", "每次交接必须点名原专题、具体验收条件、实际结果、期望结果、当前负责人和下一步动作；禁止使用无明确指向的简称。", "不得修改生产数据库、跳过代码测试或统一测试、扩大业务范围、关闭权限门禁；需要用户授权时明确报告具体受阻事项。"],
       // 验收条件要求原因、修复和验证证据全部存在。
-      acceptanceCriteria: ["复现并解释具体阻塞原因", "修复有针对性回归测试且不绕过权限和原验收条件", "提交真实修复与验证证据供原流程重新验收"],
+      acceptanceCriteria: ["逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果和期望结果", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立真实界面验收"],
       // 复用原专题已经授权的工作区。
       workspaceState: topic.workspaceState,
       // 复用原专题语言环境。
@@ -376,6 +376,18 @@ function compareCheckpointPriority(left: WorkflowExceptionRecordOutDto, right: W
   }
   // 同一时间使用稳定事件标识消除排序不确定性。
   return left.eventId.localeCompare(right.eventId);
+}
+
+/** 判断异常是否来自韩立真实界面验收或验收失败范围处理。 */
+function isAcceptanceOperation(value: unknown): boolean {
+  // 只有字符串操作名可以参与稳定判断。
+  if (typeof value !== "string") return false;
+  // 工具受阻、范围内产品失败和范围不明确都必须回到同一韩立验收点。
+  return [
+    "run_real_application_acceptance",
+    "repair_failed_real_application_acceptance",
+    "review_acceptance_failure_scope",
+  ].includes(value);
 }
 
 /** 序列化修复任务事实时移除嵌套卡点快照，避免任务意图无限递归膨胀。 */

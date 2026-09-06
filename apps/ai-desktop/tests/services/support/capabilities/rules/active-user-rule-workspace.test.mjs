@@ -12,6 +12,7 @@ const roleIds = {
   executor: "AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES",
   linghu: "AI_DESKTOP_LINGHU_FAILURE_TEST_RULES",
 };
+const sharedRuleId = "AI_DESKTOP_COLLABORATION_AUTOMATION_RULES";
 
 function fixture(root, user = "XUNAN") {
   const engine = path.join(root, "apps", "ai-desktop", "ruleengine");
@@ -20,8 +21,12 @@ function fixture(root, user = "XUNAN") {
   mkdirSync(userRoot, { recursive: true });
   writeFileSync(path.join(engine, "AGENTS.md"), `- 当前稳定用户 ID：\`${user}\`\n`, "utf8");
   writeFileSync(path.join(rules, "RULE_INDEX.md"), `USER_RULE_INDEX_PATTERN = local/<stable-user-id>/RULE_INDEX.md\n`, "utf8");
-  const assignments = Object.entries(roleIds).map(([role, id]) => `${id} = local/${user}/${role}.md`).join("\n");
+  const assignments = [
+    `${sharedRuleId} = local/${user}/shared.md`,
+    ...Object.entries(roleIds).map(([role, id]) => `${id} = local/${user}/${role}.md`),
+  ].join("\n");
   writeFileSync(path.join(userRoot, "RULE_INDEX.md"), `${assignments}\n`, "utf8");
+  writeFileSync(path.join(userRoot, "shared.md"), "# shared\nall-person-clear-communication\n", "utf8");
   for (const [role] of Object.entries(roleIds)) writeFileSync(path.join(userRoot, `${role}.md`), `# ${role}\nversion-one\n`, "utf8");
   const core = path.join(rules, "local", "core"); mkdirSync(core, { recursive: true });
   writeFileSync(path.join(core, "RULE_INDEX.md"), "FORBIDDEN_CORE = local/core/core.md\n", "utf8");
@@ -35,10 +40,18 @@ test("活动用户加载器只递归当前用户，并冻结任务规则正文",
   const service = new ActiveUserRuleFacade({ mode: "source", workspaceRoot: engine, agentsPath: path.join(engine, "AGENTS.md"), ruleRoot: rules });
   assert.equal(service.resolve("FORBIDDEN_CORE").rule, null);
   const frozen = service.createTaskRuleSnapshot("executor");
+  assert.deepEqual(frozen.mandatoryRoleRuleIds, [sharedRuleId, roleIds.executor]);
+  assert.match(service.renderTaskRuleSnapshot(frozen), /all-person-clear-communication/);
   writeFileSync(path.join(userRoot, "executor.md"), "# executor\nversion-two\n", "utf8");
   assert.match(service.renderTaskRuleSnapshot(frozen), /version-one/);
   assert.doesNotMatch(service.renderTaskRuleSnapshot(frozen), /version-two/);
   assert.match(service.renderRoleInstructions("executor"), /version-two/);
+  for (const role of Object.keys(roleIds)) {
+    const snapshot = service.createTaskRuleSnapshot(role);
+    assert.equal(snapshot.mandatoryRoleRuleIds[0], sharedRuleId);
+    assert.equal(snapshot.mandatoryRoleRuleIds[1], roleIds[role]);
+    assert.match(service.renderTaskRuleSnapshot(snapshot), /all-person-clear-communication/);
+  }
 });
 
 test("无源码工作区在规则版本变化后生成 ZIP outbox，并在启动上传成功后归档", async () => {

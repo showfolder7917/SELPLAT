@@ -1447,6 +1447,44 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("自动韩立验收失败保留原提案并进入范围内令狐修复卡点", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-repair-checkpoint-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const runId = store.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
+    let state = store.createTopic(topicRequest("验收失败原点修复"));
+    const topicId = state.activeTopicId;
+    state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    const originalCriterion = state.proposals.at(-1).acceptanceCriteria[0];
+    store.updateOneShotRun("accepting", "han-li", "韩立", "正在验收具体条件", topicId, proposalId);
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立真实界面验收");
+    store.blockOneShotRun("准备从原验收点恢复");
+    const failures = [];
+    const facade = new PersonaEvolutionRuntime({
+      store,
+      collaboration: { state() { return { tasks: [], members: [] }; } },
+      conversation,
+      recordEvent: () => undefined,
+      recordFailure: (failure) => failures.push(failure),
+    });
+    facade.setComputerAcceptanceSession(async () => ({
+      ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot"),
+      criteria: [originalCriterion],
+    }));
+    state = await facade.resumeOneShotRun(runId);
+    assert.equal(state.oneShotRun.status, "blocked");
+    assert.equal(state.proposals.at(-1).proposalId, proposalId);
+    assert.equal(state.proposals.at(-1).status, "pending-acceptance");
+    assert.equal(state.proposals.length, 1);
+    assert.equal(failures.length, 1, JSON.stringify(failures.map((failure) => ({ operation: failure.operation, error: String(failure.error) }))));
+    assert.equal(failures.at(-1).operation, "repair_failed_real_application_acceptance");
+    assert.equal(failures.at(-1).flowImpact, "blocked");
+    assert.equal(failures.at(-1).details.acceptanceFailureScope.decision, "within-original-acceptance");
+    assert.match(failures.at(-1).details.acceptanceFailureScope.summary, /实际结果：滚动位置没有变化/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 function computerRun(runId, topicId, proposalId, status, shot) {
  const now = new Date().toISOString();
  return { version: 2, runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [

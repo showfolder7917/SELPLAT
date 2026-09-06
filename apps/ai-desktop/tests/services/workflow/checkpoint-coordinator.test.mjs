@@ -59,6 +59,26 @@ test("韩立验收卡点不因原开发任务已集成而误报解除", async ()
   assert.equal(f.event.payload.checkpoint.phase, "repairing");
 });
 
+test("韩立范围内验收失败建立令狐新修复任务并明确完整测试复验链", async () => {
+  const f = fixture();
+  f.event.payload.operation = "repair_failed_real_application_acceptance";
+  f.event.payload.acceptanceFailureScope = {
+    decision: "within-original-acceptance",
+    summary: "验收条件 1：右侧边缘可以拖动加宽；实际结果：拖动无效；期望结果：窗口加宽",
+    reason: "失败逐项对应原验收条件",
+    defects: [{ checkId: "criterion-1", target: "验收条件 1：右侧边缘可以拖动加宽", actual: "拖动无效", expected: "窗口加宽", reproductionOperations: [], screenshotAttachmentIds: ["shot-1"] }],
+  };
+  await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+  const repair = f.effects.submitted[0];
+  assert.equal(repair.preferredExecutorMemberId, "linghu-ancestor");
+  assert.match(repair.problemStatement, /原专题“验收”/);
+  assert.match(repair.confirmedIntent, /代码测试、统一测试、运行版本更新和重启健康检查/);
+  assert.match(repair.confirmedIntent, /韩立真实界面验收/);
+  assert.ok(repair.constraints.some((item) => item.includes("acceptanceFailureScope")));
+  assert.ok(repair.acceptanceCriteria.some((item) => item.includes("自动返回同一提案")));
+});
+
 test("非验收任务完成集成后仍可直接解除原执行卡点", async () => {
   // 普通执行阶段卡点仍以原任务完成集成为解除依据，避免影响已有恢复路径。
   const f = fixture();

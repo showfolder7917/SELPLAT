@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.133.0
+rule_version = 5.134.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -13,6 +13,12 @@ java_ability_refs = none
 python_ability_refs = none
 <!-- 本职责没有独立 Node 能力入口。 -->
 node_ability_refs = none
+
+<!-- 韩立、南宫婉、令狐和所有动态执行人物每次传达都必须自包含并点名具体对象；简短不能以丢失事实关系为代价。 -->
+collaboration_all_person_clear_communication_contract = hanli_nangong_linghu_and_all_executors + self_contained_without_hidden_context + exact_topic_task_page_component_file_or_acceptance_criterion + confirmed_fact_and_unknown_separated + concrete_problem_actual_expected_and_business_impact + current_owner_next_owner_and_next_action + technical_term_with_customer_readable_meaning + short_status_label_allowed_but_substantive_handoff_never_ambiguous + deictic_this_that_original_problem_three_pages_and_done_require_same_paragraph_referent
+
+<!-- 韩立真实验收失败先提取本轮新缺陷并核对原条件；范围内才建立令狐新修复任务，完成代码测试、统一测试、运行版本更新和重启后返回同一提案让韩立复验。 -->
+hanli_acceptance_failure_repair_loop_contract = extract_current_run_real_failed_steps_with_actual_expected_reproduction_and_screenshots + compare_each_failure_to_unchanged_original_acceptance_criterion + all_failures_within_original_scope_only_auto_repair + outside_or_unknown_scope_preserved_without_silent_expansion + linghu_creates_new_idempotent_repair_task_from_current_failure_evidence_not_old_plan + targeted_code_test + unified_test + loaded_runtime_version_update + restart_health_check + resume_same_proposal_same_acceptance_goal + hanli_reaccepts_and_repair_completion_never_substitutes_acceptance
 
 <!-- 协作业务日志只保存可审计事件与任务摘要，禁止记录认证秘密和原始推理。 -->
 business_audit_log_contract = selplat_log_ai_desktop_only + append_only_jsonl_timeline + atomic_per_task_summary + request_workspace_sandbox_turn_approval_command_changed_files_completion_correlation + no_auth_secret_or_raw_reasoning
