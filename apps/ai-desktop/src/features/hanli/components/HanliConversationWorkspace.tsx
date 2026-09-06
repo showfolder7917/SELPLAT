@@ -8,7 +8,7 @@
 
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 
-import { MarkdownMessage, SelUiConversation } from "../../conversation";
+import { ConversationMessageImage, MarkdownMessage, SelUiConversation } from "../../conversation";
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 import { HanliCustodySwitch } from "./HanliConversationWorkspace/HanliCustodySwitch";
 import { useHanliConversationWorkspace } from "./useHanliConversationWorkspace";
@@ -73,7 +73,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
             {previews.length
               ? <div className="selconversation-message-attachments">
                 {/* 单张消息截图：使用稳定附件 ID 关联预览和替代文字。 */}
-                {previews.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}
+                {previews.map((attachment) => <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}
               </div>
               : message.attachmentIds?.length
                 // 附件恢复状态：存在附件身份但暂时无法显示图片时给出原因。

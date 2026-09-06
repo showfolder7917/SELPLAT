@@ -102,6 +102,16 @@
       "ownedAriaRoles": ["dialog"]
     },
     {
+      "id": "selImagePreview",
+      "directory": "image-preview",
+      "type": "interactive",
+      "scripts": ["selImagePreview.js"],
+      "styles": ["selImagePreview.css"],
+      "publicApi": "sel.components.imagePreview",
+      "dependencies": ["selDialog"],
+      "themeAware": true
+    },
+    {
       "id": "selDropdownMenu",
       "directory": "dropdown",
       "type": "interactive",

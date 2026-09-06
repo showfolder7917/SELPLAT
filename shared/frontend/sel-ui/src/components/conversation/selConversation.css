@@ -22,6 +22,8 @@
 .selconversation-attachments, .selconversation-message-attachments { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
 .selconversation-attachments figure { position: relative; margin: 0; }
 .selconversation-attachments img, .selconversation-message-attachments img { width: 96px; height: 64px; object-fit: cover; border-radius: var(--sel-theme-radius-control); }
+.selconversation-message-image-trigger { display: block; padding: 0; border: 0; border-radius: var(--sel-theme-radius-control); background: transparent; cursor: zoom-in; }
+.selconversation-message-image-trigger:focus-visible { outline: 2px solid var(--sel-theme-workspace-line-active); outline-offset: 2px; }
 .selconversation-status, .selconversation-error { margin: 0 12px 8px; font-size: var(--sel-theme-font-size-caption); }
 .selconversation-error { color: var(--sel-theme-semantic-error); }
 @media (max-width: 1180px) { .selconversation-composer { left: 28px; right: 28px; } }
