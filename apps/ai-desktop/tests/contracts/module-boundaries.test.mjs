@@ -606,7 +606,7 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(applicationRuntime, /registerPersona\(\{[\s\S]*?persona-conversation:nangong-wan/);
   assert.match(applicationRuntime, /registerPersona\(\{[\s\S]*?persona-inquiry:nangong-wan/);
   assert.match(applicationRuntime, /registerPersona\(\{[\s\S]*?persona-conversation:han-li/);
-  const nangongActivity = source("src/features/nangong/components/NangongConversationActivity.tsx");
+  const nangongActivity = source("src/features/nangong/components/NangongConversationWorkspace/NangongConversationActivity.tsx");
   assert.match(nangongActivity, /南宫婉正在等待你的授权/);
   assert.match(nangongActivity, /ownerMemberId === "nangong-wan"/);
   assert.equal(existsSync(path.join(appRoot, "electron/services/workflow/internal/evolution-task-distribution.service.ts")), false);

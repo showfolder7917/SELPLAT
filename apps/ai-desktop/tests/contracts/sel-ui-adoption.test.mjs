@@ -16,7 +16,9 @@ const developerApp = [
   read("../../src/features/conversation/model/useCodexConversation.ts"),
   read("../../src/features/conversation/model/useCodexWorkspace.ts"),
   read("../../src/features/hanli/components/HanliConversationWorkspace.tsx"),
+  read("../../src/features/hanli/components/useHanliConversationWorkspace.ts"),
   read("../../src/features/nangong/components/NangongConversationWorkspace.tsx"),
+  read("../../src/features/nangong/components/useNangongConversationWorkspace.ts"),
   read("../../src/features/settings/components/DeveloperSettingsFeature.tsx"),
 ].join("\n");
 const desktopChrome = read("../../src/features/shell/components/DesktopChrome.tsx");

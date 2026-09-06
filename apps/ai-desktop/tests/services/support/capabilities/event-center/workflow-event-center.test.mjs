@@ -69,9 +69,10 @@ test("人物内部消息只保留业务记录且不生成或领取语义资料",
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
     assert.deepEqual(memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 10), []);
     memory.savePersonaConversation({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messages: [], updatedAt: "2026-09-02T00:00:01.000Z" });
-    const internal = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messageId: "internal-round-1-question", speakerPersonaId: "han-li", content: "南宫婉，请核对当前范围。", createdAt: "2026-09-02T00:00:01.000Z" });
+    const internal = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messageId: "internal-round-1-question", speakerPersonaId: "han-li", content: "南宫婉，请核对当前范围。", attachmentIds: ["screenshot-1"], createdAt: "2026-09-02T00:00:01.000Z" });
     const answered = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId: "hanli-thread-internal", messageId: "internal-round-1-answer", speakerPersonaId: "nangong-wan", content: "当前范围只涉及 AI Desktop。", replyToMessageId: "internal-round-1-question", createdAt: "2026-09-02T00:00:02.000Z" });
     assert.deepEqual(internal.messages.map((message) => message.speakerPersonaId), ["han-li"]);
+    assert.deepEqual(internal.messages[0].attachmentIds, ["screenshot-1"], "内部交接必须保留客户原始截图身份");
     assert.deepEqual(answered.messages.map((message) => message.speakerPersonaId), ["han-li", "nangong-wan"]);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0, "内部问答不得生成训练主题");
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0, "内部问答不得生成训练消息");

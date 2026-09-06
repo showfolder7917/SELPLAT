@@ -1,238 +1,154 @@
-import { type Dispatch, type SetStateAction, useState } from "react";
+/**
+ * 韩立会话页面的 View。
+ *
+ * 用户点击 Developer 左侧人物树中的“韩立”后，工作区路由会渲染本页面。
+ * 页面对应实际界面中的韩立会话区，包含客户问答区、截图附件区、文字输入区和操作区。
+ * 本文件只描述可见结构和交互绑定；发送、附件与消息投影由控制 Hook 负责。
+ */
+
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 
-import type { PersonaConversationOutDto, LocaleValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
-import type { ComposerAttachment } from "../../conversation/model/chat-message";
-import type { usePersonaConversation } from "../../conversation/model/usePersonaConversation";
 import { MarkdownMessage } from "../../conversation/components/MarkdownMessage";
-import { HanliCustodySwitch } from "./HanliCustodySwitch";
 import { SelUiConversation } from "../../conversation/components/SelUiConversation";
-import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation/model/realtime-conversation";
-import { usePersonaConversationTailFollow } from "../../conversation/model/usePersonaConversationTailFollow";
+import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
+import { HanliCustodySwitch } from "./HanliConversationWorkspace/HanliCustodySwitch";
+import { useHanliConversationWorkspace } from "./useHanliConversationWorkspace";
 
-/**
- * Electron IPC 抛出的错误通常带有一段技术前缀。
- * 页面只保留用户能理解的正文；如果收到的不是 Error，则使用调用方提供的默认文案。
- */
-function readableDesktopError(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : fallback;
-  return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
-}
+/** 韩立自由讨论页面只负责展示客户与韩立的直接问答，不暴露工程写入入口。 */
+export function HanliConversationWorkspace(props: HanliConversationWorkspaceProps) {
+  // 页面控制器（controller）提供已经整理好的数据和操作，页面结构不自行编排发送流程。
+  const controller = useHanliConversationWorkspace(props);
 
-/** 韩立自由讨论沿用统一会话外壳，只暴露讨论能力，不暴露旧托管阶段或工程写入入口。 */
-export function HanliConversationWorkspace({ runtime, conversation, attachments, workspaces, locale, newConversationBusy, error, onConversation, onAttachments, onScreenshot, onPaste, onError }: {
-  runtime: ReturnType<typeof usePersonaConversation>;
-  // 后端已经保存的完整韩立会话，包含用户、韩立和内部研讨消息。
-  conversation: PersonaConversationOutDto;
-  // 用户本轮准备发送、但尚未提交的截图附件。
-  attachments: ComposerAttachment[];
-  // 当前登记的工作区。韩立必须知道讨论的是哪个工程，所以 null 时不能发送。
-  workspaces: WorkspaceStateOutDto | null;
-  // 当前界面语言，会随请求一起交给韩立后端。
-  locale: LocaleValue;
-  // 点击“新建韩立会话”后，由父组件传入的等待状态。
-  newConversationBusy: boolean;
-  // 父组件保存的页面级错误，例如 IPC 调用失败。
-  error: string;
-  // 后端返回新会话后，用它替换父组件中的旧会话。
-  onConversation(value: PersonaConversationOutDto): void;
-  // 更新父组件中的待发送附件；类型与 React 的 setState 函数一致。
-  onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;
-  // 请求桌面端截图；hidden=true 表示截图前先隐藏 AI Desktop 窗口。
-  onScreenshot(hidden: boolean): void;
-  // 把从剪贴板粘贴的图片文件交给统一截图功能处理。
-  onPaste(files: File[]): void;
-  // 把当前错误同步回父组件，空字符串表示清除错误。
-  onError(message: string): void;
-}) {
-  // 输入框中尚未发送的文字。
-  const [text, setText] = useState("");
-  // 控制器位于应用层，页面卸载后发送锁、待确认消息与截图预览仍保留。
-  const { sending: busy, setSending: setBusy, pendingMessage: pending, setPendingMessage: setPending, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors } = runtime;
-
-  /** 用户按发送按钮或在表单中提交时，完成一整轮韩立对话。 */
-  const send = async () => {
-    // 有文字时发送文字；只有截图时自动补一条说明，避免向后端发送空消息。
-    const message = text.trim() || (attachments.length ? "请结合这些截图和你掌握的客户语义资料，与我讨论这个问题。" : "");
-    // 空消息、工作区未就绪或已有请求进行中时，不重复调用后端。
-    if (!message || !workspaces || busy) return;
-
-    // 前端先生成稳定消息 ID，后端入库和附件预览都用同一个 ID 对齐。
-    const clientMessageId = `hanli-message-${crypto.randomUUID()}`;
-    // 复制本轮附件，防止清空输入区后丢失正在发送的附件引用。
-    const sentAttachments = [...attachments];
-
-    // 进入发送状态，同时清空输入区和上一次错误。
-    setBusy(true);
-    setText("");
-    onAttachments([]);
-    onError("");
-
-    // 后端回答前，时间线立即显示一条“发送中”的用户消息。
-    setPending({ messageId: clientMessageId, content: message, attachments: sentAttachments, failed: false, createdAt: new Date().toISOString() });
-
-    try {
-      // preload 暴露的 Desktop API 会通过 IPC 把消息交给 Electron 主进程中的韩立服务。
-      const next = await window.desktop?.sendPersonaConversationMessage("han-li", { clientMessageId, message, attachmentIds: sentAttachments.map((item) => item.id), workspaceState: workspaces, locale });
-      // API 不存在或后端没有返回会话时，也按发送失败处理，不能假装成功。
-      if (!next) throw new Error("韩立会话服务未返回结果。");
-
-      // 保存本轮附件预览，后端返回后仍可在对应用户消息下面显示图片。
-      if (sentAttachments.length) setAttachmentPreviews((current) => ({ ...current, [clientMessageId]: sentAttachments }));
-
-      // 使用后端返回的权威会话刷新页面；正式消息已存在后即可移除 pending。
-      onConversation(next);
-      setPending(null);
-    } catch (sendError) {
-      // 请求失败时保留用户刚才输入的消息，并把显示状态改成“发送失败”。
-      setPending((current) => current ? { ...current, failed: true } : null);
-      onError(readableDesktopError(sendError, "发送给韩立失败。"));
-    } finally {
-      // 无论成功或失败都解除发送锁，让用户可以进行下一次操作。
-      setBusy(false);
-    }
-  };
-
-  // 韩立页面只承载用户与韩立的直接交流和判断纠正；内部研讨保留原始记录，仅在南宫婉页面展示。
-  const directMessages = projectPersonaConversation(conversation.messages).direct
-    .filter((message) => message.speakerType === "user" || message.speakerPersonaId === "han-li")
-    .map((message) => ({ ...message, status: message.deliveryStatus }));
-  const messages = mergeRealtimeConversationTimeline(directMessages, pending ? [{
-    messageId: pending.messageId,
-    sequenceNumber: conversation.messages.length,
-    speakerType: "user" as const,
-    speakerPersonaId: null,
-    content: pending.content,
-    replyToMessageId: null,
-    deliveryStatus: pending.failed ? "failed" as const : "sending" as const,
-    status: pending.failed ? "failed" as const : "sending" as const,
-    attachmentIds: pending.attachments.map((item) => item.id),
-    createdAt: pending.createdAt,
-    completedAt: pending.failed ? new Date().toISOString() : null,
-  }] : []);
-  const timelineRef = usePersonaConversationTailFollow(messages.map((message) => `${message.messageId}:${message.deliveryStatus}:${message.content}`).join("|"));
+  // 当前会话（conversation）是后端已经保存的韩立会话，用于显示读取统计。
+  const conversation = props.conversation;
+  // 待发送截图（attachments）是客户本轮准备发送的图片，用于显示发送前预览。
+  const attachments = props.attachments;
+  // 新建会话等待状态（newConversationBusy）表示父页面正在重新建立韩立会话。
+  const newConversationBusy = props.newConversationBusy;
+  // 页面错误（error）是父页面需要在输入区上方展示的当前问题。
+  const error = props.error;
+  // 截图操作（onScreenshot）把截图按钮请求交给父页面的统一截图能力。
+  const onScreenshot = props.onScreenshot;
+  // 错误更新操作（onError）让托管开关可以把失败原因显示在当前页面。
+  const onError = props.onError;
 
   return <SelUiConversation
-    // 固定 ID 供样式、自动化测试和页面定位使用。
+    // 页面根节点：固定 ID 供样式、自动化测试和真实页面定位使用。
     id="selConversationHanLiPersonaId"
-    // 统一会话外壳也可以触发提交，最终仍复用上面的 send 函数。
-    onSubmit={() => void send()}
-    // timeline 是会话上半部分，负责展示空页面提示和历史消息。
-    timeline={<section ref={timelineRef} className="selconversation-timeline hanli-person-chat" aria-label="与韩立自由讨论">
-      {/* 没有任何消息时显示使用说明。 */}
-      {messages.length === 0 && <div className="dev-empty">
+    // 页面提交入口：统一会话外壳提交时调用控制 Hook 的发送操作。
+    onSubmit={() => void controller.send()}
+    // 会话区：页面上半部分，包含空状态、读取统计和客户问答历史。
+    timeline={<section ref={controller.timelineRef} className="selconversation-timeline hanli-person-chat" aria-label="与韩立自由讨论">
+      {/* 会话空状态：尚无问答时说明韩立页面的用途。 */}
+      {controller.messages.length === 0 && <div className="dev-empty">
+        {/* 空状态图标：帮助客户识别当前是人物对话页面。 */}
         <div className="dev-orb"><Code24Regular /></div>
+        {/* 空状态标题：说明当前页面用于和韩立讨论真实需求。 */}
         <h1>和韩立讨论客户真正需要什么</h1>
+        {/* 空状态说明：介绍韩立可以使用的方法资料和回答边界。 */}
         <p>可以直接描述问题。韩立会学习已整理的提问、调查和问题扩展方法，但不会按相似历史结论模仿回答。</p>
       </div>}
 
-      {/* 统计只显示本次实际读入规模，不混入会话正文或下一轮方法学习。 */}
-      {!busy && conversation.contextReadStats && <p className="hanli-context-read-stats" role="status" aria-live="polite">
+      {/* 上下文统计区：显示上一轮真正发送给韩立的各类上下文规模。 */}
+      {!controller.busy && conversation.contextReadStats && <p className="hanli-context-read-stats" role="status" aria-live="polite">
         本轮读取：方法资料 {conversation.contextReadStats.methodCharacters.toLocaleString()} 字
         · 当前会话 {conversation.contextReadStats.recentConversationCharacters.toLocaleString()} 字
         · 本轮问题 {conversation.contextReadStats.latestUserMessageCharacters.toLocaleString()} 字
         · 发送上下文 {conversation.contextReadStats.promptCharacters.toLocaleString()} 字
       </p>}
 
-      {/* 每条直接对话渲染成一个 article，data-role 区分用户和韩立。 */}
-      {messages.map((message) => {
-        // 优先读取已保存的预览；当前 pending 消息则直接使用本轮附件。
-        const previews = attachmentPreviews[message.messageId]
-          || (pending?.messageId === message.messageId ? pending.attachments : []);
+      {/* 客户问答区：按发生顺序展示客户提问和韩立回答。 */}
+      {controller.messages.map((message) => {
+        // 消息截图预览（previews）是当前问答消息已经可以直接展示的图片。
+        const previews = controller.previewsForMessage(message.messageId);
 
         return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}>
-          {/* 标题同时展示说话人，以及用户消息是否仍在发送或已经失败。 */}
+          {/* 问答身份区：显示“我”或“韩立”，并标记客户消息的发送状态。 */}
           <header>{message.speakerType === "user"
             ? `我${message.deliveryStatus === "sending" ? " · 发送中" : message.deliveryStatus === "failed" ? " · 发送失败" : ""}`
             : "韩立"}</header>
 
+          {/* 问答内容区：承载本条消息的截图证据和文字正文。 */}
           <div className="selconversation-message-body">
-            {/* 有 dataUrl 时直接展示图片；只有后端附件 ID 时显示附件数量。 */}
+            {/* 消息截图区：附件预览恢复成功时显示与本条问答绑定的图片。 */}
             {previews.length
               ? <div className="selconversation-message-attachments">
+                {/* 单张消息截图：使用稳定附件 ID 关联预览和替代文字。 */}
                 {previews.map((attachment) => <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}
               </div>
               : message.attachmentIds?.length
-                ? <small>{attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small>
+                // 附件恢复状态：存在附件身份但暂时无法显示图片时给出原因。
+                ? <small>{controller.attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small>
                 : null}
-            {/* 消息正文支持 Markdown，而不是直接显示未经格式化的纯文本。 */}
+            {/* 消息正文区：使用统一 Markdown 组件展示客户原文或韩立回复。 */}
             <MarkdownMessage text={message.content} />
           </div>
         </article>;
       })}
     </section>}
-    // composer 是会话下半部分，负责附件、输入框、截图按钮和发送按钮。
+    // 输入操作区：页面下半部分，包含待发送截图、状态提示、输入框和操作按钮。
     composer={<form
       className="selconversation-composer hanli-person-composer"
       onSubmit={(event) => {
-        // 阻止浏览器刷新整个页面，再调用 React 内部的异步发送逻辑。
+        // 表单提交只阻止浏览器刷新，完整发送过程交给控制 Hook。
         event.preventDefault();
-        void send();
+        // 调用控制 Hook 完成消息整理、桌面通信和状态更新。
+        void controller.send();
       }}
     >
-      {/* 发送前的附件预览；移除按钮只删除被点击的那一张。 */}
+      {/* 待发送附件区：显示客户本轮已经选择、尚未提交的截图。 */}
       {attachments.length > 0 && <div className="selconversation-attachments">
+        {/* 单张待发送附件：展示预览，并提供只移除当前图片的入口。 */}
         {attachments.map((attachment) => <figure key={attachment.id}>
+          {/* 待发送截图预览：让客户在发送前确认选择的图片。 */}
           <img src={attachment.dataUrl} alt={attachment.name} />
+          {/* 待发送截图说明：明确该图片会作为本轮讨论证据。 */}
           <figcaption>讨论截图</figcaption>
-          <button
-            type="button"
-            aria-label="移除截图"
-            onClick={() => onAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-          >
+          {/* 移除截图按钮：只从本轮待发送附件中移除当前图片。 */}
+          <button type="button" aria-label="移除截图" onClick={() => controller.removeAttachment(attachment.id)}>
             <Dismiss20Regular />
           </button>
         </figure>)}
       </div>}
 
-      {/* 新建会话期间给屏幕阅读器和用户显示进度。 */}
+      {/* 新建会话状态区：重新建立韩立会话期间显示真实等待状态。 */}
       {newConversationBusy && <div role="status">正在关闭当前韩立线程并建立新对话…</div>}
-      {/* role=alert 会让辅助技术及时读出错误。 */}
+      {/* 页面错误区：桌面通信或业务处理失败时立即向客户显示原因。 */}
       {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
 
+      {/* 文字输入区：接收客户问题，也允许从剪贴板粘贴截图。 */}
       <textarea
         className="selconversation-input"
         data-sel-conversation-input
         aria-label="给韩立发送消息"
         placeholder="描述问题、真实目标或你不确定该怎么问的地方…（可粘贴截图）"
-        value={text}
-        // 受控输入框：页面文字始终来自 text 状态。
-        onChange={(event) => setText(event.currentTarget.value)}
-        onPaste={(event) => {
-          // 剪贴板可能同时包含文字和文件，这里只提取图片文件。
-          const files = Array.from(event.clipboardData.items)
-            .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-            .map((item) => item.getAsFile())
-            .filter((file): file is File => file !== null);
-          if (files.length) {
-            // 已接管图片粘贴时阻止浏览器把图片内容直接塞进 textarea。
-            event.preventDefault();
-            onPaste(files);
-          }
-        }}
+        value={controller.text}
+        // 输入事件：把客户尚未发送的文字交给控制 Hook 保存。
+        onChange={(event) => controller.setText(event.currentTarget.value)}
+        // 粘贴事件：由控制 Hook 区分普通文字和图片文件。
+        onPaste={controller.pasteImages}
       />
 
+      {/* 底部操作区：左侧放辅助工具，右侧放主发送按钮。 */}
       <div className="selconversation-footer">
+        {/* 辅助工具区：包含自动托管、当前窗口截图和隐藏窗口截图。 */}
         <div className="selconversation-tools">
+          {/* 自动托管开关：调整韩立后续研讨是否允许持续自动推进。 */}
           <HanliCustodySwitch onError={onError} />
-          {/* false：保留 AI Desktop 窗口，直接截取当前屏幕。 */}
+          {/* 当前窗口截图按钮：保留 AI Desktop 窗口并截取当前屏幕。 */}
           <button type="button" className="screenshot-button" aria-label="截取当前屏幕" onClick={() => onScreenshot(false)}>
             <Screenshot24Regular />
           </button>
-          {/* true：先隐藏 AI Desktop，避免窗口挡住需要截取的目标。 */}
+          {/* 隐藏窗口截图按钮：截图前隐藏 AI Desktop，避免遮挡目标应用。 */}
           <button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" onClick={() => onScreenshot(true)}>
             <EyeOff24Regular />
           </button>
         </div>
 
+        {/* 主操作区：只放本轮对话的发送按钮。 */}
         <div className="selconversation-actions">
-          <button
-            type="submit"
-            className="selconversation-action"
-            // 新建会话、等待回复、文字和附件都为空时禁止发送。
-            disabled={newConversationBusy || busy || (!text.trim() && !attachments.length)}
-            aria-label={busy ? "思考中" : "发送给韩立"}
-          >
+          {/* 发送按钮：满足工作区、文字或附件及空闲状态后才允许提交。 */}
+          <button type="submit" className="selconversation-action" disabled={!controller.canSend} aria-label={controller.busy ? "思考中" : "发送给韩立"}>
             <Send24Filled />
           </button>
         </div>

@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.13.0 将 Workflow 的协作任务、提案执行、卡点和跨人物研讨状态收敛为领域聚合，并按职责整理内部模块。 -->
-rule_version = 2.13.0
+<!-- 2.18.0 将中文业务名称优先扩展为新手模块整目录检查，覆盖导入、参数、状态、分支、返回字段和专属子组件。 -->
+rule_version = 2.18.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -71,6 +71,20 @@ workflow_aggregate_boundary_contract = aggregate_owns_identity_state_transition_
 workflow_repair_replacement_contract = repair_task_replacementForTaskId + proposal_execution_aggregate_resolves_effective_task_chain + integrated_replacement_advances_pending_acceptance + restart_never_redispatches_from_superseded_failure + legacy_single_task_repair_compatibility_only_with_same_proposal_linghu_source_and_integrated_fact
 <!-- 人物领域与应用代码优先表达真实业务步骤；禁止用嵌套三元、一行多判断或长链式转换换取表面短小。 -->
 persona_code_readability_contract = business_named_intermediate_values + explicit_if_else_and_for + one_business_step_per_block + field_source_meaning_lifecycle_and_effect_comments + no_nested_ternary + no_compacted_guard_or_long_transform_chain
+<!-- 用户要求采用新手结构分层且页面自身拥有复杂状态时，主页面、参数类型和 use 控制逻辑必须同级；仅属于该页面的子组件进入与主页面同名的目录。 -->
+renderer_beginner_page_layout_contract = complex_page_with_owned_state_uses_peer_main_View_props_types_and_use_controller + same_named_directory_for_page_owned_child_components + child_directory_is_module_not_route + no_duplicate_copy_under_model
+<!-- 新手结构文件必须在头部说明对应的真实页面入口和可见区域；数据结构字段、use Hook 状态与操作、关键 JSX 节点均逐项写业务用途注释。 -->
+renderer_beginner_comment_contract = file_header_real_navigation_and_visible_region + every_props_field_business_comment + every_use_state_and_operation_business_comment + key_JSX_node_real_UI_comment
+<!-- 新手注释必须先说明中文业务名称和实际用途，代码变量名仅在需要建立对应关系时放入中文名称后的括号中，禁止以陌生英文标识开头让读者先猜含义。 -->
+renderer_beginner_comment_sentence_contract = chinese_business_name_first + optional_code_identifier_in_parentheses_after_meaning + real_purpose_after_identity + prohibit_unknown_identifier_first
+<!-- 新手结构中的后端、IPC、服务或跨模块调用必须展开参数对象；每个传出字段独占一行，并用中文说明业务名称、接收端用途及必要的关联关系。 -->
+renderer_beginner_outbound_call_comment_contract = multiline_cross_layer_call + one_outbound_field_per_line + chinese_business_name_and_receiver_purpose_per_field + explain_stable_identity_relationship
+<!-- 新手结构注释修正必须检查主页面及其同级参数、控制逻辑和专属子模块整棵目录；导入、字段、状态、分支与返回值均禁止用英文标识作为说明开头。 -->
+renderer_beginner_module_comment_audit_contract = audit_entire_page_module_tree + include_imports_props_state_branches_returns_and_child_components + chinese_business_concept_before_code_identifier_everywhere + prohibit_fixing_only_reported_line
+<!-- 新手结构禁止把异步业务流程直接压进 JSX 事件属性；使用具名方法、显式条件、业务中间变量和分行属性保持从数据到结构可顺序阅读。 -->
+renderer_beginner_implementation_contract = named_event_method + explicit_guard_and_error_flow + business_intermediate_values + multiline_JSX_props + no_inline_async_business_flow_or_compacted_catch_finally
+<!-- 已由公共控制器供数的纯页面、小型无状态子组件、应用装配、路由、共享 model、theme、foundation、截图 canvas 与 geometry 不得为凑齐三文件而增加空控制层。 -->
+renderer_beginner_structure_exception_contract = pure_View_with_existing_shared_controller + small_stateless_leaf + application_composition + router + shared_model_theme_foundation + screenshot_canvas_and_geometry + no_empty_wrapper_or_duplicate_controller
 <!-- Renderer 的真实窗口必须由 applications 独立拥有；Application 只装配布局与 feature，禁止一个文件同时定义多个窗口或人物、协作、会话业务页面。 -->
 renderer_application_structure_contract = applications/developer + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner + no_evolution_workspace_application
 <!-- 代码分割后的每个 Application 必须显式加载自身控件注册和样式副作用，禁止依赖其他窗口或懒加载分支先执行。 -->

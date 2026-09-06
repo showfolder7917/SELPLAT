@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.js";
 import { nangongInquiryResult, nangongInquiryWithCorrection } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/index.js";
 import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.parser.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
+
+const conversationPrompt = readFileSync(new URL("../../../prompts/personas/hanli/conversation.md", import.meta.url), "utf8");
+const inquiryResponsePrompt = readFileSync(new URL("../../../prompts/personas/hanli/inquiry-response.md", import.meta.url), "utf8");
 
 const customerQuestion = "长消息超过一屏后是否还会跑到输入框下面，这个问题是否已经修复";
 const findings = { status: "verified", answeredQuestion: customerQuestion, summary: "源码已修改，尚未发布", evidence: [{ source: "task-1 / file.ts:12", detail: "修改存在，发布记录不存在" }], unknowns: ["当前运行版本"] };
@@ -62,7 +66,11 @@ test("真实派发后才等待，调查返回后主动答复，内部问答保�
   assert.ok(f.order.indexOf("internal:inquiry:u1:answer") < f.order.indexOf("explained"));
   const question = f.messages.find((item) => item.messageId === "internal:inquiry:u1:question");
   assert.match(question.content, new RegExp(customerQuestion));
+  assert.match(question.content, new RegExp(understanding.understoodGoal));
+  assert.match(question.content, new RegExp(understanding.verificationTarget));
+  assert.match(question.content, new RegExp(understanding.expectedAnswer));
   assert.match(question.content, /调查范围/);
+  assert.deepEqual(question.attachmentIds, ["shot1"]);
   assert.equal(f.discussionContexts.length, 1);
   assert.equal(f.discussionContexts[0].customerQuestion, customerQuestion);
   assert.equal(f.discussionContexts[0].findingSummary, findings.summary);
@@ -131,6 +139,14 @@ test("结构化理解与可见回复分离，理解不足时保留澄清门禁",
   const clarification = parseHanliConversationResponse(`请确认你指的是当前运行版本还是源码。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: { ...understanding, status: "clarification-required", ambiguities: ["需要确认源码还是运行版本"], investigationQuestion: undefined } })}`);
   assert.equal(clarification.inquiry.status, "clarification-required");
   assert.deepEqual(clarification.inquiry.ambiguities, ["需要确认源码还是运行版本"]);
+});
+test("韩立必须解析上下文指代并向客户给出完整准确的交代", () => {
+  assert.match(conversationPrompt, /“这个”“这里”“这样改”“修复它”/);
+  assert.match(conversationPrompt, /找到它所指的对象、现状问题、期望变化和明确约束/);
+  assert.match(conversationPrompt, /禁止只回复“明白”“收到”“我会核实”/);
+  assert.match(conversationPrompt, /禁止把“没有、缺少、不能识别”等现状缺陷反写成“去掉、移除、继续隐藏”等修改目标/);
+  assert.match(inquiryResponsePrompt, /恢复完整客户目标/);
+  assert.match(inquiryResponsePrompt, /禁止把客户描述的现状缺陷反写成期望修改/);
 });
 test("韩立理解不足时先询问客户，收到澄清后仍以最初问题派发南宫婉", async () => {
   const messages = [];

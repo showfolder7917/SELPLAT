@@ -79,10 +79,12 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
   /** 把人物内部研讨追加到所属人物会话；发言人使用稳定 personaId，不再扩充角色枚举。 */
   appendPersonaInternalMessage(input: {
     ownerPersonaId: string; conversationId: string; messageId: string; speakerPersonaId: string; content: string;
-    replyToMessageId?: string | null; createdAt: string;
+    attachmentIds?: string[]; replyToMessageId?: string | null; createdAt: string;
   }): PersonaConversationOutDto {
     const content = input.content.trim();
     if (!content) throw new Error("人物内部研讨消息不能为空。");
+    // 附件身份只保留非空唯一值，防止同一截图在一条内部交接中重复展示。
+    const attachmentIds = [...new Set(input.attachmentIds || [])].filter((id) => id.trim()).slice(0, 20);
     this.#database.transaction((connection) => {
       const maximum = connection.prepare(`SELECT COALESCE(MAX(sequenceNumber), -1) AS value
         FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`)
@@ -91,11 +93,11 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
          attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
         VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, 'persona', $speakerPersonaId, $content, NULL,
-          '[]', $replyToMessageId, 'completed', $createdAt, $createdAt, $createdAt)
+          $attachmentIds, $replyToMessageId, 'completed', $createdAt, $createdAt, $createdAt)
         ON CONFLICT(messageId) DO NOTHING`).run({
         $messageId: input.messageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
         $sequenceNumber: Number(maximum.value) + 1, $speakerPersonaId: input.speakerPersonaId, $content: content,
-        $replyToMessageId: input.replyToMessageId || null, $createdAt: input.createdAt,
+        $attachmentIds: JSON.stringify(attachmentIds), $replyToMessageId: input.replyToMessageId || null, $createdAt: input.createdAt,
       });
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({

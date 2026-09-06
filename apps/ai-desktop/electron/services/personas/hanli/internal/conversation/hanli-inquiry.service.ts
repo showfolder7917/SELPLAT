@@ -66,13 +66,15 @@ export class HanliInquiryService {
       expectedAnswer: understanding.expectedAnswer,
       investigationQuestion: understanding.investigationQuestion,
     };
-    const publish = (messageId: string, speakerPersonaId: "han-li" | "nangong-wan", content: string, replyToMessageId?: string) => {
+    const publish = (messageId: string, speakerPersonaId: "han-li" | "nangong-wan", content: string, replyToMessageId?: string, attachmentIds: string[] = []) => {
       const next = memory.appendPersonaInternalMessage({
         ownerPersonaId: "han-li",
         conversationId,
         messageId,
         speakerPersonaId,
         content,
+        // 只有明确属于当前交接的原始截图才随消息保存，回答和状态消息默认不复制附件。
+        attachmentIds,
         replyToMessageId,
         createdAt: new Date().toISOString(),
       });
@@ -95,7 +97,8 @@ export class HanliInquiryService {
       decision,
     });
     this.#options.onPersonaConversationChanged?.(registered);
-    publish(questionId, "han-li", `客户原问题：${inquiry.customerQuestion}\n\n调查范围：${inquiry.investigationQuestion}`);
+    // 韩立使用完整、自包含的交接说明表达客户意思，同时保留客户原话和本轮截图作为证据。
+    publish(questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, request.attachmentIds || []);
     try {
       if (!this.#options.investigateWithNangong) {
         throw new Error("南宫婉只读核实服务尚未接入");
@@ -223,4 +226,16 @@ function buildInvestigationReport(findings: NangongInquiryResultOutDto): string 
     report += `\n\n尚未核实：${findings.unknowns.join("；")}`;
   }
   return report;
+}
+
+/** 把客户原话和韩立已经形成的结构化理解整理成南宫婉无需猜测上下文的交接说明。 */
+function buildInvestigationHandoff(inquiry: HanliInvestigationRequest): string {
+  // 每一段保留独立业务含义，避免“修复这个”等短句脱离前文后成为唯一目标。
+  return [
+    `客户原话：${inquiry.customerQuestion}`,
+    `韩立理解的完整目标：${inquiry.understoodGoal}`,
+    `需要核实的对象：${inquiry.verificationTarget}`,
+    `客户期望得到的结论：${inquiry.expectedAnswer}`,
+    `调查范围：${inquiry.investigationQuestion}`,
+  ].join("\n\n");
 }

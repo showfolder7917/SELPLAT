@@ -12,7 +12,9 @@ const developerApp = [
   "../../../src/features/conversation/model/useCodexWorkspace.ts",
   "../../../src/features/conversation/model/useConversationDispatch.ts",
   "../../../src/features/hanli/components/HanliConversationWorkspace.tsx",
+  "../../../src/features/hanli/components/useHanliConversationWorkspace.ts",
   "../../../src/features/nangong/components/NangongConversationWorkspace.tsx",
+  "../../../src/features/nangong/components/useNangongConversationWorkspace.ts",
   "../../../src/features/screenshot/model/useScreenshotCapture.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const codexService = readFileSync(new URL("../../../electron/services/support/platform/codex/codex.facade.ts", import.meta.url), "utf8");

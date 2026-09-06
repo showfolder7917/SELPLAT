@@ -31,6 +31,8 @@ export interface CollaborationMemoryPort {
     messageId: string;
     speakerPersonaId: string;
     content: string;
+    /** 内部消息需要展示的原始截图身份；未提供时保持为空。 */
+    attachmentIds?: string[];
     replyToMessageId?: string | null;
     createdAt: string;
   }): PersonaConversationOutDto;
