@@ -96,6 +96,13 @@ test("截图发送只允许当前人物固定截图按钮", () => {
   assert.match(source, /button\.screenshot-button\[aria-label="截取当前屏幕"\]/);
   assert.match(source, /截图附件未进入当前人物发送区/);
 });
+test("截图发送验收条件明确引导受控截图动作，不能退回纯文字发送", () => {
+  const toolSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  const prompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
+  assert.match(toolSource, /截图发送、附件显示或历史关联时必须使用 send-test-screenshot/);
+  assert.match(prompt, /截图发送、附件显示或历史关联时，必须改用 `send-test-screenshot`/);
+  assert.match(prompt, /不能用 `send-test-message` 替代/);
+});
 test("受控验收消息发送后可作为真实截图证据，悬停也形成独立输入记录", async () => {
   const f = fixture();
   const run = await f.run(async (tools) => {
