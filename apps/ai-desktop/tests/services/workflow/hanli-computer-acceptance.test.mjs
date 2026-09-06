@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, existsSync } from "node:fs";
-import { HanliComputerAcceptance } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.js";
+import { transform } from "esbuild";
+
+// 单测直接转换当前工作树源码，避免测试把未构建的隔离工作树误判为运行时代码缺失。
+const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+const transformedAcceptance = await transform(acceptanceSource, {
+  loader: "ts",
+  format: "esm",
+  target: "es2022",
+});
+const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
+const { HanliComputerAcceptance } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
   let n = 0;
@@ -56,6 +66,13 @@ test("设置浮层触发器是唯一允许的设置导航入口", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
   assert.match(source, /node\.classList\.contains\("activity-settings"\) && node\.closest\("\.dev-settings-control"\)/);
   assert.ok(source.indexOf("删除|清空|移除") < source.indexOf('node.classList.contains("activity-settings")'));
+});
+test("图片预览只放行消息缩略图、预览控件和预览区域拖拽", () => {
+  const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(source, /selconversation-message-image-trigger.*selconversation-message-attachments/);
+  assert.match(source, /selimagepreview-action, \.seldialog-close/);
+  assert.match(source, /safeImagePreviewDrag/);
+  assert.match(source, /图片预览状态不可读取，证据不足/);
 });
 test("受控验收消息发送后可作为真实截图证据，悬停也形成独立输入记录", async () => {
   const f = fixture();
