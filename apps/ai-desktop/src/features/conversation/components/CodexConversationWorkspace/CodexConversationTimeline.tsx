@@ -9,6 +9,8 @@ import { Code24Regular } from "@fluentui/react-icons";
 import type { ManagedExecutionModeValue } from "../../../../../contracts/system/desktop/index";
 // 账号登录操作来自桌面壳公开入口，仅在空会话且未登录时显示。
 import { ChatGPTLoginAction } from "../../../shell";
+// 对话消息图片负责把已发送附件统一接入公共大图预览。
+import { ConversationMessageImage } from "../ConversationMessageImage";
 // 主会话消息类型来自对话模型，用于限定托管操作的目标消息。
 import type { Message } from "../../model/chat-message";
 // 结构化追问面板负责收集 Codex 继续执行前需要的客户答案。
@@ -150,7 +152,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
               {message.attachments?.length ? (
                 <div className="selconversation-message-attachments">
                   {message.attachments.map((attachment) => (
-                    <img key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />
+                    <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />
                   ))}
                 </div>
               ) : null}

@@ -9,6 +9,8 @@ export { CodexApprovalDialog } from "./components/CodexApprovalDialog";
 export { CodexConversationWorkspace } from "./components/CodexConversationWorkspace";
 /** Markdown 消息视图：供人物与协作页面一致渲染 AI 回复。 */
 export { MarkdownMessage } from "./components/MarkdownMessage";
+/** 对话消息图片：统一把已发送图片接入 SELUI 大图预览。 */
+export { ConversationMessageImage } from "./components/ConversationMessageImage";
 /** SEL UI 会话容器：统一处理会话滚动和提交事件。 */
 export { SelUiConversation } from "./components/SelUiConversation";
 /** Codex 工作区控制器：组合发送、流式状态、审批和排队操作。 */

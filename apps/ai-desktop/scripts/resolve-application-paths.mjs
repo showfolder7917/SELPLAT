@@ -3,11 +3,14 @@ import { fileURLToPath } from "node:url";
 
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 import { resolveDependencyCache } from "./dependency-cache.mjs";
-import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
+import { isCollaborationWorktree, resolvePathDiagnosticWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const applicationRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceProjectRoot = path.resolve(applicationRoot, "..", "..");
-const selplatRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
+const selplatRoot = resolvePathDiagnosticWorkspaceRoot(sourceProjectRoot);
+const workspaceRootMode = !String(process.env.SELPLAT_ROOT || "").trim() && isCollaborationWorktree(sourceProjectRoot)
+  ? "source-worktree-diagnostic-only"
+  : "selected-workspace";
 const applicationName = resolveApplicationNameFromSourceRoot(applicationRoot);
 const paths = resolveApplicationDataPaths({ selplatRoot, applicationName });
 const dependency = resolveDependencyCache();
@@ -22,6 +25,7 @@ process.stdout.write(`${JSON.stringify({
   applicationRoot,
   sourceProjectRoot,
   selplatRoot,
+  workspaceRootMode,
   ...paths,
   dependencyCacheRoot: dependency.dependencyCacheRoot,
   dependencyCacheScope: dependency.dependencyLeaseId ? "managed-worktree-shared" : "project-local",

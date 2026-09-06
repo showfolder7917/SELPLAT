@@ -22,6 +22,20 @@ export function resolveSelectedWorkspaceRoot(sourceProjectRoot) {
   return workspaceRoot;
 }
 
+/**
+ * 路径诊断允许读取候选工作树自身的工程标识，但不把它提升为运行数据工作区。
+ * 真实构建、测试、发布和运行仍必须调用 resolveSelectedWorkspaceRoot，缺少显式选择时继续阻断。
+ */
+export function resolvePathDiagnosticWorkspaceRoot(sourceProjectRoot) {
+  const sourceRoot = path.resolve(sourceProjectRoot);
+  const configured = String(process.env.SELPLAT_ROOT || "").trim();
+  if (configured || !isCollaborationWorktree(sourceRoot)) return resolveSelectedWorkspaceRoot(sourceRoot);
+  if (!hasSelplatProjectMarkers(sourceRoot)) {
+    throw new Error("路径诊断找不到候选工作树工程标识");
+  }
+  return sourceRoot;
+}
+
 /** 数据目录不得落入任何协作任务或发布候选工作树。 */
 export function assertWorkspaceDataPath(workspaceRoot, candidatePath) {
   const root = path.resolve(workspaceRoot);
@@ -35,6 +49,11 @@ export function assertWorkspaceDataPath(workspaceRoot, candidatePath) {
 export function isCollaborationWorktree(candidatePath) {
   const segments = path.resolve(candidatePath).split(path.sep).filter(Boolean);
   return segments.some((segment, index) => segment === WORKTREE_SEGMENTS[0] && segments[index + 1] === WORKTREE_SEGMENTS[1]);
+}
+
+function hasSelplatProjectMarkers(workspaceRoot) {
+  return existsSync(path.join(workspaceRoot, "settings.gradle"))
+    && existsSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"));
 }
 
 function isDescendant(root, candidate) {
