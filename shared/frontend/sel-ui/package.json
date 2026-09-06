@@ -150,6 +150,14 @@
       "types": "./src/theme/css.d.ts",
       "default": "./src/components/grid/selGrid.css"
     },
+    "./components/image-preview": {
+      "types": "./src/runtime.d.ts",
+      "default": "./src/components/image-preview/selImagePreview.js"
+    },
+    "./components/image-preview/styles": {
+      "types": "./src/theme/css.d.ts",
+      "default": "./src/components/image-preview/selImagePreview.css"
+    },
     "./components/page-background": {
       "types": "./src/runtime.d.ts",
       "default": "./src/components/page-background/selPageBackground.js"

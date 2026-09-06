@@ -1,0 +1,10 @@
+/* selImagePreview：图片大图预览的缩放、拖动与边界内查看外观。 */
+.selimagepreview-dialog-body { display: grid; grid-template-rows: auto minmax(240px, 1fr); width: min(1120px, calc(100vw - 96px)); height: min(780px, calc(100vh - 150px)); max-width: none; max-height: none; padding: 0; overflow: hidden; }
+.selimagepreview-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--sel-theme-workspace-line); background: var(--sel-theme-control-surface); }
+.selimagepreview-action { min-height: 30px; padding: 0 10px; border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-action); color: var(--sel-theme-text-body); background: var(--sel-theme-control-surface-raised); font: inherit; cursor: pointer; }
+.selimagepreview-action:hover, .selimagepreview-action:focus-visible { border-color: var(--sel-theme-workspace-line-active); outline: none; background: var(--sel-theme-interaction-surface-hover); }
+.selimagepreview-viewport { min-width: 0; min-height: 0; display: grid; overflow: hidden; background: var(--sel-theme-workbench-canvas); place-items: center; touch-action: none; user-select: none; }
+.selimagepreview-viewport[data-pannable="true"] { cursor: grab; }
+.selimagepreview-viewport[data-pannable="true"][data-dragging="true"] { cursor: grabbing; }
+.selimagepreview-image { display: block; max-width: none; max-height: none; transform-origin: center; user-select: none; -webkit-user-drag: none; }
+@media (max-width: 720px) { .selimagepreview-dialog-body { width: calc(100vw - 28px); height: min(680px, calc(100vh - 90px)); } }
