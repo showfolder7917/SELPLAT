@@ -42,6 +42,51 @@ test("卡点真实派发、重启去重、返回原点后才允许解除", async
   assert.ok(f.effects.phases.includes("1:returned"));
 });
 
+test("韩立验收卡点不因原开发任务已集成而误报解除", async () => {
+  // 真实场景中代码任务先完成集成，韩立随后才会进入正式应用验收。
+  const f = fixture();
+  f.collaboration.tasks.push({
+    taskId: "original", state: "integrated", phase: "integrated", updatedAt: "2026-09-05T00:00:00Z",
+    executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: { constraints: [] },
+  });
+  f.event.payload.operation = "run_real_application_acceptance";
+  f.evolution.proposals[0].distributedTaskIds = ["original"];
+  await f.run();
+  // 开发任务的 integrated 不能冒充韩立复验通过，令狐必须收到真实调查修复任务。
+  assert.deepEqual(f.effects.resolved, []);
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
+  assert.equal(f.event.payload.checkpoint.phase, "repairing");
+});
+
+test("非验收任务完成集成后仍可直接解除原执行卡点", async () => {
+  // 普通执行阶段卡点仍以原任务完成集成为解除依据，避免影响已有恢复路径。
+  const f = fixture();
+  f.event.payload.phase = "executing";
+  f.collaboration.tasks.push({
+    taskId: "original", state: "integrated", phase: "integrated", updatedAt: "2026-09-05T00:00:00Z",
+    executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: { constraints: [] },
+  });
+  f.event.correlationId = "original";
+  await f.run();
+  assert.deepEqual(f.effects.resolved, ["issue-1"]);
+  assert.equal(f.effects.submitted.length, 0);
+});
+
+test("韩立验收原流程真正完成后才解除卡点", async () => {
+  // 即使关联开发任务已经集成，权威的一次性运行 completed 仍可正常结束验收卡点。
+  const f = fixture();
+  f.evolution.oneShotRun.status = "completed";
+  f.collaboration.tasks.push({
+    taskId: "original", state: "integrated", phase: "integrated", updatedAt: "2026-09-05T00:00:00Z",
+    executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: { constraints: [] },
+  });
+  f.event.correlationId = "original";
+  await f.run();
+  assert.deepEqual(f.effects.resolved, ["issue-1"]);
+  assert.equal(f.effects.submitted.length, 0);
+});
+
 test("创建后保存前中断通过原事件轮次标记找回，不重复提交", async () => {
   const f = fixture(); await f.run();
   delete f.event.payload.checkpoint;

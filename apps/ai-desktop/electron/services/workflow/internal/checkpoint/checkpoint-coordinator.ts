@@ -157,7 +157,15 @@ export class CheckpointCoordinator {
     const task = this.options.collaboration().tasks.find((item) => item.taskId === state.taskId);
     const run = evolution.oneShotRun;
     const proposal = evolution.proposals.find((item) => item.proposalId === state.proposalId);
-    if (task?.state === "integrated" || (state.runId && run?.runId === state.runId && run.status === "completed")) {
+    // 直接关联 taskId 的异常属于任务自身；只有真实应用验收或没有任务直连的验收阶段才归韩立复验。
+    const directlyTargetsTask = Boolean(task && (event.correlationId === task.taskId || event.payload.taskId === task.taskId));
+    // 韩立验收发生在开发任务集成之后；此时 integrated 只能说明代码已交付，不能说明真实界面复验通过。
+    const isAcceptanceCheckpoint = event.payload.operation === "run_real_application_acceptance" || (state.sourcePhase === "accepting" && !directlyTargetsTask);
+    // 一次性原流程明确 completed，才是验收卡点已经通过复验的权威事实。
+    const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.status === "completed");
+    // 非验收任务仍沿用原规则：任务完成集成即可确认对应执行卡点已经解除。
+    const originalTaskCompleted = !isAcceptanceCheckpoint && task?.state === "integrated";
+    if (originalTaskCompleted || originalRunCompleted) {
       this.#phase(event, state, "resolved", "原任务已完成验证，确认此卡点解除；历史轮次保留。");
       this.options.resolve(event.eventId, "原任务完成事实已确认");
       return;
@@ -167,7 +175,8 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "waiting", "已保留卡点，当前为人工暂停或业务选择，需用户明确后继续，不自动改写授权。");
       return;
     }
-    if (task) {
+    // 验收卡点中的 task 只是已经集成的原开发任务；它不能代替令狐调查当前真实界面阻塞。
+    if (task && !isAcceptanceCheckpoint) {
       const member = this.options.collaboration().members.find((item) => item.memberId === task.executorMemberId);
       const heartbeat = [member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt].filter((value): value is string => Boolean(value)).sort().at(-1);
       const stalled = event.category === "stalled" && heartbeat === event.payload.lastHeartbeatAt;
