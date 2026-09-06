@@ -95,11 +95,13 @@ export class HanliComputerAcceptance {
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "scroll", "key", "hover", "send-test-message", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "key", "hover", "send-test-message", "finish"],
             },
             observationId: { type: "string" },
             x: { type: "integer" },
             y: { type: "integer" },
+            endX: { type: "integer" },
+            endY: { type: "integer" },
             deltaY: { type: "integer" },
             key: {
               type: "string",
@@ -238,7 +240,7 @@ export class HanliComputerAcceptance {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, width, height, "悬停坐标必须位于当前应用窗口内。");
             window.webContents.sendInputEvent({ type: "mouseMove", x: Number(args.x), y: Number(args.y) });
-          } else if (args.action === "click" || args.action === "scroll") {
+          } else if (args.action === "click" || args.action === "drag" || args.action === "scroll") {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, width, height, "坐标必须位于当前应用窗口内。");
             if (args.action === "click") {
@@ -252,6 +254,14 @@ export class HanliComputerAcceptance {
               }
               window.webContents.sendInputEvent({ type: "mouseDown", x: Number(args.x), y: Number(args.y), button: "left", clickCount: 1 });
               window.webContents.sendInputEvent({ type: "mouseUp", x: Number(args.x), y: Number(args.y), button: "left", clickCount: 1 });
+            } else if (args.action === "drag") {
+              assertPointInsideWindow(args.endX, args.endY, width, height, "拖拽终点必须位于当前应用窗口内。");
+              const safe = await window.webContents.executeJavaScript(`(${safeImagePreviewDrag.toString()})(${args.x},${args.y})`) as boolean;
+              if (!safe) throw new Error("拖拽只允许命中已打开图片预览的查看区域，未执行输入。");
+              window.webContents.sendInputEvent({ type: "mouseMove", x: Number(args.x), y: Number(args.y) });
+              window.webContents.sendInputEvent({ type: "mouseDown", x: Number(args.x), y: Number(args.y), button: "left", clickCount: 1 });
+              window.webContents.sendInputEvent({ type: "mouseMove", x: Number(args.endX), y: Number(args.endY) });
+              window.webContents.sendInputEvent({ type: "mouseUp", x: Number(args.endX), y: Number(args.endY), button: "left", clickCount: 1 });
             } else {
               const deltaY = Number(args.deltaY);
               if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
@@ -267,6 +277,8 @@ export class HanliComputerAcceptance {
           snapshot = "";
           await new Promise((resolve) => setTimeout(resolve, 150));
           const output = await images();
+          const previewEvidence = await window.webContents.executeJavaScript(`(${readImagePreviewState.toString()})()`).catch(() => null);
+          const previewActual = formatImagePreviewEvidence(previewEvidence);
           let operation: HanliAcceptanceStepResultOutDto["operation"];
           if (args.action === "send-test-message") {
             operation = { type: "send", target: "persona-composer", reason: String(args.reason) };
@@ -276,6 +288,8 @@ export class HanliComputerAcceptance {
             operation = { type: "key", key: String(args.key), reason: String(args.reason) };
           } else if (args.action === "scroll") {
             operation = { type: "scroll", x: Number(args.x), y: Number(args.y), deltaY: Number(args.deltaY), reason: String(args.reason) };
+          } else if (args.action === "drag") {
+            operation = { type: "drag", x: Number(args.x), y: Number(args.y), endX: Number(args.endX), endY: Number(args.endY), reason: String(args.reason) };
           } else {
             operation = { type: "click", x: Number(args.x), y: Number(args.y), reason: String(args.reason) };
           }
@@ -284,7 +298,7 @@ export class HanliComputerAcceptance {
             operationIndex: steps.length,
             operation,
             status: "passed",
-            actual: `已发送输入，效果由韩立观察截图判断：${args.reason}`,
+            actual: `已发送输入，效果由韩立观察截图判断：${args.reason}；${previewActual}`,
             screenshotAttachmentId: snapshot,
             occurredAt: new Date().toISOString(),
           });
@@ -388,7 +402,39 @@ function safeNavigationClick(x: number, y: number): boolean {
   if (node.classList.contains("collaboration-member")) {
     return true;
   }
+  if (node.matches(".selconversation-message-image-trigger") && node.closest(".selconversation-message-attachments")) {
+    return true;
+  }
+  if (node.matches(".selimagepreview-action, .seldialog-close") && node.closest('dialog[data-sel-dialog="selDialogImagePreviewId"][open]')) {
+    return true;
+  }
   return node.getAttribute("role") === "tab" || /^(韩立|南宫婉|令狐老祖|紫灵|元瑶|宋玉|冰魄仙子|墨彩环|墨大夫|厉飞雨|张铁|李化元|任务协作群|单会话|协同模式|折叠侧栏|展开侧栏)(\s|$)/u.test(label);
+}
+
+function safeImagePreviewDrag(x: number, y: number): boolean {
+  const node = document.elementFromPoint(x, y);
+  // 仅允许可平移的大图视区接收拖拽，未溢出的图片不应被验收工具强行拖动。
+  const viewport = node?.closest<HTMLElement>(".selimagepreview-viewport");
+  return Boolean(
+    viewport?.dataset.pannable === "true"
+      && viewport.closest('dialog[data-sel-dialog="selDialogImagePreviewId"][open]'),
+  );
+}
+
+/** 读取预览组件的公开状态和视区交互标识，作为操作后的审计证据。 */
+function readImagePreviewState(): Record<string, unknown> | null {
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[data-sel-dialog="selDialogImagePreviewId"]');
+  const viewport = dialog?.querySelector<HTMLElement>(".selimagepreview-viewport");
+  const preview = (window as typeof window & { sel?: { components?: { imagePreview?: { getState?: () => Record<string, unknown> } } } }).sel?.components?.imagePreview?.getState?.();
+  if (!dialog || !viewport || !preview) return null;
+  return { open: preview.open === true, zoom: preview.zoom, pannable: viewport.dataset.pannable === "true", dragging: viewport.dataset.dragging === "true" };
+}
+
+/** 预览状态不可读时明确保留证据缺口，避免把截图外观当作操作成功。 */
+function formatImagePreviewEvidence(value: unknown): string {
+  if (!value || typeof value !== "object") return "图片预览状态不可读取，证据不足";
+  const state = value as Record<string, unknown>;
+  return `图片预览状态：open=${String(state.open)}，zoom=${String(state.zoom)}，pannable=${String(state.pannable)}，dragging=${String(state.dragging)}`;
 }
 
 /** 校验模型给出的窗口坐标，阻止把窗口外位置传入 Electron 输入事件。 */
