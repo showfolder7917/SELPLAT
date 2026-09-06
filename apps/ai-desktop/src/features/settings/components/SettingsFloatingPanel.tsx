@@ -42,7 +42,11 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
       resizable: {
         minWidth: MINIMUM_WIDTH,
         maxWidth: MAXIMUM_WIDTH,
-        labels: { left: locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度" },
+        right: true,
+        labels: {
+          left: locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度",
+          right: locale === "ja" ? "右側から設定パネルの幅を調整" : "从右侧调整设置面板宽度",
+        },
         resetLabel: locale === "ja" ? "ダブルクリックで既定の幅に戻す" : "双击恢复默认宽度",
       },
       onOpenChange,
