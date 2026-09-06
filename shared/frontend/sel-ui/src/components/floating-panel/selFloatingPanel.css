@@ -157,6 +157,12 @@
     cursor: ew-resize;
 }
 
+.selfloating-resize-right {
+    position: fixed;
+    width: 18px;
+    cursor: ew-resize;
+}
+
 .selfloating-resize-bottom {
     right: 22px;
     bottom: -11px;
