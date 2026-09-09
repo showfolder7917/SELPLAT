@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { SelUiWorkspaceTabs } from "../../theme/SelUiWorkspaceTabs";
+import { SelUiWorkspaceTabs } from "../../../theme/SelUiWorkspaceTabs";
 import {
   // 新建会话按钮使用旋转箭头；busy 时同一图标会播放旋转动画。
   ArrowClockwise24Regular,
@@ -10,25 +10,26 @@ import type {
   LocaleValue,
   // WorkspaceStateOutDto 是已经登记的工作区快照，人物会话发送时必须携带它。
   WorkspaceStateOutDto,
-} from "../../../contracts/system/desktop/index";
+} from "../../../../contracts/system/desktop/index";
+import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 // CollaborationWorkspaceFeature 显示普通协作成员、任务群或任务详情。
-import { CollaborationWorkspaceFeature } from "../../features/collaboration";
+import { CollaborationWorkspaceFeature } from "../../../features/collaboration";
 // useCollaborationWorkspace 的返回类型描述当前协作模式、选中成员和协作页面。
-import type { useCollaborationWorkspace } from "../../features/collaboration";
+import type { useCollaborationWorkspace } from "../../../features/collaboration";
 // CodexConversationWorkspace 是单会话模式下完整的主 Codex 对话页面。
-import { CodexConversationWorkspace } from "../../features/conversation";
+import { CodexConversationWorkspace } from "../../../features/conversation";
 // useCodexWorkspace 的返回类型提供主会话状态和“新建任务”等公开动作。
-import type { useCodexWorkspace } from "../../features/conversation";
+import type { useCodexWorkspace } from "../../../features/conversation";
 // useEvolutionRuntime 的返回类型是韩立和南宫共同消费的唯一 Evolution 状态。
-import type { useEvolutionRuntime } from "../../features/evolution";
+import type { useEvolutionRuntime } from "../../../features/evolution";
 // HanliConversationWorkspace 显示用户与韩立的独立自由讨论页面。
-import { HanliConversationWorkspace } from "../../features/hanli";
+import { HanliConversationWorkspace } from "../../../features/hanli";
 // usePersonaConversation 的返回类型统一提供人物会话、附件、错误和新建动作。
-import type { usePersonaConversation } from "../../features/conversation";
+import type { usePersonaConversation } from "../../../features/conversation";
 // NangongConversationWorkspace 显示南宫婉会话和专题整理入口。
-import { NangongConversationWorkspace } from "../../features/nangong";
+import { NangongConversationWorkspace } from "../../../features/nangong";
 // useScreenshotCapture 的返回类型提供截图和粘贴图片能力，但不持有各会话附件。
-import type { useScreenshotCapture } from "../../features/screenshot";
+import type { useScreenshotCapture } from "../../../features/screenshot";
 
 /** Application 传给工作区路由的公开 Feature 模型；路由只读状态并选择页面。 */
 type DeveloperWorkspaceRouterProps = {
@@ -120,7 +121,8 @@ function DeveloperWorkspacePage({
   );
   const startLinghuDisplayConversation = async () => {
     if (linghuNewConversationBusy) return;
-    if (!window.desktop) {
+    const collaborationApi = getOptionalCollaborationDesktopApi();
+    if (!collaborationApi) {
       collaboration.setError("请在桌面应用中操作");
       return;
     }
@@ -128,7 +130,7 @@ function DeveloperWorkspacePage({
     collaboration.setError("");
     try {
       // 后端只推进令狐页面的可见消息边界，不触碰巡检、任务或恢复状态。
-      collaboration.setLinghuAutomation(await window.desktop.newLinghuDisplayConversation());
+      collaboration.setLinghuAutomation(await collaborationApi.newLinghuDisplayConversation());
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "无法新建会话";
       collaboration.setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ""));

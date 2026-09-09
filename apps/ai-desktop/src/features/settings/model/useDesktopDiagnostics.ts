@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
 import type { AiMemoryDatabaseStatusOutDto, AuditLogInfoOutDto, LocaleValue, TempDirectoryInfoOutDto, TrustedCommandInfoOutDto } from "../../../../contracts/system/desktop/index";
+import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
+import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -17,11 +19,11 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
   const [testDataResetError, setTestDataResetError] = useState("");
 
   useEffect(() => {
-    const desktop = window.desktop;
+    const desktop = getOptionalSystemDesktopApi();
     if (!desktop) return;
     void desktop.getAiMemoryDatabaseStatus().then(setAiMemoryDatabaseStatus);
     void desktop.getAuditLogInfo().then(setAuditInfo);
-    void desktop.getTrustedCommandInfo().then(setTrustedCommandInfo);
+    void getOptionalCodexDesktopApi()?.getTrustedCommandInfo().then(setTrustedCommandInfo);
   }, []);
 
   useEffect(() => {
@@ -32,26 +34,26 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
   }, [settingsOpen]);
 
   const clearTempFiles = async () => {
-    const info = await window.desktop?.clearTempFiles();
+    const info = await getOptionalSystemDesktopApi()?.clearTempFiles();
     if (info) setTempInfo(info);
   };
   const clearTrustedCommands = async () => {
-    const info = await window.desktop?.clearTrustedCommands();
+    const info = await getOptionalCodexDesktopApi()?.clearTrustedCommands();
     if (info) setTrustedCommandInfo(info);
   };
   const clearTestData = async () => {
     setTestDataResetting(true);
     setTestDataResetError("");
     try {
-      await window.desktop?.clearTestData();
+      await getOptionalSystemDesktopApi()?.clearTestData();
     } catch (error) {
       setTestDataResetError(readableDesktopError(error, locale === "ja" ? "テストデータを消去できませんでした。" : "清空测试数据失败。"));
       setTestDataResetting(false);
     }
   };
-  const refreshTempInfo = () => { void window.desktop?.getTempDirectoryInfo().then(setTempInfo); };
-  const refreshAuditInfo = () => { void window.desktop?.getAuditLogInfo().then(setAuditInfo); };
-  const refreshTrustedCommandInfo = () => { void window.desktop?.getTrustedCommandInfo().then(setTrustedCommandInfo); };
+  const refreshTempInfo = () => { void getOptionalSystemDesktopApi()?.getTempDirectoryInfo().then(setTempInfo); };
+  const refreshAuditInfo = () => { void getOptionalSystemDesktopApi()?.getAuditLogInfo().then(setAuditInfo); };
+  const refreshTrustedCommandInfo = () => { void getOptionalCodexDesktopApi()?.getTrustedCommandInfo().then(setTrustedCommandInfo); };
 
   return {
     tempInfo, auditInfo, trustedCommandInfo, aiMemoryDatabaseStatus, testDataResetting, testDataResetError,

@@ -24,6 +24,7 @@ const electronMain = [
 const ipc = [
   "../../../electron/system/ipc/register-desktop-ipc.ts",
   "../../../electron/system/ipc/domains/register-codex-ipc.ts",
+  "../../../electron/system/ipc/domains/register-conversation-ipc.ts",
   "../../../electron/system/ipc/domains/register-system-ipc.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerApp = [

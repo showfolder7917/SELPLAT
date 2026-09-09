@@ -19,6 +19,8 @@ import type { ComposerAttachment } from "../../conversation";
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让会话区在新增消息后跟随到最新内容。
 import { usePersonaConversationTailFollow } from "../../conversation";
+// 协同桌面入口让人物页面沿同名 Contract、preload 和 IPC 找到韩立 Facade。
+import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 // 韩立页面参数类型（HanliConversationWorkspaceProps）描述页面结构交给控制逻辑的全部数据和操作。
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 
@@ -99,7 +101,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     // 消息发送处理从这里开始，统一覆盖桌面调用、会话更新和附件预览绑定。
     try {
       // 调用人物会话后端，把本轮客户消息发送给韩立，并等待返回最新完整会话。
-      const next = await window.desktop?.sendPersonaConversationMessage(
+      const next = await getOptionalCollaborationDesktopApi()?.sendPersonaConversationMessage(
         // 接收人物：明确本轮消息由韩立处理。
         "han-li",
         // 本轮消息资料：后端保存消息、读取截图并建立工程上下文所需的完整输入。

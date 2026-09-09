@@ -5,6 +5,8 @@
 - `system/`：让 Electron 程序安全启动、通信、显示和退出。
 - `services/`：实现 AI Desktop 的应用能力，日常业务开发主要从这里进入。
 
+从 Renderer 追踪调用时，先确认 `src/foundation/desktop-api/domains/<domain>.desktop-api.ts` 中的领域名，再打开同名 `system/preload/domains/<domain>-bridge.cts` 和 `system/ipc/domains/register-<domain>-ipc.ts`，最后进入 handler 导入的 Service `index.ts`。
+
 ## 1. 完整结构
 
 ```text

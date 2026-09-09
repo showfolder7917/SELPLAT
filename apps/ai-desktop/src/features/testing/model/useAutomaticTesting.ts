@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { AutomaticTestPreflightResultOutDto, CodexApprovalOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
+import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 import type { Message } from "../../conversation";
 
 function readableDesktopError(error: unknown, fallback: string): string {
@@ -58,7 +59,7 @@ export function useAutomaticTesting({ locale, loading, approval, messages, disca
     setChecking(true);
     setDialog(null);
     try {
-      const result = await window.desktop?.prepareAutomaticTesting();
+      const result = await getOptionalCodexDesktopApi()?.prepareAutomaticTesting();
       if (!result) throw new Error("Automatic test preflight is unavailable.");
       if (result.status !== "ready") {
         setDialog(result);

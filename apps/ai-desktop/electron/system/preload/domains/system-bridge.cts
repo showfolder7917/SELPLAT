@@ -8,7 +8,6 @@ export function systemBridge() {
     clearTestData: () => invoke("desktop:clear-test-data"),
     getCorpusSemanticBackfillStatus: () => invoke("desktop:get-corpus-semantic-backfill-status"),
     startCorpusSemanticBackfill: (limit?: number) => invoke("desktop:start-corpus-semantic-backfill", limit),
-    getApprovalGovernance: () => invoke("desktop:get-approval-governance"),
     getSettings: () => invoke("desktop:get-settings"),
     updateSettings: (settings: unknown) => invoke("desktop:update-settings", settings),
     getWorkspaces: () => invoke("desktop:get-workspaces"),

@@ -1,13 +1,17 @@
 /**
- * 协作功能公开入口：向 Developer 应用和其他功能提供协作页面、协作状态与显示转换能力。
- * 调用方只从本文件选择所需符号，不需要知道 components 和 model 的内部路径。
+ * 协作功能唯一公开入口。
+ *
+ * Developer 应用、工作区路由和主会话只从这里使用协作能力，
+ * 不直接依赖 components 或 model 的内部文件。
  */
 
-/** 协作资源管理器：在左侧树中展示成员、任务和当前阶段。 */
-export { CollaborationExplorerFeature } from "./components/CollaborationExplorerFeature";
-/** 协作工作区：根据选中内容组装任务群或成员页面。 */
+/** 右侧协作工作区：供 Developer 路由显示任务群或普通协作成员页面。 */
 export { CollaborationWorkspaceFeature } from "./components/CollaborationWorkspaceFeature";
-/** 协作状态控制器：为应用层提供任务、时间线和继续执行操作。 */
+/** 协作状态控制器：供应用层订阅成员、任务、时间线和实时输出并执行协作操作。 */
 export { useCollaborationWorkspace } from "./model/useCollaborationWorkspace";
-/** 协作成员状态文案：供对话页面把稳定状态码转成客户可读文本。 */
+/** 协作任务状态文案：供主会话把后端稳定状态码转换成中日文客户文案。 */
 export { collaborationTaskStateLabel } from "./model/collaboration-formatters";
+/** 人物导航显示转换器：供 Developer 左侧任务区解释成员的圆点与文字状态。 */
+export { collaborationMemberPresenceState, collaborationMemberStateLabel } from "./model/collaboration-formatters";
+/** 人物会话临时活动：供 Developer 左侧任务区显示正在回复、调查或等待审批。 */
+export type { PersonaConversationActivity } from "./model/collaboration-formatters";

@@ -1,6 +1,7 @@
 import { Add24Regular, Delete16Regular, Delete24Regular, FolderOpen24Regular, ShieldLock16Filled, ShieldLock16Regular, Star16Filled, Star16Regular } from "@fluentui/react-icons";
 
 import type { CodexHarnessStatusOutDto, LocaleValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue } from "../../../../contracts/system/desktop/index";
+import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { RuleManagementFeature } from "../../rules";
 import { ChatGPTLoginAction } from "../../shell";
@@ -139,9 +140,9 @@ export function DeveloperSettingsFeature({ open, onOpenChange, status, loginHint
       </div>
       {workspace.workspaceError && <em role="alert">{workspace.workspaceError}</em>}
     </section>
-    <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void window.desktop?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void confirmAndClearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
+    <div className="temp-card"><span>{text.tempFiles}</span><strong>{tempInfo ? `${tempInfo.fileCount} files · ${formatBytes(tempInfo.totalBytes)}` : "..."}</strong><div><button onClick={() => void getOptionalSystemDesktopApi()?.openTempDirectory()}><FolderOpen24Regular />{text.openTemp}</button><button className="danger" onClick={() => void confirmAndClearTempFiles()}><Delete24Regular />{text.clearTemp}</button></div></div>
     <div className="temp-card trust-card"><span>{text.trustedCommands}</span><strong>{trustedCommandInfo.count}</strong><small>{text.trustHint}</small><div><button className="danger" disabled={trustedCommandInfo.count === 0} onClick={() => void confirmAndClearTrustedCommands()}><Delete24Regular />{text.clearTrustedCommands}</button></div></div>
-    <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void window.desktop?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
+    <div className="temp-card audit-card"><span>{text.auditLogs}</span><strong>{auditInfo?.latestTask ? `${auditStatusText(auditInfo.latestTask.status, locale)} · ${auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}` : text.noAuditTask}</strong>{auditInfo?.latestTask?.reasons.map((reason) => <em key={reason.code}>{reason.message}</em>)}<div><button onClick={() => void getOptionalSystemDesktopApi()?.openAuditLogDirectory()}><FolderOpen24Regular />{text.openAuditLogs}</button></div></div>
     <RuleManagementFeature locale={locale} />
   </SettingsFloatingPanel>;
 }

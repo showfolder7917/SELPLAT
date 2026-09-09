@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** 主工作区布局只提供内容舞台，具体会话、协作和人物页面由 feature 决定。 */
+/** Developer 右侧工作区只提供内容舞台，具体页面由同目录路由选择。 */
 export function DeveloperWorkspace({ children }: { children: ReactNode }) {
   return <div className="workspace-stage-single"><main className="dev-main">{children}</main></div>;
 }

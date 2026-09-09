@@ -5,13 +5,10 @@ import { promisify } from "node:util";
 
 import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences } from "electron";
 
-import { LOCALES, SANDBOX_MODES } from "../../../contracts/foundation/index.js";
 import type {
   AppVariantValue,
-  ManagedExecutionModeValue,
   WindowActionValue,
 } from "../../../contracts/foundation/index.js";
-import type { EnqueueMessageInDto, SendMessageInDto } from "../../../contracts/services/support/capabilities/conversation/index.js";
 import type { RendererExceptionInDto } from "../../../contracts/services/support/capabilities/event-center/index.js";
 import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotSaveInDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
@@ -21,6 +18,7 @@ import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
 import { registerCodexIpc } from "./domains/register-codex-ipc.js";
+import { registerConversationIpc } from "./domains/register-conversation-ipc.js";
 import { registerSystemIpc } from "./domains/register-system-ipc.js";
 import { registerEventCenterIpcHandler } from "./event-center-ipc.js";
 import { CodexFacade as CodexService } from "../../services/support/platform/codex/index.js";
@@ -33,7 +31,6 @@ import type { NangongFacade } from "../../services/personas/nangong/index.js";
 import type { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../services/workflow/index.js";
-import { ManagedExecutionFacade as ManagedTaskExecutor } from "../../services/support/capabilities/execution/index.js";
 import { AttachmentFacade as ScreenshotStore } from "../../services/support/platform/attachments/index.js";
 import { SettingsFacade as SettingsStore } from "../../services/support/platform/settings/index.js";
 import { CommandGovernanceFacade as TrustedCommandStore } from "../../services/support/platform/security/index.js";
@@ -121,7 +118,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
-  const managedExecutor = new ManagedTaskExecutor(prompts);
   let screenCaptureAttemptId = 0;
 
   registerRulesIpc(rules, eventCenter);
@@ -257,7 +253,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   };
 
   registerSystemIpc({
-    aiMemoryDatabaseStatus, projectRoot, variant, screenshots, workflowRepository, eventCenter,
+    aiMemoryDatabaseStatus, projectRoot, variant, screenshots, eventCenter,
     clearTestData: dependencies.clearTestData,
     corpusSemanticBackfillStatus: dependencies.corpusSemanticBackfillStatus,
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
@@ -265,6 +261,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
   registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
+  registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
@@ -618,119 +615,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return saved;
   });
   handle("desktop:read-attachment-previews", (_event, attachmentIds: string[]) => screenshots.readAttachmentPreviews(attachmentIds));
-  handle("desktop:get-conversation-dispatch-state", () => dispatch.state());
-  handle("desktop:enqueue-message", (_event, value: EnqueueMessageInDto) => {
-    if (!value?.request || typeof value.request.message !== "string") throw new Error("Invalid queued message request.");
-    dispatch.enqueue(value.request, value.displayText, value.automatic === true);
-    return publishDispatchState();
-  });
-  handle("desktop:supplement-queued-message", async (_event, itemId: string) => {
-    const item = dispatch.queueItem(itemId);
-    if (!item) throw new Error("排队消息已被处理或不存在。");
-    const active = dispatch.state().activeTask;
-    if (!active || active.status !== "running") throw new Error("当前没有正在执行、可以接收补充的任务。");
-    const attachmentPaths = await screenshots.resolveAttachmentPaths(item.request.attachmentIds || []);
-    await codex.steer(item.request.message, attachmentPaths);
-    dispatch.removeQueued(itemId, "supplemented");
-    audit.recordEvent("task.supplement_delivered", {
-      dispatchId: item.id,
-      attachmentCount: attachmentPaths.length,
-    }, activeAuditTasks.values().next().value);
-    return publishDispatchState();
-  });
-  handle("desktop:discard-queued-message", (_event, itemId: string) => {
-    dispatch.removeQueued(itemId, "discarded");
-    return publishDispatchState();
-  });
-  handle("desktop:recover-conversation-task", () => {
-    dispatch.recover();
-    return publishDispatchState();
-  });
-  handle("desktop:discard-conversation-recovery", () => {
-    dispatch.discardRecovery();
-    return publishDispatchState();
-  });
-  handle("desktop:cancel", async (event) => {
-    const taskId = activeAuditTasks.get(event.sender.id);
-    audit.recordEvent("task.cancel_requested", {}, taskId);
-    return codex.cancel();
-  });
-  handle("desktop:send-message", async (ipcEvent, request: SendMessageInDto) => {
-    if (!request || typeof request.message !== "string") throw new Error("Invalid message request.");
-    if (!LOCALES.includes(request.locale)) throw new Error("Invalid locale.");
-    if (!SANDBOX_MODES.includes(request.sandboxMode)) throw new Error("Invalid sandbox mode.");
-    if (dispatch.state().activeTask) {
-      const queued = dispatch.enqueue(request, request.message);
-      publishDispatchState();
-      return { text: "消息已进入等待队列。", itemCount: 0, disposition: "queued" as const, queueItemId: queued.id };
-    }
-    let effectiveRequest = request;
-    let dispatchId = request.queueItemId;
-    if (dispatchId) effectiveRequest = dispatch.takeQueued(dispatchId).request;
-    dispatchId = dispatch.begin(effectiveRequest, dispatchId);
-    publishDispatchState();
-    let taskId: string | undefined;
-    try {
-      const executionMode: ManagedExecutionModeValue = isManagedExecutionMode(effectiveRequest.executionMode)
-        ? effectiveRequest.executionMode
-        : "conversation-managed";
-      const attachmentPaths = await screenshots.resolveAttachmentPaths(effectiveRequest.attachmentIds || []);
-      const workspaceState = workspaces.read();
-      const previousTask = audit.info().latestTask;
-      const appRelativeRoot = path.relative(projectRoot, appRoot).replaceAll(path.sep, "/");
-      const restartRequired = executionMode === "test-managed" && Boolean(previousTask?.changedFiles.some((file) => {
-        const normalized = file.replaceAll("\\", "/").replace(/^\.\//, "");
-        return normalized.startsWith(`${appRelativeRoot}/src/`)
-          || normalized.startsWith(`${appRelativeRoot}/electron/`)
-          || normalized.startsWith(`${appRelativeRoot}/contracts/`)
-          || normalized === `${appRelativeRoot}/package.json`
-          || normalized === `${appRelativeRoot}/vite.config.mjs`;
-      }));
-      taskId = audit.startTask({
-        message: effectiveRequest.message,
-        locale: effectiveRequest.locale,
-        sandboxMode: effectiveRequest.sandboxMode,
-        workspaces: workspaceState,
-        attachmentCount: attachmentPaths.length,
-        managedMode: executionMode,
-      });
-      activeAuditTasks.set(ipcEvent.sender.id, taskId);
-      let firstTurn = true;
-      const emit = (streamEvent: Parameters<typeof audit.recordStreamEvent>[1]) => {
-        audit.recordStreamEvent(taskId!, streamEvent);
-        // 进度只回送给发起本轮任务的窗口，避免多窗口之间串流或泄露任务上下文。
-        if (!ipcEvent.sender.isDestroyed()) ipcEvent.sender.send("desktop:codex-stream-event", streamEvent);
-      };
-      const response = await managedExecutor.run({
-        mode: executionMode,
-        message: effectiveRequest.message,
-        restartRequired,
-        emit,
-        runTurn: async (message, onEvent, mode) => {
-          const currentAttachments = firstTurn ? attachmentPaths : [];
-          firstTurn = false;
-          const effectiveSandbox = mode === "conversation-managed" || mode === "requirement-managed" ? "read-only" : effectiveRequest.sandboxMode;
-          return codex.send(message, effectiveRequest.locale, effectiveSandbox, workspaceState, currentAttachments, onEvent, mode);
-        },
-      });
-      audit.finishTask(taskId, "completed", undefined, response.managedStatus, response.pendingActions);
-      dispatch.finish(dispatchId, "completed");
-      publishDispatchState();
-      if (response.restartRequired) {
-        audit.recordEvent("application.controlled_restart_scheduled", { reason: "test_managed_completed" }, taskId);
-        setTimeout(() => { app.relaunch(); prepareForApplicationExit(); app.exit(0); }, 1_200);
-      }
-      return { ...response, disposition: "completed" as const };
-    } catch (error) {
-      if (taskId) audit.finishTask(taskId, "failed", error instanceof Error ? error.message : "Codex task failed.");
-      dispatch.finish(dispatchId, "failed");
-      publishDispatchState();
-      throw error;
-    } finally {
-      activeAuditTasks.delete(ipcEvent.sender.id);
-    }
-  });
-
   ipcMain.on("window:control", (event, action: WindowActionValue) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return;
@@ -759,8 +643,4 @@ function rendererExceptionOperation(value: unknown): RendererExceptionInDto["ope
   return value === "window.error" || value === "window.unhandledrejection" || value === "react.error-boundary"
     ? value
     : "window.error";
-}
-
-function isManagedExecutionMode(value: unknown): value is ManagedExecutionModeValue {
-  return value === "conversation-managed" || value === "requirement-managed" || value === "task-managed" || value === "test-managed";
 }

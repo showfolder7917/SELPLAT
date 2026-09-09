@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LinghuAutomationStateOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
+import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 
 /** 倒计时读取后台下一次检查时间，不由页面启动后台工作。 */
 export function LinghuAutomationPanel({ state, locale, onState }: {
@@ -20,9 +21,10 @@ export function LinghuAutomationPanel({ state, locale, onState }: {
   return <div>
     <button type="button" className="selswitch" role="switch" aria-label={locale === "ja" ? "自動巡回" : "自动巡检"} aria-checked={state.enabled} disabled={busy}
       onClick={() => {
-        if (!window.desktop) { setError("请在桌面应用中操作"); return; }
+        const collaborationApi = getOptionalCollaborationDesktopApi();
+        if (!collaborationApi) { setError("请在桌面应用中操作"); return; }
         setBusy(true); setError("");
-        void window.desktop.setLinghuAutomationEnabled(!state.enabled).then(onState)
+        void collaborationApi.setLinghuAutomationEnabled(!state.enabled).then(onState)
           .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "无法修改自动巡检状态"))
           .finally(() => setBusy(false));
       }}><span>{locale === "ja" ? "自動巡回" : "自动巡检"}</span><i className="selswitch-track" aria-hidden="true"><i className="selswitch-thumb" /></i></button>

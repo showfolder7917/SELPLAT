@@ -7,6 +7,12 @@
  * 本文件只从纯 contracts 推导类型，不导入 Electron、React、Node 或具体实现。
  */
 import type { DesktopApi } from "../api/desktop.api.js";
+import { CODEX_DESKTOP_API_METHODS } from "../api/domains/codex.desktop-api.js";
+import { COLLABORATION_DESKTOP_API_METHODS } from "../api/domains/collaboration.desktop-api.js";
+import { CONVERSATION_DESKTOP_API_METHODS } from "../api/domains/conversation.desktop-api.js";
+import { RULES_DESKTOP_API_METHODS } from "../api/domains/rules.desktop-api.js";
+import { SCREENSHOT_DESKTOP_API_METHODS } from "../api/domains/screenshot.desktop-api.js";
+import { SYSTEM_DESKTOP_API_METHODS } from "../api/domains/system.desktop-api.js";
 
 type ApiMethod = (...arguments_: never[]) => unknown;
 
@@ -28,10 +34,10 @@ export type DesktopCapabilityRegistryValue = {
 
 /** 按职责聚合能力 ID，供组合根和静态门禁检查领域归属。 */
 export const DESKTOP_CAPABILITY_DOMAINS = {
-  rules: ["getRuleBundleStatus", "listEffectiveRules", "resolveEffectiveRule"],
-  system: ["getEnvironment", "getAiMemoryDatabaseStatus", "clearTestData", "getCorpusSemanticBackfillStatus", "startCorpusSemanticBackfill", "getSettings", "updateSettings", "getWorkspaces", "addWorkspace", "updateWorkspacePermission", "setPrimaryWorkspace", "removeWorkspace", "openExternalUrl", "getTempDirectoryInfo", "openTempDirectory", "clearTempFiles", "getAuditLogInfo", "openAuditLogDirectory", "reportRendererException", "windowControl"],
-  codex: ["getCodexStatus", "getCodexModels", "getActiveCodexSession", "loginWithChatGPT", "logoutCodex", "getCodexApprovals", "getApprovalGovernance", "resolveCodexApproval", "getTrustedCommandInfo", "clearTrustedCommands", "prepareAutomaticTesting", "getCodexUserInputs", "resolveCodexUserInput", "newChat", "onCodexStreamEvent", "cancel"],
-  screenshot: ["prepareScreenCapture", "openScreenRecordingSettings", "restartForScreenRecordingPermission", "captureScreen", "notifyScreenCaptureStage", "onScreenCaptureFrameRequested", "submitScreenCaptureFrameResult", "showScreenshotWindow", "onScreenCaptureReset", "enterScreenshotAnnotation", "returnScreenshotSelection", "endScreenshotEditing", "saveScreenshot", "readAttachmentPreviews", "onScreenshotCompleted"],
-  collaboration: ["getCollaborationState", "getCollaborationTimeline", "onCollaborationTimelineChanged", "setDesktopOperatingMode", "selectCollaborationMember", "submitCollaborationTask", "continueCollaborationTask", "cancelCollaborationTask", "onCollaborationState", "onCollaborationStream", "getLinghuAutomationState", "setLinghuAutomationEnabled", "newLinghuDisplayConversation", "onLinghuAutomationState", "getEvolutionState", "getEvolutionTopicDossier", "getPersonaConversation", "onPersonaConversationChanged", "sendPersonaConversationMessage", "newPersonaConversation", "createEvolutionTopic", "configureEvolutionAutomation", "controlEvolutionAutomation", "resumeEvolutionOneShot", "generateNangongTopicDraft", "convertNangongConversationToTopic", "createEvolutionProposal", "updateEvolutionTopic", "decideEvolutionProposal", "decideEvolutionResult", "reviseEvolutionProposal", "autoApproveEvolutionProposal", "dispatchEvolutionProposal", "onEvolutionState"],
-  conversation: ["getConversationDispatchState", "enqueueMessage", "supplementQueuedMessage", "discardQueuedMessage", "recoverConversationTask", "discardConversationRecovery", "onConversationDispatchState", "sendMessage"],
+  rules: RULES_DESKTOP_API_METHODS,
+  system: SYSTEM_DESKTOP_API_METHODS,
+  codex: CODEX_DESKTOP_API_METHODS,
+  screenshot: SCREENSHOT_DESKTOP_API_METHODS,
+  collaboration: COLLABORATION_DESKTOP_API_METHODS,
+  conversation: CONVERSATION_DESKTOP_API_METHODS,
 } as const satisfies Record<string, readonly (keyof DesktopCapabilityRegistryValue)[]>;

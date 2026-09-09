@@ -106,11 +106,13 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(aiMemoryDatabase\)/);
   assert.doesNotMatch(source("electron/system/bootstrap/application-runtime.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
   const apiMethods = [...source("contracts/system/desktop/api/desktop.api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
-  const registryBody = source("contracts/system/desktop/value/desktop-capability-registry.value.ts").split("export const DESKTOP_CAPABILITY_DOMAINS", 2)[1];
-  const registeredMethods = [...registryBody.matchAll(/"(\w+)"/g)].map((match) => match[1]);
+  const desktopApiDomains = ["system", "rules", "codex", "screenshot", "collaboration", "conversation"];
+  const registeredMethods = desktopApiDomains.flatMap((domain) => [
+    ...source(`contracts/system/desktop/api/domains/${domain}.desktop-api.ts`).matchAll(/^\s{2}"(\w+)",?$/gm),
+  ].map((match) => match[1]));
   assert.deepEqual(new Set(registeredMethods).size, registeredMethods.length, "capability IDs must not repeat across domains");
   assert.deepEqual([...registeredMethods].sort(), [...apiMethods].sort(), "every DesktopApi method must belong to one capability domain");
-  const bridgeMethods = ["system", "rule", "codex", "screenshot", "collaboration", "conversation"]
+  const bridgeMethods = desktopApiDomains
     .flatMap((domain) => [...source(`electron/system/preload/domains/${domain}-bridge.cts`).matchAll(/^\s{4}(\w+):/gm)].map((match) => match[1]));
   assert.deepEqual(new Set(bridgeMethods).size, bridgeMethods.length, "preload methods must not repeat across domain bridges");
   assert.deepEqual([...bridgeMethods].sort(), [...apiMethods].sort(), "preload must expose every registered DesktopApi method exactly once");
@@ -125,6 +127,7 @@ test("all Electron IPC domains and renderer failures use the unified event bound
     "electron/system/ipc/domains/register-workspace-ipc.ts",
     "electron/system/ipc/domains/register-rules-ipc.ts",
     "electron/system/ipc/domains/register-codex-ipc.ts",
+    "electron/system/ipc/domains/register-conversation-ipc.ts",
     "electron/system/ipc/domains/register-system-ipc.ts",
   ]) assert.match(source(domain), /registerEventCenterIpcHandler/);
   assert.match(helper, /ipcMain\.handle\(channel/);
@@ -133,8 +136,22 @@ test("all Electron IPC domains and renderer failures use the unified event bound
   assert.match(source("src/main.tsx"), /unhandledrejection/);
   assert.match(source("src/main.tsx"), /RendererErrorBoundary/);
   assert.match(source("electron/system/preload/domains/system-bridge.cts"), /reportRendererException/);
-  for (const bridge of ["system", "rule", "codex", "screenshot", "collaboration", "conversation"]) {
+  for (const bridge of ["system", "rules", "codex", "screenshot", "collaboration", "conversation"]) {
     assert.match(source("electron/system/preload/preload.cts"), new RegExp(`${bridge}Bridge\\(\\)`));
+  }
+});
+
+test("renderer business modules enter the desktop bridge through named domains", () => {
+  const directBridgeReaders = sourceFilesUnder("src")
+    .filter((file) => !file.startsWith(path.join("src", "foundation", "desktop-api")))
+    .filter((file) => file !== path.join("src", "electron.d.ts"))
+    .filter((file) => /window\.desktop/u.test(source(file)));
+  assert.deepEqual(directBridgeReaders, [], "Renderer modules must use a named desktop-api domain instead of window.desktop");
+
+  for (const domain of ["system", "rules", "codex", "screenshot", "collaboration", "conversation"]) {
+    assert.equal(existsSync(path.join(appRoot, `src/foundation/desktop-api/domains/${domain}.desktop-api.ts`)), true, domain);
+    assert.equal(existsSync(path.join(appRoot, `contracts/system/desktop/api/domains/${domain}.desktop-api.ts`)), true, domain);
+    assert.equal(existsSync(path.join(appRoot, `electron/system/preload/domains/${domain}-bridge.cts`)), true, domain);
   }
 });
 
@@ -238,7 +255,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRule, /rule_version = 2\.18\.0/);
+  assert.match(architectureRule, /rule_version = 2\.20\.0/);
   assert.match(architectureRule, /workflow_vertical_module_layout_contract/);
   assert.match(architectureRule, /workflow_aggregate_boundary_contract/);
   assert.match(architectureRule, /workflow_repair_replacement_contract/);
@@ -248,6 +265,21 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(architectureRule, /renderer_feature_control_ownership_contract/);
   assert.match(architectureRule, /test_owner_structure_contract/);
   assert.match(architectureRule, /test_owner_execution_contract/);
+  for (const applicationPart of [
+    "src/applications/developer/explorer/DeveloperExplorer.tsx",
+    "src/applications/developer/explorer/TaskExplorerFeature.tsx",
+    "src/applications/developer/workspace/DeveloperWorkspace.tsx",
+    "src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx",
+  ]) assert.equal(existsSync(path.join(appRoot, applicationPart)), true, applicationPart);
+  for (const retiredPath of [
+    "src/applications/developer/layout/DeveloperExplorer.tsx",
+    "src/applications/developer/layout/DeveloperWorkspace.tsx",
+    "src/applications/developer/DeveloperWorkspaceRouter.tsx",
+    "src/features/collaboration/components/CollaborationExplorerFeature.tsx",
+  ]) assert.equal(existsSync(path.join(appRoot, retiredPath)), false, retiredPath);
+  assert.match(source("src/applications/developer/explorer/TaskExplorerFeature.tsx"), /OperatingModeSwitch/);
+  assert.match(source("src/applications/developer/explorer/TaskExplorerFeature.tsx"), /CollaborationTaskNavigation/);
+  assert.doesNotMatch(source("src/features/collaboration/index.ts"), /CollaborationExplorerFeature/);
   assert.equal(existsSync(path.join(appRoot, "src/variants")), false, "退役且已经为空的 variants 目录应完全删除");
   for (const application of ["developer/DeveloperApplication.tsx", "screenshot/ScreenshotApplication.tsx"]) {
     assert.equal(existsSync(path.join(appRoot, "src/applications", application)), true, `缺少 Renderer Application：${application}`);
@@ -390,6 +422,7 @@ test("main-process orchestration delegates IPC and pure collaboration parsing", 
   assert.match(ipcSource, /registerSettingsIpc\(/);
   assert.match(ipcSource, /registerWorkspaceIpc\(/);
   assert.match(ipcSource, /registerCollaborationIpc\(/);
+  assert.match(ipcSource, /registerConversationIpc\(/);
   assert.match(ipcSource, /registerRulesIpc\(/);
   assert.match(source("electron/services/support/platform/codex/codex.facade.ts"), /internal\/codex-stream-event\.mapper/);
   assert.doesNotMatch(source("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts"), /review-decision-parser|CodexReviewerSession/);

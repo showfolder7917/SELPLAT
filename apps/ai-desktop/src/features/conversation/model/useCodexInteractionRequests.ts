@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { CodexAccountOutDto, CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexUserInputRequestOutDto } from "../../../../contracts/system/desktop/index";
+import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 
 const EMPTY_ACCOUNT: CodexAccountOutDto = { authenticated: false, authMode: null, email: null, planType: null, requiresOpenaiAuth: true };
 const EMPTY_STATUS: CodexHarnessStatusOutDto = { connected: false, account: EMPTY_ACCOUNT, error: null, runtime: null };
@@ -24,9 +25,9 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
   const [loginHint, setLoginHint] = useState("");
 
   useEffect(() => {
-    const refreshStatus = () => window.desktop?.getCodexStatus().then(setStatus);
-    const refreshApprovals = () => window.desktop?.getCodexApprovals().then((items) => setApproval(items[0] || null));
-    const refreshUserInputs = () => window.desktop?.getCodexUserInputs().then((items) => setUserInputRequest(items[0] || null));
+    const refreshStatus = () => getOptionalCodexDesktopApi()?.getCodexStatus().then(setStatus);
+    const refreshApprovals = () => getOptionalCodexDesktopApi()?.getCodexApprovals().then((items) => setApproval(items[0] || null));
+    const refreshUserInputs = () => getOptionalCodexDesktopApi()?.getCodexUserInputs().then((items) => setUserInputRequest(items[0] || null));
     void refreshStatus();
     void refreshApprovals();
     void refreshUserInputs();
@@ -53,7 +54,7 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
   const login = async () => {
     setLoginHint("");
     try {
-      await window.desktop?.loginWithChatGPT();
+      await getOptionalCodexDesktopApi()?.loginWithChatGPT();
       setLoginHint(browserOpenedMessage);
     } catch (error) {
       setLoginHint(error instanceof Error ? error.message : "ChatGPT login unavailable");
@@ -61,14 +62,14 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
   };
 
   const logout = async () => {
-    const next = await window.desktop?.logoutCodex();
+    const next = await getOptionalCodexDesktopApi()?.logoutCodex();
     if (next) setStatus(next);
     onLogout();
   };
 
   const resolveApproval = async (decision: "accept" | "decline") => {
     if (!approval) return;
-    const result = await window.desktop?.resolveCodexApproval(approval.requestId, decision);
+    const result = await getOptionalCodexDesktopApi()?.resolveCodexApproval(approval.requestId, decision);
     if (result?.status === "resolved" && decision === "accept" && approval.kind === "command" && approval.trustEligible) onTrustedCommandChanged();
     setApproval(null);
   };
@@ -83,7 +84,7 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
     if (Object.values(answers).some((values) => !values[0])) return;
     setUserInputSubmitting(true);
     try {
-      await window.desktop?.resolveCodexUserInput({ requestId: userInputRequest.requestId, answers });
+      await getOptionalCodexDesktopApi()?.resolveCodexUserInput({ requestId: userInputRequest.requestId, answers });
       setUserInputRequest(null);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Unable to submit clarification answers.");

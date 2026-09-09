@@ -9,6 +9,7 @@ export function codexBridge() {
     loginWithChatGPT: () => invoke("desktop:login-with-chatgpt"),
     logoutCodex: () => invoke("desktop:logout-codex"),
     getCodexApprovals: () => invoke("desktop:get-codex-approvals"),
+    getApprovalGovernance: () => invoke("desktop:get-approval-governance"),
     resolveCodexApproval: (requestId: number, decision: "accept" | "decline") => invoke("desktop:resolve-codex-approval", requestId, decision),
     getTrustedCommandInfo: () => invoke("desktop:get-trusted-command-info"),
     clearTrustedCommands: () => invoke("desktop:clear-trusted-commands"),

@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.18.0 将中文业务名称优先扩展为新手模块整目录检查，覆盖导入、参数、状态、分支、返回字段和专属子组件。 -->
-rule_version = 2.18.0
+<!-- 2.20.0 让 Developer 装配目录直接呈现左侧 Explorer 与右侧 Workspace，并把跨模式任务导航从 collaboration 业务页面中分离。 -->
+rule_version = 2.20.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -45,6 +45,10 @@ typescript_public_export_comment_contract = one_comment_per_exported_symbol + bu
 
 <!-- Electron 主进程、preload 和 Renderer 必须保持单向依赖边界，Renderer 只能通过 DesktopApi 使用后端能力。 -->
 runtime_boundary_contract = renderer_to_typed_DesktopApi_to_preload_whitelist_to_registered_IPC_to_application_service_to_infrastructure
+<!-- 新手必须能从 Renderer 业务沿同一领域名依次找到 Contract 方法清单、preload bridge、领域 IPC 或显式宿主组合入口和公开 Service Facade；业务模块不得绕过领域入口直接读取 window.desktop。 -->
+cross_runtime_call_chain_traceability_contract = renderer_feature_to_named_desktop_api_domain_to_same_named_contract_method_manifest_to_same_named_preload_bridge_to_named_domain_IPC_or_explicit_host_composition_entry_to_public_service_index_and_facade + prohibit_renderer_business_direct_window_desktop_access
+<!-- DesktopApi 的能力归属必须由 system、rules、codex、screenshot、collaboration、conversation 六个领域方法清单组合并接受静态唯一性检查，禁止在总注册表复制第二份手写方法集合。 -->
+desktop_api_domain_manifest_contract = system_rules_codex_screenshot_collaboration_conversation_named_method_manifests + one_method_one_domain + registry_composes_manifests + preload_exact_coverage
 <!-- preload 只桥接登记能力，IPC handler 只校验和编排，业务服务不反向依赖 Renderer。 -->
 runtime_decoupling_contract = preload_no_business_logic + handler_validation_and_orchestration_only + service_no_renderer_dependency + infrastructure_no_UI_callback
 <!-- Electron 沙箱 preload 可以按领域维护源码，但生产构建必须打包为只保留 electron 外部依赖的单一物理文件；真实沙箱测试必须覆盖全部领域代表能力。 -->
@@ -89,10 +93,10 @@ renderer_beginner_structure_exception_contract = pure_View_with_existing_shared_
 renderer_application_structure_contract = applications/developer + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner + no_evolution_workspace_application
 <!-- 代码分割后的每个 Application 必须显式加载自身控件注册和样式副作用，禁止依赖其他窗口或懒加载分支先执行。 -->
 renderer_application_runtime_dependency_contract = each_lazy_application_imports_own_control_registration_and_styles + no_cross_application_side_effect_dependency + interaction_test_each_production_application
-<!-- Developer 窗口按 Shell、ActivityBar、Explorer、Workspace、StatusBar 布局区域拆分；布局组件不得直接持有 DesktopApi 业务流程。 -->
-renderer_layout_structure_contract = applications/developer/layout/DeveloperShell_DeveloperActivityBar_DeveloperExplorer_DeveloperWorkspace_DeveloperStatusBar + layout_slots_only + no_DesktopApi_business_flow_in_layout
-<!-- 人物、协作与会话控件必须进入对应 feature；格式化和实时输出类型进入 model，Application 不得重新定义这些控件或保留兼容副本。 -->
-renderer_feature_control_ownership_contract = collaboration_components_and_model + conversation_components_and_model + features/nangong + one_owner_per_control + no_duplicate_component_definition_or_compatibility_copy
+<!-- Developer 窗口的磁盘结构必须直接呈现左侧 explorer、右侧 workspace 和外围 layout；纯布局不得直接持有 DesktopApi 业务流程。 -->
+renderer_layout_structure_contract = applications/developer/layout/DeveloperShell_DeveloperActivityBar_DeveloperStatusBar + applications/developer/explorer/DeveloperExplorer_TaskExplorerFeature_and_owned_navigation + applications/developer/workspace/DeveloperWorkspace_DeveloperWorkspaceRouter + layout_slots_only + no_DesktopApi_business_flow_in_layout
+<!-- 跨单会话与协同模式的左侧任务导航归 Developer explorer 装配层；人物、协作右侧页面与会话控件继续进入对应 feature，禁止复制兼容组件。 -->
+renderer_feature_control_ownership_contract = developer_explorer_owns_cross_mode_task_navigation + collaboration_components_and_model_own_collaboration_workspace_and_state + conversation_components_and_model + features/nangong + one_owner_per_control + no_duplicate_component_definition_or_compatibility_copy
 <!-- 测试必须镜像生产所有者：Renderer 进入 applications/features，主进程进入 services，跨域门禁、真实交互和发布验证分别独立；根目录不得平铺业务测试。 -->
 test_owner_structure_contract = tests/applications + tests/features + tests/services_mirror_electron_owner + tests/contracts + tests/interaction + tests/release + tests/support_helpers_only + no_root_business_test + no_legacy_forwarder
 <!-- 完整测试入口必须递归发现所有所有者下的 test.mjs，命名脚本使用正式新路径；静态契约、服务、真实交互和发布不得互相代替。 -->

@@ -145,5 +145,29 @@ export type {
 } from "../../services/personas/hanli/index.js";
 
 export type { DesktopApi } from "./api/desktop.api.js";
+/** Codex 领域跨进程方法的权威清单。 */
+export { CODEX_DESKTOP_API_METHODS } from "./api/domains/codex.desktop-api.js";
+/** Codex Renderer 只能访问的类型化 API 视图。 */
+export type { CodexDesktopApi } from "./api/domains/codex.desktop-api.js";
+/** 协同领域跨进程方法的权威清单。 */
+export { COLLABORATION_DESKTOP_API_METHODS } from "./api/domains/collaboration.desktop-api.js";
+/** 协同 Renderer 只能访问的类型化 API 视图。 */
+export type { CollaborationDesktopApi } from "./api/domains/collaboration.desktop-api.js";
+/** 主会话领域跨进程方法的权威清单。 */
+export { CONVERSATION_DESKTOP_API_METHODS } from "./api/domains/conversation.desktop-api.js";
+/** 主会话 Renderer 只能访问的类型化 API 视图。 */
+export type { ConversationDesktopApi } from "./api/domains/conversation.desktop-api.js";
+/** 规则领域跨进程方法的权威清单。 */
+export { RULES_DESKTOP_API_METHODS } from "./api/domains/rules.desktop-api.js";
+/** 规则 Renderer 只能访问的类型化 API 视图。 */
+export type { RulesDesktopApi } from "./api/domains/rules.desktop-api.js";
+/** 截图领域跨进程方法的权威清单。 */
+export { SCREENSHOT_DESKTOP_API_METHODS } from "./api/domains/screenshot.desktop-api.js";
+/** 截图 Renderer 只能访问的类型化 API 视图。 */
+export type { ScreenshotDesktopApi } from "./api/domains/screenshot.desktop-api.js";
+/** 系统领域跨进程方法的权威清单。 */
+export { SYSTEM_DESKTOP_API_METHODS } from "./api/domains/system.desktop-api.js";
+/** 系统 Renderer 只能访问的类型化 API 视图。 */
+export type { SystemDesktopApi } from "./api/domains/system.desktop-api.js";
 export { DESKTOP_CAPABILITY_DOMAINS } from "./value/desktop-capability-registry.value.js";
 export type { DesktopCapabilityDefinitionValue, DesktopCapabilityRegistryValue } from "./value/desktop-capability-registry.value.js";

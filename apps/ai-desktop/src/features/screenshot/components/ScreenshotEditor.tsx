@@ -9,6 +9,8 @@ import {
 } from "@fluentui/react-icons";
 
 import type { LocaleValue, ScreenCaptureOutDto } from "../../../../contracts/system/desktop/index";
+import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
+import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { drawAnnotations, loadDataUrl, nextPaint, syncCanvasViewport } from "../canvas/annotation-renderer";
 import { canvasPointFromClient, clamp, findTopRectangleAtPoint, moveRectangle, normalizeRectangle, rectangleToViewport, resizeRectangle, sameRectangle, selectionConfirmPosition } from "../geometry/annotation-geometry";
@@ -173,7 +175,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     canvas.height = sourceHeight;
     canvas.getContext("2d")?.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
     const nextCroppedDataUrl = canvas.toDataURL("image/png");
-    await window.desktop?.enterScreenshotAnnotation({ width: sourceWidth, height: sourceHeight });
+    await getOptionalScreenshotDesktopApi()?.enterScreenshotAnnotation({ width: sourceWidth, height: sourceHeight });
     setCroppedSize({ width: sourceWidth, height: sourceHeight });
     setCroppedDataUrl(nextCroppedDataUrl);
     setPhase("annotate");
@@ -193,7 +195,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     baseImageRef.current = null;
     // 先让冻结蒙版完成两帧绘制，再由主进程把普通标注窗恢复为全屏框选窗，避免闪现旧画布。
     await nextPaint();
-    await window.desktop?.returnScreenshotSelection();
+    await getOptionalScreenshotDesktopApi()?.returnScreenshotSelection();
   };
 
   const createAnnotationId = () => {
@@ -396,7 +398,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     {phase === "annotate" && <header className="screenshot-header" onPointerDown={() => setSelectedRectangleId(null)}>
       <div><strong>{text.annotate}</strong><span>{croppedSize.width} × {croppedSize.height}</span></div>
       <div className="screenshot-window-controls">
-        <button type="button" title="最大化/还原" onClick={() => window.desktop?.windowControl("maximize")}><Square20Regular /></button>
+        <button type="button" title="最大化/还原" onClick={() => getOptionalSystemDesktopApi()?.windowControl("maximize")}><Square20Regular /></button>
         <button type="button" title={text.cancel} onClick={onCancel}><Dismiss20Regular /></button>
       </div>
     </header>}

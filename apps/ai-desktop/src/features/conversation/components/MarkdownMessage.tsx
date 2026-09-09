@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 
 interface MarkdownMessageProps {
   text: string;
@@ -8,7 +9,7 @@ interface MarkdownMessageProps {
 /** 把 Harness 的 Markdown 回答安全渲染为可读正文，原始 HTML 永远不进入桌面页面。 */
 export function MarkdownMessage({ text }: MarkdownMessageProps) {
   const openLink = (href: string | undefined) => {
-    if (href) void window.desktop?.openExternalUrl(href);
+    if (href) void getOptionalSystemDesktopApi()?.openExternalUrl(href);
   };
 
   return <div className="markdown-message">

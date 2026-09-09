@@ -1,5 +1,6 @@
 import React, { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { getOptionalSystemDesktopApi, hasDesktopApi } from "./foundation/desktop-api";
 import { applySelUiTheme } from "./theme/selUiTheme";
 import { SelUiProvider } from "./theme/SelUiProvider";
 
@@ -7,7 +8,7 @@ applySelUiTheme();
 
 function reportRendererException(operation: "window.error" | "window.unhandledrejection" | "react.error-boundary", error: unknown, componentStack?: string): void {
   const normalized = error instanceof Error ? error : new Error(typeof error === "string" ? error : String(error));
-  window.desktop?.reportRendererException({ operation, message: normalized.message, stack: normalized.stack, componentStack, url: window.location.href });
+  getOptionalSystemDesktopApi()?.reportRendererException({ operation, message: normalized.message, stack: normalized.stack, componentStack, url: window.location.href });
 }
 
 window.addEventListener("error", (event) => reportRendererException("window.error", event.error || event.message));
@@ -33,7 +34,7 @@ const Application = lazy(() => screenshotInteractionMode
   : import("./applications/developer/DeveloperApplication").then(({ DeveloperApplication }) => ({ default: DeveloperApplication })));
 
 const root = createRoot(document.getElementById("root")!);
-if (desktopBridgeRequired && !window.desktop) {
+if (desktopBridgeRequired && !hasDesktopApi()) {
   // preload 失效时停止展示无法工作的假界面，直接说明所有桌面操作不可用并提供安全的页面重载入口。
   root.render(<main role="alert" style={{ minHeight: "100vh", display: "grid", placeItems: "center", alignContent: "center", gap: 14, color: "#dbe5f6", background: "#080b12", fontFamily: "system-ui, sans-serif" }}><strong>AI Desktop 桌面桥接加载失败，当前按钮无法执行。</strong><span>请重新加载；若仍然失败，请重新构建并启动 AI Desktop。</span><button type="button" onClick={() => window.location.reload()}>重新加载页面</button></main>);
 } else {

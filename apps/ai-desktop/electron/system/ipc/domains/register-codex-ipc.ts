@@ -60,6 +60,12 @@ export function registerCodexIpc(dependencies: CodexIpcDependencies): void {
     }
     return approvals;
   });
+  handle("desktop:get-approval-governance", () => workflowRepository?.listApprovalGovernance() || []);
+  handle("desktop:cancel", async (event) => {
+    const taskId = activeAuditTasks.get(event.sender.id);
+    eventCenter.recordEvent("task.cancel_requested", {}, taskId);
+    return codex.cancel();
+  });
   handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline") => {
     if (!Number.isSafeInteger(requestId) || (decision !== "accept" && decision !== "decline")) throw new Error("Invalid Codex approval response.");
     // 固定项目命令可随“允许”建立信任；文件修改和高风险命令仍由服务层拒绝持久信任。

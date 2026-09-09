@@ -16,13 +16,13 @@ test("旧任务详情页面和入口整链删除，不保留跳转兼容", () =>
   for (const file of ["CollaborationTaskDetail.tsx", "CollaborationTaskProgressView.tsx"]) {
     assert.equal(existsSync(new URL("../../../src/features/collaboration/components/" + file, import.meta.url)), false);
   }
-  for (const file of ["src/applications/developer/DeveloperWorkspaceRouter.tsx", "src/features/collaboration/components/TaskCollaborationGroup.tsx", "src/features/collaboration/model/useCollaborationWorkspace.ts"]) {
+  for (const file of ["src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx", "src/features/collaboration/components/TaskCollaborationGroup.tsx", "src/features/collaboration/model/useCollaborationWorkspace.ts"]) {
     assert.doesNotMatch(source(file), /onOpenTask|selectedTaskId|setSelectedTaskId|打开任务完整记录/);
   }
 });
 test("令狐页面只保留自动开关，后台恢复职责仍存在", () => {
   const panel = source("src/features/linghu/components/LinghuAutomationPanel.tsx");
-  const router = source("src/applications/developer/DeveloperWorkspaceRouter.tsx");
+  const router = source("src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx");
   assert.match(panel, /role="switch"/);
   assert.match(panel, /setLinghuAutomationEnabled/);
   assert.doesNotMatch(panel, /newLinghuDisplayConversation/);

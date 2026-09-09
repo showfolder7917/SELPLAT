@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { WorkspacePermissionValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
+import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 
 interface UseWorkspaceRegistryOptions {
   confirmRemove(name: string): Promise<boolean>;
@@ -13,7 +14,7 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
   const [workspaceError, setWorkspaceError] = useState("");
 
   useEffect(() => {
-    const desktop = window.desktop;
+    const desktop = getOptionalSystemDesktopApi();
     if (!desktop) return;
     void desktop.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
     void desktop.getWorkspaces().then((state) => {
@@ -31,7 +32,7 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
   const addWorkspace = async () => {
     setWorkspaceError("");
     try {
-      const state = await window.desktop?.addWorkspace();
+      const state = await getOptionalSystemDesktopApi()?.addWorkspace();
       if (!state) return;
       applyWorkspaceState(state);
     } catch (error) {
@@ -42,7 +43,7 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
   const updateWorkspacePermission = async (id: string, permission: WorkspacePermissionValue) => {
     setWorkspaceError("");
     try {
-      const state = await window.desktop?.updateWorkspacePermission(id, permission);
+      const state = await getOptionalSystemDesktopApi()?.updateWorkspacePermission(id, permission);
       if (state) applyWorkspaceState(state);
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "Unable to update workspace permission");
@@ -52,7 +53,7 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
   const setPrimaryWorkspace = async (id: string) => {
     setWorkspaceError("");
     try {
-      const state = await window.desktop?.setPrimaryWorkspace(id);
+      const state = await getOptionalSystemDesktopApi()?.setPrimaryWorkspace(id);
       if (state) applyWorkspaceState(state);
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "Unable to set primary workspace");
@@ -62,7 +63,7 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
   const removeWorkspace = async (id: string, name: string) => {
     if (!await confirmRemove(name)) return;
     try {
-      const state = await window.desktop?.removeWorkspace(id);
+      const state = await getOptionalSystemDesktopApi()?.removeWorkspace(id);
       if (state) applyWorkspaceState(state);
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "Unable to remove workspace");

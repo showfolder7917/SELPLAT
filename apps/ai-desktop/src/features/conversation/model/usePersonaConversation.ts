@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
 import type { PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../contracts/system/desktop/index";
+import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
+import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
 import type { ComposerAttachment } from "./chat-message";
 import { projectPersonaConversation } from "./realtime-conversation";
 
@@ -57,7 +59,7 @@ export function usePersonaConversation(personaId: string) {
     let receivedOwnUpdate = false;
     let receivedInternalUpdate = false;
     setConversation(emptyConversation(personaId));
-    const desktop = window.desktop;
+    const desktop = getOptionalCollaborationDesktopApi();
     void desktop?.getPersonaConversation(personaId)
       .then((value) => { if (active && !receivedOwnUpdate && value) setConversation(value); })
       .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取人物会话。")); });
@@ -89,7 +91,7 @@ export function usePersonaConversation(personaId: string) {
       if (index % 5 === 0) groups.push([]);
       groups.at(-1)!.push(id);
       return groups;
-    }, []).map((ids) => window.desktop?.readAttachmentPreviews(ids))).then((groups) => {
+    }, []).map((ids) => getOptionalScreenshotDesktopApi()?.readAttachmentPreviews(ids))).then((groups) => {
       if (!active) return;
       const previews = groups.flatMap((group) => group || []);
       const readable = new Map(previews.filter((item) => item.status === "ready").map((item) => [item.id, item]));
@@ -114,7 +116,7 @@ export function usePersonaConversation(personaId: string) {
     setNewConversationFeedback("");
     setError("");
     try {
-      const value = await window.desktop?.newPersonaConversation(personaId);
+      const value = await getOptionalCollaborationDesktopApi()?.newPersonaConversation(personaId);
       if (!value) throw new Error("新建人物会话服务没有返回结果。");
       setConversation(value);
       setAttachments([]);

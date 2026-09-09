@@ -1,6 +1,7 @@
 import { type ClipboardEvent, type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 
 import type { LocaleValue } from "../../../../contracts/system/desktop/index";
+import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
 import type { ComposerAttachment } from "../../conversation";
 import { appendComposerAttachment, imageFileToPngDataUrl } from "./prepareComposerImage";
 
@@ -52,7 +53,7 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
     ? "現在のプロセスでは変更後の権限をまだ認識できません。権限が有効なら AI Desktop を再起動してください。"
     : "当前进程仍未识别更改后的权限；若系统开关已经开启，请重启 AI Desktop 使权限生效。";
 
-  useEffect(() => window.desktop?.onScreenshotCompleted(({ attachment, dataUrl, hasAnnotations }) => {
+  useEffect(() => getOptionalScreenshotDesktopApi()?.onScreenshotCompleted(({ attachment, dataUrl, hasAnnotations }) => {
     const currentOptions = optionsRef.current;
     currentOptions.setAttachments(destinationRef.current, (current) => appendComposerAttachment(current, { ...attachment, dataUrl }));
     if (hasAnnotations && destinationRef.current === "main") currentOptions.setMainInput((current) => {
@@ -79,11 +80,12 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
     setScreenRecordingRestartRequired(false);
     options.closeSettings();
     try {
-      if (window.desktop) {
+      const screenshotApi = getOptionalScreenshotDesktopApi();
+      if (screenshotApi) {
         await nextRenderedFrame();
         if (!screenCapturePreparedRef.current) {
           const startedAt = performance.now();
-          const preparation = await window.desktop.prepareScreenCapture();
+          const preparation = await screenshotApi.prepareScreenCapture();
           if (preparation.status === "blocked") {
             setScreenshotError(preparation.reason === "permission-required" ? screenPermissionRecoveryMessage : options.screenSourceUnavailable);
             setScreenRecordingSettingsAvailable(preparation.canOpenSettings);
@@ -94,7 +96,7 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
           screenCapturePreparedRef.current = true;
         }
       }
-      await window.desktop?.captureScreen({ hideOwnerWindow });
+      await getOptionalScreenshotDesktopApi()?.captureScreen({ hideOwnerWindow });
     } catch (error) {
       setScreenshotError(readableDesktopError(error, "Unable to capture screen"));
     } finally {
@@ -106,7 +108,7 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
   const openScreenRecordingSettings = async () => {
     screenRecordingSettingsOpenedRef.current = true;
     try {
-      await window.desktop?.openScreenRecordingSettings();
+      await getOptionalScreenshotDesktopApi()?.openScreenRecordingSettings();
     } catch (error) {
       screenRecordingSettingsOpenedRef.current = false;
       setScreenshotError(readableDesktopError(error, options.screenSourceUnavailable));
@@ -116,7 +118,7 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
 
   useEffect(() => {
     if (!screenRecordingSettingsAvailable) return;
-    const desktop = window.desktop;
+    const desktop = getOptionalScreenshotDesktopApi();
     if (!desktop) return;
     const recheck = () => {
       if (!screenRecordingSettingsOpenedRef.current || screenRecordingRecheckBusyRef.current || document.visibilityState !== "visible") return;
@@ -149,7 +151,7 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
     setScreenRecordingRestarting(true);
     setScreenshotError(options.locale === "ja" ? "AI Desktop を再起動しています…" : "正在重启 AI Desktop 以应用屏幕录制权限…");
     try {
-      await window.desktop?.restartForScreenRecordingPermission();
+      await getOptionalScreenshotDesktopApi()?.restartForScreenRecordingPermission();
     } catch (error) {
       setScreenRecordingRestarting(false);
       setScreenshotError(readableDesktopError(error, options.screenSourceUnavailable));
@@ -168,7 +170,7 @@ export function useScreenshotCapture(options: ScreenshotCaptureOptions) {
       const dataUrls = await Promise.all(files.map(imageFileToPngDataUrl));
       const savedAttachments: ComposerAttachment[] = [];
       for (const dataUrl of dataUrls) {
-        const saved = await window.desktop?.saveScreenshot({ originalDataUrl: dataUrl, annotatedDataUrl: dataUrl, hasAnnotations: false });
+        const saved = await getOptionalScreenshotDesktopApi()?.saveScreenshot({ originalDataUrl: dataUrl, annotatedDataUrl: dataUrl, hasAnnotations: false });
         if (!saved) throw new Error("AI Desktop clipboard image service is unavailable.");
         savedAttachments.push({ ...saved, dataUrl });
       }

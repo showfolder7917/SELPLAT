@@ -5,6 +5,8 @@ import type {
   ScreenCaptureOutDto,
   ScreenCaptureFrameInDto,
 } from "../../../contracts/system/desktop/index";
+import { getOptionalScreenshotDesktopApi } from "../../foundation/desktop-api";
+import { getOptionalSystemDesktopApi } from "../../foundation/desktop-api";
 import { ScreenshotEditor } from "../../features/screenshot";
 import "../styles/desktop-applications.css";
 
@@ -17,7 +19,7 @@ export function ScreenshotApplication() {
 
   useEffect(() => {
     const reportStage = (stage: string, detail?: string) => {
-      void window.desktop?.notifyScreenCaptureStage(stage, detail).catch(() => {});
+      void getOptionalScreenshotDesktopApi()?.notifyScreenCaptureStage(stage, detail).catch(() => {});
     };
 
     const receiveNativeFrame = async (request: ScreenCaptureFrameInDto) => {
@@ -30,7 +32,7 @@ export function ScreenshotApplication() {
         setCapture(nextCapture);
         setCaptureVersion((current) => current + 1);
         reportStage("renderer-native-frame-received", `${nextCapture.width}x${nextCapture.height}`);
-        await window.desktop?.submitScreenCaptureFrameResult({
+        await getOptionalScreenshotDesktopApi()?.submitScreenCaptureFrameResult({
           requestId: request.requestId,
           width: nextCapture.width,
           height: nextCapture.height,
@@ -38,12 +40,12 @@ export function ScreenshotApplication() {
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "无法读取屏幕画面";
         setError(message);
-        await window.desktop?.submitScreenCaptureFrameResult({ requestId: request.requestId, width: 0, height: 0, error: message });
+        await getOptionalScreenshotDesktopApi()?.submitScreenCaptureFrameResult({ requestId: request.requestId, width: 0, height: 0, error: message });
       }
     };
 
-    const removeFrameListener = window.desktop?.onScreenCaptureFrameRequested((request) => void receiveNativeFrame(request));
-    void window.desktop?.getSettings()
+    const removeFrameListener = getOptionalScreenshotDesktopApi()?.onScreenCaptureFrameRequested((request) => void receiveNativeFrame(request));
+    void getOptionalSystemDesktopApi()?.getSettings()
       .then((settings) => {
         if (settings) setLocale(settings.locale);
       })
@@ -51,7 +53,7 @@ export function ScreenshotApplication() {
     return () => removeFrameListener?.();
   }, []);
 
-  useEffect(() => window.desktop?.onScreenCaptureReset(() => {
+  useEffect(() => getOptionalScreenshotDesktopApi()?.onScreenCaptureReset(() => {
     setCapture(null);
     setError("");
   }), []);
@@ -59,7 +61,7 @@ export function ScreenshotApplication() {
   useEffect(() => {
     let paintedFrame = 0;
     const firstFrame = window.requestAnimationFrame(() => {
-      paintedFrame = window.requestAnimationFrame(() => void window.desktop?.showScreenshotWindow());
+      paintedFrame = window.requestAnimationFrame(() => void getOptionalScreenshotDesktopApi()?.showScreenshotWindow());
     });
     return () => {
       window.cancelAnimationFrame(firstFrame);
@@ -68,13 +70,13 @@ export function ScreenshotApplication() {
   }, [capture]);
 
   const cancel = async () => {
-    await window.desktop?.endScreenshotEditing();
+    await getOptionalScreenshotDesktopApi()?.endScreenshotEditing();
   };
 
   const complete = async (originalDataUrl: string, annotatedDataUrl: string, hasAnnotations: boolean) => {
-    const saved = await window.desktop?.saveScreenshot({ originalDataUrl, annotatedDataUrl, hasAnnotations });
+    const saved = await getOptionalScreenshotDesktopApi()?.saveScreenshot({ originalDataUrl, annotatedDataUrl, hasAnnotations });
     if (!saved) throw new Error("AI Desktop screenshot service is unavailable.");
-    await window.desktop?.endScreenshotEditing();
+    await getOptionalScreenshotDesktopApi()?.endScreenshotEditing();
   };
 
   if (error) return <main className="screenshot-window-error"><p>{error}</p><button type="button" onClick={() => void cancel()}>关闭</button></main>;

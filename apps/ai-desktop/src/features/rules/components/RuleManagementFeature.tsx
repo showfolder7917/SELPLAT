@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 import type { LocaleValue, RuleBundleStatusOutDto, RuntimeRuleOutDto } from "../../../../contracts/system/desktop/index";
-import { getDesktopApi } from "../../../foundation/desktop-api/desktop-api";
+import { getRulesDesktopApi } from "../../../foundation/desktop-api";
 
 export function RuleManagementFeature({ locale }: { locale: LocaleValue }) {
   const [status, setStatus] = useState<RuleBundleStatusOutDto | null>(null);
@@ -12,7 +12,7 @@ export function RuleManagementFeature({ locale }: { locale: LocaleValue }) {
   useEffect(() => {
     let active = true;
     try {
-      const desktop = getDesktopApi();
+      const desktop = getRulesDesktopApi();
       void Promise.all([
         desktop.getRuleBundleStatus(),
         desktop.listEffectiveRules(),

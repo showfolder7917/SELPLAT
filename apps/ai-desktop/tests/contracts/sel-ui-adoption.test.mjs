@@ -11,7 +11,7 @@ const entry = read("../../src/main.tsx");
 const developerStyles = read("../../src/applications/styles/desktop-applications.css");
 const developerApp = [
   read("../../src/applications/developer/DeveloperApplication.tsx"),
-  read("../../src/applications/developer/DeveloperWorkspaceRouter.tsx"),
+  read("../../src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx"),
   read("../../src/features/conversation/components/CodexConversationWorkspace.tsx"),
   read("../../src/features/conversation/model/useCodexConversation.ts"),
   read("../../src/features/conversation/model/useCodexWorkspace.ts"),

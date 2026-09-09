@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { CodexStreamEventOutDto, ManagedExecutionModeValue, SendMessageInDto } from "../../../../contracts/system/desktop/index";
+import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
+import { getOptionalConversationDesktopApi } from "../../../foundation/desktop-api";
 import { applyCodexStreamEvent, clearStoredChat, createAssistantMessage, readStoredChat, writeStoredChat, type ComposerAttachment, type Message } from "./chat-message";
 
 /** 主 Codex 会话的消息、thread 恢复、流式分卡和本地持久化。 */
@@ -26,7 +28,7 @@ export function useCodexConversation() {
   }, [messages]);
 
   useEffect(() => {
-    const desktop = window.desktop;
+    const desktop = getOptionalCodexDesktopApi();
     if (!desktop) {
       setChatHydrated(true);
       return;
@@ -54,7 +56,7 @@ export function useCodexConversation() {
   }, [activeThreadId, chatHydrated, executionMode, messages]);
 
   useEffect(() => {
-    const desktop = window.desktop;
+    const desktop = getOptionalCodexDesktopApi();
     if (!desktop) return;
     const queued: Array<{ messageId: number; event: CodexStreamEventOutDto }> = [];
     let animationFrame = 0;
@@ -119,9 +121,9 @@ export function useCodexConversation() {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const sendMessage = (request: SendMessageInDto) => window.desktop?.sendMessage(request);
-  const discardChat = () => window.desktop?.newChat();
-  const cancel = () => window.desktop?.cancel();
+  const sendMessage = (request: SendMessageInDto) => getOptionalConversationDesktopApi()?.sendMessage(request);
+  const discardChat = () => getOptionalCodexDesktopApi()?.newChat();
+  const cancel = () => getOptionalCodexDesktopApi()?.cancel();
 
   return {
     executionMode, setExecutionMode, messages, setMessages, activeThreadId, setActiveThreadId, input, setInput,

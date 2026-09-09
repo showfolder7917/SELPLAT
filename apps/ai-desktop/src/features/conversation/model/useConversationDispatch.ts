@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { ConversationDispatchStateOutDto, EnqueueMessageInDto, LocaleValue, SandboxModeValue } from "../../../../contracts/system/desktop/index";
+import { getOptionalConversationDesktopApi } from "../../../foundation/desktop-api";
 
 const EMPTY_STATE: ConversationDispatchStateOutDto = { activeTask: null, queue: [] };
 
@@ -15,25 +16,25 @@ export function useConversationDispatch(locale: LocaleValue, sandboxMode: Sandbo
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const desktop = window.desktop;
+    const desktop = getOptionalConversationDesktopApi();
     if (!desktop) return;
     void desktop.getConversationDispatchState().then(setState);
     return desktop.onConversationDispatchState(setState);
   }, []);
 
   const refresh = async () => {
-    const next = await window.desktop?.getConversationDispatchState();
+    const next = await getOptionalConversationDesktopApi()?.getConversationDispatchState();
     if (next) setState(next);
   };
 
   const enqueue = async (request: EnqueueMessageInDto) => {
-    const next = await window.desktop?.enqueueMessage(request);
+    const next = await getOptionalConversationDesktopApi()?.enqueueMessage(request);
     if (next) setState(next);
   };
 
   const discardAutomaticQueued = async () => {
     for (const item of state.queue.filter((candidate) => candidate.automatic)) {
-      const next = await window.desktop?.discardQueuedMessage(item.id);
+      const next = await getOptionalConversationDesktopApi()?.discardQueuedMessage(item.id);
       if (next) setState(next);
     }
   };
@@ -51,7 +52,7 @@ export function useConversationDispatch(locale: LocaleValue, sandboxMode: Sandbo
   const supplement = async (itemId: string) => {
     setError("");
     try {
-      const next = await window.desktop?.supplementQueuedMessage(itemId);
+      const next = await getOptionalConversationDesktopApi()?.supplementQueuedMessage(itemId);
       if (next) setState(next);
     } catch (reason) {
       setError(readableDesktopError(reason, "无法补充到当前任务。"));
@@ -59,14 +60,14 @@ export function useConversationDispatch(locale: LocaleValue, sandboxMode: Sandbo
   };
 
   const discard = async (itemId: string) => {
-    const next = await window.desktop?.discardQueuedMessage(itemId);
+    const next = await getOptionalConversationDesktopApi()?.discardQueuedMessage(itemId);
     if (next) setState(next);
   };
 
   const recover = async () => {
     setError("");
     try {
-      const next = await window.desktop?.recoverConversationTask();
+      const next = await getOptionalConversationDesktopApi()?.recoverConversationTask();
       if (next) setState(next);
     } catch (reason) {
       setError(readableDesktopError(reason, "无法继续未完成任务。"));
@@ -74,7 +75,7 @@ export function useConversationDispatch(locale: LocaleValue, sandboxMode: Sandbo
   };
 
   const discardRecovery = async () => {
-    const next = await window.desktop?.discardConversationRecovery();
+      const next = await getOptionalConversationDesktopApi()?.discardConversationRecovery();
     if (next) setState(next);
   };
 

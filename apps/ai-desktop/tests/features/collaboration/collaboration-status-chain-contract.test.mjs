@@ -15,7 +15,14 @@ const integrationSource = readFileSync(new URL("../../../electron/services/suppo
 const contractSource = readFileSync(new URL("../../../contracts/services/workflow/index.ts", import.meta.url), "utf8");
 const contractDefinitionSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
 const contractValueSource = readFileSync(new URL("../../../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
-const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+// 任务协作群已经按新手结构拆成主页面、页面状态、专题卡和纯显示转换；
+// 静态契约必须读取完整模块，不能把单个组合入口误当成全部实现。
+const taskGroupSource = [
+  "../../../src/features/collaboration/components/TaskCollaborationGroup.tsx",
+  "../../../src/features/collaboration/components/useTaskCollaborationGroup.ts",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
@@ -47,13 +54,13 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
 });
 
 test("最新等待恢复节点在对应行提供醒目的继续执行主操作", () => {
-  assert.match(taskGroupSource, /node\.eventType === "task\.interrupted" \|\| node\.eventType === "customer\.action_required"/);
-  assert.match(taskGroupSource, /hasNewerRecovery[\s\S]*return hasNewerRecovery \? null : node\.taskId/);
-  assert.match(taskGroupSource, /customerAction \? "从卡点继续"/);
+  assert.match(taskGroupSource, /isRecoveryEvent[\s\S]*"task\.interrupted"[\s\S]*"customer\.action_required"/);
+  assert.match(taskGroupSource, /hasNewerWaitingNode[\s\S]*return hasNewerWaitingNode \? null : node\.taskId/);
+  assert.match(taskGroupSource, /isCustomerAction[\s\S]*continueLabel = "从卡点继续"/);
   assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
-  assert.match(taskGroupSource, /nextSameTask[\s\S]*nextSameTask\.eventType !== "task\.interrupted"/);
-  assert.match(developerSource, /<TaskCollaborationGroup[\s\S]*onContinueTask=[\s\S]*continueTask\(taskId\)/);
+  assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);
+  assert.match(developerSource, /continueTimelineTask[\s\S]*continueTask\(taskId\)[\s\S]*<TaskCollaborationGroup[\s\S]*onContinueTask=\{continueTimelineTask\}/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
 });

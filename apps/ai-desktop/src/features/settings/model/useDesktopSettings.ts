@@ -9,6 +9,8 @@ import type {
   ReasoningEffortValue,
   SandboxModeValue,
 } from "../../../../contracts/system/desktop/index";
+import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
+import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -29,7 +31,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
   const [modelSettingsError, setModelSettingsError] = useState("");
 
   useEffect(() => {
-    const desktop = window.desktop;
+    const desktop = getOptionalSystemDesktopApi();
     if (!desktop) return;
     void desktop.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
     void desktop.getSettings().then(applySettings);
@@ -38,14 +40,14 @@ export function useDesktopSettings(settingsOpen: boolean) {
   useEffect(() => {
     if (corpusSemanticBackfill?.state !== "running") return;
     const timer = window.setInterval(() => {
-      void window.desktop?.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
+      void getOptionalSystemDesktopApi()?.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
     }, 2_000);
     return () => window.clearInterval(timer);
   }, [corpusSemanticBackfill?.state]);
 
   useEffect(() => {
     if (!settingsOpen) return;
-    const desktop = window.desktop;
+    const desktop = getOptionalCodexDesktopApi();
     if (!desktop) return;
     setModelCatalogLoading(true);
     setModelSettingsError("");
@@ -67,7 +69,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
   /** 所有模型选择都写入同一主进程设置，渲染层不建立会话级覆盖。 */
   const updateSettings = (patch: Partial<DesktopSettingsOutDto>) => {
     setModelSettingsError("");
-    void window.desktop?.updateSettings(patch)
+    void getOptionalSystemDesktopApi()?.updateSettings(patch)
       .then(applySettings)
       .catch((error) => setModelSettingsError(readableDesktopError(error, locale === "ja" ? "設定を保存できません。" : "无法保存全局设置。")));
   };
@@ -82,7 +84,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
   };
 
   const startCorpusSemanticBackfill = async () => {
-    const state = await window.desktop?.startCorpusSemanticBackfill();
+    const state = await getOptionalSystemDesktopApi()?.startCorpusSemanticBackfill();
     if (state) setCorpusSemanticBackfill(state);
   };
 

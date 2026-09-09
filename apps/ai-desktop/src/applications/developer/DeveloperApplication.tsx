@@ -15,8 +15,6 @@ import {
 import { PanelLeft24Regular } from "@fluentui/react-icons";
 
 import {
-  // 协作资源树：显示成员与任务入口。
-  CollaborationExplorerFeature,
   // 协作控制器：集中持有成员、任务和恢复操作。
   useCollaborationWorkspace,
 } from "../../features/collaboration";
@@ -45,12 +43,13 @@ import {
 } from "../../features/settings";
 import { useWorkspaceRegistry } from "../../features/workspace";
 import { useSelUi } from "../../theme/SelUiProvider";
-import { DeveloperWorkspaceRouter } from "./DeveloperWorkspaceRouter";
+import { DeveloperExplorer } from "./explorer/DeveloperExplorer";
+import { TaskExplorerFeature } from "./explorer/TaskExplorerFeature";
 import { DeveloperActivityBar } from "./layout/DeveloperActivityBar";
-import { DeveloperExplorer } from "./layout/DeveloperExplorer";
 import { DeveloperShell, DeveloperTitleBar } from "./layout/DeveloperShell";
 import { DeveloperStatusBar } from "./layout/DeveloperStatusBar";
-import { DeveloperWorkspace } from "./layout/DeveloperWorkspace";
+import { DeveloperWorkspace } from "./workspace/DeveloperWorkspace";
+import { DeveloperWorkspaceRouter } from "./workspace/DeveloperWorkspaceRouter";
 import "@selplat/sel-ui/core/kernel";
 import "@selplat/sel-ui/components/floating-panel";
 import "@selplat/sel-ui/components/floating-panel/styles";
@@ -289,7 +288,7 @@ export function DeveloperApplication() {
         )}
       />
       <DeveloperExplorer>
-        <CollaborationExplorerFeature
+        <TaskExplorerFeature
           evolution={evolution.state}
           expanded={tasksExpanded}
           locale={settings.locale}

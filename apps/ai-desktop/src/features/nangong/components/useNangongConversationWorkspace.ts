@@ -19,6 +19,8 @@ import {
 import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让消息区在新增内容后跟随到最新位置。
 import { usePersonaConversationTailFollow } from "../../conversation";
+// 协同桌面入口让人物页面沿同名 Contract、preload 和 IPC 找到南宫 Facade。
+import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 import type {
   // 南宫婉页面参数类型（NangongConversationWorkspaceProps）描述父页面交给控制逻辑的数据。
   NangongConversationWorkspaceProps,
@@ -176,7 +178,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     // 消息发送处理从这里开始，统一覆盖桌面调用、附件绑定和会话刷新。
     try {
       // 最新会话（next）是后端保存消息并生成回答后返回的权威结果。
-      const next = await window.desktop?.sendPersonaConversationMessage(
+      const next = await getOptionalCollaborationDesktopApi()?.sendPersonaConversationMessage(
         // 接收人物：明确本轮消息由南宫婉处理。
         "nangong-wan",
         // 本轮消息资料：后端保存消息、读取截图并建立工程上下文所需的完整输入。
@@ -241,7 +243,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
       return;
     }
     // 请求后端冻结客户确认过的课题内容。
-    await updateEvolutionState(() => window.desktop?.convertNangongConversationToTopic({ confirmedByUser: true, title, goal, scope, evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
+    await updateEvolutionState(() => getOptionalCollaborationDesktopApi()?.convertNangongConversationToTopic({ confirmedByUser: true, title, goal, scope, evidence, acceptanceCriteria, workspaceState: workspaces, locale }));
     // 保存流程结束后关闭草稿表单。
     setTopicDraftOpen(false);
     // 清除草稿生成反馈。
@@ -261,7 +263,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     // 草稿生成处理从这里开始，统一覆盖桌面请求和表单填充。
     try {
       // 可编辑课题草稿（draft）只是表单初值，不会直接建立课题。
-      const draft = await window.desktop?.generateNangongTopicDraft({ workspaceState: workspaces, locale });
+      const draft = await getOptionalCollaborationDesktopApi()?.generateNangongTopicDraft({ workspaceState: workspaces, locale });
       // 后端确实返回草稿时才更新表单。
       if (draft) {
         // 把列表字段转换成客户容易继续编辑的逗号分隔文字。

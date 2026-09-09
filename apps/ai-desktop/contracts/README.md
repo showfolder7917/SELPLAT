@@ -31,6 +31,7 @@ Electron main handler → application service → infrastructure
 ```
 
 - Renderer 只能通过 `DesktopApi` 使用主进程能力。
+- Renderer 应从 `src/foundation/desktop-api/domains` 选择领域入口；对应方法清单位于 `system/desktop/api/domains`，禁止业务模块直接取得全量 `DesktopApi`。
 - preload 只桥接已登记能力，不包含业务判断。
 - IPC handler 校验请求并调用应用服务，不直接操作复杂持久化或外部进程。
 - `system/desktop/index.ts` 是 Renderer 的组合出口；主进程新代码必须从所属模块唯一 `index.ts` 导入。

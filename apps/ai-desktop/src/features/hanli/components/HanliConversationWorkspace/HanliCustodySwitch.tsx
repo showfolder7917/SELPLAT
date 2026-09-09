@@ -13,6 +13,7 @@ import {
 
 // 共享演化状态方法（useEvolutionRuntime）用于读取并刷新自动托管设置。
 import { useEvolutionRuntime } from "../../../evolution";
+import { getOptionalCollaborationDesktopApi } from "../../../../foundation/desktop-api";
 
 /** 韩立自动托管开关需要由父页面提供的数据结构。 */
 interface HanliCustodySwitchProps {
@@ -55,7 +56,7 @@ export function HanliCustodySwitch(props: HanliCustodySwitchProps) {
     // 保存处理过程从这里开始，统一覆盖桌面调用、结果校验和共享状态刷新。
     try {
       // 最新演化状态（next）是后端保存成功后返回的权威结果。
-      const next = await window.desktop?.configureEvolutionAutomation({
+      const next = await getOptionalCollaborationDesktopApi()?.configureEvolutionAutomation({
         // 保留自动化设置中的其他字段，避免本开关误改无关配置。
         ...state.automationSettings,
         // 自动托管字段（automaticCustodyEnabled）取当前状态的相反值，实现开关切换。
