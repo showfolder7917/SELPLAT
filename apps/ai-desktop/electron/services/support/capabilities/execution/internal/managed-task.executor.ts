@@ -24,6 +24,8 @@ export interface ManagedExecutionRequest {
   runCodeValidation?: (authorizedFiles: readonly string[], emit: (event: CodexStreamEventOutDto) => void) => Promise<void>;
   /** 从任务工作区读取真实 Git 变更；人物上报只负责说明，不能决定修复边界。 */
   readChangedFiles?: () => Promise<string[]>;
+  /** 令狐可以依据真实技术故障，把同一签发工程内的新文件纳入修复范围。 */
+  allowProjectTechnicalRepair?: boolean;
   emit(event: CodexStreamEventOutDto): void;
 }
 
@@ -114,7 +116,7 @@ export class ManagedTaskExecutor {
     }
     emitManaged(request, "task-execution", "completed", Math.min(taskRound, TASK_ROUNDS), TASK_ROUNDS, "源码任务阶段完成");
 
-    // 首次实施已经结束；冻结真实 Git 文件边界，后续自修只能修改这个集合。
+    // 首次实施已经结束；普通执行人冻结文件边界，令狐可依据技术证据扩展同一工程内的修复范围。
     const repairScope = TaskRepairScopeAggregate.freeze(changedFiles);
 
     if (request.runCodeValidation) {
@@ -176,14 +178,18 @@ export class ManagedTaskExecutor {
     if (!runCodeValidation) throw new Error("AI Desktop 内部验证入口未配置。");
     let response = initialResponse;
     let lastFailure = "";
-    for (let round = 1; round <= VALIDATION_ROUNDS; round += 1) {
-      emitManaged(request, "code-validation", round === 1 ? "started" : "continuing", round, VALIDATION_ROUNDS,
+    let round = 0;
+    // 令狐没有固定修复轮数；只要每轮产生新的代码或文件范围证据，就继续修复和复测。
+    while (request.allowProjectTechnicalRepair || round < VALIDATION_ROUNDS) {
+      round += 1;
+      const displayedTotal = request.allowProjectTechnicalRepair ? round : VALIDATION_ROUNDS;
+      emitManaged(request, "code-validation", round === 1 ? "started" : "continuing", round, displayedTotal,
         round === 1 ? "AI Desktop 正在当前任务分支执行静态检查" : "源码修复后正在当前任务分支重新检查");
-      emitManaged(request, "interaction-validation", "started", round, VALIDATION_ROUNDS, "AI Desktop 正在当前任务分支执行隔离 Playwright");
+      emitManaged(request, "interaction-validation", "started", round, displayedTotal, "AI Desktop 正在当前任务分支执行隔离 Playwright");
       try {
         await runCodeValidation(repairScope.authorizedFiles(), request.emit);
-        emitManaged(request, "code-validation", "completed", round, VALIDATION_ROUNDS, "当前任务分支静态检查已通过");
-        emitManaged(request, "interaction-validation", "completed", round, VALIDATION_ROUNDS, "当前任务分支隔离 Playwright 已通过");
+        emitManaged(request, "code-validation", "completed", round, displayedTotal, "当前任务分支静态检查已通过");
+        emitManaged(request, "interaction-validation", "completed", round, displayedTotal, "当前任务分支隔离 Playwright 已通过");
         emitManaged(request, "completed", "completed", 1, 1, "代码级验证完成；需要时可以继续构建和运行测试");
         return {
           ...response,
@@ -197,9 +203,9 @@ export class ManagedTaskExecutor {
         };
       } catch (error) {
         lastFailure = error instanceof Error ? error.message : String(error);
-        emitManaged(request, "code-validation", "blocked", round, VALIDATION_ROUNDS, lastFailure);
+        emitManaged(request, "code-validation", "blocked", round, displayedTotal, lastFailure);
         // 范围冲突需要重新确认任务边界；重复调用模型无法改变授权事实。
-        if (error instanceof TaskRepairScopeViolationError) {
+        if (error instanceof TaskRepairScopeViolationError && !request.allowProjectTechnicalRepair) {
           // 第一次发现范围冲突就停止，避免把同一确定性结果重复五次。
           return {
             // 保留执行人的最后说明，页面仍能展示本轮上下文。
@@ -220,27 +226,47 @@ export class ManagedTaskExecutor {
             failureKind: "scope-confirmation",
           };
         }
-        if (round === VALIDATION_ROUNDS) break;
+        if (!request.allowProjectTechnicalRepair && round === VALIDATION_ROUNDS) break;
+        const changeRevisionBeforeRepair = evidence.changeRevision();
+        const authorizedCountBeforeRepair = repairScope.authorizedFiles().length;
         evidence.beginRound();
-        emitManaged(request, "task-execution", "started", round, VALIDATION_ROUNDS, `第 ${round} 轮自修：先核对失败证据并解释上一轮结果`, true);
+        emitManaged(request, "task-execution", "started", round, displayedTotal, `第 ${round} 轮自修：先核对失败证据并解释上一轮结果`, true);
         try {
           response = await request.runTurn(this.#managedPrompt("继续修复当前任务。", "execution.desktop-validation-repair", {
             failure: `第 ${round} 次测试失败。${round > 1 ? "这是复测失败，必须先解释上一轮为何无效。" : ""}\n${lastFailure}`,
             allowedFiles: repairScope.authorizedFiles().join("\n"),
+            repairAuthority: request.allowProjectTechnicalRepair
+              ? "你是令狐老祖。初始文件列表不是上限；只要失败证据指向当前签发 SELPLAT 工程内的源码、依赖、测试或流程实现，就必须读取调用链并把必要文件纳入同一修复。不得越出签发工作区，也不得代替客户作业务选择或绕过系统权限。"
+              : "只能修改首次实施已经冻结的文件；失败位于列表外时明确报告范围冲突。",
           }), (event) => {
             evidence.record(event);
             request.emit(event);
           }, "task-managed");
-          emitManaged(request, "task-execution", "completed", round, VALIDATION_ROUNDS, response.text || "本轮修改结束，等待复测；尚不代表修复通过", true);
+          // 令狐完成一轮后读取真实 Git 状态，把有证据的新技术文件纳入下一次复测和最终提交。
+          if (request.allowProjectTechnicalRepair) {
+            const observedFiles = request.readChangedFiles
+              ? await request.readChangedFiles()
+              : [...evidence.changedFiles];
+            repairScope.includeTechnicalFiles(observedFiles);
+          }
+          emitManaged(request, "task-execution", "completed", round, displayedTotal, response.text || "本轮修改结束，等待复测；尚不代表修复通过", true);
         } catch (repairError) {
-          emitManaged(request, "task-execution", "blocked", round, VALIDATION_ROUNDS, repairError instanceof Error ? repairError.message : String(repairError), true);
+          emitManaged(request, "task-execution", "blocked", round, displayedTotal, repairError instanceof Error ? repairError.message : String(repairError), true);
           throw repairError;
+        }
+        // 没有任何代码活动且真实文件范围也未变化时，继续调用模型只会重复同一轮；交回流程修复器调查自身原因。
+        if (request.allowProjectTechnicalRepair
+          && evidence.changeRevision() === changeRevisionBeforeRepair
+          && repairScope.authorizedFiles().length === authorizedCountBeforeRepair) {
+          lastFailure = `${lastFailure}；令狐本轮没有产生新的代码或文件范围证据，已停止同内容盲目重试并保留故障现场`;
+          break;
         }
         if (evidence.roundFailed) lastFailure = `${lastFailure}；修复阶段仍有失败命令：${evidence.failedCommandSummaries().join("；")}`;
       }
     }
-    emitManaged(request, "code-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, lastFailure || "当前任务分支验证失败");
-    emitManaged(request, "interaction-validation", "blocked", VALIDATION_ROUNDS, VALIDATION_ROUNDS, "Playwright 未通过，未进入集成队列");
+    const displayedTotal = request.allowProjectTechnicalRepair ? round : VALIDATION_ROUNDS;
+    emitManaged(request, "code-validation", "blocked", round, displayedTotal, lastFailure || "当前任务分支验证失败");
+    emitManaged(request, "interaction-validation", "blocked", round, displayedTotal, "Playwright 未通过，未进入集成队列");
     return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false, changedFiles: repairScope.authorizedFiles(), authorizedFiles: repairScope.authorizedFiles(), successfulCommands: evidence.successfulCommands() };
   }
 
@@ -295,6 +321,9 @@ class ExecutionEvidence {
   #successfulCommands = new Set<string>();
 
   get roundFailed(): boolean { return this.#roundFailures.length > 0; }
+
+  /** 返回真实文件修改事件的递增位置，用于判断令狐本轮是否取得了新修复进展。 */
+  changeRevision(): number { return this.#lastChange; }
 
   beginRound(): void { this.#roundFailures = []; }
 

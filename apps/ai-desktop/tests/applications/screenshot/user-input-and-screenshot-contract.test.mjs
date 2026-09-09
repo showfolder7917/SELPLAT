@@ -109,7 +109,8 @@ test("截图使用统一控制器选择 macOS 或 Windows 取帧适配器且失�
 });
 
 test("Codex 执行期间仍允许截图、粘贴和排队发送", () => {
-  assert.match(developerApp, /window\.desktop\?\.enqueueMessage/);
+  assert.match(developerApp, /getOptionalConversationDesktopApi\(\)\?\.enqueueMessage/);
+  assert.doesNotMatch(developerApp, /window\.desktop\?\.enqueueMessage/);
   assert.match(developerApp, /dispatchState\.activeTask/);
   assert.match(developerApp, /补充到当前任务/);
   assert.match(developerApp, /if \(screenshotBusy\) return/);

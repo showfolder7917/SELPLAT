@@ -1,7 +1,7 @@
 # AI Desktop Harness 工作区与运行时规则
 
-<!-- 5.111.0 要求人物长期 Codex 连接的授权与提问进入现有全局交互路由。 -->
-rule_version = 5.111.0
+<!-- 5.112.0 允许受控依赖升级任务使用工作树自身的锁哈希缓存，避免与主工程旧锁互相冒充。 -->
+rule_version = 5.112.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -61,8 +61,8 @@ unsupported_harness_server_request_policy = deny_or_cancel_without_permission_ex
 dependency_cache_mutation_boundary_contract = diagnostics_and_paths_resolve_read_prepared_cache_only + repair_migrate_and_symlink_write_in_explicit_prepare_stage_only + no_shared_cache_mutation_during_typecheck_or_fixed_diagnostics + permission_request_visible_waiting_state + no_false_running_while_human_authorization_pending
 <!-- node_modules 只能是本机临时链接且必须被 Git 忽略；任何准备、迁移或挂载动作都要先通过未跟踪门禁，防止跨平台绝对链接在 pull 时清理共享源码。 -->
 dependency_link_version_control_safety_contract = source_node_modules_never_tracked + exact_gitignore_entry_without_directory_only_trailing_slash_so_file_directory_and_symlink_are_all_ignored + prepare_migrate_attach_verify_untracked_before_mutation + reject_cross_platform_absolute_link_from_repository + shared_local_package_source_never_deleted_by_dependency_link_cleanup
-<!-- 所有开发人物、任务验证、集成验证和令狐统一测试必须复用同一受控依赖租约；缓存根由 Git 公共仓库反向验证，禁止信任环境传入任意路径。 -->
-managed_worktree_dependency_lease_contract = main_process_prepares_and_releases_link + all_developer_executor_task_test_integration_and_linghu_routes_share_one_contract + lease_environment_contains_identifier_only + source_root_derived_from_registered_git_common_directory + worktree_and_source_lock_hash_equal + exact_shared_cache_link_target + source_build_temp_and_evidence_remain_worktree_isolated + inner_command_read_only_consumes_lease + no_test_task_id_dependency_bypass + release_link_never_delete_shared_cache
+<!-- 所有开发人物、任务验证、集成验证和令狐统一测试必须复用同一受控依赖租约；同锁任务使用主工程共享缓存，改锁升级任务使用工作树自己的锁哈希缓存。 -->
+managed_worktree_dependency_lease_contract = main_process_prepares_and_releases_link + all_developer_executor_task_test_integration_and_linghu_routes_share_one_contract + source_root_derived_from_registered_git_common_directory + same_lock_uses_exact_shared_cache_and_identifier_only_environment + changed_lock_upgrade_uses_registered_worktree_owned_lock_hash_cache_without_shared_lease_identity + source_build_temp_and_evidence_remain_worktree_isolated + inner_command_read_only_consumes_prepared_cache + no_test_task_id_dependency_bypass + release_link_never_delete_reusable_cache
 
 <!-- 新会话、发送任务、中止任务、账号读取、登录和退出必须由同一长期运行 app-server 连接完成。 -->
 harness_required_lifecycle = initialize + account + thread + turn + interrupt + logout

@@ -12,7 +12,8 @@ test("韩立会话页面按数据结构、控制 Hook 和 View 分离职责", ()
   assert.match(types, /韩立会话页面的数据结构定义/);
   assert.match(types, /export interface HanliConversationWorkspaceProps/);
   assert.match(controller, /韩立会话页面的控制 Hook/);
-  assert.match(controller, /window\.desktop\?\.sendPersonaConversationMessage/);
+  assert.match(controller, /getOptionalCollaborationDesktopApi\(\)\?\.sendPersonaConversationMessage/);
+  assert.doesNotMatch(controller, /window\.desktop\?\./);
   assert.match(view, /韩立会话页面的 View/);
   assert.match(view, /useHanliConversationWorkspace\(props\)/);
   assert.doesNotMatch(view, /window\.desktop\?\.sendPersonaConversationMessage/);

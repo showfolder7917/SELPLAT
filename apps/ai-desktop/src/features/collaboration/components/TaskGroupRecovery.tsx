@@ -28,7 +28,11 @@ export function TaskGroupRecovery({ group, evolution }: TaskGroupRecoveryProps) 
   if (hasCustomerActionNode) return null;
 
   const evolutionState = evolution.state;
-  const oneShotRun = evolutionState?.oneShotRun;
+  // 演化状态尚未从后端载入时，当前没有可以安全恢复的专题。
+  if (!evolutionState) return null;
+
+  // 一次性运行来自已经确认存在的演化状态，后续读取不再携带空值歧义。
+  const oneShotRun = evolutionState.oneShotRun;
   if (!oneShotRun?.proposalId) return null;
 
   const belongsToCurrentGroup = oneShotRun.topicId === group.topicId

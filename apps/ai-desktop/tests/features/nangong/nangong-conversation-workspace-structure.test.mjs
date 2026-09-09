@@ -12,7 +12,8 @@ test("南宫婉页面按参数、控制逻辑、页面结构和专属子模块�
   assert.match(types, /南宫婉会话页面的数据结构定义/);
   assert.match(types, /export interface NangongConversationWorkspaceProps/);
   assert.match(controller, /南宫婉会话页面的控制逻辑/);
-  assert.match(controller, /window\.desktop\?\.sendPersonaConversationMessage/);
+  assert.match(controller, /getOptionalCollaborationDesktopApi\(\)\?\.sendPersonaConversationMessage/);
+  assert.doesNotMatch(controller, /window\.desktop\?\./);
   assert.match(view, /南宫婉会话页面的页面结构/);
   assert.match(view, /useNangongConversationWorkspace\(props\)/);
   assert.doesNotMatch(view, /window\.desktop\?\./);

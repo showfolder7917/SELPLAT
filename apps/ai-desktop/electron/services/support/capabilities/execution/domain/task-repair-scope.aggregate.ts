@@ -42,6 +42,15 @@ export class TaskRepairScopeAggregate {
     return [...this.#authorizedFiles].sort();
   }
 
+  /**
+   * 把令狐已经用技术证据确认的新文件纳入同一修复任务。
+   * 普通执行人不会调用这个入口，所以原任务的固定文件边界仍然保持不变。
+   */
+  includeTechnicalFiles(files: Iterable<string>): string[] {
+    for (const file of normalizeFiles([...files])) this.#authorizedFiles.add(file);
+    return this.authorizedFiles();
+  }
+
   /** 比较真实 Git 变更与冻结范围，形成可展示、可测试的结构化结论。 */
   check(observedFiles: Iterable<string>): TaskRepairScopeCheck {
     const normalizedObservedFiles = normalizeFiles([...observedFiles]);

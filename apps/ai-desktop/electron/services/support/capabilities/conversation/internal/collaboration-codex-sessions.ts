@@ -277,15 +277,17 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
       })
       : null;
     const workspaceRoot = task.versionWorkspace?.rootPath;
-    const dependencyLease = workspaceRoot
-      ? await acquireManagedDependencyLease(
-        workspaceRoot,
-        this.#options.projectRoot,
-        this.#options.applicationName,
-        `executor-${task.taskId}-${member.memberId}-g${member.generation}`,
-      )
-      : null;
+    // 依赖租约必须放在异常保护中；挂载失败时也要释放人物写入权，避免恢复任务排队等待自己。
+    let dependencyLease: ManagedDependencyLease | null = null;
     try {
+      dependencyLease = workspaceRoot
+        ? await acquireManagedDependencyLease(
+          workspaceRoot,
+          this.#options.projectRoot,
+          this.#options.applicationName,
+          `executor-${task.taskId}-${member.memberId}-g${member.generation}`,
+        )
+        : null;
       const connection = this.#createConnection(task, member, "executor", dependencyLease, releasePersonaWriter);
       return new CodexExecutorSession(
         connection,
@@ -319,7 +321,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
         migrateLegacySession: true,
         sessionStorage: "ai-desktop",
         validationOwner: "desktop",
-        dependencyLeaseId: dependencyLease?.leaseId,
+        dependencyLeaseId: dependencyLease?.environment.AI_DESKTOP_DEPENDENCY_LEASE_ID,
         preserveThreadAcrossWorkspaceChanges: Boolean(persistentSessions),
         readSettings: this.#options.readSettings,
         readRuleInstructions: this.#options.readRuleInstructionsForMember
@@ -397,6 +399,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
       runCodeValidation: (authorizedFiles, onEvent) => this.#runCodeValidation(task, authorizedFiles, onEvent),
       // 每次执行会话都绑定当前任务，不允许人物传入其他工作区路径。
       readChangedFiles: () => this.#readTaskChangedFiles(task),
+      // 令狐负责技术兜底，可以沿真实根因扩展当前签发工程内的文件范围；其他人物仍保持首次范围。
+      allowProjectTechnicalRepair: this.#connection.memberId === "linghu-ancestor",
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
     let status: ExecutorExecutionResultOutDto["status"] = "incomplete";

@@ -376,13 +376,13 @@ export class LinghuAutomationFacade {
       }
       return;
     }
-    if (attempts >= 3) {
-      // 同一指纹三次恢复后只继续检测新事实，阻止无限副作用循环。
+    if (attempts >= 1) {
+      // 同一故障事实只发起一次恢复；令狐单次会话内部可依据新证据持续修复，不靠重新派发增加能力。
       this.#store.updateRuntime("automation.flow_recovery_waiting", (state) => {
         state.currentFaultFingerprint = fingerprint;
         state.recoveryAttemptCount = attempts;
         state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = `${report}。同一停点已经安全恢复三次；我不会继续重复操作，检测仍保持运行，等待新的心跳、数据或依赖事实。`;
+        state.blockingReason = `${report}。同一故障已经发起恢复；令狐不会重复派发相同操作，检测仍保持运行，出现新的代码、测试、数据或依赖事实后继续修复。`;
       });
       return;
     }

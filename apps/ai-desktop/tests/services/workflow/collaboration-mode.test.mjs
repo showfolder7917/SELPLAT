@@ -51,6 +51,7 @@ const linghuRuntimeSource = readFileSync(new URL("../../../electron/services/per
 const integrationVerifierSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
 const startupContextSource = readFileSync(new URL("../../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
 const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+const collaborationSessionsSource = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
 // 测试也经 Platform Port 创建人物 Store，避免用例重新引入文件路径耦合。
@@ -349,7 +350,7 @@ test("令狐自动状态主文件和备份均损坏时安全关闭并等待用�
   }
 });
 
-test("令狐对同一故障指纹最多执行三次恢复副作用但继续检测", async () => {
+test("令狐对同一故障事实只派发一次但新技术事实可以继续修复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-recovery-limit-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -388,7 +389,7 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
     await facade.checkNow();
     await facade.checkNow();
     await facade.checkNow();
-    assert.equal(recoveryRequests, 3);
+    assert.equal(recoveryRequests, 1);
     assert.equal(facade.state().enabled, true);
     assert.match(facade.state().blockingReason, /检测仍保持运行/);
     collaborationStore.updateTask(facade.state().activeTaskId, "test.phase_changed", (task) => {
@@ -396,12 +397,12 @@ test("令狐对同一故障指纹最多执行三次恢复副作用但继续检�
       task.workerGeneration += 1;
     });
     await facade.checkNow();
-    assert.equal(recoveryRequests, 3, "阶段和执行代数变化不能重置同一故障的恢复预算");
+    assert.equal(recoveryRequests, 1, "阶段和执行代数变化不能重复派发同一故障");
     collaborationStore.updateTask(facade.state().activeTaskId, "test.new_failure", (task) => {
       task.blockingReason = "新的依赖文件缺失故障";
     });
     await facade.checkNow();
-    assert.equal(recoveryRequests, 4, "新的失败事实应获得独立恢复预算");
+    assert.equal(recoveryRequests, 2, "新的失败事实应立即获得新的修复机会");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -447,7 +448,7 @@ test("统一测试失败即使日志引用用户规则也由令狐修复而不�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("同一统一测试故障最多触发三次令狐源码修复", async () => {
+test("同一统一测试故障只触发一次令狐源码修复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-test-repair-limit-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -472,9 +473,9 @@ test("同一统一测试故障最多触发三次令狐源码修复", async () =>
     await facade.checkNow();
     await facade.checkNow();
     await facade.checkNow();
-    assert.equal(repairRequests, 3);
+    assert.equal(repairRequests, 1);
     assert.equal(facade.state().enabled, true);
-    assert.match(facade.state().blockingReason, /安全恢复三次/);
+    assert.match(facade.state().blockingReason, /不会重复派发相同操作/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1539,6 +1540,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation \+ every_persona_uses_same_generic_contract_hook_and_persona_id_parameter/);
   assert.match(rule, /nangong_distribution_planning_contract = AI_read_only_investigation/);
   assert.match(rule, /linghu_exception_intake_loop_prevention_contract = single_event_center_entry/);
+  assert.match(rule, /changed_lock_upgrade_uses_registered_worktree_owned_lock_hash_cache_without_shared_lease_identity/);
   assert.match(rule, /evolution_workspace_retirement_contract = no_evolution_workspace_window_route_tree_grid_dossier_topic_group_or_manual_console/);
   assert.match(rule, /ai_desktop_test_data_reset_contract = settings_danger_action_with_SELUI_confirm/);
   assert.match(rule, /evolution_workspace_hard_retirement_contract = remove_window_route_components_desktop_api_preload_IPC_query_preference_table_and_capability/);
@@ -1759,6 +1761,18 @@ test("固定人物会话同人物串行且不同人物互不阻塞", async () =>
   assert.deepEqual(events.map((event) => event.state), ["acquired", "queued", "released", "acquired", "released"]);
 });
 
+test("固定人物取得写入权后依赖挂载失败也会释放写入权", () => {
+  // 只截取执行器创建方法，避免其他方法中的异常处理让本门禁产生误判。
+  const createExecutorSource = collaborationSessionsSource.slice(
+    collaborationSessionsSource.indexOf("async createExecutor"),
+    collaborationSessionsSource.indexOf("\n  #createConnection("),
+  );
+  // 依赖挂载必须位于 try 内，确保挂载阶段抛错也会进入统一清理分支。
+  assert.match(createExecutorSource, /try \{[\s\S]*await acquireManagedDependencyLease/);
+  // 清理分支必须释放人物写入权，后续恢复才能取得同一人物的执行资格。
+  assert.match(createExecutorSource, /catch \(error\) \{[\s\S]*releasePersonaWriter\?\.\(\)/);
+});
+
 test("令狐忙碌时执行故障进入等待节点而不是覆盖人物或记为修复失败", () => {
   assert.match(coordinatorSource, /execution\.repair_queued/);
   assert.match(coordinatorSource, /等待令狐老祖完成当前任务/);
@@ -1856,6 +1870,35 @@ test("开发人物工作树共享第三方依赖但把仓库内本地包连接�
     assert.equal(git(worktree, "status", "--porcelain"), "");
     assert.equal(existsSync(path.join(worktree, "build", "ai-desktop", "node_modules")), false);
     assert.equal(existsSync(sourceModules), true);
+
+    // 模拟任务把 Codex 等依赖升级到新锁文件，并已经在自己的工作树安装完成。
+    const upgradedLockContent = JSON.stringify({ packages: {
+      "": {},
+      "node_modules/@selplat/sel-ui": { resolved: "../../shared/frontend/sel-ui", link: true },
+      "node_modules/example-upgrade": { version: "2.0.0" },
+    } });
+    const worktreeDesktopRoot = path.join(worktree, "apps", "ai-desktop");
+    const upgradedModules = path.join(worktreeDesktopRoot, "node_modules");
+    writeFileSync(path.join(worktreeDesktopRoot, "package-lock.json"), upgradedLockContent, "utf8");
+    mkdirSync(path.join(upgradedModules, ".bin"), { recursive: true });
+    mkdirSync(path.join(upgradedModules, "electron", "dist"), { recursive: true });
+    mkdirSync(path.join(upgradedModules, "@selplat"), { recursive: true });
+    writeFileSync(path.join(upgradedModules, ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc"), "upgraded", "utf8");
+    writeFileSync(path.join(upgradedModules, "electron", "path.txt"), electronExecutable, "utf8");
+    writeFileSync(path.join(upgradedModules, "electron", "dist", electronExecutable), "upgraded", "utf8");
+    // npm 的本地包链接通常是相对路径；node_modules 移入缓存后，这个旧基准会失效。
+    symlinkSync("../../../../shared/frontend/sel-ui", path.join(upgradedModules, "@selplat", "sel-ui"), process.platform === "win32" ? "junction" : "dir");
+
+    const upgradedLease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "executor-upgrade-g2");
+    const upgradedLockHash = createHash("sha256").update(upgradedLockContent).digest("hex");
+    const upgradedCacheModules = path.join(worktree, "cache", "ai-desktop", "dependencies", upgradedLockHash, "node_modules");
+    // 新锁不能冒充主工程共享租约；它使用工作树自身的受控锁哈希缓存。
+    assert.deepEqual(upgradedLease.environment, {});
+    assert.equal(realpathSync(upgradedModules), realpathSync(upgradedCacheModules));
+    assert.equal(realpathSync(path.join(upgradedModules, "@selplat", "sel-ui")), realpathSync(path.join(worktree, "shared", "frontend", "sel-ui")));
+    releaseManagedDependencyLease(upgradedLease);
+    assert.equal(existsSync(upgradedModules), false);
+    assert.equal(existsSync(upgradedCacheModules), true);
   } finally {
     try { git(repository, "worktree", "remove", "--force", worktree); } catch {}
     rmSync(repository, { recursive: true, force: true });
@@ -1988,6 +2031,87 @@ test("自动自修只能继续修改首次实施已经冻结的文件", () => {
   });
 });
 
+test("令狐可把当前签发工程内的新技术文件纳入同一修复范围", () => {
+  const scope = TaskRepairScopeAggregate.freeze(["apps/ai-desktop/original.ts"]);
+  assert.deepEqual(scope.includeTechnicalFiles([
+    "apps/ai-desktop/original.ts",
+    "apps/ai-desktop/electron/services/dependency-repair.ts",
+  ]), [
+    "apps/ai-desktop/electron/services/dependency-repair.ts",
+    "apps/ai-desktop/original.ts",
+  ]);
+  assert.equal(scope.check([
+    "apps/ai-desktop/original.ts",
+    "apps/ai-desktop/electron/services/dependency-repair.ts",
+  ]).accepted, true);
+});
+
+test("令狐技术修复有新文件证据时不受五轮固定上限", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  const changedFiles = ["apps/ai-desktop/original.ts"];
+  let validationCount = 0;
+  let turnCount = 0;
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修复当前工程内的全部技术根因",
+    restartRequired: false,
+    allowProjectTechnicalRepair: true,
+    emit: () => undefined,
+    readChangedFiles: async () => [...changedFiles],
+    runTurn: async (_message, emit) => {
+      turnCount += 1;
+      if (turnCount === 1) {
+        emit({ type: "diff-updated", turnId: "initial", changedFiles: [...changedFiles] });
+      } else {
+        const nextFile = `apps/ai-desktop/repair-${turnCount}.ts`;
+        changedFiles.push(nextFile);
+        emit({ type: "activity", turnId: `repair-${turnCount}`, activity: {
+          id: `repair-${turnCount}`,
+          itemType: "fileChange",
+          phase: "completed",
+          status: "completed",
+          summary: nextFile,
+        } });
+      }
+      return { text: "已依据新证据继续修复", itemCount: 1 };
+    },
+    runCodeValidation: async () => {
+      validationCount += 1;
+      if (validationCount <= 6) throw new Error(`第 ${validationCount} 个技术根因仍待修复`);
+    },
+  });
+  assert.equal(validationCount, 7, "令狐应跨过普通执行人的五轮固定上限");
+  assert.equal(result.managedStatus, "code-verified");
+  assert.deepEqual(result.authorizedFiles, [...changedFiles].sort());
+});
+
+test("令狐一轮没有新增修复证据时停止同内容盲目重试", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  let turnCount = 0;
+  let validationCount = 0;
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修复当前工程内的技术根因",
+    restartRequired: false,
+    allowProjectTechnicalRepair: true,
+    emit: () => undefined,
+    readChangedFiles: async () => ["apps/ai-desktop/original.ts"],
+    runTurn: async (_message, emit) => {
+      turnCount += 1;
+      if (turnCount === 1) emit({ type: "diff-updated", turnId: "initial", changedFiles: ["apps/ai-desktop/original.ts"] });
+      return { text: "本轮没有修改", itemCount: 1 };
+    },
+    runCodeValidation: async () => {
+      validationCount += 1;
+      throw new Error("同一失败证据");
+    },
+  });
+  assert.equal(turnCount, 2);
+  assert.equal(validationCount, 1);
+  assert.equal(result.managedStatus, "incomplete");
+  assert.match(result.pendingActions[0], /没有产生新的代码或文件范围证据/);
+});
+
 test("任务结果提交前通过真实 Git 状态阻断自修新增的范围外文件", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "repair-scope-"));
   const repositoryRoot = path.join(directory, "repository");
@@ -2056,7 +2180,7 @@ test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出"
   assert.doesNotMatch(dependencyVerifier, /"ci", "--ignore-scripts"/);
   assert.match(sessions, /runCodeValidation/);
   assert.match(sessions, /validationOwner: "desktop"/);
-  assert.match(sessions, /dependencyLeaseId: dependencyLease\?\.leaseId/);
+  assert.match(sessions, /dependencyLeaseId: dependencyLease\?\.environment\.AI_DESKTOP_DEPENDENCY_LEASE_ID/);
   assert.match(codex, /isDesktopOwnedValidationCommand/);
   assert.match(codex, /无需 Agent 申请 Playwright 权限/);
   assert.match(config, /AI_DESKTOP_TEST_TASK_ID/);

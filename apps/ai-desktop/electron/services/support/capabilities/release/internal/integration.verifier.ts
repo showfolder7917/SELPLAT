@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
@@ -16,7 +16,8 @@ export interface ManagedDependencyLease {
   temporaryLinkPaths: readonly string[];
   /** 工作树专属依赖覆盖层；最后一位租约持有者释放时一并回收。 */
   temporaryDirectoryPaths: readonly string[];
-  environment: Readonly<{ AI_DESKTOP_DEPENDENCY_LEASE_ID: string }>;
+  /** 锁文件一致时向子进程公开共享租约；升级候选使用自身受控缓存，不伪装成主工程同锁租约。 */
+  environment: Readonly<{ AI_DESKTOP_DEPENDENCY_LEASE_ID?: string }>;
   released: boolean;
 }
 
@@ -51,13 +52,22 @@ export async function acquireManagedDependencyLease(
   const dependencyOverlayModules = managedDependencyOverlayModules(resolvedWorkspaceRoot, applicationName, workspaceLockContent);
   // 候选检出时可能已有受 Git 跟踪的依赖链接；它不属于本轮租约，必须在结束时保留。
   const existingLinkPaths = new Set(existingIntegrationDependencyLinkPaths(workspaceDesktopRoot));
-  const dependencyMode = await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot, dependencyOverlayModules);
+  const locksMatch = sameFile(workspaceLockPath, sourceLockPath);
+  if (locksMatch) {
+    // 普通任务复用主工程同锁缓存，并用覆盖层把本地包重新指向当前工作树。
+    const dependencyMode = await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot, dependencyOverlayModules);
+    if (dependencyMode !== "linked") {
+      const createdLinks = existingIntegrationDependencyLinkPaths(workspaceDesktopRoot)
+        .filter((linkPath) => !existingLinkPaths.has(linkPath));
+      cleanupIntegrationDependencyLinks(workspaceDesktopRoot, createdLinks);
+      throw new Error("隔离工作树未能挂载主工程共享依赖缓存，拒绝签发租约。");
+    }
+  } else {
+    // 依赖升级任务的锁文件必然不同；把已安装依赖收进该工作树自己的锁哈希缓存，再签发受控租约。
+    await ensureCandidateLockDependencyCache(workspaceDesktopRoot, resolvedWorkspaceRoot, applicationName, sourceModules, sourceLockPath, npmCacheRoot);
+  }
   const temporaryLinkPaths = existingIntegrationDependencyLinkPaths(workspaceDesktopRoot)
     .filter((linkPath) => !existingLinkPaths.has(linkPath));
-  if (dependencyMode !== "linked") {
-    cleanupIntegrationDependencyLinks(workspaceDesktopRoot, temporaryLinkPaths);
-    throw new Error("隔离工作树未能挂载主工程共享依赖缓存，拒绝签发租约。");
-  }
   const holders = activeDependencyLeases.get(workspaceDesktopRoot) || new Map<string, number>();
   holders.set(safeLeaseId, (holders.get(safeLeaseId) || 0) + 1);
   activeDependencyLeases.set(workspaceDesktopRoot, holders);
@@ -65,17 +75,63 @@ export async function acquireManagedDependencyLease(
   for (const linkPath of temporaryLinkPaths) ownedLinks.add(linkPath);
   activeTemporaryLinkPaths.set(workspaceDesktopRoot, ownedLinks);
   const ownedDirectories = activeTemporaryDirectoryPaths.get(workspaceDesktopRoot) || new Set<string>();
-  ownedDirectories.add(dependencyOverlayModules);
+  if (locksMatch) ownedDirectories.add(dependencyOverlayModules);
   activeTemporaryDirectoryPaths.set(workspaceDesktopRoot, ownedDirectories);
   return {
     leaseId: safeLeaseId,
     workspaceProjectRoot: resolvedWorkspaceRoot,
     workspaceDesktopRoot,
     temporaryLinkPaths,
-    temporaryDirectoryPaths: [dependencyOverlayModules],
-    environment: { AI_DESKTOP_DEPENDENCY_LEASE_ID: safeLeaseId },
+    temporaryDirectoryPaths: locksMatch ? [dependencyOverlayModules] : [],
+    environment: locksMatch ? { AI_DESKTOP_DEPENDENCY_LEASE_ID: safeLeaseId } : {},
     released: false,
   };
+}
+
+/**
+ * 依赖升级任务不能冒充主工程同锁缓存；这里把候选依赖收进工作树自己的锁哈希缓存。
+ * 子进程随后按普通锁哈希入口读取该缓存，因此旧任务工作树也能继续，不要求回写基础设施脚本。
+ */
+async function ensureCandidateLockDependencyCache(
+  workspaceDesktopRoot: string,
+  workspaceProjectRoot: string,
+  applicationName: string,
+  sourceModules: string,
+  sourceLockPath: string,
+  npmCacheRoot?: string,
+): Promise<void> {
+  const workspaceLockPath = path.join(workspaceDesktopRoot, "package-lock.json");
+  const workspaceCacheRoot = path.join(workspaceProjectRoot, "cache", applicationName, "dependencies");
+  const candidateCacheModules = resolveLockSpecificDependencyPaths(workspaceCacheRoot, readFileSync(workspaceLockPath)).nodeModulesRoot;
+  const candidateModules = path.join(workspaceDesktopRoot, "node_modules");
+  if (!hasUsableDesktopDependencies(candidateCacheModules)) {
+    // 恢复现场已有完整依赖时直接复用；缺失时才按候选锁文件补齐一次。
+    if (!hasUsableDesktopDependencies(candidateModules)) {
+      await ensureIntegrationDependencies(workspaceDesktopRoot, sourceModules, sourceLockPath, npmCacheRoot);
+    }
+    const installedModules = lstatSync(candidateModules, { throwIfNoEntry: false });
+    if (!installedModules || installedModules.isSymbolicLink() || !hasUsableDesktopDependencies(candidateModules)) {
+      throw new Error("依赖升级候选缺少可用的 TypeScript 或 Electron 运行时，无法建立工作树缓存。");
+    }
+    mkdirSync(path.dirname(candidateCacheModules), { recursive: true });
+    renameSync(candidateModules, candidateCacheModules);
+  }
+  // node_modules 移入锁哈希缓存后，仓库内包的旧相对链接基准已经变化；必须重新连接到当前工作树。
+  rebindLocalPackageLinks(candidateCacheModules, localPackageLinks(workspaceDesktopRoot));
+  const currentModules = lstatSync(candidateModules, { throwIfNoEntry: false });
+  if (currentModules) rmSync(candidateModules, { recursive: !currentModules.isSymbolicLink(), force: true });
+  symlinkSync(candidateCacheModules, candidateModules, process.platform === "win32" ? "junction" : "dir");
+  ensureBuildDependencyLink(workspaceDesktopRoot, candidateCacheModules);
+}
+
+/** 把候选缓存中的仓库内包重新连接到当前工作树，避免移动缓存后相对链接指向不存在的目录。 */
+function rebindLocalPackageLinks(modulesRoot: string, localPackages: readonly LocalPackageLink[]): void {
+  for (const localPackage of localPackages) {
+    const linkPath = path.join(modulesRoot, localPackage.packagePath);
+    rmSync(linkPath, { recursive: true, force: true });
+    mkdirSync(path.dirname(linkPath), { recursive: true });
+    linkDependencyEntry(localPackage.targetPath, linkPath);
+  }
 }
 
 /** 释放任务拥有的链接，真实共享缓存由主工程生命周期管理。 */

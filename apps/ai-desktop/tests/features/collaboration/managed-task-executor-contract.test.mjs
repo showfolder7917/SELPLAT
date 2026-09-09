@@ -83,8 +83,12 @@ test("任务托管通过受控路径入口解析隔离依赖缓存中的公共�
   assert.match(executionPrompts, /禁止混用应用目录与 apps\/ai-desktop 前缀/);
 });
 
-test("任务托管使用后台隔离 Electron 交互测试并最多自动修复五轮", () => {
+test("普通任务最多自修五轮而令狐按新技术证据持续修复", () => {
   assert.match(executor, /const VALIDATION_ROUNDS = 5/);
+  assert.match(executor, /allowProjectTechnicalRepair/);
+  assert.match(executor, /includeTechnicalFiles/);
+  assert.match(executor, /while \(request\.allowProjectTechnicalRepair \|\| round < VALIDATION_ROUNDS\)/);
+  assert.match(collaborationSessions, /memberId === "linghu-ancestor"/);
   assert.match(executor, /interaction-validation/);
   assert.match(executor, /isIsolatedInteractionTestCommand/);
   assert.match(executionPrompts, /npm run test:interaction/);
@@ -119,7 +123,7 @@ test("测试托管只在完成门禁明确要求时执行自身的单次受控�
   assert.doesNotMatch(ipc, /function isTestManagedRequest/);
   const testManagedRestartBlock = ipc.match(/if \(response\.restartRequired\) \{[\s\S]*?\n      \}/)?.[0] || "";
   assert.match(testManagedRestartBlock, /test_managed_completed/);
-  assert.match(testManagedRestartBlock, /app\.relaunch\(\); prepareForApplicationExit\(\); app\.exit\(0\)/);
+  assert.match(testManagedRestartBlock, /app\.relaunch\(\);[\s\S]*prepareForApplicationExit\(\);[\s\S]*app\.exit\(0\)/);
   assert.equal((testManagedRestartBlock.match(/app\.relaunch\(\)/g) || []).length, 1);
 });
 
