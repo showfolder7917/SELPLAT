@@ -129,7 +129,7 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
 
   const submitConfirmedCollaborationTask = async (message: Message) => {
     if (!options.workspaces) throw new Error("协同任务缺少工作区。");
-    const task = await options.collaboration.submitConversationTask(message, messages, options.workspaces, options.locale);
+    const task = await options.collaboration.actions.submitConversationTask(message, messages, options.workspaces, options.locale);
     setMessages((current) => current.map((item) => item.id === message.id ? { ...item, actionTriggered: true, collaborationTaskId: task?.taskId } : item));
   };
 

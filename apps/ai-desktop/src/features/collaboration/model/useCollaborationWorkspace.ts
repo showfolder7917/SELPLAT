@@ -80,12 +80,21 @@ function collectAttachmentIds(messages: Message[]): string[] {
  * 每个字段都在这里显式组装，页面调用方不需要了解协作快照协议。
  */
 function createConversationTaskRequest(
-  confirmedMessage: Message,
-  messages: Message[],
-  workspaces: WorkspaceStateOutDto,
-  locale: LocaleValue,
-  state: CollaborationStateOutDto | null,
+  input: {
+    /** 已经获得用户确认、即将转换为协作任务的消息。 */
+    confirmedMessage: Message;
+    /** 当前完整会话，用于寻找原始问题、来源消息和附件。 */
+    messages: Message[];
+    /** 当前登记的工作区边界。 */
+    workspaces: WorkspaceStateOutDto;
+    /** 当前界面语言。 */
+    locale: LocaleValue;
+    /** 当前协作状态，用于确定真实会话负责人。 */
+    state: CollaborationStateOutDto | null;
+  },
 ): SubmitCollaborationTaskInDto {
+  // 具名输入让调用方无需记忆五个相邻业务参数的位置顺序。
+  const { confirmedMessage, messages, workspaces, locale, state } = input;
   const latestUserMessage = findLatestUserMessage(messages);
   const originalQuestion = latestUserMessage?.text || confirmedMessage.text;
   const conversationOwner = state?.members.find((member) => member.kind === "conversation-owner");
@@ -129,16 +138,24 @@ function createLiveOutput(turnId: string): CollaborationLiveOutput {
  * 人物时间线需要保留同一节点的历史；任务流在回合变化时创建新消息。
  */
 function mergeLiveOutput(
-  current: Record<string, CollaborationLiveOutput>,
-  key: string,
-  event: CollaborationStreamEventOutDto["event"],
-  preserveNodeHistory: boolean,
+  input: {
+    /** 当前按任务或节点保存的实时输出。 */
+    current: Record<string, CollaborationLiveOutput>;
+    /** 本次增量所属的任务或时间线节点标识。 */
+    key: string;
+    /** 主进程推送的单个 Codex 流事件。 */
+    event: CollaborationStreamEventOutDto["event"];
+    /** 新回合到来时是保留节点历史，还是为任务建立新输出。 */
+    historyMode: "preserve-node-history" | "reset-on-new-turn";
+  },
 ): Record<string, CollaborationLiveOutput> {
+  // 具名输入和枚举式策略替代含义不明确的布尔位置参数。
+  const { current, key, event, historyMode } = input;
   const existingOutput = current[key];
 
   let targetOutput = existingOutput;
   const belongsToNewTurn = existingOutput?.turnId !== event.turnId;
-  if (!existingOutput || (!preserveNodeHistory && belongsToNewTurn)) {
+  if (!existingOutput || (historyMode === "reset-on-new-turn" && belongsToNewTurn)) {
     targetOutput = createLiveOutput(event.turnId);
   }
 
@@ -208,15 +225,20 @@ export function useCollaborationWorkspace() {
 
     // 同一流事件分别归档到任务和具体时间线节点，服务两个不同展示区域。
     const removeStreamListener = desktop.onCollaborationStream((envelope: CollaborationStreamEventOutDto) => {
-      setStreams((current) => mergeLiveOutput(current, envelope.taskId, envelope.event, false));
+      setStreams((current) => mergeLiveOutput({
+        current,
+        key: envelope.taskId,
+        event: envelope.event,
+        historyMode: "reset-on-new-turn",
+      }));
 
       if (envelope.timelineNodeId) {
-        setTimelineStreams((current) => mergeLiveOutput(
+        setTimelineStreams((current) => mergeLiveOutput({
           current,
-          envelope.timelineNodeId!,
-          envelope.event,
-          true,
-        ));
+          key: envelope.timelineNodeId!,
+          event: envelope.event,
+          historyMode: "preserve-node-history",
+        }));
       }
     });
 
@@ -276,7 +298,13 @@ export function useCollaborationWorkspace() {
     workspaces: WorkspaceStateOutDto,
     locale: LocaleValue,
   ) => {
-    const request = createConversationTaskRequest(message, messages, workspaces, locale, state);
+    const request = createConversationTaskRequest({
+      confirmedMessage: message,
+      messages,
+      workspaces,
+      locale,
+      state,
+    });
     const nextState = await submitTask(request);
 
     const tasksCreatedFromMessage = nextState?.tasks.filter((candidate) => {
@@ -305,32 +333,72 @@ export function useCollaborationWorkspace() {
     return nextTimeline;
   };
 
-  // 公开返回值按“原始状态、页面状态、派生信息、业务操作”排列，调用方可顺序查找。
+  // 公开返回值按“权威数据、导航状态、反馈、业务操作、稳定配置”分组，调用方不再面对二十多个平铺字段。
   return {
-    state,
-    setState,
-    timeline,
-    setTimeline,
-    linghuAutomation,
-    setLinghuAutomation,
-    streams,
-    timelineStreams,
-    panel,
-    setPanel,
-    error,
-    setError,
-    navigationRevision,
-    syncPanel,
-    terminalStates: TERMINAL_TASK_STATES,
-    collaborationMode,
-    selectedMember,
-    selectedMemberTasks,
-    setOperatingMode,
-    selectMember,
-    submitTask,
-    submitConversationTask,
-    continueTask,
-    cancelTask,
-    refreshTimeline,
+    // 权威数据（data）来自主进程状态、SQLite 时间线或实时事件投影。
+    data: {
+      // 协作总状态：保存模式、成员、任务和当前后端选择。
+      state,
+      // 权威时间线：保存已经落库的专题和人物节点。
+      timeline,
+      // 令狐自动化：保存自动保障和会话显示边界。
+      linghuAutomation,
+      // 任务实时输出：供主 Codex 会话中的协作状态链读取。
+      streams,
+      // 节点实时输出：供任务群和人物页面读取。
+      timelineStreams,
+    },
+    // 导航状态（navigation）只描述当前打开的协作页面和对应人物任务。
+    navigation: {
+      // 当前面板：区分人物页面和任务协作群页面。
+      panel,
+      // 导航修订号：重复选择相同目标时仍可通知页签聚焦。
+      revision: navigationRevision,
+      // 协作模式：说明当前是否启用多人协作工作区。
+      collaborationMode,
+      // 当前人物：从权威成员列表解析，缺失时明确为空。
+      selectedMember,
+      // 当前人物任务：只保留尚未结束且与该人物真实相关的任务。
+      selectedMemberTasks,
+    },
+    // 页面反馈（feedback）集中承载跨进程读取或业务操作错误。
+    feedback: {
+      // 当前错误：由工作区统一显示，空字符串表示没有错误。
+      error,
+    },
+    // 业务操作（actions）是调用方允许触发的状态更新和跨进程动作。
+    actions: {
+      // 协作状态写入：接收主进程返回的完整新状态。
+      setState,
+      // 时间线写入：接收重新读取的权威时间线。
+      setTimeline,
+      // 令狐状态写入：接收令狐操作返回的新状态。
+      setLinghuAutomation,
+      // 导航切换：更新面板并递增导航修订号。
+      setPanel,
+      // 面板同步：只更新当前面板，不递增导航修订号。
+      syncPanel,
+      // 错误写入：统一清除或显示协作页面错误。
+      setError,
+      // 模式切换：请求主进程切换单会话或多人协作模式。
+      setOperatingMode,
+      // 人物选择：请求主进程保存当前协作成员。
+      selectMember,
+      // 任务提交：提交已经构造好的类型化协作任务。
+      submitTask,
+      // 会话任务提交：把已确认主会话转换并提交为协作任务。
+      submitConversationTask,
+      // 任务继续：从主进程保存的最近恢复点继续协作任务。
+      continueTask,
+      // 任务取消：取消尚未进入终态的协作任务。
+      cancelTask,
+      // 时间线刷新：人工审批后重新读取已经落库的历史。
+      refreshTimeline,
+    },
+    // 稳定配置（configuration）公开任务终态集合，供路由派生只读人物视图。
+    configuration: {
+      // 任务终态集合：统一判断任务是否仍占用人物或允许继续操作。
+      terminalTaskStates: TERMINAL_TASK_STATES,
+    },
   };
 }

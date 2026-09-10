@@ -60,7 +60,9 @@ export function TaskExplorerFeature({
   controller,
   onToggle,
 }: TaskExplorerFeatureProps) {
-  const { collaborationMode, setOperatingMode, setPanel } = controller;
+  // 当前运行模式来自导航状态，模式切换与页面切换来自业务操作组。
+  const { collaborationMode } = controller.navigation;
+  const { setOperatingMode, setPanel } = controller.actions;
 
   /** 切换运行模式后统一回到人物页，避免保留不适用于新模式的任务群选择。 */
   const changeMode = async (mode: "single-conversation" | "collaboration") => {

@@ -28,6 +28,20 @@ export type PersonaConversationActivity =
   | "creating"
   | "waiting-approval";
 
+/** 人物状态文案输入：用字段名说明每份状态在优先级判断中的角色。 */
+export type CollaborationMemberStateLabelInput = {
+  /** 当前需要显示状态的协作成员。 */
+  member: CollaborationMemberOutDto;
+  /** 当前界面语言。 */
+  locale: LocaleValue;
+  /** 权威任务时间线；尚未加载时允许为空。 */
+  timeline?: CollaborationTimelineSnapshotOutDto | null;
+  /** 韩立与南宫婉共享的研讨状态；其他人物不会消费。 */
+  evolution?: EvolutionStateOutDto | null;
+  /** 人物会话临时活动；只影响显示，不改变后端调度状态。 */
+  conversationActivity?: PersonaConversationActivity | null;
+};
+
 type MemberState = CollaborationMemberOutDto["state"];
 type TaskState = CollaborationStateOutDto["tasks"][number]["state"];
 
@@ -210,12 +224,10 @@ export function collaborationMemberPresenceState(
 
 /** 按明确优先级选择人物侧栏状态：会话、研讨、时间线、工作阶段、普通状态。 */
 export function collaborationMemberStateLabel(
-  member: CollaborationMemberOutDto,
-  locale: LocaleValue,
-  timeline?: CollaborationTimelineSnapshotOutDto | null,
-  evolution?: EvolutionStateOutDto | null,
-  conversationActivity?: PersonaConversationActivity | null,
+  input: CollaborationMemberStateLabelInput,
 ): string {
+  // 具名输入避免调用方依靠位置猜测时间线、演化状态和会话活动的顺序。
+  const { member, locale, timeline, evolution, conversationActivity } = input;
   if (conversationMayControlDisplay(member) && conversationActivity !== "active") {
     const activityLabel = conversationActivityLabel(conversationActivity, locale);
     if (activityLabel) return activityLabel;

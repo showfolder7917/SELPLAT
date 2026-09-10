@@ -63,16 +63,18 @@ type CollaborationWorkspace = ReturnType<typeof useCollaborationWorkspace>;
  * 异常或副作用：成员信息尚未加载时回退到韩立键，不修改协作状态。
  */
 function workspaceTabId(collaboration: CollaborationWorkspace): string {
-  if (!collaboration.collaborationMode) return "main";
-  if (collaboration.panel === "task-group") return "group";
-  return `member:${collaboration.selectedMember?.memberId || "han-li"}`;
+  // 页签判断只读取协作控制器已经归组的导航状态。
+  const { collaborationMode, panel, selectedMember } = collaboration.navigation;
+  if (!collaborationMode) return "main";
+  if (panel === "task-group") return "group";
+  return `member:${selectedMember?.memberId || "han-li"}`;
 }
 
 /** 页签标题：把稳定键转成客户可读文字，成员页优先显示真实姓名。 */
 function workspaceTabTitle(tabId: string, collaboration: CollaborationWorkspace): string {
   if (tabId === "main") return "Codex Chat";
   if (tabId === "group") return "任务协作群";
-  return collaboration.selectedMember?.displayName || "韩立";
+  return collaboration.navigation.selectedMember?.displayName || "韩立";
 }
 
 /** Developer 工作区路由只选择公开 Feature，不实现人物、协作或主会话内部流程。 */
@@ -98,42 +100,46 @@ function DeveloperWorkspacePage({
 }: DeveloperWorkspaceRouterProps) {
   // 令狐的新建展示会话沿用页签动作的等待反馈，防止用户重复创建可见边界。
   const [linghuNewConversationBusy, setLinghuNewConversationBusy] = useState(false);
+  // 页面路由只读取协作控制器集中维护的导航状态。
+  const { collaborationMode, panel, selectedMember } = collaboration.navigation;
+  // 页面错误和令狐状态更新只通过控制器业务操作执行。
+  const { setError, setLinghuAutomation } = collaboration.actions;
   // 未进入协同模式时，工作区固定显示主 Codex 会话。
-  const showMainConversation = !collaboration.collaborationMode;
+  const showMainConversation = !collaborationMode;
   // 协同模式选择韩立成员页时，切换到韩立独立会话页面。
   const showHanli = Boolean(
-    collaboration.collaborationMode
-    && collaboration.panel === "member"
-    && collaboration.selectedMember?.memberId === "han-li",
+    collaborationMode
+    && panel === "member"
+    && selectedMember?.memberId === "han-li",
   );
   // 南宫婉页面依赖共同 Evolution 状态；状态尚未加载时不能渲染不完整页面。
   const showNangong = Boolean(
-    collaboration.collaborationMode
-    && collaboration.panel === "member"
-    && collaboration.selectedMember?.memberId === "nangong-wan"
+    collaborationMode
+    && panel === "member"
+    && selectedMember?.memberId === "nangong-wan"
     && evolution.state,
   );
   // 令狐仍使用协作成员页的正式会话外壳；这里只决定是否显示统一页签动作。
   const showLinghu = Boolean(
-    collaboration.collaborationMode
-    && collaboration.panel === "member"
-    && collaboration.selectedMember?.memberId === "linghu-ancestor",
+    collaborationMode
+    && panel === "member"
+    && selectedMember?.memberId === "linghu-ancestor",
   );
   const startLinghuDisplayConversation = async () => {
     if (linghuNewConversationBusy) return;
     const collaborationApi = getOptionalCollaborationDesktopApi();
     if (!collaborationApi) {
-      collaboration.setError("请在桌面应用中操作");
+      setError("请在桌面应用中操作");
       return;
     }
     setLinghuNewConversationBusy(true);
-    collaboration.setError("");
+    setError("");
     try {
       // 后端只推进令狐页面的可见消息边界，不触碰巡检、任务或恢复状态。
-      collaboration.setLinghuAutomation(await collaborationApi.newLinghuDisplayConversation());
+      setLinghuAutomation(await collaborationApi.newLinghuDisplayConversation());
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "无法新建会话";
-      collaboration.setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ""));
+      setError(message.replace(/^Error invoking remote method '[^']+':\s*/, ""));
     } finally {
       setLinghuNewConversationBusy(false);
     }
@@ -193,11 +199,8 @@ function DeveloperWorkspacePage({
     workspaceContent = (
       <CollaborationWorkspaceFeature
         locale={locale}
-        workspaces={workspaces}
         controller={collaboration}
         evolution={evolution}
-        nangong={nangong}
-        screenshot={screenshot}
       />
     );
   }
@@ -272,50 +275,58 @@ function DeveloperWorkspacePage({
 /** 工作区页签路由：每个稳定路由拥有独立页面，切换页签不修改任务事实。 */
 export function DeveloperWorkspaceRouter(props: DeveloperWorkspaceRouterProps) {
   const collaboration = props.collaboration;
+  // 路由分别读取权威状态、当前导航和允许触发的导航操作。
+  const { state } = collaboration.data;
+  const { collaborationMode, selectedMember } = collaboration.navigation;
+  const { setOperatingMode, selectMember, syncPanel } = collaboration.actions;
   const tabId = workspaceTabId(collaboration);
   const tabTitle = workspaceTabTitle(tabId, collaboration);
-  const requestedTab = collaboration.state ? { id: tabId, label: tabTitle } : null;
+  const requestedTab = state ? { id: tabId, label: tabTitle } : null;
 
   /** 页签切换：只更新操作模式或当前面板，不改动任务内容。 */
   function activateWorkspaceTab(key: string) {
     if (key === "main") {
-      if (collaboration.collaborationMode) {
-        void collaboration.setOperatingMode("single-conversation");
+      if (collaborationMode) {
+        void setOperatingMode("single-conversation");
       }
       return;
     }
-    if (!collaboration.collaborationMode) {
-      void collaboration.setOperatingMode("collaboration");
+    if (!collaborationMode) {
+      void setOperatingMode("collaboration");
     }
     if (key === "group") {
-      collaboration.syncPanel("task-group");
+      syncPanel("task-group");
       return;
     }
-    collaboration.syncPanel("member");
+    syncPanel("member");
     const memberId = key.slice("member:".length);
-    if (collaboration.selectedMember?.memberId !== memberId) {
-      void collaboration.selectMember(memberId);
+    if (selectedMember?.memberId !== memberId) {
+      void selectMember(memberId);
     }
   }
 
   /** 页签页面：为目标页签派生独立的只读协作视图。 */
   function renderWorkspacePage(key: string) {
     const memberId = key.slice("member:".length);
-    const selectedMember = collaboration.state?.members.find((item) => item.memberId === memberId)
-      || collaboration.selectedMember;
-    const selectedMemberTasks = collaboration.state?.tasks.filter((task) => {
-      if (collaboration.terminalStates.has(task.state)) return false;
-      if (task.executorMemberId === selectedMember?.memberId) return true;
-      if (task.initiator?.memberId === selectedMember?.memberId) return true;
-      return task.executionRecords.some((record) => record.executor.memberId === selectedMember?.memberId);
+    const pageMember = state?.members.find((item) => item.memberId === memberId)
+      || selectedMember;
+    const selectedMemberTasks = state?.tasks.filter((task) => {
+      if (collaboration.configuration.terminalTaskStates.has(task.state)) return false;
+      if (task.executorMemberId === pageMember?.memberId) return true;
+      if (task.initiator?.memberId === pageMember?.memberId) return true;
+      return task.executionRecords.some((record) => record.executor.memberId === pageMember?.memberId);
     }) || [];
     const panel = key === "group" ? "task-group" : "member";
+    // 页签只覆盖当前页面自己的导航投影，权威数据和业务操作继续复用同一控制器。
     const collaborationView = {
       ...collaboration,
-      collaborationMode: key !== "main",
-      panel: panel as typeof collaboration.panel,
-      selectedMember,
-      selectedMemberTasks,
+      navigation: {
+        ...collaboration.navigation,
+        collaborationMode: key !== "main",
+        panel: panel as typeof collaboration.navigation.panel,
+        selectedMember: pageMember,
+        selectedMemberTasks,
+      },
     };
     return <DeveloperWorkspacePage {...props} collaboration={collaborationView} />;
   }
@@ -323,7 +334,7 @@ export function DeveloperWorkspaceRouter(props: DeveloperWorkspaceRouterProps) {
   return (
     <SelUiWorkspaceTabs
       request={requestedTab}
-      revision={collaboration.navigationRevision}
+      revision={collaboration.navigation.revision}
       onActivate={activateWorkspaceTab}
       renderPage={renderWorkspacePage}
     />

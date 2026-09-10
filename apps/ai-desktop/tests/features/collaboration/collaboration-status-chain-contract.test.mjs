@@ -23,6 +23,7 @@ const taskGroupSource = [
   "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
   "../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const collaborationModelSource = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
@@ -60,7 +61,24 @@ test("最新等待恢复节点在对应行提供醒目的继续执行主操作",
   assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);
-  assert.match(developerSource, /continueTimelineTask[\s\S]*continueTask\(taskId\)[\s\S]*<TaskCollaborationGroup[\s\S]*onContinueTask=\{continueTimelineTask\}/);
+  assert.match(developerSource, /continueTimelineTask[\s\S]*continueTask\(taskId\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{taskGroupModel\}/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
+});
+
+test("专题卡使用单一卡片模型归组显示状态和用户操作", () => {
+  // 父页面先构造具名卡片模型，避免在 JSX 调用处平铺十多个无法辨别职责的参数。
+  assert.match(taskGroupSource, /const cardModel: TaskGroupCardModel = \{[\s\S]*presentation: \{[\s\S]*actions: \{/);
+  // 卡片组件只接收一个模型参数，后续子节点继续复用同一模型而不重复透传共享依赖。
+  assert.match(taskGroupSource, /<TaskGroupCard key=\{group\.groupId\} model=\{cardModel\}/);
+  assert.match(taskGroupSource, /function TaskTimelineNode\([\s\S]*model: TaskGroupCardModel/);
+});
+
+test("协作页面和控制器使用具名模型归组公开依赖", () => {
+  // 任务群与人物页都只接收一个模型，工作区不再传递未使用的会话和截图控制器。
+  assert.match(developerSource, /<TaskCollaborationGroup model=\{taskGroupModel\}/);
+  assert.match(developerSource, /<CollaborationMemberPage model=\{memberPageModel\}/);
+  assert.doesNotMatch(developerSource, /<CollaborationWorkspaceFeature[\s\S]{0,300}(?:workspaces|nangong|screenshot)=/);
+  // 协作控制器按权威数据、导航、反馈、操作和稳定配置分组，调用方通过组名理解字段职责。
+  assert.match(collaborationModelSource, /data: \{[\s\S]*navigation: \{[\s\S]*feedback: \{[\s\S]*actions: \{[\s\S]*configuration: \{/);
 });

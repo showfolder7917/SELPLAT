@@ -57,7 +57,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
 
   /** 协作任务重试：把关联任务标识交给协作控制器继续执行。 */
   async function retryCollaborationTask(taskId: string): Promise<void> {
-    await collaboration.continueTask(taskId);
+    await collaboration.actions.continueTask(taskId);
   }
 
   /** 预设答案选择：保存选中文本，并退出该问题的自定义输入模式。 */
@@ -88,7 +88,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
 
   /** 托管阶段推进：协作模式提交真实协作任务，单会话模式发送确认命令。 */
   async function advanceManagedStage(mode: ManagedExecutionModeValue, label: string, message: Message) {
-    const shouldCreateCollaborationTask = collaboration.collaborationMode
+    const shouldCreateCollaborationTask = collaboration.navigation.collaborationMode
       && message.managedMode === "conversation-managed";
     if (shouldCreateCollaborationTask) {
       try {
@@ -130,7 +130,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
       {messages.map((message) => {
         const collaborationTaskId = message.collaborationTaskId;
         const messageTask = collaborationTaskId
-          ? collaboration.state?.tasks.find((task) => task.taskId === collaborationTaskId) || null
+          ? collaboration.data.state?.tasks.find((task) => task.taskId === collaborationTaskId) || null
           : null;
         const isAssistantMessage = message.role === "assistant";
         const showsUserInput = isAssistantMessage

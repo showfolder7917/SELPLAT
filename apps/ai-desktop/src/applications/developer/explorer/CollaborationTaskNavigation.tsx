@@ -46,7 +46,12 @@ export function CollaborationTaskNavigation({
   locale,
   personaConversationActivities,
 }: CollaborationTaskNavigationProps) {
-  const { state, timeline, panel, setPanel, selectMember } = controller;
+  // 权威数据提供成员列表和任务群时间线。
+  const { state, timeline } = controller.data;
+  // 导航状态提供当前选中的页面。
+  const { panel } = controller.navigation;
+  // 导航操作集中负责选人和切换右侧页面。
+  const { setPanel, selectMember } = controller.actions;
 
   /** 选择人物后把右侧页面明确切回人物页。 */
   const openMemberPage = async (memberId: string) => {
@@ -78,7 +83,13 @@ export function CollaborationTaskNavigation({
           const conversationActivity = personaConversationActivities[member.memberId];
           const memberSelected = panel === "member" && member.memberId === state.selectedMemberId;
           const presenceState = collaborationMemberPresenceState(member, conversationActivity);
-          const stateLabel = collaborationMemberStateLabel(member, locale, timeline, evolution, conversationActivity);
+          const stateLabel = collaborationMemberStateLabel({
+            member,
+            locale,
+            timeline,
+            evolution,
+            conversationActivity,
+          });
           const selectCurrentMember = () => void openMemberPage(member.memberId);
 
           return (

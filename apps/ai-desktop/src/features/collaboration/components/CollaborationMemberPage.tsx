@@ -39,11 +39,8 @@ import {
   collaborationMemberStateLabel,
 } from "../model/collaboration-formatters";
 
-type CollaborationMemberPageProps = {
-  /** 当前选中的协作成员；状态尚未加载时为 null。 */
-  member: CollaborationMemberOutDto | null;
-  /** 主进程从 SQLite 投影出的权威协作时间线。 */
-  timeline: CollaborationTimelineSnapshotOutDto | null;
+/** 人物页面显示状态：只描述页面当前需要展示的数据。 */
+type CollaborationMemberPagePresentation = {
   /** 当前时间线节点尚未完成的实时正文。 */
   liveTextByNodeId: Record<string, string>;
   /** 当前界面语言。 */
@@ -52,8 +49,27 @@ type CollaborationMemberPageProps = {
   linghuAutomation: LinghuAutomationStateOutDto | null;
   /** 南宫婉与韩立共同使用的专题研讨状态。 */
   nangongEvolution: EvolutionStateOutDto | null;
-  /** 令狐面板写操作完成后，把主进程返回的新状态交回控制器。 */
-  onLinghuState: (state: LinghuAutomationStateOutDto) => void;
+};
+
+/** 人物页面模型：把人物、时间线、显示状态和操作归成一个入口。 */
+export type CollaborationMemberPageModel = {
+  /** 当前选中的协作成员；状态尚未加载时为 null。 */
+  member: CollaborationMemberOutDto | null;
+  /** 主进程从 SQLite 投影出的权威协作时间线。 */
+  timeline: CollaborationTimelineSnapshotOutDto | null;
+  /** 页面语言、实时正文和人物专项状态。 */
+  presentation: CollaborationMemberPagePresentation;
+  /** 人物页面允许触发的业务操作。 */
+  actions: {
+    /** 令狐面板写操作完成后，把主进程返回的新状态交回控制器。 */
+    onLinghuState: (state: LinghuAutomationStateOutDto) => void;
+  };
+};
+
+/** 人物页面组件只接收一份具名模型。 */
+type CollaborationMemberPageProps = {
+  /** 已经按业务职责归组的人物页面模型。 */
+  model: CollaborationMemberPageModel;
 };
 
 type TimelineGroup = NonNullable<CollaborationTimelineSnapshotOutDto>["groups"][number];
@@ -82,10 +98,17 @@ function findLatestTaskId(member: CollaborationMemberOutDto, timeline: Collabora
 
 /** 按人物和当前任务筛选页面真正需要展示的时间线分组。 */
 function buildVisibleGroups(
-  member: CollaborationMemberOutDto,
-  timeline: CollaborationTimelineSnapshotOutDto | null,
-  linghuAutomation: LinghuAutomationStateOutDto | null,
+  input: {
+    /** 当前需要筛选时间线的协作成员。 */
+    member: CollaborationMemberOutDto;
+    /** 主进程提供的完整权威时间线。 */
+    timeline: CollaborationTimelineSnapshotOutDto | null;
+    /** 令狐页面当前允许显示的会话时间边界。 */
+    linghuAutomation: LinghuAutomationStateOutDto | null;
+  },
 ): TimelineGroup[] {
+  // 具名输入让三个相邻对象的用途在调用处保持可见。
+  const { member, timeline, linghuAutomation } = input;
   const latestTaskId = findLatestTaskId(member, timeline);
 
   return (timeline?.groups || []).map((group) => {
@@ -118,25 +141,74 @@ function memberConversationId(memberId: string): string {
   return `selConversationWorker${encodedMemberId}Id`;
 }
 
-/** 普通协作人物的真实任务进度页面。 */
-export function CollaborationMemberPage({
-  member,
-  timeline,
+/** 人物时间线中的一条真实交接或执行消息。 */
+function CollaborationMemberTimelineNode({
+  node,
   liveTextByNodeId,
-  locale,
-  linghuAutomation,
-  nangongEvolution,
-  onLinghuState,
-}: CollaborationMemberPageProps) {
+}: {
+  /** 当前需要展示的人物时间线节点。 */
+  node: TimelineGroup["nodes"][number];
+  /** 按节点保存的实时正文，只覆盖仍在执行的当前节点。 */
+  liveTextByNodeId: Record<string, string>;
+}) {
+  // 接收人姓名按后端顺序合并，空列表表示当前动作没有交接目标。
+  const recipientNames = node.recipients.map((person) => person.displayName).join("、");
+  // 交接标签只在存在接收人时显示箭头和姓名。
+  const handoffLabel = recipientNames ? ` → ${recipientNames}` : "";
+  // 当前节点优先显示实时正文，历史节点固定显示数据库正文或摘要。
+  const visibleText = node.status === "current"
+    ? liveTextByNodeId[node.nodeId] || node.content || node.summary
+    : node.content || node.summary;
+
+  return (
+    // 人物消息根节点保留时间线节点标识，便于页面定位真实消息来源。
+    <article className="selconversation-message" data-role="persona" data-timeline-node-id={node.nodeId}>
+      {/* 消息身份区：按执行者、接收人和真实动作说明本次交接。 */}
+      <header>
+        {node.actor.displayName}{handoffLabel} · {node.action}
+      </header>
+      {/* 消息正文区：显示业务正文，并在存在证据时提供技术详情。 */}
+      <div className="selconversation-message-body">
+        {/* 可见正文使用统一 Markdown 组件，保持协作页面排版一致。 */}
+        <MarkdownMessage text={visibleText} />
+        {/* 技术详情没有内容时不渲染空折叠入口。 */}
+        {node.detail && (
+          <SelUiDisclosure
+            idPrefix="person-task-evidence"
+            open={false}
+            trigger={<span>技术详情</span>}
+          >
+            {/* 技术证据同样使用统一 Markdown 组件安全展示。 */}
+            <MarkdownMessage text={node.detail} />
+          </SelUiDisclosure>
+        )}
+      </div>
+    </article>
+  );
+}
+
+/** 普通协作人物的真实任务进度页面。 */
+export function CollaborationMemberPage({ model }: CollaborationMemberPageProps) {
+  // 人物和时间线是页面展示真实协作记录的权威业务数据。
+  const { member, timeline } = model;
+  // 显示状态集中提供语言、实时正文以及人物专项运行状态。
+  const { liveTextByNodeId, locale, linghuAutomation, nangongEvolution } = model.presentation;
+  // 人物操作组当前只开放令狐状态写回，后续动作仍有明确归属位置。
+  const { onLinghuState } = model.actions;
   // 会话末尾锚点：实时正文变化时只滚动人物页面内部区域。
   const conversationTail = useRef<HTMLDivElement>(null);
-  const visibleGroups = member ? buildVisibleGroups(member, timeline, linghuAutomation) : [];
+  // 可见专题只保留当前人物真实参与且仍属于当前展示边界的节点。
+  const visibleGroups = member ? buildVisibleGroups({ member, timeline, linghuAutomation }) : [];
+  // 最新节点用于判断自动滚动目标和当前实时正文。
   const latestNode = visibleGroups.flatMap((group) => group.nodes).at(-1);
+  // 最新正文变化时也需要触发滚动，即使节点标识没有变化。
   const latestText = latestNode
     ? liveTextByNodeId[latestNode.nodeId] || latestNode.content
     : "";
   useEffect(() => {
+    // 只有页面末尾锚点确实可见于布局时才执行内部滚动。
     const tailIsVisible = conversationTail.current?.getClientRects().length;
+    // 滚动限制在最近位置，避免人物页更新时跳动整个 Developer 工作区。
     if (tailIsVisible) conversationTail.current?.scrollIntoView({ block: "nearest" });
   }, [latestNode?.nodeId, latestText]);
 
@@ -144,12 +216,12 @@ export function CollaborationMemberPage({
     return <section className="collaboration-member-page">请选择人物。</section>;
   }
 
-  const memberStateLabel = collaborationMemberStateLabel(
+  const memberStateLabel = collaborationMemberStateLabel({
     member,
     locale,
     timeline,
-    nangongEvolution,
-  );
+    evolution: nangongEvolution,
+  });
   const visibleLinghuAutomation = member.memberId === "linghu-ancestor"
     ? linghuAutomation
     : null;
@@ -188,33 +260,14 @@ export function CollaborationMemberPage({
             {visibleGroups.map((group) => (
               <section key={group.groupId} aria-label={group.title}>
                 <p className="selconversation-context-stats">{group.title}</p>
-                {group.nodes.map((node) => {
-                  const recipientNames = node.recipients.map((person) => person.displayName).join("、");
-                  const handoffLabel = recipientNames ? ` → ${recipientNames}` : "";
-                  const visibleText = node.status === "current"
-                    ? liveTextByNodeId[node.nodeId] || node.content || node.summary
-                    : node.content || node.summary;
-
-                  return (
-                    <article key={node.nodeId} className="selconversation-message" data-role="persona">
-                      <header>
-                        {node.actor.displayName}{handoffLabel} · {node.action}
-                      </header>
-                      <div className="selconversation-message-body">
-                        <MarkdownMessage text={visibleText} />
-                        {node.detail && (
-                          <SelUiDisclosure
-                            idPrefix="person-task-evidence"
-                            open={false}
-                            trigger={<span>技术详情</span>}
-                          >
-                            <MarkdownMessage text={node.detail} />
-                          </SelUiDisclosure>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+                {/* 专题节点列表：每个节点交给独立组件计算交接标签和可见正文。 */}
+                {group.nodes.map((node) => (
+                  <CollaborationMemberTimelineNode
+                    key={node.nodeId}
+                    node={node}
+                    liveTextByNodeId={liveTextByNodeId}
+                  />
+                ))}
               </section>
             ))}
             <div ref={conversationTail} />

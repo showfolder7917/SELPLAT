@@ -13,8 +13,8 @@ import type {
   CollaborationTimelineGroupOutDto,
 } from "../../../../contracts/system/desktop/index";
 import type {
-  // 页面参数：读取时间线快照和继续任务回调。
-  TaskCollaborationGroupProps,
+  // 页面模型：读取时间线快照和继续任务回调。
+  TaskCollaborationGroupModel,
 } from "./TaskCollaborationGroup.types";
 
 /** 在一个 Map 中记录用户对指定任务卡或节点的展开选择。 */
@@ -40,7 +40,10 @@ function findCurrentGroupId(groups: CollaborationTimelineGroupOutDto[]): string 
 }
 
 /** 任务协作群页面的状态和操作控制器。 */
-export function useTaskCollaborationGroup({ snapshot, onContinueTask }: TaskCollaborationGroupProps) {
+export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
+  // 权威时间线来自模型数据组，继续操作来自模型业务操作组。
+  const { snapshot } = model.data;
+  const { onContinueTask } = model.actions;
   // 专题卡人工展开选择；没有记录时由当前专题规则决定默认值。
   const [groupOpenOverrides, setGroupOpenOverrides] = useState<Map<string, boolean>>(new Map());
   // 时间线节点人工展开选择；没有记录时使用主进程给出的 automaticOpen。

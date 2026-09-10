@@ -195,7 +195,9 @@ export function DeveloperApplication() {
     setAttachments,
   });
   // 当前人物页和后台未完成回复共同决定会话显示状态；协作调度仍使用后端成员状态。
-  const activePersonaId = collaboration.collaborationMode && collaboration.panel === "member" ? collaboration.selectedMember?.memberId : null;
+  const activePersonaId = collaboration.navigation.collaborationMode && collaboration.navigation.panel === "member"
+    ? collaboration.navigation.selectedMember?.memberId
+    : null;
   let hanliActivity: "active" | "responding" | "creating" | "waiting-approval" | null = null;
   if (codex.interaction.approval?.ownerMemberId === "han-li") {
     hanliActivity = "waiting-approval";
