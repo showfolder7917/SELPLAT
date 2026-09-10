@@ -14,6 +14,9 @@ const coordinatorSource = readFileSync(new URL("../../../electron/services/workf
 const integrationSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const contractSource = readFileSync(new URL("../../../contracts/services/workflow/index.ts", import.meta.url), "utf8");
 const contractDefinitionSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-task.out.dto.ts", import.meta.url), "utf8");
+const executionContractSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-execution.out.dto.ts", import.meta.url), "utf8");
+const integrationContractSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-integration.out.dto.ts", import.meta.url), "utf8");
+const snapshotContractSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-task-snapshot.out.dto.ts", import.meta.url), "utf8");
 const contractValueSource = readFileSync(new URL("../../../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
 // 任务协作群已经按新手结构拆成主页面、页面状态、专题卡和纯显示转换；
 // 静态契约必须读取完整模块，不能把单个组合入口误当成全部实现。
@@ -81,4 +84,19 @@ test("协作页面和控制器使用具名模型归组公开依赖", () => {
   assert.doesNotMatch(developerSource, /<CollaborationWorkspaceFeature[\s\S]{0,300}(?:workspaces|nangong|screenshot)=/);
   // 协作控制器按权威数据、导航、反馈、操作和稳定配置分组，调用方通过组名理解字段职责。
   assert.match(collaborationModelSource, /data: \{[\s\S]*navigation: \{[\s\S]*feedback: \{[\s\S]*actions: \{[\s\S]*configuration: \{/);
+});
+
+test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {
+  // 任务主协议只负责组合当前状态，执行、集成和提交快照分别由独立文件解释。
+  assert.doesNotMatch(contractDefinitionSource, /interface CollaborationExecutionRecordOutDto|interface CollaborationIntegrationFailureOutDto|interface CollaborationTaskSnapshotOutDto/);
+  assert.match(executionContractSource, /interface CollaborationExecutionRecordOutDto/);
+  assert.match(integrationContractSource, /interface CollaborationIntegrationFailureOutDto/);
+  assert.match(snapshotContractSource, /interface CollaborationTaskSnapshotOutDto/);
+  // 统一测试使用有业务名称的 DTO，避免把匿名对象继续塞进任务主接口。
+  assert.match(executionContractSource, /interface CollaborationUnifiedTestOutDto/);
+  assert.match(contractDefinitionSource, /unifiedTest\?: CollaborationUnifiedTestOutDto \| null/);
+  // 唯一公开入口继续导出原有类型名，业务调用方不需要依赖物理文件位置。
+  assert.match(contractSource, /CollaborationExecutionRecordOutDto[\s\S]*collaboration-execution\.out\.dto\.js/);
+  assert.match(contractSource, /CollaborationIntegrationBatchOutDto[\s\S]*collaboration-integration\.out\.dto\.js/);
+  assert.match(contractSource, /CollaborationTaskSnapshotOutDto[\s\S]*collaboration-task-snapshot\.out\.dto\.js/);
 });
