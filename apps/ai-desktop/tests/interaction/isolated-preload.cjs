@@ -11,9 +11,10 @@ let harnessStatus = {
   connected: true,
   account: { authenticated: true, authMode: "test", email: "interaction@test.invalid", planType: "test", requiresOpenaiAuth: false },
   error: null,
-  runtime: { source: "bundled", version: "0.149.0" },
+  runtime: { source: "bundled", version: "0.154.0" },
 };
 let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", defaultModel: "gpt-5.6-terra", reasoningEffort: "medium", serviceTier: "default", codexAppCorpusIngestionEnabled: false };
+let codexModelCatalogFailure = null;
 let pendingCodexApproval = null;
 let pendingUserInput = null;
 let finishManagedTurn = null;
@@ -267,10 +268,15 @@ contextBridge.exposeInMainWorld("desktop", {
   startCorpusSemanticBackfill: async () => ({ state: "completed", targetCount: 2, discoveredCount: 2, processedCount: 2, insertedCount: 2, failedCount: 0, message: "补齐完成：新增 2 条 AI 摘要。", startedAt: "2026-08-28T00:00:00.000Z", completedAt: "2026-08-28T00:00:01.000Z" }),
   getSettings: async () => ({ ...desktopSettings }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
-  getCodexModels: async () => ({ models: [
+  getCodexModels: async () => {
+    if (codexModelCatalogFailure) throw new Error(codexModelCatalogFailure);
+    return { models: [
     { id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: false },
     { id: "gpt-5.6-terra", displayName: "5.6 Terra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: true },
-  ] }),
+    { id: "gpt-5.6-astra", displayName: "5.6 Astra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: false },
+    ] };
+  },
+  setInteractionModelCatalogFailure: async (message) => { codexModelCatalogFailure = message || null; },
   getWorkspaces: async () => workspace,
   addWorkspace: async () => workspace,
   updateWorkspacePermission: async () => workspace,

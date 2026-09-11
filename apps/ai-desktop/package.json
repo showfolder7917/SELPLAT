@@ -32,6 +32,7 @@
     "migrate:data-layout": "node scripts/run-with-dependencies.mjs node scripts/migrate-project-data-layout.mjs",
     "paths:resolve": "node scripts/run-with-dependencies.mjs node scripts/resolve-application-paths.mjs",
     "migrate:dependencies": "node scripts/migrate-dependencies-to-cache.mjs",
+    "rollback:codex-runtime": "node scripts/rollback-codex-runtime.mjs",
     "dependencies:ensure": "node scripts/ensure-dependency-cache.mjs",
     "dependencies:link": "node scripts/manage-dependency-link.mjs link",
     "dependencies:unlink": "node scripts/manage-dependency-link.mjs unlink",
@@ -64,8 +65,8 @@
     "test:codex-runtime": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/platform/codex/codex-runtime.test.mjs"
   },
   "dependencies": {
+    "@openai/codex": "0.154.0",
     "@selplat/node-common-core": "file:../../shared/node/common-core",
-    "@openai/codex": "0.149.0",
     "@isaacs/fs-minipass": "4.0.1",
     "chownr": "3.0.0",
     "minipass": "7.1.3",
@@ -73,9 +74,9 @@
     "tar": "7.5.22"
   },
   "optionalDependencies": {
-    "@openai/codex-darwin-arm64": "npm:@openai/codex@0.149.0-darwin-arm64",
-    "@openai/codex-darwin-x64": "npm:@openai/codex@0.149.0-darwin-x64",
-    "@openai/codex-win32-x64": "npm:@openai/codex@0.149.0-win32-x64"
+    "@openai/codex-darwin-arm64": "npm:@openai/codex@0.154.0-darwin-arm64",
+    "@openai/codex-darwin-x64": "npm:@openai/codex@0.154.0-darwin-x64",
+    "@openai/codex-win32-x64": "npm:@openai/codex@0.154.0-win32-x64"
   },
   "devDependencies": {
     "@fluentui/react-icons": "^2.0.0",

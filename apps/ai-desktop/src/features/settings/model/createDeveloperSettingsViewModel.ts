@@ -37,6 +37,14 @@ export function createDeveloperSettingsViewModel(
   const runtimeDescription = status.runtime
     ? `${status.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${status.runtime.version}`
     : status.connected ? "openai/codex app-server" : status.error || "Harness offline";
+  const astraAppeared = settings.modelCatalog.models.some((model) => `${model.id} ${model.displayName}`.toLocaleLowerCase().includes("astra"));
+  const modelCatalogStatus = settings.modelCatalogLoading
+    ? (locale === "ja" ? "モデル一覧を読み込み中…" : "正在读取模型列表…")
+    : settings.modelCatalogLoaded
+      ? (locale === "ja"
+        ? `モデル一覧を取得しました（${settings.modelCatalog.models.length}件）・Astra ${astraAppeared ? "あり" : "なし"}`
+        : `已读取 ${settings.modelCatalog.models.length} 个模型 · Astra${astraAppeared ? "已出现" : "未出现"}`)
+      : "";
   const auditSummary = diagnostics.auditInfo?.latestTask
     ? `${auditStatusText(diagnostics.auditInfo.latestTask.status, locale)} · ${diagnostics.auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}`
     : text.noAuditTask;
@@ -70,6 +78,7 @@ export function createDeveloperSettingsViewModel(
       defaultModelLabel: locale === "ja" ? "既定モデル" : "默认模型",
       defaultModel: settings.defaultModel || "",
       modelCatalogLoading: settings.modelCatalogLoading,
+      modelCatalogStatus,
       defaultOptionLabel: settings.modelCatalogLoading
         ? (locale === "ja" ? "モデルを読み込み中…" : "正在读取模型…")
         : (locale === "ja" ? "Codex の既定値" : "Codex 默认"),

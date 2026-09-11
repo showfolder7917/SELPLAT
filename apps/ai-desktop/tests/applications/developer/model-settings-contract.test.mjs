@@ -67,9 +67,15 @@ test("模型目录来自官方 app-server 并按模型能力渲染推理强度�
   assert.match(developer, /model\.models\.map/);
   assert.match(developer, /supportedEfforts\.map/);
   assert.match(developer, /fastServiceTierSupported/);
+  assert.match(developer, /modelCatalogStatus/);
+  assert.match(developer, /Astra.*已出现/);
+  assert.match(developer, /Astra.*未出现/);
+  assert.match(developer, /无法读取模型列表/);
   assert.match(developer, /const nextServiceTier = model\?\.supportedServiceTiers\?\.includes\(serviceTier\) \? serviceTier : "default"/);
   assert.match(developer, /selectedModel\?\.supportedServiceTiers\?\.includes\("fast"\) === true/);
   assert.match(interactionPreload, /supportedServiceTiers: \["default", "fast"\]/);
+  assert.match(interactionPreload, /gpt-5\.6-astra/);
+  assert.match(interactionPreload, /setInteractionModelCatalogFailure/);
 });
 
 test("每轮主会话与协同连接读取同一份全局模型设置", () => {
