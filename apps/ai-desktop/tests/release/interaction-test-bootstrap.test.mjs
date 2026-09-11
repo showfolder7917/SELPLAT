@@ -4,6 +4,7 @@ import test from "node:test";
 
 const runner = readFileSync(new URL("../../scripts/run-interaction-tests.mjs", import.meta.url), "utf8");
 const config = readFileSync(new URL("../../playwright.interaction.config.ts", import.meta.url), "utf8");
+const serverRunner = readFileSync(new URL("../../scripts/run-interaction-test-server.mjs", import.meta.url), "utf8");
 const paths = readFileSync(new URL("../../scripts/interaction-test-paths.mjs", import.meta.url), "utf8");
 const packageJson = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
 const isolatedMain = readFileSync(new URL("../interaction/isolated-main.cjs", import.meta.url), "utf8");
@@ -19,6 +20,32 @@ test("交互测试引导不依赖尚未编译的本地公共包", () => {
   assert.match(paths, /resolveDependencyCache/);
   assert.match(paths, /temporaryMaterialsRoot/);
   assert.match(paths, /archiveLogRoot/);
+});
+
+test("截图编辑器测试服务保留退出诊断并在用例前检查可用性", () => {
+  assert.match(config, /AI_DESKTOP_INTERACTION_SERVER_DIAGNOSTICS/);
+  assert.match(config, /node scripts\/run-interaction-test-server\.mjs/);
+  assert.match(serverRunner, /vite\/package\.json/);
+  assert.doesNotMatch(serverRunner, /require\.resolve\("vite\/bin\/vite\.js"\)/);
+  assert.match(serverRunner, /failed-to-resolve/);
+  assert.match(config, /vite-server-diagnostics/);
+  assert.match(serverRunner, /failed-to-start/);
+  assert.match(serverRunner, /stoppingSignal/);
+  assert.match(serverRunner, /stdout/);
+  assert.match(serverRunner, /stderr/);
+  assert.match(sidebarSpec, /openScreenshotInteractionHarness/);
+  assert.match(sidebarSpec, /截图编辑器受控服务不可用/);
+});
+
+test("交互测试在工件写入前后保留存储快照", () => {
+  assert.match(runner, /storage-diagnostics\.json/);
+  assert.match(runner, /statfsSync/);
+  assert.match(runner, /availableBytes/);
+  assert.match(runner, /availableInodes/);
+  assert.match(runner, /directoryUsage/);
+  assert.match(runner, /无法写入交互测试存储诊断/);
+  assert.match(runner, /storageSnapshot\("before"\)/);
+  assert.match(runner, /storageSnapshot\("after"/);
 });
 
 test("桌面交互测试使用固定隔离入口并加载生产文件与正式窗口尺寸", () => {
