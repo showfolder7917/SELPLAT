@@ -15,6 +15,7 @@ const runSegment = (process.env.AI_DESKTOP_TEST_RUN_ID || "").replaceAll(/[^a-zA
 const interactionRoot = path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "interaction", taskSegment, runSegment);
 mkdirSync(interactionRoot, { recursive: true });
 process.env.AI_DESKTOP_INTERACTION_USER_DATA_ROOT = path.join(interactionRoot, "user-data");
+process.env.AI_DESKTOP_INTERACTION_SERVER_DIAGNOSTICS = path.join(interactionRoot, "vite-server-diagnostics.json");
 
 export default defineConfig({
   testDir: "./tests/interaction",
@@ -33,7 +34,7 @@ export default defineConfig({
   },
   // 主桌面用例直接加载生产文件；本地服务仅供独立截图编辑器测试入口使用。
   webServer: {
-    command: "cross-env VITE_APP_VARIANT=developer vite --host 127.0.0.1 --port 4197 --strictPort",
+    command: "node scripts/run-interaction-test-server.mjs",
     url: "http://127.0.0.1:4197",
     reuseExistingServer: false,
     timeout: 30_000,
