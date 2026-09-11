@@ -46,8 +46,10 @@ test("只有韩立和南宫婉输入区使用官方模型目录", () => {
   assert.match(hook, /codex\.getCodexModels\(\)/);
   assert.match(hanli, /modelCatalog/);
   assert.match(hanli, /selectModel/);
+  assert.match(hanli, /当前会话模型：\{selectedModelLabel\}/);
   assert.match(nangong, /modelCatalog/);
   assert.match(nangong, /selectModel/);
+  assert.match(nangong, /当前会话模型：\{selectedModelLabel\}/);
   assert.match(harnessRule, /hanli_and_nangong_persona_conversation_selected_model_override/);
   assert.doesNotMatch(linghu, /selectedModel/);
 });

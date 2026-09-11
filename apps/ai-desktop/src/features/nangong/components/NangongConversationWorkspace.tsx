@@ -56,6 +56,9 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
   const newConversationBusy = props.newConversationBusy;
   // 页面错误（error）是父页面需要显示的业务问题。
   const error = props.error;
+  // 当前会话模型直接投影为可见文字，验收截图无需猜测下拉框的已选项。
+  const selectedModelLabel = props.runtime.modelCatalog.find((model) => model.id === props.conversation.selectedModel)?.displayName
+    || "使用设置页默认模型";
   // 截图操作（onScreenshot）把截图按钮请求交给统一截图能力。
   const onScreenshot = props.onScreenshot;
 
@@ -186,6 +189,7 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
           {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
         </select>
       </label>
+      <p className="selconversation-model-status" role="status">当前会话模型：{selectedModelLabel}</p>
 
       {/* 问答输入区：接收客户文字，也允许粘贴截图。 */}
       <textarea className="selconversation-input" data-sel-conversation-input aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={controller.chatText} onChange={(event) => controller.setChatText(event.currentTarget.value)} onPaste={controller.pasteImages} />

@@ -26,6 +26,9 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
   const newConversationBusy = props.newConversationBusy;
   // 页面错误（error）是父页面需要在输入区上方展示的当前问题。
   const error = props.error;
+  // 当前会话模型直接投影为可见文字，验收截图无需猜测下拉框的已选项。
+  const selectedModelLabel = props.runtime.modelCatalog.find((model) => model.id === conversation.selectedModel)?.displayName
+    || "使用设置页默认模型";
   // 截图操作（onScreenshot）把截图按钮请求交给父页面的统一截图能力。
   const onScreenshot = props.onScreenshot;
   // 错误更新操作（onError）让托管开关可以把失败原因显示在当前页面。
@@ -127,6 +130,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
           {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
         </select>
       </label>
+      <p className="selconversation-model-status" role="status">当前会话模型：{selectedModelLabel}</p>
 
       {/* 文字输入区：接收客户问题，也允许从剪贴板粘贴截图。 */}
       <textarea
