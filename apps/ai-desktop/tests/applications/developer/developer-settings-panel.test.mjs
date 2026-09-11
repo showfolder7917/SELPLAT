@@ -8,6 +8,9 @@ import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } fro
 const component = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
   "../../../src/features/settings/components/DeveloperSettingsFeature.tsx",
+  "../../../src/features/settings/components/DeveloperSettingsView.tsx",
+  "../../../src/features/settings/model/createDeveloperSettingsViewModel.ts",
+  "../../../src/features/settings/model/useDeveloperSettingsSectionController.ts",
   "../../../src/features/settings/model/useDesktopDiagnostics.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const settingsPanel = readFileSync(new URL("../../../src/features/settings/components/SettingsFloatingPanel.tsx", import.meta.url), "utf8");
@@ -27,7 +30,8 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
   assert.match(component, /保留人物对话、训练记忆、登录、设置、工作区、规则和源码/);
   assert.match(component, /Codex 聊天训练入库/);
   assert.match(component, /只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库/);
-  assert.match(component, /aria-label=.*一键补齐历史 AI 摘要/);
+  assert.match(component, /backfillAriaLabel:.*一键补齐历史 AI 摘要/);
+  assert.match(component, /aria-label=\{corpus\.backfillAriaLabel\}/);
   assert.match(component, /startCorpusSemanticBackfill\(\)/);
   assert.match(component, /dev-account[\s\S]*test-data-reset-card[\s\S]*model-settings-card/);
   assert.match(styles, /\.test-data-reset-card\s*\{/);

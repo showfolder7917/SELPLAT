@@ -241,10 +241,17 @@ test("统一对话语料不吸收专题审批任务测试与异常业务投影",
 });
 
 test("renderer feature logic is no longer owned by the developer shell", () => {
-  const developerApp = source("src/applications/developer/DeveloperApplication.tsx");
+  // DeveloperApplication 只展示窗体布局，运行时 Feature 依赖由同应用的控制器统一准备。
+  const developerApp = [
+    source("src/applications/developer/DeveloperApplication.tsx"),
+    source("src/applications/developer/model/useDeveloperApplicationController.ts"),
+  ].join("\n");
   const codexWorkspace = source("src/features/conversation/model/useCodexWorkspace.ts");
   const collaborationWorkspace = source("src/features/collaboration/model/useCollaborationWorkspace.ts");
-  const settingsFeature = source("src/features/settings/components/DeveloperSettingsFeature.tsx");
+  const settingsFeature = [
+    source("src/features/settings/components/DeveloperSettingsFeature.tsx"),
+    source("src/features/settings/components/DeveloperSettingsView.tsx"),
+  ].join("\n");
   const architectureRule = source(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md`);
   assert.doesNotMatch(developerApp, /function applyCodexStreamEvent/);
   assert.doesNotMatch(developerApp, /function readStoredChat/);
@@ -255,7 +262,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRule, /rule_version = 2\.20\.0/);
+  assert.match(architectureRule, /rule_version = 2\.21\.0/);
   assert.match(architectureRule, /workflow_vertical_module_layout_contract/);
   assert.match(architectureRule, /workflow_aggregate_boundary_contract/);
   assert.match(architectureRule, /workflow_repair_replacement_contract/);
@@ -263,6 +270,12 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(architectureRule, /renderer_application_runtime_dependency_contract/);
   assert.match(architectureRule, /renderer_layout_structure_contract/);
   assert.match(architectureRule, /renderer_feature_control_ownership_contract/);
+  assert.match(architectureRule, /renderer_presentation_layer_contract/);
+  assert.match(architectureRule, /renderer_controller_responsibility_contract/);
+  assert.match(architectureRule, /renderer_view_model_responsibility_contract/);
+  assert.match(architectureRule, /renderer_section_creation_contract/);
+  assert.match(architectureRule, /renderer_pure_ui_contract/);
+  assert.match(architectureRule, /renderer_presentation_layer_scope_contract/);
   assert.match(architectureRule, /test_owner_structure_contract/);
   assert.match(architectureRule, /test_owner_execution_contract/);
   for (const applicationPart of [
@@ -378,6 +391,51 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
     assert.doesNotMatch(source(sourceFile), applicationInternalImport, `${sourceFile} must use a feature public index`);
     assert.doesNotMatch(source(sourceFile), siblingInternalImport, `${sourceFile} must use a sibling feature public index`);
   }
+});
+
+test("复杂 Renderer 窗口按 Controller、ViewModel、Section 和纯 UI 渐进分层", () => {
+  const developerApplication = source("src/applications/developer/DeveloperApplication.tsx");
+  const developerViewModel = source("src/applications/developer/model/createDeveloperViewModel.ts");
+  const developerSidebar = source("src/applications/developer/components/DeveloperSidebarControls.tsx");
+  const screenshotApplication = source("src/applications/screenshot/ScreenshotApplication.tsx");
+  const screenshotViewModel = source("src/applications/screenshot/model/createScreenshotApplicationViewModel.ts");
+  const settingsView = source("src/features/settings/components/DeveloperSettingsView.tsx");
+  const workspaceRouter = source("src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx");
+  const workspaceRouterController = source("src/applications/developer/model/useDeveloperWorkspaceRouterController.ts");
+  const workspaceRouterViewModel = source("src/applications/developer/model/createDeveloperWorkspaceRouterViewModel.ts");
+  const workspacePageSection = source("src/applications/developer/sections/DeveloperWorkspacePageSection.tsx");
+  const linghuDisplayController = source("src/applications/developer/model/useLinghuDisplayConversationController.ts");
+  const workspaceTabAction = source("src/applications/developer/components/DeveloperWorkspaceTabAction.tsx");
+
+  // DeveloperApplication 只保留四层装配顺序，布局细节由 Section 和纯组件表达。
+  assert.match(developerApplication, /useDeveloperApplicationController/);
+  assert.match(developerApplication, /createDeveloperViewModel/);
+  assert.match(developerApplication, /DeveloperActivitySection/);
+  assert.match(developerApplication, /DeveloperExplorerSection/);
+  assert.match(developerApplication, /DeveloperWorkspaceSection/);
+  assert.doesNotMatch(developerViewModel, /return\s*</u);
+  assert.doesNotMatch(developerSidebar, /useDeveloperApplicationController|getOptional\w+DesktopApi/u);
+
+  // Screenshot 入口采用同一方向，但画布算法仍留在专业模块中。
+  assert.match(screenshotApplication, /useScreenshotApplicationController/);
+  assert.match(screenshotApplication, /createScreenshotApplicationViewModel/);
+  assert.match(screenshotApplication, /ScreenshotApplicationSection/);
+  assert.doesNotMatch(screenshotViewModel, /return\s*</u);
+
+  // Settings 的纯 View 不得越层读取 Desktop API 或调用控制 Hook。
+  assert.doesNotMatch(settingsView, /useDeveloperSettingsSectionController|getOptional\w+DesktopApi/u);
+
+  // 工作区路由不直接跨 Electron 边界；令狐动作由 Controller 持有，按钮保持纯 UI。
+  assert.doesNotMatch(workspaceRouter, /getOptional\w+DesktopApi/u);
+  assert.match(workspaceRouter, /useDeveloperWorkspaceRouterController/);
+  assert.match(workspaceRouter, /createDeveloperWorkspaceRouterViewModel/);
+  assert.match(workspaceRouter, /DeveloperWorkspacePageSection/);
+  assert.doesNotMatch(workspaceRouter, /CodexConversationWorkspace|HanliConversationWorkspace|NangongConversationWorkspace/u);
+  assert.match(workspaceRouterController, /activateTab/);
+  assert.doesNotMatch(workspaceRouterViewModel, /return\s*</u);
+  assert.doesNotMatch(workspacePageSection, /getOptional\w+DesktopApi/u);
+  assert.match(linghuDisplayController, /getOptionalCollaborationDesktopApi/);
+  assert.doesNotMatch(workspaceTabAction, /useState|useEffect|getOptional\w+DesktopApi/u);
 });
 
 test("tests mirror production owners and the full runner discovers them recursively", () => {

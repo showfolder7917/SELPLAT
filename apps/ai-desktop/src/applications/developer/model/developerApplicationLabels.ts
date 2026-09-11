@@ -1,0 +1,30 @@
+/** Developer 窗口使用的中日文文案；单独存放后，主组件可以专注展示布局。 */
+export const developerApplicationLabels = {
+  ja: {
+    title: "Developer", settings: "接続と実行設定",
+    workspaces: "WORKSPACES", addWorkspace: "ワークスペースを追加", primary: "メイン", makePrimary: "メインに設定",
+    remove: "削除", removeConfirm: "ワークスペース一覧から「{name}」を削除しますか？ディスク上のフォルダーは削除されません。",
+    minimumWorkspace: "ワークスペースを1つ以上残してください", readOnly: "読み取り専用", write: "ワークスペース書き込み",
+    readOnlyTip: "現在は読み取り専用", writeTip: "現在は書き込み可能", account: "ChatGPT アカウント",
+    signedOut: "ChatGPT にログインしてください", signOut: "ログアウト", signIn: "ChatGPT でログイン",
+    browserOpened: "ブラウザーでログインを完了してください", tempFiles: "一時ファイル", openTemp: "一時フォルダーを開く",
+    clearTemp: "すべて消去", clearConfirm: "AI Desktop の一時ファイルをすべて削除しますか？", trustedCommands: "信頼済みコマンド",
+    trustHint: "同じプロジェクトとコマンドは次回から自動的に許可されます。", clearTrustedCommands: "信頼をすべて解除",
+    clearTrustedConfirm: "登録済みの信頼コマンドをすべて解除しますか？", auditLogs: "業務ログ", openAuditLogs: "ログフォルダーを開く",
+    noAuditTask: "タスク履歴はまだありません", attachment: "画像添付", automaticTestTriggered: "自動テスト",
+    screenSourceUnavailable: "画面ソースを読み取れません。画面収録の権限を確認してから再試行してください。",
+  },
+  "zh-CN": {
+    title: "Developer", settings: "连接与执行设置",
+    workspaces: "工作区", addWorkspace: "添加工作区", primary: "主目录", makePrimary: "设为主目录", remove: "移除",
+    removeConfirm: "确定从工作区列表移除“{name}”吗？不会删除磁盘中的真实目录。", minimumWorkspace: "至少保留一个工作区",
+    readOnly: "只读", write: "工作区写入", readOnlyTip: "当前只读", writeTip: "当前可写入", account: "ChatGPT 账号",
+    signedOut: "请先登录 ChatGPT", signOut: "退出登录", signIn: "使用 ChatGPT 登录", browserOpened: "请在浏览器中完成登录",
+    tempFiles: "临时文件", openTemp: "临时目录", clearTemp: "一键清理",
+    clearConfirm: "确定清理 AI Desktop temp 中的全部临时文件吗？", trustedCommands: "可信命令",
+    trustHint: "相同项目和命令下次将自动允许。", clearTrustedCommands: "清除全部信任",
+    clearTrustedConfirm: "确定清除全部项目可信命令吗？", auditLogs: "业务日志", openAuditLogs: "打开日志目录",
+    noAuditTask: "暂无任务记录", attachment: "图片附件", automaticTestTriggered: "自动测试",
+    screenSourceUnavailable: "无法读取屏幕来源，请检查屏幕录制权限后重试。",
+  },
+} as const;

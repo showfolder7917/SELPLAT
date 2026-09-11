@@ -38,6 +38,8 @@ const developerApp = [
   "../../../src/features/conversation/model/useCodexWorkspace.ts",
   "../../../src/features/conversation/model/useConversationDispatch.ts",
   "../../../src/features/settings/components/DeveloperSettingsFeature.tsx",
+  "../../../src/features/settings/components/DeveloperSettingsView.tsx",
+  "../../../src/features/settings/model/createDeveloperSettingsViewModel.ts",
   "../../../src/features/settings/model/useDesktopDiagnostics.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const chatMessageModel = readFileSync(new URL("../../../src/features/conversation/model/chat-message.ts", import.meta.url), "utf8");

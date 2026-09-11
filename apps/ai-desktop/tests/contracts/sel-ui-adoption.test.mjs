@@ -11,7 +11,11 @@ const entry = read("../../src/main.tsx");
 const developerStyles = read("../../src/applications/styles/desktop-applications.css");
 const developerApp = [
   read("../../src/applications/developer/DeveloperApplication.tsx"),
+  read("../../src/applications/developer/components/DeveloperWorkspaceTabAction.tsx"),
+  read("../../src/applications/developer/model/useDeveloperTooltip.ts"),
+  read("../../src/applications/developer/model/createDeveloperWorkspaceRouterViewModel.ts"),
   read("../../src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx"),
+  read("../../src/applications/developer/sections/DeveloperWorkspacePageSection.tsx"),
   read("../../src/features/conversation/components/CodexConversationWorkspace.tsx"),
   read("../../src/features/conversation/model/useCodexConversation.ts"),
   read("../../src/features/conversation/model/useCodexWorkspace.ts"),
@@ -20,6 +24,8 @@ const developerApp = [
   read("../../src/features/nangong/components/NangongConversationWorkspace.tsx"),
   read("../../src/features/nangong/components/useNangongConversationWorkspace.ts"),
   read("../../src/features/settings/components/DeveloperSettingsFeature.tsx"),
+  read("../../src/features/settings/components/DeveloperSettingsView.tsx"),
+  read("../../src/features/settings/model/createDeveloperSettingsViewModel.ts"),
 ].join("\n");
 const desktopChrome = read("../../src/features/shell/components/DesktopChrome.tsx");
 const desktopIpc = read("../../electron/system/ipc/register-desktop-ipc.ts");
@@ -179,5 +185,5 @@ test("登录主操作完整消费 SEL UI 令牌并保留可读文字节点", () 
   ]) assert.match(accountRule, new RegExp(`var\\(${token}\\)`), `登录按钮缺少 ${token}`);
   assert.doesNotMatch(accountRule, /min-height:\s*32px|padding:\s*0 13px|border-radius:\s*6px|font-weight:\s*650/);
   assert.match(desktopChrome, /className="chatgpt-login-action primary"[\s\S]*?<span>\{label\}<\/span>/);
-  assert.match(developerApp, /<ChatGPTLoginAction label=\{text\.signIn\}/);
+  assert.match(developerApp, /<ChatGPTLoginAction label=\{account\.signInLabel\}/);
 });

@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const screenshotEditor = readFileSync(new URL("../../../src/features/screenshot/components/ScreenshotEditor.tsx", import.meta.url), "utf8");
-const screenshotWindow = readFileSync(new URL("../../../src/applications/screenshot/ScreenshotApplication.tsx", import.meta.url), "utf8");
+const screenshotWindow = [
+  "../../../src/applications/screenshot/ScreenshotApplication.tsx",
+  "../../../src/applications/screenshot/model/useScreenshotApplicationController.ts",
+  "../../../src/applications/screenshot/model/createScreenshotApplicationViewModel.ts",
+  "../../../src/applications/screenshot/sections/ScreenshotApplicationSection.tsx",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",

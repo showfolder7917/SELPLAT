@@ -4,8 +4,8 @@
 rule_scope = selplat/application/ai-desktop/architecture_boundary_and_rule_delivery
 <!-- 规则所有者始终从工程根当前稳定用户声明解析，禁止固定用户分支。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
-<!-- 2.20.0 让 Developer 装配目录直接呈现左侧 Explorer 与右侧 Workspace，并把跨模式任务导航从 collaboration 业务页面中分离。 -->
-rule_version = 2.20.0
+<!-- 2.21.0 为复杂 Renderer 窗口和页面增加 Controller、ViewModel、Section、Pure UI 渐进分层，并禁止对基础设施和简单组件机械套层。 -->
+rule_version = 2.21.0
 <!-- active 表示规则正文、叶子索引和生产规则白名单已经形成可达入口。 -->
 rule_status = active
 <!-- 本轮架构重构由应用 TypeScript、Node 构建脚本和静态门禁实现，不建立 Java 能力。 -->
@@ -91,6 +91,18 @@ renderer_beginner_implementation_contract = named_event_method + explicit_guard_
 renderer_beginner_structure_exception_contract = pure_View_with_existing_shared_controller + small_stateless_leaf + application_composition + router + shared_model_theme_foundation + screenshot_canvas_and_geometry + no_empty_wrapper_or_duplicate_controller
 <!-- Renderer 的真实窗口必须由 applications 独立拥有；Application 只装配布局与 feature，禁止一个文件同时定义多个窗口或人物、协作、会话业务页面。 -->
 renderer_application_structure_contract = applications/developer + applications/screenshot + one_real_window_per_application + application_composes_layout_and_features_only + no_variants_production_owner + no_evolution_workspace_application
+<!-- 复杂窗口的数据准备依次经过应用 Controller 与 ViewModel，可见区域由 Section 组合，纯组件只消费窄 props；适用于 Developer、Screenshot 等真实复杂窗口。 -->
+renderer_presentation_layer_contract = complex_application_Controller_to_ViewModel_to_Section_to_Pure_UI + application_structure_only + feature_state_owned_by_feature_controller + narrow_section_view_model_slice
+<!-- Controller 拥有请求、状态迁移和跨 Feature 协调；不得返回 JSX、创建视觉 className 或复制 Feature 已有业务状态。 -->
+renderer_controller_responsibility_contract = request_state_transition_and_cross_feature_coordination + no_JSX_or_visual_class + no_duplicate_feature_state_owner
+<!-- ViewModel 只把 Controller 状态转换为显示文案、可见性、禁用态、选择态和窄回调；禁止调用 Desktop API、修改持久状态、返回 JSX 或原样透传完整 Controller。 -->
+renderer_view_model_responsibility_contract = controller_state_to_display_copy_visibility_disabled_selected_and_narrow_callbacks + no_DesktopApi_or_persistence_mutation + no_JSX_ReactNode_DOM + no_whole_controller_passthrough
+<!-- Section 只为包含多个子组件、独立空错恢复状态、稳定区域边界或独立测试价值的真实可见区域建立；禁止一行转发空包装。 -->
+renderer_section_creation_contract = real_visible_region_with_multiple_children_or_independent_state_or_stable_boundary_or_test_value + no_one_line_forwarding_wrapper
+<!-- 纯 UI 组件只依据简单 props 与回调渲染，不读取应用 Controller、Feature 全局状态或 Desktop API。 -->
+renderer_pure_ui_contract = deterministic_props_and_callbacks_only + no_application_controller + no_feature_global_state + no_DesktopApi
+<!-- 四层结构按复杂度采用；foundation、theme、纯 model、小型无状态叶子以及截图 canvas/geometry 保持本身职责，不为目录整齐生成空层。 -->
+renderer_presentation_layer_scope_contract = complex_windows_pages_and_display_transformations_only + foundation_theme_pure_model_small_leaf_screenshot_canvas_geometry_exempt + no_mechanical_full_src_layering
 <!-- 代码分割后的每个 Application 必须显式加载自身控件注册和样式副作用，禁止依赖其他窗口或懒加载分支先执行。 -->
 renderer_application_runtime_dependency_contract = each_lazy_application_imports_own_control_registration_and_styles + no_cross_application_side_effect_dependency + interaction_test_each_production_application
 <!-- Developer 窗口的磁盘结构必须直接呈现左侧 explorer、右侧 workspace 和外围 layout；纯布局不得直接持有 DesktopApi 业务流程。 -->

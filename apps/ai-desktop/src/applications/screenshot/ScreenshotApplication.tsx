@@ -1,85 +1,18 @@
-import { useEffect, useState } from "react";
+/** 独立截图窗口的总装配入口，只连接 Controller、ViewModel 和页面 Section。 */
 
-import type {
-  LocaleValue,
-  ScreenCaptureOutDto,
-  ScreenCaptureFrameInDto,
-} from "../../../contracts/system/desktop/index";
-import { getOptionalScreenshotDesktopApi } from "../../foundation/desktop-api";
-import { getOptionalSystemDesktopApi } from "../../foundation/desktop-api";
-import { ScreenshotEditor } from "../../features/screenshot";
+import { createScreenshotApplicationViewModel } from "./model/createScreenshotApplicationViewModel";
+import { useScreenshotApplicationController } from "./model/useScreenshotApplicationController";
+import { ScreenshotApplicationSection } from "./sections/ScreenshotApplicationSection";
+
+// 独立懒加载窗口必须自己加载所需样式，不能依赖 Developer 窗口先启动。
 import "../styles/desktop-applications.css";
 
-/** 独立截图窗口只负责选择、标注和保存主进程取得的 macOS 原生无光标 PNG。 */
+/** 按 Controller → ViewModel → Section 装配真实截图窗口。 */
 export function ScreenshotApplication() {
-  const [capture, setCapture] = useState<ScreenCaptureOutDto | null>(null);
-  const [captureVersion, setCaptureVersion] = useState(0);
-  const [locale, setLocale] = useState<LocaleValue>("zh-CN");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const reportStage = (stage: string, detail?: string) => {
-      void getOptionalScreenshotDesktopApi()?.notifyScreenCaptureStage(stage, detail).catch(() => {});
-    };
-
-    const receiveNativeFrame = async (request: ScreenCaptureFrameInDto) => {
-      try {
-        const nextCapture = request.capture;
-        if (!nextCapture?.dataUrl.startsWith("data:image/png;base64,") || nextCapture.width < 1 || nextCapture.height < 1) {
-          throw new Error("主进程返回的截图画面无效。");
-        }
-        setError("");
-        setCapture(nextCapture);
-        setCaptureVersion((current) => current + 1);
-        reportStage("renderer-native-frame-received", `${nextCapture.width}x${nextCapture.height}`);
-        await getOptionalScreenshotDesktopApi()?.submitScreenCaptureFrameResult({
-          requestId: request.requestId,
-          width: nextCapture.width,
-          height: nextCapture.height,
-        });
-      } catch (caught) {
-        const message = caught instanceof Error ? caught.message : "无法读取屏幕画面";
-        setError(message);
-        await getOptionalScreenshotDesktopApi()?.submitScreenCaptureFrameResult({ requestId: request.requestId, width: 0, height: 0, error: message });
-      }
-    };
-
-    const removeFrameListener = getOptionalScreenshotDesktopApi()?.onScreenCaptureFrameRequested((request) => void receiveNativeFrame(request));
-    void getOptionalSystemDesktopApi()?.getSettings()
-      .then((settings) => {
-        if (settings) setLocale(settings.locale);
-      })
-      .catch((caught) => setError(caught instanceof Error ? caught.message : "无法打开截图窗口"));
-    return () => removeFrameListener?.();
-  }, []);
-
-  useEffect(() => getOptionalScreenshotDesktopApi()?.onScreenCaptureReset(() => {
-    setCapture(null);
-    setError("");
-  }), []);
-
-  useEffect(() => {
-    let paintedFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      paintedFrame = window.requestAnimationFrame(() => void getOptionalScreenshotDesktopApi()?.showScreenshotWindow());
-    });
-    return () => {
-      window.cancelAnimationFrame(firstFrame);
-      if (paintedFrame) window.cancelAnimationFrame(paintedFrame);
-    };
-  }, [capture]);
-
-  const cancel = async () => {
-    await getOptionalScreenshotDesktopApi()?.endScreenshotEditing();
-  };
-
-  const complete = async (originalDataUrl: string, annotatedDataUrl: string, hasAnnotations: boolean) => {
-    const saved = await getOptionalScreenshotDesktopApi()?.saveScreenshot({ originalDataUrl, annotatedDataUrl, hasAnnotations });
-    if (!saved) throw new Error("AI Desktop screenshot service is unavailable.");
-    await getOptionalScreenshotDesktopApi()?.endScreenshotEditing();
-  };
-
-  if (error) return <main className="screenshot-window-error"><p>{error}</p><button type="button" onClick={() => void cancel()}>关闭</button></main>;
-  if (!capture) return <main className="screenshot-window-loading" aria-label="正在加载截图" />;
-  return <ScreenshotEditor key={captureVersion} capture={capture} locale={locale} onCancel={() => void cancel()} onComplete={complete} />;
+  // Controller 接收主进程画面并负责保存或取消。
+  const controller = useScreenshotApplicationController();
+  // ViewModel 将运行状态转换为错误、加载或编辑三种互斥页面。
+  const viewModel = createScreenshotApplicationViewModel(controller);
+  // Section 只根据显示模型选择当前可见页面。
+  return <ScreenshotApplicationSection viewModel={viewModel} />;
 }

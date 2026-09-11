@@ -22,6 +22,8 @@ const collaboration = read("electron/services/support/capabilities/conversation/
 const developer = [
   read("src/applications/developer/DeveloperApplication.tsx"),
   read("src/features/settings/components/DeveloperSettingsFeature.tsx"),
+  read("src/features/settings/components/DeveloperSettingsView.tsx"),
+  read("src/features/settings/model/createDeveloperSettingsViewModel.ts"),
   read("src/features/settings/model/useDesktopSettings.ts"),
 ].join("\n");
 const interactionPreload = read("tests/interaction/isolated-preload.cjs");
@@ -50,7 +52,8 @@ test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () =>
   assert.match(store, /value\.codexAppCorpusIngestionEnabled === true/);
   assert.match(store, /typeof patch\.codexAppCorpusIngestionEnabled === "boolean"/);
   assert.match(developer, /Codex 聊天训练入库/);
-  assert.match(developer, /aria-pressed=\{codexAppCorpusIngestionEnabled\}/);
+  assert.match(developer, /ingestionEnabled: settings\.codexAppCorpusIngestionEnabled/);
+  assert.match(developer, /aria-pressed=\{corpus\.ingestionEnabled\}/);
 });
 
 test("模型目录来自官方 app-server 并按模型能力渲染推理强度和速度", () => {
@@ -61,7 +64,7 @@ test("模型目录来自官方 app-server 并按模型能力渲染推理强度�
   assert.match(service, /additionalSpeedTiers/);
   assert.match(service, /supportsFastMode === true/);
   assert.match(contracts, /supportedServiceTiers: ModelServiceTierValue\[\]/);
-  assert.match(developer, /modelCatalog\.models\.map/);
+  assert.match(developer, /model\.models\.map/);
   assert.match(developer, /supportedEfforts\.map/);
   assert.match(developer, /fastServiceTierSupported/);
   assert.match(developer, /const nextServiceTier = model\?\.supportedServiceTiers\?\.includes\(serviceTier\) \? serviceTier : "default"/);
