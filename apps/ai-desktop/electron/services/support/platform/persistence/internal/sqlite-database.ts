@@ -24,6 +24,8 @@ export type AiMemoryDatabaseInitialization = {
 export type InitializeAiMemoryDatabaseOptions = {
   projectRoot: string;
   runtimeMarkerPath: string;
+  /** 已安装应用使用包内只读迁移清单；数据库文件仍由 projectRoot 的受控路径决定。 */
+  migrationSqlRoot?: string;
 };
 
 export class SqliteDatabase {
@@ -116,7 +118,10 @@ export function initializeAiMemoryDatabase(options: InitializeAiMemoryDatabaseOp
     const resolved = resolveAiMemoryPaths(options.projectRoot);
     databasePath = resolved.databasePath;
     recoveryEvidence = existsSync(databasePath) || existsSync(options.runtimeMarkerPath);
-    const sqlRoot = path.join(resolved.databaseRoot, "sql");
+    // 候选包必须用自身携带的迁移版本升级受控工程数据库；不能因主工程尚未提升而遗漏新列。
+    const sqlRoot = options.migrationSqlRoot
+      ? path.resolve(options.migrationSqlRoot)
+      : path.join(resolved.databaseRoot, "sql");
     const marker = readRuntimeMarker(options.runtimeMarkerPath);
     const expectedPathHash = hashDatabasePath(databasePath);
     if (marker && marker.databasePathHash !== expectedPathHash) {

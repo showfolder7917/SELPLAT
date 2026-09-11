@@ -44,6 +44,30 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   }
 });
 
+test("候选包可用自身迁移清单升级仍停在旧版本的受控工程数据库", () => {
+  const fixture = createFixture("candidate-packaged-migrations");
+  try {
+    installSchemaUpTo(fixture, 1024);
+    const legacy = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(legacy.status.schemaVersion, "1024");
+    legacy.database?.close();
+
+    const candidateMigrationRoot = path.join(appRoot, "db", "sql");
+    const upgraded = initializeAiMemoryDatabase({
+      ...fixture.options,
+      migrationSqlRoot: candidateMigrationRoot,
+    });
+    assert.equal(upgraded.status.state, "ready");
+    assert.equal(upgraded.status.schemaVersion, "1025");
+    assert.ok(upgraded.database?.withConnection((connection) =>
+      connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get(),
+    ));
+    upgraded.database?.close();
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("1023 在主题已有语义提取和需求轨迹引用时原子升级并保留数据", () => {
   const fixture = createFixture("1023-referenced-topic");
   try {

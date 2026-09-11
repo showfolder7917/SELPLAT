@@ -217,6 +217,8 @@ export async function startApplication(): Promise<void> {
   persistenceContext = createPersistenceContext({
     projectRoot,
     runtimeMarkerPath: path.join(app.getPath("userData"), "ai-memory-database-state.json"),
+    // 已安装候选包从自身资源读取迁移，数据文件仍固定留在已选择的工程数据根。
+    migrationSqlRoot: app.isPackaged ? path.join(process.resourcesPath, "db", "sql") : undefined,
     eventCenter,
     onTimelineChanged: (event) => {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
