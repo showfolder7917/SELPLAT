@@ -241,7 +241,7 @@ test("会话发送统一排队、显式补充并在重建后显示恢复操作",
 });
 
 test("Harness 只使用指定版本的内置或校验下载 Codex 并公开实际来源", () => {
-  assert.match(codexRuntime, /CODEX_TARGET_VERSION = "0\.149\.0"/);
+  assert.match(codexRuntime, /CODEX_TARGET_VERSION = "0\.154\.0"/);
   assert.match(codexRuntime, /source: "bundled" \| "downloaded"/);
   assert.match(codexRuntime, /registry\.npmjs\.org/);
   assert.match(codexRuntime, /archiveIntegrity/);

@@ -282,7 +282,7 @@ export class CodexService {
       // 真实任务放在第一段；工作区仍是同一条用户输入的授权上下文，但不再抢占官方线程标题。
       text: `${userTask}\n\n${workspaceContext(workspaces)}`,
     }];
-    // 官方 app-server 0.149.0 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
+    // 官方 app-server 的 turn/start 使用 localImage 路径读取本地主进程已校验的 PNG。
     input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
     this.#activeExecutionMode = executionMode;
     this.#activeWorkspaces = workspaces;

@@ -97,7 +97,7 @@ packaged_harness_binary_contract = asar_unpack_@openai_codex_and_platform_packag
 <!-- AI Desktop 只维护单一 Developer 产品线和 electron-builder.developer.config.cjs 配置；客户版与免安装 ZIP 的配置、脚本、运行模式和界面分支保持退役。 -->
 ai_desktop_single_packaging_configuration_contract = developer_product_only + electron-builder.developer.config.cjs_only + windows_NSIS_and_macos_DMG_or_dir + prohibit_customer_config_and_scripts + prohibit_archive_zip_config_script_protocol_runtime_or_UI_branch
 <!-- Windows 包只允许在 Windows 原生宿主生成；平台包仍直接锁定，但 macOS 不得再执行 Windows 交叉打包。 -->
-windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.149.0-win32-x64
+windows_harness_platform_dependency = direct_alias_@openai/codex-win32-x64_to_@openai/codex@0.154.0-win32-x64
 <!-- 所有 Windows 打包入口必须在任何构建前校验 process.platform=win32，真实启动和登录验收也只在 Windows 环境执行。 -->
 windows_native_build_host_contract = win32_host_gate_before_build + prohibit_macos_cross_package + windows_runtime_login_and_button_acceptance_on_windows_only
 <!-- 规则没有重复文档结构，不创建虚假模板或案例；官方协议 README 和应用真实源码构成可核对依据。 -->

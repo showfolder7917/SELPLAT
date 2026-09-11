@@ -116,7 +116,7 @@ harness_global_model_settings_contract = settings_panel_default_model_reasoning_
 <!-- AI Desktop 初始安装和旧版空模型设置统一迁移到 Terra，迁移后仍以用户显式选择为最高优先级。 -->
 harness_default_model_contract = initialize_and_migrate_legacy_empty_default_to_gpt_5_6_terra + preserve_later_explicit_user_selection
 <!-- Harness 运行时版本是应用发布事实，只允许安装包内置目标版或下载校验后的同一目标版。 -->
-harness_runtime_version_alignment_contract = exact_target_0_149_0 + packaged_native_runtime_first + verified_same_version_private_download_only_when_packaged_missing_or_invalid + no_hot_swap_during_active_turn + visible_packaged_or_verified_download_source_path_and_version + audit_selected_runtime
+harness_runtime_version_alignment_contract = exact_target_0_154_0 + packaged_native_runtime_first + verified_same_version_private_download_only_when_packaged_missing_or_invalid + no_hot_swap_during_active_turn + visible_packaged_or_verified_download_source_path_and_version + audit_selected_runtime
 <!-- 旧的兼容探测会造成 AI 误认和不受控切换，因此源码与规则都不得保留任何外部候选入口。 -->
 harness_external_runtime_prohibition = no_PATH_scan + no_Homebrew + no_ChatGPT_app_runtime + no_Codex_app_runtime + no_models_cache_version_selection + no_user_configured_executable + no_highest_version_fallback
 <!-- 下载修复只接受已固化清单，归档、包元数据和原生程序必须在执行前逐项验证。 -->

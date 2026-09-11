@@ -9,7 +9,7 @@ import { execFile, spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { extract } from "tar";
 
-export const CODEX_TARGET_VERSION = "0.149.0";
+export const CODEX_TARGET_VERSION = "0.154.0";
 
 const OPENAI_MAC_TEAM_ID = "2DC432GLL2";
 const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024;
@@ -24,12 +24,12 @@ interface PlatformRuntimeManifest {
 }
 
 const PLATFORM_RUNTIME_MANIFESTS: Record<string, PlatformRuntimeManifest> = {
-  "darwin-arm64": runtimeManifest("darwin-arm64", "vendor/aarch64-apple-darwin/bin/codex", "GsZJbzBWiD48RETrO8VHGAQNgfSrUVxItXZFeD87wswatPi0+lKuQo8Dx4nMYmOZhZrVtwr3al/feRrZxnDV8Q=="),
-  "darwin-x64": runtimeManifest("darwin-x64", "vendor/x86_64-apple-darwin/bin/codex", "H+mMgW3Nhc5QzGWEklCoFqACuOc0cVpgPkPQRw0LShoK7P5664T6BRnyl1yzT6orKPKv49cXry7DIWWZ19SanQ=="),
-  "linux-arm64": runtimeManifest("linux-arm64", "vendor/aarch64-unknown-linux-musl/bin/codex", "fAXPpvIob+11RNZJS9CVVTsKb+V4Hw3woGFPj42D7fU2wBJUKI2jfAc4fLJNtrpwRecLeW601mtkMHOSIbWuuA=="),
-  "linux-x64": runtimeManifest("linux-x64", "vendor/x86_64-unknown-linux-musl/bin/codex", "uZXaN9JPxu0/jjnqqJeTd4kRYPnjVZK3MiVndfG1mHhEaoDKL7ScWHfPqvAEOjwsSDEmQSlMfUkmvYp/CHciYw=="),
-  "win32-arm64": runtimeManifest("win32-arm64", "vendor/aarch64-pc-windows-msvc/bin/codex.exe", "pUd8MzuwtqT5DhM1NUE1gETWIZ9fkDA1XB7tt9YNIi/peUgLuziQgZd7o0bNON4cNzgbil1YUN1qDTgQm0g3pg=="),
-  "win32-x64": runtimeManifest("win32-x64", "vendor/x86_64-pc-windows-msvc/bin/codex.exe", "qKbwSOOO/fdhQ5MlXE2fts6taPxRPZ/zqeC+eqHD72hLRymV9rFCUbUxOCquognUPRPvS/2/kRCV0UVhoDd3yQ=="),
+  "darwin-arm64": runtimeManifest("darwin-arm64", "vendor/aarch64-apple-darwin/bin/codex", "HP/vJCH/t2hB9Kg6hotN9UglClJ6/z584fal5lEP14C9gNAgAQS4/kTQC7l5V+BA3TqwDPwINSjul28cX8AYXg=="),
+  "darwin-x64": runtimeManifest("darwin-x64", "vendor/x86_64-apple-darwin/bin/codex", "2aqz+72Hop8PF2RYglQ4JnGjm3OlRIrTykJIT0hyLeUgM6NCFy09RgTmqRCoWliKQZjEn9jjZqUEp7QujAj77g=="),
+  "linux-arm64": runtimeManifest("linux-arm64", "vendor/aarch64-unknown-linux-musl/bin/codex", "KmTCB6ST484zeYlPpKP/K5P/gRaYmt6TihVD+zotoe6O9q0JSBP+FYvCz4A/zZXR7xDOHURTSjHp0sD8wWS0YQ=="),
+  "linux-x64": runtimeManifest("linux-x64", "vendor/x86_64-unknown-linux-musl/bin/codex", "a4FI3A8sGtwGrOqltrPbrS2hajrHQG591EwmRfiRoLMb10VxdBtUGW4gu6IJVYENiYGA7k3P4jlRHEoCZU/s9Q=="),
+  "win32-arm64": runtimeManifest("win32-arm64", "vendor/aarch64-pc-windows-msvc/bin/codex.exe", "CRUmZnE0Y/a8aLMrrA681EytOGaPaF659wJAiI4I3hsbQjaeYBSPV7PkCjy4Qn5LR/fmwIUORVH+6JaBNQL+tw=="),
+  "win32-x64": runtimeManifest("win32-x64", "vendor/x86_64-pc-windows-msvc/bin/codex.exe", "Stg2KEJPIKVqPPR1wCverGOR4ey3RR3cvakR07w7FNKQUMzmHaOZomRsP2bR1qOT/67yHsks9rB+MCMfIWXcRA=="),
 };
 
 export interface CodexRuntime {
