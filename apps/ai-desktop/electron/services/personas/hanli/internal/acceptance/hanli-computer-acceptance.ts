@@ -100,7 +100,7 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
@@ -121,6 +121,7 @@ export class HanliComputerAcceptance {
             control: {
               type: "string",
               enum: ["hanli-model", "nangong-model", "default-model", "reasoning-effort", "service-tier"],
+              description: "仅供 focus-model-control 使用：聚焦固定白名单控件，不读取或设置选项值；模型和设置值只能由后续真实键盘输入改变。",
             },
             reason: { type: "string" },
             findings: {

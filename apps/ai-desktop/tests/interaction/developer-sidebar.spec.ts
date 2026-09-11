@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -6,6 +7,26 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 let application: ElectronApplication;
 let page: Page;
 const productionRendererFile = path.resolve("../../build/ai-desktop/renderer/developer/index.html");
+
+function interactionServerDiagnostics() {
+  const diagnosticsFile = process.env.AI_DESKTOP_INTERACTION_SERVER_DIAGNOSTICS;
+  if (!diagnosticsFile) return "未配置服务诊断文件。";
+  try {
+    return readFileSync(diagnosticsFile, "utf8");
+  } catch (error) {
+    return `无法读取服务诊断文件 ${diagnosticsFile}：${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+async function openScreenshotInteractionHarness() {
+  try {
+    const health = await page.request.get("http://127.0.0.1:4197/", { timeout: 3_000 });
+    if (!health.ok()) throw new Error(`服务返回 HTTP ${health.status()}。`);
+  } catch (error) {
+    throw new Error(`截图编辑器受控服务不可用；${error instanceof Error ? error.message : String(error)}\n${interactionServerDiagnostics()}`);
+  }
+  await page.goto("http://127.0.0.1:4197/?mode=screenshot-interaction");
+}
 test.beforeAll(async () => {
   // 冷缓存首次转换生产资源时 Electron 建连可能超过单项交互的 15 秒时限；只放宽一次性启动钩子。
   test.setTimeout(45_000);
@@ -932,7 +953,7 @@ test("SELUI 多页签保留草稿、重复定位、关闭相邻页且不删除�
 });
 
 test("红框选中后可以移动缩放且操作按钮随焦点显示", async () => {
-  await page.goto("http://127.0.0.1:4197/?mode=screenshot-interaction");
+  await openScreenshotInteractionHarness();
   const source = page.locator(".screenshot-source");
   await expect(source).toBeVisible();
   const sourceBounds = await source.boundingBox();
