@@ -96,7 +96,7 @@ export class HanliComputerAcceptance {
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "key", "hover", "send-test-message", "send-test-screenshot", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
             },
             observationId: { type: "string" },
             x: { type: "integer" },
@@ -106,7 +106,11 @@ export class HanliComputerAcceptance {
             deltaY: { type: "integer" },
             key: {
               type: "string",
-              enum: ["Tab", "Escape", "ArrowDown", "ArrowUp", "PageDown", "PageUp"],
+              enum: ["Tab", "Escape", "Home", "ArrowDown", "ArrowUp", "PageDown", "PageUp"],
+            },
+            control: {
+              type: "string",
+              enum: ["hanli-model", "nangong-model", "default-model", "reasoning-effort", "service-tier"],
             },
             reason: { type: "string" },
             findings: {
@@ -249,6 +253,15 @@ export class HanliComputerAcceptance {
               throw new Error(`受控验收截图未发送：${result.status}。`);
             }
             sentComposerLabels.add(result.composerLabel);
+          } else if (args.action === "focus-model-control") {
+            // 受控入口仅打开人物页或设置浮层并聚焦固定模型控件；模型值仍必须由后续真实键盘输入改变。
+            const result = await window.webContents.executeJavaScript(`(${focusAcceptanceModelControl.toString()})(${JSON.stringify(args.control)})`) as {
+              status: string;
+              controlLabel: string | null;
+            };
+            if (result.status !== "focused" || !result.controlLabel) {
+              throw new Error(`模型控件不可聚焦：${result.status}。`);
+            }
           } else if (args.action === "hover") {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, width, height, "悬停坐标必须位于当前应用窗口内。");
@@ -285,7 +298,7 @@ export class HanliComputerAcceptance {
               }
               window.webContents.sendInputEvent({ type: "mouseWheel", x: Number(args.x), y: Number(args.y), deltaY: Number(args.deltaY), deltaX: 0 });
             }
-          } else if (args.action === "key" && ["Tab", "Escape", "ArrowDown", "ArrowUp", "PageDown", "PageUp"].includes(String(args.key))) {
+          } else if (args.action === "key" && ["Tab", "Escape", "Home", "ArrowDown", "ArrowUp", "PageDown", "PageUp"].includes(String(args.key))) {
             window.webContents.sendInputEvent({ type: "keyDown", keyCode: String(args.key) });
             window.webContents.sendInputEvent({ type: "keyUp", keyCode: String(args.key) });
           } else throw new Error("不支持的单步操作");
@@ -302,6 +315,8 @@ export class HanliComputerAcceptance {
           let operation: HanliAcceptanceStepResultOutDto["operation"];
           if (args.action === "send-test-message" || args.action === "send-test-screenshot") {
             operation = { type: "send", target: "persona-composer", reason: String(args.reason) };
+          } else if (args.action === "focus-model-control") {
+            operation = { type: "key", key: `focus:${String(args.control)}`, reason: String(args.reason) };
           } else if (args.action === "hover") {
             operation = { type: "hover", x: Number(args.x), y: Number(args.y), reason: String(args.reason) };
           } else if (args.action === "key") {
@@ -451,6 +466,54 @@ async function sendAcceptanceScreenshot(sentComposerLabels: string[]): Promise<{
   if (sendButton.disabled) return { status: "截图附件发送按钮仍禁用", composerLabel: null };
   sendButton.click();
   return { status: "sent", composerLabel };
+}
+
+/**
+ * 为模型选择验收提供唯一的受控聚焦路径。
+ *
+ * 它不能读取或设置选项值：人物切换、设置浮层打开和焦点交接均是客户可见 UI 行为；
+ * 后续选择必须由工具的真实键盘事件完成，并以新截图而非 DOM 结果作为验收证据。
+ */
+async function focusAcceptanceModelControl(control: unknown): Promise<{ status: string; controlLabel: string | null }> {
+  const modelControls = {
+    "hanli-model": { memberName: "韩立", selector: 'select[aria-label="韩立对话模型"]' },
+    "nangong-model": { memberName: "南宫婉", selector: 'select[aria-label="南宫婉对话模型"]' },
+  } as const;
+  const settingsControls = {
+    "default-model": ['select[aria-label="默认模型"]', 'select[aria-label="既定モデル"]'],
+    "reasoning-effort": ['select[aria-label="推理强度"]', 'select[aria-label="推論の強度"]'],
+    "service-tier": ['select[aria-label="推理速度"]', 'select[aria-label="推論速度"]'],
+  } as const;
+  const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  if (control === "hanli-model" || control === "nangong-model") {
+    const target = modelControls[control];
+    const member = [...document.querySelectorAll<HTMLButtonElement>("button.collaboration-member")]
+      .find((candidate) => candidate.offsetParent !== null && candidate.textContent?.trim().startsWith(target.memberName));
+    if (!member) return { status: `未找到${target.memberName}人物入口`, controlLabel: null };
+    member.click();
+    await nextFrame();
+    const select = document.querySelector<HTMLSelectElement>(target.selector);
+    if (!select || select.offsetParent === null) return { status: `未显示${target.memberName}模型选择`, controlLabel: null };
+    if (select.disabled) return { status: `${target.memberName}模型选择当前不可用`, controlLabel: null };
+    select.focus();
+    return { status: "focused", controlLabel: select.getAttribute("aria-label") };
+  }
+  if (control === "default-model" || control === "reasoning-effort" || control === "service-tier") {
+    const settingsTrigger = document.querySelector<HTMLButtonElement>(".dev-settings-control > button.activity-settings");
+    if (!settingsTrigger || settingsTrigger.offsetParent === null) return { status: "未找到设置入口", controlLabel: null };
+    if (settingsTrigger.getAttribute("aria-expanded") !== "true") {
+      settingsTrigger.click();
+      await nextFrame();
+    }
+    const select = settingsControls[control]
+      .map((selector) => document.querySelector<HTMLSelectElement>(selector))
+      .find((candidate) => candidate?.offsetParent !== null);
+    if (!select) return { status: "未显示设置模型控件", controlLabel: null };
+    if (select.disabled) return { status: "设置模型控件当前不可用", controlLabel: null };
+    select.focus();
+    return { status: "focused", controlLabel: select.getAttribute("aria-label") };
+  }
+  return { status: "不支持的模型控件", controlLabel: null };
 }
 
 function safeNavigationClick(x: number, y: number): boolean {
