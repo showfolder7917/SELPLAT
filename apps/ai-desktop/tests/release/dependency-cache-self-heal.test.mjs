@@ -146,6 +146,10 @@ test("当前哈希缓存存在时收敛实体目录和旧哈希链接", () => {
   assert.match(cache, /sourceDependencyCacheRoot/);
   assert.match(cache, /worktreeOverlayRoot/);
   assert.match(cache, /resolveRegisteredWorktreeSourceRoot\(details\.projectRoot\)/);
+  assert.match(cache, /Build dependency link escaped the application cache/);
+  assert.match(cache, /realpathSync\(buildTarget\) !== realpathSync\(details\.dependencyRoot\)/);
+  assert.match(cache, /rmSync\(details\.buildLinkPath, \{ force: true \}\)/);
+  assert.match(cache, /createDependencyLink\(details\.dependencyRoot, details\.buildLinkPath\)/);
 });
 
 test("共享依赖租约只复用同锁缓存，升级锁文件改用工作树专属缓存", () => {

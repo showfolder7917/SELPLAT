@@ -169,6 +169,27 @@ test("任务侧栏保留运行模式与协作入口", async () => {
   await expect(page.getByRole("button", { name: "协同模式" })).toBeVisible();
 });
 
+test("用户可从左侧活动栏打开测试台并查看真实验收证据", async ({}, testInfo) => {
+  await page.evaluate(() => (window as any).desktop.setInteractionTestConsoleFixture(true));
+  const open = page.getByRole("button", { name: "打开测试台", exact: true });
+  await expect(open).toBeVisible();
+  await open.click();
+  const consoleDialog = page.getByRole("dialog", { name: "测试台", exact: true });
+  await expect(consoleDialog).toBeVisible();
+  await expect(consoleDialog).toContainText("修复鼠标点击后持续转圈");
+  await expect(consoleDialog).toContainText("Codex 0.154.0 · 安装包内置");
+  await expect(consoleDialog).toContainText("3 个 · Astra 已出现");
+  await expect(consoleDialog).toContainText("令狐老祖统一测试通过");
+  await expect(consoleDialog).toContainText("新版本已打包、重启并通过渲染器健康检查");
+  await expect(consoleDialog).not.toContainText("/Users/");
+  await consoleDialog.getByRole("button", { name: "技术证据" }).click();
+  await expect(consoleDialog).toContainText("[本机路径已隐藏]");
+  await page.screenshot({ path: testInfo.outputPath("test-console-open.png") });
+  await page.getByRole("button", { name: "关闭测试台", exact: true }).click();
+  await expect(consoleDialog).toBeHidden();
+  await page.evaluate(() => (window as any).desktop.setInteractionTestConsoleFixture(false));
+});
+
 test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", async () => {
   await page.goto(`${pathToFileURL(productionRendererFile).href}?interactionAiMemoryState=recovery-required`);
   const recovery = page.getByRole("alert").filter({ hasText: "AI Memory 数据库已停用" });

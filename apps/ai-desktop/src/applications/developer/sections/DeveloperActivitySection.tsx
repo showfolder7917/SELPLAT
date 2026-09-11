@@ -1,4 +1,5 @@
 import { DeveloperSettingsFeature } from "../../../features/settings";
+import { TestConsoleFeature } from "../../../features/test-console";
 import { DeveloperActivityBar } from "../layout/DeveloperActivityBar";
 import type { DeveloperActivityViewModel } from "../model/developerViewModelTypes";
 
@@ -11,6 +12,21 @@ type DeveloperActivitySectionProps = {
 export function DeveloperActivitySection({ viewModel }: DeveloperActivitySectionProps) {
   return (
     <DeveloperActivityBar
+      testConsoleControl={(
+        <TestConsoleFeature
+          locale={viewModel.settings.locale}
+          open={viewModel.testConsoleOpen}
+          onOpenChange={viewModel.onTestConsoleOpenChange}
+          runtime={viewModel.status.runtime}
+          modelCatalog={viewModel.settings.modelCatalog}
+          modelCatalogLoaded={viewModel.settings.modelCatalogLoaded}
+          modelCatalogLoading={viewModel.settings.modelCatalogLoading}
+          modelCatalogError={viewModel.settings.modelSettingsError}
+          audit={viewModel.diagnostics.auditInfo}
+          collaboration={viewModel.collaborationState}
+          evolution={viewModel.evolutionState}
+        />
+      )}
       settingsControl={(
         <DeveloperSettingsFeature
           open={viewModel.open}

@@ -1375,6 +1375,65 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("客户卡点解除且任务完成集成后自动恢复韩立验收", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-recovered-acceptance-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
+    store.controlAutomation("start");
+    store.beginOneShotRun(workspaceState, "zh-CN");
+    let state = store.createTopic(topicRequest("恢复后进入韩立验收"));
+    const topicId = state.activeTopicId;
+    state = store.createProposal(topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    const taskId = "recovered-integrated-task";
+    store.updateOneShotRun("testing", "linghu-ancestor", "令狐老祖", "等待本地修改归属恢复", topicId, proposalId);
+    store.markDispatched(proposalId, taskId);
+    store.markProgress(proposalId, "blocked", "本地修改归属尚未确认");
+    store.blockOneShotRun("本地修改归属尚未确认");
+    // 模拟旧版本在任务完成后只推进提案、却没有同步恢复一次性演化运行；重启时必须继续韩立验收。
+    store.markProgress(proposalId, "pending-acceptance", "任务已经完成集成，等待韩立验收");
+
+    const collaboration = {
+      state() {
+        return {
+          members: [],
+          tasks: [{
+            taskId,
+            evolutionProposalId: proposalId,
+            evolutionRoundId: proposalId,
+            state: "integrated",
+            snapshot: { title: "恢复后进入韩立验收" },
+            createdAt: "2026-09-11T00:00:00.000Z",
+            updatedAt: "2026-09-11T00:01:00.000Z",
+          }],
+        };
+      },
+    };
+    let acceptanceRuns = 0;
+    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, recordEvent: () => undefined });
+    facade.setComputerAcceptanceSession(async () => {
+      acceptanceRuns += 1;
+      return computerRun("recovered-acceptance-run", topicId, proposalId, "passed", "recovered-shot");
+    });
+
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+
+    state = facade.state();
+    assert.equal(acceptanceRuns, 1);
+    assert.equal(state.proposals[0].status, "completed");
+    assert.equal(state.oneShotRun.status, "completed");
+    assert.equal(state.oneShotRun.phase, "completed");
+
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    assert.equal(acceptanceRuns, 1, "完成后的轮询不得重复执行韩立验收");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("一次性流程捕获的 AI JSON 解析失败仍登记为技术异常并保留恢复点", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-technical-failure-"));
   try {
@@ -1521,10 +1580,14 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
       recordEvent: () => undefined,
       recordFailure: (failure) => failures.push(failure),
     });
-    facade.setComputerAcceptanceSession(async () => ({
-      ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot"),
-      criteria: [originalCriterion],
-    }));
+    let acceptanceRuns = 0;
+    facade.setComputerAcceptanceSession(async () => {
+      acceptanceRuns += 1;
+      return {
+        ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot"),
+        criteria: [originalCriterion],
+      };
+    });
     state = await facade.resumeOneShotRun(runId);
     assert.equal(state.oneShotRun.status, "blocked");
     assert.equal(state.proposals.at(-1).proposalId, proposalId);
@@ -1535,6 +1598,10 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
     assert.equal(failures.at(-1).flowImpact, "blocked");
     assert.equal(failures.at(-1).details.acceptanceFailureScope.decision, "within-original-acceptance");
     assert.match(failures.at(-1).details.acceptanceFailureScope.summary, /实际结果：滚动位置没有变化/);
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    assert.equal(acceptanceRuns, 1, "真实验收失败仍需沿修复卡点处理，轮询不得自动重试验收");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

@@ -116,6 +116,57 @@ const createCompletedEvolutionTask = (proposal) => {
     finalResult: "南宫婉提案已经审批、分发并完成。", startedAt: now, createdAt: now, updatedAt: now, completedAt: now,
   };
 };
+// 测试台夹具只写隔离内存中的权威任务与档案形状，用于验证页面不会靠固定文案伪造通过。
+const setInteractionTestConsoleFixture = (enabled) => {
+  const topicId = "interaction-test-console-topic";
+  const proposalId = "interaction-test-console-proposal";
+  const taskId = "interaction-test-console-task";
+  evolutionState.topics = evolutionState.topics.filter((item) => item.topicId !== topicId);
+  evolutionState.proposals = evolutionState.proposals.filter((item) => item.proposalId !== proposalId);
+  evolutionState.archiveRecords = evolutionState.archiveRecords.filter((item) => item.topicId !== topicId);
+  collaborationState.tasks = collaborationState.tasks.filter((item) => item.taskId !== taskId);
+  if (!enabled) {
+    publishCollaborationState("test-console.fixture-cleared");
+    return publishNangongEvolution("test-console.fixture-cleared");
+  }
+  const now = new Date().toISOString();
+  evolutionState.topics.push({
+    topicId, title: "修复鼠标点击后持续转圈", goal: "恢复协作流程自动推进", scope: ["AI Desktop"], exclusions: ["正常客户页面新增技术字段"],
+    evidence: ["客户反馈流程停在验收恢复节点"], acceptanceCriteria: ["统一测试通过", "新版本完成重启健康检查", "韩立回到原节点验收"],
+    workspaceState: workspace, locale: "zh-CN", origin: "nangong", sourceConversationMessageIds: [], deliberationId: null, continuationOfTopicId: null,
+    nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "pending-acceptance", topicRevision: 3, currentProposalVersion: 1,
+    recoveryPoint: "pending-acceptance", createdAt: now, updatedAt: now,
+  });
+  evolutionState.proposals.push({
+    proposalId, topicId, version: 1, title: "修复协作恢复卡点", type: "product", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉",
+    purpose: "correction", targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null, revisionFeedbackApprovalId: null,
+    content: "修复旧版本在任务集成后没有恢复韩立验收的问题。", evidence: ["原流程已完成统一测试，但一次性运行仍停在等待状态。"],
+    impactScope: ["AI Desktop 协作恢复"], exclusions: ["正常客户页面"], risks: [], rollbackPlan: "恢复原恢复判断。",
+    acceptanceCriteria: ["统一测试通过", "新版本完成重启健康检查", "韩立回到原节点验收"], distributionPlan: null, status: "pending-acceptance", approvals: [],
+    distributedTaskIds: [taskId], resultSummary: "修复、统一测试和重启已完成，等待韩立验收。", createdAt: now, updatedAt: now,
+  });
+  collaborationState.tasks.push({
+    taskId, taskRevision: 4, assignmentId: "interaction-test-console-assignment", workerGeneration: 1, state: "integrated", phase: "ready",
+    executorMemberId: "linghu-ancestor", currentPlanVersion: 1, infrastructureFailureCount: 0, mergeStrategy: "INDEPENDENT", atomicGroupId: null,
+    dependencyTaskIds: [], integrationGeneration: 2, initiator: { memberId: "nangong-wan", displayName: "南宫婉" }, automationSource: "evolution",
+    evolutionProposalId: proposalId, evolutionRoundId: topicId, returnedToNangongAt: null, selfUpgradeTargetMemberId: null, selfUpgradeCapabilityScope: null,
+    sourceEvolutionApprovalId: "interaction-approval", historyCompleteness: "complete",
+    snapshot: { title: "修复协作恢复卡点", problemStatement: "任务完成后没有继续验收。", confirmedIntent: "恢复原验收节点。", constraints: [], acceptanceCriteria: ["统一测试通过", "完成重启"], sourceMessageIds: [], attachmentIds: [], workspaceState: workspace, locale: "zh-CN", contentHash: "interaction-test-console" },
+    plans: [], executionRecords: [{ assignmentId: "interaction-test-console-assignment", executor: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, workerGeneration: 1, status: "code-verified", assignedAt: now, executionStartedAt: now, completedAt: now, transferFromAssignmentId: null, handoffType: "initial", result: "恢复判断已修正。", blockingReason: null, changedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "/Users/private/secret.ts"] }],
+    flowEvents: [
+      { eventId: "interaction-unified-test", type: "unified_test.passed", stage: "integration", status: "completed", actor: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, summary: "令狐老祖统一测试通过。", occurredAt: now, error: false },
+      { eventId: "interaction-release-restart", type: "release.restart_healthy", stage: "integration", status: "completed", actor: { memberId: "system", displayName: "系统" }, summary: "新版本已打包、重启并通过渲染器健康检查。", occurredAt: now, error: false },
+    ],
+    versionWorkspace: null, finalResult: "修复已进入运行版本。", resultSummary: { outcome: "succeeded", finalResult: "修复已进入运行版本。", originalProblem: "任务完成后没有继续验收。", solvedProblem: "原验收节点已恢复。", changes: "补齐任务完成后的验收恢复判断。", remaining: "等待韩立执行真实界面验收。", success: true, generatedAt: now },
+    blockingReason: null, recoveryTargetState: null, unifiedTest: { status: "passed", owner: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, failureReason: null, startedAt: now, completedAt: now },
+    startedAt: now, codeVerifiedAt: now, createdAt: now, updatedAt: now, completedAt: now,
+  });
+  evolutionState.archiveRecords.push({ recordId: "interaction-acceptance", deliberationId: null, topicId, proposalId, taskId, sequenceNumber: 1, category: "acceptance", eventType: "acceptance.started", actor: "han-li", title: "韩立正在按原范围执行真实界面验收", payload: {}, occurredAt: now });
+  evolutionState.activeTopicId = topicId;
+  evolutionState.oneShotRun = { runId: "interaction-test-console-run", topicId, proposalId, status: "running", phase: "accepting", actor: "han-li", actorName: "韩立", action: "正在真实界面验收", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
+  publishCollaborationState("test-console.fixture-ready");
+  return publishNangongEvolution("test-console.fixture-ready");
+};
 const publishLinghuAutomation = (reason) => {
   linghuAutomationState.updatedAt = new Date().toISOString();
   const event = { state: structuredClone(linghuAutomationState), reason };
@@ -382,6 +433,7 @@ contextBridge.exposeInMainWorld("desktop", {
   newLinghuDisplayConversation: async () => { linghuAutomationState.displayConversationStartedAt = new Date().toISOString(); return publishLinghuAutomation("automation.display_conversation_created"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getEvolutionState: async () => structuredClone(evolutionState),
+  setInteractionTestConsoleFixture: async (enabled) => structuredClone(setInteractionTestConsoleFixture(enabled)),
   setInteractionOneShotRun: async (run) => { evolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
   // 隔离验收恢复夹具只改变测试内存，不连接生产任务或在线模型。
   setInteractionResumeFixture: async (mode) => {

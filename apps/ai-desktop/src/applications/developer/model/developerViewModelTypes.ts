@@ -50,6 +50,10 @@ export type DeveloperTitleBarViewModel = {
 
 /** 最左侧活动栏中的设置区域输入。 */
 export type DeveloperActivityViewModel = {
+  /** 测试台浮动窗口当前是否打开。 */
+  testConsoleOpen: boolean;
+  /** 测试台开关会与设置窗口互斥，避免两个侧窗相互遮挡。 */
+  onTestConsoleOpenChange: (open: boolean) => void;
   /** 设置浮层当前是否打开。 */
   open: Controller["settingsPanel"]["open"];
   /** 设置浮层开关事件写回应用状态。 */
@@ -64,6 +68,10 @@ export type DeveloperActivityViewModel = {
   settings: Controller["settings"];
   /** 设置 Feature 自己持有的诊断控制器。 */
   diagnostics: Controller["diagnostics"];
+  /** 当前协作任务为测试台提供真实执行、统一测试和重启记录。 */
+  collaborationState: Controller["collaboration"]["data"]["state"];
+  /** 当前演化状态为测试台提供专题、提案和韩立验收记录。 */
+  evolutionState: Controller["evolution"]["state"];
   /** 设置 Feature 自己持有的工作区控制器。 */
   workspace: Controller["workspace"];
   /** 登录按钮触发主会话登录流程。 */

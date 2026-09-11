@@ -20,14 +20,28 @@ export function useDeveloperApplicationController() {
   const shellRef = useRef<HTMLDivElement>(null);
   // 设置面板打开时，设置和诊断控制器会刷新桌面数据。
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 测试台是独立只读窗口，打开时会关闭设置窗口以避免活动栏浮层互相遮挡。
+  const [testConsoleOpen, setTestConsoleOpen] = useState(false);
   // 任务区域可以独立折叠，不影响左侧栏本身。
   const [tasksExpanded, setTasksExpanded] = useState(true);
 
   // 设置先提供语言和沙箱模式，后续控制器共享这些配置。
-  const settings = useDesktopSettings(settingsOpen);
+  const settings = useDesktopSettings(settingsOpen || testConsoleOpen);
   const text = developerApplicationLabels[settings.locale];
   const sidebar = useDeveloperSidebar(settings.locale);
-  const diagnostics = useDesktopDiagnostics(settingsOpen, settings.locale);
+  const diagnostics = useDesktopDiagnostics(settingsOpen || testConsoleOpen, settings.locale);
+
+  /** 打开设置时关闭测试台，两个活动栏窗口始终只有一个接收用户操作。 */
+  const setSettingsPanelOpen = (open: boolean) => {
+    setSettingsOpen(open);
+    if (open) setTestConsoleOpen(false);
+  };
+
+  /** 打开测试台时关闭设置，并触发模型与诊断状态刷新。 */
+  const setTestConsolePanelOpen = (open: boolean) => {
+    setTestConsoleOpen(open);
+    if (open) setSettingsOpen(false);
+  };
 
   // 工作区列表的“移除”只删除登记信息，不删除磁盘目录。
   const workspace = useWorkspaceRegistry({
@@ -55,7 +69,7 @@ export function useDeveloperApplicationController() {
     browserOpenedMessage: text.browserOpened,
     workspaces: workspace.workspaces,
     collaboration,
-    onOpenSettings: () => setSettingsOpen(true),
+    onOpenSettings: () => setSettingsPanelOpen(true),
     onTrustedCommandChanged: diagnostics.refreshTrustedCommandInfo,
     onAuditChanged: diagnostics.refreshAuditInfo,
   });
@@ -85,7 +99,7 @@ export function useDeveloperApplicationController() {
     locale: settings.locale,
     screenSourceUnavailable: text.screenSourceUnavailable,
     setMainInput: codex.conversation.setInput,
-    closeSettings: () => setSettingsOpen(false),
+    closeSettings: () => setSettingsPanelOpen(false),
     refreshTempInfo: diagnostics.refreshTempInfo,
     getAttachments,
     setAttachments,
@@ -99,7 +113,8 @@ export function useDeveloperApplicationController() {
   // 按页面区块分组返回，主组件可以直接对应到可见布局。
   return {
     shell: { ref: shellRef, sidebar },
-    settingsPanel: { open: settingsOpen, setOpen: setSettingsOpen },
+    settingsPanel: { open: settingsOpen, setOpen: setSettingsPanelOpen },
+    testConsolePanel: { open: testConsoleOpen, setOpen: setTestConsolePanelOpen },
     tasks: { expanded: tasksExpanded, toggle: () => setTasksExpanded((current) => !current) },
     text,
     settings,

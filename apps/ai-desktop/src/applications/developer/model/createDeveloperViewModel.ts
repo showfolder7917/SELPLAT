@@ -54,6 +54,8 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
     },
     // 活动栏只获得设置 Feature 所需的窄输入。
     activity: {
+      testConsoleOpen: controller.testConsolePanel.open,
+      onTestConsoleOpenChange: controller.testConsolePanel.setOpen,
       open: controller.settingsPanel.open,
       onOpenChange: controller.settingsPanel.setOpen,
       status: controller.codex.interaction.status,
@@ -61,6 +63,8 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       text: controller.text,
       settings: controller.settings,
       diagnostics: controller.diagnostics,
+      collaborationState: controller.collaboration.data.state,
+      evolutionState: controller.evolution.state,
       workspace: controller.workspace,
       onLogin: () => { void controller.codex.interaction.login(); },
       onLogout: () => { void controller.codex.interaction.logout(); },

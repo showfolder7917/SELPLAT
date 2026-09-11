@@ -223,6 +223,18 @@ export function attachDependencyCache() {
   } else if (!lstatSync(details.buildLinkPath).isSymbolicLink()) {
     rmSync(details.linkPath, { force: true });
     throw new Error(`Build dependency path must be a temporary link: ${details.buildLinkPath}`);
+  } else {
+    const buildTarget = path.resolve(path.dirname(details.buildLinkPath), readlinkSync(details.buildLinkPath));
+    if (!isManagedDependencyCacheTarget(details, buildTarget)) {
+      rmSync(details.linkPath, { force: true });
+      throw new Error(`Build dependency link escaped the application cache: ${details.buildLinkPath}`);
+    }
+    // 锁文件升级后，旧构建链接会让 build 中的运行时继续解析到上一版本；受控命令必须同步收敛两处链接。
+    if (!existsSync(buildTarget) || realpathSync(buildTarget) !== realpathSync(details.dependencyRoot)) {
+      rmSync(details.buildLinkPath, { force: true });
+      createDependencyLink(details.dependencyRoot, details.buildLinkPath);
+      ownsBuildLink = true;
+    }
   }
   return { ...details, ownsLink: true, ownsBuildLink };
 }

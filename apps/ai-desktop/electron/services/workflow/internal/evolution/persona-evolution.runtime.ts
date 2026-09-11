@@ -567,6 +567,22 @@ export class PersonaEvolutionRuntime {
           state = this.#store.markProgress(proposal.proposalId, execution.nextStatus, execution.summary);
         }
       }
+      // 客户卡点解除后，协作任务可能在演化运行之外完成集成和发布重启。旧版本会先把提案推进到
+      // pending-acceptance，却把 oneShotRun 留在更早的 blocked；重启后两者状态相同，不再触发上面的状态转换。
+      // 只在“最近一次阻塞早于进入待验收”且当前有效任务全部集成时恢复，因此韩立真实验收产生的新阻塞不会被轮询重试。
+      for (const proposal of state.proposals.filter((item) => item.status === "pending-acceptance")) {
+        const run = state.oneShotRun;
+        if (run?.status !== "blocked" || run.proposalId !== proposal.proposalId) continue;
+        const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view();
+        if (!execution.completed || execution.missingTaskIds.length > 0) continue;
+        const records = state.archiveRecords.filter((record) => record.proposalId === proposal.proposalId);
+        const latestBlocked = [...records].reverse().find((record) => record.eventType === "one-shot.blocked");
+        const latestPendingAcceptance = [...records].reverse().find((record) => record.eventType === "proposal.progress_reconciled"
+          && (record.payload.proposal as { status?: unknown } | undefined)?.status === "pending-acceptance");
+        if (latestBlocked && latestPendingAcceptance && latestBlocked.sequenceNumber < latestPendingAcceptance.sequenceNumber) {
+          state = this.#store.resumeOneShotRun();
+        }
+      }
       if (state.oneShotRun?.status === "running") {
         // 暂停、停止和人工接管必须冻结当前专题，恢复后仍沿原卡点继续。
         if (state.automationRuntime.status !== "running") return;
