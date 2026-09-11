@@ -22,6 +22,8 @@ export interface PersistenceContext {
 export interface CreatePersistenceContextOptions {
   projectRoot: string;
   runtimeMarkerPath: string;
+  /** 已安装包的只读迁移目录；不得改变受控工程内的数据库文件位置。 */
+  migrationSqlRoot?: string;
   eventCenter: EventCenterFacade;
   onTimelineChanged(event: CollaborationTimelineChangedEventOutDto): void;
 }
@@ -31,6 +33,7 @@ export function createPersistenceContext(options: CreatePersistenceContextOption
   const initialization = initializeAiMemoryDatabase({
     projectRoot: options.projectRoot,
     runtimeMarkerPath: options.runtimeMarkerPath,
+    migrationSqlRoot: options.migrationSqlRoot,
   });
   const database = initialization.database;
   const workflowRepository = database ? createWorkflowRepository(database) : null;

@@ -528,9 +528,11 @@ test("developer package carries external rule and prompt resources", () => {
   assert.match(developerConfig, /selplatDevelopmentRoot/);
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "ruleengine"));
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "prompts"));
+  assert.ok(builderManifest.extraResources.some((resource) => resource.to === "db/sql"));
   assert.match(source("electron/system/config/app-config.ts"), /userData"\), "workspace"/);
   assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "ruleengine"/);
   assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "prompts"/);
+  assert.match(source("electron/system/bootstrap/application-runtime.ts"), /migrationSqlRoot: app\.isPackaged \? path\.join\(process\.resourcesPath, "db", "sql"\) : undefined/);
   assert.match(source("package.json"), /build:prompts/);
 });
 

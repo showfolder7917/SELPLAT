@@ -28,6 +28,7 @@ export const COLLABORATION_DESKTOP_API_METHODS = [
   "onPersonaConversationChanged",
   "sendPersonaConversationMessage",
   "newPersonaConversation",
+  "selectPersonaConversationModel",
   "createEvolutionTopic",
   "configureEvolutionAutomation",
   "controlEvolutionAutomation",

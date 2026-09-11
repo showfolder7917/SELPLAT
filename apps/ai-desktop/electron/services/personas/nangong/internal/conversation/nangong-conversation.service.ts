@@ -58,7 +58,8 @@ export class NangongConversationService {
     try {
       const context = this.#memory?.buildNangongContext(state.conversation)
         || state.conversation.messages.slice(-12).map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
-      const response = await this.#conversation.send(request, context);
+      const selectedModel = this.#memory?.readPersonaConversation("nangong-wan", state.conversation.conversationId).selectedModel || null;
+      const response = await this.#conversation.send(request, context, selectedModel);
       const parsed = parseNangongConversationResponse(response.text);
       state = this.#store.completeConversationTurn(userMessage.messageId, parsed.reply);
       turnCompleted = true;

@@ -174,6 +174,19 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       {/* 页面错误区：展示发送、草稿或桌面通信失败原因。 */}
       {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
 
+      {/* 模型选择区：当前南宫婉会话只保存官方模型 ID；留空时使用设置页默认模型。 */}
+      <label className="selconversation-model-picker">本对话模型
+        <select
+          aria-label="南宫婉对话模型"
+          value={props.conversation.selectedModel || ""}
+          disabled={controller.chatBusy || newConversationBusy || props.runtime.modelCatalogLoading}
+          onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
+        >
+          <option value="">使用设置页默认模型</option>
+          {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+        </select>
+      </label>
+
       {/* 问答输入区：接收客户文字，也允许粘贴截图。 */}
       <textarea className="selconversation-input" data-sel-conversation-input aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={controller.chatText} onChange={(event) => controller.setChatText(event.currentTarget.value)} onPaste={controller.pasteImages} />
 

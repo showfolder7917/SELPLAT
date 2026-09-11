@@ -17,7 +17,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1024");
+    assert.equal(first.status.schemaVersion, "1025");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -30,14 +30,39 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 25);
+      assert.equal(Number(row.count), 26);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1024", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1025", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
       assert.equal(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopEvolutionWorkbenchPreference'").get(), undefined);
+      assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get());
     } finally {
       inspection.close();
     }
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("候选包可用自身迁移清单升级仍停在旧版本的受控工程数据库", () => {
+  const fixture = createFixture("candidate-packaged-migrations");
+  try {
+    installSchemaUpTo(fixture, 1024);
+    const legacy = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(legacy.status.schemaVersion, "1024");
+    legacy.database?.close();
+
+    const candidateMigrationRoot = path.join(appRoot, "db", "sql");
+    const upgraded = initializeAiMemoryDatabase({
+      ...fixture.options,
+      migrationSqlRoot: candidateMigrationRoot,
+    });
+    assert.equal(upgraded.status.state, "ready");
+    assert.equal(upgraded.status.schemaVersion, "1025");
+    assert.ok(upgraded.database?.withConnection((connection) =>
+      connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get(),
+    ));
+    upgraded.database?.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
   }

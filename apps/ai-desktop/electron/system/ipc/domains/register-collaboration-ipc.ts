@@ -51,10 +51,11 @@ export function registerCollaborationIpc(
   handle("desktop:new-linghu-display-conversation", () => linghuAutomation.newDisplayConversation());
   handle("desktop:get-nangong-evolution-state", () => evolution.state());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
-  // 人物会话只有这三个跨进程入口。以后增加人物时注册处理器即可，不再增加人物专用 channel。
+  // 人物会话统一通过读取、发送、新建和模型选择四类入口访问；新人物只需注册处理器。
   handle("desktop:get-persona-conversation", (_event, personaId: string) => personaConversations.conversation(personaId));
   handle("desktop:send-persona-conversation-message", (_event, personaId: string, request: SendPersonaConversationMessageInDto) => personaConversations.send(personaId, request));
   handle("desktop:new-persona-conversation", (_event, personaId: string) => personaConversations.newConversation(personaId));
+  handle("desktop:select-persona-conversation-model", (_event, personaId: string, selectedModel: string | null) => personaConversations.selectModel(personaId, selectedModel));
   handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftInDto) => nangong.generateTopicDraft(request));
   handle("desktop:convert-nangong-conversation-to-topic", (_event, request: ConvertNangongConversationToTopicInDto) => nangong.convertConversationToTopic(request));
   handle("desktop:create-evolution-topic", (_event, request: CreateNangongTopicInDto) => evolution.createTopic(request));

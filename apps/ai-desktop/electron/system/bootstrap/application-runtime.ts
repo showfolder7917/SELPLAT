@@ -217,6 +217,8 @@ export async function startApplication(): Promise<void> {
   persistenceContext = createPersistenceContext({
     projectRoot,
     runtimeMarkerPath: path.join(app.getPath("userData"), "ai-memory-database-state.json"),
+    // 已安装候选包从自身资源读取迁移，数据文件仍固定留在已选择的工程数据根。
+    migrationSqlRoot: app.isPackaged ? path.join(process.resourcesPath, "db", "sql") : undefined,
     eventCenter,
     onTimelineChanged: (event) => {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
@@ -605,7 +607,7 @@ export async function startApplication(): Promise<void> {
     },
     askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
     conversation: {
-      send: async (request, prompt) => hanLiCodex!.send(prompt, request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null),
+      send: async (request, prompt, selectedModel) => hanLiCodex!.send(prompt, request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null, selectedModel),
       newChat: () => hanLiCodex!.newChat(),
       activeConversationId: () => hanLiCodex!.activeSession().threadId,
     },
@@ -659,10 +661,17 @@ export async function startApplication(): Promise<void> {
     hanli: hanliRuntime.facade,
     conversation: {
       // 用户与南宫婉聊天时固定为只读调查；聊天确认不等于工程写入授权。
-      send: async (request, context) => nangongCodex!.send(prompts.render("nangong.conversation", {
-        recentConversation: context,
-        userMessage: request.message,
-      }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null),
+      send: async (request, context) => {
+        // Workflow 的既有南宫会话端口只声明两个参数；模型仍从当前统一会话头读取，避免另建 Evolution 状态副本。
+        const conversationId = personaEvolution?.state().conversation.conversationId || null;
+        const selectedModel = conversationId
+          ? collaborationMemory?.readPersonaConversation("nangong-wan", conversationId).selectedModel || null
+          : null;
+        return nangongCodex!.send(prompts.render("nangong.conversation", {
+          recentConversation: context,
+          userMessage: request.message,
+        }), request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null, selectedModel);
+      },
       // 新聊天只重置人物 Codex 线程，不删除已经持久化的专题事实。
       newChat: () => nangongCodex!.newChat(),
     },
@@ -710,11 +719,27 @@ export async function startApplication(): Promise<void> {
   // 统一人物会话注册表是 IPC 的唯一入口。人物自己的服务仍可保留专属业务能力，但会话读写必须在这里登记。
   const personaConversations = new PersonaConversationFacade();
   personaConversations.register("han-li", hanliRuntime.facade);
+  // 南宫婉正文和流程仍由 Evolution 管理；会话头只为这一个会话补充持久化模型选择。
+  const nangongConversationWithSelectedModel = (conversation: PersonaConversationOutDto): PersonaConversationOutDto => ({
+    ...conversation,
+    selectedModel: conversation.conversationId
+      ? collaborationMemory?.readPersonaConversation("nangong-wan", conversation.conversationId).selectedModel || null
+      : null,
+  });
   personaConversations.register("nangong-wan", {
     // 南宫婉页面状态还包含专题信息，这里只抽取统一会话 DTO 交给通用 IPC。
-    conversation: () => personaEvolution!.state().conversation,
-    sendConversationMessage: async (request) => (await nangongRuntime.facade.sendConversationMessage(request)).conversation,
-    newConversation: async () => (await nangongRuntime.facade.newConversation()).conversation,
+    conversation: () => nangongConversationWithSelectedModel(personaEvolution!.state().conversation),
+    sendConversationMessage: async (request) => nangongConversationWithSelectedModel((await nangongRuntime.facade.sendConversationMessage(request)).conversation),
+    newConversation: async () => nangongConversationWithSelectedModel((await nangongRuntime.facade.newConversation()).conversation),
+    selectConversationModel: async (selectedModel) => {
+      const conversation = personaEvolution!.state().conversation;
+      if (!conversation.conversationId) throw new Error("南宫婉当前对话尚未建立，不能保存模型选择。");
+      // 新对话第一次选择前先将 Evolution 正文投影为会话头；投影不会覆盖既有模型选择。
+      collaborationMemory?.syncEvolutionState(personaEvolution!.state());
+      const saved = collaborationMemory?.selectPersonaConversationModel("nangong-wan", conversation.conversationId, selectedModel);
+      if (!saved) throw new Error("AI Memory 尚未接入，无法保存南宫婉对话模型。");
+      return { ...conversation, selectedModel: saved.selectedModel };
+    },
   });
   // Evolution Facade 面向专题页面，Workflow Facade 面向跨人物调度。
   const evolutionRuntime = createEvolutionRuntime(personaEvolution);

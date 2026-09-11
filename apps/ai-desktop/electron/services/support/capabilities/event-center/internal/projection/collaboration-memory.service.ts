@@ -76,6 +76,11 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     return this.#conversations.create(ownerPersonaId);
   }
 
+  /** 保存人物对话头的模型选择；消息正文和 Evolution 状态仍由各自原有所有者维护。 */
+  selectPersonaConversationModel(ownerPersonaId: string, conversationId: string, selectedModel: string | null): PersonaConversationOutDto {
+    return this.#conversations.selectModel(ownerPersonaId, conversationId, selectedModel);
+  }
+
   /** 把人物内部研讨追加到所属人物会话；发言人使用稳定 personaId，不再扩充角色枚举。 */
   appendPersonaInternalMessage(input: {
     ownerPersonaId: string; conversationId: string; messageId: string; speakerPersonaId: string; content: string;
