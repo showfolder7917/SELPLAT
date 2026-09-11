@@ -143,13 +143,17 @@ test("当前哈希缓存存在时收敛实体目录和旧哈希链接", () => {
   assert.match(cache, /linkedDependencyRoot === realpathSync\(details\.dependencyRoot\)/);
   assert.match(cache, /rmSync\(details\.linkPath, \{ recursive: true, force: true \}\)/);
   assert.ok(cache.indexOf("Dependency cache is missing") < cache.indexOf("recursive: true, force: true"));
+  assert.match(cache, /sourceDependencyCacheRoot/);
+  assert.match(cache, /worktreeOverlayRoot/);
+  assert.match(cache, /resolveRegisteredWorktreeSourceRoot\(details\.projectRoot\)/);
 });
 
-test("共享依赖租约从 Git 公共仓库解析缓存根并核对两份锁文件", () => {
+test("共享依赖租约只复用同锁缓存，升级锁文件改用工作树专属缓存", () => {
   assert.match(cache, /AI_DESKTOP_DEPENDENCY_LEASE_ID/);
   assert.match(cache, /rev-parse", "--path-format=absolute", "--git-common-dir/);
   assert.match(cache, /worktree", "list", "--porcelain/);
   assert.match(cache, /sourceLockHash !== lockHash/);
+  assert.match(cache, /if \(sourceLockHash !== lockHash\) return null/);
   assert.match(cache, /dependency-overlays/);
   assert.match(cache, /sharedDependencyRoot, dependencyRoot/);
   assert.match(cache, /link target does not match the registered repository cache/);

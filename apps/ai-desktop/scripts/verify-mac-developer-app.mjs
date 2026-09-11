@@ -17,7 +17,7 @@ if (!macDirectory) throw new Error("未找到 macOS 开发版输出目录。");
 const applicationPath = path.join(releaseRoot, macDirectory.name, "AI Desktop.app");
 if (!existsSync(applicationPath)) throw new Error("未找到 AI Desktop.app。");
 
-const targetCodexVersion = "0.149.0";
+const targetCodexVersion = "0.154.0";
 const codexArchitecture = process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
 const codexPackage = process.arch === "arm64" ? "codex-darwin-arm64" : "codex-darwin-x64";
 const codexPath = path.join(applicationPath, "Contents", "Resources", "app.asar.unpacked", "node_modules", "@openai", codexPackage, "vendor", codexArchitecture, "bin", "codex");

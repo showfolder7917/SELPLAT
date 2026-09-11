@@ -14,7 +14,7 @@ test("固定 Codex 运行时只选择安装包内置目标版本", async () => {
     ...process.env,
     CODEX_HOME: path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "codex-runtime-test", "codex-home"),
   });
-  assert.equal(CODEX_TARGET_VERSION, "0.149.0");
+  assert.equal(CODEX_TARGET_VERSION, "0.154.0");
   assert.equal(runtime.source, "bundled");
   assert.equal(runtime.version, CODEX_TARGET_VERSION);
   assert.match(runtime.command, /node_modules[\\/]@openai[\\/]codex-/);

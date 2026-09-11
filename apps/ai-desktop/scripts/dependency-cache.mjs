@@ -31,8 +31,8 @@ export function resolveDependencyCache() {
 }
 
 /**
- * 隔离工作树只能消费桌面主进程签发的共享依赖租约；工作树锁文件、源工程锁文件和租约哈希必须完全一致。
- * 普通本地命令没有完整租约环境时继续使用自身工程缓存，禁止半套环境变量悄悄改变数据根。
+ * 隔离工作树只有在锁文件与来源工程完全一致时才消费桌面主进程签发的共享依赖租约。
+ * 升级依赖导致锁哈希变化时，必须退回工作树自己的锁哈希缓存，禁止把新依赖伪装成旧共享租约。
  */
 function resolveManagedDependencyLease({ appRoot, projectRoot, applicationName, lockHash }) {
   const leaseId = process.env.AI_DESKTOP_DEPENDENCY_LEASE_ID;
@@ -43,7 +43,7 @@ function resolveManagedDependencyLease({ appRoot, projectRoot, applicationName, 
   const sourceLockPath = path.join(sourceApplicationRoot, "package-lock.json");
   if (!existsSync(sourceLockPath)) throw new Error("Managed dependency source package-lock.json is missing");
   const sourceLockHash = createHash("sha256").update(readFileSync(sourceLockPath)).digest("hex");
-  if (sourceLockHash !== lockHash) throw new Error("Managed dependency source and worktree lock files differ");
+  if (sourceLockHash !== lockHash) return null;
   return { leaseId, sourceProjectRoot };
 }
 
@@ -110,11 +110,28 @@ function managedLinkTarget(details) {
   if (!current) return null;
   if (!current.isSymbolicLink()) throw new Error(`Application dependency path must be a symbolic link or junction: ${details.linkPath}`);
   const target = path.resolve(path.dirname(details.linkPath), readlinkSync(details.linkPath));
-  const dependencyCacheRoot = details.dependencyCacheRoot || path.dirname(details.cacheRoot);
-  if (!isInsideRoot(dependencyCacheRoot, target)) {
+  if (!isManagedDependencyCacheTarget(details, target)) {
     throw new Error(`Application dependency link escaped the application cache: ${details.linkPath}`);
   }
   return target;
+}
+
+/**
+ * 工作树升级锁文件后，node_modules 仍可能链接至已登记来源工程的旧哈希缓存。
+ * 该链接可被受控准备流程回收；任何其他工程或任意外部目录仍一律拒绝。
+ */
+function isManagedDependencyCacheTarget(details, target) {
+  const dependencyCacheRoot = details.dependencyCacheRoot || path.dirname(details.cacheRoot);
+  if (isInsideRoot(dependencyCacheRoot, target)) return true;
+  const worktreeOverlayRoot = path.join(details.projectRoot, "cache", details.applicationName, "dependency-overlays");
+  if (isInsideRoot(worktreeOverlayRoot, target)) return true;
+  try {
+    const sourceProjectRoot = resolveRegisteredWorktreeSourceRoot(details.projectRoot);
+    const sourceDependencyCacheRoot = path.join(sourceProjectRoot, "cache", details.applicationName, "dependencies");
+    return isInsideRoot(sourceDependencyCacheRoot, target);
+  } catch {
+    return false;
+  }
 }
 
 function createDependencyLink(target, linkPath) {

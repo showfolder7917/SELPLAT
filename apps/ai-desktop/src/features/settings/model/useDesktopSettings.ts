@@ -27,6 +27,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
   const [codexAppCorpusIngestionEnabled, setCodexAppCorpusIngestionEnabled] = useState(false);
   const [corpusSemanticBackfill, setCorpusSemanticBackfill] = useState<CorpusSemanticBackfillStatusOutDto | null>(null);
   const [modelCatalog, setModelCatalog] = useState<CodexModelCatalogOutDto>({ models: [] });
+  const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
   const [modelSettingsError, setModelSettingsError] = useState("");
 
@@ -50,9 +51,13 @@ export function useDesktopSettings(settingsOpen: boolean) {
     const desktop = getOptionalCodexDesktopApi();
     if (!desktop) return;
     setModelCatalogLoading(true);
+    setModelCatalogLoaded(false);
     setModelSettingsError("");
     void desktop.getCodexModels()
-      .then(setModelCatalog)
+      .then((catalog) => {
+        setModelCatalog(catalog);
+        setModelCatalogLoaded(true);
+      })
       .catch((error) => setModelSettingsError(readableDesktopError(error, locale === "ja" ? "モデル一覧を取得できません。" : "无法读取模型列表。")))
       .finally(() => setModelCatalogLoading(false));
   }, [locale, settingsOpen]);
@@ -104,6 +109,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
     codexAppCorpusIngestionEnabled,
     corpusSemanticBackfill,
     modelCatalog,
+    modelCatalogLoaded,
     modelCatalogLoading,
     modelSettingsError,
     selectedModel,

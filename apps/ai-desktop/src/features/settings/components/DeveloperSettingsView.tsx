@@ -63,6 +63,7 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
           </div>
           <strong>{model.selectedModelName}</strong>
         </header>
+        {model.modelCatalogStatus && <small role="status">{model.modelCatalogStatus}</small>}
         <label>
           <span>{model.defaultModelLabel}</span>
           <select
