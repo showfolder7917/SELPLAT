@@ -49,7 +49,9 @@ test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () =
   assert.match(settingsPanel, /right: locale === "ja"/);
   assert.match(settingsPanel, /resetLabel:/);
   assert.doesNotMatch(component, /SettingsWidthResizer/);
-  assert.match(settingsPanel, /setPortalBody\(content\)/);
+  assert.match(settingsPanel, /content\.append\(scrollStack\)/);
+  assert.match(settingsPanel, /scrollStack\.className = "dev-settings-scroll-stack"/);
+  assert.match(settingsPanel, /setPortalBody\(scrollStack\)/);
   assert.match(settingsPanel, /portalBody\?\.scrollTo\(\{ top: 0 \}\)/);
   assert.match(settingsPanel, /portalBody && open && createPortal\(children, portalBody\)/);
   assert.match(styles, /\.dev-activitybar \.dev-settings \.selfloating-resize-bottom, \.dev-activitybar \.dev-settings \.selfloating-resize-corner/);
@@ -57,9 +59,10 @@ test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () =
 });
 
 test("设置业务内容区具有稳定剩余高度并独立纵向滚动", () => {
-  assert.match(styles, /\.dev-activitybar \.dev-settings\s*\{[^}]*height:\s*min\(720px, calc\(100vh - 60px\)\)/);
+  assert.match(styles, /\.dev-activitybar \.dev-settings\s*\{[^}]*height:\s*min\(680px, calc\(100vh - 60px\)\)/);
   assert.match(styles, /\.dev-activitybar \.dev-settings \.selfloating-heading\s*\{[^}]*flex:\s*0 0 54px/);
   assert.match(styles, /\.dev-activitybar \.dev-settings-content\s*\{[^}]*min-height:\s*0;[^}]*flex:\s*1 1 auto;[^}]*overflow-y:\s*auto/);
+  assert.match(styles, /\.dev-activitybar \.dev-settings-scroll-stack\s*\{[^}]*min-height:\s*calc\(100% \+ 1px\);[^}]*padding:\s*14px 18px 32px/);
 });
 
 test("SELUI 浮动面板提供宽度约束、键盘、双击与关闭交互", () => {

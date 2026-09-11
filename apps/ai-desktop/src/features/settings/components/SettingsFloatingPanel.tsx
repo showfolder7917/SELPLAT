@@ -31,6 +31,9 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
     if (!host || !floatingPanel) return;
     const content = document.createElement("div");
     content.className = "dev-settings-content";
+    const scrollStack = document.createElement("div");
+    scrollStack.className = "dev-settings-scroll-stack";
+    content.append(scrollStack);
     const controller = floatingPanel.mount(host, {
       id: "developer-settings",
       title: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
@@ -58,8 +61,8 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
     const closeIconRoot = closeButton ? createRoot(closeButton) : null;
     closeIconRoot?.render(<Dismiss20Regular />);
     controller.panel.style.width = `${DEFAULT_WIDTH}px`;
-    // 业务内容必须进入专属滚动节点；不能直接挂到会裁剪溢出的 SELUI body。
-    setPortalBody(content);
+    // 业务内容必须进入专属滚动栈；外层只负责滚动，内层保持内容最小高度，不能直接挂到会裁剪溢出的 SELUI body。
+    setPortalBody(scrollStack);
     if (openRef.current) controller.open();
     return () => {
       setPortalBody(null);
