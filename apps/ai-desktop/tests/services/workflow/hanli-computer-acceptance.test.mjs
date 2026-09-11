@@ -140,6 +140,18 @@ test("截图无法定位控件时，观察结果仍提供受限模型聚焦提�
     await finish(tools, id(focused));
   });
 });
+test("工具契约在首次观察前也声明受限模型聚焦路径", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const definition = tools.definitions[0];
+    assert.match(definition.description, /截图无法辨识模型选择器时，可用 focus-model-control/);
+    assert.match(definition.description, /不能读取或设置模型值/);
+    assert.match(definition.inputSchema.properties.control.description, /仅供 focus-model-control 使用/);
+    assert.match(definition.inputSchema.properties.control.description, /只能由后续真实键盘输入改变/);
+    await observe(tools);
+    await finish(tools, id(await observe(tools)), "blocked");
+  });
+});
 test("受控验收消息发送后可作为真实截图证据，悬停也形成独立输入记录", async () => {
   const f = fixture();
   const run = await f.run(async (tools) => {
