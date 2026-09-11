@@ -12,7 +12,7 @@ import { CodexConversationTimeline } from "./CodexConversationWorkspace/CodexCon
 
 /** 按时间线、编辑区和自动测试提示的顺序组合主 Codex 会话。 */
 export function CodexConversationWorkspace(props: CodexConversationWorkspaceProps) {
-  // ViewModel 统一选择语言文案，并把自动测试状态转换为纯对话框输入。
+  // 显示模型（ViewModel）统一选择语言文案，并把自动测试状态转换为纯对话框输入。
   const viewModel = createCodexConversationViewModel(props);
 
   return (

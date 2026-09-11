@@ -578,6 +578,8 @@ export class PersonaEvolutionRuntime {
           const hasCurrentRunDeliberation = state.deliberations.some((item) => Date.parse(item.createdAt) >= Date.parse(state.oneShotRun!.startedAt));
           const result = await this.#deliberation.advance({ requireProblem: true, forceNew: !hasCurrentRunDeliberation });
           state = result.state;
+          // 等待真实客户确认属于稳定停点；没有新业务事实时禁止按秒改写整份演化状态并继续排队。
+          if (result.activity === "idle") return;
           const established = [...state.deliberations].reverse().find((item) => item.status === "established" && item.topicId);
           if (!established?.topicId) {
             this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "正在判断南宫婉回答；条件不足时继续提出下一问", null, null);

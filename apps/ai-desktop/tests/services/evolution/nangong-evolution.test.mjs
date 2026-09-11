@@ -287,6 +287,59 @@ test("自动托管关闭时范围扩展仍回到真实客户确认", async () =>
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("等待真实客户确认时不重复改写一次性运行档案", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "deliberation-confirmation-idle-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: false, workspaceState, locale: "zh-CN" });
+    store.beginOneShotRun(workspaceState, "zh-CN");
+    store.beginDeliberation("idle-confirmation", [{ sourceMessageId: "user-idle", content: "只修复当前页面。" }], "是否只修复当前页面？", "确认修复范围");
+    const roundId = store.state().deliberations[0].rounds[0].roundId;
+    const candidate = { title: "当前页面修复", goal: "修复当前页面", scope: ["当前页面"], exclusions: ["其他页面"], evidence: ["用户要求"], acceptanceCriteria: ["当前页面恢复正常"], establishmentReason: "范围明确" };
+    store.recordDeliberationAnswer("idle-confirmation", roundId, "只处理当前页面，不扩展范围。");
+    store.assessDeliberation("idle-confirmation", roundId, "范围已经明确", null, candidate);
+    store.offerDeliberationConfirmation("idle-confirmation", "只修复当前页面，符合请回复 1。");
+    const before = store.state();
+    const runtime = new PersonaEvolutionRuntime({
+      store,
+      collaboration: { state() { return { members: [], tasks: [] }; } },
+      conversation,
+      ...distributionServices,
+      recordEvent: () => undefined,
+      askHanliDeliberation: async () => { throw new Error("等待客户确认时不应再次询问韩立"); },
+      askNangongDeliberation: async () => { throw new Error("确认说明已存在时不应再次询问南宫婉"); },
+      memory: {
+        readLatestRequirementDiscussionContext() { return null; },
+        readHanLiEvolutionCorpus() { return []; },
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendPersonaInternalMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+      },
+      readStableUserId: () => "XUNAN",
+      readProjectScope: () => "/workspace",
+      readHanliConversationId: () => "hanli-thread",
+    });
+    runtime.notifyWorkflowChanged();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    runtime.stop();
+    const after = store.state();
+    assert.equal(after.updatedAt, before.updatedAt);
+    assert.equal(after.archiveRecords.length, before.archiveRecords.length);
+    assert.equal(after.oneShotRun.action, before.oneShotRun.action);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("相同一次性运行活动不会追加重复档案", () => {
+  const key = `one-shot-idempotent-${Date.now()}`;
+  const store = evolutionStore(key);
+  store.beginOneShotRun(workspaceState, "zh-CN");
+  store.updateOneShotRun("preparing-topic", "han-li", "韩立", "等待真实客户确认", null, null);
+  const before = store.state();
+  store.updateOneShotRun("preparing-topic", "han-li", "韩立", "等待真实客户确认", null, null);
+  const after = store.state();
+  assert.equal(after.updatedAt, before.updatedAt);
+  assert.equal(after.archiveRecords.length, before.archiveRecords.length);
+});
+
 test("成熟判断不能绕过可见确认；确认持久化且非1重新讨论", () => {
   const key = `confirmation-gate-${Date.now()}`;
   let store = evolutionStore(key);

@@ -178,6 +178,26 @@ test("默认人物稳定列出，新增、重命名和删除入口退役，存�
   }
 });
 
+test("重复选择当前人物或当前桌面模式不产生协作状态事件", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-selection-idempotent-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const reasons = [];
+    store.subscribe((_state, reason) => reasons.push(reason));
+    const before = store.state();
+    store.selectMember("han-li");
+    store.setMode("collaboration");
+    assert.deepEqual(reasons, []);
+    assert.equal(store.state().updatedAt, before.updatedAt);
+    store.selectMember("nangong-wan");
+    assert.deepEqual(reasons, ["member.selected"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("人物和模式显示选择不会唤醒演化状态机", () => {
+  assert.match(applicationRuntimeSource, /reason !== "member\.selected" && reason !== "mode\.changed"/);
+});
+
 test("旧令狐卡点修复结果从返回南宫婉迁回集成队列", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "checkpoint-repair-migration-"));
   try {

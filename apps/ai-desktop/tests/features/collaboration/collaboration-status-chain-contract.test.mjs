@@ -64,7 +64,7 @@ test("最新等待恢复节点在对应行提供醒目的继续执行主操作",
   assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);
-  assert.match(developerSource, /continueTimelineTask[\s\S]*continueTask\(taskId\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{taskGroupModel\}/);
+  assert.match(developerSource, /continueTimelineTask[\s\S]*controller\.actions\.continueTask\(taskId\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
 });
@@ -79,8 +79,8 @@ test("专题卡使用单一卡片模型归组显示状态和用户操作", () =>
 
 test("协作页面和控制器使用具名模型归组公开依赖", () => {
   // 任务群与人物页都只接收一个模型，工作区不再传递未使用的会话和截图控制器。
-  assert.match(developerSource, /<TaskCollaborationGroup model=\{taskGroupModel\}/);
-  assert.match(developerSource, /<CollaborationMemberPage model=\{memberPageModel\}/);
+  assert.match(developerSource, /<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
+  assert.match(developerSource, /<CollaborationMemberPage model=\{viewModel\.memberPage\}/);
   assert.doesNotMatch(developerSource, /<CollaborationWorkspaceFeature[\s\S]{0,300}(?:workspaces|nangong|screenshot)=/);
   // 协作控制器按权威数据、导航、反馈、操作和稳定配置分组，调用方通过组名理解字段职责。
   assert.match(collaborationModelSource, /data: \{[\s\S]*navigation: \{[\s\S]*feedback: \{[\s\S]*actions: \{[\s\S]*configuration: \{/);

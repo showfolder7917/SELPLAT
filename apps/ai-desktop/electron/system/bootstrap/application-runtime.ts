@@ -512,7 +512,8 @@ export async function startApplication(): Promise<void> {
       }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
-      personaEvolution?.notifyWorkflowChanged();
+      // 人物页签和桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
+      if (reason !== "member.selected" && reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
     },
     onStream: (taskId, memberId, event) => {
       eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);

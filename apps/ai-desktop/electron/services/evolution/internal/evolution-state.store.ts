@@ -122,6 +122,16 @@ export class EvolutionStateStore {
     if (!current || current.status !== "running") return this.state();
     const resolvedTopicId = topicId === undefined ? current.topicId : topicId;
     const resolvedProposalId = proposalId === undefined ? current.proposalId : proposalId;
+    // 相同人物、阶段和动作没有形成新的业务事实，不更新时间或追加重复档案。
+    if (current.phase === phase
+      && current.actor === actor
+      && current.actorName === actorName.trim()
+      && current.action === action.trim()
+      && current.topicId === (resolvedTopicId || null)
+      && current.proposalId === (resolvedProposalId || null)
+      && current.blockingReason === null) {
+      return this.state();
+    }
     const now = new Date().toISOString();
     return this.#commit("one-shot.activity", resolvedTopicId || null, resolvedProposalId || null, (state) => {
       const run = state.oneShotRun;

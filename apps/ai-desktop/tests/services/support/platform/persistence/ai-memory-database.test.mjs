@@ -309,6 +309,7 @@ test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", (
   ].join("\n");
   const rendererSource = [
     path.join(appRoot, "src", "applications", "developer", "DeveloperApplication.tsx"),
+    path.join(appRoot, "src", "applications", "developer", "components", "AiMemoryRecoveryBanner.tsx"),
     path.join(appRoot, "src", "features", "settings", "components", "DeveloperSettingsFeature.tsx"),
   ].map((file) => readFileSync(file, "utf8")).join("\n");
   assert.match(mainSource, /initializeAiMemoryDatabase/);

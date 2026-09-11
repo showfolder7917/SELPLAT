@@ -13,10 +13,11 @@ const timeline = read("../../../src/features/conversation/components/CodexConver
 // 会话编辑区子模块：独立拥有附件、队列、输入和工具栏组装。
 const composer = read("../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer.tsx");
 
-test("Codex 会话页按 View、数据结构和专属可见区域分开职责", () => {
+test("Codex 会话页按 Section、数据结构和专属可见区域分开职责", () => {
   assert.match(types, /Codex 会话页面的数据结构定义/);
   assert.match(types, /export interface CodexConversationWorkspaceProps/);
-  assert.match(view, /Codex 会话页面的 View/);
+  assert.match(view, /Codex 会话页面的 Section/);
+  assert.match(view, /createCodexConversationViewModel/);
   assert.match(view, /CodexConversationTimeline/);
   assert.match(view, /CodexConversationComposer/);
   assert.doesNotMatch(view, /messages\.map|<textarea/);

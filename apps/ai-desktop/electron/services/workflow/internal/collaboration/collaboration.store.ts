@@ -91,11 +91,14 @@ export class CollaborationStore {
 
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto {
     if (mode !== "single-conversation" && mode !== "collaboration") throw new Error("无效的桌面运行模式。");
+    if (this.#state.mode === mode) return this.state();
     return this.#commit("mode.changed", (state) => { state.mode = mode; });
   }
 
   selectMember(memberId: string): CollaborationStateOutDto {
     this.#member(memberId);
+    // 重复点击当前人物只是界面选择，不产生新的协作业务事实或磁盘写入。
+    if (this.#state.selectedMemberId === memberId) return this.state();
     return this.#commit("member.selected", (state) => { state.selectedMemberId = memberId; });
   }
 
