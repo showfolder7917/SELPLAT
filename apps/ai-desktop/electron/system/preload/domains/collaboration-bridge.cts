@@ -24,6 +24,7 @@ export function collaborationBridge() {
     onPersonaConversationChanged: (listener: (conversation: unknown) => void) => subscribe("desktop:persona-conversation-changed", listener),
     sendPersonaConversationMessage: (personaId: string, request: unknown) => invoke("desktop:send-persona-conversation-message", personaId, request),
     newPersonaConversation: (personaId: string) => invoke("desktop:new-persona-conversation", personaId),
+    selectPersonaConversationModel: (personaId: string, selectedModel: string | null) => invoke("desktop:select-persona-conversation-model", personaId, selectedModel),
     generateNangongTopicDraft: (request: unknown) => invoke("desktop:generate-nangong-topic-draft", request),
     convertNangongConversationToTopic: (request: unknown) => invoke("desktop:convert-nangong-conversation-to-topic", request),
     createEvolutionTopic: (request: unknown) => invoke("desktop:create-evolution-topic", request),

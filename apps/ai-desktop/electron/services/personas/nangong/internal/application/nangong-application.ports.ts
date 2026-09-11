@@ -34,7 +34,7 @@ export interface NangongApplicationServiceOptions {
   prompts: PromptLibraryPort;
   mutations: EvolutionMutationPort;
   conversation: {
-    send(request: SendPersonaConversationMessageInDto, context: string): Promise<SendMessageOutDto>;
+    send(request: SendPersonaConversationMessageInDto, context: string, selectedModel?: string | null): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
   };
   memory?: CollaborationMemoryPort | null;

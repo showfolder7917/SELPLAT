@@ -32,10 +32,11 @@ export class PersonaConversationRepository {
     if (!this.database) return emptyConversation(ownerPersonaId);
     return this.database.withConnection((connection) => {
       const header = connection.prepare(`
-        SELECT conversationId, createdAt, updatedAt FROM AiDesktopPersonaConversation
+        SELECT conversationId, selectedModel, createdAt, updatedAt FROM AiDesktopPersonaConversation
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId
       `).get({ $ownerPersonaId: requiredPersonaId(ownerPersonaId), $conversationId: requiredConversationId(conversationId) }) as {
         conversationId: string;
+        selectedModel: string | null;
         createdAt: string;
         updatedAt: string;
       } | undefined;
@@ -51,6 +52,7 @@ export class PersonaConversationRepository {
       return {
         ownerPersonaId,
         conversationId: header.conversationId,
+        selectedModel: header.selectedModel,
         createdAt: header.createdAt,
         messages: rows.map(mapMessage),
         updatedAt: header.updatedAt,
@@ -72,12 +74,17 @@ export class PersonaConversationRepository {
         WHERE ownerPersonaId=$ownerPersonaId AND status='active' AND conversationId<>$conversationId
       `).run({ $ownerPersonaId: ownerPersonaId, $conversationId: conversationId });
       connection.prepare(`
-        INSERT INTO AiDesktopPersonaConversation (conversationId, ownerPersonaId, status, createdAt, updatedAt)
-        VALUES ($conversationId, $ownerPersonaId, 'active', $createdAt, $updatedAt)
-        ON CONFLICT(conversationId) DO UPDATE SET status='active', updatedAt=excluded.updatedAt
+        INSERT INTO AiDesktopPersonaConversation (conversationId, ownerPersonaId, status, selectedModel, createdAt, updatedAt)
+        VALUES ($conversationId, $ownerPersonaId, 'active', $selectedModel, $createdAt, $updatedAt)
+        ON CONFLICT(conversationId) DO UPDATE SET
+          status='active',
+          -- Evolution 只投影正文和流程状态；模型选择始终由会话头的专用写入保留。
+          selectedModel=COALESCE(excluded.selectedModel, AiDesktopPersonaConversation.selectedModel),
+          updatedAt=excluded.updatedAt
       `).run({
         $conversationId: conversationId,
         $ownerPersonaId: ownerPersonaId,
+        $selectedModel: normalizedModel(conversation.selectedModel),
         $createdAt: conversation.createdAt || conversation.messages[0]?.createdAt || conversation.updatedAt,
         $updatedAt: conversation.updatedAt,
       });
@@ -96,11 +103,30 @@ export class PersonaConversationRepository {
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET status='archived' WHERE ownerPersonaId=$ownerPersonaId AND status='active'`)
         .run({ $ownerPersonaId: owner });
       connection.prepare(`
-        INSERT INTO AiDesktopPersonaConversation (conversationId, ownerPersonaId, status, createdAt, updatedAt)
-        VALUES ($conversationId, $ownerPersonaId, 'active', $now, $now)
+        INSERT INTO AiDesktopPersonaConversation (conversationId, ownerPersonaId, status, selectedModel, createdAt, updatedAt)
+        VALUES ($conversationId, $ownerPersonaId, 'active', NULL, $now, $now)
       `).run({ $conversationId: conversationId, $ownerPersonaId: owner, $now: now });
     });
-    return { ownerPersonaId: owner, conversationId, createdAt: now, messages: [], updatedAt: now };
+    return { ownerPersonaId: owner, conversationId, selectedModel: null, createdAt: now, messages: [], updatedAt: now };
+  }
+
+  /** 只更新当前会话头的模型选择，不重写消息正文或 Evolution 运行状态。 */
+  selectModel(ownerPersonaId: string, conversationId: string, selectedModel: string | null): PersonaConversationOutDto {
+    if (!this.database) throw new Error("AI Memory 数据库当前不可用，人物会话模型不能保存。");
+    const owner = requiredPersonaId(ownerPersonaId);
+    const conversation = requiredConversationId(conversationId);
+    const now = new Date().toISOString();
+    this.database.transaction((connection) => {
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET selectedModel=$selectedModel, updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $ownerPersonaId: owner, $conversationId: conversation, $selectedModel: normalizedModel(selectedModel), $updatedAt: now,
+      });
+      const changed = connection.prepare("SELECT changes() AS count").get() as { count: number };
+      if (changed.count === 0) {
+        throw new Error("当前人物会话不存在，不能保存模型选择。");
+      }
+    });
+    return this.read(owner, conversation);
   }
 }
 
@@ -156,7 +182,12 @@ function upsertMessage(
 }
 
 function emptyConversation(ownerPersonaId: string): PersonaConversationOutDto {
-  return { ownerPersonaId: requiredPersonaId(ownerPersonaId), conversationId: null, messages: [], updatedAt: new Date(0).toISOString() };
+  return { ownerPersonaId: requiredPersonaId(ownerPersonaId), conversationId: null, selectedModel: null, messages: [], updatedAt: new Date(0).toISOString() };
+}
+
+function normalizedModel(value: string | null | undefined): string | null {
+  const model = value?.trim() || "";
+  return model || null;
 }
 
 function requiredPersonaId(value: string): string {

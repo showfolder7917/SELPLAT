@@ -39,6 +39,7 @@ const allowedTestScripts = new Set([
   "test:interaction",
   "test:managed",
   "test:model-settings",
+  "test:persona-conversation-model",
   "test:database-paths",
   "test:database-foundation",
   "test:trust",

@@ -36,14 +36,14 @@ const harnessRule = [
   read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md`),
 ].join("\n");
 
-test("全局设置持久化模型、推理强度和速度且不提供会话覆盖字段", () => {
+test("全局设置持久化默认模型、推理强度和速度，人物会话字段不进入设置协议", () => {
   assert.match(contracts, /defaultModel: string \| null/);
   assert.match(contracts, /reasoningEffort: ReasoningEffortValue \| null/);
   assert.match(contracts, /serviceTier: ModelServiceTierValue/);
   assert.match(store, /defaultModel: patch\.defaultModel/);
   assert.match(store, /DEFAULT_AI_DESKTOP_MODEL = "gpt-5\.6-terra"/);
   assert.match(store, /validModel\(value\.defaultModel\) \|\| DEFAULT_AI_DESKTOP_MODEL/);
-  assert.doesNotMatch(contracts, /sessionModel|conversationModel/);
+  assert.doesNotMatch(contracts, /selectedModel/);
 });
 
 test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () => {
@@ -81,7 +81,7 @@ test("模型目录来自官方 app-server 并按模型能力渲染推理强度�
 test("每轮主会话与协同连接读取同一份全局模型设置", () => {
   assert.match(service, /const modelSettings = this\.#options\.readSettings\(\)/);
   assert.match(service, /serviceTier: modelSettings\.serviceTier/);
-  assert.match(service, /#assertModelSettingsSupported\(modelSettings\)/);
+  assert.match(service, /#assertModelSettingsSupported\(modelSettings, selectedModel\)/);
   assert.match(service, /不支持快速处理/);
   assert.match(collaboration, /readSettings: this\.#options\.readSettings/);
 });

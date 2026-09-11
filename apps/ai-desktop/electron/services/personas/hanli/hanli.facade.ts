@@ -20,6 +20,7 @@ export interface HanliApplicationPort {
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 归档当前业务会话并创建新会话。 */
   newConversation(): Promise<PersonaConversationOutDto>;
+  selectConversationModel(selectedModel: string | null): Promise<PersonaConversationOutDto>;
   /** 登记等待韩立审批的提案。 */
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
   /** 保存用户作出的人工审批决定。 */
@@ -90,6 +91,9 @@ export class HanliFacade {
   /** 重置韩立的模型线程并新建空白业务会话；旧业务会话只归档，不删除历史消息。 */
   newConversation(): Promise<PersonaConversationOutDto> {
     return this.#application.newConversation();
+  }
+  selectConversationModel(selectedModel: string | null): Promise<PersonaConversationOutDto> {
+    return this.#application.selectConversationModel(selectedModel);
   }
   /** 接收南宫或令狐提交的提案并登记审批申请，不提前生成审批结论。 */
   requestProposalReview(proposalId: string): EvolutionStateOutDto {

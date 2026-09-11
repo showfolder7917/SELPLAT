@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
-import type { PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../contracts/system/desktop/index";
+import type { CodexModelOptionOutDto, PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
+import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
 import type { ComposerAttachment } from "./chat-message";
 import { projectPersonaConversation } from "./realtime-conversation";
 
 function emptyConversation(personaId: string): PersonaConversationOutDto {
-  return { ownerPersonaId: personaId, conversationId: null, messages: [], updatedAt: new Date(0).toISOString() };
+  return { ownerPersonaId: personaId, conversationId: null, selectedModel: null, messages: [], updatedAt: new Date(0).toISOString() };
 }
 
 function readableDesktopError(error: unknown, fallback: string): string {
@@ -47,6 +48,9 @@ export function usePersonaConversation(personaId: string) {
   // 新线程建立成功后只提示当前页面，不把旧线程的错误或等待状态带入新对话。
   const [newConversationFeedback, setNewConversationFeedback] = useState("");
   const [error, setError] = useState("");
+  // 官方模型目录只从 Codex bridge 读取，人物页面不维护固定模型列表。
+  const [modelCatalog, setModelCatalog] = useState<CodexModelOptionOutDto[]>([]);
+  const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
 
   // 韩立只读核实使用稳定进度/结果消息对表达生命周期；页面据此显示南宫婉真实活动，不改写协作任务占用状态。
   const delegatedResponderPersonaId = personaId === "han-li" && sending && conversation.messages.some((message) => {
@@ -81,6 +85,18 @@ export function usePersonaConversation(personaId: string) {
     });
     return () => { active = false; removeListener?.(); };
   }, [personaId]);
+
+  useEffect(() => {
+    let active = true;
+    const codex = getOptionalCodexDesktopApi();
+    if (!codex) return () => { active = false; };
+    setModelCatalogLoading(true);
+    void codex.getCodexModels()
+      .then((catalog) => { if (active) setModelCatalog(catalog.models); })
+      .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取官方模型目录。")); })
+      .finally(() => { if (active) setModelCatalogLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -132,11 +148,23 @@ export function usePersonaConversation(personaId: string) {
     }
   };
 
+  const selectModel = async (selectedModel: string | null) => {
+    if (sending || newConversationBusy) return;
+    setError("");
+    try {
+      const value = await getOptionalCollaborationDesktopApi()?.selectPersonaConversationModel(personaId, selectedModel);
+      if (!value) throw new Error("人物会话模型服务没有返回结果。");
+      setConversation(value);
+    } catch (reason) {
+      setError(readableDesktopError(reason, "无法保存人物对话模型。"));
+    }
+  };
+
   return {
     personaId, conversation, setConversation, attachments, setAttachments,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
-    delegatedResponderPersonaId,
+    delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, selectModel,
   };
 }
 

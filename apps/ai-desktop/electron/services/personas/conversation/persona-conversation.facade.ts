@@ -5,6 +5,7 @@ export interface PersonaConversationHandler {
   conversation(): PersonaConversationOutDto;
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   newConversation(): Promise<PersonaConversationOutDto>;
+  selectConversationModel(selectedModel: string | null): Promise<PersonaConversationOutDto>;
 }
 
 /**
@@ -32,6 +33,10 @@ export class PersonaConversationFacade {
 
   newConversation(personaId: string): Promise<PersonaConversationOutDto> {
     return this.#requireHandler(personaId).newConversation();
+  }
+
+  selectModel(personaId: string, selectedModel: string | null): Promise<PersonaConversationOutDto> {
+    return this.#requireHandler(personaId).selectConversationModel(selectedModel);
   }
 
   #requireHandler(personaId: string): PersonaConversationHandler {

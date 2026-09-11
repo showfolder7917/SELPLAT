@@ -39,6 +39,7 @@
     "test:document": "node scripts/run-with-dependencies.mjs node scripts/test-document-runner.mjs",
     "test:developer-settings": "node scripts/run-with-dependencies.mjs node --test tests/applications/developer/developer-settings-panel.test.mjs",
     "test:model-settings": "node --test tests/applications/developer/model-settings-contract.test.mjs",
+    "test:persona-conversation-model": "node --test tests/features/conversation/persona-conversation-model.test.mjs",
     "test:database-paths": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/platform/persistence/ai-memory-path-resolver.test.mjs",
     "test:database-foundation": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/platform/persistence/ai-memory-database.test.mjs && node scripts/run-with-dependencies.mjs electron tests/release/ai-memory-electron-runtime-smoke.mjs",
     "test:workflow-event-center": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/capabilities/event-center/workflow-event-center.test.mjs",

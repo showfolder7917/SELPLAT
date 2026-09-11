@@ -21,6 +21,8 @@ export interface PersonaConversationMessageOutDto {
 export interface PersonaConversationOutDto {
   ownerPersonaId: string;
   conversationId: string | null;
+  /** 当前对话显式选定的官方模型；null 表示本轮继续使用设置页默认模型。 */
+  selectedModel?: string | null;
   /** 会话建立时刻固定不变，用于隔离新会话之前的其他消息流。 */
   createdAt?: string;
   messages: PersonaConversationMessageOutDto[];

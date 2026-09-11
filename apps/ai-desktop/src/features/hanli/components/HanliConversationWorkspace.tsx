@@ -115,6 +115,19 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
       {/* 页面错误区：桌面通信或业务处理失败时立即向客户显示原因。 */}
       {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
 
+      {/* 模型选择区：只读取官方目录；留空表示本对话继续采用设置页默认模型。 */}
+      <label className="selconversation-model-picker">本对话模型
+        <select
+          aria-label="韩立对话模型"
+          value={conversation.selectedModel || ""}
+          disabled={controller.busy || newConversationBusy || props.runtime.modelCatalogLoading}
+          onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
+        >
+          <option value="">使用设置页默认模型</option>
+          {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+        </select>
+      </label>
+
       {/* 文字输入区：接收客户问题，也允许从剪贴板粘贴截图。 */}
       <textarea
         className="selconversation-input"
