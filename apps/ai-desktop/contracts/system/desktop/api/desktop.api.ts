@@ -174,6 +174,8 @@ export interface DesktopApi {
   sendPersonaConversationMessage(personaId: string, request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 关闭韩立当前固定线程并建立空白自由对话。 */
   newPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
+  /** 保存当前人物会话选择的官方模型；null 表示使用设置页默认模型。 */
+  selectPersonaConversationModel(personaId: string, selectedModel: string | null): Promise<PersonaConversationOutDto>;
   /** 从已确认输入建立新专题。 */
   createEvolutionTopic(request: CreateNangongTopicInDto): Promise<EvolutionStateOutDto>;
   /** 更新演化自动化时间、次数等受控配置。 */

@@ -25,6 +25,7 @@ export interface CollaborationMemoryPort {
   recordVerifiedInspectionExperience(stableUserId: string, projectScope: string, candidate: HanliAcceptanceExperienceCandidateOutDto): void;
   readPersonaConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
   newPersonaConversation(ownerPersonaId: string): PersonaConversationOutDto;
+  selectPersonaConversationModel(ownerPersonaId: string, conversationId: string, selectedModel: string | null): PersonaConversationOutDto;
   appendPersonaInternalMessage(input: {
     ownerPersonaId: string;
     conversationId: string;

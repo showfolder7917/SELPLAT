@@ -111,8 +111,8 @@ managed_status_indicator_lifecycle_contract = running_bright_pulsing + terminal_
 <!-- 回复卡和全部内部执行面板必须允许收缩，长路径不得建立超出卡片的固有宽度。 -->
 managed_response_boundary_contract = card_width_100_percent_with_maximum + all_flex_grid_children_min_width_zero + internal_panels_max_width_100_percent + long_path_wrap_or_ellipsis + no_horizontal_boundary_escape
 <!-- Harness 连接时必须重新识别运行时；优先使用与当前 AI Desktop 专属模型缓存客户端版本一致的本机 Codex，避免旧二进制读取新缓存字段失败。 -->
-<!-- 模型配置必须来自固定 app-server 的真实模型能力并由所有连接逐轮读取同一全局设置，禁止渲染层固定列表或会话级覆盖。 -->
-harness_global_model_settings_contract = settings_panel_default_model_reasoning_effort_and_service_tier + model_list_and_supported_efforts_from_pinned_app_server + electron_userData_persistence + main_conversation_collaboration_executor_and_reviewer_read_latest_each_turn + no_conversation_level_override
+<!-- 模型目录必须来自固定 app-server；仅韩立与南宫婉的统一人物会话可保存模型选择，其他连接继续逐轮使用全局默认。 -->
+harness_global_model_settings_contract = settings_panel_default_model_reasoning_effort_and_service_tier + model_list_and_supported_efforts_from_pinned_app_server + electron_userData_persistence + hanli_and_nangong_persona_conversation_selected_model_override + main_conversation_collaboration_executor_and_reviewer_use_global_default_model + global_reasoning_effort_and_service_tier_for_all_connections
 <!-- AI Desktop 初始安装和旧版空模型设置统一迁移到 Terra，迁移后仍以用户显式选择为最高优先级。 -->
 harness_default_model_contract = initialize_and_migrate_legacy_empty_default_to_gpt_5_6_terra + preserve_later_explicit_user_selection
 <!-- Harness 运行时版本是应用发布事实，只允许安装包内置目标版或下载校验后的同一目标版。 -->

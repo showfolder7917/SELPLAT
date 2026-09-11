@@ -58,7 +58,7 @@ export interface HanliApplicationServiceOptions {
   /** 韩立普通模型会话；始终使用只读工作区但允许返回观点和调查请求。 */
   conversation?: {
     /** 向当前韩立模型线程发送一轮完整提示。 */
-    send(request: SendPersonaConversationMessageInDto, prompt: string): Promise<SendMessageOutDto>;
+    send(request: SendPersonaConversationMessageInDto, prompt: string, selectedModel?: string | null): Promise<SendMessageOutDto>;
     /** 关闭旧模型上下文并建立新的空白线程。 */
     newChat(): Promise<void>;
     /** 返回当前 provider 线程标识，仅用于校验会话是否可续接。 */

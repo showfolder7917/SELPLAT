@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,15 @@ for (const ruleTreeResource of ["AGENTS.md", path.join("rules", "RULE_INDEX.md")
 for (const promptResource of ["manifest.json", "prompts.json"]) {
   const promptPath = path.join(resourcesRoot, "prompts", promptResource);
   if (!existsSync(promptPath)) throw new Error(`Packaged prompt resource is missing: ${promptPath}`);
+}
+const migrationRoot = path.join(resourcesRoot, "db", "sql");
+const migrationManifest = path.join(migrationRoot, "load-order.txt");
+if (!existsSync(migrationManifest)) throw new Error(`Packaged SQLite migration manifest is missing: ${migrationManifest}`);
+for (const line of readFileSync(migrationManifest, "utf8").split(/\r?\n/u)) {
+  const [, migrationFile] = line.trim().split("|");
+  if (!migrationFile) continue;
+  const migrationPath = path.join(migrationRoot, migrationFile);
+  if (!existsSync(migrationPath)) throw new Error(`Packaged SQLite migration is missing: ${migrationPath}`);
 }
 
 const listing = execFileSync(process.execPath, [require.resolve("@electron/asar/bin/asar.js"), "list", asarPath], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });

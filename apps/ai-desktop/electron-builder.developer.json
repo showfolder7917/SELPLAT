@@ -13,7 +13,8 @@
   ],
   "extraResources": [
     { "from": "../../build/ai-desktop/rule-bundle", "to": "ruleengine", "filter": ["manifest.json", "AGENTS.md", "rules/**/*"] },
-    { "from": "../../build/ai-desktop/prompt-bundle", "to": "prompts", "filter": ["manifest.json", "prompts.json"] }
+    { "from": "../../build/ai-desktop/prompt-bundle", "to": "prompts", "filter": ["manifest.json", "prompts.json"] },
+    { "from": "db/sql", "to": "db/sql", "filter": ["load-order.txt", "*.sql"] }
   ],
   "asarUnpack": ["node_modules/@openai/codex/**/*", "node_modules/@openai/codex-*/**/*"],
   "win": { "target": "nsis", "artifactName": "AI-Desktop-${version}-Setup.${ext}" },

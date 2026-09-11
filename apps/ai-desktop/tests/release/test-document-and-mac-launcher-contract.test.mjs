@@ -95,6 +95,7 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builderConfig, /const buildRoot = path\.join\(selplatRoot, "build", "ai-desktop"\);/);
   assert.match(builderConfig, /resource\.to === "ruleengine".*path\.join\(buildRoot, "rule-bundle"\)/s);
   assert.match(builderConfig, /resource\.to === "prompts".*path\.join\(buildRoot, "prompt-bundle"\)/s);
+  assert.match(builder, /\{ "from": "db\/sql", "to": "db\/sql", "filter": \["load-order\.txt", "\*\.sql"\] \}/);
   assert.match(launcher, /npm run build:developer/);
   assert.match(launcher, /npm run package:mac:developer/);
   assert.match(launcher, /codesign --force --deep --sign -/);
@@ -128,6 +129,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /if \(healthCheckPassed\) rmSync\(healthRun/);
   assert.match(packageContentVerifier, /for \(const promptResource of \["manifest\.json", "prompts\.json"\]\)/);
   assert.match(packageContentVerifier, /Packaged prompt resource is missing/);
+  assert.match(packageContentVerifier, /Packaged SQLite migration manifest is missing/);
+  assert.match(packageContentVerifier, /Packaged SQLite migration is missing/);
   assert.match(packagedBootstrap, /await import\("\.\/main\.js"\)/);
   assert.doesNotMatch(packagedBootstrap, /external runtime|runtimeRoot|pathToFileURL/);
 });

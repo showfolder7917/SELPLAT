@@ -75,6 +75,10 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#conversation.newConversation();
   }
 
+  selectConversationModel(selectedModel: string | null): Promise<PersonaConversationOutDto> {
+    return this.#conversation.selectModel(selectedModel);
+  }
+
   /** 接收人物提交的提案并登记审批申请；不会提前作出审批结论。 */
   requestProposalReview(proposalId: string): EvolutionStateOutDto {
     return this.#approvals.recordApplication(proposalId);

@@ -85,6 +85,8 @@ export class HanliConversationService {
       ownerPersonaId: "han-li",
       // null 表示尚未建立可持久化的业务会话。
       conversationId: null,
+      // 未建立会话时没有人物专属模型选择，发送时会回退设置页默认模型。
+      selectedModel: null,
       // 空数组表示当前没有可展示的持久消息。
       messages: [],
       // 纪元时间避免把空快照误判成刚发生的业务更新。
@@ -183,6 +185,19 @@ export class HanliConversationService {
     return memory.newPersonaConversation("han-li");
   }
 
+  /** 为当前韩立业务会话保存模型；首次选择会先建立空会话头。 */
+  async selectModel(selectedModel: string | null): Promise<PersonaConversationOutDto> {
+    const memory = this.#options.memory;
+    if (!memory) throw new Error("AI Memory 尚未接入，无法保存韩立对话模型。");
+    let conversation = this.conversation();
+    if (!conversation.conversationId) conversation = memory.newPersonaConversation("han-li");
+    const conversationId = conversation.conversationId;
+    if (!conversationId) throw new Error("韩立当前对话尚未建立，不能保存模型选择。");
+    const saved = memory.selectPersonaConversationModel("han-li", conversationId, selectedModel);
+    this.#options.onPersonaConversationChanged?.(saved);
+    return saved;
+  }
+
   /** 普通韩立对话：构造上下文、调用模型、保存结果并更新当前观点事实。 */
   async #continueConversation(
     request: SendPersonaConversationMessageInDto,
@@ -223,7 +238,7 @@ export class HanliConversationService {
     // 创建时间记录本轮用户消息真实进入模型调用的时刻。
     const createdAt = new Date().toISOString();
     // 普通韩立模型运行在只读工作区，但可以返回调查请求和观点。
-    const response = await chat.send(request, prompt);
+    const response = await chat.send(request, prompt, conversation.selectedModel);
     // 没有稳定 provider 会话标识时不能把模型输出当成完整人物回合。
     if (!response.threadId && !chat.activeConversationId()) {
       // 明确失败使用户原消息进入失败状态，而不是保存无法续接的回复。

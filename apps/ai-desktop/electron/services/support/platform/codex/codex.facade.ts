@@ -266,6 +266,7 @@ export class CodexService {
     attachmentPaths: string[] = [],
     onStreamEvent: (event: CodexStreamEventOutDto) => void = () => undefined,
     executionMode: ManagedExecutionModeValue | null = null,
+    selectedModel: string | null = null,
   ): Promise<SendMessageOutDto> {
     const normalizedMessage = message.trim();
     // send 接收的是已经拼装好的内部提示词，用户输入长度由上层各自校验，运输层不再误拦上下文。
@@ -287,16 +288,16 @@ export class CodexService {
     this.#activeExecutionMode = executionMode;
     this.#activeWorkspaces = workspaces;
     try {
-      // 每轮读取最新全局值，让持久会话与临时协同连接同时生效且没有会话级覆盖分支。
+      // 每轮读取最新全局值；人物会话可单独指定模型，但推理强度和服务等级始终沿用全局设置。
       const modelSettings = this.#options.readSettings();
-      await this.#assertModelSettingsSupported(modelSettings);
+      const effectiveModel = await this.#assertModelSettingsSupported(modelSettings, selectedModel);
       const result = asObject(await this.#request("turn/start", {
         threadId,
         cwd: primaryRoot.path,
         approvalPolicy: "on-request",
         approvalsReviewer: "user",
         sandboxPolicy: createSandboxPolicy(sandboxMode, workspaces),
-        ...(modelSettings.defaultModel ? { model: modelSettings.defaultModel } : {}),
+        ...(effectiveModel ? { model: effectiveModel } : {}),
         ...(modelSettings.reasoningEffort ? { effort: modelSettings.reasoningEffort } : {}),
         serviceTier: modelSettings.serviceTier,
         input,
@@ -315,18 +316,19 @@ export class CodexService {
   }
 
   /**
-   * app-server 已明确列出模型能力时，禁止把不支持的全局选择静默降级为默认值。
-   * 这同时覆盖主会话、协同执行和协同审核，因为三者共用 send 调用路径。
+   * app-server 已明确列出模型能力时，禁止把不支持的实际选用模型静默降级为默认值。
+   * 主会话、协同执行和协同审核未传人物选择，因此仍按全局默认模型校验。
    */
-  async #assertModelSettingsSupported(settings: DesktopSettingsOutDto): Promise<void> {
-    if (!settings.defaultModel && !settings.reasoningEffort && settings.serviceTier === "default") return;
+  async #assertModelSettingsSupported(settings: DesktopSettingsOutDto, selectedModel: string | null): Promise<string | null> {
+    const effectiveModel = selectedModel?.trim() || settings.defaultModel;
+    if (!effectiveModel && !settings.reasoningEffort && settings.serviceTier === "default") return null;
     const catalog = await this.getModels();
-    const model = settings.defaultModel
-      ? catalog.models.find((entry) => entry.id === settings.defaultModel)
+    const model = effectiveModel
+      ? catalog.models.find((entry) => entry.id === effectiveModel)
       : catalog.models.find((entry) => entry.isDefault);
     if (!model) {
-      if (settings.defaultModel) throw new Error(`全局默认模型“${settings.defaultModel}”当前不可用，请在设置中重新选择。`);
-      return;
+      if (effectiveModel) throw new Error(`模型“${effectiveModel}”当前不可用，请重新选择。`);
+      return null;
     }
     if (settings.reasoningEffort && model.supportedReasoningEfforts.length > 0 && !model.supportedReasoningEfforts.includes(settings.reasoningEffort)) {
       throw new Error(`模型“${model.displayName}”不支持推理强度“${settings.reasoningEffort}”，请在设置中重新选择。`);
@@ -334,6 +336,7 @@ export class CodexService {
     if (settings.serviceTier !== "default" && !model.supportedServiceTiers.includes(settings.serviceTier)) {
       throw new Error(`模型“${model.displayName}”不支持快速处理，请在设置中切换为标准速度或选择支持该速度的模型。`);
     }
+    return effectiveModel;
   }
 
   dispose(): void {
