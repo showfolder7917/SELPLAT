@@ -16,7 +16,14 @@ const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: [
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
   let n = 0;
   const inputs = [], progress = [];
-  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => /sendAcceptanceMessage|sendAcceptanceScreenshot/.test(String(script)) ? sendResult : /focusAcceptanceModelControl/.test(String(script)) ? { status: "focused", controlLabel: "韩立对话模型" } : safe, sendInputEvent: (event) => inputs.push(event) } };
+  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => {
+    const source = String(script);
+    if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
+    if (/focusAcceptanceModelControl/.test(source)) {
+      return { status: "focused", controlLabel: source.includes("nangong-model") ? "南宫婉对话模型" : "韩立对话模型" };
+    }
+    return safe;
+  }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
   return { inputs, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
 }
@@ -120,6 +127,18 @@ test("模型验收只聚焦韩立、南宫婉或设置模型控件，值仍由�
   assert.match(source, /select\[aria-label="南宫婉对话模型"\]/);
   assert.match(source, /select\.focus\(\)/);
   assert.match(source, /不能读取或设置选项值/);
+});
+test("截图无法定位控件时，观察结果仍提供受限模型聚焦提示和后续聚焦证据", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const first = await observe(tools);
+    const observation = JSON.parse(first.contentItems[0].text);
+    assert.deepEqual(observation.modelControlHints.map((item) => item.control), ["hanli-model", "nangong-model", "default-model", "reasoning-effort", "service-tier"]);
+    const focused = await tools.call("hanli_computer", { action: "focus-model-control", control: "nangong-model", reason: "聚焦南宫婉对话模型", observationId: id(first) });
+    const afterFocus = JSON.parse(focused.contentItems[0].text);
+    assert.deepEqual(afterFocus.interactionEvidence.focusedModelControl, { control: "nangong-model", label: "南宫婉对话模型" });
+    await finish(tools, id(focused));
+  });
 });
 test("受控验收消息发送后可作为真实截图证据，悬停也形成独立输入记录", async () => {
   const f = fixture();
