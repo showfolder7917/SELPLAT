@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { DecideHanliProposalInDto, EvolutionStateEventOutDto, EvolutionStateOutDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
+import { createEvolutionStateSynchronizer } from "./evolution-state-synchronizer";
 
 /** Evolution Feature 统一拥有跨人物共享状态、订阅和写动作，人物会话只消费该公开模型。 */
 export function useEvolutionRuntime() {
@@ -13,8 +14,19 @@ export function useEvolutionRuntime() {
   useEffect(() => {
     const desktop = getOptionalCollaborationDesktopApi();
     if (!desktop) return;
-    void desktop.getEvolutionState().then(setState);
-    return desktop.onEvolutionState((event: EvolutionStateEventOutDto) => setState(event.state));
+    const synchronizer = createEvolutionStateSynchronizer();
+    let active = true;
+    void desktop.getEvolutionState().then((initial) => {
+      const next = synchronizer.acceptInitial(initial);
+      if (active && next) setState(next);
+    });
+    const unsubscribe = desktop.onEvolutionState((event: EvolutionStateEventOutDto) => {
+      if (active) setState(synchronizer.acceptLive(event.state));
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const decideProposal = async (proposalId: string, request: DecideHanliProposalInDto) => {
