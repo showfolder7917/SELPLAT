@@ -124,20 +124,9 @@ export class HanliFacade {
     if (!this.#options.computerAcceptance) {
       throw new Error("韩立Computer Use尚未接入");
     }
-    const conversationId = this.#options.memory?.readPersonaConversation("han-li").conversationId;
     return this.#computer.run(goal, targetWindow, (tools, session) => this.#options.computerAcceptance!(goal, tools, session), (content) => {
+      // 验收步骤属于专题审计，不是客户与韩立的自由讨论；仅记录事件，避免污染客户可见会话及其上下文。
       this.#options.recordEvent("hanli.acceptance.computer_progress", { proposalId: goal.proposalId, content });
-      if (conversationId && this.#options.memory) {
-        const next = this.#options.memory.appendPersonaInternalMessage({
-          ownerPersonaId: "han-li",
-          conversationId,
-          messageId: "computer:" + crypto.randomUUID(),
-          speakerPersonaId: "han-li",
-          content,
-          createdAt: new Date().toISOString(),
-        });
-        this.#options.onPersonaConversationChanged?.(next);
-      }
     });
   }
   /** 审批最终执行结果；旧提案与既有验收证据不会被覆盖。 */
