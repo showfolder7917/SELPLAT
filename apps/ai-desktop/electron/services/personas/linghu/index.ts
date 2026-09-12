@@ -14,4 +14,4 @@ export {
 } from "./internal/create-linghu-runtime.js";
 
 // 场景提交能力仅暴露受控工具与请求生命周期，不暴露人物状态存储。
-export { createAcceptanceSceneSubmission } from "./internal/linghu-acceptance-scene.js";
+export { acceptanceSceneRuntimeFacts, createAcceptanceSceneSubmission } from "./internal/linghu-acceptance-scene.js";

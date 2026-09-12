@@ -298,7 +298,8 @@ test("受控发送把人物输入框解析器与两种发送动作一起注入�
 });
 test("受控发送在专题卡片没有输入框时只复用既有韩立入口", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-  assert.match(source, /findAcceptancePersonaComposer\(sentComposerLabels\)/);
+  assert.match(source, /createAcceptancePersonaScript\(sendAcceptanceMessage/);
+  assert.match(source, /findAcceptancePersonaComposer\.toString\(\)/);
   assert.match(source, /button\.collaboration-member/);
   assert.match(source, /startsWith\("韩立"\)/);
   assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame/);

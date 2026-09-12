@@ -7,13 +7,28 @@ async function sourceModule(file) {
   const { code } = await transform(readFileSync(file, "utf8"), { loader: "ts", format: "esm", target: "es2022" });
   return import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 }
-const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/linghu/internal/linghu-acceptance-scene.ts");
+const { acceptanceSceneRuntimeFacts, validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/linghu/internal/linghu-acceptance-scene.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const goal = { topicId: "t", proposalId: "p", title: "引导", criteria: ["没有任务时，先告诉我怎么开始", "按钮和说明相邻"] };
 const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数据", conditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
 ] };
+
+test("场景准备直接读取当前专题、提案与运行的权威归属", () => {
+  const facts = acceptanceSceneRuntimeFacts({ ...goal, topicId: "topic-a", proposalId: "proposal-a" }, {
+    topics: [{ topicId: "topic-a", status: "pending-acceptance" }],
+    proposals: [{ proposalId: "proposal-a", topicId: "topic-a", status: "pending-acceptance", distributedTaskIds: ["task-a"] }],
+    oneShotRun: { topicId: "topic-a", proposalId: "proposal-a", status: "running", phase: "accepting" },
+  }, true);
+  assert.deepEqual(facts, {
+    source: "ai-desktop-authoritative-runtime", currentWindowAvailable: true,
+    targetTopicRegistered: true, targetTopicStatus: "pending-acceptance",
+    targetProposalRegistered: true, targetProposalStatus: "pending-acceptance",
+    distributedTaskIds: ["task-a"], currentRunMatchesTarget: true,
+    currentRunStatus: "running", currentRunPhase: "accepting",
+  });
+});
 
 test("令狐显式选择场景不依赖用户语言、页面名和词序", () => {
   assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
