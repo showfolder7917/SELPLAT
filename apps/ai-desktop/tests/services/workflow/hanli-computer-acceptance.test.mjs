@@ -202,7 +202,10 @@ test("受控发送在输入框或发送按钮不可用时明确拒绝", async ()
 });
 test("未提交判断但已有真实截图时归档为受阻，模型断线仍回收权限", async () => {
   const f = fixture(); let tools;
-  const run = await f.run(async (value) => { tools = value; await observe(value); });
+  const run = await f.run(async (value, session) => {
+    tools = value;
+    if (!session.beginFinalization()) await observe(value);
+  });
   assert.equal(run.status, "blocked");
   assert.deepEqual(run.evidenceAttachmentIds, ["image-1"]);
   assert.equal(run.stepResults.length, 1);
@@ -214,6 +217,29 @@ test("未提交判断但已有真实截图时归档为受阻，模型断线仍�
   await assert.rejects(observe(tools), /授权已收回/);
   await assert.rejects(f.run(async () => {}), /未留下可归档的真实截图证据/);
   await assert.rejects(f.run(async () => { throw new Error("断线"); }), /断线/);
+});
+test("首回合遗漏 finish 后只允许终态提交，不能借重试继续操作页面", async () => {
+  const f = fixture(); let turn = 0;
+  const run = await f.run(async (tools, session) => {
+    turn += 1;
+    if (turn === 1) {
+      const snapshot = id(await observe(tools));
+      assert.equal(session.beginFinalization(), true);
+      await assert.rejects(observe(tools), /终态回合只允许提交 finish/);
+      await finish(tools, snapshot, "blocked");
+      return;
+    }
+    assert.fail("验收器不得自行创建第二个模型回合；运行时负责复用同一会话发送终态提示。");
+  });
+  assert.equal(run.status, "blocked");
+  assert.equal(turn, 1);
+  assert.match(f.progress.at(-2), /仅允许 finish/);
+});
+test("运行时在首回合遗漏 finish 时复用同一服务发送受限终态提示", () => {
+  const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  assert.match(runtime, /const sendAcceptanceTurn = \(promptId: "hanli\.computer-acceptance" \| "hanli\.computer-acceptance-finalization"\)/);
+  assert.match(runtime, /await sendAcceptanceTurn\("hanli\.computer-acceptance"\);[\s\S]*if \(session\.beginFinalization\(\)\)[\s\S]*await sendAcceptanceTurn\("hanli\.computer-acceptance-finalization"\);/);
+  assert.match(runtime, /const service = new CodexService[\s\S]*await sendAcceptanceTurn\("hanli\.computer-acceptance-finalization"\);[\s\S]*service\.dispose\(\)/);
 });
 test("finish 校验被拒绝时在受阻记录中保留受限诊断", async () => {
   const f = fixture();

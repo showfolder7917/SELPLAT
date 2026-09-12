@@ -81,6 +81,7 @@ export interface HanliApplicationServiceOptions {
   computerAcceptance?: (
     goal: HanliComputerAcceptanceInDto,
     tools: CodexDynamicToolsPort,
+    session: { beginFinalization: () => boolean },
   ) => Promise<void>;
   /** 把人物业务事件和异常写入统一事件中心。 */
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
