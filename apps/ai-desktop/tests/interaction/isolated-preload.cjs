@@ -500,7 +500,14 @@ contextBridge.exposeInMainWorld("desktop", {
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getEvolutionState: async () => structuredClone(evolutionState),
   setInteractionTestConsoleFixture: async (enabled) => structuredClone(setInteractionTestConsoleFixture(enabled)),
-  setInteractionOneShotRun: async (run) => { evolutionState.oneShotRun = run ? structuredClone(run) : null; return publishNangongEvolution("one-shot.activity"); },
+  setInteractionOneShotRun: async (run) => {
+    evolutionState.oneShotRun = run ? structuredClone(run) : null;
+    if (run?.resumeMode === "post-completion-review" && run.proposalId) {
+      const proposal = evolutionState.proposals.find((item) => item.proposalId === run.proposalId);
+      if (proposal) proposal.status = "completed";
+    }
+    return publishNangongEvolution("one-shot.activity");
+  },
   // 隔离验收恢复夹具只改变测试内存，不连接生产任务或在线模型。
   setInteractionResumeFixture: async (mode) => {
     const now = new Date().toISOString();

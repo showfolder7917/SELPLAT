@@ -8,9 +8,28 @@ import type {
   CollaborationTimelineGroupOutDto,
   // 时间线节点：筛选恢复入口并生成节点显示信息。
   CollaborationTimelineNodeOutDto,
+  // 一次性运行：把完成态复核卡点投影到原专题，而不改写历史时间线。
+  EvolutionOneShotRunOutDto,
   // 界面语言：选择中文或日文文案。
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
+
+/**
+ * 把完成态复核的当前卡点投影到原专题卡。
+ * 历史专题仍可保持 completed；只有同一运行正在等待继续时，界面显示 blocked。
+ */
+export function currentTaskGroupPresentation(
+  group: CollaborationTimelineGroupOutDto,
+  oneShotRun: EvolutionOneShotRunOutDto | null | undefined,
+): CollaborationTimelineGroupOutDto {
+  const waitingForCompletionReview = oneShotRun?.topicId === group.topicId
+    && oneShotRun.proposalId === group.proposalId
+    && oneShotRun.status === "blocked"
+    && oneShotRun.resumeMode === "post-completion-review";
+  return waitingForCompletionReview && group.status !== "blocked"
+    ? { ...group, status: "blocked" }
+    : group;
+}
 
 /** 专题头部当前活动的显示事实，人数和姓名始终来自同一组当前节点。 */
 export type GroupActivityPresentation = {

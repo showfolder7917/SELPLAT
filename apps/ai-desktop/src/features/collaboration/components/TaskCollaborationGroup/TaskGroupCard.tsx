@@ -26,6 +26,8 @@ import {
 import {
   // 摘要压缩：节点头部保持一行可扫描文字。
   compactTimelineText,
+  // 当前专题投影：完成态复核等待继续时让原卡显示卡点，运行后立即恢复历史完成态。
+  currentTaskGroupPresentation,
   // 详情标签：按申请、审批、变更或验证证据选择名称。
   detailLabel,
   // 耗时转换：专题头部显示墙钟总耗时。
@@ -279,6 +281,8 @@ function TaskTimelineNode({
 export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 专题数据和演化控制器属于卡片的业务输入。
   const { group, evolution } = model;
+  // 当前专题（presentedGroup）只叠加运行中的卡点状态，不改写后端历史时间线。
+  const presentedGroup = currentTaskGroupPresentation(group, evolution.state?.oneShotRun);
   // 卡片显示状态统一提供语言、时间、展开选择和错误信息。
   const { locale, open, continueError } = model.presentation;
   // 卡片操作这里只读取专题展开操作，节点操作继续由统一模型传给节点。
@@ -294,13 +298,13 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     // 专题卡根折叠区统一承载卡片头部、恢复入口、人物时间线和下一流程。
     <SelUiDisclosure
       idPrefix="task-collaboration-group"
-      className={`task-collaboration-group ${group.status}`}
+      className={`task-collaboration-group ${presentedGroup.status}`}
       open={open}
       onOpenChange={onOpenChange}
-      trigger={<TaskGroupHeader group={group} presentation={model.presentation} />}
+      trigger={<TaskGroupHeader group={presentedGroup} presentation={model.presentation} />}
     >
       {/* 专题恢复入口：只在原始演化运行确实暂停或阻塞时提供恢复操作。 */}
-      <TaskGroupRecovery group={group} evolution={evolution} locale={locale} />
+      <TaskGroupRecovery group={presentedGroup} evolution={evolution} locale={locale} />
       {/* 历史记录之前显示唯一权威下一流程；阻塞时额外解释失败后的恢复方向。 */}
       <div className="task-timeline-next">
         {/* 下一流程引导线：与时间线视觉相连，不承载可读文字。 */}
@@ -325,8 +329,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
           )}
         </span>
         {/* 失败恢复方向：只有专题阻塞且后端提供说明时才追加显示。 */}
-        {group.status === "blocked" && group.failureNextStep && (
-          <small>{locale === "ja" ? "失敗時" : "失败后"}：{group.failureNextStep}</small>
+        {presentedGroup.status === "blocked" && presentedGroup.failureNextStep && (
+          <small>{locale === "ja" ? "失敗時" : "失败后"}：{presentedGroup.failureNextStep}</small>
         )}
       </div>
       {/* 人物时间线：按后端确定的稳定顺序展示过滤后的真实节点。 */}

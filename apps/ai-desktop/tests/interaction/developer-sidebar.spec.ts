@@ -97,6 +97,48 @@ test("从卡点继续后仍受阻会明确反馈而不是看起来没反应", as
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("完成态复核卡点在原卡显示继续入口且恢复开始后立即消失", async () => {
+  await page.evaluate(async () => {
+    const api = (window as any).desktop;
+    await api.setInteractionTaskTimelineFixture(true);
+    await api.setInteractionAcceptanceTimelineFixture("completed");
+    const now = new Date().toISOString();
+    await api.setInteractionOneShotRun({
+      runId: "completion-review-fixture",
+      topicId: "interaction-timeline",
+      proposalId: "interaction-timeline-proposal",
+      status: "blocked",
+      phase: "blocked",
+      actor: "han-li",
+      actorName: "韩立",
+      action: "success",
+      blockingReason: "完成态页面复核仍需继续。",
+      resumeMode: "post-completion-review",
+      startedAt: now,
+      updatedAt: now,
+      completedAt: now,
+    });
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+  const card = page.locator(".task-collaboration-group").filter({ hasText: "专题任务 01 · 修订截图按钮可用态" });
+  const resume = card.getByRole("button", { name: "从卡点继续", exact: true });
+  await expect(card).toHaveClass(/blocked/);
+  await expect(card).toContainText("已阻塞");
+  await expect(resume).toBeVisible();
+  await resume.click();
+  await expect(card).toHaveClass(/completed/);
+  await expect(card).toContainText("已完成");
+  await expect(card.getByRole("button", { name: /恢复中|从卡点继续/ })).toHaveCount(0);
+  await expect(card).not.toContainText("正在恢复原任务");
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionOneShotRun(null);
+    await (window as any).desktop.setInteractionAcceptanceTimelineFixture(null);
+    await (window as any).desktop.setInteractionTaskTimelineFixture(false);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+});
+
 test("普通继续入口位于下一流程并在恢复请求成功后消失", async () => {
   await page.evaluate(async () => {
     await (window as any).desktop.setInteractionInterruptedTimelineFixture(true);
