@@ -207,6 +207,28 @@ export class EvolutionStateStore {
    * 真实返回示例：界面显示“南宫婉正在重新调查韩立退回项”，后续状态机沿原专题继续。
    * 异常或副作用示例：没有可恢复卡点时拒绝；成功后清除旧阻塞原因但保留全部审批和版本记录。
    */
+  /** 恢复当前运行中尚未建立专题的研讨，保留运行标识、轮次和历史，不重复建任务。 */
+  resumePendingDeliberation(deliberationId: string): EvolutionStateOutDto {
+    const current = this.#state.oneShotRun;
+    const deliberation = this.#state.deliberations.find((item) => item.deliberationId === deliberationId);
+    if (!current || current.status === "completed" || current.status === "running"
+      || !deliberation || !["questioning", "ready-to-establish"].includes(deliberation.status)
+      || deliberation.topicId || Date.parse(deliberation.createdAt) < Date.parse(current.startedAt)) {
+      throw new Error("当前运行没有可原位继续的未完成研讨。");
+    }
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.resumed", null, null, (state) => {
+      Object.assign(state.oneShotRun!, {
+        topicId: null, proposalId: null, status: "running", phase: "preparing-topic",
+        actor: "han-li", actorName: "韩立", action: "正在继续原有研讨，调查完成后仍需确认范围",
+        blockingReason: null, completedAt: null, updatedAt: now,
+      });
+      state.automationRuntime.status = "running";
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.stopReason = null;
+    }, { deliberationId, phase: "preparing-topic", status: "running", nextOwner: "han-li" });
+  }
+
   resumeOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status === "completed" || (current.status !== "blocked" && this.#state.automationRuntime.status !== "paused") || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");

@@ -274,6 +274,15 @@ export class PersonaEvolutionRuntime {
     return state;
   }
 
+  /** 客户确认继续后恢复同一研讨，不重新建立运行或覆盖已保存调查轮次。 */
+  resumePendingDeliberation(deliberationId: string): EvolutionStateOutDto {
+    if (this.#running || this.#resuming) throw new Error("流程正在处理中，请等待本轮结束。");
+    if (!this.#deliberation) throw new Error("人物内部研讨能力尚未就绪。");
+    const state = this.#store.resumePendingDeliberation(deliberationId);
+    this.#scheduleContinuation(0);
+    return state;
+  }
+
   /**
    * 把客户对修复说明的确认或纠正交给统一人物研讨服务。
    * 真实传参示例：replyHanliNangongConfirmation("不要按钮，只恢复边缘拖动")。

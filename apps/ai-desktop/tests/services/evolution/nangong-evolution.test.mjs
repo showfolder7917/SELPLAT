@@ -1810,3 +1810,62 @@ for (const mode of ["explicit", "background"]) {
     } finally { facade.stop(); }
   });
 }
+
+test("韩立独立1恢复阻塞中的当前研讨而不是只返回已有研讨", async () => {
+  let started = 0;
+  const resumed = [];
+  const messages = [{ messageId: "hanli-viewpoint", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点应先核实运行窗口，再决定修改范围。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }];
+  const memory = {
+    readPersonaConversation(ownerPersonaId) {
+      return { ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt };
+    },
+    registerPersonaRound(input) {
+      messages.push({ messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt });
+      messages.push({ messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt });
+      return { ownerPersonaId: input.ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: input.completedAt };
+    },
+  };
+  const service = new HanliConversationService({
+    store: { state: () => ({ deliberations: [{ deliberationId: "pending-discussion", status: "questioning", topicId: null, createdAt: "2026-09-02T01:00:00.000Z" }], oneShotRun: { runId: "existing-run", status: "blocked", startedAt: "2026-09-02T00:00:00.000Z" } }) },
+    prompts,
+    memory,
+    conversation: { activeConversationId: () => "hanli-active-deliberation", async send() { throw new Error("不应调用普通聊天"); }, async newChat() {} },
+    async startInternalDeliberation() { started += 1; return { continuous: true }; },
+    async resumeInternalDeliberation(id) { resumed.push(id); },
+    recordEvent() {},
+    readStableUserId: () => "XUNAN",
+    readProjectScope: () => "/workspace",
+  });
+
+  const result = await service.send({ clientMessageId: "duplicate-confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
+
+  assert.equal(started, 0);
+  assert.deepEqual(resumed, ["pending-discussion"]);
+  assert.match(result.messages.at(-1).content, /已继续原有研讨/);
+});
+
+test("恢复当前未完成研讨保留运行与轮次，拒绝跨运行历史研讨", () => {
+  const key = "resume-pending-original-run";
+  const store = evolutionStore(key);
+  store.configureAutomation({ maxRoundsPerTopic: 5, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+  store.beginOneShotRun(workspaceState, "zh-CN");
+  store.beginDeliberation("pending", [{ content: "隔离环境任务验收", source: "codex", role: "user", capturedAt: new Date().toISOString() }], "如何隔离测试任务？", "不影响正式记录");
+  store.updateOneShotRun("accepting", "han-li", "韩立", "错误绑定的旧验收", "old-topic", "old-proposal");
+  store.blockOneShotRun("原研讨等待继续");
+  const before = store.state();
+  const resumed = store.resumePendingDeliberation("pending");
+  assert.equal(resumed.oneShotRun.runId, before.oneShotRun.runId);
+  assert.equal(resumed.oneShotRun.startedAt, before.oneShotRun.startedAt);
+  assert.deepEqual(resumed.deliberations, before.deliberations);
+  assert.equal(resumed.oneShotRun.topicId, null);
+  assert.equal(resumed.oneShotRun.proposalId, null);
+  assert.equal(resumed.oneShotRun.phase, "preparing-topic");
+  assert.equal(resumed.automationSettings.automaticCustodyEnabled, false);
+  assert.equal(resumed.topics.length, 0);
+  assert.throws(() => store.resumePendingDeliberation("pending"), /没有可原位继续/);
+  store.blockOneShotRun("等待继续");
+  const legacy = readPersistedState(key);
+  legacy.deliberations[0].createdAt = "2020-01-01T00:00:00.000Z";
+  writePersistedState(key, legacy);
+  assert.throws(() => evolutionStore(key).resumePendingDeliberation("pending"), /没有可原位继续/);
+});

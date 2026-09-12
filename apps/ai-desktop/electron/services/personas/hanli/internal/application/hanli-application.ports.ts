@@ -70,6 +70,8 @@ export interface HanliApplicationServiceOptions {
   /** 完整用户回合入库后异步唤醒韩立客户语义整理。 */
   refreshSemanticMemory?: () => void;
   /** 以当前观点创建一次性韩立—南宫婉内部研讨流程。 */
+  /** 用户明确继续时，恢复原有未完成研讨。 */
+  resumeInternalDeliberation?: (deliberationId: string) => Promise<void>;
   startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
   /** 把用户确认或纠正交回当前等待中的内部研讨轮次。 */
   replyInternalDeliberationConfirmation?: (reply: string) => Promise<{ customerReply: string }>;

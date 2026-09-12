@@ -188,6 +188,17 @@ export class HanliConversationService {
           "已恢复尚未确认的原范围。请核对或纠正后继续，未创建新任务，也未开始实施。",
           START_DELIBERATION_DECISION);
       }
+      const run = workflowState.oneShotRun;
+      const unfinished = [...workflowState.deliberations].reverse().find((item) =>
+        item.status === "questioning" && !item.topicId && run
+        && Date.parse(item.createdAt) >= Date.parse(run.startedAt));
+      if (run?.status === "blocked" && unfinished) {
+        if (!this.#options.resumeInternalDeliberation) throw new Error("原研讨恢复能力尚未就绪。");
+        await this.#options.resumeInternalDeliberation(unfinished.deliberationId);
+        return this.#recordControlReply(request, conversation,
+          "已继续原有研讨，保留之前的调查记录；调查完成后仍会请你确认范围。",
+          START_DELIBERATION_DECISION);
+      }
       // 保存可见反馈，避免用户误以为点击没有响应或连接已经断开。
       return this.#recordControlReply(
         request,

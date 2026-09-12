@@ -623,6 +623,10 @@ export async function startApplication(): Promise<void> {
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request) => startHanliInternalDeliberation(request),
+    resumeInternalDeliberation: async (deliberationId) => {
+      if (!personaEvolution) throw new Error("人物内部研讨运行时尚未就绪。");
+      personaEvolution.resumePendingDeliberation(deliberationId);
+    },
     replyInternalDeliberationConfirmation: (reply) => replyHanliInternalDeliberation(reply),
     analyzeCorpus: async (prompt) => {
       if (!corpusSemanticBackfillCodex) throw new Error("韩立客户认知提取服务尚未就绪。");
