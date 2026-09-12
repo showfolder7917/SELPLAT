@@ -153,6 +153,26 @@ test("当前韩立验收优先于已写入的专题完成状态，验收收口�
   } finally { fixture.close(); }
 });
 
+test("专题完成后退休不同验收轮次遗留的活动节点", () => {
+  const fixture = createFixture("acceptance-stale-round");
+  try {
+    const acceptance = (attempt, eventId, offset, status, groupStatus) => businessEvent(fixture, eventId, "proposal-1", offset, {
+      nodeId: `acceptance:proposal-1:${attempt}:run`, taskId: null, proposalId: "proposal-1", sourceFactKey: eventId,
+      kind: "verification", actor: member("han-li", "韩立"), recipients: [member("nangong-wan", "南宫婉")], status,
+      action: status === "current" ? "正在真实操作验收" : "验收通过，结果已返回", summary: "韩立正在核验真实界面结果。",
+      content: "验收状态事实", detail: "验收截图证据", startedAt: fixture.at(offset), completedAt: status === "completed" ? fixture.at(offset) : null,
+      automaticOpen: status === "current", manualApprovalProposalId: null, occurredAt: fixture.at(offset),
+    }, groupStatus);
+    fixture.append(acceptance("attempt-old", "acceptance-old-started", 1, "current", "verifying"));
+    fixture.append(acceptance("attempt-new", "acceptance-new-started", 2, "current", "verifying"));
+    fixture.append(acceptance("attempt-new", "acceptance-new-passed", 3, "completed", "completed"));
+    const completed = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.executingCount + completed.verifyingCount + completed.waitingCount, 0);
+    assert.equal(completed.nodes.find((node) => node.nodeId.includes("attempt-old"))?.status, "completed");
+  } finally { fixture.close(); }
+});
+
 test("同专题执行尚未结束时不能提前显示专题完成", () => {
   const fixture = createFixture("execution-closing");
   try {

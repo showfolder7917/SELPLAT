@@ -309,6 +309,21 @@ export class CollaborationTimelineRepository {
       node.summary = "本任务已通过重启健康检查，当前进度见后续节点。";
       node.automaticOpen = false;
     }
+    // 专题终态是所有人物工作的最终边界。多轮验收、恢复和重投影可能留下不同 nodeId 的活动节点；
+    // 只要它们早于最终完成时间，就在读模型中退休，保留原始审计事实且不覆盖完成后新开始的工作。
+    const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
+    const topicUpdatedAt = String(topic.updatedAt);
+    if (persistedStatus === "completed") {
+      for (const node of nodes) {
+        if (node.startedAt >= topicUpdatedAt || !["current", "waiting"].includes(node.status)) continue;
+        node.status = "completed";
+        node.completedAt = topicUpdatedAt;
+        node.durationMs = durationMs(node.startedAt, topicUpdatedAt);
+        node.action = "该阶段已结束";
+        node.summary = "本专题已完成，当前结果见后续节点。";
+        node.automaticOpen = false;
+      }
+    }
     // 人数不是阶段数；同一人物旧阶段与验证并存时只计一次，验证状态优先。
     const verifyingPeople = new Set(nodes.filter(node => node.status === "current" && node.kind === "verification").map(node => node.actor.memberId).filter(id => id !== "system"));
     const executingPeople = new Set(nodes.filter(node => node.status === "current" && ["analysis", "execution", "repair"].includes(node.kind)).map(node => node.actor.memberId).filter(id => id !== "system" && !verifyingPeople.has(id)));
@@ -317,7 +332,6 @@ export class CollaborationTimelineRepository {
     const waitingCount = nodes.filter((node) => node.status === "waiting" || node.kind === "approval-application" && node.status === "current").length;
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
-    const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
     // 阻塞与取消仍是停止事实；正常运行时必须先收口全部当前工作，才可显示专题完成。
     const calculated = persistedStatus === "blocked" || persistedStatus === "cancelled" ? persistedStatus
       : currentNodes.some((node) => node.kind === "verification") ? "verifying"
@@ -325,7 +339,7 @@ export class CollaborationTimelineRepository {
           : currentNodes.length > 0 ? "running"
             : persistedStatus === "completed" ? "completed"
               : nodes.at(-1)?.status === "failed" ? "blocked" : persistedStatus;
-    const updatedAt = String(topic.updatedAt);
+    const updatedAt = topicUpdatedAt;
     return {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
       status: calculated, summary: [...nodes].reverse().find((node) => node.status === "current")?.summary || nodes.at(-1)?.summary || String(topic.summary),
