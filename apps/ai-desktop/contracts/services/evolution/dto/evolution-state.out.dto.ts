@@ -10,6 +10,7 @@ import type { HanliEvolutionDeliberationOutDto } from "../../personas/hanli/inde
 import type { PersonaConversationOutDto } from "../../personas/conversation/index.js";
 import type { EvolutionArchiveRecordOutDto } from "./evolution-archive-record.out.dto.js";
 import type { EvolutionAutomationRuntimeOutDto, EvolutionAutomationSettingsOutDto } from "./evolution-automation.out.dto.js";
+import type { CurrentTopicStageOutDto } from "./current-topic-stage.out.dto.js";
 import type { EvolutionOneShotConfirmationOutDto, EvolutionOneShotRunOutDto } from "./evolution-one-shot-run.out.dto.js";
 import type { EvolutionProposalOutDto } from "./evolution-proposal.out.dto.js";
 import type { EvolutionTopicOutDto } from "./evolution-topic.out.dto.js";
@@ -29,6 +30,8 @@ export interface EvolutionStateOutDto {
   proposals: EvolutionProposalOutDto[];
   deliberations: HanliEvolutionDeliberationOutDto[];
   archiveRecords: EvolutionArchiveRecordOutDto[];
+  /** 由 Evolution/Workflow 运行时生成的当前专题唯一阶段；页面不得再自行合成任务与验收状态。 */
+  currentTopicStage?: CurrentTopicStageOutDto;
   /** 南宫婉当前会话的运行时投影；持久化正文只存在于统一人物会话表。 */
   conversation: PersonaConversationOutDto;
   updatedAt: string;

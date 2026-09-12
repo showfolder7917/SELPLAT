@@ -91,6 +91,9 @@ export type {
 } from "../../services/personas/linghu/index.js";
 
 export type {
+  CurrentTopicAcceptanceOutDto,
+  CurrentTopicStageOutDto,
+  CurrentTopicStageStatusValue,
   EvolutionApprovalOutDto,
   EvolutionApprovalDecisionValue,
   EvolutionApprovalSourceValue,
