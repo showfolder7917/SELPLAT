@@ -12,6 +12,39 @@ import type {
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
 
+/** 专题头部当前活动的显示事实，人数和姓名始终来自同一组当前节点。 */
+export type GroupActivityPresentation = {
+  /** 当前仍在处理专题的去重人物名称。 */
+  activeOwnerLabels: string[];
+  /** 专题状态文案；真实验收时明确显示验收人物。 */
+  statusLabel: string;
+};
+
+/** 从当前节点生成专题头部活动事实，避免人数统计与人物名称使用不同来源。 */
+export function groupActivityPresentation(
+  group: CollaborationTimelineGroupOutDto,
+  locale: LocaleValue,
+): GroupActivityPresentation {
+  const activeOwnerLabels = new Map<string, string>();
+  let acceptanceNode: CollaborationTimelineNodeOutDto | undefined;
+
+  for (const node of group.nodes) {
+    if (node.status !== "current" || node.actor.memberId === "system") continue;
+    const isAcceptance = node.kind === "verification" && node.nodeId.startsWith("acceptance:");
+    if (isAcceptance) acceptanceNode = node;
+
+    let roleLabel = "";
+    if (isAcceptance) roleLabel = locale === "ja" ? "（受入確認）" : "（验收）";
+    else if (node.kind === "verification") roleLabel = locale === "ja" ? "（検証）" : "（验证）";
+    activeOwnerLabels.set(node.actor.memberId, `${node.actor.displayName}${roleLabel}`);
+  }
+
+  const statusLabel = group.status === "verifying" && acceptanceNode
+    ? locale === "ja" ? `${acceptanceNode.actor.displayName}が受入確認中` : `${acceptanceNode.actor.displayName}验收中`
+    : groupStatusLabel(group.status, locale);
+  return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
+}
+
 /** 同一任务连续重启时，只让最新等待节点显示一次“继续执行”。 */
 export function latestRecoveryTaskId(
   nodes: CollaborationTimelineNodeOutDto[],

@@ -93,6 +93,35 @@ test("从卡点继续后仍受阻会明确反馈而不是看起来没反应", as
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("任务卡明确显示韩立验收归属，并在专题完成后隐藏处理中人数", async () => {
+  // 使用真实 BrowserWindow 最小尺寸验证卡片，不能用 Playwright 视口覆盖正式窗口尺寸。
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([1000, 700]);
+  try {
+    await page.evaluate(async () => {
+      await (window as any).desktop.setInteractionAcceptanceTimelineFixture("accepting");
+    });
+    await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+    await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+    const card = page.getByText("专题任务 01 · 修订截图按钮可用态", { exact: true }).locator("..").locator("..");
+    await expect(card).toContainText("韩立验收中");
+    await expect(card).toContainText("并行处理中 2 人：执行人甲、韩立（验收）");
+    expect(await card.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.evaluate(async () => {
+      await (window as any).desktop.setInteractionAcceptanceTimelineFixture("completed");
+    });
+    await expect(card).toContainText("已完成");
+    await expect(card).not.toContainText("并行处理中");
+    await page.evaluate(async () => {
+      await (window as any).desktop.setInteractionAcceptanceTimelineFixture(null);
+    });
+    await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+  } finally {
+    // 后续正式窗口测试从标准默认尺寸开始，避免本用例留下跨用例的窗口状态。
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+  }
+});
+
 test("客户操作方案和继续按钮只显示在对应等待节点", async () => {
   await page.evaluate(async () => {
     const api = (window as any).desktop;

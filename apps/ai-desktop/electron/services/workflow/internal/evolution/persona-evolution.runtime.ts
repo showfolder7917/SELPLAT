@@ -505,6 +505,10 @@ export class PersonaEvolutionRuntime {
             publishAcceptance("started", "令狐已准备验收场景，韩立正在观察真实页面并逐步操作验收。");
             this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
           });
+          // 先把韩立已经完成本轮验收的时间线事实收口，避免专题完成状态先于验收节点到达页面。
+          if (runResult.status === "passed") {
+            publishAcceptance("passed", `韩立真实界面验收通过。运行记录：${runResult.runId}\n逐步结果：\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
+          }
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "blocked") {
             const reason = runResult.stepResults
@@ -548,8 +552,6 @@ export class PersonaEvolutionRuntime {
               acceptanceFailureKind: "product-defect",
             });
           }
-          // 通过结果仍完整保留运行记录、逐步结论和截图证据。
-          publishAcceptance("passed", `韩立真实界面验收通过。运行记录：${runResult.runId}\n逐步结果：\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
         } catch (error) {
           const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
           publishAcceptance("failed", reason);

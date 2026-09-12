@@ -116,6 +116,64 @@ test("十人并行只消费 flowEvents，执行和自检分开统计", () => {
   } finally { fixture.close(); }
 });
 
+test("当前韩立验收优先于已写入的专题完成状态，验收收口后人数归零", () => {
+  const fixture = createFixture("acceptance-closing");
+  try {
+    const acceptance = (eventId, offset, status, groupStatus) => businessEvent(fixture, eventId, "proposal-1", offset, {
+      nodeId: "acceptance:proposal-1:attempt-1:run", taskId: null, proposalId: "proposal-1", sourceFactKey: eventId,
+      kind: "verification", actor: member("han-li", "韩立"), recipients: [member("nangong-wan", "南宫婉")], status,
+      action: status === "current" ? "正在真实操作验收" : "验收通过，结果已返回", summary: "韩立正在核验真实界面结果。",
+      content: "验收状态事实", detail: "验收截图证据", startedAt: fixture.at(1), completedAt: status === "completed" ? fixture.at(offset) : null,
+      automaticOpen: status === "current", manualApprovalProposalId: null, occurredAt: fixture.at(offset),
+    }, groupStatus);
+    fixture.append(acceptance("acceptance-started", 1, "current", "completed"));
+    const accepting = fixture.timeline.snapshot(fixture.at(2)).groups[0];
+    assert.equal(accepting.status, "verifying");
+    assert.equal(accepting.verifyingCount, 1);
+    fixture.append(acceptance("acceptance-passed", 3, "completed", "completed"));
+    const completed = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.executingCount + completed.verifyingCount, 0);
+  } finally { fixture.close(); }
+});
+
+test("同专题执行尚未结束时不能提前显示专题完成", () => {
+  const fixture = createFixture("execution-closing");
+  try {
+    const acceptance = (eventId, offset, status, groupStatus) => businessEvent(fixture, eventId, "proposal-1", offset, {
+      nodeId: "acceptance:proposal-1:attempt-1:run", taskId: null, proposalId: "proposal-1", sourceFactKey: eventId,
+      kind: "execution", actor: member("han-li", "韩立"), recipients: [member("nangong-wan", "南宫婉")], status,
+      action: status === "current" ? "正在真实操作验收" : "验收通过，结果已返回", summary: "韩立正在核验真实界面结果。",
+      content: "验收状态事实", detail: "验收截图证据", startedAt: fixture.at(1), completedAt: status === "completed" ? fixture.at(offset) : null,
+      automaticOpen: status === "current", manualApprovalProposalId: null, occurredAt: fixture.at(offset),
+    }, groupStatus);
+    fixture.append(acceptance("acceptance-started", 1, "current", "completed"));
+    const accepting = fixture.timeline.snapshot(fixture.at(2)).groups[0];
+    assert.equal(accepting.status, "running");
+    assert.equal(accepting.executingCount, 1);
+    fixture.append(acceptance("acceptance-passed", 3, "completed", "completed"));
+    const completed = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.executingCount + completed.verifyingCount, 0);
+  } finally { fixture.close(); }
+});
+
+for (const stoppedStatus of ["blocked", "cancelled"]) test(`残留验收节点不得覆盖${stoppedStatus}停止事实`, () => {
+  const fixture = createFixture(`acceptance-${stoppedStatus}`);
+  try {
+    const acceptance = (eventId, offset, status, groupStatus) => businessEvent(fixture, eventId, "proposal-1", offset, {
+      nodeId: "acceptance:proposal-1:attempt-1:run", taskId: null, proposalId: "proposal-1", sourceFactKey: eventId,
+      kind: "verification", actor: member("han-li", "韩立"), recipients: [member("nangong-wan", "南宫婉")], status,
+      action: status === "current" ? "正在真实操作验收" : "验收通过，结果已返回", summary: "韩立正在核验真实界面结果。",
+      content: "验收状态事实", detail: "验收截图证据", startedAt: fixture.at(1), completedAt: status === "completed" ? fixture.at(offset) : null,
+      automaticOpen: status === "current", manualApprovalProposalId: null, occurredAt: fixture.at(offset),
+    }, groupStatus);
+    fixture.append(acceptance("acceptance-started", 1, "current", stoppedStatus));
+    const accepting = fixture.timeline.snapshot(fixture.at(2)).groups[0];
+    assert.equal(accepting.status, stoppedStatus);
+  } finally { fixture.close(); }
+});
+
 test("旧执行节点先失败结束，令狐修复作为新事件追加", () => {
   const fixture = createFixture("handoff");
   try {

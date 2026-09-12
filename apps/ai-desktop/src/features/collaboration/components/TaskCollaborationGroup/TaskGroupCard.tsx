@@ -30,6 +30,8 @@ import {
   detailLabel,
   // 耗时转换：专题头部显示墙钟总耗时。
   formatTimelineDuration,
+  // 专题活动事实：从同一组当前节点生成人数、人物和验收状态。
+  groupActivityPresentation,
   // 专题状态：把稳定状态码转换成中日文。
   groupStatusLabel,
   // 恢复任务选择：只在最新等待节点返回任务标识。
@@ -101,12 +103,12 @@ function TaskGroupHeader({
 }: Pick<TaskGroupCardModel, "group" | "presentation">) {
   // 界面语言（locale）决定专题状态和耗时使用中文还是日文。
   const { locale, nowMs } = presentation;
-  // 活跃人数（activePeopleCount）合并正在执行和正在验证的人数。
-  const activePeopleCount = group.executingCount + group.verifyingCount;
-  // 结束状态（groupFinished）决定耗时使用后端定稿值还是本地动态计算值。
-  const groupFinished = group.status === "completed" || group.status === "cancelled";
+  // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
+  const groupStopped = group.status === "blocked" || group.status === "completed" || group.status === "cancelled";
+  // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
+  const activity = groupActivityPresentation(group, locale);
   // 专题耗时（durationMs）在任务未结束时至少增长到当前墙钟时间。
-  const durationMs = groupFinished
+  const durationMs = groupStopped
     ? group.durationMs
     : Math.max(group.durationMs, nowMs - Date.parse(group.startedAt));
 
@@ -123,10 +125,10 @@ function TaskGroupHeader({
       {/* 专题事实区：集中展示状态、并行人数和从开始到现在的总耗时。 */}
       <span className="task-group-facts">
         {/* 专题状态：把稳定状态码转换为当前语言的可读标签。 */}
-        <b>{groupStatusLabel(group.status, locale)}</b>
+        <b>{activity.statusLabel}</b>
         {/* 并行人数：只有确实有人执行或验证时才显示，避免无意义的零值。 */}
-        {activePeopleCount > 0 && (
-          <em>{locale === "ja" ? `並行 ${activePeopleCount}人` : `并行处理中 ${activePeopleCount} 人`}</em>
+        {!groupStopped && activity.activeOwnerLabels.length > 0 && (
+          <em>{locale === "ja" ? `並行 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `并行处理中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
         )}
         {/* 专题总耗时：已结束专题固定，未结束专题跟随当前时间增长。 */}
         <small>

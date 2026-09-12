@@ -59,6 +59,13 @@ test("新一轮真实验收开始覆盖旧失败，结束后以新结果为准",
   assert.equal(stage.latestAcceptance.runId, "new-run");
 });
 
+test("真实验收进行中优先于已经完成的提案状态", () => {
+  const state = evolution("passed");
+  state.proposals[0].status = "completed";
+  state.oneShotRun = { proposalId: "proposal-current", status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z" };
+  assert.equal(projectCurrentTopicStage(state, { tasks: [task()] }).status, "accepting");
+});
+
 test("验收结果按真实发生时间选择，保留历史顺序不修改输入", () => {
   const state = evolution("failed");
   const old = { ...state.archiveRecords[0], occurredAt: "2026-09-12T03:00:00.000Z", payload: { acceptanceRun: { runId: "old-pass", status: "passed" } } };

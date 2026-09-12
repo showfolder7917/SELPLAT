@@ -37,6 +37,7 @@ let inquiryFixtureRequest = null;
 let inquiryFixtureRelease = null;
 let nangongNewConversationCalls = 0;
 let taskTimelineFixtureEnabled = false;
+let acceptanceTimelineFixtureStatus = null;
 let customerActionTimelineFixtureEnabled = false;
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
@@ -198,6 +199,15 @@ const publishCollaborationTimelineChanged = () => {
 };
 const interactionTimelineSnapshot = () => {
   if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
+  if (acceptanceTimelineFixtureStatus) {
+    const startedAt = "2026-08-29T00:12:00.000Z";
+    const accepting = acceptanceTimelineFixtureStatus === "accepting";
+    const nodes = [
+      { nodeId: "task:interaction-worker", taskId: "interaction-worker", eventType: "execution.started", kind: "execution", actor: { memberId: "executor-1", displayName: "执行人甲" }, recipients: [], status: accepting ? "current" : "completed", action: "处理同专题任务", summary: "执行人甲正在处理同一专题的子任务。", content: "执行状态", detail: "执行证据", contentRole: "execution-output", detailRole: "changed-files", startedAt, completedAt: accepting ? null : startedAt, durationMs: 60_000, automaticOpen: false, manualApprovalProposalId: null },
+      { nodeId: "acceptance:interaction:attempt:run", taskId: null, eventType: accepting ? "acceptance.started" : "acceptance.passed", kind: "verification", actor: { memberId: "han-li", displayName: "韩立" }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }], status: accepting ? "current" : "completed", action: accepting ? "正在真实操作验收" : "验收通过，结果已返回", summary: accepting ? "韩立正在观察真实页面并逐步操作验收。" : "韩立真实界面验收已经通过。", content: "验收状态", detail: "验收截图证据", contentRole: "verification-output", detailRole: "verification-evidence", startedAt, completedAt: accepting ? null : startedAt, durationMs: 60_000, automaticOpen: accepting, manualApprovalProposalId: null },
+    ];
+    return { version: 1, groups: [{ groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal", title: "专题任务 01 · 修订截图按钮可用态", status: accepting ? "verifying" : "completed", summary: accepting ? "韩立正在验收，专题尚未完成。" : "验收和同专题处理均已完成。", nodes, executingCount: accepting ? 1 : 0, verifyingCount: accepting ? 1 : 0, waitingCount: 0, completedCount: accepting ? 0 : 2, startedAt, updatedAt: evolutionState.updatedAt, durationMs: 60_000, nextStep: accepting ? "韩立 · 完成当前验证" : "本专题已完成" }], updatedAt: evolutionState.updatedAt };
+  }
   if (customerActionTimelineFixtureEnabled) {
     const startedAt = "2026-08-29T00:12:00.000Z";
     return { version: 1, groups: [{
@@ -637,11 +647,18 @@ contextBridge.exposeInMainWorld("desktop", {
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   setInteractionTaskTimelineFixture: async (active) => {
     taskTimelineFixtureEnabled = active === true;
+    acceptanceTimelineFixtureStatus = null;
     if (!active) customerActionTimelineFixtureEnabled = false;
     evolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.activeTopicId = active ? "interaction-timeline" : null;
     publishNangongEvolution(active ? "interaction.timeline_fixture" : "interaction.timeline_fixture_cleared");
+    publishCollaborationTimelineChanged();
+    return structuredClone(interactionTimelineSnapshot());
+  },
+  setInteractionAcceptanceTimelineFixture: async (status) => {
+    acceptanceTimelineFixtureStatus = status === "accepting" || status === "completed" ? status : null;
+    taskTimelineFixtureEnabled = acceptanceTimelineFixtureStatus !== null;
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },

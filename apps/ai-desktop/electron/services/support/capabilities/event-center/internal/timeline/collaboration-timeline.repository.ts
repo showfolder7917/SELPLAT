@@ -252,11 +252,13 @@ export class CollaborationTimelineRepository {
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
     const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
-    const calculated = persistedStatus === "blocked" || persistedStatus === "cancelled" || persistedStatus === "completed" ? persistedStatus
-      : currentNodes.some((node) => node.kind === "approval-application") ? "waiting-approval"
-        : currentNodes.some((node) => node.kind === "verification") ? "verifying"
+    // 阻塞与取消仍是停止事实；正常运行时必须先收口全部当前工作，才可显示专题完成。
+    const calculated = persistedStatus === "blocked" || persistedStatus === "cancelled" ? persistedStatus
+      : currentNodes.some((node) => node.kind === "verification") ? "verifying"
+        : currentNodes.some((node) => node.kind === "approval-application") ? "waiting-approval"
           : currentNodes.length > 0 ? "running"
-            : nodes.at(-1)?.status === "failed" ? "blocked" : persistedStatus;
+            : persistedStatus === "completed" ? "completed"
+              : nodes.at(-1)?.status === "failed" ? "blocked" : persistedStatus;
     const updatedAt = String(topic.updatedAt);
     return {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
