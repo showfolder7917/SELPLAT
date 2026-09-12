@@ -633,7 +633,7 @@ export async function startApplication(): Promise<void> {
       const current = workspaces.read();
       return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
     },
-    computerAcceptance: async (goal, dynamicTools) => {
+    computerAcceptance: async (goal, dynamicTools, session) => {
       const topic = evolutionStateStore.state().topics.find((item) => item.topicId === goal.topicId);
       if (!topic) throw new Error("验收专题不存在。");
       // 独立连接隔离验收工具与普通聊天；本轮结束即销毁，旧工具不回流普通会话。
@@ -647,10 +647,15 @@ export async function startApplication(): Promise<void> {
         timer = setTimeout(() => reject(new Error("韩立交互式验收会话超过10分钟未完成，未代替韩立给出验收结论。")), 600_000);
       });
       try {
-        await Promise.race([
-          service.send(prompts.render("hanli.computer-acceptance", { goalJson: JSON.stringify(goal) }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null),
+        const sendAcceptanceTurn = (promptId: "hanli.computer-acceptance" | "hanli.computer-acceptance-finalization") => Promise.race([
+          service.send(prompts.render(promptId, { goalJson: JSON.stringify(goal) }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null),
           acceptanceTimeout,
         ]);
+        await sendAcceptanceTurn("hanli.computer-acceptance");
+        // 首回合正常结束却遗漏 finish 时，仅追加同一线程的终态提交回合；不重开窗口工具或放宽操作授权。
+        if (session.beginFinalization()) {
+          await sendAcceptanceTurn("hanli.computer-acceptance-finalization");
+        }
       }
       finally { if (timer) clearTimeout(timer); service.dispose(); }
     },

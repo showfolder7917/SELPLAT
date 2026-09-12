@@ -125,7 +125,7 @@ export class HanliFacade {
       throw new Error("韩立Computer Use尚未接入");
     }
     const conversationId = this.#options.memory?.readPersonaConversation("han-li").conversationId;
-    return this.#computer.run(goal, targetWindow, (tools) => this.#options.computerAcceptance!(goal, tools), (content) => {
+    return this.#computer.run(goal, targetWindow, (tools, session) => this.#options.computerAcceptance!(goal, tools, session), (content) => {
       this.#options.recordEvent("hanli.acceptance.computer_progress", { proposalId: goal.proposalId, content });
       if (conversationId && this.#options.memory) {
         const next = this.#options.memory.appendPersonaInternalMessage({

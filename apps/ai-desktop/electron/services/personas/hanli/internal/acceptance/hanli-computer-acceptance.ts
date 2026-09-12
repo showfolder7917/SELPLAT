@@ -18,7 +18,10 @@ export class HanliComputerAcceptance {
   async run(
     goal: HanliComputerAcceptanceInDto,
     window: BrowserWindow,
-    model: (tools: CodexDynamicToolsPort) => Promise<void>,
+    model: (
+      tools: CodexDynamicToolsPort,
+      session: { beginFinalization: () => boolean },
+    ) => Promise<void>,
     progress: (message: string) => void,
   ): Promise<HanliAcceptanceRunOutDto> {
     if (this.#active) {
@@ -44,6 +47,8 @@ export class HanliComputerAcceptance {
     const sentComposerLabels = new Set<string>();
     let verdict: "passed" | "failed" | "blocked" = "blocked";
     let completed = false;
+    // 终态回合复用同一动态工具，但在模型遗漏 finish 时只保留提交判断这一条路径。
+    let finalizationOnly = false;
     // 仅记录 finish 的受限终态，供未完成验收回到同一提案时区分模型未调用与参数被拒绝。
     let finishAttempted = false;
     let finishRejection = "";
@@ -175,6 +180,9 @@ export class HanliComputerAcceptance {
           if (attemptedFinish) finishAttempted = true;
           if (!args || typeof args.reason !== "string" || !args.reason.trim()) {
             throw new Error("必须说明当前操作与验收目标的关系");
+          }
+          if (finalizationOnly && args.action !== "finish") {
+            throw new Error("终态回合只允许提交 finish，不能继续操作应用。");
           }
           if (args.action === "observe") {
             return await images();
@@ -397,7 +405,16 @@ export class HanliComputerAcceptance {
       },
     };
     try {
-      await model(tools);
+      await model(tools, {
+        beginFinalization: () => {
+          if (completed || finishAttempted || !snapshot || !evidence.includes(snapshot)) {
+            return false;
+          }
+          finalizationOnly = true;
+          progress("验收模型未提交 finish；进入仅允许 finish 的终态回合，禁止继续操作应用。");
+          return true;
+        },
+      });
     } finally {
       closed = true;
       this.#active = false;
