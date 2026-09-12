@@ -110,7 +110,7 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。测试台历史只能用 scroll-test-console 滚动可见 .dev-test-console-content，技术证据只能用 expand-test-console-evidence 展开固定只读入口，窄窗口只能用 resize-acceptance-window 的 narrow/restore 预设，且仅限已显示的测试台或任务协作群；三者都不接受任意目标或尺寸。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
@@ -287,7 +287,6 @@ export class HanliComputerAcceptance {
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
           let testConsoleEvidence: Record<string, unknown> | null = null;
-          let acceptanceTargetEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
           if (args.action === "send-test-message") {
             // 固定文案、当前人物输入框和人物维度单次上限共同限制真实发送的业务副作用。
@@ -338,11 +337,7 @@ export class HanliComputerAcceptance {
             }
             testConsoleEvidence = result;
           } else if (args.action === "resize-acceptance-window") {
-            // 窄窗口仅服务已显示的固定验收页面，不能把任意产品页变为窗口操作目标。
-            const state = await window.webContents.executeJavaScript(`(${readAcceptanceResizeTarget.toString()})()`) as Record<string, unknown>;
-            if (state.status !== "visible") {
-              throw new Error("测试台或任务协作群未显示，不能调整验收窗口尺寸。");
-            }
+            // 全应用布局验收不依赖测试台是否打开；尺寸仍限应用支持的预设。
             if (args.resizePreset === "narrow") {
               // 仅使用应用本身支持的最小窗口预设，保留初始位置，禁止模型提供任意尺寸。
               window.setBounds({ ...initialBounds, width: 1000, height: 700 });
@@ -358,7 +353,6 @@ export class HanliComputerAcceptance {
             } else {
               throw new Error("窗口尺寸只允许 narrow 或 restore 预设。");
             }
-            acceptanceTargetEvidence = state;
           } else if (args.action === "hover") {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, width, height, "悬停坐标必须位于当前应用窗口内。");
@@ -408,7 +402,6 @@ export class HanliComputerAcceptance {
             ...(focusedModelControl ? { focusedModelControl } : {}),
             ...(dragEvidence ? { imagePreviewDuringDrag: dragEvidence } : {}),
             ...(testConsoleEvidence ? { testConsole: testConsoleEvidence } : {}),
-            ...(acceptanceTargetEvidence ? { acceptanceTarget: acceptanceTargetEvidence } : {}),
             ...(windowResizeEvidence ? { acceptanceWindow: windowResizeEvidence } : {}),
           };
           const output = await images(interactionEvidence);
@@ -548,18 +541,6 @@ function readTestConsoleState(): Record<string, unknown> {
     scrollTop: Math.round(content.scrollTop),
     maxScrollTop: Math.max(0, Math.round(content.scrollHeight - content.clientHeight)),
   };
-}
-
-/** 窄窗口只服务已显示的测试台或任务协作群，任务协作群以实际边界判断，避免高度计算差异误拒绝。 */
-function readAcceptanceResizeTarget(): Record<string, unknown> {
-  const testConsole = readTestConsoleState();
-  if (testConsole.status === "visible") return { status: "visible", target: "test-console" };
-  const taskGroup = document.querySelector<HTMLElement>(".task-collaboration-page");
-  const bounds = taskGroup?.getBoundingClientRect();
-  if (taskGroup && bounds && bounds.width > 0 && bounds.height > 0) {
-    return { status: "visible", target: "task-group" };
-  }
-  return { status: "hidden" };
 }
 
 /** 只滚动已显示的测试台内容容器，并回执位置变化，不接收任意坐标。 */
