@@ -14,6 +14,7 @@ import type { CollaborationWorkflowFacade } from "../../index.js";
 import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
 // 提案执行聚合统一解释原任务、修复任务和验收状态，Runtime 不再拼装零散布尔值。
 import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggregate.js";
+import { projectCurrentTopicStage } from "../../domain/current-topic-stage.projection.js";
 // 单任务聚合统一解释人物是否仍真实占用任务。
 import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
 import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
@@ -204,7 +205,17 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 读取当前 Evolution 快照；返回值是副本，调用方不能绕过 Store 直接改状态。 */
-  state(): EvolutionStateOutDto { return this.#store.state(); }
+  state(): EvolutionStateOutDto {
+    return this.#withCurrentTopicStage(this.#store.state());
+  }
+
+  /** 在完整 Evolution 快照上附加只读阶段，避免以页面投影替换领域状态。 */
+  #withCurrentTopicStage(state: EvolutionStateOutDto): EvolutionStateOutDto {
+    return {
+      ...state,
+      currentTopicStage: projectCurrentTopicStage(state, this.#collaboration.state()),
+    };
+  }
 
   /** 按专题读取来源、研讨、提案和执行档案；数据库读模型不可用时使用当前状态安全降级。 */
   dossier(topicId: string): EvolutionTopicDossierOutDto {
@@ -216,7 +227,17 @@ export class PersonaEvolutionRuntime {
     return { topic, deliberation, proposals: state.proposals.filter((item) => item.topicId === topicId), archiveRecords: state.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic.deliberationId), executionRecords: [] };
   }
   /** 订阅已持久化的 Evolution 状态变化，并返回取消订阅函数。 */
-  subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]) { return this.#store.subscribe(listener); }
+  subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]) {
+    return this.#store.subscribe((state, reason, topicId, proposalId, previousState) => {
+      listener(
+        this.#withCurrentTopicStage(state),
+        reason,
+        topicId,
+        proposalId,
+        this.#withCurrentTopicStage(previousState),
+      );
+    });
+  }
 
   /** 启动一次立即检查和三十秒周期检查；重复调用不会创建第二个计时器。 */
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
