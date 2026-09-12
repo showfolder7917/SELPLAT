@@ -252,3 +252,15 @@ test("测试台导航只放行活动栏内固定按钮且继续拒绝危险操�
     assert.equal(check("开启自动托管", true), false);
   } finally { globalThis.document = previous; }
 });
+
+
+test("finish 缺少最新截图编号时仍记录提交被拒绝", async () => {
+  const f = fixture();
+  const run = await f.run(async (tools) => {
+    await observe(tools);
+    await assert.rejects(tools.call("hanli_computer", { action: "finish", reason: "提交本轮判断", findings: [] }), /必须基于最新截图/);
+  });
+  assert.equal(run.status, "blocked");
+  assert.match(run.stepResults[0].actual, /尝试提交 finish.*必须基于最新截图/);
+  assert.doesNotMatch(run.stepResults[0].actual, /未尝试提交/);
+});

@@ -170,6 +170,9 @@ export class HanliComputerAcceptance {
         let attemptedFinish = false;
         try {
           const args = raw as Record<string, unknown>;
+          // 提交即使缺少 reason 或最新截图编号，也必须保留为被拒绝的提交尝试。
+          attemptedFinish = args?.action === "finish";
+          if (attemptedFinish) finishAttempted = true;
           if (!args || typeof args.reason !== "string" || !args.reason.trim()) {
             throw new Error("必须说明当前操作与验收目标的关系");
           }
@@ -180,8 +183,6 @@ export class HanliComputerAcceptance {
             throw new Error("必须基于最新截图操作，请重新observe。");
           }
           if (args.action === "finish") {
-            attemptedFinish = true;
-            finishAttempted = true;
             if (!Array.isArray(args.findings) || args.findings.length !== goal.criteria.length) {
               throw new Error("每条验收条件都必须返回真实结果，不能漏项。");
             }
