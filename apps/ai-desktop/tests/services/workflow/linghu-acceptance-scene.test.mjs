@@ -7,7 +7,7 @@ async function sourceModule(file) {
   const { code } = await transform(readFileSync(file, "utf8"), { loader: "ts", format: "esm", target: "es2022" });
   return import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 }
-const { parseAcceptanceScenePlan } = await sourceModule("electron/services/personas/linghu/internal/linghu-acceptance-scene.ts");
+const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/linghu/internal/linghu-acceptance-scene.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const goal = { topicId: "t", proposalId: "p", title: "引导", criteria: ["没有任务时，先告诉我怎么开始", "按钮和说明相邻"] };
 const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数据", conditions: [
@@ -16,12 +16,12 @@ const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数
 ] };
 
 test("令狐显式选择场景不依赖用户语言、页面名和词序", () => {
-  assert.deepEqual(parseAcceptanceScenePlan(JSON.stringify(plan), goal), plan);
-  assert.deepEqual(parseAcceptanceScenePlan(JSON.stringify(plan), { ...goal, criteria: ["Empty tasks guidance", "Adjacent button"] }), plan);
+  assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
+  assert.deepEqual(validateAcceptanceScenePlan(plan, { ...goal, criteria: ["Empty tasks guidance", "Adjacent button"] }), plan);
 });
 test("场景缺项、重复、未知类型不能默认进入正式窗口", () => {
   for (const invalid of [{ ...plan, kind: "guess" }, { ...plan, conditions: [] }, { ...plan, conditions: [plan.conditions[0], plan.conditions[0]] }, { ...plan, reason: "" }]) {
-    assert.throws(() => parseAcceptanceScenePlan(JSON.stringify(invalid), goal));
+    assert.throws(() => validateAcceptanceScenePlan(invalid, goal));
   }
 });
 function fixture(failure) {
@@ -80,4 +80,37 @@ test("渲染器无响应时准备超时仍关闭临时窗口", async (t) => {
   await rejected;
   assert.equal(f.registered.size, 0);
   assert.equal(f.events.filter((event) => event === "close").length, 1);
+});
+
+test("说明文字不污染场景结果，只接受本轮工具提交并在结束后关闭", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  let lastId;
+  const result = await submission.run(goal, async (requestId) => {
+    lastId = requestId;
+    assert.equal((await submission.tools.call("linghu_submit_acceptance_scene", { ...plan, requestId: "old" })).success, false);
+    assert.equal((await submission.tools.call("linghu_submit_acceptance_scene", { ...plan, requestId })).success, true);
+    assert.equal((await submission.tools.call("linghu_submit_acceptance_scene", { ...plan, requestId })).success, false);
+    return "我会先核对工程协议。这里有普通说明文字。";
+  });
+  assert.deepEqual(result, plan);
+  assert.equal((await submission.tools.call("linghu_submit_acceptance_scene", { ...plan, requestId: lastId })).success, false);
+});
+test("缺少工具提交和模型异常均释放请求，不解析文字JSON或沿用上轮结果", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  await assert.rejects(submission.run(goal, async () => JSON.stringify(plan)), /未通过场景提交工具/);
+  await assert.rejects(submission.run(goal, async () => { throw new Error("disconnect"); }), /disconnect/);
+  await submission.run(goal, async (requestId) => {
+    assert.equal((await submission.tools.call("linghu_submit_acceptance_scene", { ...plan, requestId })).success, true);
+  });
+});
+
+test("令狐场景工具通过本轮阶段连接装配，结束与应用退出都回收", () => {
+  const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  const scene = runtime.slice(runtime.indexOf("analyzeAcceptanceScene: (goal)"), runtime.indexOf("analyzeCustomerActionGuidance: (facts)"));
+  assert.match(scene, /dynamicTools: submission.tools/);
+  assert.match(scene, /read: \(\) => null/);
+  assert.match(scene, /finally/);
+  assert.match(scene, /service.dispose\(\)/);
+  assert.match(runtime, /linghuSceneCodex\?\.dispose\(\)/);
+  assert.doesNotMatch(scene, /JSON.parse/);
 });

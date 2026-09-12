@@ -5,21 +5,22 @@ import { transform } from "esbuild";
 
 // 单测直接转换当前工作树源码，避免测试把未构建的隔离工作树误判为运行时代码缺失。
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick };", {
+const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport };", {
   loader: "ts",
   format: "esm",
   target: "es2022",
 });
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
-const { HanliComputerAcceptance } = acceptanceModule;
+const { HanliComputerAcceptance, mapScreenshotPointToViewport } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }, screenshotScale = 1) {
   let n = 0;
   const inputs = [], progress = [];
   let bounds = { x: 0, y: 0, width: 1200, height: 800 };
   const boundsCalls = [];
-  const window = { isDestroyed: () => false, getBounds: () => ({ ...bounds }), setBounds: (next) => { bounds = { ...next }; boundsCalls.push({ ...next }); }, getContentBounds: () => ({ width: bounds.width, height: bounds.height }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: bounds.width, height: bounds.height }) }), executeJavaScript: async (script) => {
+  const window = { isDestroyed: () => false, getBounds: () => ({ ...bounds }), setBounds: (next) => { bounds = { ...next }; boundsCalls.push({ ...next }); }, getContentBounds: () => ({ width: bounds.width, height: bounds.height }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: bounds.width * screenshotScale, height: bounds.height * screenshotScale }) }), executeJavaScript: async (script) => {
     const source = String(script);
+    if (/readAcceptanceViewport/.test(source)) return { width: bounds.width, height: bounds.height };
     if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
     if (/focusAcceptanceModelControl/.test(source)) {
       return { status: "focused", controlLabel: source.includes("nangong-model") ? "南宫婉对话模型" : "韩立对话模型" };
@@ -99,6 +100,23 @@ test("不安全点击被拒绝且可以真实报告受阻", async () => {
     await finish(tools, snapshot, "blocked");
   });
   assert.equal(result.status, "blocked");
+});
+
+test("截图像素坐标按当前视口比例映射后再验证和输入", async () => {
+  assert.deepEqual(mapScreenshotPointToViewport(800, 400, {
+    screenshot: { width: 2400, height: 1600 }, viewport: { width: 1200, height: 800 },
+  }), { x: 400, y: 200 });
+  const f = fixture(true, undefined, true, { status: "empty" }, 2);
+  const run = await f.run(async (tools) => {
+    const first = await observe(tools);
+    const next = await tools.call("hanli_computer", { action: "click", reason: "点击空任务页主按钮", observationId: id(first), x: 800, y: 400 });
+    await finish(tools, id(next));
+  });
+  assert.equal(run.status, "passed");
+  assert.deepEqual(f.inputs.map(({ type, x, y }) => ({ type, x, y })), [
+    { type: "mouseDown", x: 400, y: 200 },
+    { type: "mouseUp", x: 400, y: 200 },
+  ]);
 });
 test("设置浮层触发器是唯一允许的设置导航入口", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");

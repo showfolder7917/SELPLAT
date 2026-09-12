@@ -1,5 +1,5 @@
 import type { HanliComputerAcceptanceInDto, AcceptanceScenePlanOutDto } from "../../../../contracts/services/personas/hanli/index.js";
-import { parseAcceptanceScenePlan } from "./internal/linghu-acceptance-scene.js";
+import { validateAcceptanceScenePlan } from "./internal/linghu-acceptance-scene.js";
 // 工作区和语言由主进程组合根读取，令狐不自行解析用户设置。
 import type { LocaleValue } from "../../../../contracts/foundation/index.js";
 import type { WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
@@ -61,7 +61,7 @@ export interface LinghuAutomationFacadeOptions {
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
   // 只读模型根据已确认事实生成客户能执行的指导，程序不内置具体问题文案。
   /** 固定令狐会话生成逐项场景前提，只读且不能宣告产品验收通过。 */
-  analyzeAcceptanceScene?(goal: HanliComputerAcceptanceInDto): Promise<string>;
+  analyzeAcceptanceScene?(goal: HanliComputerAcceptanceInDto): Promise<AcceptanceScenePlanOutDto>;
   analyzeCustomerActionGuidance?(facts: Record<string, unknown>): Promise<string>;
   // 普通运行异常只进入巡检修复，不伪装成阻断原任务的“卡点”。
   readUnhandledExceptions?(): WorkflowExceptionRecordOutDto[];
@@ -118,7 +118,7 @@ export class LinghuAutomationFacade {
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" } };
     this.#recordEvent("linghu.acceptance_scene.planning", identity);
     try {
-      const plan = parseAcceptanceScenePlan(await this.#analyzeAcceptanceScene(goal), goal);
+      const plan = validateAcceptanceScenePlan(await this.#analyzeAcceptanceScene(goal), goal);
       this.#recordEvent("linghu.acceptance_scene.planned", { ...identity, plan });
       if (plan.kind === "blocked") throw new Error(`验收场景准备受阻：${plan.reason}`);
       return plan;

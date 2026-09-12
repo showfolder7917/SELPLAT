@@ -112,7 +112,7 @@ import {
   type WorkflowSupervisorPort as WorkflowSupervisor,
 } from "../../services/workflow/index.js";
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
-import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
+import { createAcceptanceSceneSubmission, createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
 import { createHanliRuntime } from "../../services/personas/hanli/index.js";
 import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
@@ -152,6 +152,8 @@ let nangongDistributionCodex: CodexService | undefined;
 let corpusSemanticBackfillCodex: CodexService | undefined;
 // 客户操作指导使用令狐独立只读线程，不污染故障修复和普通人物会话。
 let linghuGuidanceCodex: CodexService | undefined;
+// 令狐场景阶段工具仅存在于本轮连接，结束或应用退出立即回收。
+let linghuSceneCodex: CodexService | undefined;
 // 跨人物协作协调器，负责任务状态、工作树和集成流程。
 let collaboration: CollaborationCoordinator | undefined;
 // 令狐公开门面只暴露检查、恢复和统一测试等受控能力。
@@ -822,13 +824,29 @@ export async function startApplication(): Promise<void> {
     readUnhandledExceptions: () => workflowRepository?.listUnhandledExceptions(50) || [],
     claimUnhandledExceptions: (eventIds) => workflowRepository?.claimExceptions(eventIds, "linghu-ancestor") || [],
     analyzeAcceptanceScene: (goal) => {
-      // 与令狐已有只读指导共用串行队列，不创建冒充正式人物的临时子代理。
       const analysis = linghuGuidanceQueue.then(async () => {
-        if (!linghuGuidanceCodex) throw new Error("令狐场景准备服务尚未就绪。");
-        return (await linghuGuidanceCodex.send(
-          prompts.render("linghu.acceptance-scene", { goalJson: JSON.stringify(goal) }),
-          settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
-        )).text;
+        // 正式令狐的阶段连接只承载本轮工具，不能恢复未登记新工具的旧指导线程。
+        const submission = createAcceptanceSceneSubmission();
+        const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
+          codexHome, serviceName: "selplat_linghu_acceptance_scene", threadSource: "ai-desktop-linghu-acceptance-scene",
+          migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
+          readSettings: () => settings.read(), readRuleInstructions: () => rules.renderRoleInstructions("linghu"), dynamicTools: submission.tools,
+        }, (details) => eventCenter.recordEvent("linghu.acceptance_scene.tool_policy", details), (details) => eventCenter.recordEvent("linghu.acceptance_scene.thread", details));
+        linghuSceneCodex = service;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            submission.run(goal, (requestId) => service.send(
+              prompts.render("linghu.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) }),
+              settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
+            )),
+            new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("令狐场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),
+          ]);
+        } finally {
+          if (timer) clearTimeout(timer);
+          service.dispose();
+          if (linghuSceneCodex === service) linghuSceneCodex = undefined;
+        }
       });
       linghuGuidanceQueue = analysis.catch(() => undefined);
       return analysis;
@@ -1062,5 +1080,6 @@ export function disposeApplication(): void {
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
   corpusSemanticBackfillCodex?.dispose();
   linghuGuidanceCodex?.dispose();
+  linghuSceneCodex?.dispose();
   prepareAiMemoryShutdown();
 }

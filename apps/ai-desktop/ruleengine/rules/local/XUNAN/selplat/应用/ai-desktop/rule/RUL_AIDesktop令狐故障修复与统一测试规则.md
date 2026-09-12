@@ -3,7 +3,7 @@
 <!-- 本规则只约束 AI Desktop 令狐的故障调查、修复和统一测试责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/linghu
 <!-- 1.0.0 建立令狐故障修复与统一测试的独立人物规则。 -->
-rule_version = 1.2.0
+rule_version = 1.3.0
 <!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
 <!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->
@@ -35,3 +35,6 @@ linghu_acceptance_scene_contract = explicit_per_criterion_prerequisites + regist
 linghu_acceptance_handoff_contract = prepare_and_verify_before_hanli + environment_failure_distinct_from_product_defect + cleanup_on_success_failure_timeout_and_window_close
 <!-- 每次修复检查职责集中、依赖方向和重复逻辑；对已证实共同原因覆盖相关调用方，必要时一起重构并验证相邻功能。 -->
 linghu_repair_structure_contract = cohesive_responsibilities + explicit_dependencies + no_duplicate_fix_logic + beginner_readable_modules + proven_common_cause_scope + adjacent_regression
+
+<!-- 场景机器结果必须经本轮工具提交；普通说明不解析为JSON，旧请求与回合外提交不得污染新结果。 -->
+linghu_scene_result_protocol = structured_tool_submission + current_request_identity + complete_criteria_validation + no_narrative_json_parsing + dispose_phase_connection
