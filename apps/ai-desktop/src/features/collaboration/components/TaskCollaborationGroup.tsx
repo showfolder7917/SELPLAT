@@ -62,14 +62,15 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
       <section className="task-collaboration-page">
         <div className="task-collaboration-empty">
           <strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong>
-          <span>
+          <span className="task-collaboration-empty-intro">
             {locale === "ja"
               ? "申請、承認、配布と実行の履歴がここに表示されます。"
-              : "审批、分发、执行和验证会按发生顺序显示在这里。"}
+              : "先点击“找韩立说需求”说明目标；会话会引导你确认需求与范围，之后的任务安排会显示在这里。"}
           </span>
           <button type="button" className="task-collaboration-empty-action" onClick={openHanliConversation}>
             {locale === "ja" ? "韓立に要望を伝える" : "找韩立说需求"}
           </button>
+          {locale !== "ja" && <span className="task-collaboration-empty-detail">审批、分发、执行和验证会按发生顺序显示在这里。</span>}
         </div>
       </section>
     );

@@ -1111,15 +1111,25 @@ test("空任务起点连续排列并导航到可输入的韩立会话", async ({
   await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
   const empty = page.locator(".task-collaboration-empty");
   await expect(empty).toBeVisible();
+  const intro = empty.locator(".task-collaboration-empty-intro");
+  const action = empty.getByRole("button", { name: "找韩立说需求" });
+  const detail = empty.locator(".task-collaboration-empty-detail");
   for (const width of [1560, 1000]) {
     await application.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 700), width);
     const title = await empty.locator("strong").boundingBox();
-    const description = await empty.locator(":scope > span").boundingBox();
-    expect(description!.y - title!.y - title!.height).toBeLessThanOrEqual(12);
+    await expect(intro).toBeVisible();
+    await expect(action).toBeVisible();
+    await expect(detail).toBeVisible();
+    const introBox = await intro.boundingBox();
+    const actionBox = await action.boundingBox();
+    const detailBox = await detail.boundingBox();
+    expect(introBox!.y - title!.y - title!.height).toBeLessThanOrEqual(12);
+    expect(introBox!.y).toBeLessThan(actionBox!.y);
+    expect(actionBox!.y).toBeLessThan(detailBox!.y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`empty-${width}.png`) });
   }
-  await empty.getByRole("button", { name: "找韩立说需求" }).click();
+  await action.click();
   const input = page.getByRole("textbox", { name: "给韩立发送消息" });
   await expect(input).toBeFocused();
   await page.keyboard.type("测试需求");

@@ -1,3 +1,4 @@
+import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
 import { randomUUID } from "node:crypto";
 // Repository 只持久化卡点聚合快照，不自行解释卡点阶段。
 import type { WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
@@ -551,9 +552,10 @@ export class WorkflowRepository {
   }
 
   #upsertTask(connection: DatabaseSync, state: CollaborationStateOutDto, task: CollaborationTaskOutDto): void {
-    const member = state.members.find((item) => item.memberId === task.executorMemberId && item.currentTaskId === task.taskId);
+    const member = new CollaborationTaskAggregate({ task }).activeOwner(state.members);
     const heartbeatAt = latestTime(member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt);
-    const timeoutAt = TERMINAL_TASK_STATES.has(task.state) ? null : new Date(Date.parse(heartbeatAt) + STALE_AFTER_MS).toISOString();
+    const timeoutAt = new CollaborationTaskAggregate({ task }).requiresExecutionHeartbeat()
+      ? new Date(Date.parse(heartbeatAt) + STALE_AFTER_MS).toISOString() : null;
     const workflowId = task.evolutionProposalId ? `evolution:${task.evolutionProposalId}` : `collaboration:${task.taskId}`;
     if (!task.evolutionProposalId) connection.prepare(`
       INSERT INTO AiDesktopWorkflowRun (workflowId, topicId, proposalId, origin, title, state, currentStage, currentOwnerId, recoveryPoint, nextLaunchAt, startedAt, completedAt, updatedAt)

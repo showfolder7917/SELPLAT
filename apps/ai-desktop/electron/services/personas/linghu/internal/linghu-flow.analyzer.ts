@@ -1,4 +1,5 @@
-﻿// 协同状态与任务类型提供令狐只读分析所需的权威事实，不允许本模块修改任务。
+import { CollaborationTaskAggregate } from "../../../workflow/index.js";
+// 协同状态与任务类型提供令狐只读分析所需的权威事实，不允许本模块修改任务。
 import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../contracts/services/workflow/index.js";
 // 令狐协议定义健康状态、阻塞分类、快照和模块报告的数据形状。
 import type { LinghuAutomaticFlowSnapshotOutDto, LinghuAutomationModuleValue, LinghuBlockingKindValue, LinghuFlowHealthValue } from "../../../../../contracts/services/personas/linghu/index.js";
@@ -25,7 +26,7 @@ export function automaticFlowSnapshots(state: CollaborationStateOutDto, activeTa
 /** 根据任务、成员心跳和检查时间生成单条自动保障快照。 */
 function automaticFlowSnapshot(state: CollaborationStateOutDto, task: CollaborationTaskOutDto, checkedAt: string): LinghuAutomaticFlowSnapshotOutDto {
   // 只有当前确实持有该任务的成员心跳才属于本任务，避免复用人物上一任务的时间。
-  const member = state.members.find((candidate) => candidate.memberId === task.executorMemberId && candidate.currentTaskId === task.taskId);
+  const member = new CollaborationTaskAggregate({ task }).activeOwner(state.members);
   // 最近进展优先比较心跳、协议进度和任务状态更新时间。
   const progressAt = latestTime(member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt);
   // 超过安全阈值只形成停点事实，是否恢复仍由 Facade 的权限和次数门禁决定。

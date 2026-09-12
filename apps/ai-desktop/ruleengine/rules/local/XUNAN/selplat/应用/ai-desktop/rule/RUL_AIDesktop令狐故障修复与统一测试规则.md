@@ -3,7 +3,7 @@
 <!-- 本规则只约束 AI Desktop 令狐的故障调查、修复和统一测试责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/linghu
 <!-- 1.0.0 建立令狐故障修复与统一测试的独立人物规则。 -->
-rule_version = 1.0.0
+rule_version = 1.1.0
 <!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
 <!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->
@@ -23,3 +23,8 @@ linghu_repair_scope_contract = proven_failure_only + no_original_task_reimplemen
 linghu_test_contract = registered_unified_test_list + factual_result + failed_item_retest
 <!-- 规则修复只能写入当前用户层并保存变更前版本。 -->
 linghu_rule_repair_contract = active_user_only + previous_revision_preserved + no_core_common_other_user_write
+
+<!-- 重复失败由任务历史提供上下文，先核对真实测试提交再决定共同根因修复，避免逐次补丁。 -->
+linghu_repeated_failure_contract = original_task_history_and_candidate_commit_comparison + previous_change_vs_new_failure + related_callers_and_boundary_review + explicit_refactor_decision + original_failure_and_adjacent_regression + no_test_weakening
+<!-- 修复持有原任务期间，旧心跳或晚到恢复请求不能重新集成旧结果。 -->
+linghu_active_repair_ownership_contract = actual_handler_progress + no_concurrent_recovery_or_stale_result_integration + preserve_original_task_and_history

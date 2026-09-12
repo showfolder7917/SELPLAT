@@ -88,3 +88,6 @@ export function createPersonaCapabilityRegistry(): Pick<PersonaCapabilityRegistr
   // 返回受控能力集合，外部模块不能读取注册表内部 Map。
   return new PersonaCapabilityRegistry();
 }
+
+// 心跳与巡检读取同一任务聚合的实际阶段持有人。
+export { CollaborationTaskAggregate } from "./domain/collaboration-task.aggregate.js";

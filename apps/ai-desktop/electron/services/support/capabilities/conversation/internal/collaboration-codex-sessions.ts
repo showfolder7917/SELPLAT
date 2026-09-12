@@ -1,3 +1,4 @@
+import { repairInvestigationContext } from "./repair-investigation-context.js";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -420,7 +421,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
   }
 
   async investigateRepair(task: CollaborationTaskOutDto, failure: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
-    return this.#runRequirement(task, this.#prompts.render("executor.repair-investigation", { failure }), emit);
+    return this.#runRequirement(task, this.#prompts.render("executor.repair-investigation", { failure: `${failure}\n\n${repairInvestigationContext(task, process.platform)}` }), emit);
   }
 
   async executeRepair(task: CollaborationTaskOutDto, diagnosis: CollaborationRepairDiagnosisOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
@@ -428,7 +429,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
       repairInstruction: diagnosis.repairInstruction,
       failureStage: diagnosis.failureStage,
       failureSummary: diagnosis.failureSummary,
-      technicalEvidence: diagnosis.technicalEvidence.join("\n"),
+      technicalEvidence: `${diagnosis.technicalEvidence.join("\n")}\n\n${repairInvestigationContext(task, process.platform)}`,
     }), emit);
   }
 

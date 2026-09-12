@@ -94,6 +94,13 @@ test("没有专题任务时可从空状态进入韩立会话，但不创建任�
   assert.doesNotMatch(taskGroupSource, /submitTask|submitConversationTask/);
 });
 
+test("空任务页先引导说明需求，再展示后续协作安排", () => {
+  assert.match(
+    taskGroupSource,
+    /task-collaboration-empty-intro[\s\S]*先点击“找韩立说需求”说明目标；会话会引导你确认需求与范围，之后的任务安排会显示在这里。[\s\S]*<\/span>[\s\S]*task-collaboration-empty-action[\s\S]*task-collaboration-empty-detail[\s\S]*审批、分发、执行和验证会按发生顺序显示在这里。/,
+  );
+});
+
 test("任务协作群空状态在窄窗口保持单列、换行和容器边界", () => {
   assert.match(developerStyles, /\.task-collaboration-empty \{[\s\S]*width: min\(100%, 480px\)[\s\S]*min-width: 0[\s\S]*display: grid/);
   assert.match(developerStyles, /\.task-collaboration-empty > span \{[\s\S]*max-width: 100%[\s\S]*overflow-wrap: anywhere/);

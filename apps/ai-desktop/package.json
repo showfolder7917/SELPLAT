@@ -24,9 +24,9 @@
     "start:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/start-developer-desktop.mjs",
     "start:isolated-acceptance": "node scripts/start-isolated-acceptance.mjs",
     "dist:win": "npm run dist:win:developer",
-    "dist:win:developer": "node scripts/assert-package-host.mjs win32 && npm run build:developer && node scripts/run-with-dependencies.mjs electron-builder --config electron-builder.developer.config.cjs --win nsis --x64",
-    "dist:mac:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs electron-builder --config electron-builder.developer.config.cjs --mac dmg",
-    "package:mac:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs electron-builder --config electron-builder.developer.config.cjs --mac dir && node scripts/run-with-dependencies.mjs node scripts/sign-mac-developer-app.mjs",
+    "dist:win:developer": "node scripts/assert-package-host.mjs win32 && npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --win nsis --x64",
+    "dist:mac:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --mac dmg",
+    "package:mac:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --mac dir && node scripts/run-with-dependencies.mjs node scripts/sign-mac-developer-app.mjs",
     "verify:mac:developer": "node scripts/run-with-dependencies.mjs node scripts/verify-mac-developer-app.mjs",
     "verify:developer-package-root": "node scripts/run-with-dependencies.mjs node scripts/verify-developer-package-root.mjs",
     "verify:package-content": "node scripts/run-with-dependencies.mjs node scripts/verify-package-content.mjs",
@@ -62,7 +62,7 @@
     "test:nangong-evolution": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/evolution/nangong-evolution.test.mjs",
     "test:explorer": "node --test tests/applications/developer/developer-explorer-collapse.test.mjs",
     "test:interaction": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/run-interaction-tests.mjs",
-    "test:managed": "node scripts/run-with-dependencies.mjs node --test tests/features/collaboration/managed-task-executor-contract.test.mjs tests/applications/developer/model-settings-contract.test.mjs tests/applications/screenshot/user-input-and-screenshot-contract.test.mjs tests/release/test-document-and-mac-launcher-contract.test.mjs tests/release/developer-package-root.test.mjs tests/services/support/platform/workspace/selected-workspace-root.test.mjs",
+    "test:managed": "node scripts/run-with-dependencies.mjs node scripts/run-managed-tests.mjs",
     "test:trust": "node scripts/run-with-dependencies.mjs node --test tests/services/support/platform/security/trusted-command-store.test.mjs",
     "test:codex-runtime": "npm run build:electron && node scripts/run-with-dependencies.mjs node --test tests/services/support/platform/codex/codex-runtime.test.mjs"
   },
@@ -98,6 +98,5 @@
     "remark-gfm": "^4.0.1",
     "typescript": "6.0.3",
     "vite": "6.4.2"
-  },
-  "build": {}
+  }
 }

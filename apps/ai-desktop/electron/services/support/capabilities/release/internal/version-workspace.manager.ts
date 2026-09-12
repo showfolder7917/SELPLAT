@@ -82,6 +82,34 @@ export class CandidateWorkspaceDirtyError extends Error {
   }
 }
 
+/** 阻止候选合并已被任务工作区后续提交替代的旧结果快照。 */
+export class StaleTaskResultError extends Error {
+  readonly taskId: string;
+  readonly resultSha: string;
+  readonly workspaceHeadSha: string;
+
+  constructor(taskId: string, resultSha: string, workspaceHeadSha: string) {
+    super(`任务 ${taskId} 的固定 resultSha 已过期：记录为 ${resultSha}，任务工作区当前 HEAD 为 ${workspaceHeadSha}。请先重新登记任务结果后再创建发布候选。`);
+    this.name = "StaleTaskResultError";
+    this.taskId = taskId;
+    this.resultSha = resultSha;
+    this.workspaceHeadSha = workspaceHeadSha;
+  }
+}
+
+/** 阻止候选静默遗漏仍留在任务工作区中的后续修改。 */
+export class UncommittedTaskWorkspaceError extends Error {
+  readonly taskId: string;
+  readonly changedFiles: string[];
+
+  constructor(taskId: string, changedFiles: string[]) {
+    super(`任务 ${taskId} 的工作区仍有未提交修改，不能创建发布候选：${changedFiles.join("、") || "Git 未返回路径"}`);
+    this.name = "UncommittedTaskWorkspaceError";
+    this.taskId = taskId;
+    this.changedFiles = changedFiles;
+  }
+}
+
 /** 只在应用签发的目录中建立 Git worktree，执行人永不直接修改用户当前工作目录。 */
 export class VersionWorkspaceManager {
   readonly #repositoryRoot: string;
@@ -255,6 +283,7 @@ export class VersionWorkspaceManager {
   /** 从固定基线创建可追溯的 release/<version>-rc 候选；只有发布锁持有者可以调用。 */
   async createReleaseCandidate(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTaskOutDto[], legacyIntegrationBranch = false): Promise<IntegrationCandidate> {
     if (tasks.length === 0) throw new Error("集成批次不能为空。");
+    await Promise.all(tasks.map((task) => this.#assertTaskResultIsCurrent(task)));
     const baseSha = await this.#integrationBaseSha();
     const safeVersion = safeVersionSegment(version);
     const branchName = legacyIntegrationBranch ? `codex/collab/integration-g${generation}` : await this.#availableReleaseBranch(safeVersion, generation);
@@ -405,6 +434,20 @@ export class VersionWorkspaceManager {
   #validateCandidateBranch(branchName: string): void {
     if (/^release\/[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?-rc(?:-g[1-9][0-9]*(?:-r[2-9][0-9]*)?)?$/.test(branchName)) return;
     this.#validateManagedBranch(branchName);
+  }
+
+  /** 任务工作区仍可读取时，候选只能合并与其当前 HEAD 一致的已冻结结果提交。 */
+  async #assertTaskResultIsCurrent(task: CollaborationTaskOutDto): Promise<void> {
+    const workspace = task.versionWorkspace;
+    const resultSha = workspace?.resultSha;
+    // 旧归档候选只有 resultSha，缺少受控工作区时无法补做实时比对。
+    if (!resultSha || !workspace?.rootPath) return;
+    const rootPath = this.#validateManagedPath(workspace.rootPath);
+    this.#validateManagedBranch(workspace.branchName);
+    const changedFiles = splitStatusPorcelain(await this.#gitRaw(rootPath, ["status", "--porcelain", "-z"]));
+    if (changedFiles.length) throw new UncommittedTaskWorkspaceError(task.taskId, changedFiles);
+    const workspaceHeadSha = await this.#git(rootPath, ["rev-parse", "HEAD"]);
+    if (workspaceHeadSha !== resultSha) throw new StaleTaskResultError(task.taskId, resultSha, workspaceHeadSha);
   }
 
   async #git(cwd: string, args: string[]): Promise<string> {

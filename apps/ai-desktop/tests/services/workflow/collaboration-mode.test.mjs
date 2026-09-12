@@ -20,7 +20,7 @@ import { parseCustomerActionGuidance } from "../../../../../build/ai-desktop/ele
 import { TestResourceCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/test-resource-coordinator.facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/integration-release.facade.js";
 import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
-import { LocalChangeOwnershipError, MergeConflictError, VersionWorkspaceManager } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-workspace.manager.js";
+import { LocalChangeOwnershipError, MergeConflictError, StaleTaskResultError, UncommittedTaskWorkspaceError, VersionWorkspaceManager } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-workspace.manager.js";
 import { ManagedTaskExecutor } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/internal/managed-task.executor.js";
 import { TaskRepairScopeAggregate, TaskRepairScopeViolationError } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/index.js";
 import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
@@ -988,7 +988,7 @@ test("发布重启携带候选源码提交且只由同一运行版本完成健�
   assert.match(startupContextSource, /--ai-desktop-runtime-sha=/);
   assert.match(startupContextSource, /\^\[0-9a-f\]\{40,64\}\$/);
   assert.match(applicationRuntimeSource, /publishRelease: \(executable, releaseBatchId, runtimeSourceSha\)/);
-  assert.match(applicationRuntimeSource, /`--ai-desktop-runtime-sha=\$\{runtimeSourceSha\}`/);
+  assert.match(applicationRuntimeSource, /releaseRestartArguments\(projectRoot, runtimeSourceSha, process\.argv\)/);
   assert.match(applicationRuntimeSource, /resolveCleanRuntimeSourceSha\(projectRoot\)/);
   assert.match(applicationRuntimeSource, /源码尚未提交/);
   assert.match(integrationPipelineSource, /batch\.integrationSha === this\.#loadedRuntimeSha/);
@@ -1102,6 +1102,88 @@ test("同一版本已有首个发布候选时后续批次使用唯一代次分�
     assert.equal(git(repositoryRoot, "rev-parse", candidate.branchName), candidate.candidateSha);
     await manager.retireCandidate(candidate);
     assert.equal(git(repositoryRoot, "rev-parse", "release/0.1.1-rc-g7"), candidate.candidateSha);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("发布候选拒绝任务工作区已有后续提交的过期结果快照", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "stale-task-result-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  const taskRoot = path.join(managedRoot, "tasks", "task-stale", "r1");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "source.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    const baseSha = git(repositoryRoot, "rev-parse", "HEAD");
+    mkdirSync(path.dirname(taskRoot), { recursive: true });
+    git(repositoryRoot, "worktree", "add", "-b", "codex/collab/task-stale/worker/r1", taskRoot, "HEAD");
+    writeFileSync(path.join(taskRoot, "source.txt"), "first repair\n");
+    git(taskRoot, "add", "-A");
+    git(taskRoot, "commit", "-m", "first repair");
+    const resultSha = git(taskRoot, "rev-parse", "HEAD");
+    writeFileSync(path.join(taskRoot, "source.txt"), "second repair\n");
+    git(taskRoot, "add", "-A");
+    git(taskRoot, "commit", "-m", "second repair");
+    const workspaceHeadSha = git(taskRoot, "rev-parse", "HEAD");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    await assert.rejects(
+      () => manager.createReleaseCandidate("release-0.1.1-g11", "0.1.1", 11, [{
+        taskId: "TASK-STALE",
+        versionWorkspace: {
+          workspaceId: "worktree:TASK-STALE:r1", rootPath: taskRoot, branchName: "codex/collab/task-stale/worker/r1",
+          baseSha, resultSha, createdAt: new Date().toISOString(), retiredAt: null,
+        },
+      }]),
+      (error) => {
+        assert.ok(error instanceof StaleTaskResultError);
+        assert.equal(error.taskId, "TASK-STALE");
+        assert.equal(error.resultSha, resultSha);
+        assert.equal(error.workspaceHeadSha, workspaceHeadSha);
+        return true;
+      },
+    );
+    assert.throws(() => git(repositoryRoot, "show-ref", "--verify", "refs/heads/release/0.1.1-rc-g11"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("发布候选拒绝任务工作区中尚未冻结的修改", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "dirty-task-result-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  const taskRoot = path.join(managedRoot, "tasks", "task-dirty", "r1");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "source.txt"), "base\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    const baseSha = git(repositoryRoot, "rev-parse", "HEAD");
+    mkdirSync(path.dirname(taskRoot), { recursive: true });
+    git(repositoryRoot, "worktree", "add", "-b", "codex/collab/task-dirty/worker/r1", taskRoot, "HEAD");
+    writeFileSync(path.join(taskRoot, "source.txt"), "uncommitted repair\n");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    await assert.rejects(
+      () => manager.createReleaseCandidate("release-0.1.1-g12", "0.1.1", 12, [{
+        taskId: "TASK-DIRTY",
+        versionWorkspace: {
+          workspaceId: "worktree:TASK-DIRTY:r1", rootPath: taskRoot, branchName: "codex/collab/task-dirty/worker/r1",
+          baseSha, resultSha: baseSha, createdAt: new Date().toISOString(), retiredAt: null,
+        },
+      }]),
+      (error) => {
+        assert.ok(error instanceof UncommittedTaskWorkspaceError);
+        assert.equal(error.taskId, "TASK-DIRTY");
+        assert.deepEqual(error.changedFiles, ["source.txt"]);
+        return true;
+      },
+    );
+    assert.throws(() => git(repositoryRoot, "show-ref", "--verify", "refs/heads/release/0.1.1-rc-g12"));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -2305,4 +2387,51 @@ test("初始化卡点核查环境变化后恢复同一任务，重启和心跳�
     assert.equal(inspected, prior);
     assert.equal(resumed.length, 2);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test("令狐活跃调查期间晚到恢复不得重排旧结果，真实进展属于令狐", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "repair-ownership-"));
+  let finishDiagnosis;
+  const diagnosis = new Promise((resolve) => { finishDiagnosis = resolve; });
+  let entered;
+  const started = new Promise((resolve) => { entered = resolve; });
+  let coordinator;
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask({ title: "原任务", problemStatement: "打包失败", confirmedIntent: "修复同一任务", workspaceState, locale: "zh-CN" });
+    store.updateTask(task.taskId, "fixture.failed", (current) => {
+      current.state = "test-failed";
+      current.executorMemberId = "song-yu";
+      current.versionWorkspace = { workspaceId: "test", rootPath: directory, branchName: "codex/test", baseSha: "base", resultSha: "old", createdAt: new Date().toISOString(), retiredAt: null };
+      current.integrationFailure = { kind: "verification", detail: "missing entry", conflictFiles: [], baseSha: "base", resultSha: "old", generation: 2, occurredAt: new Date().toISOString() };
+    });
+    let schedules = 0;
+    coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => {}, start: () => "span", instant: () => {}, interruptOpenSpans: () => {} },
+      workspaces: { commitTaskResult: async () => "new" },
+      executor: new ExecutorFacade({ createExecutor: async () => ({
+        isAlive: () => true,
+        investigateRepair: async (_task, _failure, emit) => { emit({ type: "activity", text: "真实调查" }); entered(); return diagnosis; },
+        executeRepair: async () => ({ status: "code-verified", text: "已修复", pendingActions: [], changedFiles: [], authorizedFiles: [], successfulCommands: ["test"] }),
+        dispose: async () => {},
+      }) }),
+      integrationPipeline: { finishWaitingTask: () => {}, trackWaitingTask: () => {}, schedule: () => { schedules += 1; }, dispose: () => {} },
+      emitState: () => {}, emitStream: () => {},
+    });
+    const running = coordinator.repairTechnicalFailure(task.taskId);
+    await started;
+    await coordinator.recoverTask(task.taskId, "晚到的原执行人超时");
+    coordinator.continueTask(task.taskId);
+    assert.equal(store.task(task.taskId).state, "repairing-execution");
+    assert.equal(store.task(task.taskId).versionWorkspace.resultSha, "old");
+    assert.equal(schedules, 0);
+    assert.ok(store.state().members.find((member) => member.memberId === "linghu-ancestor").lastProtocolProgressAt);
+    finishDiagnosis("核对候选版本后统一修复");
+    await running;
+    assert.equal(store.task(task.taskId).versionWorkspace.resultSha, "new");
+    assert.equal(store.task(task.taskId).state, "ready-for-integration");
+    assert.ok(schedules > 0);
+  } finally { finishDiagnosis?.("结束"); await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
 });

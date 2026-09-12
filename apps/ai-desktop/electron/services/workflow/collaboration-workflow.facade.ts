@@ -92,6 +92,8 @@ export class CollaborationCoordinator {
   }
 
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {
+    // 活跃修复拥有原任务，监督器晚到的恢复请求不能把旧 resultSha 重新送去集成。
+    if (this.#technicalRepairRuns.has(taskId)) return this.state();
     const current = this.#store.task(taskId);
     const guidanceActor = current.customerActionGuidance
       ? this.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID)
@@ -192,7 +194,7 @@ export class CollaborationCoordinator {
 
       const task = this.#store.task(taskId);
       repairSession = await this.#executor.createTransient(task, requireMember(this.state(), LINGHU_MEMBER_ID));
-      const diagnosisText = await repairSession.investigateRepair(task, failureEvidence || originalReason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosisText = await repairSession.investigateRepair(task, failureEvidence || originalReason, (event) => this.#emitRepairProgress(taskId, event));
       const diagnosis = repairDiagnosis(task, diagnosisText, originalReason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
       this.#store.updateTask(taskId, repairInvestigatedEvent, (current, state) => {
         current.repairDiagnosis = diagnosis;
@@ -201,7 +203,7 @@ export class CollaborationCoordinator {
         current.blockingReason = ownershipFailure ? "令狐老祖已查明本地修改来源，正在按调查结论修复" : "令狐老祖已完成失败候选只读调查，正在按调查结论修复";
         appendFlow(current, repairInvestigatedEvent, "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
       });
-      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitRepairProgress(taskId, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；")
         || (ownershipFailure ? "本地修改来源修复未完成代码级验证" : "统一测试修复未完成代码级验证"));
       const resultSha = await this.#workspaces.commitTaskResult(
@@ -261,6 +263,8 @@ export class CollaborationCoordinator {
 
   /** 把已由自动保障确认的停点转换为可审计恢复态，并立即建立新的执行或集成租约。 */
   async recoverTask(taskId: string, reason: string): Promise<CollaborationStateOutDto> {
+    // 先保护在途修复，再处理可能已经过期的超时通知。
+    if (this.#technicalRepairRuns.has(taskId)) return this.state();
     const task = this.#store.task(taskId);
     if (task.state !== "blocked" && task.state !== "recovering") await this.#blockTask(taskId, reason);
     return this.continueTask(taskId);
@@ -803,7 +807,7 @@ export class CollaborationCoordinator {
       });
       const task = this.#store.task(taskId);
       repairSession = await this.#executor.createTransient(task, requireMember(this.state(), LINGHU_MEMBER_ID));
-      const diagnosisText = await repairSession.investigateRepair(task, reason, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const diagnosisText = await repairSession.investigateRepair(task, reason, (event) => this.#emitRepairProgress(taskId, event));
       const diagnosis = repairDiagnosis(task, diagnosisText, reason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
       this.#store.updateTask(taskId, "execution.repair_investigated", (current, state) => {
         current.repairDiagnosis = diagnosis;
@@ -812,12 +816,12 @@ export class CollaborationCoordinator {
         current.blockingReason = "令狐老祖已完成失败现场只读调查，正在按调查结论修复";
         appendFlow(current, "execution.repair_investigated", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
       });
-      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitRepairProgress(taskId, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "修复未完成代码验证");
       // 修复通过代码验证仍不等于原需求完成；只读核对当前源码与原验收条件。
       const completionText = await repairSession.investigateRepair(this.#store.task(taskId),
         `修复后的只读完成核对，不要再次实施。原需求：${task.snapshot.confirmedIntent}\n验收条件：${JSON.stringify(task.snapshot.acceptanceCriteria)}\n修复结果：${repaired.text}\n检查当前源码和验证证据。最终单独输出 REPAIR_COMPLETION={"complete":true或false,"remaining":"真实剩余工作或空串","evidence":"具体证据"}。只有全部原需求已满足且无剩余工作才允许true。`,
-        (event) => this.#emitStream(taskId, LINGHU_MEMBER_ID, event));
+        (event) => this.#emitRepairProgress(taskId, event));
       const completionLine = completionText.split("\n").find((line) => line.trim().startsWith("REPAIR_COMPLETION="));
       let completion: { complete?: boolean; remaining?: string; evidence?: string } = {};
       try { if (completionLine) completion = JSON.parse(completionLine.trim().slice("REPAIR_COMPLETION=".length)); }
@@ -1021,6 +1025,12 @@ export class CollaborationCoordinator {
     const timer = this.#heartbeatTimers.get(key);
     if (timer) clearInterval(timer);
     this.#heartbeatTimers.delete(key);
+  }
+
+  /** 调查与修复都把真实模型活动写回当前处理人，避免仍使用原执行人的旧心跳。 */
+  #emitRepairProgress(taskId: string, event: CodexStreamEventOutDto): void {
+    this.#touchProtocolProgress(taskId, LINGHU_MEMBER_ID);
+    this.#emitStream(taskId, LINGHU_MEMBER_ID, event);
   }
 
   #touchProtocolProgress(taskId: string, memberId: string): void {

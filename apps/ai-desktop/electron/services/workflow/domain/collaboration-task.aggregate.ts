@@ -81,6 +81,20 @@ export class CollaborationTaskAggregate {
     return ["recovering", "blocked", "test-failed"].includes(this.#task.state);
   }
 
+  /** 执行心跳只约束人物执行；测试、发布和等待由各自资源租约及超时负责。 */
+  requiresExecutionHeartbeat(): boolean {
+    return ["analyzing", "executing", "repairing-execution"].includes(this.#task.state);
+  }
+
+  /** 取得当前阶段实际持有人；修复归令狐，原执行人只保留历史身份。 */
+  activeOwner(members: CollaborationMemberOutDto[]): CollaborationMemberOutDto | undefined {
+    const handlerId = this.#task.currentHandler?.memberId;
+    const ownerId = handlerId || this.#task.executorMemberId;
+    return members.find((member) => member.memberId === ownerId
+      && member.currentTaskId === this.#task.taskId
+      && member.state === "working");
+  }
+
   /** 判断任务是否仍由一名处于工作态的人物真实占用。 */
   hasLiveOwner(members: CollaborationMemberOutDto[]): boolean {
     // 人物必须明确持有当前任务，单独的历史时间线节点不能表示仍在工作。

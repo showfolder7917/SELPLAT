@@ -93,9 +93,9 @@ test("自动测试开启前集中预检并只授权无参数固定入口", () =>
 
 test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builder, /com\.selplat\.aidesktop\.developer/);
-  assert.match(builderConfig, /const buildRoot = path\.join\(selplatRoot, "build", "ai-desktop"\);/);
-  assert.match(builderConfig, /resource\.to === "ruleengine".*path\.join\(buildRoot, "rule-bundle"\)/s);
-  assert.match(builderConfig, /resource\.to === "prompts".*path\.join\(buildRoot, "prompt-bundle"\)/s);
+  assert.match(builderConfig, /const sourceBundleBuildRoot = path\.join\(selplatRoot, "build", "ai-desktop"\);[\s\S]*resource\.to === "ruleengine".*path\.join\(sourceBundleBuildRoot, "rule-bundle"\)[\s\S]*resource\.to === "prompts".*path\.join\(sourceBundleBuildRoot, "prompt-bundle"\)/);
+  assert.match(builderConfig, /const candidateProjectRoot = path\.resolve\(applicationRoot, "\.\.\/\.\."\);[\s\S]*const candidateBuildRoot = path\.join\(candidateProjectRoot, "build", "ai-desktop"\);[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/renderer\/developer"[\s\S]*path\.join\(candidateBuildRoot, "renderer", "developer"\)[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/electron"[\s\S]*path\.join\(candidateBuildRoot, "electron"\)/);
+  assert.match(builderConfig, /resource\.to === "db\/sql".*path\.join\(applicationRoot, "db", "sql"\)/);
   assert.match(builder, /\{ "from": "db\/sql", "to": "db\/sql", "filter": \["load-order\.txt", "\*\.sql"\] \}/);
   assert.match(launcher, /npm run build:developer/);
   assert.match(launcher, /npm run package:mac:developer/);
@@ -112,7 +112,7 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
   assert.match(appConfig, /--selplat-root=/);
   assert.match(appConfig, /resolveAppVariant\(\): AppVariantValue \{\s+return "developer";/);
-  assert.match(electronMain, /--ai-desktop-variant=developer/);
+  assert.match(electronMain, /releaseRestartArguments\(projectRoot, runtimeSourceSha, process\.argv\)/);
   assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \? true : app\.requestSingleInstanceLock\(\);/);
   assert.match(startupContext, /if \(!healthCheckFile && !ownsApplicationInstance\) app\.quit\(\);/);
   assert.match(startupContext, /else if \(!healthCheckFile\) app\.on\("second-instance"/);

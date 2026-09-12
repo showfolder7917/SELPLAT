@@ -1,3 +1,4 @@
+import { releaseRestartArguments } from "./release-restart-arguments.js";
 ﻿/**
  * AI Desktop 应用运行时组合根。
  *
@@ -511,7 +512,7 @@ export async function startApplication(): Promise<void> {
     },
     publishRelease: (executable, releaseBatchId, runtimeSourceSha) => {
       eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId, runtimeSourceSha });
-      app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer", `--ai-desktop-runtime-sha=${runtimeSourceSha}`] });
+      app.relaunch({ execPath: executable, args: releaseRestartArguments(projectRoot, runtimeSourceSha, process.argv) });
       prepareAiMemoryShutdown();
       app.exit(0);
     },
@@ -845,7 +846,7 @@ export async function startApplication(): Promise<void> {
         // 统一测试成功后只发布已提交的源码版本，避免新进程无法证明自己实际装载了哪次修复。
         const runtimeSourceSha = resolveCleanRuntimeSourceSha(projectRoot);
         eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable, runtimeSourceSha });
-        app.relaunch({ execPath: executable, args: [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer", `--ai-desktop-runtime-sha=${runtimeSourceSha}`] });
+        app.relaunch({ execPath: executable, args: releaseRestartArguments(projectRoot, runtimeSourceSha, process.argv) });
         prepareAiMemoryShutdown();
         app.exit(0);
       },
