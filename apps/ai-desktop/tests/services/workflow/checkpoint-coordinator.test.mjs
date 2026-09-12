@@ -1,8 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CheckpointCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint/checkpoint-coordinator.js";
-import { CheckpointHandoffService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.js";
-import { AcceptanceHandoffService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance/acceptance-handoff.service.js";
+import { build } from "esbuild";
+
+// 本测试验证当前工作树的工作流源码；禁止构建时不能把缺失产物误报为协调器失败。
+async function loadWorkflowSource(entryPoint) {
+  const result = await build({
+    entryPoints: [entryPoint],
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "es2022",
+    write: false,
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+
+const { CheckpointCoordinator } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts");
+const { CheckpointHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.ts");
+const { AcceptanceHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts");
 
 // 端口夹具只模拟已发生的任务状态，不调用真实服务、不修改生产运行。
 function fixture() {

@@ -390,7 +390,32 @@ export class HanliComputerAcceptance {
       this.#active = false;
     }
     if (!completed) {
-      throw new Error("韩立尚未通过交互工具提交完整验收判断，不能认定通过。");
+      // 模型正常结束却没有提交 finish 时，已经保存的真实截图不能随着异常丢失。
+      // 仅将其归档为受阻，绝不据此推断产品通过或失败；没有截图仍不能构造验收记录。
+      if (!snapshot || !evidence.includes(snapshot)) {
+        throw new Error("韩立尚未通过交互工具提交完整验收判断，且未留下可归档的真实截图证据。");
+      }
+      const actual = "验收模型未通过交互工具提交完整判断，当前条件未形成可归档的功能结论。";
+      const layoutActual = "验收模型未通过交互工具提交完整判断，当前条件未形成可归档的布局结论。";
+      for (const [index] of goal.criteria.entries()) {
+        steps.push({
+          checkId: `criterion-${index + 1}`,
+          operationIndex: steps.length,
+          operation: {
+            type: "judgement",
+            criterionId: `criterion-${index + 1}`,
+          },
+          status: "blocked",
+          actual,
+          layoutStatus: "blocked",
+          layoutActual,
+          layoutScreenshotAttachmentId: snapshot,
+          screenshotAttachmentId: snapshot,
+          occurredAt: new Date().toISOString(),
+        });
+      }
+      verdict = "blocked";
+      progress(`韩立验收受阻：${actual}`);
     }
     let windowTitle = "已关闭";
     let finalBounds = initialBounds;
