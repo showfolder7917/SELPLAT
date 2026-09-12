@@ -405,7 +405,7 @@ export class PersonaEvolutionRuntime {
     try {
       this.#store.updateOneShotRun("accepting", "linghu-ancestor", "令狐老祖", "正在恢复完成态只读验收场景", topic.topicId, proposal.proposalId);
       const result = await this.#computerAcceptanceSession(goal, () => {
-        publishAcceptance("started", "令狐已恢复只读验收场景，韩立正在复核完成态页面。");
+        // 完成态复核属于后台只读检查，不能重新打开可见的“韩立验收中”节点污染被验收页面。
         this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在只读复核完成态页面", topic.topicId, proposal.proposalId);
       }, () => {
         throw new Error("完成态复核恢复不得再次提交业务完成动作。");

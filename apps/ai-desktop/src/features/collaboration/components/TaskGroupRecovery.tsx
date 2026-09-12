@@ -65,7 +65,8 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
   // 正式提案用于判断当前业务状态是否仍允许恢复。
   const proposal = evolutionState.proposals.find((item) => item.proposalId === oneShotRun.proposalId);
   // 恢复等待状态只匹配当前运行，不能被其他专题的恢复请求污染。
-  const recoveryPending = evolution.resumingRunId === oneShotRun.runId;
+  // 后端已经把原运行切回 running 后，提交中的按钮必须立即离开被验收页面。
+  const recoveryPending = evolution.resumingRunId === oneShotRun.runId && oneShotRun.status === "blocked";
   // 恢复反馈同样按运行标识归属，确保页面显示正确任务的结果。
   const recoveryFeedback = evolution.resumeFeedback?.runId === oneShotRun.runId
     ? evolution.resumeFeedback
