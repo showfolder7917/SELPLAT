@@ -133,3 +133,10 @@ test("令狐场景工具通过本轮阶段连接装配，结束与应用退出�
   assert.match(runtime, /linghuSceneCodex\?\.dispose\(\)/);
   assert.doesNotMatch(scene, /JSON.parse/);
 });
+
+test("场景说明区分条件式规则与必须构造的验收状态", () => {
+  const prompt = readFileSync("prompts/personas/linghu/acceptance-scene.md", "utf8");
+  assert.match(prompt, /若、如果、存在时、出现时/);
+  assert.match(prompt, /不代表验收场景必须人为创建/);
+  assert.match(prompt, /不得因此选择 blocked/);
+});
