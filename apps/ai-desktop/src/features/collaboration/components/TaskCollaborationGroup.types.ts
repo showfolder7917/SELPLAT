@@ -36,6 +36,8 @@ export type TaskCollaborationGroupModel = {
     onManualApproval: (proposalId: string, title: string, content: string) => void;
     /** 用户从最新等待节点继续原协作任务。 */
     onContinueTask: (taskId: string) => Promise<void>;
+    /** 打开韩立人物会话，让用户从需求讨论开始，不提交协作任务。 */
+    onOpenHanliConversation: () => Promise<void>;
   };
 };
 

@@ -286,6 +286,13 @@ export function useCollaborationWorkspace() {
     return applyStateRequest(getOptionalCollaborationDesktopApi()?.selectCollaborationMember(memberId));
   };
 
+  /** 选择成员并切换到对应人物页，不创建或提交协作任务。 */
+  const openMemberPage = async (memberId: string) => {
+    const nextState = await selectMember(memberId);
+    if (!nextState) return;
+    setPanel("member");
+  };
+
   /** 提交已经构造好的类型化协作任务。 */
   const submitTask = (request: SubmitCollaborationTaskInDto) => {
     return applyStateRequest(getOptionalCollaborationDesktopApi()?.submitCollaborationTask(request));
@@ -384,6 +391,8 @@ export function useCollaborationWorkspace() {
       setOperatingMode,
       // 人物选择：请求主进程保存当前协作成员。
       selectMember,
+      // 人物页导航：选择成员成功后打开对应人物会话，不涉及任务提交。
+      openMemberPage,
       // 任务提交：提交已经构造好的类型化协作任务。
       submitTask,
       // 会话任务提交：把已确认主会话转换并提交为协作任务。

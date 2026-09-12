@@ -58,6 +58,8 @@ export function createCollaborationWorkspaceViewModel({
       actions: {
         onManualApproval,
         onContinueTask,
+        // 空状态入口复用成员导航，只选择韩立并打开其会话页面。
+        onOpenHanliConversation: () => controller.actions.openMemberPage("han-li"),
       },
     },
     memberPage: {
