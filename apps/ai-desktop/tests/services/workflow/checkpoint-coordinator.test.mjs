@@ -7,7 +7,7 @@ import { AcceptanceHandoffService } from "../../../../../build/ai-desktop/electr
 // 端口夹具只模拟已发生的任务状态，不调用真实服务、不修改生产运行。
 function fixture() {
   const event = { eventId: "issue-1", correlationId: "topic-1", category: "technical-error", flowImpact: "blocked", message: "真实点击被工具拒绝", occurredAt: "2026-09-05T00:00:00Z", payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", recoveryPoint: "真实界面验收" } };
-  const evolution = { automationRuntime: { status: "idle" }, oneShotRun: { runId: "run-1", proposalId: "proposal-1", status: "blocked" }, topics: [{ topicId: "topic-1", title: "验收", workspaceState: { roots: [] }, locale: "zh-CN" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1", title: "原验收" }] };
+  const evolution = { automationSettings: { automaticCustodyEnabled: false }, automationRuntime: { status: "idle" }, oneShotRun: { runId: "run-1", proposalId: "proposal-1", status: "blocked" }, topics: [{ topicId: "topic-1", title: "验收", workspaceState: { roots: [] }, locale: "zh-CN" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1", title: "原验收" }] };
   const collaboration = { tasks: [], members: [] };
   const effects = { submitted: [], resumed: [], handled: [], resolved: [], phases: [] };
   const events = [event];
@@ -62,6 +62,7 @@ test("韩立验收卡点不因原开发任务已集成而误报解除", async ()
 test("韩立范围内验收失败建立令狐新修复任务并明确完整测试复验链", async () => {
   const f = fixture();
   f.event.payload.operation = "repair_failed_real_application_acceptance";
+  f.event.payload.acceptanceFailureKind = "product-defect";
   f.event.payload.acceptanceFailureScope = {
     decision: "within-original-acceptance",
     summary: "验收条件 1：右侧边缘可以拖动加宽；实际结果：拖动无效；期望结果：窗口加宽",
@@ -75,8 +76,22 @@ test("韩立范围内验收失败建立令狐新修复任务并明确完整测�
   assert.match(repair.problemStatement, /原专题“验收”/);
   assert.match(repair.confirmedIntent, /代码测试、统一测试、运行版本更新和重启健康检查/);
   assert.match(repair.confirmedIntent, /韩立真实界面验收/);
+  assert.match(repair.confirmedIntent, /故障分类：product-defect/);
+  assert.match(repair.confirmedIntent, /相同条件证明原现象已经改变/);
+  assert.ok(repair.constraints.some((item) => item.includes("不得仅修改韩立验收工具")));
+  assert.ok(repair.constraints.some((item) => item.includes("修复方向错误")));
   assert.ok(repair.constraints.some((item) => item.includes("acceptanceFailureScope")));
   assert.ok(repair.acceptanceCriteria.some((item) => item.includes("自动返回同一提案")));
+});
+
+test("韩立工具受阻只允许修验收能力，不能反向修改产品页面", async () => {
+  const f = fixture();
+  f.event.payload.operation = "run_real_application_acceptance";
+  f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
+  await f.run();
+  const repair = f.effects.submitted[0];
+  assert.match(repair.confirmedIntent, /故障分类：acceptance-capability-blocked/);
+  assert.ok(repair.constraints.some((item) => item.includes("不得修改产品页面来迎合")));
 });
 
 test("非验收任务完成集成后仍可直接解除原执行卡点", async () => {
@@ -226,4 +241,22 @@ test("验收每轮独立身份，结果返回韩立及南宫婉", () => {
   assert.equal(f.events.size, 4);
   assert.equal([...f.messages.values()].filter(message => message.ownerPersonaId === "nangong-wan").length, 4);
   assert.equal([...f.messages.values()].filter(message => message.messageId.startsWith("hanli-result:")).length, 2);
+});
+
+
+test("自动托管原点复验超过三轮仍交令狐调查，不关闭流程或重复派同一轮", async () => {
+  const f = fixture();
+  f.evolution.automationSettings.automaticCustodyEnabled = true;
+  for (let round = 1; round <= 5; round += 1) {
+    await f.run();
+    assert.equal(f.effects.submitted.length, round);
+    assert.equal(f.effects.submitted.at(-1).preferredExecutorMemberId, "linghu-ancestor");
+    await f.run();
+    assert.equal(f.effects.submitted.length, round);
+    f.collaboration.tasks.at(-1).state = "integrated";
+    await f.run();
+  }
+  assert.equal(f.effects.submitted.length, 5);
+  assert.notEqual(f.event.payload.checkpoint.exhausted, true);
+  assert.deepEqual(f.effects.resolved, []);
 });

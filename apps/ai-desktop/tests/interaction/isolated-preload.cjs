@@ -30,6 +30,11 @@ const collaborationTimelineListeners = new Set();
 const linghuAutomationListeners = new Set();
 const nangongEvolutionListeners = new Set();
 const personaConversationListeners = new Set();
+let inquiryFixtureEnabled = false;
+let inquiryFixtureBackup = null;
+let inquiryFixtureMembersBackup = null;
+let inquiryFixtureRequest = null;
+let inquiryFixtureRelease = null;
 let nangongNewConversationCalls = 0;
 let taskTimelineFixtureEnabled = false;
 let customerActionTimelineFixtureEnabled = false;
@@ -324,7 +329,7 @@ contextBridge.exposeInMainWorld("desktop", {
     return { models: [
     { id: "gpt-5.6-sol", displayName: "5.6 Sol", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: false },
     { id: "gpt-5.6-terra", displayName: "5.6 Terra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: true },
-    { id: "gpt-5.6-astra", displayName: "5.6 Astra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: false },
+    { id: "gpt-6-astra", displayName: "GPT-6 Astra", provider: "OpenAI", supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"], supportedServiceTiers: ["default", "fast"], defaultReasoningEffort: "medium", isDefault: false },
     ] };
   },
   setInteractionModelCatalogFailure: async (message) => { codexModelCatalogFailure = message || null; },
@@ -459,6 +464,48 @@ contextBridge.exposeInMainWorld("desktop", {
     const deliberation = topic?.deliberationId ? evolutionState.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null;
     return structuredClone({ topic, deliberation, proposals: evolutionState.proposals.filter((item) => item.topicId === topicId), archiveRecords: evolutionState.archiveRecords.filter((item) => item.topicId === topicId || item.deliberationId === topic?.deliberationId), executionRecords: [] });
   },
+  // 排查专用隔离画面：测试驱动阶段事件，不连接真实模型或改动生产数据。
+  setInteractionInquiryFixture: async (enabled) => {
+    if (!enabled) {
+      if (inquiryFixtureBackup) hanliConversation = inquiryFixtureBackup;
+      inquiryFixtureBackup = null;
+      if (inquiryFixtureMembersBackup) {
+        collaborationState.members = collaborationState.members.map((member) =>
+          inquiryFixtureMembersBackup.find((saved) => saved.memberId === member.memberId) || member);
+        inquiryFixtureMembersBackup = null;
+        publishCollaborationState("inquiry.fixture-restored");
+      }
+      inquiryFixtureEnabled = false;
+      for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
+      return;
+    }
+    inquiryFixtureBackup = structuredClone(hanliConversation);
+    inquiryFixtureMembersBackup = structuredClone(collaborationState.members.filter((member) =>
+      member.memberId === "han-li" || member.memberId === "nangong-wan"));
+    collaborationState.members = collaborationState.members.map((member) =>
+      member.memberId === "han-li" || member.memberId === "nangong-wan"
+        ? { ...member, state: member.memberId === "han-li" ? "conversation" : "idle", phase: null, currentTaskId: null, blockingReason: null }
+        : member);
+    publishCollaborationState("inquiry.fixture-ready");
+    inquiryFixtureEnabled = true;
+    inquiryFixtureRequest = null;
+    const now = new Date().toISOString();
+    hanliConversation = {
+      ownerPersonaId: "han-li", conversationId: "inquiry-ui", updatedAt: now, messages: [
+        { messageId: "inquiry-ui-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null,
+          content: "检查滚动条为什么会跳动", replyToMessageId: null, attachmentIds: [], deliveryStatus: "completed", createdAt: now, completedAt: now },
+      ],
+      activity: { kind: "inquiry", requestId: "inquiry-ui-user", phase: "explaining", status: "retryable",
+        round: 2, summary: "解释服务暂时不可用，调查依据已保存。", updatedAt: now },
+    };
+    for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
+  },
+  setInteractionInquiryPhase: async (phase) => {
+    hanliConversation.activity = { ...hanliConversation.activity, phase, status: "running", summary: phase === "assessing" ? "韩立正在判断证据。" : "南宫婉正在核实当前页面。" };
+    for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
+  },
+  finishInteractionInquiryRetry: async () => { inquiryFixtureRelease?.(); },
+  getInteractionInquiryRequest: async () => structuredClone(inquiryFixtureRequest),
   getPersonaConversation: async (personaId) => structuredClone(personaId === "nangong-wan" ? evolutionState.conversation : hanliConversation),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },
   setInteractionCheckpointMessages: async () => {
@@ -473,6 +520,21 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   sendPersonaConversationMessage: async (personaId, request) => {
     if (personaId !== "han-li") return sendNangongTestConversation(request);
+    if (inquiryFixtureEnabled && request.clientMessageId === "inquiry-ui-user") {
+      inquiryFixtureRequest = structuredClone(request);
+      hanliConversation.activity = { ...hanliConversation.activity, status: "running", phase: "explaining", summary: "韩立正在整理结论。" };
+      for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
+      await new Promise((resolve) => { inquiryFixtureRelease = resolve; });
+      inquiryFixtureRelease = null;
+      const now = new Date().toISOString();
+      hanliConversation.messages.push({ messageId: "inquiry:inquiry-ui-user:result", sequenceNumber: 1,
+        speakerType: "persona", speakerPersonaId: "han-li", content: "源码证据已确认，实际运行复现尚待验证。",
+        replyToMessageId: "inquiry-ui-user", attachmentIds: [], deliveryStatus: "completed", createdAt: now, completedAt: now });
+      hanliConversation.activity = { ...hanliConversation.activity, status: "completed", phase: "completed", summary: "排查结论已返回。" };
+      for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
+      return structuredClone(hanliConversation);
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const now = new Date().toISOString();
     const userMessageId = request.clientMessageId || `hanli-user-${Date.now()}`;

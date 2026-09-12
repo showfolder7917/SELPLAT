@@ -648,7 +648,7 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(source("electron/services/workflow/internal/collaboration/collaboration.store.ts"), /new CollaborationTaskAggregate/);
   assert.match(source("electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts"), /new WorkflowCheckpointAggregate/);
   assert.match(source("electron/services/workflow/internal/evolution/hanli-nangong-deliberation.service.ts"), /new HanliNangongDeliberationAggregate/);
-  assert.match(source("prompts/personas/hanli/conversation.md"), /韩立的用户目标代理身份/);
+  assert.match(source("prompts/personas/hanli/conversation.md"), /韩立的用户目标代理、产品架构师和界面设计负责人身份/);
   assert.equal(existsSync(path.join(appRoot, "electron/services/personas/hanli/internal/hanli-deliberation.service.ts")), false);
   const hanliApplication = source("electron/services/personas/hanli/internal/application/hanli-application.service.ts");
   assert.match(hanliApplication, /class HanliApplicationService/);

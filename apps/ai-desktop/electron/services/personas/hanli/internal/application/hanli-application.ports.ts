@@ -37,6 +37,8 @@ export interface HanliInvestigationRequest {
   expectedAnswer: string;
   /** 韩立为补齐证据提出的具体调查问题。 */
   investigationQuestion: string;
+  /** 同一问题的既有调查依据，补查时用于核对反例和避免重复读取。 */
+  previousFindings?: NangongInquiryResultOutDto[];
 }
 
 /** 韩立人物应用服务的装配参数；共同事实和外部对话均通过最小端口注入。 */
@@ -52,13 +54,14 @@ export interface HanliApplicationServiceOptions {
   /** 后台训练语料语义分析端口。 */
   analyzeCorpus?: (prompt: string) => Promise<string>;
   /** 韩立向南宫婉发起一次只读事实调查的受控端口。 */
-  investigateWithNangong?: (inquiry: HanliInvestigationRequest, request: SendPersonaConversationMessageInDto) => Promise<NangongInquiryResultOutDto>;
+  investigateWithNangong?: (inquiry: HanliInvestigationRequest, request: SendPersonaConversationMessageInDto, onAcquired?: () => void) => Promise<NangongInquiryResultOutDto>;
   /** 人物会话持久状态变化后向全部窗口发布新快照。 */
   onPersonaConversationChanged?: (conversation: import("../../../../../../contracts/services/personas/conversation/index.js").PersonaConversationOutDto) => void;
   /** 韩立普通模型会话；始终使用只读工作区但允许返回观点和调查请求。 */
   conversation?: {
     /** 向当前韩立模型线程发送一轮完整提示。 */
-    send(request: SendPersonaConversationMessageInDto, prompt: string, selectedModel?: string | null): Promise<SendMessageOutDto>;
+    send(request: SendPersonaConversationMessageInDto, prompt: string, selectedModel?: string | null,
+      options?: { workspacePolicy: "request-snapshot" }): Promise<SendMessageOutDto>;
     /** 关闭旧模型上下文并建立新的空白线程。 */
     newChat(): Promise<void>;
     /** 返回当前 provider 线程标识，仅用于校验会话是否可续接。 */

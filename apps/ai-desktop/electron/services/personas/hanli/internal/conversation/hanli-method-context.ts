@@ -91,7 +91,10 @@ export function buildHanliMethodContext(context: HanliSemanticContextOutDto): st
 export function buildHanliRecentConversation(messages: Array<{ messageId?: string; speakerType: string; speakerPersonaId: string | null; content: string }>): string {
   const blocks: string[] = [];
   let characters = 0;
-  const recentMessages = messages.slice(-16).reverse();
+  // 持久排查恢复点不是人物发言，必须在截取最近窗口之前排除。
+  const recentMessages = messages
+    .filter((message) => !message.messageId?.startsWith("internal:inquiry-checkpoint:"))
+    .slice(-16).reverse();
   for (const message of recentMessages) {
     const isInquiryAnchor = message.messageId?.startsWith("internal:hanli-inquiry-anchor:");
     const isDiscussionContext = message.messageId?.startsWith("internal:requirement-discussion-context:");

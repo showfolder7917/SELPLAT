@@ -26,9 +26,6 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
   const newConversationBusy = props.newConversationBusy;
   // 页面错误（error）是父页面需要在输入区上方展示的当前问题。
   const error = props.error;
-  // 当前会话模型直接投影为可见文字，验收截图无需猜测下拉框的已选项。
-  const selectedModelLabel = props.runtime.modelCatalog.find((model) => model.id === conversation.selectedModel)?.displayName
-    || "使用设置页默认模型";
   // 截图操作（onScreenshot）把截图按钮请求交给父页面的统一截图能力。
   const onScreenshot = props.onScreenshot;
   // 错误更新操作（onError）让托管开关可以把失败原因显示在当前页面。
@@ -113,24 +110,24 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         </figure>)}
       </div>}
 
+      {/* 排查阶段由主进程持久恢复点投影；不会把排队或解释显示成调查。 */}
+      {controller.activity && <div role="status" aria-live="polite" aria-label="韩立排查进度">
+        <span>{controller.activity.summary}</span>
+        {controller.canRetryInquiry && <button
+          type="button"
+          onClick={() => void controller.retryInquiry()}
+          aria-label="从原阶段继续排查"
+        >从原阶段继续排查</button>}
+      </div>}
       {/* 新建会话状态区：重新建立韩立会话期间显示真实等待状态。 */}
       {newConversationBusy && <div role="status">正在关闭当前韩立线程并建立新对话…</div>}
       {/* 页面错误区：桌面通信或业务处理失败时立即向客户显示原因。 */}
       {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
-
-      {/* 模型选择区：只读取官方目录；留空表示本对话继续采用设置页默认模型。 */}
-      <label className="selconversation-model-picker">本对话模型
-        <select
-          aria-label="韩立对话模型"
-          value={conversation.selectedModel || ""}
-          disabled={controller.busy || newConversationBusy || props.runtime.modelCatalogLoading}
-          onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
-        >
-          <option value="">使用设置页默认模型</option>
-          {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
-        </select>
-      </label>
-      <p className="selconversation-model-status" role="status">当前会话模型：{selectedModelLabel}</p>
+      {/* 模型目录错误紧邻输入工具区展示，并提供真实重读入口，不再用空值伪装读取成功。 */}
+      {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
+        <span>{props.runtime.modelCatalogError}</span>
+        <button type="button" onClick={() => void props.runtime.reloadModelCatalog()}>重新读取模型</button>
+      </div>}
 
       {/* 文字输入区：接收客户问题，也允许从剪贴板粘贴截图。 */}
       <textarea
@@ -151,6 +148,19 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         <div className="selconversation-tools">
           {/* 自动托管开关：调整韩立后续研讨是否允许持续自动推进。 */}
           <HanliCustodySwitch onError={onError} />
+          {/* 对话模型属于输入工具，与自动托管并列；留空明确表示跟随设置页默认模型。 */}
+          <label className="selconversation-model-picker" title="本对话模型">
+            <span>模型</span>
+            <select
+              aria-label="韩立对话模型"
+              value={conversation.selectedModel || ""}
+              disabled={controller.busy || newConversationBusy || props.runtime.modelCatalogLoading || Boolean(props.runtime.modelCatalogError)}
+              onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
+            >
+              <option value="">{props.runtime.modelCatalogLoading ? "正在读取模型…" : props.runtime.modelCatalogError ? "模型列表不可用" : "跟随默认模型"}</option>
+              {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+            </select>
+          </label>
           {/* 当前窗口截图按钮：保留 AI Desktop 窗口并截取当前屏幕。 */}
           <button type="button" className="screenshot-button" aria-label="截取当前屏幕" onClick={() => onScreenshot(false)}>
             <Screenshot24Regular />

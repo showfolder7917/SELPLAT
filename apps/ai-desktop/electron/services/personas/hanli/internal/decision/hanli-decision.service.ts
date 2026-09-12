@@ -1,4 +1,5 @@
 
+import { reviewDesignCoverage } from "../../domain/hanli-design-review.policy.js";
 import type { CollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../../evolution/index.js";
@@ -55,7 +56,18 @@ export class HanliDecisionService {
     if (!validDecisions.includes(decision) || !advice) {
       throw new Error("韩立一次性方向审批缺少有效决定或具体意见。");
     }
-    return { decision: decision as "approved" | "rejected" | "supplement-required", advice };
+    // 设计缺项属于方案补充，沿南宫婉原返修链处理，不能冒充模型故障交给令狐。
+    const design = reviewDesignCoverage(value.designReview, {
+      evidence: [...proposal.evidence, ...(topic?.evidence || [])],
+      acceptanceCriteria: proposal.acceptanceCriteria,
+    });
+    if (decision === "approved" && !design.complete) {
+      return { decision: "supplement-required", advice: `设计检查尚未完成，暂不指派执行。\n${design.notes}` };
+    }
+    return {
+      decision: decision as "approved" | "rejected" | "supplement-required",
+      advice: `${advice}\n\n韩立设计检查：\n${design.notes}`,
+    };
   }
 
 }

@@ -233,9 +233,9 @@ export class WorkflowCheckpointAggregate {
   }
 
   /** 清除旧修复任务并开始下一轮调查。 */
-  startNextRound(): void {
-    // 三轮是当前自动修复硬上限。
-    if (this.#state.round >= 3) {
+  startNextRound(automaticCustody = false): void {
+    // 非托管保留有限轮次；托管在原点复验失败后重新调查，不以次数结束任务。
+    if (!automaticCustody && this.#state.round >= 3) {
       // 记录耗尽事实，调用方只能等待新增证据或人工处理。
       this.#state.exhausted = true;
       // 阶段由 Coordinator 在发布耗尽交接时统一改变，不创建第四轮修复任务。

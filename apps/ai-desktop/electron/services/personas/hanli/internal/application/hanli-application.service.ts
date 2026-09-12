@@ -132,7 +132,21 @@ export class HanliApplicationService implements HanliApplicationPort {
     const hasValidVersion = run.version === 2;
     const hasInteractionSteps = run.stepResults.length > 0;
     const hasEvidence = run.evidenceAttachmentIds.length > 0;
-    if (!hasValidVersion || !hasInteractionSteps || !hasEvidence) {
+    const hasCriterionEvidence = run.criteria.every((_criterion, index) => {
+      const matches = run.stepResults.filter((step) => step.checkId === `criterion-${index + 1}`);
+      const step = matches[0];
+      return matches.length === 1
+        && step !== undefined
+        && ["passed", "failed", "blocked"].includes(step.status)
+        && Boolean(step.actual?.trim())
+        && Boolean(step.screenshotAttachmentId)
+        && run.evidenceAttachmentIds.includes(step.screenshotAttachmentId!)
+        && ["passed", "failed", "blocked"].includes(step.layoutStatus)
+        && Boolean(step.layoutActual?.trim())
+        && Boolean(step.layoutScreenshotAttachmentId)
+        && run.evidenceAttachmentIds.includes(step.layoutScreenshotAttachmentId!);
+    });
+    if (!hasValidVersion || !hasInteractionSteps || !hasEvidence || !hasCriterionEvidence) {
       throw new Error("缺少真实交互验收证据");
     }
     return this.#store.recordAcceptanceRun(run);

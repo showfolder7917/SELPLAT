@@ -39,8 +39,9 @@ test("输入框和消息高度变化后动态留白并仅在尾部继续跟随",
 
 test("韩立核实消息生命周期驱动南宫婉真实核实状态", () => {
   assert.match(personaConversation, /delegatedResponderPersonaId/);
-  assert.match(personaConversation, /inquiry:\(\.\+\):progress/);
-  assert.match(personaConversation, /inquiry:\$\{match\[1\]\}:result/);
+  assert.match(personaConversation, /inquiryActivity\?\.status === "running"/);
+  assert.match(personaConversation, /inquiryActivity\.phase === "investigating"/);
+  assert.doesNotMatch(personaConversation, /inquiry:\(\.\+\):progress/);
   assert.match(developerPersonaActivities, /else if \(hanli\.delegatedResponderPersonaId === "nangong-wan"\)/);
   assert.match(developerPersonaActivities, /nangongActivity = "investigating"/);
 });

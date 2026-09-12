@@ -1023,3 +1023,48 @@ test("红框选中后可以移动缩放且操作按钮随焦点显示", async ()
   await expect(result).toHaveAttribute("data-completed", "true");
   await expect(result).toHaveAttribute("data-has-annotations", "true");
 });
+
+test("韩立排查显示真实阶段并从原阶段重试，保留输入草稿和原问题", async ({}, testInfo) => {
+  // 上一用例使用独立截图页面，本用例显式回到生产人物页面。
+  await page.goto(pathToFileURL(productionRendererFile).href);
+  const tasks = page.locator("#developer-task-list");
+  await page.evaluate(() => (window as any).desktop.setInteractionInquiryFixture(true));
+  try {
+    await tasks.getByRole("button", { name: "协同模式", exact: true }).click();
+    await tasks.getByRole("button", { name: /韩立/ }).click();
+    const conversation = page.getByRole("tabpanel", { name: "韩立", exact: true });
+    const progress = conversation.getByRole("status", { name: "韩立排查进度" });
+    const retry = conversation.getByRole("button", { name: "从原阶段继续排查" });
+    const draft = conversation.getByRole("textbox", { name: "给韩立发送消息" });
+    await expect(progress).toContainText("调查依据已保存");
+    await expect(retry).toBeVisible();
+    await draft.fill("保留这条待发送补充");
+    await retry.click();
+    await expect(progress).toContainText("韩立正在整理结论");
+    await expect(retry).toHaveCount(0);
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("整理结论");
+    await expect(draft).toHaveValue("保留这条待发送补充");
+    const request = await page.evaluate(() => (window as any).desktop.getInteractionInquiryRequest());
+    expect(request.clientMessageId).toBe("inquiry-ui-user");
+    expect(request.message).toBe("检查滚动条为什么会跳动");
+    await page.evaluate(() => (window as any).desktop.finishInteractionInquiryRetry());
+    await expect(progress).toContainText("排查结论已返回");
+    await expect(conversation.getByText("检查滚动条为什么会跳动", { exact: true })).toHaveCount(1);
+    await expect(conversation.getByText("源码证据已确认，实际运行复现尚待验证。", { exact: true })).toBeVisible();
+    await page.evaluate(() => (window as any).desktop.setInteractionInquiryPhase("investigating"));
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("等待核实");
+    await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("正在核实");
+    await page.evaluate(() => (window as any).desktop.setInteractionInquiryPhase("assessing"));
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("判断证据");
+    await expect(tasks.getByRole("button", { name: /南宫婉/ })).not.toContainText("正在核实");
+  } catch (error) {
+    await page.screenshot({ path: testInfo.outputPath("hanli-inquiry-failure.png") });
+    throw error;
+  } finally {
+    await page.evaluate(async () => {
+      const api = (window as any).desktop;
+      await api.finishInteractionInquiryRetry();
+      await api.setInteractionInquiryFixture(false);
+    });
+  }
+});

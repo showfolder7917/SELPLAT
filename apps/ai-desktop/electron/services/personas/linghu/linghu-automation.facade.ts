@@ -45,6 +45,8 @@ export interface LinghuAutomationFacadeOptions {
   store: LinghuAutomationStore;
   // Coordinator 是协同任务唯一副作用入口。
   collaboration: LinghuCollaborationPort;
+  // 初始化卡点只读核查真实环境；只有满足条件且证据变化才重新签发原任务。
+  inspectPreparationRecovery(task: CollaborationTaskOutDto): Promise<{ ready: boolean; revision: string; detail: string }>;
   // 工作区读取器在真正提交有证据的修复任务时获取最新登记值。
   readWorkspaceState(): WorkspaceStateOutDto;
   // 语言读取器保持新任务与当前用户设置一致。
@@ -74,6 +76,7 @@ export class LinghuAutomationFacade {
   // 私有字段保存注入端口，外部模块不能绕过公开方法调用内部实现。
   readonly #store: LinghuAutomationStore;
   readonly #collaboration: LinghuCollaborationPort;
+  readonly #inspectPreparationRecovery: LinghuAutomationFacadeOptions["inspectPreparationRecovery"];
   readonly #readWorkspaceState: () => WorkspaceStateOutDto;
   readonly #locale: () => LocaleValue;
   readonly #recordEvent: LinghuAutomationFacadeOptions["recordEvent"];
@@ -93,6 +96,7 @@ export class LinghuAutomationFacade {
     // 每个字段保持原端口引用，方便测试替换单一依赖。
     this.#store = options.store;
     this.#collaboration = options.collaboration;
+    this.#inspectPreparationRecovery = options.inspectPreparationRecovery;
     this.#readWorkspaceState = options.readWorkspaceState;
     this.#locale = options.locale;
     this.#recordEvent = options.recordEvent;
@@ -318,9 +322,9 @@ export class LinghuAutomationFacade {
   /** 对单条流程执行受故障指纹约束的最小恢复；人工业务阻塞只保留恢复点，绝不自动越权续接。 */
   async #recoverFlow(task: CollaborationTaskOutDto, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): Promise<void> {
     // 指纹只随真实故障事实变化，恢复动作自己的 updatedAt 不会重置次数。
-    const fingerprint = faultFingerprint(task, snapshot);
+    let fingerprint = faultFingerprint(task, snapshot);
     // 每个指纹独立计数，单一故障不会阻塞其他流程。
-    const attempts = this.#store.state().recoveryAttemptsByFingerprint[fingerprint] || 0;
+    let attempts = this.#store.state().recoveryAttemptsByFingerprint[fingerprint] || 0;
     // 检查点固定任务、目标状态和执行代数，支持应用重启后继续。
     const checkpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
     // 人类报告用于状态、事件和等待原因保持同一事实表述。
@@ -375,6 +379,21 @@ export class LinghuAutomationFacade {
         });
       }
       return;
+    }
+    if (task.state === "blocked" && task.recoveryTargetState === "preparing-worktree") {
+      // 初始化没有进入执行会话，先调查外部依赖事实，不能把旧故障的一次预算当作永久停止。
+      const evidence = await this.#inspectPreparationRecovery(task);
+      this.#recordEvent("linghu.automation.preparation_investigated", { taskId: task.taskId, ...evidence }, task.taskId);
+      if (!evidence.ready || !evidence.revision) {
+        this.#store.updateRuntime("automation.preparation_waiting", (state) => {
+          state.recoveryCheckpoint = checkpoint;
+          state.blockingReason = evidence.detail;
+        });
+        return;
+      }
+      // 环境证据单独纳入同一故障预算；进程重启不会清空历史，也不会重复发起相同恢复。
+      fingerprint = `${fingerprint}|preparation:${evidence.revision}`;
+      attempts = this.#store.state().recoveryAttemptsByFingerprint[fingerprint] || 0;
     }
     if (attempts >= 1) {
       // 同一故障事实只发起一次恢复；令狐单次会话内部可依据新证据持续修复，不靠重新派发增加能力。

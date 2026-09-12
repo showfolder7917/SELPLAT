@@ -2,6 +2,7 @@
 export { IntegrationReleaseCoordinatorFacade } from "./integration-release.facade.js";
 import {
   acquireManagedDependencyLease,
+  inspectManagedDependencyRecovery,
   cleanupIntegrationDependencyLinks,
   ensureIntegrationDependencies,
   releaseManagedDependencyLease,
@@ -39,6 +40,7 @@ export function createReleaseBatchStore(...arguments_: ConstructorParameters<typ
 // 以下函数是发布能力对组合根提供的受控操作，不公开内部类和异常实现。
 export {
   acquireManagedDependencyLease,
+  inspectManagedDependencyRecovery,
   cleanupIntegrationDependencyLinks,
   ensureIntegrationDependencies,
   releaseManagedDependencyLease,

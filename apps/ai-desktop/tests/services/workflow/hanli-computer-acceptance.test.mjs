@@ -29,7 +29,20 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
-const finish = (tools, observationId, status = "passed", evidenceId = observationId) => tools.call("hanli_computer", { action: "finish", reason: "依据截图逐项判断", observationId, findings: [{ criterionId: "criterion-1", status, actual: "截图中的页面状态", evidenceId }] });
+const finish = (tools, observationId, status = "passed", evidenceId = observationId, layoutStatus = status === "blocked" ? "blocked" : "passed") => tools.call("hanli_computer", {
+  action: "finish",
+  reason: "依据截图逐项判断功能和布局",
+  observationId,
+  findings: [{
+    criterionId: "criterion-1",
+    status,
+    actual: "截图中的功能状态",
+    evidenceId,
+    layoutStatus,
+    layoutActual: "控件位置、遮挡、拥挤、尺寸和整体协调性已检查",
+    layoutEvidenceId: evidenceId,
+  }],
+});
 
 test("观察后逐步输入，再看真实返回截图才能形成验收记录", async () => {
   const f = fixture(); let saved;
@@ -55,9 +68,21 @@ test("无实际操作、旧截图、伪造证据、漏验条件都不能通过",
     await assert.rejects(tools.call("hanli_computer", { action: "key", reason: "旧画面", observationId: first, key: "Tab" }), /最新截图/);
     await assert.rejects(finish(tools, next, "passed", "fabricated"), /截图依据/);
     await assert.rejects(finish(tools, next, "passed", first), /截图依据/);
+    await assert.rejects(tools.call("hanli_computer", { action: "finish", reason: "只判断功能", observationId: next, findings: [{ criterionId: "criterion-1", status: "passed", actual: "功能可用", evidenceId: next }] }), /布局判断/);
     await assert.rejects(tools.call("hanli_computer", { action: "finish", reason: "漏项", observationId: next, findings: [] }), /不能漏项/);
     await finish(tools, next);
   });
+});
+test("功能通过但布局失败时整体验收仍不通过", async () => {
+  const f = fixture();
+  const result = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const next = id(await tools.call("hanli_computer", { action: "key", reason: "触发布局检查", observationId: first, key: "Tab" }));
+    await finish(tools, next, "passed", next, "failed");
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.stepResults.at(-1).layoutStatus, "failed");
+  assert.match(result.stepResults.at(-1).layoutActual, /位置、遮挡、拥挤、尺寸/);
 });
 test("不安全点击被拒绝且可以真实报告受阻", async () => {
   const f = fixture(false);

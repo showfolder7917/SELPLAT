@@ -17,10 +17,21 @@ export function getDeveloperPersonaActivities({ collaboration, codex, hanli, nan
     ? collaboration.navigation.selectedMember?.memberId
     : null;
 
+  // 新问题已经发送但尚未受理时，旧排查状态不再代表当前问题。
+  const pendingRequestId = hanli.pendingMessage?.messageId;
+  const inquiry = pendingRequestId && pendingRequestId !== hanli.conversation.activity?.requestId
+    ? undefined : hanli.conversation.activity;
   // 韩立状态按照等待授权、新建会话、回复和当前页面的优先级判断。
   let hanliActivity: PersonaConversationActivity | null = null;
   if (codex.interaction.approval?.ownerMemberId === "han-li") hanliActivity = "waiting-approval";
   else if (hanli.newConversationBusy) hanliActivity = "creating";
+  else if (inquiry?.status === "retryable" || inquiry?.status === "interrupted") hanliActivity = "waiting-recovery";
+  else if (inquiry?.status === "running") {
+    const phase = inquiry.phase;
+    if (phase === "queued" || phase === "investigating") hanliActivity = "waiting-investigation";
+    else if (phase === "assessing") hanliActivity = "assessing";
+    else hanliActivity = "explaining";
+  }
   else if (hanli.sending) hanliActivity = "responding";
   else if (activePersonaId === "han-li") hanliActivity = "active";
 

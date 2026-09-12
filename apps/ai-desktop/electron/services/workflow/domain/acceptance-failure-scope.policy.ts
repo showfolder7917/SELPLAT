@@ -44,7 +44,7 @@ export class AcceptanceFailureScopePolicy {
   /** 从本轮失败步骤提取缺陷，并与原提案验收条件逐项核对。 */
   review(proposal: EvolutionProposalOutDto, run: HanliAcceptanceRunOutDto): AcceptanceFailureScopeReview {
     // 只把明确失败的判断步骤作为产品缺陷；工具受阻沿独立卡点线路处理。
-    const failedSteps = run.stepResults.filter((step) => step.status === "failed");
+    const failedSteps = run.stepResults.filter((step) => step.status === "failed" || step.layoutStatus === "failed");
     // 验收运行必须原样携带当前提案验收条件，防止旧目标或相邻目标混入修复任务。
     const criteriaUnchanged = sameTextList(run.criteria, proposal.acceptanceCriteria);
     // 每个失败步骤必须能定位到一个原验收条件。
@@ -64,13 +64,17 @@ export class AcceptanceFailureScopePolicy {
       // 截图去重后保留本步骤截图和本轮公共证据。
       const screenshotAttachmentIds = [...new Set([
         step.screenshotAttachmentId,
+        step.layoutScreenshotAttachmentId,
         ...run.evidenceAttachmentIds,
       ].filter((item): item is string => Boolean(item)))];
       // 返回一项可以直接交给令狐复现的真实新缺陷。
       return {
         checkId: step.checkId,
         target: `验收条件 ${criterionIndex + 1}：${expected}`,
-        actual: step.actual.trim() || "本轮真实界面结果未达到验收条件",
+        actual: [
+          step.status === "failed" ? step.actual.trim() : "",
+          step.layoutStatus === "failed" ? `布局：${step.layoutActual.trim()}` : "",
+        ].filter(Boolean).join("；") || "本轮真实界面结果未达到验收条件",
         expected,
         reproductionOperations: run.stepResults
           .slice(0, step.operationIndex + 1)

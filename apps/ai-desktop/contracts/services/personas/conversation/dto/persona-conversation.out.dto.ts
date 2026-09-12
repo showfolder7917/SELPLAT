@@ -1,3 +1,5 @@
+import type { PersonaConversationActivityOutDto } from "./persona-conversation-activity.out.dto.js";
+
 /** 人物会话中的发言主体类型；具体人物由 speakerPersonaId 标识，不再扩充固定角色枚举。 */
 export type PersonaConversationSpeakerTypeValue = "user" | "persona" | "system";
 
@@ -27,6 +29,8 @@ export interface PersonaConversationOutDto {
   createdAt?: string;
   messages: PersonaConversationMessageOutDto[];
   updatedAt: string;
+  /** 人物服务组合的真实活动；数据库消息保持独立，不由页面根据等待气泡推断。 */
+  activity?: PersonaConversationActivityOutDto;
   /** 只描述本次发送实际装入提示词的字符数；不写入人物消息，也不参与下一轮学习。 */
   contextReadStats?: {
     methodCharacters: number;

@@ -12,6 +12,12 @@ export interface HanliAcceptanceStepResultOutDto {
   operation: HanliAcceptanceOperationValue;
   status: "passed" | "failed" | "blocked";
   actual: string;
+  /** 同一验收条件下对位置、遮挡、拥挤、尺寸和整体协调性的独立判断。 */
+  layoutStatus: "passed" | "failed" | "blocked";
+  /** 韩立从真实截图观察到的布局结果；不能用功能操作成功代替。 */
+  layoutActual: string;
+  /** 布局判断引用的最新真实截图。 */
+  layoutScreenshotAttachmentId: string | null;
   screenshotAttachmentId: string | null;
   occurredAt: string;
 }

@@ -1,10 +1,10 @@
 # AI Desktop 事件、记忆与统一界面规则
 
 <!-- 5.160.0 补充南宫婉内部研讨的持久进度、授权等待与阻塞原因页面投影。 -->
-rule_version = 5.160.0
+rule_version = 5.161.0
 
 <!-- 截图与聚焦不证明用户操作成功；每项必须有结果断言，交互项必须真实操作后再断言。 -->
-hanli_acceptance_evidence_gate = model_observes_fresh_screenshot_after_each_real_input + evidence_reference_per_criterion + no_input_no_pass + missing_or_failed_evidence_never_passes + legacy_run_cannot_approve_current_proposal
+hanli_acceptance_evidence_gate = model_observes_fresh_screenshot_after_each_real_input + independent_function_and_layout_finding_per_criterion + layout_checks_position_overlap_crowding_size_overflow_and_visual_balance + interaction_success_never_substitutes_layout_judgement + evidence_reference_per_function_and_layout_finding + no_input_no_pass + missing_or_failed_evidence_never_passes + legacy_run_cannot_approve_current_proposal
 <!-- 验收交接只消费真实运行事件，禁止页面自己推断收件或编造完成。 -->
 hanli_acceptance_handoff_contract = nangong_receives_verified_results_then_submits + hanli_started_and_actual_result + internal_messages_in_nangong + direct_result_to_user + shared_timeline_and_persona_status
 <!-- 资源树退役不等于通用布局能力退役；折叠不卸载人物会话，恢复按钮始终可达。 -->

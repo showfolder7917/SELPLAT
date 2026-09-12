@@ -57,7 +57,13 @@ test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () =>
 });
 
 test("模型目录来自官方 app-server 并按模型能力渲染推理强度和速度", () => {
-  assert.match(service, /#request\("model\/list", \{ includeHidden: false \}\)/);
+  assert.match(service, /#request\("model\/list", \{/);
+  assert.match(service, /includeHidden: false/);
+  assert.match(service, /model\.supported_reasoning_levels/);
+  assert.match(service, /model\.service_tiers/);
+  assert.match(service, /model\.additional_speed_tiers/);
+  assert.match(service, /model\.display_name/);
+  assert.match(service, /model\.slug/);
   assert.match(service, /supportedReasoningEfforts/);
   assert.match(service, /supportedServiceTiers/);
   assert.match(service, /serviceTiers/);
@@ -74,7 +80,7 @@ test("模型目录来自官方 app-server 并按模型能力渲染推理强度�
   assert.match(developer, /const nextServiceTier = model\?\.supportedServiceTiers\?\.includes\(serviceTier\) \? serviceTier : "default"/);
   assert.match(developer, /selectedModel\?\.supportedServiceTiers\?\.includes\("fast"\) === true/);
   assert.match(interactionPreload, /supportedServiceTiers: \["default", "fast"\]/);
-  assert.match(interactionPreload, /gpt-5\.6-astra/);
+  assert.match(interactionPreload, /gpt-6-astra/);
   assert.match(interactionPreload, /setInteractionModelCatalogFailure/);
 });
 

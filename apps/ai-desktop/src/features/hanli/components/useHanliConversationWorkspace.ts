@@ -57,7 +57,9 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   const onError = props.onError;
 
   // 发送等待状态（busy）表示当前是否已有一轮韩立请求正在处理。
-  const busy = runtime.sending;
+  const activity = conversation.activity;
+  const busy = runtime.sending || activity?.status === "running";
+  const canRetryInquiry = Boolean(activity && ["retryable", "interrupted"].includes(activity.status) && !busy && !props.newConversationBusy);
   // 发送状态更新操作（setBusy）负责锁定或解除当前发送操作。
   const setBusy = runtime.setSending;
   // 临时客户消息（pending）是在后端返回前已经显示在会话区的消息。
@@ -147,6 +149,34 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     }
   }
 
+  /** 恢复同一排查请求，保留输入框草稿和原消息身份。 */
+  async function retryInquiry(): Promise<void> {
+    if (!canRetryInquiry || !activity || !workspaces) return;
+    const original = conversation.messages.find((message) => message.messageId === activity.requestId && message.speakerType === "user");
+    if (!original) {
+      onError("找不到原始问题，无法恢复本次排查。");
+      return;
+    }
+    setBusy(true);
+    onError("");
+    try {
+      const next = await getOptionalCollaborationDesktopApi()?.sendPersonaConversationMessage("han-li", {
+        // 原消息身份让后端恢复原阶段，不能生成第二条用户消息。
+        clientMessageId: original.messageId,
+        message: original.content,
+        attachmentIds: original.attachmentIds || [],
+        workspaceState: workspaces,
+        locale,
+      });
+      if (!next) throw new Error("排查恢复服务没有返回结果。");
+      onConversation(next);
+    } catch (error) {
+      onError(readableDesktopError(error, "恢复排查失败。"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // 直接问答消息（directMessages）只保留客户与韩立的交流，内部研讨继续只在南宫婉页面展示。
   const directMessages = projectPersonaConversation(conversation.messages).direct
     // 过滤其他人物消息，避免南宫婉或令狐的内部交接混入客户问答区。
@@ -231,6 +261,10 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
 
   // 返回 View 渲染和响应交互所需的最小页面模型。
   return {
+    // 阶段说明和恢复入口直接来自后端的真实活动投影。
+    activity,
+    canRetryInquiry,
+    retryInquiry,
     // 待发送文字（text）是输入框当前显示的内容。
     text,
     // 文字更新操作（setText）让页面在客户输入时保存最新内容。

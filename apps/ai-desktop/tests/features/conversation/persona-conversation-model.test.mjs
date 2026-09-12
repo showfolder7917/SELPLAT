@@ -16,6 +16,7 @@ const loadOrder = read("db/sql/load-order.txt");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
 const hook = read("src/features/conversation/model/usePersonaConversation.ts");
+const modelCatalog = read("src/foundation/model-catalog.ts");
 const hanli = read("src/features/hanli/components/HanliConversationWorkspace.tsx");
 const nangong = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
 const linghu = read("src/features/linghu/components/LinghuAutomationPanel.tsx");
@@ -42,14 +43,22 @@ test("韩立和南宫婉各自从会话头读取模型并将实际模型传给 H
 });
 
 test("只有韩立和南宫婉输入区使用官方模型目录", () => {
-  assert.match(hook, /getOptionalCodexDesktopApi\(\)/);
-  assert.match(hook, /codex\.getCodexModels\(\)/);
+  assert.match(hook, /loadOfficialModelCatalog\(\)/);
+  assert.match(modelCatalog, /getOptionalCodexDesktopApi\(\)/);
+  assert.match(modelCatalog, /desktop\.getCodexModels\(\)/);
   assert.match(hanli, /modelCatalog/);
   assert.match(hanli, /selectModel/);
-  assert.match(hanli, /当前会话模型：\{selectedModelLabel\}/);
+  assert.match(hanli, /<HanliCustodySwitch[\s\S]*selconversation-model-picker/);
+  assert.match(hanli, /跟随默认模型/);
+  assert.doesNotMatch(hanli, /当前会话模型：|使用设置页默认模型|未知/);
   assert.match(nangong, /modelCatalog/);
   assert.match(nangong, /selectModel/);
-  assert.match(nangong, /当前会话模型：\{selectedModelLabel\}/);
+  assert.match(nangong, /selconversation-tools[\s\S]*selconversation-model-picker/);
+  assert.match(nangong, /重新读取模型/);
+  assert.doesNotMatch(nangong, /当前会话模型：|使用设置页默认模型|未知/);
+  assert.match(codex, /stringValue\(model\.slug\)/);
+  assert.match(codex, /stringValue\(model\.display_name\)/);
+  assert.match(codex, /model\.supported_reasoning_levels/);
   assert.match(harnessRule, /hanli_and_nangong_persona_conversation_selected_model_override/);
   assert.doesNotMatch(linghu, /selectedModel/);
 });

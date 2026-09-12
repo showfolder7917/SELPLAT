@@ -576,8 +576,9 @@ export async function startApplication(): Promise<void> {
     store: evolutionStateStore,
     prompts,
     memory: collaborationMemory,
-    investigateWithNangong: (inquiry, request) => {
+    investigateWithNangong: (inquiry, request, onAcquired) => {
       const investigation = inquiryQueue.then(async () => {
+      onAcquired?.();
       const inquiryCodex = nangongInquiryCodex;
       if (!inquiryCodex) throw new Error("南宫婉只读核实服务尚未就绪。");
       const state = evolutionStateStore.state();
@@ -587,8 +588,10 @@ export async function startApplication(): Promise<void> {
         understandingJson: JSON.stringify({ understoodGoal: inquiry.understoodGoal, verificationTarget: inquiry.verificationTarget, expectedAnswer: inquiry.expectedAnswer }),
         investigationQuestion: inquiry.investigationQuestion,
         facts: JSON.stringify(facts),
+        previousFindingsJson: JSON.stringify(inquiry.previousFindings || []),
       });
-      const workspace = mergeWorkspaceState(workspaces.read(), request.workspaceState);
+      // 只读排查沿用原请求工作区，补查不静默加入后来登记的其他工程。
+      const workspace = structuredClone(request.workspaceState);
       const attachments = await screenshots.resolveAttachmentPaths(request.attachmentIds || []);
       return nangongInquiryWithCorrection(
         () => inquiryCodex.send(prompt, request.locale, "read-only", workspace, attachments, () => undefined, null),
@@ -607,7 +610,14 @@ export async function startApplication(): Promise<void> {
     },
     askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
     conversation: {
-      send: async (request, prompt, selectedModel) => hanLiCodex!.send(prompt, request.locale, "read-only", mergeWorkspaceState(workspaces.read(), request.workspaceState), await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null, selectedModel),
+      send: async (request, prompt, selectedModel, options) => {
+        // 排查判断和解释只消费原请求范围；普通自由会话继续沿用当前登记工作区策略。
+        const workspace = options?.workspacePolicy === "request-snapshot"
+          ? structuredClone(request.workspaceState)
+          : mergeWorkspaceState(workspaces.read(), request.workspaceState);
+        return hanLiCodex!.send(prompt, request.locale, "read-only", workspace,
+          await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null, selectedModel);
+      },
       newChat: () => hanLiCodex!.newChat(),
       activeConversationId: () => hanLiCodex!.activeSession().threadId,
     },

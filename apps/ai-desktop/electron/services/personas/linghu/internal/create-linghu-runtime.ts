@@ -9,6 +9,7 @@ import {
 } from "../../../support/capabilities/testing/index.js";
 // 主进程运行时由唯一 Facade 和唯一 Store 组成，调用方不再分别装配内部文件。
 import { LinghuAutomationFacade, type LinghuAutomationFacadeOptions } from "../linghu-automation.facade.js";
+import { inspectManagedDependencyRecovery } from "../../../support/capabilities/release/index.js";
 import { LinghuAutomationStore } from "./linghu-automation.store.js";
 
 /** 令狐内部统一测试执行器所需的稳定运行环境。 */
@@ -26,7 +27,7 @@ export interface LinghuUnifiedTestRuntimeOptions {
 }
 
 /** 创建令狐运行时需要的外部能力；内部 Store 和 Runner 不允许由调用方传入。 */
-export interface CreateLinghuRuntimeOptions extends Omit<LinghuAutomationFacadeOptions, "store" | "runUnifiedTestAndRestart"> {
+export interface CreateLinghuRuntimeOptions extends Omit<LinghuAutomationFacadeOptions, "store" | "runUnifiedTestAndRestart" | "inspectPreparationRecovery"> {
   // Platform 已绑定路径的 JSON Port；令狐模块看不到文件名和文件系统。
   persistence: AtomicJsonPersistencePort;
   // 统一测试环境只提供构造数据，具体 Runner 由令狐运行时创建并隐藏。
@@ -76,6 +77,9 @@ export function createLinghuRuntime(options: CreateLinghuRuntimeOptions): Linghu
   const facade = new LinghuAutomationFacade({
     store,
     collaboration: options.collaboration,
+    inspectPreparationRecovery: (task) => task.versionWorkspace
+      ? inspectManagedDependencyRecovery(task.versionWorkspace.rootPath, options.unifiedTest.sourceProjectRoot, options.unifiedTest.applicationName)
+      : Promise.resolve({ ready: false, revision: "", detail: "尚无已登记的任务工作树，保留初始化卡点等待工作树准备。" }),
     readWorkspaceState: options.readWorkspaceState,
     locale: options.locale,
     recordEvent: options.recordEvent,

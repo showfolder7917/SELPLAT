@@ -167,9 +167,32 @@ export class CodexService {
   /** 模型和能力始终来自当前固定 app-server，避免前端维护会过期的提供商或模型常量。 */
   async getModels(): Promise<CodexModelCatalogOutDto> {
     await this.#ensureReady();
-    const result = asObject(await this.#request("model/list", { includeHidden: false }));
-    const source = Array.isArray(result.data) ? result.data : Array.isArray(result.models) ? result.models : [];
-    return { models: source.map(normalizeModelOption).filter((model): model is CodexModelOptionOutDto => Boolean(model)) };
+    const models: CodexModelOptionOutDto[] = [];
+    const seenIds = new Set<string>();
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+    do {
+      // app-server 的模型目录可能分页；每一页都沿官方 cursor 继续读取，避免只展示首批模型。
+      const result = asObject(await this.#request("model/list", {
+        includeHidden: false,
+        ...(cursor ? { cursor } : {}),
+      }));
+      const source = Array.isArray(result.data) ? result.data : Array.isArray(result.models) ? result.models : null;
+      if (!source) throw new Error("Codex 模型目录返回结构无效。请重新读取模型列表。");
+      for (const entry of source) {
+        const model = normalizeModelOption(entry);
+        if (!model || seenIds.has(model.id)) continue;
+        seenIds.add(model.id);
+        models.push(model);
+      }
+      const nextCursor = stringValue(result.nextCursor) || stringValue(result.next_cursor);
+      if (!nextCursor || seenCursors.has(nextCursor)) break;
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    } while (cursor);
+    // 成功但无法识别任何模型同样是目录故障，不能让界面伪装成只有“默认模型”。
+    if (models.length === 0) throw new Error("Codex 模型目录为空或字段不受支持。请重新读取模型列表。");
+    return { models };
   }
 
   async loginWithChatGPT(): Promise<CodexLoginResponseOutDto> {
@@ -789,11 +812,14 @@ function runtimeInfo(runtime: CodexRuntime | null): CodexHarnessStatusOutDto["ru
 }
 
 /** 兼容 app-server 模型目录的稳定字段和旧版别名，同时只向渲染层暴露选择器需要的信息。 */
-function normalizeModelOption(value: unknown): CodexModelOptionOutDto | null {
+export function normalizeModelOption(value: unknown): CodexModelOptionOutDto | null {
   const model = asObject(value);
-  const id = stringValue(model.id) || stringValue(model.model);
+  // Codex 0.154.0 使用 slug；旧版 id/model 继续作为兼容别名。
+  const id = stringValue(model.slug) || stringValue(model.id) || stringValue(model.model);
   if (!id) return null;
-  const effortSource = Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [];
+  const effortSource = Array.isArray(model.supported_reasoning_levels)
+    ? model.supported_reasoning_levels
+    : Array.isArray(model.supportedReasoningEfforts) ? model.supportedReasoningEfforts : [];
   const supportedReasoningEfforts = effortSource
     .map((entry) => typeof entry === "string"
       ? normalizeReasoningEffort(entry)
@@ -803,31 +829,36 @@ function normalizeModelOption(value: unknown): CodexModelOptionOutDto | null {
     // 新版目录直接给出受支持服务层级；其他字段保留给固定旧版 app-server 的兼容读取。
     ...(Array.isArray(model.supportedServiceTiers) ? model.supportedServiceTiers : []),
     ...(Array.isArray(model.serviceTiers) ? model.serviceTiers : []),
+    ...(Array.isArray(model.service_tiers) ? model.service_tiers : []),
     ...(Array.isArray(model.additionalSpeedTiers) ? model.additionalSpeedTiers : []),
+    ...(Array.isArray(model.additional_speed_tiers) ? model.additional_speed_tiers : []),
     ...(model.supportsFastMode === true ? ["fast"] : []),
   ];
   const supportedServiceTiers = [...new Set([
     "default" as ModelServiceTierValue,
-    ...serviceTierSource.map((entry) => normalizeServiceTier(typeof entry === "string" ? entry : stringValue(asObject(entry).serviceTier))).filter((tier): tier is ModelServiceTierValue => Boolean(tier)),
+    ...serviceTierSource.map((entry) => normalizeServiceTier(typeof entry === "string"
+      ? entry
+      : stringValue(asObject(entry).serviceTier) || stringValue(asObject(entry).id))).filter((tier): tier is ModelServiceTierValue => Boolean(tier)),
   ])];
   return {
     id,
-    displayName: stringValue(model.displayName) || id,
+    displayName: stringValue(model.display_name) || stringValue(model.displayName) || id,
     description: stringValue(model.description) || "",
-    provider: stringValue(model.provider) || stringValue(model.modelProvider),
+    provider: stringValue(model.provider) || stringValue(model.model_provider) || stringValue(model.modelProvider),
     supportedReasoningEfforts,
     supportedServiceTiers,
-    defaultReasoningEffort: normalizeReasoningEffort(stringValue(model.defaultReasoningEffort)),
-    isDefault: model.isDefault === true,
+    defaultReasoningEffort: normalizeReasoningEffort(stringValue(model.default_reasoning_level) || stringValue(model.defaultReasoningEffort)),
+    isDefault: model.is_default === true || model.isDefault === true,
   };
 }
 
 function normalizeReasoningEffort(value: string | null): ReasoningEffortValue | null {
   return value === "none" || value === "minimal" || value === "low" || value === "medium"
-    || value === "high" || value === "xhigh" || value === "max" ? value : null;
+    || value === "high" || value === "xhigh" || value === "max" || value === "ultra" ? value : null;
 }
 
 function normalizeServiceTier(value: string | null): ModelServiceTierValue | null {
+  if (value === "priority") return "fast";
   return value === "default" || value === "fast" ? value : null;
 }
 

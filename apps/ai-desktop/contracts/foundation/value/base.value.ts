@@ -15,7 +15,7 @@ export const SANDBOX_MODES = ["read-only", "workspace-write"] as const;
 /** 单个已注册工作区允许只读访问或写入的授权级别。 */
 export const WORKSPACE_PERMISSIONS = ["read-only", "workspace-write"] as const;
 /** 模型从不启用推理到最大推理深度的可选强度等级。 */
-export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] as const;
 /** 模型请求使用标准服务或快速服务的可选层级。 */
 export const MODEL_SERVICE_TIERS = ["default", "fast"] as const;
 /** 对话从普通交流依次进入需求、任务和测试托管阶段时使用的执行模式。 */

@@ -25,6 +25,10 @@ export type PersonaConversationActivity =
   | "active"
   | "responding"
   | "investigating"
+  | "waiting-investigation"
+  | "assessing"
+  | "explaining"
+  | "waiting-recovery"
   | "creating"
   | "waiting-approval";
 
@@ -125,6 +129,10 @@ function conversationActivityLabel(
     active: "会话中",
     responding: "正在回复",
     investigating: "正在核实",
+    "waiting-investigation": "等待核实",
+    assessing: "判断证据",
+    explaining: "整理结论",
+    "waiting-recovery": "等待恢复",
     creating: "正在建立新会话",
     "waiting-approval": "等待授权",
   };
@@ -132,6 +140,10 @@ function conversationActivityLabel(
     active: "会話中",
     responding: "返信中",
     investigating: "確認中",
+    "waiting-investigation": "調査待ち",
+    assessing: "根拠を確認中",
+    explaining: "結論を整理中",
+    "waiting-recovery": "復旧待ち",
     creating: "新しい会話を作成中",
     "waiting-approval": "許可待ち",
   };

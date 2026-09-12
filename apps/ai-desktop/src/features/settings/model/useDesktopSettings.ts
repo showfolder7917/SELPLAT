@@ -9,8 +9,8 @@ import type {
   ReasoningEffortValue,
   SandboxModeValue,
 } from "../../../../contracts/system/desktop/index";
-import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
+import { loadOfficialModelCatalog } from "../../../foundation/model-catalog";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -48,12 +48,10 @@ export function useDesktopSettings(settingsOpen: boolean) {
 
   useEffect(() => {
     if (!settingsOpen) return;
-    const desktop = getOptionalCodexDesktopApi();
-    if (!desktop) return;
     setModelCatalogLoading(true);
     setModelCatalogLoaded(false);
     setModelSettingsError("");
-    void desktop.getCodexModels()
+    void loadOfficialModelCatalog()
       .then((catalog) => {
         setModelCatalog(catalog);
         setModelCatalogLoaded(true);

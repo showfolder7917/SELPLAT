@@ -217,7 +217,7 @@ export class CheckpointCoordinator {
     // 上轮恢复异步返回running后仍可能再次受阻，必须开新修复轮，不能无限重放旧成果。
     if (state.resumedRound === state.round) {
       const aggregate = new WorkflowCheckpointAggregate(state);
-      aggregate.startNextRound();
+      aggregate.startNextRound(evolution.automationSettings.automaticCustodyEnabled === true);
       Object.assign(state, aggregate.snapshot());
       if (aggregate.isExhausted()) {
         // 达到上限后发布一次稳定耗尽事实。
@@ -225,7 +225,7 @@ export class CheckpointCoordinator {
         // 禁止进入后续派发逻辑。
         return;
       }
-      this.#phase(event, state, "received", `原点复验再次受阻：${run.blockingReason || event.message}。进入下一轮调查。`);
+      this.#phase(event, state, "received", `原点复验再次受阻：${run.blockingReason || event.message}。上一轮没有解除原故障，进入新的根因调查，禁止重复原修复方向。`);
     }
     // 用持久任务标记查重，覆盖创建任务后、保存关联前崩溃的窗口。
     const marker = `卡点标识：${state.runId}:round:${state.round}`;
@@ -274,7 +274,7 @@ export class CheckpointCoordinator {
         Object.assign(state, aggregate.snapshot());
         if (resumed.oneShotRun?.status === "blocked") {
           const blockedAggregate = new WorkflowCheckpointAggregate(state);
-          blockedAggregate.startNextRound();
+          blockedAggregate.startNextRound(resumed.automationSettings.automaticCustodyEnabled === true);
           Object.assign(state, blockedAggregate.snapshot());
           if (blockedAggregate.isExhausted()) {
             // 三轮原点复验都失败后结束自动修复。
@@ -282,7 +282,7 @@ export class CheckpointCoordinator {
             // 禁止继续进入新一轮。
             return;
           }
-          this.#phase(event, state, "received", `原点复验仍受阻：${resumed.oneShotRun.blockingReason || "尚未解除"}。开始下一轮调查。`);
+          this.#phase(event, state, "received", `原点复验仍受阻：${resumed.oneShotRun.blockingReason || "尚未解除"}。本轮修复方向未解除原故障，开始新的根因调查并禁止重复原方案。`);
         } else {
           // 恢复成功只表示回到原流程，最终通过仍由原验收链判断。
           this.#phase(event, state, "resuming", "修复已交回，原流程正在重新验证；未直接标记验收通过。");
@@ -316,18 +316,26 @@ export class CheckpointCoordinator {
       // 下一次监督轮询会继续核对当前任务。
       return;
     }
-    // 提交包含原任务关系和完整边界的新修复任务。
+    const acceptanceFailureKind = event.payload.acceptanceFailureKind === "product-defect"
+      ? "product-defect"
+      : event.payload.acceptanceFailureKind === "acceptance-capability-blocked" ? "acceptance-capability-blocked" : "technical-runtime";
+    const repairBoundary = acceptanceFailureKind === "product-defect"
+      ? "本轮属于真实产品缺陷：必须先复现实际产品结果，再修改产品实现；不得仅修改韩立验收工具、提示词或测试数据来制造通过。"
+      : acceptanceFailureKind === "acceptance-capability-blocked"
+        ? "本轮属于验收能力受阻：只能补齐安全验收能力；不得修改产品页面来迎合截图或定位工具。"
+        : "本轮属于运行或测试基础设施故障：先修复对应基础设施，不得无证据改动产品业务。";
+    // 提交包含原任务关系、故障所有者和完整边界的新修复任务。
     const result = this.options.submitRepair({
       // 标题明确这是流程卡点修复而不是原专题重新实施。
       title: `修复流程卡点：${topic.title}`,
       // 原异常正文作为问题事实。
       problemStatement: `原专题“${topic.title}”在韩立真实界面验收中未通过。\n${event.message}`,
       // 修复目标必须返回原提案步骤，不代替韩立验收。
-      confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立真实界面验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(event.payload, omitCheckpointSnapshot)}`,
+      confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。故障分类：${acceptanceFailureKind}。${repairBoundary} 修复前必须复现原实际结果；修复后必须用相同条件证明原现象已经改变，若未改变应判定本轮修复方向错误并重新调查，不能进入打包或声称完成。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立真实界面验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(event.payload, omitCheckpointSnapshot)}`,
       // 限制修复只能处理已经确认的技术故障。
-      constraints: [marker, "仅修复 acceptanceFailureScope 中已经判定属于原验收范围的真实新缺陷；先调查再修改，保留原任务历史和恢复点。", "每次交接必须点名原专题、具体验收条件、实际结果、期望结果、当前负责人和下一步动作；禁止使用无明确指向的简称。", "不得修改生产数据库、跳过代码测试或统一测试、扩大业务范围、关闭权限门禁；需要用户授权时明确报告具体受阻事项。"],
+      constraints: [marker, repairBoundary, "仅修复 acceptanceFailureScope 中已经判定属于原验收范围的真实新缺陷；先调查再修改，保留原任务历史和恢复点。", "前一轮结果未改变原故障时必须明确标记修复方向错误，读取新的运行证据后更换根因假设；禁止重复相同修改或用测试替身代替真实复现。", "每次交接必须点名原专题、具体验收条件、实际结果、期望结果、当前负责人和下一步动作；禁止使用无明确指向的简称。", "不得修改生产数据库、跳过代码测试或统一测试、扩大业务范围、关闭权限门禁；需要用户授权时明确报告具体受阻事项。"],
       // 验收条件要求原因、修复和验证证据全部存在。
-      acceptanceCriteria: ["逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果和期望结果", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立真实界面验收"],
+      acceptanceCriteria: ["逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果、期望结果及故障所有者", "生产修改必须对应故障分类，且相同复现条件下原现象已经改变；只改验收工具、提示词或假测试不能证明产品缺陷修复", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立真实界面验收"],
       // 复用原专题已经授权的工作区。
       workspaceState: topic.workspaceState,
       // 复用原专题语言环境。

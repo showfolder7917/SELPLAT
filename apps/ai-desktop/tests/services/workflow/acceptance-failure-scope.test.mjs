@@ -22,8 +22,8 @@ function failedRun(criteria = ["右侧边缘可以拖动加宽", "放大图片�
     initialBounds: { x: 0, y: 0, width: 1000, height: 800 },
     finalBounds: { x: 0, y: 0, width: 1000, height: 800 },
     stepResults: [
-      { checkId: "interaction", operationIndex: 0, operation: { type: "click", x: 500, y: 300, reason: "打开图片预览" }, status: "passed", actual: "图片预览已打开", screenshotAttachmentId: "shot-1", occurredAt: now },
-      { checkId, operationIndex: 1, operation: { type: "judgement", criterionId: checkId }, status: "failed", actual: "向右拖动后图片完全离开预览区域", screenshotAttachmentId: "shot-2", occurredAt: now },
+      { checkId: "interaction", operationIndex: 0, operation: { type: "click", x: 500, y: 300, reason: "打开图片预览" }, status: "passed", actual: "图片预览已打开", layoutStatus: "passed", layoutActual: "预览布局待判断", layoutScreenshotAttachmentId: "shot-1", screenshotAttachmentId: "shot-1", occurredAt: now },
+      { checkId, operationIndex: 1, operation: { type: "judgement", criterionId: checkId }, status: "failed", actual: "向右拖动后图片完全离开预览区域", layoutStatus: "passed", layoutActual: "没有额外布局异常", layoutScreenshotAttachmentId: "shot-2", screenshotAttachmentId: "shot-2", occurredAt: now },
     ],
     evidenceAttachmentIds: ["shot-1", "shot-2"],
     startedAt: now,
@@ -40,6 +40,18 @@ test("韩立本轮真实失败逐项对应原验收条件后才允许令狐修�
   assert.equal(review.defects[0].expected, "放大图片后仍可拖动查看边缘");
   assert.deepEqual(review.defects[0].screenshotAttachmentIds, ["shot-2", "shot-1"]);
   assert.equal(review.defects[0].reproductionOperations.length, 2);
+});
+
+test("功能成功但布局失败仍提取为原验收范围内缺陷", () => {
+  const run = failedRun();
+  const judgement = run.stepResults[1];
+  judgement.status = "passed";
+  judgement.actual = "控件可以选择";
+  judgement.layoutStatus = "failed";
+  judgement.layoutActual = "模型选择器单独占行并挤压输入区";
+  const review = new AcceptanceFailureScopePolicy().review(proposal(), run);
+  assert.equal(review.decision, "within-original-acceptance");
+  assert.match(review.defects[0].actual, /布局：模型选择器单独占行/);
 });
 
 test("验收条件变化或失败标识不能对应原条件时禁止自动扩大修复范围", () => {

@@ -13,7 +13,7 @@ export function auditStatusText(status: AuditTaskSummaryOutDto["status"], locale
 }
 
 export function reasoningEffortLabel(effort: ReasoningEffortValue, locale: LocaleValue): string {
-  const chinese: Record<ReasoningEffortValue, string> = { none: "无", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "超高", max: "最大" };
-  const japanese: Record<ReasoningEffortValue, string> = { none: "なし", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "最高", max: "最大" };
+  const chinese: Record<ReasoningEffortValue, string> = { none: "无", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "超高", max: "最大", ultra: "极致" };
+  const japanese: Record<ReasoningEffortValue, string> = { none: "なし", minimal: "最小", low: "低", medium: "中", high: "高", xhigh: "最高", max: "最大", ultra: "極限" };
   return locale === "ja" ? japanese[effort] : chinese[effort];
 }

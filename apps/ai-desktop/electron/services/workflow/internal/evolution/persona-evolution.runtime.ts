@@ -343,7 +343,8 @@ export class PersonaEvolutionRuntime {
     for (let transition = 0; transition < transitionLimit; transition += 1) {
       let state = this.state();
       const run = state.oneShotRun;
-      if (!run || run.status !== "running" || !run.topicId) return state;
+      if (!run || run.status !== "running" || !run.topicId
+        || state.automationRuntime.status !== "running") return state;
       const topic = state.topics.find((item) => item.topicId === run.topicId);
       if (!topic) return this.#blockOneShotFailure("technical", "load_one_shot_topic", new Error("一次性运行关联的演化课题不存在。"), "一次性运行关联的演化课题不存在。");
       const proposals = state.proposals.filter((item) => item.topicId === topic.topicId).sort((left, right) => left.version - right.version);
@@ -371,7 +372,8 @@ export class PersonaEvolutionRuntime {
 
       if (flowAction === "supplement") {
         const correctionRounds = proposals.filter((item) => item.supersedesProposalId !== null).length;
-        if (correctionRounds >= state.automationSettings.maxCorrectionRounds) {
+        if (state.automationSettings.automaticCustodyEnabled !== true
+          && correctionRounds >= state.automationSettings.maxCorrectionRounds) {
           const reason = `提案返修已经达到 ${state.automationSettings.maxCorrectionRounds} 轮，韩立仍未确认方向可执行。`;
           return this.#blockOneShotFailure("business", "revision_budget_exhausted", new Error(reason), reason);
         }
@@ -438,6 +440,8 @@ export class PersonaEvolutionRuntime {
             sourceType: "system",
             sourceId: "nangong-evolution",
             operation: `one_shot_task_waiting_for_linghu:${failureKind}`,
+            // 执行卡点必须进入监督器的阻断队列，不能只显示令狐正在恢复。
+            flowImpact: "blocked",
             error: new Error(reason),
             correlationId: topic.topicId,
             fingerprint: `nangong-one-shot:${run?.runId || "unknown"}:waiting-for-linghu:${blockedTask.taskId}:${failureKind}`,
@@ -471,9 +475,17 @@ export class PersonaEvolutionRuntime {
           const runResult = await this.#computerAcceptanceSession(goal);
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "blocked") {
-            const reason = runResult.stepResults.filter((step) => step.status === "blocked").map((step) => `${step.checkId}：${step.actual}`).join("\n");
+            const reason = runResult.stepResults
+              .filter((step) => step.status === "blocked" || step.layoutStatus === "blocked")
+              .map((step) => `${step.checkId}：功能 ${step.actual}；布局 ${step.layoutActual || "未提供布局判断"}`)
+              .join("\n");
             publishAcceptance("failed", `验收受阻，已上报令狐处理：\n${reason}`);
-            return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error(reason), reason, { evidenceAttachmentIds: runResult.evidenceAttachmentIds, acceptanceRunId: runResult.runId });
+            // 工具无法完成验收属于验收能力故障，必须与已经观察到的产品失败分开，避免令狐修改错误对象。
+            return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error(reason), reason, {
+              evidenceAttachmentIds: runResult.evidenceAttachmentIds,
+              acceptanceRunId: runResult.runId,
+              acceptanceFailureKind: "acceptance-capability-blocked",
+            });
           }
           if (runResult.status === "failed") {
             // 先提取本轮真实新缺陷，再决定能否沿原验收范围自动修复。
@@ -494,6 +506,7 @@ export class PersonaEvolutionRuntime {
               acceptanceRunId: runResult.runId,
               evidenceAttachmentIds: runResult.evidenceAttachmentIds,
               acceptanceFailureScope: scopeReview,
+              acceptanceFailureKind: "product-defect",
             });
           }
           // 通过结果仍完整保留运行记录、逐步结论和截图证据。
@@ -513,6 +526,11 @@ export class PersonaEvolutionRuntime {
         return state;
       }
       return state;
+    }
+    // 连续状态变化只让出本次调度，托管仍保留原节点并自动继续。
+    if (this.state().automationSettings.automaticCustodyEnabled === true) {
+      this.#scheduleContinuation(5_000);
+      return this.state();
     }
     return this.#blockOneShotFailure("technical", "advance_one_shot_transition_limit", new Error("一次性流程在单次推进中出现过多连续状态变化。"), "一次性流程在单次推进中出现过多连续状态变化，已保留恢复点等待检查。");
   }

@@ -81,6 +81,13 @@ const conversation = { async send(_request, context) { return { text: `南宫婉
 const distributionServices = {
   async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
 };
+// 通过审批的测试替身必须提供本轮设计检查，缺项场景由独立门禁测试覆盖。
+function approvedDesignResponse(state, advice) {
+  const proposal = state.proposals.at(-1);
+  const topic = state.topics.find((item) => item.topicId === proposal.topicId);
+  const check = { status: "passed", reason: "本轮方案与用户要求一致", evidence: proposal.evidence.length ? proposal.evidence : topic.evidence, acceptanceCriteria: proposal.acceptanceCriteria };
+  return JSON.stringify({ decision: "approved", advice, designReview: { architecture: check, layout: check, userJourney: check } });
+}
 let mutationSequence = 0;
 function mutation(facade) { return { expectedStateVersion: facade.state().updatedAt, idempotencyKey: `nangong-test-${++mutationSequence}` }; }
 
@@ -1149,6 +1156,7 @@ test("训练归档失败进入统一异常旁路且不把已完成聊天标记�
     const plainConversation = { async send() { return { text: "聊天回复已经完成。", itemCount: 1 }; }, async newChat() {} };
     const memory = {
       buildNangongContext() { return "当前运行态上下文"; },
+      readPersonaConversation() { return null; },
       syncConversation() { throw new Error("training database unavailable"); },
     };
     const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: plainConversation, memory, recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure) });
@@ -1167,7 +1175,7 @@ test("人物回复失败只原位标记用户消息且不产生训练归档", as
     let archiveCount = 0;
     const store = evolutionStore(path.join(directory, "state.json"));
     const failedConversation = { async send() { throw new Error("conversation unavailable"); }, async newChat() {} };
-    const memory = { buildNangongContext() { return ""; }, syncConversation() { archiveCount += 1; } };
+    const memory = { buildNangongContext() { return ""; }, readPersonaConversation() { return null; }, syncConversation() { archiveCount += 1; } };
     const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: failedConversation, memory, recordEvent: () => undefined });
     await assert.rejects(() => facade.sendConversationMessage({ clientMessageId: "client-send-failure", message: "不要丢失原文", workspaceState, locale: "zh-CN" }), /conversation unavailable/);
     const state = facade.state();
@@ -1252,7 +1260,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     };
     const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation: readyConversation, ...distributionServices, recordEvent: () => undefined,
-      hanLi: { async send() { return JSON.stringify({ decision: "approved", advice: "事实、范围、风险、回退和验收条件完整，同意沿既有流程执行。" }); } },
+      hanLi: { async send(_prompt, state) { return approvedDesignResponse(state, "事实、范围、风险、回退和验收条件完整，同意沿既有流程执行。"); } },
     });
     const invited = await facade.sendConversationMessage({ message: "请确认现在是否可以进入完整流程", workspaceState, locale: "zh-CN" });
     assert.equal(invited.oneShotConfirmation.status, "awaiting-user-confirmation");
@@ -1315,7 +1323,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation: readyConversation, ...distributionServices,
       recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure),
-      hanLi: { async send() { return JSON.stringify({ decision: "approved", advice: "事实和验收条件完整。" }); } },
+      hanLi: { async send(_prompt, state) { return approvedDesignResponse(state, "事实和验收条件完整。"); } },
     });
     await facade.sendConversationMessage({ message: "请确认进入本轮流程", workspaceState, locale: "zh-CN" });
     await facade.sendConversationMessage({ message: "1", workspaceState, locale: "zh-CN" });
@@ -1352,6 +1360,20 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     assert.equal(recoveryRequests, 1);
     assert.equal(failures.length, 2);
     assert.equal(failures[1].operation, "one_shot_task_waiting_for_linghu:verification");
+    assert.equal(failures[1].flowImpact, "blocked");
+
+    tasks[0].state = "blocked";
+    tasks[0].phase = "blocked";
+    tasks[0].integrationFailure = null;
+    tasks[0].blockingReason = "执行人初始化失败：共享依赖缓存不可用";
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    assert.equal(failures.at(-1).operation, "one_shot_task_waiting_for_linghu:blocked");
+    assert.equal(failures.at(-1).flowImpact, "blocked");
+    assert.equal(failures.at(-1).details.taskId, "blocked-integration-task");
+    assert.equal(facade.state().oneShotRun.status, "running");
+
 
     tasks[0].state = "cancelled";
     tasks[0].phase = null;
@@ -1532,7 +1554,15 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     state = store.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
-    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /必须先完成真实应用检查/);
+    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /包含功能与布局证据/);
+    const legacyRun = computerRun("legacy-run", state.topics[0].topicId, proposalId, "passed", "legacy-shot");
+    for (const step of legacyRun.stepResults) {
+      delete step.layoutStatus;
+      delete step.layoutActual;
+      delete step.layoutScreenshotAttachmentId;
+    }
+    store.recordAcceptanceRun(legacyRun);
+    assert.throws(() => store.decideResult(proposalId, "approved", "沿用旧验收记录"), /包含功能与布局证据/);
     store.recordAcceptanceRun(computerRun("failure-run", state.topics[0].topicId, proposalId, "failed", "failure-shot"));
     state = store.decideResult(proposalId, "supplement-required", "修复设置侧栏滚动后重新提交");
     assert.equal(state.proposals[0].status, "supplement-required");
@@ -1608,8 +1638,8 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
 function computerRun(runId, topicId, proposalId, status, shot) {
  const now = new Date().toISOString();
  return { version: 2, runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [
- { checkId: "interaction", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", screenshotAttachmentId:shot, occurredAt:now },
- { checkId: "criterion-1", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", screenshotAttachmentId:shot, occurredAt:now }
+ { checkId: "interaction", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now },
+ { checkId: "criterion-1", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
  ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };
 }
 

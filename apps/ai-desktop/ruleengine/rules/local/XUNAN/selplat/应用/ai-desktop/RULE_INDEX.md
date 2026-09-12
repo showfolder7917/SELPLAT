@@ -49,6 +49,7 @@ load_rule_for_ai_desktop_harness_workspace_permission_or_runtime_lifecycle_chang
 
 <!-- AI Desktop 托管协作、令狐自动恢复、所有人物清晰传达和流式状态呈现的独立职责规则。v5.134.0 要求韩立验收失败先核对原范围，再由令狐建立新修复任务并完成测试、重启和原点复验。 -->
 <!-- v5.129.0：令狐巡检旧提案审批整链退役，保留既有任务授权及安全保护；巡检与会话边界不变。 -->
+<!-- v5.137.0：托管轮数只作检查点，继续现有工作流，技术故障由令狐恢复。 -->
 AI_DESKTOP_COLLABORATION_AUTOMATION_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md
 <!-- 修改托管阶段、专题任务时间线、重启恢复幂等与继续入口、多人并行、人工审批、协作回流、令狐自动化、统一测试重试、运行版本核验、自身引导升级或流式进度时直接加载。 -->
 load_rule_for_ai_desktop_collaboration_managed_stage_or_linghu_automation_change = AI_DESKTOP_COLLABORATION_AUTOMATION_RULES

@@ -21,6 +21,51 @@ export interface ManagedDependencyLease {
   released: boolean;
 }
 
+/** 初始化失败后的只读核查；不安装、删除依赖或签发执行租约。 */
+export async function inspectManagedDependencyRecovery(
+  workspaceProjectRoot: string,
+  sourceProjectRoot: string,
+  applicationName: string,
+): Promise<{ ready: boolean; revision: string; detail: string }> {
+  try {
+    const workspace = path.resolve(workspaceProjectRoot);
+    const source = path.resolve(sourceProjectRoot);
+    if (workspace === source) throw new Error("恢复目标必须是隔离工作树。");
+    await verifyRegisteredWorktree(workspace, source);
+    const desktop = path.join(workspace, "apps", applicationName);
+    const sourceLock = readFileSync(path.join(source, "apps", applicationName, "package-lock.json"));
+    const candidateLock = readFileSync(path.join(desktop, "package-lock.json"));
+    const cacheOwner = sourceLock.equals(candidateLock) ? source : workspace;
+    const modules = resolveLockSpecificDependencyPaths(
+      resolveApplicationDataPaths({ selplatRoot: cacheOwner, applicationName }).dependencyCacheRoot,
+      candidateLock,
+    ).nodeModulesRoot;
+    if (!hasUsableDesktopDependencies(modules)) {
+      return { ready: false, revision: "", detail: "已核查登记工作树与锁文件；对应缓存缺少完整 TypeScript 或 Electron 运行时，等待依赖准备完成。" };
+    }
+    const localModules = path.join(desktop, "node_modules");
+    const existing = lstatSync(localModules, { throwIfNoEntry: false });
+    if (existing && !existing.isSymbolicLink()) {
+      return { ready: false, revision: "", detail: "已核查共享缓存完整；候选工作树仍有独立依赖目录，需处理安装残留后再恢复，不自动删除现场。" };
+    }
+    // 只使用实际依赖版本和文件身份；心跳、任务代次和检查时间不能重新开放恢复。
+    const electronRoot = path.join(modules, "electron");
+    const executable = path.join(electronRoot, "dist", readFileSync(path.join(electronRoot, "path.txt"), "utf8").trim());
+    const facts = [candidateLock.toString("utf8"), realpathSync(modules),
+      ...[executablePath(modules, "tsc"), executable].map((file) => {
+        const stat = statSync(file);
+        return [realpathSync(file), stat.size, stat.mtimeMs, stat.ino].join(":");
+      })];
+    return {
+      ready: true,
+      revision: createHash("sha256").update(JSON.stringify(facts)).digest("hex"),
+      detail: "已核查工作树归属、锁文件、共享缓存及 TypeScript/Electron 实体；依赖准备条件已满足，可沿原任务重新签发租约。",
+    };
+  } catch (error) {
+    return { ready: false, revision: "", detail: `恢复条件核查未通过：${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
 const activeDependencyLeases = new Map<string, Map<string, number>>();
 // 同一工作树可由多个校验共享租约，临时链接归工作树所有，不能依赖最后释放的是哪份租约。
 const activeTemporaryLinkPaths = new Map<string, Set<string>>();

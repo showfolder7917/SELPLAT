@@ -56,9 +56,6 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
   const newConversationBusy = props.newConversationBusy;
   // 页面错误（error）是父页面需要显示的业务问题。
   const error = props.error;
-  // 当前会话模型直接投影为可见文字，验收截图无需猜测下拉框的已选项。
-  const selectedModelLabel = props.runtime.modelCatalog.find((model) => model.id === props.conversation.selectedModel)?.displayName
-    || "使用设置页默认模型";
   // 截图操作（onScreenshot）把截图按钮请求交给统一截图能力。
   const onScreenshot = props.onScreenshot;
 
@@ -176,20 +173,11 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
       {/* 页面错误区：展示发送、草稿或桌面通信失败原因。 */}
       {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
-
-      {/* 模型选择区：当前南宫婉会话只保存官方模型 ID；留空时使用设置页默认模型。 */}
-      <label className="selconversation-model-picker">本对话模型
-        <select
-          aria-label="南宫婉对话模型"
-          value={props.conversation.selectedModel || ""}
-          disabled={controller.chatBusy || newConversationBusy || props.runtime.modelCatalogLoading}
-          onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
-        >
-          <option value="">使用设置页默认模型</option>
-          {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
-        </select>
-      </label>
-      <p className="selconversation-model-status" role="status">当前会话模型：{selectedModelLabel}</p>
+      {/* 模型目录失败保留真实原因和重读入口，不把空目录伪装成默认模型正常可用。 */}
+      {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
+        <span>{props.runtime.modelCatalogError}</span>
+        <button type="button" onClick={() => void props.runtime.reloadModelCatalog()}>重新读取模型</button>
+      </div>}
 
       {/* 问答输入区：接收客户文字，也允许粘贴截图。 */}
       <textarea className="selconversation-input" data-sel-conversation-input aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={controller.chatText} onChange={(event) => controller.setChatText(event.currentTarget.value)} onPaste={controller.pasteImages} />
@@ -198,6 +186,19 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       <div className="selconversation-footer">
         {/* 辅助工具区：包含两种截图方式和课题整理入口。 */}
         <div className="selconversation-tools">
+          {/* 对话模型与其他输入工具保持同一行，避免在输入框上方新增业务区块。 */}
+          <label className="selconversation-model-picker" title="本对话模型">
+            <span>模型</span>
+            <select
+              aria-label="南宫婉对话模型"
+              value={props.conversation.selectedModel || ""}
+              disabled={controller.chatBusy || newConversationBusy || props.runtime.modelCatalogLoading || Boolean(props.runtime.modelCatalogError)}
+              onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
+            >
+              <option value="">{props.runtime.modelCatalogLoading ? "正在读取模型…" : props.runtime.modelCatalogError ? "模型列表不可用" : "跟随默认模型"}</option>
+              {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
+            </select>
+          </label>
           {/* 当前屏幕截图：保留 AI Desktop 窗口进行截图。 */}
           <button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-sel-tooltip="截取当前屏幕" data-sel-tooltip-mode="always" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button>
           {/* 隐藏窗口截图：截图前隐藏 AI Desktop，避免遮挡目标。 */}

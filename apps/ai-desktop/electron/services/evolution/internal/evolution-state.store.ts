@@ -574,19 +574,35 @@ export class EvolutionStateStore {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
     const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
-    if (decision === "approved" && (run?.version !== 2 || run.status !== "passed")) throw new Error("韩立必须先完成真实应用检查且全部通过，才能验收通过。 ");
-    const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed").map((step) => {
+    const hasCompleteLayoutEvidence = Boolean(run) && run!.criteria.every((_criterion, index) => {
+      const matches = run!.stepResults.filter((step) => step.checkId === `criterion-${index + 1}`);
+      const step = matches[0];
+      return matches.length === 1
+        && step !== undefined
+        && step.status === "passed"
+        && Boolean(step.actual?.trim())
+        && Boolean(step.screenshotAttachmentId)
+        && run!.evidenceAttachmentIds.includes(step.screenshotAttachmentId!)
+        && step.layoutStatus === "passed"
+        && Boolean(step.layoutActual?.trim())
+        && Boolean(step.layoutScreenshotAttachmentId)
+        && run!.evidenceAttachmentIds.includes(step.layoutScreenshotAttachmentId!);
+    });
+    if (decision === "approved" && (run?.version !== 2 || run.status !== "passed" || !hasCompleteLayoutEvidence)) {
+      throw new Error("韩立必须先完成包含功能与布局证据的真实应用检查且全部通过，才能验收通过。 ");
+    }
+    const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed" || step.layoutStatus !== "passed").map((step) => {
       return {
         evidenceId: `acceptance-failure-${run.runId}-${step.checkId}-${step.operationIndex}`,
         runId: run.runId,
 
         checkId: step.checkId,
         target: "真实应用界面",
-        severity: step.status === "blocked" ? "blocking" : "major",
+        severity: step.status === "blocked" || step.layoutStatus === "blocked" ? "blocking" : "major",
         reproductionOperations: run.stepResults.slice(0, step.operationIndex + 1).map((item) => structuredClone(item.operation)),
-        actual: step.actual,
+        actual: [step.status !== "passed" ? step.actual : "", step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : ""].filter(Boolean).join("；"),
         expected: run.criteria?.[Number(step.checkId.replace("criterion-", "")) - 1] || "符合专题验收条件",
-        screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
+        screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, step.layoutScreenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
       };
     });
     const now = new Date().toISOString();

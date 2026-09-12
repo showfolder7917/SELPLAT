@@ -33,8 +33,11 @@ for (const promptResource of ["manifest.json", "prompts.json"]) {
 const migrationRoot = path.join(resourcesRoot, "db", "sql");
 const migrationManifest = path.join(migrationRoot, "load-order.txt");
 if (!existsSync(migrationManifest)) throw new Error(`Packaged SQLite migration manifest is missing: ${migrationManifest}`);
-for (const line of readFileSync(migrationManifest, "utf8").split(/\r?\n/u)) {
-  const [, migrationFile] = line.trim().split("|");
+for (const line of readFileSync(migrationManifest, "utf8")
+  .split(/\r?\n/u)
+  .map((entry) => entry.trim())
+  .filter((entry) => entry && !entry.startsWith("#"))) {
+  const [, migrationFile] = line.split("|");
   if (!migrationFile) continue;
   const migrationPath = path.join(migrationRoot, migrationFile);
   if (!existsSync(migrationPath)) throw new Error(`Packaged SQLite migration is missing: ${migrationPath}`);

@@ -10,7 +10,7 @@ import { CollaborationDurationLog } from "../../../../../build/ai-desktop/electr
 import { CollaborationCoordinator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/collaboration-workflow.facade.js";
 import { PersonaSessionWriterQueue, collaborationWorkspaceState } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.js";
 import { createCollaborationResultSummary } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/result/result-summary.js";
-import { acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/integration.verifier.js";
+import { inspectManagedDependencyRecovery, acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/integration.verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/verified-package.release.js";
 import { CollaborationStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/collaboration.store.js";
 import { LinghuAutomationFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
@@ -1569,7 +1569,7 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
   assert.match(rule, /never_expand_user_intent/);
   assert.match(rule, /character_training_corpus_ingestion_contract = main_character_visible_conversation_only \+ unified_topic_and_message_tables_with_open_source_speaker_and_evidence_tier/);
   assert.match(rule, /persona_semantic_memory_human_trigger_contract = completed_user_with_nangong_or_user_with_hanli_round_only[\s\S]*real_user_message_required[\s\S]*persona_to_persona_business_archive_only[\s\S]*no_training_topic_message_or_semantic_refresh_for_internal_persona_exchange/);
-  assert.match(rule, /hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit[\s\S]*no_unconfirmed_legacy_background_flow[\s\S]*standalone_1_starts_unified_continuous_runtime[\s\S]*retired_four_automation_switches_never_restored[\s\S]*no_internal_training_corpus_write_or_semantic_refresh/);
+  assert.match(rule, /hanli_deliberation_reactivation_boundary_contract = preserve_historical_query_and_audit[\s\S]*no_unconfirmed_legacy_background_flow[\s\S]*standalone_1_or_enabled_custody_with_ready_current_goal_starts_existing_unified_runtime[\s\S]*retired_four_automation_switches_never_restored[\s\S]*no_internal_training_corpus_write_or_semantic_refresh/);
   assert.match(rule, /hanli_nangong_continuous_deliberation_contract = hanli_conversation_maturity_invitation[\s\S]*standalone_1_starts_user_anchored_read_only_deliberation[\s\S]*continuous_switch_restarts_discovery_after_completion[\s\S]*no_new_evidence_waits_and_rechecks_without_inventing_problem/);
   assert.match(rule, /workflow_event_center_single_entry_contract = EventCenterFacade_to_archive_and_main_process_SQLite/);
   assert.match(rule, /opt_in_codex_work_desktop_current_workspace_task_complete_watch_plus_startup_backfill/);
@@ -1865,6 +1865,22 @@ test("开发人物工作树共享第三方依赖但把仓库内本地包连接�
     writeFileSync(path.join(sourceModules, "electron", "dist", electronExecutable), "ready", "utf8");
     symlinkSync(path.join(repository, "shared", "frontend", "sel-ui"), path.join(sourceModules, "@selplat", "sel-ui"), process.platform === "win32" ? "junction" : "dir");
 
+    const readiness = await inspectManagedDependencyRecovery(worktree, repository, "ai-desktop");
+    assert.equal(readiness.ready, true);
+    assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), false);
+    assert.deepEqual(await inspectManagedDependencyRecovery(worktree, repository, "ai-desktop"), readiness);
+    const runtimeFile = path.join(sourceModules, "electron", "dist", electronExecutable);
+    rmSync(runtimeFile);
+    assert.equal((await inspectManagedDependencyRecovery(worktree, repository, "ai-desktop")).ready, false);
+    writeFileSync(runtimeFile, "changed-runtime");
+    assert.notEqual((await inspectManagedDependencyRecovery(worktree, repository, "ai-desktop")).revision, readiness.revision);
+    const residualModules = path.join(worktree, "apps", "ai-desktop", "node_modules");
+    mkdirSync(residualModules);
+    writeFileSync(path.join(residualModules, "evidence.txt"), "preserve");
+    assert.equal((await inspectManagedDependencyRecovery(worktree, repository, "ai-desktop")).ready, false);
+    assert.equal(readFileSync(path.join(residualModules, "evidence.txt"), "utf8"), "preserve");
+    rmSync(residualModules, { recursive: true });
+    assert.equal((await inspectManagedDependencyRecovery(repository, repository, "ai-desktop")).ready, false);
     const lease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "executor-song-yu-g1");
     const validationLease = await acquireManagedDependencyLease(worktree, repository, "ai-desktop", "task-validation-1");
     assert.deepEqual(lease.environment, { AI_DESKTOP_DEPENDENCY_LEASE_ID: "executor-song-yu-g1" });
@@ -2237,4 +2253,56 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   assert.match(ui, /TaskCollaborationGroup/);
   assert.doesNotMatch(ui, /任务完整记录/);
   assert.match(ui, /SelUiConversation/);
+});
+
+
+test("初始化卡点核查环境变化后恢复同一任务，重启和心跳不重置相同证据预算", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-preparation-recovery-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const task = collaborationStore.submitTask({ title: "初始化恢复", problemStatement: "缓存缺失",
+      confirmedIntent: "修复后继续原任务", workspaceState, locale: "zh-CN" });
+    const block = () => collaborationStore.updateTask(task.taskId, "test.blocked", (current) => {
+      current.state = "blocked"; current.phase = "blocked";
+      current.recoveryTargetState = "preparing-worktree"; current.blockingReason = "执行人初始化失败：依赖未就绪";
+    });
+    block();
+    let evidence = { ready: false, revision: "", detail: "缓存缺失" };
+    let inspected = 0;
+    const resumed = [];
+    const storePath = path.join(directory, "linghu.json");
+    const makeFacade = () => new LinghuAutomationFacade({
+      store: createTestLinghuStore(storePath),
+      collaboration: { state: () => collaborationStore.state(),
+        continueTask: (id) => { resumed.push(id); return collaborationStore.continueTask(id); } },
+      inspectPreparationRecovery: async () => { inspected += 1; return evidence; },
+      readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
+      recordEvent: () => undefined, readTestResourceState: idleTestResourceState,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+    let facade = makeFacade();
+    await facade.handleTaskCheckpoint(task.taskId);
+    assert.equal(resumed.length, 0);
+    assert.match(facade.state().blockingReason, /缓存缺失/);
+    evidence = { ready: true, revision: "dependency-a", detail: "就绪" };
+    await facade.handleTaskCheckpoint(task.taskId);
+    assert.deepEqual(resumed, [task.taskId]);
+    block();
+    facade = makeFacade();
+    await facade.handleTaskCheckpoint(task.taskId);
+    collaborationStore.updateTask(task.taskId, "test.heartbeat", (current) => { current.workerGeneration += 1; });
+    await facade.handleTaskCheckpoint(task.taskId);
+    assert.equal(resumed.length, 1);
+    evidence = { ...evidence, revision: "dependency-b" };
+    await facade.handleTaskCheckpoint(task.taskId);
+    assert.deepEqual(resumed, [task.taskId, task.taskId]);
+    assert.equal(collaborationStore.state().tasks.length, 1);
+    block();
+    collaborationStore.cancelTask(task.taskId);
+    const prior = inspected;
+    await facade.handleTaskCheckpoint(task.taskId);
+    assert.equal(inspected, prior);
+    assert.equal(resumed.length, 2);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

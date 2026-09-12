@@ -3,205 +3,241 @@ import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } f
 import type { NangongInquiryResultOutDto } from "../../../../../../contracts/services/personas/nangong/index.js";
 import type { ConversationRoundTopicDecisionInDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { HanliApplicationServiceOptions, HanliInquiryUnderstanding, HanliInvestigationRequest } from "../application/hanli-application.ports.js";
+import { HanliInquiryAggregate, type InquirySnapshot } from "../../domain/hanli-inquiry.aggregate.js";
+import { INQUIRY_CHECKPOINT_PREFIX, parseInquiryAssessment, readInquiryCheckpoint } from "./hanli-inquiry-checkpoint.js";
 
-/** 真实只读核实：消息展示是交接事实的投影，不用于模拟调查或授权。 */
+/** 韩立负责调查、证据评估、补查和客户解释；每个外部步骤前后持久化恢复点。 */
 export class HanliInquiryService {
-  /** 正在执行的调查请求；键由业务会话与客户消息共同组成，用于阻止重复派发。 */
   readonly #pending = new Map<string, Promise<PersonaConversationOutDto>>();
-  /** 韩立应用能力集合；提供记忆、南宫婉调查端口、提示词和事件记录。 */
   readonly #options: HanliApplicationServiceOptions;
 
   constructor(options: HanliApplicationServiceOptions) {
     this.#options = options;
   }
 
-  /** 固定原会话和请求标识；同一已完成请求重试只读结果，不重复调查。 */
-  run(
-    request: SendPersonaConversationMessageInDto,
-    conversationId: string,
-    customerQuestion: string,
-    understanding: HanliInquiryUnderstanding,
-    decision: ConversationRoundTopicDecisionInDto,
-  ): Promise<PersonaConversationOutDto> {
-    const stableRequest = {
-      ...request,
-      clientMessageId: request.clientMessageId || randomUUID(),
-    };
-    const key = `${conversationId}:${stableRequest.clientMessageId}`;
-    const pending = this.#pending.get(key);
-    if (pending) {
-      return pending;
+  /** 返回真实活动；应用重启后没有执行者的 running 恢复点显示为 interrupted。 */
+  project(conversation: PersonaConversationOutDto): PersonaConversationOutDto {
+    const state = readInquiryCheckpoint(conversation);
+    if (!state) return conversation;
+    const latestUser = [...conversation.messages].reverse().find((message) => message.speakerType === "user");
+    if (latestUser && latestUser.messageId !== state.requestId) return { ...conversation, activity: undefined };
+    let status: NonNullable<PersonaConversationOutDto["activity"]>["status"] = state.status;
+    let summary = state.summary;
+    if (status === "running" && !this.#pending.has(this.#key(state))) {
+      status = "interrupted";
+      summary = "上次排查已中断，现有证据已保存，可以从原阶段继续。";
     }
-    const next = this.#run(stableRequest, conversationId, customerQuestion, understanding, decision)
-      .finally(() => {
-        this.#pending.delete(key);
-      });
+    return {
+      ...conversation,
+      activity: { kind: "inquiry", requestId: state.requestId, phase: state.phase, status,
+        round: state.rounds.length, summary, updatedAt: state.updatedAt },
+    };
+  }
+
+  /** 同一用户请求优先恢复；不同请求不能并发占用韩立判断会话。 */
+  resume(request: SendPersonaConversationMessageInDto, conversation: PersonaConversationOutDto): Promise<PersonaConversationOutDto> | null {
+    const pendingKey = `${conversation.conversationId}:${request.clientMessageId}`;
+    const active = this.#pending.get(pendingKey);
+    if (active) return active;
+    const state = request.clientMessageId ? readInquiryCheckpoint(conversation, request.clientMessageId) : null;
+    if (!state) {
+      if (this.#pending.size) throw new Error("韩立正在处理已有排查，请等待本轮结束。");
+      return null;
+    }
+    // 重试不允许修改原问题或借当前工作区选择扩大已冻结的读取范围。
+    if (request.message !== state.request.message
+      || JSON.stringify(request.workspaceState) !== JSON.stringify(state.request.workspaceState)
+      || JSON.stringify(request.attachmentIds || []) !== JSON.stringify(state.request.attachmentIds || [])) {
+      throw new Error("重试必须使用原问题、原截图和原工作区；需要改变范围时请发送新问题。");
+    }
+    return this.#start(state);
+  }
+
+  run(request: SendPersonaConversationMessageInDto, conversationId: string, customerQuestion: string,
+    understanding: HanliInquiryUnderstanding, decision: ConversationRoundTopicDecisionInDto): Promise<PersonaConversationOutDto> {
+    const stableRequest = { ...request, clientMessageId: request.clientMessageId || randomUUID() };
+    const prior = this.#options.memory!.readPersonaConversation("han-li", conversationId);
+    const resumed = this.resume(stableRequest, prior);
+    if (resumed) return resumed;
+    if (understanding.status !== "ready" || !understanding.investigationQuestion) {
+      throw new Error("韩立尚未形成可派发的核实范围。");
+    }
+    const state: InquirySnapshot = {
+      version: 1, conversationId, requestId: stableRequest.clientMessageId,
+      request: structuredClone(stableRequest), selectedModel: prior.selectedModel || null,
+      goal: { customerQuestion: customerQuestion.trim(), understoodGoal: understanding.understoodGoal,
+        verificationTarget: understanding.verificationTarget, expectedAnswer: understanding.expectedAnswer,
+        investigationQuestion: understanding.investigationQuestion },
+      decision, phase: "queued", status: "running",
+      summary: "韩立已明确核实范围，等待南宫婉接收只读调查。",
+      updatedAt: new Date().toISOString(), rounds: [{ question: understanding.investigationQuestion }],
+    };
+    return this.#start(state);
+  }
+
+  #key(state: InquirySnapshot): string {
+    return `${state.conversationId}:${state.requestId}`;
+  }
+
+  #start(state: InquirySnapshot): Promise<PersonaConversationOutDto> {
+    const key = this.#key(state);
+    const pending = this.#pending.get(key);
+    if (pending) return pending;
+    if (this.#pending.size) throw new Error("韩立正在处理已有排查，请等待本轮结束。");
+    // 先登记真实执行者，再开始发通知，避免初始阶段被投影成中断。
+    const next = Promise.resolve().then(() => this.#execute(new HanliInquiryAggregate(state)))
+      .finally(() => this.#pending.delete(key));
     this.#pending.set(key, next);
     return next;
   }
 
-  async #run(
-    request: SendPersonaConversationMessageInDto,
-    conversationId: string,
-    customerQuestion: string,
-    understanding: HanliInquiryUnderstanding,
-    decision: ConversationRoundTopicDecisionInDto,
-  ): Promise<PersonaConversationOutDto> {
-    const memory = this.#options.memory!;
-    const id = request.clientMessageId || randomUUID();
-    const resultId = `inquiry:${id}:result`;
-    const prior = memory.readPersonaConversation("han-li", conversationId);
-    const resultAlreadyExists = prior.messages.some((message) => message.messageId === resultId);
-    if (resultAlreadyExists) {
-      return prior;
-    }
-    const questionId = `internal:inquiry:${id}:question`;
-    if (understanding.status !== "ready" || !understanding.investigationQuestion) {
-      throw new Error("韩立尚未形成可派发的核实范围");
-    }
-    const inquiry: HanliInvestigationRequest = {
-      customerQuestion: customerQuestion.trim(),
-      understoodGoal: understanding.understoodGoal,
-      verificationTarget: understanding.verificationTarget,
-      expectedAnswer: understanding.expectedAnswer,
-      investigationQuestion: understanding.investigationQuestion,
-    };
-    const publish = (messageId: string, speakerPersonaId: "han-li" | "nangong-wan", content: string, replyToMessageId?: string, attachmentIds: string[] = []) => {
-      const next = memory.appendPersonaInternalMessage({
-        ownerPersonaId: "han-li",
-        conversationId,
-        messageId,
-        speakerPersonaId,
-        content,
-        // 只有明确属于当前交接的原始截图才随消息保存，回答和状态消息默认不复制附件。
-        attachmentIds,
-        replyToMessageId,
-        createdAt: new Date().toISOString(),
-      });
-      this.#options.onPersonaConversationChanged?.(next);
-      return next;
-    };
-    const createdAt = new Date().toISOString();
-    const registered = memory.registerPersonaRound({
-      ownerPersonaId: "han-li",
-      responderPersonaId: "han-li",
-      corpusSource: "hanli",
-      conversationId,
-      userMessageId: id,
-      userContent: request.message,
-      attachmentIds: request.attachmentIds || [],
-      personaMessageId: `inquiry:${id}:progress`,
-      personaContent: "南宫婉正在核实事实；她返回后，我会继续判断并整理成清楚的结论和解决方案。",
-      createdAt,
-      completedAt: createdAt,
-      decision,
+  #publish(state: InquirySnapshot, messageId: string, speakerPersonaId: "han-li" | "nangong-wan",
+    content: string, replyToMessageId?: string, attachmentIds: string[] = []): PersonaConversationOutDto {
+    const next = this.#options.memory!.appendPersonaInternalMessage({
+      ownerPersonaId: "han-li", conversationId: state.conversationId, messageId, speakerPersonaId,
+      content, replyToMessageId, attachmentIds, createdAt: new Date().toISOString(),
     });
-    this.#options.onPersonaConversationChanged?.(registered);
-    // 韩立使用完整、自包含的交接说明表达客户意思，同时保留客户原话和本轮截图作为证据。
-    publish(questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, request.attachmentIds || []);
+    const projected = this.project(next);
+    this.#options.onPersonaConversationChanged?.(projected);
+    return projected;
+  }
+
+  #save(state: InquirySnapshot): PersonaConversationOutDto {
+    // 恢复点与内部讨论共用 SQLite 原子追加入口，不建立旁路文件或第二份事实库。
+    return this.#publish(state, `${INQUIRY_CHECKPOINT_PREFIX}${state.requestId}:${randomUUID()}:assessment`,
+      "han-li", JSON.stringify(state), state.requestId);
+  }
+
+  async #execute(aggregate: HanliInquiryAggregate): Promise<PersonaConversationOutDto> {
+    const state = aggregate.state;
+    const memory = this.#options.memory!;
+    const resultId = `inquiry:${state.requestId}:result`;
+    const prior = memory.readPersonaConversation("han-li", state.conversationId);
+    // 最终消息已持久化而终态保存中断时，只补终态，不重复解释或调查。
+    if (prior.messages.some((message) => message.messageId === resultId)) {
+      if (state.status !== "completed" && state.status !== "blocked") {
+        aggregate.finish();
+        return this.#save(state);
+      }
+      return this.project(prior);
+    }
+    if (!prior.messages.some((message) => message.messageId === state.requestId)) {
+      memory.registerPersonaRound({
+        ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli",
+        conversationId: state.conversationId, userMessageId: state.requestId,
+        userContent: state.request.message, attachmentIds: state.request.attachmentIds || [],
+        personaMessageId: `inquiry:${state.requestId}:progress`,
+        personaContent: "我会核对相关规则、截图和当前实现；调查返回后继续判断证据是否足够，再给你结论和建议。",
+        createdAt: state.updatedAt, completedAt: state.updatedAt, decision: state.decision,
+      });
+    }
+    // 技术失败保留 phase；恢复不重置已有 findings 或 assessment。
+    state.status = "running";
+    this.#save(state);
     try {
-      if (!this.#options.investigateWithNangong) {
-        throw new Error("南宫婉只读核实服务尚未接入");
-      }
-      // 单一进度消息已经随用户请求原子登记；这里真实调用端口并立即接住拒绝，避免重复等待气泡和未处理异步错误。
-      const pending = this.#options.investigateWithNangong(inquiry, request).then(
-        (text) => ({ text }),
-        (error: unknown) => ({ error }),
-      );
-      const response = await pending;
-      if ("error" in response) {
-        throw response.error;
-      }
-      // 南宫婉端口已经完成模型文本边界识别、格式纠正和字段校验；韩立只消费结构化调查事实。
-      const findings = response.text;
-      const report = buildInvestigationReport(findings);
-      publish(`internal:inquiry:${id}:answer`, "nangong-wan", report, questionId);
-      // 原始技术依据只作为内部交接保存；韩立必须基于同一份证据向客户解释影响并给出下一步方案。
-      const customerReply = await this.#explainForCustomer(request, inquiry, findings);
-      try {
-        // 这里只发布中立事实包，不启动研讨或创建专题；后续 Workflow 可独立决定何时消费。
-        memory.recordRequirementDiscussionContext?.({
-          contextId: id,
-          ownerPersonaId: "han-li",
-          conversationId,
-          sourceRequestId: id,
-          customerQuestion: inquiry.customerQuestion,
-          understoodGoal: inquiry.understoodGoal,
-          verificationTarget: inquiry.verificationTarget,
-          expectedAnswer: inquiry.expectedAnswer,
-          investigationQuestion: inquiry.investigationQuestion,
-          findingStatus: findings.status,
-          findingSummary: findings.summary,
-          evidence: findings.evidence,
-          unknowns: findings.unknowns,
-          customerConclusion: customerReply,
-          createdAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        let reason = "需求研讨事实包保存失败";
-        if (error instanceof Error) {
-          reason = error.message;
+      while (state.phase !== "completed" && state.phase !== "blocked") {
+        if (state.phase === "queued" || state.phase === "investigating") {
+          await this.#investigate(aggregate);
+        } else if (state.phase === "assessing") {
+          await this.#assess(aggregate);
+        } else if (state.phase === "explaining") {
+          const reply = await this.#explain(aggregate);
+          this.#recordDiscussion(state, aggregate.findings(), reply);
+          this.#publish(state, resultId, "han-li", reply, `inquiry:${state.requestId}:progress`);
+          aggregate.finish();
+          const result = this.#save(state);
+          const completed = result.activity?.status === "completed";
+          this.#options.recordEvent(completed ? "hanli.inquiry.completed" : "hanli.inquiry.blocked", {
+            correlationId: state.conversationId, conversationId: state.conversationId,
+            requestId: state.requestId, rounds: state.rounds.length, status: state.status,
+            resolvesFailure: completed,
+          });
+          return result;
         }
-        this.#options.recordEvent("hanli.inquiry.discussion_context_failed", {
-          conversationId,
-          requestId: id,
-          reason,
-        });
       }
-      this.#options.recordEvent("hanli.inquiry.completed", {
-        correlationId: conversationId,
-        conversationId,
-        requestId: id,
-        status: findings.status,
-        resolvesFailure: true,
-      });
-      return publish(resultId, "han-li", customerReply, `inquiry:${id}:progress`);
+      return this.project(memory.readPersonaConversation("han-li", state.conversationId));
     } catch (error) {
-      let reason = "调查服务没有返回有效结果";
-      if (error instanceof Error) {
-        reason = error.message;
-      }
+      const reason = error instanceof Error ? error.message : "排查服务没有返回有效结果";
       this.#options.recordEvent("hanli.inquiry.failed", {
-        correlationId: conversationId,
-        conversationId,
-        requestId: id,
-        reason,
-        flowImpact: "none",
+        correlationId: state.conversationId, conversationId: state.conversationId,
+        requestId: state.requestId, phase: state.phase, reason, flowImpact: "none",
       });
-      publish(`internal:inquiry:${id}:failure`, "han-li", `本次核实未完成：${reason}`, questionId);
-      return publish(resultId, "han-li", `本次向南宫婉核实未完成：${reason}。目前没有足够事实判断进度，不能据此认定已完成。`);
+      aggregate.fail(reason);
+      // 失败记录没有 result 身份；用户重试时仍然可以继续相同阶段。
+      return this.#save(state);
     }
   }
 
-  async #explainForCustomer(request: SendPersonaConversationMessageInDto, inquiry: HanliInvestigationRequest, findings: NangongInquiryResultOutDto): Promise<string> {
+  async #investigate(aggregate: HanliInquiryAggregate): Promise<void> {
+    const state = aggregate.state;
+    const round = state.rounds.length;
+    const questionId = round === 1 ? `internal:inquiry:${state.requestId}:question`
+      : `internal:inquiry:${state.requestId}:round:${round}:question`;
+    const answerId = round === 1 ? `internal:inquiry:${state.requestId}:answer`
+      : `internal:inquiry:${state.requestId}:round:${round}:answer`;
+    const inquiry: HanliInvestigationRequest = {
+      ...state.goal, investigationQuestion: aggregate.current.question,
+      previousFindings: state.rounds.flatMap((item) => item.findings ? [item.findings] : []),
+    };
+    this.#publish(state, questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, state.request.attachmentIds || []);
+    if (!this.#options.investigateWithNangong) throw new Error("南宫婉只读核实服务尚未接入");
+    aggregate.transition("queued", `第 ${round} 轮调查等待南宫婉接收。`);
+    this.#save(state);
+    const findings = await this.#options.investigateWithNangong(inquiry, state.request, () => {
+      aggregate.transition("investigating", `南宫婉正在进行第 ${round} 轮只读核实：${aggregate.current.question}`);
+      this.#save(state);
+    });
+    aggregate.receive(findings);
+    // 先保留结构化证据，后续显示、评估或解释失败均可恢复。
+    this.#save(state);
+    this.#publish(state, answerId, "nangong-wan", buildInvestigationReport(findings), questionId);
+  }
+
+  async #assess(aggregate: HanliInquiryAggregate): Promise<void> {
+    const state = aggregate.state;
+    const chat = this.#options.conversation;
+    if (!chat) throw new Error("韩立证据判断能力尚未接入");
+    const prompt = this.#options.prompts.render("hanli.inquiry-assessment", {
+      customerQuestion: state.goal.customerQuestion,
+      understandingJson: JSON.stringify(state.goal),
+      roundsJson: JSON.stringify(state.rounds),
+
+    });
+    const response = await chat.send({ ...state.request, attachmentIds: [] }, prompt, state.selectedModel, { workspacePolicy: "request-snapshot" });
+    aggregate.assess(parseInquiryAssessment(response, state.goal.customerQuestion));
+    this.#save(state);
+  }
+
+  async #explain(aggregate: HanliInquiryAggregate): Promise<string> {
+    const state = aggregate.state;
+    const chat = this.#options.conversation;
+    if (!chat) throw new Error("韩立客户解释能力尚未接入");
+    const prompt = this.#options.prompts.render("hanli.inquiry-response", {
+      customerQuestion: state.goal.customerQuestion,
+      understandingJson: JSON.stringify(state.goal),
+      investigationQuestion: aggregate.current.question,
+      findingsJson: JSON.stringify(aggregate.findings()),
+    });
+    const response = await chat.send({ ...state.request, attachmentIds: [] }, prompt, state.selectedModel, { workspacePolicy: "request-snapshot" });
+    const reply = response.text.trim();
+    if (!reply) throw new Error("韩立没有返回客户解释");
+    return reply;
+  }
+
+  #recordDiscussion(state: InquirySnapshot, findings: NangongInquiryResultOutDto, customerReply: string): void {
     try {
-      const conversation = this.#options.conversation;
-      if (!conversation) {
-        throw new Error("韩立客户解释能力尚未接入");
-      }
-      const prompt = this.#options.prompts.render("hanli.inquiry-response", {
-        customerQuestion: inquiry.customerQuestion,
-        understandingJson: JSON.stringify({ understoodGoal: inquiry.understoodGoal, verificationTarget: inquiry.verificationTarget, expectedAnswer: inquiry.expectedAnswer }),
-        investigationQuestion: inquiry.investigationQuestion,
-        findingsJson: JSON.stringify(findings),
+      this.#options.memory!.recordRequirementDiscussionContext?.({
+        contextId: state.requestId, ownerPersonaId: "han-li", conversationId: state.conversationId,
+        sourceRequestId: state.requestId, ...state.goal,
+        findingStatus: findings.status, findingSummary: findings.summary,
+        evidence: findings.evidence, unknowns: findings.unknowns,
+        customerConclusion: customerReply, createdAt: new Date().toISOString(),
       });
-      // 调查截图已经由南宫婉核实；二次解释只消费结构化事实，避免韩立绕过调查自行猜测。
-      const response = await conversation.send({ ...request, attachmentIds: [] }, prompt);
-      const reply = response.text.trim();
-      if (!reply) {
-        throw new Error("韩立没有返回客户解释");
-      }
-      return reply;
     } catch (error) {
-      let reason = "韩立没有返回客户解释";
-      if (error instanceof Error) {
-        reason = error.message;
-      }
-      this.#options.recordEvent("hanli.inquiry.explanation_failed", {
-        requestId: request.clientMessageId || null,
-        reason,
+      this.#options.recordEvent("hanli.inquiry.discussion_context_failed", {
+        conversationId: state.conversationId, requestId: state.requestId,
+        reason: error instanceof Error ? error.message : "需求研讨事实包保存失败",
       });
-      return "南宫婉已经完成调查，原始依据也已保存，但我这次没有成功把技术结果整理成清楚的解决方案。请稍后重试；我不会把难懂的技术报告直接丢给你，也不会在解释完成前擅自开始修改。";
     }
   }
 }
