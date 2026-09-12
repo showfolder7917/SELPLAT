@@ -31,3 +31,6 @@ export function createFixedUnifiedTestRunner(options: FixedUnifiedTestRunnerOpti
 export function isUnifiedTestInfrastructureError(error: unknown): boolean {
   return error instanceof UnifiedTestInfrastructureError;
 }
+
+// 其他流程通过公开入口复用相同失败摘要，避免再次截掉末尾原因。
+export { summarizeTestFailure } from "./internal/test-failure-summary.js";

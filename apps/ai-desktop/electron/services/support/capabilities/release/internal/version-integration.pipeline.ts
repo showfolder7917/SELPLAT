@@ -1,3 +1,4 @@
+import { summarizeTestFailure } from "../../testing/index.js";
 import { randomUUID } from "node:crypto";
 
 import type { CollaborationIntegrationFailureKindValue, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
@@ -412,7 +413,7 @@ function appendFlow(
     stage,
     status,
     actor: actor ? participantSnapshot(actor) : null,
-    summary: summary.slice(0, 2_000),
+    summary: error ? summarizeTestFailure(summary) : summary.slice(0, 2_000),
     occurredAt: new Date().toISOString(),
     error,
   });

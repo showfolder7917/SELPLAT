@@ -1,3 +1,4 @@
+import { summarizeTestFailure } from "./internal/test-failure-summary.js";
 import { randomUUID } from "node:crypto";
 import {
   mkdirSync,
@@ -97,7 +98,7 @@ export class TestResourceCoordinatorFacade {
       } catch (error) {
         this.#emit("failed", request, new Date().toISOString(), lease.waitDurationMs, Date.now() - executionStartedAt, lease.contentionCount, {
           leaseId,
-          detail: error instanceof Error ? error.message.slice(0, 2_000) : String(error).slice(0, 2_000),
+          detail: summarizeTestFailure(error instanceof Error ? error.message : String(error)),
         });
         throw error;
       } finally {
