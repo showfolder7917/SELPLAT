@@ -20,6 +20,7 @@ import { parseCustomerActionGuidance } from "../../../../../build/ai-desktop/ele
 import { TestResourceCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/test-resource-coordinator.facade.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/integration-release.facade.js";
 import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
+import { describeGitFailure, resolveGitCommand } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/git-process.js";
 import { LocalChangeOwnershipError, MergeConflictError, StaleTaskResultError, UncommittedTaskWorkspaceError, VersionWorkspaceManager } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-workspace.manager.js";
 import { ManagedTaskExecutor } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/internal/managed-task.executor.js";
 import { TaskRepairScopeAggregate, TaskRepairScopeViolationError } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/index.js";
@@ -98,6 +99,20 @@ function runReleaseWorker(coordinationRoot, releaseBatchId, holdMilliseconds) {
 function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }).trim();
 }
+
+test("darwin 发布 Git 使用系统可执行文件并保留启动诊断", () => {
+  assert.equal(resolveGitCommand("darwin", () => true), "/usr/bin/git");
+  assert.equal(resolveGitCommand("darwin", () => false), "git");
+  const error = Object.assign(new Error("spawn git ENOENT"), { code: "ENOENT" });
+  const diagnostic = describeGitFailure(error, "/usr/bin/git", "/candidate/worktree", { PATH: "" });
+  assert.match(diagnostic.message, /command=\/usr\/bin\/git/);
+  assert.match(diagnostic.message, /cwd=\/candidate\/worktree/);
+  assert.match(diagnostic.message, /PATH=<missing>/);
+  const checkFailure = Object.assign(new Error("Command failed"), { stdout: "candidate.txt:1: trailing whitespace\n" });
+  assert.match(describeGitFailure(checkFailure, "/usr/bin/git", "/candidate/worktree", {}).message, /candidate\.txt:1: trailing whitespace/);
+  const bufferedCheckFailure = Object.assign(new Error("Command failed"), { stderr: Buffer.from("candidate.txt:1: trailing whitespace\n") });
+  assert.match(describeGitFailure(bufferedCheckFailure, "/usr/bin/git", "/candidate/worktree", {}).message, /candidate\.txt:1: trailing whitespace/);
+});
 
 test("会话卡片绑定真实协作任务并完整显示修复回流与统一测试状态", () => {
   assert.match(developerSource, /collaborationTaskId/);

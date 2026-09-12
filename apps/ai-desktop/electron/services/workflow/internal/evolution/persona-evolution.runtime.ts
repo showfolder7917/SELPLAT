@@ -129,7 +129,7 @@ export class PersonaEvolutionRuntime {
   /** 当前是否正在执行人工恢复，防止重复继续。 */
   #resuming = false;
   /** Electron 窗口层注入的真实应用验收执行器。 */
-  #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>) | null = null;
+  #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto, onSceneReady: () => void) => Promise<HanliAcceptanceRunOutDto>) | null = null;
 
   /**
    * 组装跨人物演化顺序以及南宫人物入口。
@@ -250,7 +250,7 @@ export class PersonaEvolutionRuntime {
     this.#continuationTimer = null;
   }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
-  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
   /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
   notifyWorkflowChanged(): void { void this.#tick(); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
@@ -500,9 +500,11 @@ export class PersonaEvolutionRuntime {
         if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。");
         try {
           const goal: HanliComputerAcceptanceInDto = { topicId: topic.topicId, proposalId: proposal.proposalId, title: proposal.title, criteria: proposal.acceptanceCriteria };
-          publishAcceptance("started", "韩立正在观察真实页面并逐步操作验收。");
-          this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
-          const runResult = await this.#computerAcceptanceSession(goal);
+          this.#store.updateOneShotRun("accepting", "linghu-ancestor", "令狐老祖", "正在准备并核实验收场景", topic.topicId, proposal.proposalId);
+          const runResult = await this.#computerAcceptanceSession(goal, () => {
+            publishAcceptance("started", "令狐已准备验收场景，韩立正在观察真实页面并逐步操作验收。");
+            this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
+          });
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "blocked") {
             const reason = runResult.stepResults

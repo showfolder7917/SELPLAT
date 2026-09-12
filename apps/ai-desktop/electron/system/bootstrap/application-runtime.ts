@@ -821,6 +821,18 @@ export async function startApplication(): Promise<void> {
     readTestResourceState: () => testResources.state(),
     readUnhandledExceptions: () => workflowRepository?.listUnhandledExceptions(50) || [],
     claimUnhandledExceptions: (eventIds) => workflowRepository?.claimExceptions(eventIds, "linghu-ancestor") || [],
+    analyzeAcceptanceScene: (goal) => {
+      // 与令狐已有只读指导共用串行队列，不创建冒充正式人物的临时子代理。
+      const analysis = linghuGuidanceQueue.then(async () => {
+        if (!linghuGuidanceCodex) throw new Error("令狐场景准备服务尚未就绪。");
+        return (await linghuGuidanceCodex.send(
+          prompts.render("linghu.acceptance-scene", { goalJson: JSON.stringify(goal) }),
+          settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
+        )).text;
+      });
+      linghuGuidanceQueue = analysis.catch(() => undefined);
+      return analysis;
+    },
     analyzeCustomerActionGuidance: (facts) => {
       const analysis = linghuGuidanceQueue.then(async () => {
         if (!linghuGuidanceCodex) throw new Error("令狐客户操作指导服务尚未就绪。");

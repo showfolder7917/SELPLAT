@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
+import { executeGit } from "./git-process.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -223,7 +224,7 @@ export async function verifyCollaborationIntegration(
 
 /** 只核对本批候选相对冻结基线引入的差异，禁止历史提交中的旧问题阻断当前批次。 */
 export async function verifyCandidateDelta(rootPath: string, candidateRange: Readonly<{ baseSha: string; candidateSha: string }>): Promise<void> {
-  await run("git", ["diff", "--check", `${candidateRange.baseSha}..${candidateRange.candidateSha}`], rootPath);
+  await executeGit(["diff", "--check", `${candidateRange.baseSha}..${candidateRange.candidateSha}`], rootPath, { timeout: 180_000 });
 }
 
 /**
@@ -361,10 +362,10 @@ function cleanupManagedDependencyOverlays(workspaceProjectRoot: string, overlayM
 }
 
 async function verifyRegisteredWorktree(workspaceProjectRoot: string, sourceProjectRoot: string): Promise<void> {
-  const { stdout: commonOutput } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: workspaceProjectRoot });
+  const { stdout: commonOutput } = await executeGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], workspaceProjectRoot);
   const commonDirectory = path.resolve(workspaceProjectRoot, commonOutput.trim());
   if (commonDirectory !== path.join(sourceProjectRoot, ".git")) throw new Error("隔离工作树不属于当前主工程，禁止签发共享依赖租约。");
-  const { stdout: worktreeOutput } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: sourceProjectRoot });
+  const { stdout: worktreeOutput } = await executeGit(["worktree", "list", "--porcelain"], sourceProjectRoot);
   const registeredRoots = worktreeOutput.split(/\r?\n/)
     .filter((line) => line.startsWith("worktree "))
     .map((line) => path.resolve(line.slice("worktree ".length)));

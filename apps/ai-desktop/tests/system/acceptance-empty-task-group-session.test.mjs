@@ -39,12 +39,11 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   const collaborationIpcSource = readFileSync("electron/system/ipc/domains/register-collaboration-ipc.ts", "utf8");
   const runtimeSource = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   const preloadSource = readFileSync("electron/system/preload/preload.cts", "utf8");
-  assert.match(desktopIpcSource, /任务协作群/u);
-  assert.match(desktopIpcSource, /空状态\|无专题任务\|找韩立说需求/u);
-  assert.match(desktopIpcSource, /task-collaboration-empty\(-action\)\?/);
-  assert.match(desktopIpcSource, /partition: "hanli-empty-task-group-acceptance"/);
-  assert.match(desktopIpcSource, /additionalArguments: \["--hanli-empty-task-group-acceptance"\]/);
-  assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession\.remove/);
+  const sceneSource = readFileSync("electron/system/ipc/acceptance-scene-window.ts", "utf8");
+  assert.match(desktopIpcSource, /linghuAutomation\.planAcceptanceScene\(goal\)/);
+  assert.doesNotMatch(desktopIpcSource, /requiresEmptyTaskGroup/);
+  assert.match(desktopIpcSource, /prepareAcceptanceSceneWindow/);
+  assert.match(sceneSource, /additionalArguments: \["--hanli-empty-task-group-acceptance"\]/);
   assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession/);
   assert.match(collaborationIpcSource, /rejectIsolatedMutation/);
   assert.match(runtimeSource, /const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession\(\)/);

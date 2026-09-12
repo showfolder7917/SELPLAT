@@ -1,3 +1,4 @@
+import { prepareAcceptanceSceneWindow } from "./acceptance-scene-window.js";
 import { execFile } from "node:child_process";
 import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
@@ -134,42 +135,28 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  personaWorkflow.setComputerAcceptanceSession(async (goal) => {
+  personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady) => {
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
-    // 验收条件可使用用户文案或页面稳定 class；两者都必须进入同一个非持久化空状态窗口。
-    const requiresEmptyTaskGroup = goal.criteria.some((criterion) => /任务协作群[\s\S]*(空状态|无专题任务|找韩立说需求)|task-collaboration-empty(-action)?/u.test(criterion));
-    let acceptanceWindow = targetWindow;
-    if (requiresEmptyTaskGroup) {
-      // 空状态只在零专题投影中可见；使用非持久化窗口而非清理正式任务数据。
-      acceptanceWindow = new BrowserWindow({
-        ...targetWindow.getBounds(),
-        frame: false,
-        show: false,
-        backgroundColor: "#080b12",
-        title: "AI Desktop 独立空状态验收",
-        webPreferences: {
-          preload: preloadPath,
-          contextIsolation: true,
-          nodeIntegration: false,
-          sandbox: true,
-          partition: "hanli-empty-task-group-acceptance",
-          additionalArguments: ["--hanli-empty-task-group-acceptance"],
-        },
-      });
-      acceptanceEmptyTaskGroupSession.register(acceptanceWindow.webContents.id);
-      acceptanceWindow.once("ready-to-show", () => acceptanceWindow.show());
-      await acceptanceWindow.loadFile(path.join(rendererRoot, "index.html"));
-    }
+    const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
+    const plan = await linghuAutomation.planAcceptanceScene(goal);
+    let prepared: Awaited<ReturnType<typeof prepareAcceptanceSceneWindow>> | undefined;
     try {
-      const run = await hanli.executeComputerAcceptance(goal, acceptanceWindow);
+      prepared = await prepareAcceptanceSceneWindow(plan, {
+        target: targetWindow, preloadPath, rendererRoot, sessions: acceptanceEmptyTaskGroupSession,
+        createWindow: (options) => new BrowserWindow(options),
+      });
+      audit.recordEvent("linghu.acceptance_scene.ready", { ...identity, plan, webContentsId: prepared.window.webContents.id });
+      onSceneReady();
+      const run = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan }, prepared.window);
       audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
       return run;
+    } catch (error) {
+      audit.recordEvent(prepared ? "hanli.acceptance.failed" : "linghu.acceptance_scene.failed", { ...identity, kind: plan.kind, reason: error instanceof Error ? error.message : String(error) });
+      throw error;
     } finally {
-      if (acceptanceWindow !== targetWindow) {
-        acceptanceEmptyTaskGroupSession.remove(acceptanceWindow.webContents.id);
-        if (!acceptanceWindow.isDestroyed()) acceptanceWindow.close();
-      }
+      prepared?.dispose();
+      if (prepared) audit.recordEvent("linghu.acceptance_scene.released", { ...identity, kind: plan.kind });
     }
   });
 

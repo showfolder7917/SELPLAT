@@ -1,12 +1,9 @@
-import { execFile } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import type { CollaborationTaskOutDto, CollaborationVersionWorkspaceOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import { TaskRepairScopeAggregate } from "../../execution/index.js";
-
-const execFileAsync = promisify(execFile);
+import { executeGit } from "./git-process.js";
 
 export interface IntegrationCandidate {
   generation: number;
@@ -451,21 +448,17 @@ export class VersionWorkspaceManager {
   }
 
   async #git(cwd: string, args: string[]): Promise<string> {
-    const result = await execFileAsync("git", args, {
-      cwd,
+    const result = await executeGit(args, cwd, {
       timeout: 120_000,
       maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
     });
     return result.stdout.trim();
   }
 
   async #gitRaw(cwd: string, args: string[]): Promise<string> {
-    const result = await execFileAsync("git", args, {
-      cwd,
+    const result = await executeGit(args, cwd, {
       timeout: 120_000,
       maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
     });
     return result.stdout;
   }

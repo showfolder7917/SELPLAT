@@ -1,3 +1,5 @@
+import type { HanliComputerAcceptanceInDto, AcceptanceScenePlanOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import { parseAcceptanceScenePlan } from "./internal/linghu-acceptance-scene.js";
 // 工作区和语言由主进程组合根读取，令狐不自行解析用户设置。
 import type { LocaleValue } from "../../../../contracts/foundation/index.js";
 import type { WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
@@ -58,6 +60,8 @@ export interface LinghuAutomationFacadeOptions {
   // 统一测试通过后由组合根安排受控重启。
   runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
   // 只读模型根据已确认事实生成客户能执行的指导，程序不内置具体问题文案。
+  /** 固定令狐会话生成逐项场景前提，只读且不能宣告产品验收通过。 */
+  analyzeAcceptanceScene?(goal: HanliComputerAcceptanceInDto): Promise<string>;
   analyzeCustomerActionGuidance?(facts: Record<string, unknown>): Promise<string>;
   // 普通运行异常只进入巡检修复，不伪装成阻断原任务的“卡点”。
   readUnhandledExceptions?(): WorkflowExceptionRecordOutDto[];
@@ -74,6 +78,7 @@ export class LinghuAutomationFacade {
   }
 
   // 私有字段保存注入端口，外部模块不能绕过公开方法调用内部实现。
+  readonly #analyzeAcceptanceScene: NonNullable<LinghuAutomationFacadeOptions["analyzeAcceptanceScene"]>;
   readonly #store: LinghuAutomationStore;
   readonly #collaboration: LinghuCollaborationPort;
   readonly #inspectPreparationRecovery: LinghuAutomationFacadeOptions["inspectPreparationRecovery"];
@@ -94,6 +99,7 @@ export class LinghuAutomationFacade {
   /** 保存组合根注入的所有端口；构造本身不启动检测。 */
   constructor(options: LinghuAutomationFacadeOptions) {
     // 每个字段保持原端口引用，方便测试替换单一依赖。
+    this.#analyzeAcceptanceScene = options.analyzeAcceptanceScene || (async () => { throw new Error("令狐验收场景分析器未接入。"); });
     this.#store = options.store;
     this.#collaboration = options.collaboration;
     this.#inspectPreparationRecovery = options.inspectPreparationRecovery;
@@ -105,6 +111,21 @@ export class LinghuAutomationFacade {
     this.#analyzeCustomerActionGuidance = options.analyzeCustomerActionGuidance || (async () => { throw new Error("令狐客户操作指导分析器尚未配置。"); });
     this.#readUnhandledExceptions = options.readUnhandledExceptions || (() => []);
     this.#claimUnhandledExceptions = options.claimUnhandledExceptions || (() => []);
+  }
+
+  /** 令狐负责判定准备前提；就绪事实由实际窗口准备器验证后单独记录。 */
+  async planAcceptanceScene(goal: HanliComputerAcceptanceInDto): Promise<AcceptanceScenePlanOutDto> {
+    const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" } };
+    this.#recordEvent("linghu.acceptance_scene.planning", identity);
+    try {
+      const plan = parseAcceptanceScenePlan(await this.#analyzeAcceptanceScene(goal), goal);
+      this.#recordEvent("linghu.acceptance_scene.planned", { ...identity, plan });
+      if (plan.kind === "blocked") throw new Error(`验收场景准备受阻：${plan.reason}`);
+      return plan;
+    } catch (error) {
+      this.#recordEvent("linghu.acceptance_scene.blocked", { ...identity, reason: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
   }
 
   /** 返回 Store 的深复制状态快照。 */
