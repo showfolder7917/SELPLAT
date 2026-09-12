@@ -519,7 +519,7 @@ button { color: inherit; }
 .task-timeline-next { display: flex; align-items: center; gap: 10px; margin: 12px 0 0 38px; padding: 12px 4px; color: var(--sel-theme-workbench-text-muted); }
 .task-timeline-next i { width: 12px; height: 12px; border: 2px solid var(--sel-theme-control-line-soft); border-radius: 50%; }
 .task-timeline-next strong { color: var(--sel-theme-workbench-text); }
-.task-collaboration-empty { width: min(100%, 480px); min-width: 0; display: grid; justify-items: center; gap: 8px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
+.task-collaboration-empty { width: min(100%, 480px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 8px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
 .task-collaboration-empty strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
 .task-collaboration-empty > span { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
 .task-collaboration-empty-action { max-width: 100%; min-height: 36px; padding: 6px 14px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); font: inherit; font-weight: 650; cursor: pointer; }

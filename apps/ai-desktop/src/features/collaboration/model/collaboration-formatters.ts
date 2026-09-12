@@ -245,6 +245,16 @@ export function collaborationMemberStateLabel(
     if (activityLabel) return activityLabel;
   }
 
+  // 生成计划由南宫婉调度服务执行，不占执行租约；侧栏须读取任务卡同一条当前事实。
+  const planningNode = member.memberId === "nangong-wan"
+    ? timeline?.groups.filter((group) => group.status === "running")
+      .flatMap((group) => group.nodes)
+      .filter((node) => node.actor.memberId === member.memberId && node.status === "current"
+        && !node.completedAt && node.nodeId.startsWith("distribution-planning:"))
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0]
+    : undefined;
+  if (planningNode) return locale === "ja" ? "実行計画を作成中" : planningNode.action;
+
   const currentDeliberationLabel = deliberationLabel(member, evolution);
   if (currentDeliberationLabel) return currentDeliberationLabel;
 

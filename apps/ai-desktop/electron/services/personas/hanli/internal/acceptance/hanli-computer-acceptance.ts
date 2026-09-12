@@ -110,7 +110,7 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。测试台历史只能用 scroll-test-console 滚动可见 .dev-test-console-content，技术证据只能用 expand-test-console-evidence 展开固定只读入口，窄窗口只能用 resize-acceptance-window 的 narrow/restore 预设；三者都不接受任意目标或尺寸。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
@@ -337,10 +337,7 @@ export class HanliComputerAcceptance {
             }
             testConsoleEvidence = result;
           } else if (args.action === "resize-acceptance-window") {
-            const state = await window.webContents.executeJavaScript(`(${readTestConsoleState.toString()})()`) as Record<string, unknown>;
-            if (state.status !== "visible") {
-              throw new Error("测试台未显示，不能调整验收窗口尺寸。");
-            }
+            // 全应用布局验收不依赖测试台是否打开；尺寸仍限应用支持的预设。
             if (args.resizePreset === "narrow") {
               // 仅使用应用本身支持的最小窗口预设，保留初始位置，禁止模型提供任意尺寸。
               window.setBounds({ ...initialBounds, width: 1000, height: 700 });
@@ -356,7 +353,6 @@ export class HanliComputerAcceptance {
             } else {
               throw new Error("窗口尺寸只允许 narrow 或 restore 预设。");
             }
-            testConsoleEvidence = state;
           } else if (args.action === "hover") {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, width, height, "悬停坐标必须位于当前应用窗口内。");
@@ -723,6 +719,9 @@ function safeNavigationClick(x: number, y: number): boolean {
   if (!node) {
     return false;
   }
+  // 折叠标题可能含历史“审批通过”等文字，按真实只读控件身份判断，不按内容误拦截。
+  if (node.matches("button[data-sel-disclosure-trigger]") && node.closest("[data-sel-disclosure]")) return true;
+  if (node.matches("button.test-console-disclosure") && node.closest(".dev-test-console")) return true;
   const label = (node.getAttribute("aria-label") || node.getAttribute("title") || node.textContent || "").trim();
   if (/删除|清空|移除|提交|保存|确认|通过|退回|分发|发布|重启|自动巡检|自动托管/u.test(label)) {
     return false;

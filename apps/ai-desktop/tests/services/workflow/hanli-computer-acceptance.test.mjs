@@ -131,17 +131,18 @@ test("测试台验收能力只允许固定容器滚动、只读证据展开和�
   assert.deepEqual(f.boundsCalls, [{ x: 0, y: 0, width: 1000, height: 700 }, { x: 0, y: 0, width: 1200, height: 800 }]);
   assert.deepEqual(run.stepResults.slice(0, 3).map((step) => step.operation.type), ["scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window"]);
 });
-test("隐藏测试台时固定验收能力全部拒绝", async () => {
+test("隐藏测试台不阻止当前页面的窄窗口验收", async () => {
   const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, false);
   const run = await f.run(async (tools) => {
     const first = id(await observe(tools));
     await assert.rejects(tools.call("hanli_computer", { action: "scroll-test-console", reason: "尝试滚动隐藏测试台", observationId: first, deltaY: 320 }), /测试台内容未滚动：hidden/);
     await assert.rejects(tools.call("hanli_computer", { action: "expand-test-console-evidence", reason: "尝试展开隐藏测试台", observationId: first }), /测试台技术证据未展开：hidden/);
-    await assert.rejects(tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "尝试调整隐藏测试台窗口", observationId: first }), /测试台未显示/);
-    await finish(tools, first, "blocked");
+    const narrow = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "检查当前任务页窄窗口", observationId: first });
+    const restored = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "restore", reason: "恢复窗口", observationId: id(narrow) });
+    await finish(tools, id(restored), "blocked");
   });
   assert.equal(run.status, "blocked");
-  assert.deepEqual(f.boundsCalls, []);
+  assert.equal(f.boundsCalls.length, 2);
 });
 test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
@@ -153,7 +154,7 @@ test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸",
   assert.match(source, /width: 1000, height: 700/);
   assert.match(source, /window\.setBounds\(initialBounds\)/);
   const navigationBody = source.slice(source.indexOf("function safeNavigationClick"), source.indexOf("function safeImagePreviewDrag"));
-  assert.doesNotMatch(navigationBody, /test-console-disclosure/);
+  assert.match(navigationBody, /test-console-disclosure/);
 });
 test("预览拖拽与受控截图发送都形成受限交互记录", async () => {
   const f = fixture();
@@ -373,4 +374,21 @@ test("验收收尾提示登记为可打包资源且变量匹配", () => {
   const content = readFileSync(`prompts/${entries[0].file}`, "utf8");
   assert.match(content, /{{goalJson}}/);
   assert.match(content, /finish/);
+});
+
+
+test("只读折叠标题含审批通过仍可查看，实际提交按钮仍拒绝", () => {
+  const previous = globalThis.document;
+  const check = (disclosure) => {
+    const node = {
+      getAttribute: (key) => key === "aria-label" ? "审批通过，发布完成" : null,
+      matches: (selector) => disclosure && selector === "button[data-sel-disclosure-trigger]",
+      closest: (selector) => disclosure && selector === "[data-sel-disclosure]" ? {} : null,
+      classList: { contains: () => false },
+    };
+    globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
+    return acceptanceModule.safeNavigationClick(12, 30);
+  };
+  try { assert.equal(check(true), true); assert.equal(check(false), false); }
+  finally { globalThis.document = previous; }
 });

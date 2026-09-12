@@ -46,3 +46,17 @@ test("人物直接会话覆盖空闲显示但不覆盖真实执行状态", () =>
   assert.equal(label({ member: working, locale: "zh-CN", conversationActivity: "active" }), "执行修改中");
   assert.equal(label({ member: working, locale: "zh-CN", conversationActivity: "responding" }), "执行修改中");
 });
+
+
+test("南宫婉计划生成与任务卡同源，结束或阻塞后不残留忙碌", () => {
+  const member = { memberId: "nangong-wan", state: "idle" };
+  const node = { nodeId: "distribution-planning:p:1", actor: member, status: "current", completedAt: null, startedAt: "2026-09-12T07:00:00Z", action: "正在生成执行计划并分配执行人" };
+  const group = { status: "running", nodes: [node] };
+  const timeline = { groups: [group] };
+  assert.equal(label({ member, locale: "zh-CN", timeline }), node.action);
+  assert.equal(label({ member, locale: "ja", timeline }), "実行計画を作成中");
+  group.status = "blocked";
+  assert.equal(label({ member, locale: "zh-CN", timeline }), "空闲");
+  group.status = "running"; node.status = "completed";
+  assert.equal(label({ member, locale: "zh-CN", timeline }), "空闲");
+});

@@ -20,3 +20,5 @@
 
 
 当前内置 Codex 代码模式的实际返回格式：hanli_computer 的截图响应为字符串，第一行是观察元数据 JSON，换行后是完整 data URI。先检查 typeof raw === "string"，以第一个换行分开，JSON.parse 仅解析第一行；保存 meta.observationId，并调用 image(raw.slice(breakAt + 1)) 展示图像，同时 text 只输出元数据。不要对字符串使用 Object.keys，不要把整个响应 JSON.parse、image(raw) 或再次拼接 data:image 前缀。没有换行或后半部分不是 data:image/ 时，只读取短错误回执，不把错误当图片；finish 成功回执是文字，必须单独读取。此格式只说明当前代码模式封装，不改变截图采集范围和工具动作。
+
+页面查看权限覆盖整个AI Desktop：可切换页面、展开只读详情、滚动及在任何页面使用 narrow/restore 窗口预设，不需要先打开测试台。标题中的历史审批或通过文字不代表正在执行审批。正式业务写操作仍只使用受控入口；缺少空状态等真实场景时明确说明场景未准备，不能清理正式数据或把缺场景当作产品失败。
