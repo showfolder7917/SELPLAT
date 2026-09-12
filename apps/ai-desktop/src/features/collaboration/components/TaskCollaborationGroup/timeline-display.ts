@@ -45,27 +45,33 @@ export function groupActivityPresentation(
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
 }
 
-/** 需要客户完成具体操作时，只让最新等待节点在原位置显示一次“从卡点继续”。 */
-export function latestRecoveryTaskId(
-  nodes: CollaborationTimelineNodeOutDto[],
-  node: CollaborationTimelineNodeOutDto,
-  index: number,
-): string | null {
-  if (!node.taskId || node.eventType !== "customer.action_required" || node.status !== "waiting") return null;
+/** 卡片顶部当前可执行的恢复动作；历史节点只作审计展示，不再各自承载按钮。 */
+export type ActiveRecoveryAction = {
+  /** 继续接口需要的原任务标识。 */
+  taskId: string;
+  /** 客户卡点使用更明确的按钮文字。 */
+  customerAction: boolean;
+};
 
-  const hasNewerWaitingNode = nodes.slice(index + 1).some((candidate) => {
-    return candidate.taskId === node.taskId
-      && candidate.eventType === node.eventType
-      && candidate.status === "waiting";
-  });
-  return hasNewerWaitingNode ? null : node.taskId;
-}
-
-/** 普通应用中断的恢复入口属于当前流程区，不混入历史人物节点。 */
-export function latestInterruptedRecoveryTaskId(nodes: CollaborationTimelineNodeOutDto[]): string | null {
-  return [...nodes].reverse().find((node) => {
-    return node.taskId && node.eventType === "task.interrupted" && node.status === "waiting";
-  })?.taskId || null;
+/**
+ * 从每个任务的最新权威节点选择唯一恢复入口。
+ * 同一任务一旦出现更新的进行或完成节点，旧等待节点立即失效，避免恢复成功后按钮残留。
+ */
+export function latestActiveRecoveryAction(nodes: CollaborationTimelineNodeOutDto[]): ActiveRecoveryAction | null {
+  const visitedTaskIds = new Set<string>();
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (!node.taskId || visitedTaskIds.has(node.taskId)) continue;
+    visitedTaskIds.add(node.taskId);
+    const isRecoveryWait = node.status === "waiting"
+      && (node.eventType === "customer.action_required" || node.eventType === "task.interrupted");
+    if (!isRecoveryWait) continue;
+    return {
+      taskId: node.taskId,
+      customerAction: node.eventType === "customer.action_required",
+    };
+  }
+  return null;
 }
 
 /** 兼容旧重复恢复数据：同一恢复状态段只显示最后一条等待记录。 */

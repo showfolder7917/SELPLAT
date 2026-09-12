@@ -34,10 +34,8 @@ import {
   groupActivityPresentation,
   // 专题状态：把稳定状态码转换成中日文。
   groupStatusLabel,
-  // 恢复任务选择：只在最新等待节点返回任务标识。
-  latestRecoveryTaskId,
-  // 普通中断恢复：把入口放到专题当前流程区，不塞进历史节点。
-  latestInterruptedRecoveryTaskId,
+  // 当前恢复动作：统一放到专题当前流程区，并在同一任务恢复后立即失效。
+  latestActiveRecoveryAction,
   // 节点耗时：正在执行或等待时随当前时间更新。
   nodeDurationLabel,
   // 节点状态：把完成、当前、等待和失败转换成中日文。
@@ -189,7 +187,6 @@ function TaskTimelineNode({
   model,
   node,
   index,
-  visibleNodes,
 }: {
   /** 当前专题卡模型，统一提供专题、显示状态和用户操作。 */
   model: TaskGroupCardModel;
@@ -197,34 +194,19 @@ function TaskTimelineNode({
   node: CollaborationTimelineNodeOutDto;
   /** 当前节点在可见时间线中的顺序。 */
   index: number;
-  /** 已过滤连续重复恢复记录后的完整可见节点。 */
-  visibleNodes: CollaborationTimelineNodeOutDto[];
 }) {
   // 专题数据（group）用于审批窗口标题和节点所属专题判断。
   const { group } = model;
   // 显示状态统一提供语言、时间、继续状态和实时正文。
-  const { locale, nowMs, continuingTaskId, liveTextByNodeId } = model.presentation;
-  // 用户操作统一提供展开查询、展开保存、审批和任务恢复能力。
-  const { isNodeOpen, onNodeOpenChange, onManualApproval, onContinueTask } = model.actions;
+  const { locale, nowMs, liveTextByNodeId } = model.presentation;
+  // 用户操作统一提供展开查询、展开保存和审批能力；恢复操作只由专题当前流程区承载。
+  const { isNodeOpen, onNodeOpenChange, onManualApproval } = model.actions;
   // 节点展开状态（nodeOpen）同时尊重后端自动展开提示和用户手动选择。
   const nodeOpen = isNodeOpen(node.nodeId, node.automaticOpen);
   // 实时正文（liveText）只属于当前执行节点，历史节点始终显示数据库正文。
   const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] || "" : "";
-  // 恢复任务标识（recoveryTaskId）只选择最新且仍有效的等待节点。
-  const recoveryTaskId = latestRecoveryTaskId(visibleNodes, node, index);
-  // 客户卡点（isCustomerAction）需要使用更明确的“从卡点继续”按钮文字。
-  const isCustomerAction = node.eventType === "customer.action_required";
-  // 继续状态（continuing）用于防止同一个恢复任务被重复提交。
-  const continuing = recoveryTaskId === continuingTaskId;
   // 可操作状态（hasAction）决定节点右侧是否需要预留操作区域。
-  const hasAction = Boolean(node.manualApprovalProposalId || recoveryTaskId);
-
-  // 默认继续文字适用于普通暂停或阻塞任务。
-  let continueLabel = locale === "ja" ? "実行を続ける" : "继续执行";
-  // 客户动作节点使用“卡点”文字，帮助用户理解恢复来源。
-  if (isCustomerAction) continueLabel = "从卡点继续";
-  // 正在提交恢复请求时显示进行中状态，并与按钮禁用状态保持一致。
-  if (continuing) continueLabel = locale === "ja" ? "続行中…" : "继续中…";
+  const hasAction = Boolean(node.manualApprovalProposalId);
 
   /** 把当前节点绑定的提案交给工作区打开正式审批窗口。 */
   const approveCurrentProposal = () => {
@@ -234,15 +216,7 @@ function TaskTimelineNode({
     onManualApproval(node.manualApprovalProposalId, group.title, node.content);
   };
 
-  /** 从当前等待节点保存的恢复点继续原任务。 */
-  const continueCurrentTask = () => {
-    // 没有恢复任务标识时不允许发出无法定位原任务的继续请求。
-    if (!recoveryTaskId) return;
-    // 有效恢复点只提交任务标识，异步状态和异常由页面控制器统一处理。
-    onContinueTask(recoveryTaskId);
-  };
-
-  // 节点操作区（actionButtons）只在存在审批或恢复动作时交给统一折叠控件。
+  // 节点操作区（actionButtons）只在存在审批动作时交给统一折叠控件。
   const actionButtons = hasAction ? (
     <span className="task-node-actions">
       {/* 人工审批入口：仅为绑定了待审批提案的节点显示。 */}
@@ -253,21 +227,6 @@ function TaskTimelineNode({
           onClick={approveCurrentProposal}
         >
           {locale === "ja" ? "手動承認" : "手动审批"}
-        </button>
-      )}
-      {/* 任务恢复入口：仅为最新且仍有效的等待节点显示。 */}
-      {recoveryTaskId && (
-        <button
-          type="button"
-          className="task-recovery-continue"
-          disabled={continuing}
-          aria-label={isCustomerAction ? "从卡点继续" : continueLabel}
-          onClick={continueCurrentTask}
-        >
-          {/* 恢复图标：请求处理中显示旋转提示，空闲时显示继续执行提示。 */}
-          <i className={continuing ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
-          {/* 恢复文字：随节点类型、语言和提交状态显示准确动作。 */}
-          {continueLabel}
         </button>
       )}
     </span>
@@ -326,10 +285,10 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { onOpenChange } = model.actions;
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
-  // 普通恢复任务（interruptedRecoveryTaskId）只从仍在等待的应用中断事实读取。
-  const interruptedRecoveryTaskId = latestInterruptedRecoveryTaskId(visibleNodes);
-  // 普通恢复提交中（interruptedRecoveryPending）用于避免重复触发同一个任务。
-  const interruptedRecoveryPending = interruptedRecoveryTaskId === model.presentation.continuingTaskId;
+  // 当前恢复动作（recoveryAction）只来自某个任务的最新等待事实，历史节点不能重新获得按钮。
+  const recoveryAction = latestActiveRecoveryAction(visibleNodes);
+  // 恢复提交中（recoveryPending）用于禁用顶部唯一入口，避免重复提交。
+  const recoveryPending = recoveryAction?.taskId === model.presentation.continuingTaskId;
 
   return (
     // 专题卡根折叠区统一承载卡片头部、恢复入口、人物时间线和下一流程。
@@ -351,14 +310,17 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         {/* 权威下一步骤：直接展示后端为当前专题计算的继续方向。 */}
         <span className="task-timeline-next-current">
           <span>{group.nextStep}</span>
-          {interruptedRecoveryTaskId && !interruptedRecoveryPending && (
+          {recoveryAction && (
             <button
               type="button"
               className="task-recovery-continue"
-              onClick={() => model.actions.onContinueTask(interruptedRecoveryTaskId)}
+              disabled={recoveryPending}
+              onClick={() => model.actions.onContinueTask(recoveryAction.taskId)}
             >
-              <i className="ri-play-circle-line" aria-hidden="true" />
-              {locale === "ja" ? "実行を続ける" : "继续执行"}
+              <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
+              {recoveryPending
+                ? locale === "ja" ? "続行中…" : "继续中…"
+                : recoveryAction.customerAction ? "从卡点继续" : locale === "ja" ? "実行を続ける" : "继续执行"}
             </button>
           )}
         </span>
@@ -375,7 +337,6 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             model={model}
             node={node}
             index={index}
-            visibleNodes={visibleNodes}
           />
         ))}
       </div>

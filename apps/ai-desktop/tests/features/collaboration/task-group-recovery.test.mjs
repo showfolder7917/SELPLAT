@@ -14,6 +14,13 @@ const result = await build({
 const compiled = { exports: {} };
 new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), compiled, compiled.exports);
 const { TaskGroupRecovery } = compiled.exports;
+const selectorResult = await build({
+  entryPoints: [fileURLToPath(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts", import.meta.url))],
+  bundle: true, format: "cjs", platform: "node", packages: "external", write: false,
+});
+const selectorCompiled = { exports: {} };
+new Function("require", "module", "exports", selectorResult.outputFiles[0].text)(createRequire(import.meta.url), selectorCompiled, selectorCompiled.exports);
+const { latestActiveRecoveryAction } = selectorCompiled.exports;
 function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [], groupStatus = "blocked" } = {}) {
   const group = { topicId: "topic-a", proposalId: "proposal-a", nodes, status: groupStatus };
   const evolution = {
@@ -52,16 +59,39 @@ test("恢复处理中禁用按钮并隐藏旧原因，失败反馈保留警告�
 
 test("任务节点已有精确恢复入口时不再显示专题级重复按钮", () => {
   const interrupted = render({ nodes: [{
+    taskId: "task-a",
     status: "waiting",
     eventType: "task.interrupted",
   }] });
   assert.equal(interrupted, "");
 
   const customerAction = render({ nodes: [{
+    taskId: "task-a",
     status: "waiting",
     eventType: "customer.action_required",
   }] });
   assert.equal(customerAction, "");
+});
+
+test("同一任务出现更新节点后旧等待节点不再压住专题恢复入口", () => {
+  const html = render({ nodes: [
+    { taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+    { taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
+  ] });
+  assert.match(html, /从卡点继续/);
+});
+
+test("恢复选择器只认同一任务的最新事实", () => {
+  assert.deepEqual(latestActiveRecoveryAction([
+    { taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+  ]), { taskId: "task-a", customerAction: true });
+  assert.equal(latestActiveRecoveryAction([
+    { taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+    { taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
+  ]), null);
+  assert.deepEqual(latestActiveRecoveryAction([
+    { taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
+  ]), { taskId: "task-a", customerAction: false });
 });
 
 test("专题已经恢复运行时不显示旧一次性运行的恢复入口", () => {

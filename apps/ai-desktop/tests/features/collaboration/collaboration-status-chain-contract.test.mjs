@@ -58,12 +58,12 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
   assert.match(integrationSource, /unified_test\.failed/);
 });
 
-test("普通恢复入口位于下一流程，客户操作仍在对应等待节点", () => {
-  assert.match(taskGroupSource, /latestInterruptedRecoveryTaskId[\s\S]*node\.eventType === "task\.interrupted"/);
-  assert.match(taskGroupSource, /hasNewerWaitingNode[\s\S]*return hasNewerWaitingNode \? null : node\.taskId/);
-  assert.match(taskGroupSource, /isCustomerAction[\s\S]*continueLabel = "从卡点继续"/);
-  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(interruptedRecoveryTaskId\)/);
-  assert.match(taskGroupSource, /onContinueTask\(recoveryTaskId\)/);
+test("普通中断和客户卡点的唯一恢复入口都位于下一流程", () => {
+  assert.match(taskGroupSource, /latestActiveRecoveryAction[\s\S]*node\.eventType === "customer\.action_required"[\s\S]*node\.eventType === "task\.interrupted"/);
+  assert.match(taskGroupSource, /visitedTaskIds[\s\S]*node\.status === "waiting"/);
+  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(recoveryAction\.taskId\)/);
+  assert.match(taskGroupSource, /recoveryAction\.customerAction \? "从卡点继续"/);
+  assert.doesNotMatch(taskGroupSource, /continueCurrentTask/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);
   assert.match(developerSource, /continueTimelineTask[\s\S]*controller\.actions\.continueTask\(taskId\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);

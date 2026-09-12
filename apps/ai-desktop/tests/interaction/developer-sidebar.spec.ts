@@ -145,7 +145,7 @@ test("任务卡明确显示韩立验收归属，并在专题完成后隐藏处�
   }
 });
 
-test("客户操作方案和继续按钮只显示在对应等待节点", async () => {
+test("客户操作方案保留在等待节点，唯一继续按钮位于下一流程且恢复后消失", async () => {
   await page.evaluate(async () => {
     const api = (window as any).desktop;
     await api.setInteractionTaskTimelineFixture(true);
@@ -156,9 +156,12 @@ test("客户操作方案和继续按钮只显示在对应等待节点", async ()
   const waitingNode = page.locator('[data-task-timeline-node-id="customer-action:interaction"]');
   await expect(waitingNode).toContainText("为什么需要您处理");
   await expect(waitingNode).toContainText("1. 确认修改属于当前专题");
-  await expect(waitingNode.getByRole("button", { name: "从卡点继续", exact: true })).toBeVisible();
+  await expect(waitingNode.getByRole("button", { name: "从卡点继续", exact: true })).toHaveCount(0);
+  const resume = page.locator(".task-timeline-next-current").getByRole("button", { name: "从卡点继续", exact: true });
+  await expect(resume).toBeVisible();
   await expect(page.locator(".task-group-recovery")).toHaveCount(0);
-  await waitingNode.getByRole("button", { name: "从卡点继续", exact: true }).click();
+  await resume.click();
+  await expect(page.getByRole("button", { name: "从卡点继续", exact: true })).toHaveCount(0);
   await expect(waitingNode).toHaveCount(0);
   await page.evaluate(async () => {
     await (window as any).desktop.setInteractionTaskTimelineFixture(false);

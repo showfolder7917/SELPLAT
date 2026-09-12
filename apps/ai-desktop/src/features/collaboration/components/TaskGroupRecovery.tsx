@@ -14,7 +14,7 @@ import type {
 } from "../../evolution";
 
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
-import { compactTimelineText, presentTimelineText } from "./TaskCollaborationGroup/timeline-display";
+import { compactTimelineText, latestActiveRecoveryAction, presentTimelineText } from "./TaskCollaborationGroup/timeline-display";
 
 /** 恢复提示先显示短摘要，完整原因仅在用户展开时展示。 */
 function RecoveryMessage({ message, role, locale }: { message: string; role?: "alert" | "status"; locale: LocaleValue }) {
@@ -43,11 +43,7 @@ type TaskGroupRecoveryProps = {
 /** 仅为当前专题原运行提供唯一恢复入口。 */
 export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecoveryProps) {
   // 任务节点已有精确恢复入口时，专题级运行恢复不能再显示第二个入口。
-  const hasTaskRecoveryNode = group.nodes.some((node) => {
-    // 客户操作留在对应节点，普通应用中断由卡片“下一流程”区域承载。
-    return node.status === "waiting"
-      && (node.eventType === "customer.action_required" || node.eventType === "task.interrupted");
-  });
+  const hasTaskRecoveryNode = Boolean(latestActiveRecoveryAction(group.nodes));
   // 节点已经拥有精确恢复入口时，专题级入口必须隐藏。
   if (hasTaskRecoveryNode) return null;
 
