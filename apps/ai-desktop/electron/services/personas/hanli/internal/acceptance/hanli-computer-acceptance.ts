@@ -568,6 +568,10 @@ function safeNavigationClick(x: number, y: number): boolean {
   if (node.classList.contains("activity-settings") && node.closest(".dev-settings-control")) {
     return true;
   }
+  // 用户已批准的测试台只读导航仅放行固定容器中的触发器。
+  if (node.classList.contains("activity-test-console") && node.closest(".dev-test-console-control")) {
+    return true;
+  }
   if (node.classList.contains("collaboration-member")) {
     return true;
   }
