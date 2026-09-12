@@ -128,6 +128,7 @@ import { createCapabilityContext } from "./capabilities.bootstrap.js";
 import { createCollaborationContext } from "./collaboration.bootstrap.js";
 import { createPersonaApplicationContext } from "./personas.bootstrap.js";
 import { registerApplicationIpc } from "./ipc.bootstrap.js";
+import { AcceptanceEmptyTaskGroupSession } from "../ipc/acceptance-empty-task-group-session.js";
 import { TestDataResetService } from "../../services/support/application/test-data-reset.service.js";
 
 const startup = createStartupContext();
@@ -489,6 +490,8 @@ export async function startApplication(): Promise<void> {
       return parseCodexSemanticBackfillResponse(response.text);
     },
   }) : null;
+  // IPC 首次读取和后续协作状态推送必须共用这一隔离会话，避免正式专题覆盖空状态窗口。
+  const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession();
   let linghuRuntime: LinghuRuntime | undefined;
   const collaborationContext = createCollaborationContext({
     startup,
@@ -519,7 +522,13 @@ export async function startApplication(): Promise<void> {
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
       }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.isDestroyed()) continue;
+        const isolated = acceptanceEmptyTaskGroupSession.isActive(window.webContents.id);
+        // 隔离窗口只接收对应的只读空状态投影，正式窗口仍接收完整状态与任务关联。
+        const projectedState = isolated ? acceptanceEmptyTaskGroupSession.collaborationState(window.webContents.id, state) : state;
+        window.webContents.send("desktop:collaboration-state", { state: projectedState, reason, taskIds: isolated ? [] : taskIds });
+      }
       // 人物页签和桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
       if (reason !== "member.selected" && reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
     },
@@ -933,6 +942,7 @@ export async function startApplication(): Promise<void> {
       if (!corpusSemanticBackfill) throw new Error("AI Memory 数据库不可用，无法补齐历史摘要。");
       return corpusSemanticBackfill.start(limit);
     },
+    acceptanceEmptyTaskGroupSession,
     prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 
