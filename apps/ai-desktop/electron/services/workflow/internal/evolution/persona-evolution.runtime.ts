@@ -635,7 +635,9 @@ export class PersonaEvolutionRuntime {
           state = result.state;
           // 等待真实客户确认属于稳定停点；没有新业务事实时禁止按秒改写整份演化状态并继续排队。
           if (result.activity === "idle") return;
-          const established = [...state.deliberations].reverse().find((item) => item.status === "established" && item.topicId);
+          // 只有这次推进真正建立专题，才能移交实施；历史已建立专题不能接管新研讨。
+          const established = result.activity === "topic-established"
+            ? state.deliberations.find((item) => item.topicId === result.topicId) : undefined;
           if (!established?.topicId) {
             this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "正在判断南宫婉回答；条件不足时继续提出下一问", null, null);
             this.#scheduleContinuation(1_000);
@@ -658,7 +660,9 @@ export class PersonaEvolutionRuntime {
         state = result.state;
         if (result.activity !== "idle") {
           state = this.#store.beginOneShotRun(state.automationContext.workspaceState!, state.automationContext.locale);
-          const established = [...state.deliberations].reverse().find((item) => item.status === "established" && item.topicId);
+          // 只有这次推进真正建立专题，才能移交实施；历史已建立专题不能接管新研讨。
+          const established = result.activity === "topic-established"
+            ? state.deliberations.find((item) => item.topicId === result.topicId) : undefined;
           state = this.#store.updateOneShotRun(
             established?.topicId ? "forming-proposal" : "preparing-topic",
             established?.topicId ? "nangong-wan" : "han-li",

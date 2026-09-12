@@ -33,7 +33,7 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
       readProjectScope: options.readProjectScope || (() => projectPaths.projectRoot),
       screenshots: {},
     });
-    super({ ...options, prompts, hanli: hanliRuntime.facade });
+    super({ ...options, collaboration: { state: () => ({ tasks: [], members: [] }), ...options.collaboration }, prompts, hanli: hanliRuntime.facade });
     this.hanliRuntime = hanliRuntime;
   }
   sendConversationMessage(...args) { return this.nangongRuntime.facade.sendConversationMessage(...args); }
@@ -1775,3 +1775,38 @@ test("返修调查没有新增可核验事实时不创建提案版本", async ()
     assert.equal(state.proposals[0].status, "supplement-required");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+for (const mode of ["explicit", "background"]) {
+  test(`新研讨调查中不能接管历史专题：${mode}`, async () => {
+    const key = `new-deliberation-keeps-scope-${mode}`;
+    let store = evolutionStore(key);
+    store.configureAutomation({ maxRoundsPerTopic: 5, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+    store.beginDeliberation("old-deliberation", [{ content: "旧需求", source: "codex", role: "user", capturedAt: "2026-01-01T00:00:00.000Z" }], "旧问题", "旧需求");
+    const snapshot = readPersistedState(key);
+    snapshot.deliberations[0].status = "established";
+    snapshot.deliberations[0].topicId = "old-topic";
+    snapshot.deliberations[0].createdAt = "2026-01-01T00:00:00.000Z";
+    writePersistedState(key, snapshot);
+    store = evolutionStore(key);
+    store.controlAutomation("start");
+    const facade = new PersonaEvolutionRuntime({
+      store, collaboration: { state: () => ({ tasks: [], members: [] }) }, conversation,
+      recordEvent() {},
+      askHanliDeliberation: async () => JSON.stringify({ decision: "continue", assessment: "需要核实隔离环境", nextQuestion: "如何隔离正式记录？", questionReason: "不改正式数据" }),
+      askNangongDeliberation: async () => "当前正式页面有任务，需要隔离测试环境。",
+    });
+    try {
+      if (mode === "explicit") facade.startHanliNangongDeliberation(workspaceState, "zh-CN");
+      store.beginDeliberation("new-deliberation", [{ content: "测试空状态但保留正式记录", source: "codex", role: "user", capturedAt: new Date().toISOString() }], "怎样测试空状态？", "客户新确认的需求");
+      facade.start();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      const state = facade.state();
+      assert.ok(state.deliberations.at(-1).rounds.length >= 2, "新研讨已收到真实推进结果");
+      assert.equal(state.oneShotRun.status, "running");
+      assert.equal(state.oneShotRun.phase, "preparing-topic");
+      assert.equal(state.oneShotRun.topicId, null, "不得把旧专题放进新运行");
+      assert.equal(state.oneShotRun.proposalId, null);
+      assert.equal(state.proposals.length, 0, "调查未完成不能生成执行提案");
+    } finally { facade.stop(); }
+  });
+}

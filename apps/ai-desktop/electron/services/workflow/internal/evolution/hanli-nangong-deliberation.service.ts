@@ -38,6 +38,8 @@ export interface HanliNangongDeliberationAdvanceResult {
   state: EvolutionStateOutDto;
   /** 本轮真实发生的最高业务动作。 */
   activity: "idle" | "questioning" | "topic-established";
+  /** 本次实际建立的专题，避免调用方从历史列表误取旧专题。 */
+  topicId?: string | null;
 }
 
 interface CustomerCorrectionInterpretation {
@@ -257,7 +259,7 @@ export class HanliNangongDeliberationService {
     const state = this.dependencies.store.establishDeliberationTopic(deliberation.deliberationId);
     this.#appendInternalMessage(roundId, "started", "nangong", `收到 1。我现在开始整理“${deliberation.candidate!.title}”的实施提案，随后进入审批、分发、执行和验证。具体进度会在任务协作群显示。`, `internal:${roundId}:confirm`, new Date().toISOString());
     this.dependencies.recordEvent("hanli.nangong.topic_established", { deliberationId: deliberation.deliberationId, topicId: state.activeTopicId, candidate: deliberation.candidate });
-    return { state, activity: "topic-established" };
+    return { state, activity: "topic-established", topicId: requireDeliberation(state, deliberation.deliberationId).topicId };
   }
 
   #recordConfirmationReply(deliberation: HanliEvolutionDeliberationOutDto, rawReply: string, followup: { question: string; reason: string } | null): EvolutionStateOutDto {
