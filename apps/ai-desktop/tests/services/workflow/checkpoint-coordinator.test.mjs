@@ -245,7 +245,7 @@ test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南�
   assert.equal(f.messages.size, 2); assert.equal(f.events.size, 2);
 });
 
-test("验收每轮独立身份，结果返回韩立及南宫婉", () => {
+test("验收每轮独立身份，结果留在专题时间线而不写入客户会话", () => {
   const f = memoryFixture();
   const service = new AcceptanceHandoffService({ memory: f.memory, store: { state: () => ({ topics: [{ topicId: "topic-1", title: "原任务" }] }) }, readHanliConversationId: () => "han-li-conversation", recordTimelineEvent: event => f.events.set(event.eventId, event) });
   const proposal = { topicId: "topic-1", proposalId: "proposal-1" };
@@ -255,7 +255,8 @@ test("验收每轮独立身份，结果返回韩立及南宫婉", () => {
   }
   assert.equal(f.events.size, 4);
   assert.equal([...f.messages.values()].filter(message => message.ownerPersonaId === "nangong-wan").length, 4);
-  assert.equal([...f.messages.values()].filter(message => message.messageId.startsWith("hanli-result:")).length, 2);
+  assert.equal([...f.messages.values()].filter(message => message.messageId.startsWith("hanli-result:")).length, 0);
+  assert.ok([...f.messages.values()].every(message => message.messageId.startsWith("internal:")));
 });
 
 

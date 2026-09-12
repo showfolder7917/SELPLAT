@@ -51,10 +51,6 @@ export class AcceptanceHandoffService {
       const messageId = `internal:${id}:${owner}:${received ? "question" : "answer"}`;
       const conversation = memory.appendPersonaInternalMessage({ ownerPersonaId: owner, conversationId, messageId, speakerPersonaId: actor.memberId, content, replyToMessageId: received ? null : `internal:acceptance:${proposal.proposalId}:${attemptId}:received:${owner}:question`, createdAt: now });
       this.options.onPersonaConversationChanged?.(conversation);
-      if (owner === "han-li" && (phase === "passed" || failed)) {
-        const result = memory.appendPersonaInternalMessage({ ownerPersonaId: "han-li", conversationId, messageId: `hanli-result:${proposal.proposalId}:${attemptId}:${phase}`, speakerPersonaId: "han-li", content: `“${topic.title}”的验收结果：\n\n${content}`, createdAt: now });
-        this.options.onPersonaConversationChanged?.(result);
-      }
     }
   }
 }
