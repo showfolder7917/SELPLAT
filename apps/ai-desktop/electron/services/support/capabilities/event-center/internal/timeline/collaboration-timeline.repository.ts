@@ -225,6 +225,24 @@ export class CollaborationTimelineRepository {
       return true;
     }).map((row) => this.#node(connection, row, now))
       .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || (firstSequence.get(left.nodeId) || 0) - (firstSequence.get(right.nodeId) || 0));
+    // 同一任务已交付重启健康结果时，早期恢复或中断批次不再是当前工作；原始事实仍保留。
+    const deliveredAt = new Map<string, string>();
+    for (const node of nodes) {
+      if (node.taskId && node.eventType === "release.restart_healthy" && node.status === "completed") {
+        deliveredAt.set(node.taskId, node.completedAt || node.startedAt);
+      }
+    }
+    for (const node of nodes) {
+      const endedAt = node.taskId ? deliveredAt.get(node.taskId) : undefined;
+      if (!endedAt || node.startedAt > endedAt || !["current", "waiting"].includes(node.status)
+        || !["analysis", "execution", "verification", "repair"].includes(node.kind)) continue;
+      node.status = "completed";
+      node.completedAt = endedAt;
+      node.durationMs = durationMs(node.startedAt, endedAt);
+      node.action = "该阶段已结束";
+      node.summary = "本任务已通过重启健康检查，当前进度见后续节点。";
+      node.automaticOpen = false;
+    }
     // 人数不是阶段数；同一人物旧阶段与验证并存时只计一次，验证状态优先。
     const verifyingPeople = new Set(nodes.filter(node => node.status === "current" && node.kind === "verification").map(node => node.actor.memberId).filter(id => id !== "system"));
     const executingPeople = new Set(nodes.filter(node => node.status === "current" && ["analysis", "execution", "repair"].includes(node.kind)).map(node => node.actor.memberId).filter(id => id !== "system" && !verifyingPeople.has(id)));

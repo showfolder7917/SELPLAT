@@ -619,6 +619,8 @@ test("三次测试两次修复保留顺序且通过后等待健康检查而不�
     const healthy = fixture.timeline.snapshot().groups[0];
     assert.notEqual(healthy.status, "completed", "健康检查不能冒充韩立验收完成");
     assert.match(healthy.nextStep, /韩立.*验收/);
+    assert.equal(healthy.executingCount + healthy.verifyingCount + healthy.waitingCount, 0);
+
   } finally { fixture.close(); }
 });
 
@@ -633,3 +635,39 @@ function createFixture(suffix) {
   const base = Date.now() + 1_000;
   return { database, timeline, at(offset) { return new Date(base + offset * 1_000).toISOString(); }, append(event) { timeline.appendBusinessEvent(event); }, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
 }
+
+
+test("交付后旧恢复和中断测试停止计时，另一任务及后续新工作仍保留", () => {
+  const fixture = createFixture("delivered-closes-old-stages");
+  try {
+    const add = (id, taskId, type, offset, status, kind) => {
+      const event = businessEvent(fixture, id, "proposal-1", offset, {
+        nodeId: id, sourceFactKey: id, proposalId: "proposal-1", occurredAt: fixture.at(offset), automaticOpen: true, manualApprovalProposalId: null, taskId, kind, actor: member(taskId, taskId), recipients: [], status,
+        action: id, summary: id, content: "原始记录", detail: "保留历史", startedAt: fixture.at(offset),
+        completedAt: status === "completed" ? fixture.at(offset) : null,
+      }, "running");
+      event.eventType = type;
+      fixture.append(event);
+    };
+    add("old-recovery", "task-a", "execution.repair_started", 1, "current", "repair");
+    add("old-test", "task-a", "unified_test.started", 2, "current", "verification");
+    add("waiting", "task-a", "task.blocked", 3, "waiting", "execution");
+    add("other-task", "task-b", "execution.started", 4, "current", "execution");
+    add("delivered", "task-a", "release.restart_healthy", 5, "completed", "result");
+    add("new-work", "task-a", "execution.started", 6, "current", "execution");
+    const first = fixture.timeline.snapshot(fixture.at(8)).groups[0];
+    const later = fixture.timeline.snapshot(fixture.at(20)).groups[0];
+    for (const id of ["old-recovery", "old-test", "waiting"]) {
+      const node = first.nodes.find((item) => item.nodeId === id);
+      assert.equal(node.status, "completed");
+      assert.equal(node.completedAt, fixture.at(5));
+      assert.equal(node.content, "原始记录");
+      assert.equal(node.durationMs, later.nodes.find((item) => item.nodeId === id).durationMs);
+    }
+    assert.equal(first.nodes.find((item) => item.nodeId === "other-task").status, "current");
+    assert.equal(first.nodes.find((item) => item.nodeId === "new-work").status, "current");
+    assert.equal(first.verifyingCount, 0);
+    assert.equal(first.waitingCount, 0);
+    assert.equal(first.executingCount, 2);
+  } finally { fixture.close(); }
+});
