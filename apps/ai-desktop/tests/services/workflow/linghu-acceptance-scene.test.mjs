@@ -18,7 +18,7 @@ const currentWindowGoal = {
     oneShotRun: { topicId: "t", proposalId: "p", status: "running", phase: "accepting" },
   },
 };
-const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数据", conditions: [
+const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, conditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
 ] };
@@ -28,12 +28,12 @@ test("令狐显式选择场景不依赖用户语言、页面名和词序", () =>
   assert.deepEqual(validateAcceptanceScenePlan(plan, { ...goal, criteria: ["Empty tasks guidance", "Adjacent button"] }), plan);
 });
 test("场景缺项、重复、未知类型不能默认进入正式窗口", () => {
-  for (const invalid of [{ ...plan, kind: "guess" }, { ...plan, conditions: [] }, { ...plan, conditions: [plan.conditions[0], plan.conditions[0]] }, { ...plan, reason: "" }]) {
+  for (const invalid of [{ ...plan, kind: "guess" }, { ...plan, conditions: [] }, { ...plan, conditions: [plan.conditions[0], plan.conditions[0]] }, { ...plan, reason: "" }, { ...plan, completionReviewRequired: undefined }, { ...plan, completionReviewRequired: true }]) {
     assert.throws(() => validateAcceptanceScenePlan(invalid, goal));
   }
 });
 test("当前窗口必须使用运行时核验过的同一专题、提案和验收运行身份", () => {
-  const currentPlan = { ...plan, kind: "current-window", reason: "已核验目标专题正在验收" };
+  const currentPlan = { ...plan, kind: "current-window", reason: "已核验目标专题正在验收", completionReviewRequired: true };
   assert.deepEqual(validateAcceptanceScenePlan(currentPlan, currentWindowGoal), currentPlan);
   assert.throws(() => validateAcceptanceScenePlan(currentPlan, goal), /只读专题、提案或运行记录/);
   assert.throws(() => validateAcceptanceScenePlan(currentPlan, {

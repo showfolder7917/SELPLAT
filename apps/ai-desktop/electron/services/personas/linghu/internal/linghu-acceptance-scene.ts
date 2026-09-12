@@ -6,7 +6,8 @@ import type { AcceptanceScenePlanOutDto, HanliComputerAcceptanceInDto } from "..
 export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanOutDto {
   const value = input as AcceptanceScenePlanOutDto;
   if (!value || !["current-window", "empty-task-group", "blocked"].includes(value.kind)
-    || typeof value.reason !== "string" || !value.reason.trim() || !Array.isArray(value.conditions)) {
+    || typeof value.reason !== "string" || !value.reason.trim()
+    || typeof value.completionReviewRequired !== "boolean" || !Array.isArray(value.conditions)) {
     throw new Error("令狐未提交有效的验收场景计划。");
   }
   const expectedIds = goal.criteria.map((_, index) => `criterion-${index + 1}`);
@@ -19,7 +20,15 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   if (value.kind === "current-window" && !hasVerifiedCurrentWindowContext(goal)) {
     throw new Error("当前窗口场景缺少与验收目标一致的只读专题、提案或运行记录，不能把模型推测当作页面事实。");
   }
-  return { kind: value.kind, reason: value.reason.trim(), conditions: value.conditions.map(({ criterionId, prerequisite }) => ({ criterionId, prerequisite: prerequisite.trim() })) };
+  if (value.completionReviewRequired && value.kind !== "current-window") {
+    throw new Error("跨完成态复核只能使用当前真实窗口，隔离或受阻场景不能触发业务完成动作。");
+  }
+  return {
+    kind: value.kind,
+    reason: value.reason.trim(),
+    completionReviewRequired: value.completionReviewRequired,
+    conditions: value.conditions.map(({ criterionId, prerequisite }) => ({ criterionId, prerequisite: prerequisite.trim() })),
+  };
 }
 
 /** 当前窗口只能复用已由运行时核实关联关系的专题，避免模型在无数据端口时臆测记录缺失。 */
@@ -39,8 +48,9 @@ export function createAcceptanceSceneSubmission() {
   const tools: CodexDynamicToolsPort = {
     definitions: [{ type: "function", name: "linghu_submit_acceptance_scene",
       description: "提交本轮逐项验收场景计划。必须填写当前请求编号；说明文字不能替代此提交。工具只记录计划，不修改页面或原任务数据。",
-      inputSchema: { type: "object", additionalProperties: false, required: ["requestId", "kind", "reason", "conditions"], properties: {
+      inputSchema: { type: "object", additionalProperties: false, required: ["requestId", "kind", "reason", "completionReviewRequired", "conditions"], properties: {
         requestId: { type: "string" }, kind: { type: "string", enum: ["current-window", "empty-task-group", "blocked"] }, reason: { type: "string" },
+        completionReviewRequired: { type: "boolean" },
         conditions: { type: "array", items: { type: "object", additionalProperties: false, required: ["criterionId", "prerequisite"], properties: { criterionId: { type: "string" }, prerequisite: { type: "string" } } } },
       } },
     }],

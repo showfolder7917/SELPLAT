@@ -2,6 +2,8 @@
 export interface AcceptanceScenePlanOutDto {
   kind: "current-window" | "empty-task-group" | "blocked";
   reason: string;
+  /** 原条件是否必须跨越“验收中 -> 已完成”才能取得完整证据；仅当前窗口可以启用。 */
+  completionReviewRequired: boolean;
   /** 与原验收条件逐项对应的前提，不能省略未覆盖条件。 */
   conditions: { criterionId: string; prerequisite: string }[];
 }

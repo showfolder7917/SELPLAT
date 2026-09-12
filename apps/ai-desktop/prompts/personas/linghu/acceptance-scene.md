@@ -5,8 +5,9 @@
 其中 `sceneContext` 是主进程已核验的只读专题、提案和运行身份事实。选择 `current-window` 时必须以该事实为准；不得声称查询过未提供的运行记录，也不得因缺少模型查询能力臆测专题不存在。
 
 逐条理解验收条件的前提，结合只读核查，必须调用 linghu_submit_acceptance_scene 工具提交计划，requestId 原样使用本轮目标中的编号。普通回复可以解释，但不能代替工具提交。工具参数：
-{"requestId":"本轮请求编号","kind":"current-window|empty-task-group|blocked","reason":"选择理由","conditions":[{"criterionId":"criterion-1","prerequisite":"此条件成立所需的页面和数据前提"}]}
+{"requestId":"本轮请求编号","kind":"current-window|empty-task-group|blocked","reason":"选择理由","completionReviewRequired":false,"conditions":[{"criterionId":"criterion-1","prerequisite":"此条件成立所需的页面和数据前提"}]}
 每个原条件按顺序编号 criterion-1、criterion-2 等，必须各出现一次。
+只有原条件明确要求观察“验收中”到“已完成”的真实状态切换，且当前窗口已具备同一专题、提案和运行身份时，才把 completionReviewRequired 设为 true。此时程序先让韩立确认验收场景真实可用，再由原 Workflow 完成收口，最后让韩立只读复核全部原条件；不要因为完成态尚未发生而在前置门报告受阻。其他情况必须为 false。
 可用场景：
 - current-window：现有真实应用与数据能够满足所有验收前提。不能因为应用能打开就认定适用。
 - empty-task-group：目标要求没有专题或任务时的协作群界面。程序会使用同一发布代码建立非持久化空数据验收窗口，隔离原任务与会话；可导航、检查按钮焦点、调整尺寸，但不能发送消息或改原数据。

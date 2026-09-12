@@ -148,8 +148,19 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       });
       audit.recordEvent("linghu.acceptance_scene.ready", { ...identity, plan, webContentsId: prepared.window.webContents.id });
       onSceneReady();
-      const run = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan }, prepared.window);
+      const completionReviewRequired = plan.kind === "current-window" && plan.completionReviewRequired;
+      const initialGoal = completionReviewRequired ? {
+        ...goal,
+        criteria: ["确认当前真实窗口已进入目标专题的韩立验收阶段，任务卡可读、尚未误示为已完成，且页面没有阻止完成收口的错误。"],
+        preparedScene: plan,
+        reviewMode: "pre-completion-gate" as const,
+      } : { ...goal, preparedScene: plan };
+      const run = await hanli.executeComputerAcceptance(initialGoal, prepared.window);
       if (run.status !== "passed") {
+        audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
+        return run;
+      }
+      if (!completionReviewRequired) {
         audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
         return run;
       }
@@ -161,7 +172,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         runId: run.runId,
         startedAt: run.startedAt,
         initialBounds: run.initialBounds,
-        stepResults: [...run.stepResults, ...review.stepResults.map((step, index) => ({ ...step, operationIndex: run.stepResults.length + index }))],
+        stepResults: [
+          ...run.stepResults.map((step) => ({ ...step, checkId: "pre-completion-gate" })),
+          ...review.stepResults.map((step, index) => ({ ...step, operationIndex: run.stepResults.length + index })),
+        ],
         evidenceAttachmentIds: [...new Set([...run.evidenceAttachmentIds, ...review.evidenceAttachmentIds])],
       };
       audit.recordEvent("hanli.acceptance.real_app_checked", { runId: merged.runId, topicId: merged.topicId, proposalId: merged.proposalId, status: merged.status, evidenceCount: merged.evidenceAttachmentIds.length, postCompletionReview: true });
