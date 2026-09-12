@@ -5,7 +5,7 @@ import { transform } from "esbuild";
 
 // 单测直接转换当前工作树源码，避免测试把未构建的隔离工作树误判为运行时代码缺失。
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport };", {
+const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus };", {
   loader: "ts",
   format: "esm",
   target: "es2022",
@@ -20,6 +20,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
   const boundsCalls = [];
   const window = { isDestroyed: () => false, getBounds: () => ({ ...bounds }), setBounds: (next) => { bounds = { ...next }; boundsCalls.push({ ...next }); }, getContentBounds: () => ({ width: bounds.width, height: bounds.height }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: bounds.width * screenshotScale, height: bounds.height * screenshotScale }) }), executeJavaScript: async (script) => {
     const source = String(script);
+    if (/readNavigationClickStatus/.test(source)) return typeof safe === "function" ? safe() : safe ? "allowed" : "restricted";
     if (/readAcceptanceViewport/.test(source)) return { width: bounds.width, height: bounds.height };
     if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
     if (/focusAcceptanceModelControl/.test(source)) {
@@ -444,4 +445,31 @@ test("截图编号错误回执给出有效身份，拒绝动作后仍可重新�
   });
   assert.equal(run.status, "passed");
   assert.equal(f.inputs.length, 2);
+});
+
+
+test("说明文字上的误点不是权限拒绝，重新观察后可在同一验收继续", async () => {
+  let status = "missed";
+  const f = fixture(() => status);
+  await f.run(async (tools) => {
+    const first = await observe(tools);
+    await assert.rejects(tools.call("hanli_computer", { action: "click", observationId: id(first), x: 938, y: 262, reason: "点击起步按钮" }), /未命中按钮.*不是权限拒绝/);
+    assert.equal(f.inputs.length, 0);
+    const fresh = await observe(tools);
+    status = "allowed";
+    const clicked = await tools.call("hanli_computer", { action: "click", observationId: id(fresh), x: 938, y: 293, reason: "依据新截图校正到按钮中心" });
+    assert.equal(f.inputs.length, 2);
+    await finish(tools, id(clicked));
+  });
+});
+
+test("命中分类只看控件身份，空白或说明不调用权限判断，受限按钮仍拒绝", () => {
+  const previous = globalThis.document;
+  try {
+    globalThis.document = { elementFromPoint: () => ({ closest: () => null }) };
+    assert.equal(acceptanceModule.readNavigationClickStatus(938, 262, () => { throw new Error("说明文字不应进行权限判断"); }), "missed");
+    globalThis.document = { elementFromPoint: () => ({ closest: () => ({}) }) };
+    assert.equal(acceptanceModule.readNavigationClickStatus(938, 293, () => false), "restricted");
+    assert.equal(acceptanceModule.readNavigationClickStatus(938, 293, () => true), "allowed");
+  } finally { globalThis.document = previous; }
 });

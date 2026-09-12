@@ -376,12 +376,15 @@ export class HanliComputerAcceptance {
             assertPointInsideWindow(point.x, point.y, width, height, "换算后的坐标必须位于当前应用窗口内。");
             if (args.action === "click") {
               // 只用DOM做安全拦截，绝不通过DOM替模型定位或断言成功。
-              const safe = await window.webContents.executeJavaScript(`(${safeNavigationClick.toString()})(${point.x},${point.y})`) as boolean;
+              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},${safeNavigationClick.toString()})`) as "allowed" | "missed" | "restricted";
               if (closed) {
                 throw new Error("验收已终止，未执行点击。");
               }
-              if (!safe) {
-                throw new Error("该位置不是允许的导航控件；可能改变业务数据，未执行点击。");
+              if (clickStatus === "missed") {
+                throw new Error(`截图坐标 (${args.x}, ${args.y}) 未命中按钮或导航控件，未执行点击。这不是权限拒绝；请在本轮 observe 重新查看截图，校正按钮中心位置后再点击，不能据此判定页面或验收权限受阻。`);
+              }
+              if (clickStatus !== "allowed") {
+                throw new Error("已命中控件，但该控件不在允许的导航范围内，未执行点击。不能换工具绕过限制。");
               }
               window.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
               window.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
@@ -742,6 +745,13 @@ async function focusAcceptanceModelControl(control: unknown): Promise<{ status: 
     return { status: "focused", controlLabel: select.getAttribute("aria-label") };
   }
   return { status: "不支持的模型控件", controlLabel: null };
+}
+
+/** 区分坐标误点与真正的导航限制；只判断命中身份，不替模型定位目标或判断页面成功。 */
+function readNavigationClickStatus(x: number, y: number, isAllowed: (x: number, y: number) => boolean): "allowed" | "missed" | "restricted" {
+  const control = document.elementFromPoint(x, y)?.closest("button,[role=tab],[role=treeitem]");
+  if (!control) return "missed";
+  return isAllowed(x, y) ? "allowed" : "restricted";
 }
 
 function safeNavigationClick(x: number, y: number): boolean {
