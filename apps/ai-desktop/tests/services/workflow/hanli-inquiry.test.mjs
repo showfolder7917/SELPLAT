@@ -404,3 +404,30 @@ test("删除韩立托管排障旁路，不保留后台恢复或旧状态兼容�
   const inquirySource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.ts", import.meta.url), "utf8");
   assert.doesNotMatch(inquirySource, /recoverAutomatic|waitForRecovery|#recoveryTimer|strategyReview/);
 });
+
+
+test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认端口", async () => {
+  const f = fixture(async () => findings);
+  const replies = [];
+  const state = {
+    oneShotRun: { runId: "existing-run", status: "running" },
+    deliberations: [{ deliberationId: "existing", status: "ready-to-establish", rounds: [
+      { roundId: "scope-round", confirmation: { offer: "旧验收工具方案", offeredAt: "2026-09-12T03:00:00.000Z", reply: null } },
+    ] }],
+  };
+  const service = new HanliConversationService({
+    memory: f.memory, store: { state: () => state },
+    conversation: { send: async () => { throw new Error("确认不进入普通聊天"); } },
+    recordEvent: () => {},
+    replyInternalDeliberationConfirmation: async (reply) => {
+      replies.push(reply); return { customerReply: "已交原研讨纠正范围" };
+    },
+    startInternalDeliberation: async () => { throw new Error("不能创建重复研讨"); },
+  });
+  await service.send({ ...request, clientMessageId: "restore-scope", message: "1" });
+  assert.equal(replies.length, 0);
+  assert.match(f.messages.find((item) => item.messageId === "hanli-confirmation:scope-round").content, /尚未批准.*[\s\S]*旧验收工具方案/);
+  await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
+  assert.deepEqual(replies, ["不要旧方案，仅修测试台状态"]);
+  assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round").length, 1);
+});

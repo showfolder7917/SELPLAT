@@ -171,6 +171,23 @@ export class HanliConversationService {
     }
     // 当前已有活动研讨时，重复输入 1 只返回原流程状态。
     if (action.kind === "return-existing-deliberation") {
+      // 新建人物会话不会取消业务研讨；找回尚未展示的真实范围，不能把本次 1 当作旧方案授权。
+      const pending = [...workflowState.deliberations].reverse().find((item) =>
+        item.status === "ready-to-establish" && item.rounds.at(-1)?.confirmation
+        && !item.rounds.at(-1)?.confirmation?.reply);
+      const round = pending?.rounds.at(-1);
+      if (round?.confirmation && conversation.conversationId) {
+        const restored = memory.appendPersonaInternalMessage({
+          ownerPersonaId: "han-li", conversationId: conversation.conversationId,
+          messageId: `hanli-confirmation:${round.roundId}`, speakerPersonaId: "han-li",
+          content: `之前的研讨仍在等待范围确认，本次 1 尚未批准该方案。请先核对或纠正原范围：\n\n${round.confirmation.offer}\n\n如需调整目标，请直接说明；只有再次输入 1 才确认这份范围。`,
+          createdAt: round.confirmation.offeredAt,
+        });
+        this.#options.onPersonaConversationChanged?.(restored);
+        return this.#recordControlReply(request, restored,
+          "已恢复尚未确认的原范围。请核对或纠正后继续，未创建新任务，也未开始实施。",
+          START_DELIBERATION_DECISION);
+      }
       // 保存可见反馈，避免用户误以为点击没有响应或连接已经断开。
       return this.#recordControlReply(
         request,
