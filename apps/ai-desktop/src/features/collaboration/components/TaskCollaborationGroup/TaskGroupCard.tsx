@@ -313,7 +313,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
         {/* 权威下一步骤：直接展示后端为当前专题计算的继续方向。 */}
         <span className="task-timeline-next-current">
-          <span>{group.nextStep}</span>
+          <span>{presentedGroup.nextStep}</span>
           {recoveryAction && (
             <button
               type="button"
