@@ -735,6 +735,14 @@ function safeNavigationClick(x: number, y: number): boolean {
   if (node.matches("button.activity-test-console") && node.closest(".dev-activitybar .dev-test-console-control")) {
     return true;
   }
+  // 任务计数与名称紧邻，不能依赖文本边界；只允许任务列表中的固定导航入口切换右侧面板。
+  if (node.matches("button.collaboration-task-group-entry") && node.closest("#developer-task-list")) {
+    return true;
+  }
+  // 空状态唯一入口只打开韩立会话，不提交任务、确认或恢复流程。
+  if (node.matches("button.task-collaboration-empty-action") && node.closest(".task-collaboration-page .task-collaboration-empty")) {
+    return true;
+  }
   if (node.classList.contains("collaboration-member")) {
     return true;
   }
@@ -744,7 +752,7 @@ function safeNavigationClick(x: number, y: number): boolean {
   if (node.matches(".selimagepreview-action, .seldialog-close") && node.closest('dialog[data-sel-dialog="selDialogImagePreviewId"][open]')) {
     return true;
   }
-  return node.getAttribute("role") === "tab" || /^(韩立|南宫婉|令狐老祖|紫灵|元瑶|宋玉|冰魄仙子|墨彩环|墨大夫|厉飞雨|张铁|李化元|任务协作群|单会话|协同模式|折叠侧栏|展开侧栏)(\s|$)/u.test(label);
+  return node.getAttribute("role") === "tab" || /^(韩立|南宫婉|令狐老祖|紫灵|元瑶|宋玉|冰魄仙子|墨大夫|厉飞雨|张铁|李化元|单会话|协同模式|折叠侧栏|展开侧栏)(\s|$)/u.test(label);
 }
 
 function safeImagePreviewDrag(x: number, y: number): boolean {
