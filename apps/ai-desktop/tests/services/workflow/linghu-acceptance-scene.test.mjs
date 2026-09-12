@@ -26,6 +26,8 @@ const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数
 test("令狐显式选择场景不依赖用户语言、页面名和词序", () => {
   assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
   assert.deepEqual(validateAcceptanceScenePlan(plan, { ...goal, criteria: ["Empty tasks guidance", "Adjacent button"] }), plan);
+  const recoveryPlan = { ...plan, kind: "failure-recovery-timeline", reason: "条件要求核对失败与恢复的完整事实" };
+  assert.deepEqual(validateAcceptanceScenePlan(recoveryPlan, goal), recoveryPlan);
 });
 test("场景缺项、重复、未知类型不能默认进入正式窗口", () => {
   for (const invalid of [{ ...plan, kind: "guess" }, { ...plan, conditions: [] }, { ...plan, conditions: [plan.conditions[0], plan.conditions[0]] }, { ...plan, reason: "" }, { ...plan, completionReviewRequired: undefined }, { ...plan, completionReviewRequired: true }]) {
@@ -63,6 +65,13 @@ test("当前场景沿用原窗口，释放时不关闭原应用", async () => {
   prepared.dispose();
   assert.deepEqual(f.events, []);
 });
+test("失败恢复场景创建同样只读的非持久化窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...plan, kind: "failure-recovery-timeline", reason: "核对失败和恢复详情" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+
 test("隔离场景成功后只回收自己登记的窗口，重复清理幂等", async () => {
   const f = fixture();
   const prepared = await prepareAcceptanceSceneWindow(plan, f.options);
@@ -139,4 +148,5 @@ test("场景说明区分条件式规则与必须构造的验收状态", () => {
   assert.match(prompt, /若、如果、存在时、出现时/);
   assert.match(prompt, /不代表验收场景必须人为创建/);
   assert.match(prompt, /不得因此选择 blocked/);
+  assert.match(prompt, /failure-recovery-timeline/);
 });

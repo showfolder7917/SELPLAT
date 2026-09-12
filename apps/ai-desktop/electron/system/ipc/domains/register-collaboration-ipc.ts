@@ -47,7 +47,7 @@ export function registerCollaborationIpc(
   });
   // 任务协作群只读取 SQLite 不可变事件；数据库不可用时抛给 EventCenter，禁止退回 JSON 快照拼接旧实现。
   handle("desktop:get-collaboration-timeline", (event) => {
-    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.timeline();
+    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.timeline(event.sender.id);
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineSnapshot();
   });

@@ -5,12 +5,13 @@
 其中 `sceneContext` 是主进程已核验的只读专题、提案和运行身份事实。选择 `current-window` 时必须以该事实为准；不得声称查询过未提供的运行记录，也不得因缺少模型查询能力臆测专题不存在。
 
 逐条理解验收条件的前提，结合只读核查，必须调用 linghu_submit_acceptance_scene 工具提交计划，requestId 原样使用本轮目标中的编号。普通回复可以解释，但不能代替工具提交。工具参数：
-{"requestId":"本轮请求编号","kind":"current-window|empty-task-group|blocked","reason":"选择理由","completionReviewRequired":false,"conditions":[{"criterionId":"criterion-1","prerequisite":"此条件成立所需的页面和数据前提"}]}
+{"requestId":"本轮请求编号","kind":"current-window|empty-task-group|failure-recovery-timeline|blocked","reason":"选择理由","completionReviewRequired":false,"conditions":[{"criterionId":"criterion-1","prerequisite":"此条件成立所需的页面和数据前提"}]}
 每个原条件按顺序编号 criterion-1、criterion-2 等，必须各出现一次。
 只有原条件明确要求观察“验收中”到“已完成”的真实状态切换，且当前窗口已具备同一专题、提案和运行身份时，才把 completionReviewRequired 设为 true。此时程序先让韩立确认验收场景真实可用，再由原 Workflow 完成收口，最后让韩立只读复核全部原条件；不要因为完成态尚未发生而在前置门报告受阻。其他情况必须为 false。
 “若、如果、存在时、出现时”开头的条件是条件式规则，不代表验收场景必须人为创建该可选状态。当前事实没有该可选状态时，只要能从页面确认没有矛盾展示，就把它记为条件未触发时的可观察前提；不得因此选择 blocked。只在用户明确要求该状态必须实际出现，或缺少完成所有非条件式要求所需的数据时，才认定场景缺失。
 可用场景：
 - current-window：现有真实应用与数据能够满足所有验收前提。不能因为应用能打开就认定适用。
 - empty-task-group：目标要求没有专题或任务时的协作群界面。程序会使用同一发布代码建立非持久化空数据验收窗口，隔离原任务与会话；可导航、检查按钮焦点、调整尺寸，但不能发送消息或改原数据。
+- failure-recovery-timeline：目标要求实际查看失败原因、调查、修复、测试与恢复等待的完整历史。程序会建立同一发布代码的非持久化只读时间线，保留详情展开与恢复入口的可达性，但不能提交恢复或改正式数据。
 - blocked：前提不明、需要尚未提供的数据或上述场景不能覆盖所有条件（例如同时要求已有任务与无任务，或隔离场景需要写数据）。明确缺失能力，交环境排障，不能错误选择当前窗口碰运气。
 按语义判断，不要求用户使用特定页面名、词序或语言。原任务存在不妨碍选 empty-task-group。程序准备成功后才交韩立点击截图验收，准备成功不等于产品通过。

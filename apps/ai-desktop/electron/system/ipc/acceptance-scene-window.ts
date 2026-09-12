@@ -18,11 +18,11 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceScenePlanOutD
   if (plan.kind === "current-window") return { window: options.target, dispose() {} };
   const window = options.createWindow({
     ...options.target.getBounds(), frame: false, show: false, backgroundColor: "#080b12",
-    title: "AI Desktop 独立空状态验收",
+    title: plan.kind === "failure-recovery-timeline" ? "AI Desktop 独立失败恢复验收" : "AI Desktop 独立空状态验收",
     webPreferences: { preload: options.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true,
       // 不使用 persist 前缀，关闭后不会向正式会话写入空状态。
       partition: `acceptance-empty-${Date.now()}`,
-      additionalArguments: ["--hanli-empty-task-group-acceptance"] },
+      additionalArguments: ["--hanli-empty-task-group-acceptance", `--hanli-acceptance-scene=${plan.kind}`] },
   });
   const contentsId = window.webContents.id;
   let disposed = false;
@@ -32,7 +32,7 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceScenePlanOutD
     options.sessions.remove(contentsId);
     if (!window.isDestroyed()) window.close();
   };
-  options.sessions.register(contentsId);
+  options.sessions.register(contentsId, plan.kind);
   window.once("closed", dispose);
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {

@@ -235,12 +235,16 @@ export class VersionWorkspaceManager {
     const changedFiles = await this.#localChangedFiles();
     if (changedFiles.length === 0) return null;
     const owners = new Map<string, LocalChangeOwnershipCandidate>();
+    const registeredTaskIds = [...new Set(candidates.map((candidate) => candidate.taskId))].sort();
     for (const changedFile of changedFiles) {
       const matching = candidates.filter((candidate) => normalizedFiles(candidate.changedFiles).has(changedFile));
       if (matching.length !== 1) {
+        const registrationContext = registeredTaskIds.length > 0
+          ? `本批待集成任务：${registeredTaskIds.join("、")}。`
+          : "本批没有可核对的待集成任务。";
         throw new LocalChangeOwnershipError(matching.length === 0
-          ? `本地修改 ${changedFile} 未登记到任何待集成任务，禁止自动提交或合并。`
-          : `本地修改 ${changedFile} 同时属于多个待集成任务，禁止猜测归属。`, [changedFile], this.#repositoryRoot);
+          ? `本地修改 ${changedFile} 未登记到任何待集成任务，禁止自动提交或合并。${registrationContext}`
+          : `本地修改 ${changedFile} 同时属于多个待集成任务，禁止猜测归属。${registrationContext}`, [changedFile], this.#repositoryRoot);
       }
       owners.set(matching[0].taskId, matching[0]);
     }

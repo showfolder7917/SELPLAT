@@ -1084,6 +1084,7 @@ test("目标分支修改无归属或多任务重叠时保持原状并阻止合�
       assert.ok(error instanceof LocalChangeOwnershipError);
       assert.equal(error.workspaceRoot, repositoryRoot);
       assert.deepEqual(error.conflictFiles, ["unknown.txt"]);
+      assert.match(error.message, /本批没有可核对的待集成任务/);
       return true;
     });
     assert.match(git(repositoryRoot, "status", "--porcelain"), /unknown\.txt/);

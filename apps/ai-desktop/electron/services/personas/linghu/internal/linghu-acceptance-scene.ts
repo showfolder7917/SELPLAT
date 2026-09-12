@@ -5,7 +5,7 @@ import type { AcceptanceScenePlanOutDto, HanliComputerAcceptanceInDto } from "..
 /** 验证令狐的结构化准备计划，任何缺项都退回环境排障，不默认为当前窗口。 */
 export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanOutDto {
   const value = input as AcceptanceScenePlanOutDto;
-  if (!value || !["current-window", "empty-task-group", "blocked"].includes(value.kind)
+  if (!value || !["current-window", "empty-task-group", "failure-recovery-timeline", "blocked"].includes(value.kind)
     || typeof value.reason !== "string" || !value.reason.trim()
     || typeof value.completionReviewRequired !== "boolean" || !Array.isArray(value.conditions)) {
     throw new Error("令狐未提交有效的验收场景计划。");
@@ -49,7 +49,7 @@ export function createAcceptanceSceneSubmission() {
     definitions: [{ type: "function", name: "linghu_submit_acceptance_scene",
       description: "提交本轮逐项验收场景计划。必须填写当前请求编号；说明文字不能替代此提交。工具只记录计划，不修改页面或原任务数据。",
       inputSchema: { type: "object", additionalProperties: false, required: ["requestId", "kind", "reason", "completionReviewRequired", "conditions"], properties: {
-        requestId: { type: "string" }, kind: { type: "string", enum: ["current-window", "empty-task-group", "blocked"] }, reason: { type: "string" },
+        requestId: { type: "string" }, kind: { type: "string", enum: ["current-window", "empty-task-group", "failure-recovery-timeline", "blocked"] }, reason: { type: "string" },
         completionReviewRequired: { type: "boolean" },
         conditions: { type: "array", items: { type: "object", additionalProperties: false, required: ["criterionId", "prerequisite"], properties: { criterionId: { type: "string" }, prerequisite: { type: "string" } } } },
       } },
