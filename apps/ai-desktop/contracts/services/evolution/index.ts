@@ -1,5 +1,7 @@
 /** Evolution 协议唯一入口：只显式公开不带人物命令归属的共享事实。 */
 export type { EvolutionApprovalOutDto } from "./dto/evolution-approval.out.dto.js";
+/** 当前专题的统一只读阶段，供页面避免分别解释任务与验收事实。 */
+export type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, CurrentTopicStageStatusValue } from "./dto/current-topic-stage.out.dto.js";
 export type { EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionApprovalStageValue, EvolutionFeedbackTargetValue } from "./value/evolution-approval.value.js";
 export type { EvolutionArchiveRecordOutDto } from "./dto/evolution-archive-record.out.dto.js";
 export type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue } from "./value/evolution-archive-record.value.js";

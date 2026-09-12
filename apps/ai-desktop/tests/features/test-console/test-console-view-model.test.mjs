@@ -46,6 +46,7 @@ function fixture({
   topics = [],
   tasks = [],
   archiveRecords = [],
+  currentTopicStage = undefined,
 } = {}) {
   return {
     locale: "zh-CN",
@@ -62,8 +63,23 @@ function fixture({
       proposals,
       topics,
       archiveRecords,
+      currentTopicStage,
       updatedAt: "2026-09-12T00:00:00.000Z",
     },
+  };
+}
+
+function stage({
+  status = "executing",
+  title = "当前专题",
+  effectiveTaskIds = ["task-current"],
+  missingTaskIds = [],
+  repairContent = "当前专题的修复内容",
+  latestAcceptance = null,
+} = {}) {
+  return {
+    topicId: "topic-current", proposalId: "proposal-current", status, title, summary: "当前专题统一状态说明", repairContent,
+    remaining: "", effectiveTaskIds, missingTaskIds, latestAcceptance, updatedAt: "2026-09-12T00:00:00.000Z",
   };
 }
 
@@ -84,6 +100,7 @@ function currentProposal(distributedTaskIds) {
 test("等待用户确认且没有任务时不显示当前修复、进行中或历史记录", () => {
   const viewModel = createTestConsoleViewModel(fixture({
     oneShotConfirmation: { status: "awaiting-user-confirmation", createdAt: "2026-09-12T00:00:00.000Z" },
+    currentTopicStage: stage({ status: "awaiting-confirmation", title: "等待用户确认", effectiveTaskIds: [], repairContent: "" }),
   }));
 
   assert.equal(viewModel.summary.statusCode, "awaiting-confirmation");
@@ -102,9 +119,10 @@ test("只有当前专题的有效执行任务才显示进行中与对应记录",
     proposals: [currentProposal(["task-current"])],
     topics: [{ topicId: "topic-current", title: "当前专题" }],
     tasks: [activeTask, staleTask],
+    currentTopicStage: stage({ status: "executing" }),
   }));
 
-  assert.equal(viewModel.summary.statusCode, "running");
+  assert.equal(viewModel.summary.statusCode, "executing");
   assert.equal(viewModel.summary.status, "进行中");
   assert.deepEqual(viewModel.history.map((item) => item.id), ["current-event"]);
   assert.deepEqual(viewModel.details.changedFiles, ["src/features/test-console/model/createTestConsoleViewModel.ts"]);
@@ -118,9 +136,10 @@ test("修复替代链以最新有效任务决定完成状态，旧失败任务�
     proposals: [currentProposal(["task-original"])],
     topics: [{ topicId: "topic-current", title: "当前专题" }],
     tasks: [original, repaired],
+    currentTopicStage: stage({ status: "accepting", effectiveTaskIds: ["task-repaired"], repairContent: "修复完成内容" }),
   }));
 
-  assert.equal(viewModel.summary.statusCode, "completed");
+  assert.equal(viewModel.summary.statusCode, "accepting");
   assert.equal(viewModel.summary.change, "修复完成内容");
   assert.deepEqual(viewModel.history.map((item) => item.id), ["repair-complete"]);
 });
@@ -137,21 +156,51 @@ test("失败状态和归档记录只使用当前专题的有效任务链", () =>
     topics: [{ topicId: "topic-current", title: "当前专题" }],
     tasks: [failedTask],
     archiveRecords,
+    currentTopicStage: stage({ status: "failed-pending-repair" }),
   }));
 
-  assert.equal(viewModel.summary.statusCode, "failed");
+  assert.equal(viewModel.summary.statusCode, "failed-pending-repair");
   assert.deepEqual(viewModel.history.map((item) => item.id), ["current-record", "current-failure"]);
 });
 
+test("最新真实验收失败优先于已集成任务，顶部与验收区使用同一专题阶段", () => {
+  const integrated = task({ taskId: "task-current", state: "integrated", changes: "旧任务已经集成" });
+  const input = fixture({
+    proposals: [currentProposal(["task-current"])],
+    topics: [{ topicId: "topic-current", title: "当前专题" }],
+    tasks: [integrated],
+  });
+  input.evolution.currentTopicStage = stage({
+    status: "failed-pending-repair",
+    repairContent: "修正测试台状态矛盾",
+    latestAcceptance: { runId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", status: "failed", occurredAt: "2026-09-12T04:42:19.000Z" },
+  });
 
-test("正式研讨等待确认且无任务时使用原范围状态，已回复或结束后不残留等待", () => {
+  const viewModel = createTestConsoleViewModel(input);
+  assert.equal(viewModel.summary.status, "失败待处理");
+  assert.equal(viewModel.summary.change, "修正测试台状态矛盾");
+  assert.equal(viewModel.checks.find((item) => item.id === "acceptance")?.status, "failed");
+});
+
+
+test("页面缺少运行时投影时不再根据研讨或任务快照自行猜测专题阶段", () => {
   const input = fixture({ oneShotRun: { status: "running", phase: "preparing-topic", proposalId: null } });
   const confirmation = { offer: "测试台状态修正范围", reply: null, offeredAt: "2026-09-12T03:33:56.027Z" };
   input.evolution.deliberations = [{ status: "ready-to-establish", rounds: [{ confirmation }] }];
-  assert.equal(createTestConsoleViewModel(input).summary.status, "等待用户确认");
-  confirmation.reply = "1";
   assert.equal(createTestConsoleViewModel(input).summary.statusCode, "not-run");
-  confirmation.reply = null;
-  input.evolution.deliberations[0].status = "established";
-  assert.equal(createTestConsoleViewModel(input).summary.statusCode, "not-run");
+});
+
+test("仅旧隔离夹具明确处于验收运行时适配为验收中，其他缺失投影快照不变", () => {
+  const acceptingTask = task({ taskId: "task-current", state: "integrated", changes: "补齐任务完成后的验收恢复判断" });
+  const input = fixture({
+    oneShotRun: { topicId: "topic-current", proposalId: "proposal-current", phase: "accepting", status: "running", action: "正在真实界面验收", updatedAt: "2026-09-12T00:00:00.000Z" },
+    proposals: [currentProposal(["task-current"])],
+    topics: [{ topicId: "topic-current", title: "修复鼠标点击后持续转圈" }],
+    tasks: [acceptingTask],
+  });
+
+  const viewModel = createTestConsoleViewModel(input);
+  assert.equal(viewModel.summary.statusCode, "accepting");
+  assert.equal(viewModel.summary.title, "修复鼠标点击后持续转圈");
+  assert.equal(viewModel.summary.change, "补齐任务完成后的验收恢复判断");
 });
