@@ -14,6 +14,7 @@ import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePr
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
+import { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
@@ -118,6 +119,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
+  // 仅登记被韩立动态工具打开的短生命周期空状态窗口，正式窗口绝不进入该投影。
+  const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession();
   let screenCaptureAttemptId = 0;
 
   registerRulesIpc(rules, eventCenter);
@@ -131,12 +134,42 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   };
 
   personaWorkflow.setComputerAcceptanceSession(async (goal) => {
-    // 演化工作台退役后，真实验收只操作当前正式主窗口，不创建隐藏兼容窗口。
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
-    const run = await hanli.executeComputerAcceptance(goal, targetWindow);
-    audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
-    return run;
+    const requiresEmptyTaskGroup = goal.criteria.some((criterion) => /任务协作群/u.test(criterion)
+      && /空状态|无专题任务|找韩立说需求/u.test(criterion));
+    let acceptanceWindow = targetWindow;
+    if (requiresEmptyTaskGroup) {
+      // 空状态只在零专题投影中可见；使用非持久化窗口而非清理正式任务数据。
+      acceptanceWindow = new BrowserWindow({
+        ...targetWindow.getBounds(),
+        frame: false,
+        show: false,
+        backgroundColor: "#080b12",
+        title: "AI Desktop 独立空状态验收",
+        webPreferences: {
+          preload: preloadPath,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          partition: "hanli-empty-task-group-acceptance",
+          additionalArguments: ["--hanli-empty-task-group-acceptance"],
+        },
+      });
+      acceptanceEmptyTaskGroupSession.register(acceptanceWindow.webContents.id);
+      acceptanceWindow.once("ready-to-show", () => acceptanceWindow.show());
+      await acceptanceWindow.loadFile(path.join(rendererRoot, "index.html"));
+    }
+    try {
+      const run = await hanli.executeComputerAcceptance(goal, acceptanceWindow);
+      audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
+      return run;
+    } finally {
+      if (acceptanceWindow !== targetWindow) {
+        acceptanceEmptyTaskGroupSession.remove(acceptanceWindow.webContents.id);
+        if (!acceptanceWindow.isDestroyed()) acceptanceWindow.close();
+      }
+    }
   });
 
   const recordScreenCaptureStage = (
@@ -260,7 +293,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints, acceptanceEmptyTaskGroupSession);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
