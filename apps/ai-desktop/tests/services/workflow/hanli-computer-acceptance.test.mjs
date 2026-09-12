@@ -209,10 +209,22 @@ test("未提交判断但已有真实截图时归档为受阻，模型断线仍�
   assert.equal(run.stepResults[0].checkId, "criterion-1");
   assert.equal(run.stepResults[0].status, "blocked");
   assert.equal(run.stepResults[0].screenshotAttachmentId, "image-1");
+  assert.match(run.stepResults[0].actual, /未尝试提交 finish/);
   assert.match(f.progress.at(-1), /未通过交互工具提交完整判断/);
   await assert.rejects(observe(tools), /授权已收回/);
   await assert.rejects(f.run(async () => {}), /未留下可归档的真实截图证据/);
   await assert.rejects(f.run(async () => { throw new Error("断线"); }), /断线/);
+});
+test("finish 校验被拒绝时在受阻记录中保留受限诊断", async () => {
+  const f = fixture();
+  const run = await f.run(async (tools) => {
+    const snapshot = id(await observe(tools));
+    await assert.rejects(tools.call("hanli_computer", {
+      action: "finish", reason: "尝试提交不完整判断", observationId: snapshot, findings: [],
+    }), /不能漏项/);
+  });
+  assert.equal(run.status, "blocked");
+  assert.match(run.stepResults[0].actual, /尝试提交 finish，但被现有校验拒绝：每条验收条件都必须返回真实结果，不能漏项/);
 });
 test("旧计划执行器、补参数提示词和桌面接口不兼容退役", () => {
   assert.equal(existsSync("electron/services/personas/hanli/internal/hanli-real-app-acceptance.runner.ts"), false);
