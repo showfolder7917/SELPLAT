@@ -214,6 +214,18 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "waiting", `同一原流程已有卡点 ${primary.eventId} 正在处理，本条保留关联，不重复派发。`);
       return;
     }
+    // 主卡点保存恢复关系；本轮故障事实必须取同一提案最新的真实验收结果。
+    const failureEvent = isAcceptanceCheckpoint
+      ? relatedEvents.filter((item) => item.flowImpact === "blocked"
+        && item.payload.proposalId === state.proposalId
+        && isAcceptanceOperation(item.payload.operation))
+        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0] || event
+      : event;
+    // 最新复验需要范围确认时，旧技术卡点不能绕过本轮业务确认门。
+    if (failureEvent.category === "business-exception") {
+      this.#phase(event, state, "waiting", `最新验收需要用户确认：${failureEvent.message}。保留原恢复关系，不派发旧故障修复。`);
+      return;
+    }
     // 上轮恢复异步返回running后仍可能再次受阻，必须开新修复轮，不能无限重放旧成果。
     if (state.resumedRound === state.round) {
       const aggregate = new WorkflowCheckpointAggregate(state);
@@ -316,9 +328,9 @@ export class CheckpointCoordinator {
       // 下一次监督轮询会继续核对当前任务。
       return;
     }
-    const acceptanceFailureKind = event.payload.acceptanceFailureKind === "product-defect"
+    const acceptanceFailureKind = failureEvent.payload.acceptanceFailureKind === "product-defect"
       ? "product-defect"
-      : event.payload.acceptanceFailureKind === "acceptance-capability-blocked" ? "acceptance-capability-blocked" : "technical-runtime";
+      : failureEvent.payload.acceptanceFailureKind === "acceptance-capability-blocked" ? "acceptance-capability-blocked" : "technical-runtime";
     const repairBoundary = acceptanceFailureKind === "product-defect"
       ? "本轮属于真实产品缺陷：必须先复现实际产品结果，再修改产品实现；不得仅修改韩立验收工具、提示词或测试数据来制造通过。"
       : acceptanceFailureKind === "acceptance-capability-blocked"
@@ -329,9 +341,9 @@ export class CheckpointCoordinator {
       // 标题明确这是流程卡点修复而不是原专题重新实施。
       title: `修复流程卡点：${topic.title}`,
       // 原异常正文作为问题事实。
-      problemStatement: `原专题“${topic.title}”在韩立真实界面验收中未通过。\n${event.message}`,
+      problemStatement: `原专题“${topic.title}”在韩立真实界面验收中未通过。\n${failureEvent.message}`,
       // 修复目标必须返回原提案步骤，不代替韩立验收。
-      confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。故障分类：${acceptanceFailureKind}。${repairBoundary} 修复前必须复现原实际结果；修复后必须用相同条件证明原现象已经改变，若未改变应判定本轮修复方向错误并重新调查，不能进入打包或声称完成。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立真实界面验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(event.payload, omitCheckpointSnapshot)}`,
+      confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。故障分类：${acceptanceFailureKind}。${repairBoundary} 修复前必须复现原实际结果；修复后必须用相同条件证明原现象已经改变，若未改变应判定本轮修复方向错误并重新调查，不能进入打包或声称完成。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立真实界面验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(failureEvent.payload, omitCheckpointSnapshot)}`,
       // 限制修复只能处理已经确认的技术故障。
       constraints: [marker, repairBoundary, "仅修复 acceptanceFailureScope 中已经判定属于原验收范围的真实新缺陷；先调查再修改，保留原任务历史和恢复点。", "前一轮结果未改变原故障时必须明确标记修复方向错误，读取新的运行证据后更换根因假设；禁止重复相同修改或用测试替身代替真实复现。", "每次交接必须点名原专题、具体验收条件、实际结果、期望结果、当前负责人和下一步动作；禁止使用无明确指向的简称。", "不得修改生产数据库、跳过代码测试或统一测试、扩大业务范围、关闭权限门禁；需要用户授权时明确报告具体受阻事项。"],
       // 验收条件要求原因、修复和验证证据全部存在。

@@ -260,3 +260,40 @@ test("自动托管原点复验超过三轮仍交令狐调查，不关闭流程�
   assert.notEqual(f.event.payload.checkpoint.exhausted, true);
   assert.deepEqual(f.effects.resolved, []);
 });
+
+
+test("复验出现新产品失败时沿原卡点派发最新证据，重启不重复派发", async () => {
+  const f = fixture();
+  Object.assign(f.event.payload, { operation: "run_real_application_acceptance", acceptanceRunId: "old-run", acceptanceFailureKind: "acceptance-capability-blocked", evidenceAttachmentIds: ["old-shot"] });
+  await f.run();
+  f.collaboration.tasks[0].state = "integrated";
+  f.options.resume = async () => { f.evolution.oneShotRun.status = "running"; return f.evolution; };
+  await f.run();
+  f.evolution.oneShotRun.status = "blocked";
+  f.events.push({ ...f.event, eventId: "issue-2", occurredAt: "2026-09-05T01:00:00Z", message: "已完成与验收中冲突", payload: {
+    runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "repair_failed_real_application_acceptance",
+    acceptanceRunId: "new-run", acceptanceFailureKind: "product-defect", evidenceAttachmentIds: ["new-shot"],
+    acceptanceFailureScope: { decision: "within-original-acceptance", summary: "实际仍在验收，期望不得显示已完成" },
+  } });
+  await f.run(); await f.run();
+  assert.equal(f.effects.submitted.length, 2);
+  const repair = f.effects.submitted[1];
+  assert.match(repair.problemStatement, /已完成与验收中冲突/);
+  assert.match(repair.confirmedIntent, /故障分类：product-defect/);
+  assert.match(repair.confirmedIntent, /new-run/);
+  assert.match(repair.confirmedIntent, /new-shot/);
+  assert.doesNotMatch(repair.confirmedIntent, /old-run|old-shot|acceptance-capability-blocked/);
+  assert.equal(f.event.payload.acceptanceRunId, "old-run");
+  assert.equal(f.event.payload.checkpoint.round, 2);
+});
+
+test("最新验收范围待确认时旧技术卡点不得派发修复", async () => {
+  const f = fixture();
+  f.event.payload.operation = "run_real_application_acceptance";
+  f.events.push({ ...f.event, eventId: "issue-2", category: "business-exception", occurredAt: "2026-09-05T01:00:00Z", message: "新失败范围需要用户确认", payload: {
+    runId: "run-1", proposalId: "proposal-1", operation: "review_acceptance_failure_scope",
+  } });
+  await f.run();
+  assert.equal(f.effects.submitted.length, 0);
+  assert.equal(f.event.payload.checkpoint.phase, "waiting");
+});
