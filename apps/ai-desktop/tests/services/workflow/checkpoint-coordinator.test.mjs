@@ -297,3 +297,15 @@ test("最新验收范围待确认时旧技术卡点不得派发修复", async ()
   assert.equal(f.effects.submitted.length, 0);
   assert.equal(f.event.payload.checkpoint.phase, "waiting");
 });
+
+ test("验收恢复完整继承专题和提案排除项，安全工具不自动获得授权", async () => {
+  const f = fixture();
+  f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
+  f.evolution.topics[0].exclusions = ["不改变全窗口截图", "不开自动托管"];
+  f.evolution.proposals[0].exclusions = ["不开自动托管", "不扩展验收工具"];
+  await f.run();
+  const repair = f.effects.submitted[0];
+  assert.deepEqual(repair.constraints.filter((item) => item.startsWith("原确认范围排除项：")), ["原确认范围排除项：不改变全窗口截图", "原确认范围排除项：不开自动托管", "原确认范围排除项：不扩展验收工具"]);
+  assert.match(repair.confirmedIntent, /安全性不代表已获授权/);
+  assert.match(repair.confirmedIntent, /等待明确授权/);
+});
