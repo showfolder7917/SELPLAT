@@ -200,10 +200,18 @@ test("受控发送在输入框或发送按钮不可用时明确拒绝", async ()
   });
   assert.equal(result.status, "blocked");
 });
-test("普通文字回复不算验收完成，模型断线回收权限", async () => {
+test("未提交判断但已有真实截图时归档为受阻，模型断线仍回收权限", async () => {
   const f = fixture(); let tools;
-  await assert.rejects(f.run(async (value) => { tools = value; await observe(value); }), /尚未.*提交/);
+  const run = await f.run(async (value) => { tools = value; await observe(value); });
+  assert.equal(run.status, "blocked");
+  assert.deepEqual(run.evidenceAttachmentIds, ["image-1"]);
+  assert.equal(run.stepResults.length, 1);
+  assert.equal(run.stepResults[0].checkId, "criterion-1");
+  assert.equal(run.stepResults[0].status, "blocked");
+  assert.equal(run.stepResults[0].screenshotAttachmentId, "image-1");
+  assert.match(f.progress.at(-1), /未通过交互工具提交完整判断/);
   await assert.rejects(observe(tools), /授权已收回/);
+  await assert.rejects(f.run(async () => {}), /未留下可归档的真实截图证据/);
   await assert.rejects(f.run(async () => { throw new Error("断线"); }), /断线/);
 });
 test("旧计划执行器、补参数提示词和桌面接口不兼容退役", () => {
