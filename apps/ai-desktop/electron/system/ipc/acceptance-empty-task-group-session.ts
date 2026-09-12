@@ -1,6 +1,6 @@
 import type { PersonaConversationOutDto } from "../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
-import type { CollaborationStateOutDto, CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
+import type { CollaborationStateOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue } from "../../../contracts/services/workflow/index.js";
 
 type IsolatedAcceptanceScenario = "empty-task-group" | "failure-recovery-timeline";
 
@@ -18,15 +18,18 @@ const linghu = { memberId: "linghu-laozu", displayName: "令狐老祖" };
 export class AcceptanceEmptyTaskGroupSession {
   #scenarios = new Map<number, IsolatedAcceptanceScenario>();
   #selectedMembers = new Map<number, string>();
+  #operatingModes = new Map<number, DesktopOperatingModeValue>();
 
   register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group"): void {
     this.#scenarios.set(webContentsId, sceneKind);
     this.#selectedMembers.set(webContentsId, "han-li");
+    this.#operatingModes.set(webContentsId, "collaboration");
   }
 
   remove(webContentsId: number): void {
     this.#scenarios.delete(webContentsId);
     this.#selectedMembers.delete(webContentsId);
+    this.#operatingModes.delete(webContentsId);
   }
 
   isActive(webContentsId: number): boolean {
@@ -36,12 +39,20 @@ export class AcceptanceEmptyTaskGroupSession {
   collaborationState(webContentsId: number, actual: CollaborationStateOutDto): CollaborationStateOutDto {
     return {
       ...actual,
+      mode: this.#operatingModes.get(webContentsId) || "collaboration",
       selectedMemberId: this.#selectedMembers.get(webContentsId) || "han-li",
       // 独立验收只能查看真实成员入口，不能读取或改变正式任务与集成批次。
       tasks: [],
       integrationBatches: [],
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  /** 模式只属于该验收窗口的导航状态，不写入正式协作 Store。 */
+  setMode(webContentsId: number, mode: DesktopOperatingModeValue, actual: CollaborationStateOutDto): CollaborationStateOutDto {
+    if (mode !== "single-conversation" && mode !== "collaboration") throw new Error("无效的桌面运行模式。");
+    this.#operatingModes.set(webContentsId, mode);
+    return this.collaborationState(webContentsId, actual);
   }
 
   selectMember(webContentsId: number, memberId: string, actual: CollaborationStateOutDto): CollaborationStateOutDto {

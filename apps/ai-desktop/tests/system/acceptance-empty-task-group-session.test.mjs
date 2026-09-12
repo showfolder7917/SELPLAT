@@ -23,6 +23,7 @@ test("独立空状态验收会话只遮蔽登记窗口的任务投影并拒绝�
   session.register(42);
   const isolated = session.collaborationState(42, collaborationState);
   assert.equal(session.isActive(42), true);
+  assert.equal(isolated.mode, "collaboration");
   assert.equal(isolated.selectedMemberId, "han-li");
   assert.deepEqual(isolated.tasks, []);
   assert.deepEqual(isolated.integrationBatches, []);
@@ -30,6 +31,9 @@ test("独立空状态验收会话只遮蔽登记窗口的任务投影并拒绝�
   assert.equal(session.evolutionState({ topics: ["formal"], proposals: ["formal"], deliberations: ["formal"], archiveRecords: ["formal"] }).activeTopicId, null);
   assert.throws(() => session.rejectMutation(), /只读/);
   assert.deepEqual(session.selectMember(42, "nangong-wan", collaborationState).tasks, []);
+  const singleConversation = session.setMode(42, "single-conversation", collaborationState);
+  assert.equal(singleConversation.mode, "single-conversation");
+  assert.equal(collaborationState.mode, "collaboration", "验收导航不能修改正式协作状态");
   session.remove(42);
   assert.equal(session.isActive(42), false);
 });

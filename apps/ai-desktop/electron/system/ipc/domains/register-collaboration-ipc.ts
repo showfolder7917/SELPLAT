@@ -51,7 +51,12 @@ export function registerCollaborationIpc(
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineSnapshot();
   });
-  handle("desktop:set-operating-mode", (event, mode: DesktopOperatingModeValue) => { rejectIsolatedMutation(event.sender.id); return collaboration.setMode(mode); });
+  handle("desktop:set-operating-mode", (event, mode: DesktopOperatingModeValue) => {
+    if (!isIsolatedAcceptance(event.sender.id)) return collaboration.setMode(mode);
+    const isolated = acceptanceEmptyTaskGroupSession!.setMode(event.sender.id, mode, collaboration.state());
+    event.sender.send("desktop:collaboration-state", isolated);
+    return isolated;
+  });
   handle("desktop:select-collaboration-member", (event, memberId: string) => {
     const state = collaboration.state();
     if (!isIsolatedAcceptance(event.sender.id)) return collaboration.selectMember(memberId);
