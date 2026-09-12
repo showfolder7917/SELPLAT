@@ -179,7 +179,7 @@ export class HanliConversationService {
       if (round?.confirmation && conversation.conversationId) {
         const restored = memory.appendPersonaInternalMessage({
           ownerPersonaId: "han-li", conversationId: conversation.conversationId,
-          messageId: `hanli-confirmation:${round.roundId}`, speakerPersonaId: "han-li",
+          messageId: `hanli-confirmation:${round.roundId}:restored:${conversation.conversationId}`, speakerPersonaId: "han-li",
           content: `之前的研讨仍在等待范围确认，本次 1 尚未批准该方案。请先核对或纠正原范围：\n\n${round.confirmation.offer}\n\n如需调整目标，请直接说明；只有再次输入 1 才确认这份范围。`,
           createdAt: round.confirmation.offeredAt,
         });
@@ -747,7 +747,8 @@ export class HanliConversationService {
       // 按真实消息顺序检查稳定消息标识。
       for (const message of conversation.messages) {
         // 标识完全一致表示用户确实看到了本轮范围说明。
-        if (message.messageId === expectedMessageId) {
+        if (message.messageId === expectedMessageId
+          || message.messageId === `${expectedMessageId}:restored:${conversation.conversationId}`) {
           // 保存可见事实并停止无关扫描。
           confirmationIsVisible = true;
           // 当前轮次已经找到，不需要继续遍历消息。
