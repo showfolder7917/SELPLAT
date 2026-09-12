@@ -8,6 +8,7 @@ export type CurrentTopicStageStatusValue =
   | "awaiting-confirmation"
   | "executing"
   | "verifying"
+  | "pending-acceptance"
   | "accepting"
   | "completed"
   | "failed-pending-repair"

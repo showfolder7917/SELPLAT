@@ -488,11 +488,11 @@ export class PersonaEvolutionRuntime {
         const attemptId = randomUUID();
         const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
         publishAcceptance("received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
-        this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
         if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。");
         try {
           const goal: HanliComputerAcceptanceInDto = { topicId: topic.topicId, proposalId: proposal.proposalId, title: proposal.title, criteria: proposal.acceptanceCriteria };
           publishAcceptance("started", "韩立正在观察真实页面并逐步操作验收。");
+          this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
           const runResult = await this.#computerAcceptanceSession(goal);
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "blocked") {

@@ -44,7 +44,7 @@ function statusLabel(status: string, locale: LocaleValue): string {
 /** 把已有权威状态整理成只读测试台；本函数不执行测试，也不自行把任务判为通过。 */
 export function createTestConsoleViewModel(source: TestConsoleSource) {
   const { locale } = source;
-  const stage = resolveCurrentTopicStage(source.evolution, source.collaboration);
+  const stage = source.evolution?.currentTopicStage;
   const proposal = source.evolution?.proposals.find((item) => item.proposalId === stage?.proposalId) || null;
   const topic = source.evolution?.topics.find((item) => item.topicId === stage?.topicId) || null;
   const effectiveTasks = (source.collaboration?.tasks || []).filter((task) => stage?.effectiveTaskIds.includes(task.taskId));
@@ -143,45 +143,6 @@ export function createTestConsoleViewModel(source: TestConsoleSource) {
       technicalEvidence,
     },
     history,
-  };
-}
-
-/**
- * 正式运行时始终提供 currentTopicStage。隔离交互夹具仍直接发布旧快照时，
- * 仅把“正在验收”的明确运行事实转换为同一只读形状，避免把夹具旁路误显示为未执行。
- * 该适配不处理任务执行、完成或失败，缺少正式投影的其他快照仍保持未执行。
- */
-function resolveCurrentTopicStage(
-  evolution: EvolutionStateOutDto | null,
-  collaboration: CollaborationStateOutDto | null,
-) {
-  if (evolution?.currentTopicStage) return evolution.currentTopicStage;
-
-  const run = evolution?.oneShotRun;
-  if (!evolution || !run || run.phase !== "accepting" || run.status !== "running" || !run.proposalId || !run.topicId) return undefined;
-
-  const proposal = evolution.proposals.find((item) => item.proposalId === run.proposalId);
-  const topic = evolution.topics.find((item) => item.topicId === run.topicId);
-  if (!proposal || !topic || proposal.topicId !== topic.topicId) return undefined;
-
-  const taskIds = proposal.distributedTaskIds || [];
-  const effectiveTasks = (collaboration?.tasks || []).filter((item) => taskIds.includes(item.taskId));
-  if (effectiveTasks.length === 0) return undefined;
-
-  const latestTask = [...effectiveTasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-  if (!latestTask) return undefined;
-  return {
-    topicId: topic.topicId,
-    proposalId: proposal.proposalId,
-    status: "accepting" as const,
-    title: topic.title,
-    summary: run.action || "当前有效任务已经完成，正在进行韩立真实界面验收。",
-    repairContent: latestTask.resultSummary?.changes || latestTask.resultSummary?.solvedProblem || latestTask.snapshot.confirmedIntent || proposal.content,
-    remaining: latestTask.resultSummary?.remaining || latestTask.blockingReason || "",
-    effectiveTaskIds: effectiveTasks.map((item) => item.taskId),
-    missingTaskIds: taskIds.filter((taskId) => !effectiveTasks.some((item) => item.taskId === taskId)),
-    latestAcceptance: null,
-    updatedAt: run.updatedAt || evolution.updatedAt,
   };
 }
 

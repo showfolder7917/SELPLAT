@@ -41,9 +41,29 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
-test("没有失败验收事实时，待验收提案保持验收中", () => {
+test("尚未开始真实验收时，待验收提案不得显示验收中", () => {
   const state = evolution("passed");
   state.archiveRecords = [];
   const stage = projectCurrentTopicStage(state, { tasks: [task()] });
-  assert.equal(stage.status, "accepting");
+  assert.equal(stage.status, "pending-acceptance");
+});
+
+
+test("新一轮真实验收开始覆盖旧失败，结束后以新结果为准", () => {
+  const state = evolution("failed");
+  state.oneShotRun = { proposalId: "proposal-current", status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z" };
+  assert.equal(projectCurrentTopicStage(state, { tasks: [task()] }).status, "accepting");
+  state.archiveRecords.push({ ...state.archiveRecords[0], occurredAt: "2026-09-12T05:01:00.000Z", payload: { acceptanceRun: { runId: "new-run", status: "failed" } } });
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.latestAcceptance.runId, "new-run");
+});
+
+test("验收结果按真实发生时间选择，保留历史顺序不修改输入", () => {
+  const state = evolution("failed");
+  const old = { ...state.archiveRecords[0], occurredAt: "2026-09-12T03:00:00.000Z", payload: { acceptanceRun: { runId: "old-pass", status: "passed" } } };
+  state.archiveRecords.push(old);
+  const before = structuredClone(state);
+  assert.equal(projectCurrentTopicStage(state, { tasks: [task()] }).status, "failed-pending-repair");
+  assert.deepEqual(state, before);
 });

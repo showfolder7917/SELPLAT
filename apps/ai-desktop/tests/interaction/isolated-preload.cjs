@@ -131,6 +131,7 @@ const setInteractionTestConsoleFixture = (enabled) => {
   evolutionState.archiveRecords = evolutionState.archiveRecords.filter((item) => item.topicId !== topicId);
   collaborationState.tasks = collaborationState.tasks.filter((item) => item.taskId !== taskId);
   if (!enabled) {
+    evolutionState.currentTopicStage = null;
     publishCollaborationState("test-console.fixture-cleared");
     return publishNangongEvolution("test-console.fixture-cleared");
   }
@@ -169,6 +170,13 @@ const setInteractionTestConsoleFixture = (enabled) => {
   evolutionState.archiveRecords.push({ recordId: "interaction-acceptance", deliberationId: null, topicId, proposalId, taskId, sequenceNumber: 1, category: "acceptance", eventType: "acceptance.started", actor: "han-li", title: "韩立正在按原范围执行真实界面验收", payload: {}, occurredAt: now });
   evolutionState.activeTopicId = topicId;
   evolutionState.oneShotRun = { runId: "interaction-test-console-run", topicId, proposalId, status: "running", phase: "accepting", actor: "han-li", actorName: "韩立", action: "正在真实界面验收", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
+  // 隔离数据直接遵守运行时投影协议；正式页面不为旧夹具推断状态。
+  evolutionState.currentTopicStage = {
+    topicId, proposalId, status: "accepting", title: "修复鼠标点击后持续转圈",
+    summary: "韩立正在执行真实界面验收。", repairContent: "补齐任务完成后的验收恢复判断。",
+    remaining: "等待韩立执行真实界面验收。", effectiveTaskIds: [taskId], missingTaskIds: [],
+    latestAcceptance: null, updatedAt: now,
+  };
   publishCollaborationState("test-console.fixture-ready");
   return publishNangongEvolution("test-console.fixture-ready");
 };

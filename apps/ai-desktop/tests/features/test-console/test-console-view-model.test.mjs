@@ -190,7 +190,7 @@ test("页面缺少运行时投影时不再根据研讨或任务快照自行猜�
   assert.equal(createTestConsoleViewModel(input).summary.statusCode, "not-run");
 });
 
-test("仅旧隔离夹具明确处于验收运行时适配为验收中，其他缺失投影快照不变", () => {
+test("缺少正式投影时即使旧运行快照处于验收也不推断阶段", () => {
   const acceptingTask = task({ taskId: "task-current", state: "integrated", changes: "补齐任务完成后的验收恢复判断" });
   const input = fixture({
     oneShotRun: { topicId: "topic-current", proposalId: "proposal-current", phase: "accepting", status: "running", action: "正在真实界面验收", updatedAt: "2026-09-12T00:00:00.000Z" },
@@ -200,7 +200,7 @@ test("仅旧隔离夹具明确处于验收运行时适配为验收中，其他�
   });
 
   const viewModel = createTestConsoleViewModel(input);
-  assert.equal(viewModel.summary.statusCode, "accepting");
-  assert.equal(viewModel.summary.title, "修复鼠标点击后持续转圈");
-  assert.equal(viewModel.summary.change, "补齐任务完成后的验收恢复判断");
+  assert.equal(viewModel.summary.statusCode, "not-run");
+  assert.equal(viewModel.summary.title, "暂无修复任务");
+  assert.equal(viewModel.summary.change, "");
 });

@@ -34,15 +34,21 @@ export function projectCurrentTopicStage(
   const latestAcceptance = readLatestAcceptance(evolution, proposal.proposalId);
   const task = latestEffectiveTask(execution.effectiveTasks);
   const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
+  // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
+  const run = evolution.oneShotRun;
+  const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
+    && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt);
   const failedAcceptance = latestAcceptance?.status === "failed" || latestAcceptance?.status === "blocked";
   const status = awaitingConfirmation || taskNeedsConfirmation
     ? "awaiting-confirmation"
+    : acceptanceStarted
+      ? "accepting"
     : failedAcceptance
     ? "failed-pending-repair"
     : proposal.status === "completed" && latestAcceptance?.status === "passed"
       ? "completed"
-      : latestAcceptance?.status === "running" || proposal.status === "pending-acceptance"
-        ? "accepting"
+      : proposal.status === "pending-acceptance"
+        ? "pending-acceptance"
         : execution.blocked
           ? "failed-pending-repair"
           : execution.nextStatus === "verifying"
@@ -75,7 +81,8 @@ function confirmationUpdatedAt(evolution: EvolutionStateOutDto): string {
 }
 
 function readLatestAcceptance(evolution: EvolutionStateOutDto, proposalId: string): CurrentTopicAcceptanceOutDto | null {
-  const record = [...evolution.archiveRecords].reverse().find((item) => item.proposalId === proposalId && item.eventType === "acceptance.real_app_checked");
+  const record = evolution.archiveRecords.filter((item) => item.proposalId === proposalId && item.eventType === "acceptance.real_app_checked")
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
   const acceptanceRun = record?.payload.acceptanceRun;
   if (!record || !acceptanceRun || typeof acceptanceRun !== "object") return null;
   const value = acceptanceRun as { runId?: unknown; status?: unknown };
@@ -89,7 +96,8 @@ function latestEffectiveTask(tasks: CollaborationTaskOutDto[]): CollaborationTas
 
 function stageSummary(status: CurrentTopicStageOutDto["status"], executionSummary: string, acceptance: CurrentTopicAcceptanceOutDto | null): string {
   if (status === "failed-pending-repair") return acceptance ? `最新真实验收 ${acceptance.runId} 未通过，等待按原恢复点处理。` : executionSummary;
-  if (status === "accepting") return "当前有效任务已经完成，正在等待或进行韩立真实界面验收。";
+  if (status === "pending-acceptance") return "当前有效任务已经完成，等待韩立开始真实界面验收。";
+  if (status === "accepting") return "韩立已开始本轮真实界面验收。";
   if (status === "completed") return "韩立真实界面验收已经通过，专题已完成。";
   return executionSummary;
 }
