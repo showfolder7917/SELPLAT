@@ -37,13 +37,19 @@ test("独立空状态验收会话只遮蔽登记窗口的任务投影并拒绝�
 test("空状态条件只创建非持久化验收窗口，并在验收后关闭", () => {
   const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
   const collaborationIpcSource = readFileSync("electron/system/ipc/domains/register-collaboration-ipc.ts", "utf8");
+  const runtimeSource = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   const preloadSource = readFileSync("electron/system/preload/preload.cts", "utf8");
   assert.match(desktopIpcSource, /任务协作群/u);
   assert.match(desktopIpcSource, /空状态\|无专题任务\|找韩立说需求/u);
   assert.match(desktopIpcSource, /partition: "hanli-empty-task-group-acceptance"/);
   assert.match(desktopIpcSource, /additionalArguments: \["--hanli-empty-task-group-acceptance"\]/);
   assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession\.remove/);
+  assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession/);
   assert.match(collaborationIpcSource, /rejectIsolatedMutation/);
+  assert.match(runtimeSource, /const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession\(\)/);
+  assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.isActive\(window\.webContents\.id\)/);
+  assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.collaborationState\(window\.webContents\.id, state\)/);
+  assert.match(runtimeSource, /taskIds: isolated \? \[\] : taskIds/);
   assert.match(source, /独立空状态验收会话为只读/);
   assert.match(source, /tasks: \[\]/);
   assert.match(preloadSource, /readOnlyAcceptanceWindow/);

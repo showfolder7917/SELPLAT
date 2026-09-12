@@ -14,7 +14,7 @@ import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePr
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
-import { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
+import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
@@ -71,6 +71,8 @@ interface DesktopIpcDependencies {
   clearTestData: () => Promise<TestDataResetResultOutDto>;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
+  /** 应用运行时与 IPC 共用同一实例，保证推送状态不会覆盖隔离空状态投影。 */
+  acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession;
 }
 
 interface ScreenshotWindowSession {
@@ -115,12 +117,11 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, acceptanceEmptyTaskGroupSession } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
   // 仅登记被韩立动态工具打开的短生命周期空状态窗口，正式窗口绝不进入该投影。
-  const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession();
   let screenCaptureAttemptId = 0;
 
   registerRulesIpc(rules, eventCenter);
