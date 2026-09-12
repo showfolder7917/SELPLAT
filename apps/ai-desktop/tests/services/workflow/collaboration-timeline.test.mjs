@@ -261,6 +261,33 @@ test("客户行动指导显示在原等待节点并在点击继续后交给令�
   } finally { fixture.close(); }
 });
 
+test("普通中断按等待、恢复、重新执行依次收口旧节点", () => {
+  const fixture = createFixture("interrupted-recovery-lifecycle");
+  try {
+    const recovering = task(fixture, 1, true);
+    const actor = recovering.originalExecutor;
+    recovering.flowEvents.push(flow("interrupted", "task.interrupted", "recovery", "waiting", null, "应用重建中断原连接，等待用户继续", fixture.at(5), true));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(5), [recovering]), [recovering.taskId]);
+
+    let group = fixture.timeline.snapshot(fixture.at(6)).groups[0];
+    assert.equal(group.nodes.filter((node) => node.status === "current").length, 0);
+    assert.equal(group.nodes.filter((node) => node.eventType === "task.interrupted" && node.status === "waiting").length, 1);
+
+    recovering.flowEvents.push(flow("recovery-requested", "task.recovery_requested", "recovery", "started", recovering.initiator, "用户请求继续执行任务", fixture.at(7)));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [recovering]), [recovering.taskId]);
+    group = fixture.timeline.snapshot(fixture.at(8)).groups[0];
+    assert.equal(group.nodes.some((node) => node.eventType === "task.interrupted" && node.status === "waiting"), false);
+    assert.equal(group.nodes.filter((node) => node.action === "正在恢复任务" && node.status === "current").length, 1);
+
+    recovering.flowEvents.push(flow("execution-resumed", "execution.started", "execution", "started", actor, "执行人继续原任务", fixture.at(9)));
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(9), [recovering]), [recovering.taskId]);
+    group = fixture.timeline.snapshot(fixture.at(10)).groups[0];
+    assert.equal(group.nodes.some((node) => node.action === "正在恢复任务" && node.status === "current"), false);
+    assert.equal(group.nodes.filter((node) => node.kind === "execution" && node.status === "current").length, 1);
+    assert.equal(group.waitingCount, 0);
+  } finally { fixture.close(); }
+});
+
 test("修改任务快照但没有新业务事件时时间线不变", () => {
   const fixture = createFixture("no-state-inference");
   try {

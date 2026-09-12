@@ -38,6 +38,7 @@ let inquiryFixtureRelease = null;
 let nangongNewConversationCalls = 0;
 let taskTimelineFixtureEnabled = false;
 let acceptanceTimelineFixtureStatus = null;
+let interruptedTimelineFixtureStatus = null;
 let customerActionTimelineFixtureEnabled = false;
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
@@ -199,6 +200,33 @@ const publishCollaborationTimelineChanged = () => {
 };
 const interactionTimelineSnapshot = () => {
   if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
+  if (interruptedTimelineFixtureStatus) {
+    const startedAt = "2026-08-29T00:12:00.000Z";
+    const waiting = interruptedTimelineFixtureStatus === "waiting";
+    const nodes = [{
+      nodeId: "recovery:interaction-task:1:interrupted", taskId: "interaction-task",
+      eventType: waiting ? "task.interrupted" : "task.recovery_requested", kind: "repair",
+      actor: { memberId: "system", displayName: "系统" }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }],
+      status: waiting ? "waiting" : "completed", action: waiting ? "等待恢复任务" : "恢复请求已提交",
+      summary: waiting ? "应用重建中断原连接，等待用户继续" : "用户请求继续执行任务",
+      content: "应用重建中断原连接，等待用户继续", detail: "从原任务恢复，不创建新任务。",
+      contentRole: "repair-output", detailRole: "recovery-conditions", startedAt,
+      completedAt: waiting ? null : startedAt, durationMs: 60_000, automaticOpen: true, manualApprovalProposalId: null,
+    }];
+    if (!waiting) nodes.push({
+      nodeId: "recovery:interaction-task:1:requested", taskId: "interaction-task", eventType: "task.recovery_requested", kind: "repair",
+      actor: { memberId: "nangong-wan", displayName: "南宫婉" }, recipients: [{ memberId: "nangong-wan", displayName: "南宫婉" }],
+      status: "current", action: "正在恢复任务", summary: "用户请求继续执行任务", content: "用户请求继续执行任务", detail: "",
+      contentRole: "repair-output", detailRole: "recovery-conditions", startedAt, completedAt: null, durationMs: 1_000, automaticOpen: true, manualApprovalProposalId: null,
+    });
+    return { version: 1, groups: [{
+      groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal",
+      title: "应用重建恢复任务", status: waiting ? "blocked" : "running", summary: waiting ? "等待用户继续" : "正在恢复原任务",
+      nodes, executingCount: waiting ? 0 : 1, verifyingCount: 0, waitingCount: waiting ? 1 : 0, completedCount: waiting ? 0 : 1,
+      startedAt, updatedAt: evolutionState.updatedAt, durationMs: 60_000, nextStep: waiting ? "系统 · 等待恢复任务" : "南宫婉 · 正在恢复任务",
+      failureNextStep: waiting ? "从原任务卡继续" : null,
+    }], updatedAt: evolutionState.updatedAt };
+  }
   if (acceptanceTimelineFixtureStatus) {
     const startedAt = "2026-08-29T00:12:00.000Z";
     const accepting = acceptanceTimelineFixtureStatus === "accepting";
@@ -446,6 +474,7 @@ contextBridge.exposeInMainWorld("desktop", {
   submitCollaborationTask: async () => publishCollaborationState("task.submitted"),
   continueCollaborationTask: async () => {
     customerActionTimelineFixtureEnabled = false;
+    if (interruptedTimelineFixtureStatus === "waiting") interruptedTimelineFixtureStatus = "recovering";
     const state = publishCollaborationState("task.recovery_requested");
     publishCollaborationTimelineChanged();
     return state;
@@ -648,6 +677,7 @@ contextBridge.exposeInMainWorld("desktop", {
   setInteractionTaskTimelineFixture: async (active) => {
     taskTimelineFixtureEnabled = active === true;
     acceptanceTimelineFixtureStatus = null;
+    interruptedTimelineFixtureStatus = null;
     if (!active) customerActionTimelineFixtureEnabled = false;
     evolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
@@ -659,6 +689,12 @@ contextBridge.exposeInMainWorld("desktop", {
   setInteractionAcceptanceTimelineFixture: async (status) => {
     acceptanceTimelineFixtureStatus = status === "accepting" || status === "completed" ? status : null;
     taskTimelineFixtureEnabled = acceptanceTimelineFixtureStatus !== null;
+    publishCollaborationTimelineChanged();
+    return structuredClone(interactionTimelineSnapshot());
+  },
+  setInteractionInterruptedTimelineFixture: async (active) => {
+    interruptedTimelineFixtureStatus = active ? "waiting" : null;
+    taskTimelineFixtureEnabled = active === true;
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },

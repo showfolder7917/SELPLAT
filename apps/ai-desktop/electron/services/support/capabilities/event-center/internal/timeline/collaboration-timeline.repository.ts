@@ -94,7 +94,7 @@ export class CollaborationTimelineRepository {
               ? `${legacySourceFactKey}:failure-semantics-v2`
               : legacySourceFactKey;
           // 投影升级按完整事件序列重放，不能只追加早期开始事件而覆盖已有结束事实。
-          const sourceFactKey = `${baseSourceFactKey}:lifecycle-v4`;
+          const sourceFactKey = `${baseSourceFactKey}:lifecycle-v5`;
           if (connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: sourceFactKey })) continue;
           const legacySubmitted = event.type === "task.submitted"
             && Boolean(connection.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: legacySourceFactKey }));
@@ -102,6 +102,10 @@ export class CollaborationTimelineRepository {
             ? projectLegacySubmittedFlowCorrection(task, event, task.initiator || NANGONG)
             : projectCollaborationFlowEvent(task, event, task.initiator || NANGONG);
           if (!projection) continue;
+          // 恢复阶段切换先收口被替代的当前节点，再追加新阶段；原事实仍按追加方式保留。
+          if (this.#closeSupersededTaskNodes(connection, String(group.groupId), task.taskId, event, sourceFactKey, committedAt)) {
+            changedGroupIds.add(String(group.groupId));
+          }
           for (const { sourceSuffix, ...fact } of projection.facts) if (this.#appendFact(connection, {
             ...fact, groupId: String(group.groupId), proposalId: task.evolutionProposalId, taskId: task.taskId,
             sourceFactKey: `${sourceFactKey}${sourceSuffix}`, occurredAt: event.occurredAt,
@@ -196,6 +200,68 @@ export class CollaborationTimelineRepository {
     });
     connection.prepare("UPDATE AiDesktopTaskTimelineTopic SET revision=revision+1 WHERE groupId=$groupId").run({ $groupId: fact.groupId });
     return true;
+  }
+
+  /** 恢复流程开始新阶段时，以追加纠正事实结束同一任务已被替代的当前节点。 */
+  #closeSupersededTaskNodes(
+    connection: DatabaseSync,
+    groupId: string,
+    taskId: string,
+    event: CollaborationStateOutDto["tasks"][number]["flowEvents"][number],
+    sourceFactKey: string,
+    committedAt: string,
+  ): boolean {
+    const closesInterruptedWork = event.type === "task.interrupted";
+    const closesRecoveryWait = event.type === "task.recovery_requested";
+    const closesRecoveryWork = event.type === "executor.assigned"
+      || event.type === "executor.reassigned"
+      || event.type === "execution.started";
+    if (!closesInterruptedWork && !closesRecoveryWait && !closesRecoveryWork) return false;
+
+    const currentRows = connection.prepare(`SELECT current.* FROM AiDesktopTaskTimelineEvent current
+      JOIN (SELECT nodeId, MAX(sequenceNumber) AS sequenceNumber FROM AiDesktopTaskTimelineEvent
+        WHERE groupId=$groupId AND taskId=$taskId GROUP BY nodeId) latest
+      ON latest.nodeId=current.nodeId AND latest.sequenceNumber=current.sequenceNumber
+      WHERE current.groupId=$groupId AND current.taskId=$taskId AND current.status IN ('current', 'waiting')
+      ORDER BY current.sequenceNumber`).all({ $groupId: groupId, $taskId: taskId }) as Array<Record<string, unknown>>;
+
+    let changed = false;
+    for (const row of currentRows) {
+      const status = String(row.status);
+      const eventType = String(row.eventType);
+      const shouldClose = (closesInterruptedWork && status === "current")
+        || (closesRecoveryWait && status === "waiting" && eventType === "task.interrupted")
+        || (closesRecoveryWork && status === "current" && eventType === "task.recovery_requested");
+      if (!shouldClose) continue;
+
+      const action = closesInterruptedWork
+        ? "应用中断，当前阶段已结束"
+        : closesRecoveryWait ? "恢复请求已提交" : "任务恢复完成";
+      changed = this.#appendFact(connection, {
+        groupId,
+        proposalId: nullable(row.proposalId),
+        taskId,
+        nodeId: String(row.nodeId),
+        sourceFactKey: `${sourceFactKey}:close:${String(row.nodeId)}`,
+        eventType: event.type,
+        contentRole: row.contentRole as CollaborationTimelineNodeOutDto["contentRole"],
+        detailRole: row.detailRole as CollaborationTimelineNodeOutDto["detailRole"],
+        kind: row.kind as CollaborationTimelineNodeOutDto["kind"],
+        actor: participant(String(row.actorMemberId), String(row.actorDisplayName)),
+        recipients: parseParticipants(row.recipientsJson),
+        status: "completed",
+        action,
+        summary: event.summary,
+        content: String(row.content),
+        detail: String(row.detail),
+        startedAt: String(row.startedAt),
+        completedAt: event.occurredAt,
+        automaticOpen: false,
+        manualApprovalProposalId: null,
+        occurredAt: event.occurredAt,
+      }, committedAt) || changed;
+    }
+    return changed;
   }
 
   #commit(groupIds: string[], committedAt: string): CollaborationTimelineCommit {

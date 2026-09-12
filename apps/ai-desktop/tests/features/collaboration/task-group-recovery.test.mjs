@@ -14,8 +14,8 @@ const result = await build({
 const compiled = { exports: {} };
 new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), compiled, compiled.exports);
 const { TaskGroupRecovery } = compiled.exports;
-const group = { topicId: "topic-a", proposalId: "proposal-a", nodes: [] };
-function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a" } = {}) {
+function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [] } = {}) {
+  const group = { topicId: "topic-a", proposalId: "proposal-a", nodes };
   const evolution = {
     state: { oneShotRun: { runId: "run-original", topicId, proposalId: "proposal-a", status: "blocked", blockingReason: reason },
       proposals: [{ proposalId: "proposal-a", status: "blocked" }], automationRuntime: { status: "paused" } },
@@ -48,4 +48,18 @@ test("恢复处理中禁用按钮并隐藏旧原因，失败反馈保留警告�
   assert.match(failure, /role="alert"/);
   assert.match(failure, /查看完整原因与证据/);
   assert.doesNotMatch(failure, /等待重新验证/);
+});
+
+test("任务节点已有精确恢复入口时不再显示专题级重复按钮", () => {
+  const interrupted = render({ nodes: [{
+    status: "waiting",
+    eventType: "task.interrupted",
+  }] });
+  assert.equal(interrupted, "");
+
+  const customerAction = render({ nodes: [{
+    status: "waiting",
+    eventType: "customer.action_required",
+  }] });
+  assert.equal(customerAction, "");
 });

@@ -93,6 +93,25 @@ test("从卡点继续后仍受阻会明确反馈而不是看起来没反应", as
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("普通继续入口位于下一流程并在恢复请求成功后消失", async () => {
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionInterruptedTimelineFixture(true);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+  const nextStep = page.locator(".task-timeline-next-current");
+  const resume = nextStep.getByRole("button", { name: "继续执行", exact: true });
+  await expect(resume).toBeVisible();
+  await expect(page.locator('[data-task-timeline-node-id="recovery:interaction-task:1:interrupted"]').getByRole("button", { name: "继续执行", exact: true })).toHaveCount(0);
+  await resume.click();
+  await expect(page.getByRole("button", { name: "继续执行", exact: true })).toHaveCount(0);
+  await expect(page.getByText("恢复请求已提交", { exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionInterruptedTimelineFixture(false);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+});
+
 test("任务卡明确显示韩立验收归属，并在专题完成后隐藏处理中人数", async () => {
   // 使用真实 BrowserWindow 最小尺寸验证卡片，不能用 Playwright 视口覆盖正式窗口尺寸。
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));

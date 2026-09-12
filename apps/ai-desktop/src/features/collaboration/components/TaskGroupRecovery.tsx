@@ -42,13 +42,14 @@ type TaskGroupRecoveryProps = {
 
 /** 仅为当前专题原运行提供唯一恢复入口。 */
 export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecoveryProps) {
-  // 客户操作卡点已经在具体节点提供按钮时，专题顶部不能再显示重复入口。
-  const hasCustomerActionNode = group.nodes.some((node) => {
-    // 只有仍在等待客户操作的节点才算当前有效卡点。
-    return node.eventType === "customer.action_required" && node.status === "waiting";
+  // 任务节点已有精确恢复入口时，专题级运行恢复不能再显示第二个入口。
+  const hasTaskRecoveryNode = group.nodes.some((node) => {
+    // 客户操作留在对应节点，普通应用中断由卡片“下一流程”区域承载。
+    return node.status === "waiting"
+      && (node.eventType === "customer.action_required" || node.eventType === "task.interrupted");
   });
   // 节点已经拥有精确恢复入口时，专题级入口必须隐藏。
-  if (hasCustomerActionNode) return null;
+  if (hasTaskRecoveryNode) return null;
 
   const evolutionState = evolution.state;
   // 演化状态尚未从后端载入时，当前没有可以安全恢复的专题。

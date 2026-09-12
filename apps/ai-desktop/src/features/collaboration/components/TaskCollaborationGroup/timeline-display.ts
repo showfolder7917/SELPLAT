@@ -45,15 +45,13 @@ export function groupActivityPresentation(
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
 }
 
-/** 同一任务连续重启时，只让最新等待节点显示一次“继续执行”。 */
+/** 需要客户完成具体操作时，只让最新等待节点在原位置显示一次“从卡点继续”。 */
 export function latestRecoveryTaskId(
   nodes: CollaborationTimelineNodeOutDto[],
   node: CollaborationTimelineNodeOutDto,
   index: number,
 ): string | null {
-  const isRecoveryEvent = node.eventType === "task.interrupted"
-    || node.eventType === "customer.action_required";
-  if (!node.taskId || !isRecoveryEvent || node.status !== "waiting") return null;
+  if (!node.taskId || node.eventType !== "customer.action_required" || node.status !== "waiting") return null;
 
   const hasNewerWaitingNode = nodes.slice(index + 1).some((candidate) => {
     return candidate.taskId === node.taskId
@@ -61,6 +59,13 @@ export function latestRecoveryTaskId(
       && candidate.status === "waiting";
   });
   return hasNewerWaitingNode ? null : node.taskId;
+}
+
+/** 普通应用中断的恢复入口属于当前流程区，不混入历史人物节点。 */
+export function latestInterruptedRecoveryTaskId(nodes: CollaborationTimelineNodeOutDto[]): string | null {
+  return [...nodes].reverse().find((node) => {
+    return node.taskId && node.eventType === "task.interrupted" && node.status === "waiting";
+  })?.taskId || null;
 }
 
 /** 兼容旧重复恢复数据：同一恢复状态段只显示最后一条等待记录。 */

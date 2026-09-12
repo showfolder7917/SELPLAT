@@ -36,6 +36,8 @@ import {
   groupStatusLabel,
   // 恢复任务选择：只在最新等待节点返回任务标识。
   latestRecoveryTaskId,
+  // 普通中断恢复：把入口放到专题当前流程区，不塞进历史节点。
+  latestInterruptedRecoveryTaskId,
   // 节点耗时：正在执行或等待时随当前时间更新。
   nodeDurationLabel,
   // 节点状态：把完成、当前、等待和失败转换成中日文。
@@ -324,6 +326,10 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { onOpenChange } = model.actions;
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
+  // 普通恢复任务（interruptedRecoveryTaskId）只从仍在等待的应用中断事实读取。
+  const interruptedRecoveryTaskId = latestInterruptedRecoveryTaskId(visibleNodes);
+  // 普通恢复提交中（interruptedRecoveryPending）用于避免重复触发同一个任务。
+  const interruptedRecoveryPending = interruptedRecoveryTaskId === model.presentation.continuingTaskId;
 
   return (
     // 专题卡根折叠区统一承载卡片头部、恢复入口、人物时间线和下一流程。
@@ -343,7 +349,19 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         {/* 下一流程标签：按当前界面语言说明这一栏的业务含义。 */}
         <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
         {/* 权威下一步骤：直接展示后端为当前专题计算的继续方向。 */}
-        <span>{group.nextStep}</span>
+        <span className="task-timeline-next-current">
+          <span>{group.nextStep}</span>
+          {interruptedRecoveryTaskId && !interruptedRecoveryPending && (
+            <button
+              type="button"
+              className="task-recovery-continue"
+              onClick={() => model.actions.onContinueTask(interruptedRecoveryTaskId)}
+            >
+              <i className="ri-play-circle-line" aria-hidden="true" />
+              {locale === "ja" ? "実行を続ける" : "继续执行"}
+            </button>
+          )}
+        </span>
         {/* 失败恢复方向：只有专题阻塞且后端提供说明时才追加显示。 */}
         {group.status === "blocked" && group.failureNextStep && (
           <small>{locale === "ja" ? "失敗時" : "失败后"}：{group.failureNextStep}</small>

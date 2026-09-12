@@ -71,6 +71,8 @@ export function CollaborationWorkspaceFeature({
   /** 等待节点继续原任务时交给协作控制器执行。 */
   async function continueTimelineTask(taskId: string) {
     await controller.actions.continueTask(taskId);
+    // 恢复请求成功后立即读取权威时间线，让旧等待入口在同一次用户操作中收口。
+    await controller.actions.refreshTimeline();
   }
 
   // ViewModel 只把 Controller 状态映射成任务群和人物页面输入。
