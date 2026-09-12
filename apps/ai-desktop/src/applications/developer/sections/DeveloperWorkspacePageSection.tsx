@@ -44,6 +44,7 @@ export function DeveloperWorkspacePageSection({ viewModel }: DeveloperWorkspaceP
         onScreenshot={(hidden) => void viewModel.screenshot.startScreenshot(hidden, "hanli")}
         onPaste={(files) => void viewModel.screenshot.pasteClipboardImages(files, "hanli")}
         onError={hanli.setError}
+        isCurrentPage={viewModel.isCurrentPage}
       />
     );
   } else if (viewModel.kind === "nangong") {

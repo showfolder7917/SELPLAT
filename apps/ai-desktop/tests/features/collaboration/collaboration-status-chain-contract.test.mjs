@@ -27,6 +27,7 @@ const taskGroupSource = [
   "../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const collaborationModelSource = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
+const collaborationViewModelSource = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
@@ -84,6 +85,19 @@ test("协作页面和控制器使用具名模型归组公开依赖", () => {
   assert.doesNotMatch(developerSource, /<CollaborationWorkspaceFeature[\s\S]{0,300}(?:workspaces|nangong|screenshot)=/);
   // 协作控制器按权威数据、导航、反馈、操作和稳定配置分组，调用方通过组名理解字段职责。
   assert.match(collaborationModelSource, /data: \{[\s\S]*navigation: \{[\s\S]*feedback: \{[\s\S]*actions: \{[\s\S]*configuration: \{/);
+});
+
+test("没有专题任务时可从空状态进入韩立会话，但不创建任务", () => {
+  assert.match(taskGroupSource, /groups\.length === 0[\s\S]*onClick=\{openHanliConversation\}[\s\S]*找韩立说需求/);
+  assert.match(collaborationModelSource, /const openMemberPage = async \(memberId: string\)[\s\S]*selectMember\(memberId\)[\s\S]*setPanel\("member"\)/);
+  assert.match(collaborationViewModelSource, /onOpenHanliConversation: \(\) => controller\.actions\.openMemberPage\("han-li"\)/);
+  assert.doesNotMatch(taskGroupSource, /submitTask|submitConversationTask/);
+});
+
+test("任务协作群空状态在窄窗口保持单列、换行和容器边界", () => {
+  assert.match(developerStyles, /\.task-collaboration-empty \{[\s\S]*width: min\(100%, 480px\)[\s\S]*min-width: 0[\s\S]*display: grid/);
+  assert.match(developerStyles, /\.task-collaboration-empty > span \{[\s\S]*max-width: 100%[\s\S]*overflow-wrap: anywhere/);
+  assert.match(developerStyles, /\.task-collaboration-empty-action \{[\s\S]*max-width: 100%/);
 });
 
 test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {

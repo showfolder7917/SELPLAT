@@ -29,13 +29,20 @@ test("韩立 View 明确标注实际页面的会话、问答、附件和输入�
 });
 
 test("韩立数据结构和控制 Hook 为新手保留逐项业务说明", () => {
-  for (const field of ["runtime", "conversation", "attachments", "workspaces", "locale", "newConversationBusy", "error", "onConversation", "onAttachments", "onScreenshot", "onPaste", "onError"]) {
+  for (const field of ["runtime", "conversation", "attachments", "workspaces", "locale", "newConversationBusy", "error", "onConversation", "onAttachments", "onScreenshot", "onPaste", "onError", "isCurrentPage"]) {
     const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     assert.match(types, new RegExp(`/\\*\\*[\\s\\S]*?\\*/\\s*${escapedField}(?:\\??:|\\()`));
   }
   assert.match(controller, /待发送文字（text）保存输入框中尚未发送的内容/);
   assert.match(controller, /本轮消息资料：后端保存消息、读取截图并建立工程上下文所需的完整输入/);
   assert.match(controller, /返回 View 渲染和响应交互所需的最小页面模型/);
+});
+
+test("韩立会话成为当前页时把焦点交给需求输入框", () => {
+  assert.match(view, /const messageInputRef = useRef<HTMLTextAreaElement>\(null\)/);
+  assert.match(view, /if \(props\.isCurrentPage\) messageInputRef\.current\?\.focus\(\)/);
+  assert.match(view, /\}, \[props\.isCurrentPage\]\)/);
+  assert.match(view, /<textarea[\s\S]*ref=\{messageInputRef\}/);
 });
 
 test("自动托管作为韩立会话专属子模块并使用新手可读结构", () => {
