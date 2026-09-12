@@ -325,6 +325,33 @@ test("测试台导航只放行活动栏内固定按钮且继续拒绝危险操�
   } finally { globalThis.document = previous; }
 });
 
+test("任务协作群与空状态韩立入口只在固定容器内允许导航", () => {
+  const previous = globalThis.document;
+  const check = ({ label, taskGroup = false, emptyAction = false, inTaskList = false, inEmptyState = false }) => {
+    const node = {
+      getAttribute: (key) => key === "aria-label" ? label : null,
+      classList: { contains: () => false },
+      matches: (selector) => (selector === "button.collaboration-task-group-entry" && taskGroup)
+        || (selector === "button.task-collaboration-empty-action" && emptyAction),
+      closest: (selector) => {
+        if (selector === "#developer-task-list") return inTaskList ? {} : null;
+        if (selector === ".task-collaboration-page .task-collaboration-empty") return inEmptyState ? {} : null;
+        return null;
+      },
+    };
+    globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
+    return acceptanceModule.safeNavigationClick(12, 30);
+  };
+  try {
+    assert.equal(check({ label: "任务协作群0", taskGroup: true, inTaskList: true }), true);
+    assert.equal(check({ label: "任务协作群0", taskGroup: true }), false);
+    assert.equal(check({ label: "任务协作群", inTaskList: true }), false);
+    assert.equal(check({ label: "找韩立说需求", emptyAction: true, inEmptyState: true }), true);
+    assert.equal(check({ label: "找韩立说需求", emptyAction: true }), false);
+    assert.equal(check({ label: "确认并提交", emptyAction: true, inEmptyState: true }), false);
+  } finally { globalThis.document = previous; }
+});
+
 
 test("finish 缺少最新截图编号时仍记录提交被拒绝", async () => {
   const f = fixture();
