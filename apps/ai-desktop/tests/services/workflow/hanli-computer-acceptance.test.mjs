@@ -13,7 +13,7 @@ const transformedAcceptance = await transform(acceptanceSource + "\nexport { saf
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
 const { HanliComputerAcceptance } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, acceptanceTarget = testConsoleVisible ? "test-console" : null) {
   let n = 0;
   const inputs = [], progress = [];
   let bounds = { x: 0, y: 0, width: 1200, height: 800 };
@@ -26,6 +26,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     }
     if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
     if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
+    if (/readAcceptanceResizeTarget/.test(source)) return acceptanceTarget ? { status: "visible", target: acceptanceTarget } : { status: "hidden" };
     if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
@@ -124,25 +125,37 @@ test("测试台验收能力只允许固定容器滚动、只读证据展开和�
     const expanded = await tools.call("hanli_computer", { action: "expand-test-console-evidence", reason: "展开测试台只读技术证据", observationId: id(scrolled) });
     assert.equal(JSON.parse(expanded.contentItems[0].text).interactionEvidence.testConsole.status, "expanded");
     const narrow = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "检查固定窄窗口布局", observationId: id(expanded) });
-    assert.deepEqual(JSON.parse(narrow.contentItems[0].text).interactionEvidence.acceptanceWindow, { preset: "narrow", bounds: { x: 0, y: 0, width: 1000, height: 700 } });
+    const narrowObservation = JSON.parse(narrow.contentItems[0].text).interactionEvidence;
+    assert.deepEqual(narrowObservation.acceptanceTarget, { status: "visible", target: "test-console" });
+    assert.deepEqual(narrowObservation.acceptanceWindow, { preset: "narrow", bounds: { x: 0, y: 0, width: 1000, height: 700 } });
     await finish(tools, id(narrow));
   });
   assert.equal(run.status, "passed");
   assert.deepEqual(f.boundsCalls, [{ x: 0, y: 0, width: 1000, height: 700 }, { x: 0, y: 0, width: 1200, height: 800 }]);
   assert.deepEqual(run.stepResults.slice(0, 3).map((step) => step.operation.type), ["scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window"]);
 });
-test("隐藏测试台不阻止当前页面的窄窗口验收", async () => {
+test("隐藏测试台时固定验收能力全部拒绝", async () => {
   const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, false);
   const run = await f.run(async (tools) => {
     const first = id(await observe(tools));
     await assert.rejects(tools.call("hanli_computer", { action: "scroll-test-console", reason: "尝试滚动隐藏测试台", observationId: first, deltaY: 320 }), /测试台内容未滚动：hidden/);
     await assert.rejects(tools.call("hanli_computer", { action: "expand-test-console-evidence", reason: "尝试展开隐藏测试台", observationId: first }), /测试台技术证据未展开：hidden/);
-    const narrow = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "检查当前任务页窄窗口", observationId: first });
-    const restored = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "restore", reason: "恢复窗口", observationId: id(narrow) });
-    await finish(tools, id(restored), "blocked");
+    await assert.rejects(tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "尝试调整隐藏测试台窗口", observationId: first }), /测试台或任务协作群未显示/);
+    await finish(tools, first, "blocked");
   });
   assert.equal(run.status, "blocked");
-  assert.equal(f.boundsCalls.length, 2);
+  assert.deepEqual(f.boundsCalls, []);
+});
+test("任务协作群显示时可使用同一固定窄窗口预设，其他页面仍拒绝", async () => {
+  const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, false, "task-group");
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const narrow = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "检查任务协作群窄窗口布局", observationId: first });
+    assert.deepEqual(JSON.parse(narrow.contentItems[0].text).interactionEvidence.acceptanceTarget, { status: "visible", target: "task-group" });
+    await finish(tools, id(narrow));
+  });
+  assert.equal(run.status, "passed");
+  assert.deepEqual(f.boundsCalls, [{ x: 0, y: 0, width: 1000, height: 700 }, { x: 0, y: 0, width: 1200, height: 800 }]);
 });
 test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
@@ -151,6 +164,8 @@ test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸",
   assert.match(source, /expand-test-console-evidence/);
   assert.match(source, /\.test-console-disclosure/);
   assert.match(source, /resizePreset/);
+  assert.match(source, /readAcceptanceResizeTarget/);
+  assert.match(source, /\.task-collaboration-page/);
   assert.match(source, /width: 1000, height: 700/);
   assert.match(source, /window\.setBounds\(initialBounds\)/);
   const navigationBody = source.slice(source.indexOf("function safeNavigationClick"), source.indexOf("function safeImagePreviewDrag"));
