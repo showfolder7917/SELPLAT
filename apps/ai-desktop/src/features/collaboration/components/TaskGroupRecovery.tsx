@@ -74,7 +74,7 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
   // 原运行只有未完成且处于阻塞或暂停状态时才允许继续。
   const runCanResume = oneShotRun.status !== "completed"
     && (oneShotRun.status === "blocked" || evolutionState.automationRuntime.status === "paused");
-  // 可恢复提案状态覆盖等待补充、退回、阻塞和执行验证中的真实卡点。
+  // 可恢复提案状态覆盖普通卡点；已完成提案只接受后端显式登记的完成态复核模式。
   const resumableProposalStates = [
     "supplement-required",
     "rejected",
@@ -84,7 +84,8 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
     "verifying",
   ];
   // 提案必须真实存在并处于允许恢复的状态。
-  const proposalCanResume = proposal && resumableProposalStates.includes(proposal.status);
+  const proposalCanResume = proposal && (resumableProposalStates.includes(proposal.status)
+    || (proposal.status === "completed" && oneShotRun.resumeMode === "post-completion-review"));
   // 恢复按钮要求运行和提案两层状态同时允许继续。
   const showResumeButton = Boolean(group.status === "blocked" && runCanResume && proposalCanResume);
 

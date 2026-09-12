@@ -1,5 +1,5 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
@@ -28,6 +28,7 @@ import {
   type EvolutionMutationPort,
   type EvolutionStatePort,
 } from "../../../evolution/index.js";
+import { findCompletionReviewCheckpoint } from "../../../evolution/domain/completion-review-checkpoint.js";
 
 export interface PersonaEvolutionRuntimeOptions {
   /** Evolution 专题、研讨和提案的唯一状态端口。 */
@@ -367,6 +368,72 @@ export class PersonaEvolutionRuntime {
     return this.nangongRuntime.facade.distributeProposal(proposalId, mutation);
   }
 
+  /** 只恢复业务完成后的页面复核，不重新提交已经完成的审批、分发和结果决定。 */
+  async #resumePostCompletionReview(
+    state: EvolutionStateOutDto,
+    topic: EvolutionTopicOutDto,
+    proposal: EvolutionProposalOutDto,
+    run: EvolutionOneShotRunOutDto,
+  ): Promise<EvolutionStateOutDto> {
+    const checkpoint = findCompletionReviewCheckpoint(state, proposal.proposalId);
+    if (!checkpoint) {
+      return this.#blockOneShotFailure("technical", "resume_post_completion_review", new Error("完成态复核证据不完整。"), "完成态复核证据不完整，已拒绝重复执行已完成业务。 ");
+    }
+    if (!this.#computerAcceptanceSession) {
+      return this.#blockOneShotFailure("technical", "resume_post_completion_review", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。 ");
+    }
+
+    const attemptId = randomUUID();
+    const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
+    publishAcceptance("received", "已恢复原完成态复核卡点；本轮只读检查完成后的真实页面，不重复业务完成动作。");
+    const goal: HanliComputerAcceptanceInDto = {
+      topicId: topic.topicId,
+      proposalId: proposal.proposalId,
+      title: proposal.title,
+      criteria: proposal.acceptanceCriteria,
+      reviewMode: "post-completion-review",
+      priorPhaseEvidence: {
+        summary: checkpoint.initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
+        evidenceAttachmentIds: checkpoint.initialPass.evidenceAttachmentIds,
+      },
+      sceneContext: {
+        topic: { topicId: topic.topicId, status: topic.status },
+        proposal: { proposalId: proposal.proposalId, topicId: proposal.topicId, status: proposal.status },
+        oneShotRun: { topicId: run.topicId, proposalId: run.proposalId, status: run.status, phase: run.phase },
+      },
+    };
+    try {
+      this.#store.updateOneShotRun("accepting", "linghu-ancestor", "令狐老祖", "正在恢复完成态只读验收场景", topic.topicId, proposal.proposalId);
+      const result = await this.#computerAcceptanceSession(goal, () => {
+        publishAcceptance("started", "令狐已恢复只读验收场景，韩立正在复核完成态页面。");
+        this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在只读复核完成态页面", topic.topicId, proposal.proposalId);
+      }, () => {
+        throw new Error("完成态复核恢复不得再次提交业务完成动作。");
+      });
+      this.#hanli.recordAcceptanceRun(result);
+      if (result.status !== "passed") {
+        const reason = result.stepResults
+          .filter((step) => step.status !== "passed" || step.layoutStatus !== "passed")
+          .map((step) => `${step.checkId}：功能 ${step.actual}；布局 ${step.layoutActual || "未提供布局判断"}`)
+          .join("\n") || "完成态复核没有取得通过证据。";
+        publishAcceptance("failed", `完成态复核仍未通过：\n${reason}`);
+        return this.#blockOneShotFailure(result.status === "blocked" ? "technical" : "business", "resume_post_completion_review", new Error(reason), reason, {
+          acceptanceRunId: result.runId,
+          evidenceAttachmentIds: result.evidenceAttachmentIds,
+        });
+      }
+      publishAcceptance("passed", `韩立完成态只读复核通过。运行记录：${result.runId}\n截图证据：${result.evidenceAttachmentIds.join("、")}`);
+      let next = this.#store.finishOneShotRun();
+      next = this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”的业务结果和完成态页面复核均已通过，记录已归档到专题工作台。`, []);
+      if (next.automationRuntime.status === "running") this.#scheduleContinuation(1_000);
+      return next;
+    } catch (error) {
+      const reason = `韩立完成态复核恢复失败：${error instanceof Error ? error.message : String(error)}`;
+      publishAcceptance("failed", reason);
+      return this.#blockOneShotFailure("technical", "resume_post_completion_review", error, reason);
+    }
+  }
+
   /** 一次性托管只调度现有动作；每次推进到需要等待真实任务状态的位置即返回。 */
   async #advanceOneShot(): Promise<EvolutionStateOutDto> {
     const transitionLimit = Math.max(12, this.state().automationSettings.maxCorrectionRounds * 3 + 8);
@@ -387,6 +454,11 @@ export class PersonaEvolutionRuntime {
         proposal = state.proposals.at(-1)!;
         this.#store.updateOneShotRun("approving", "han-li", "韩立", "正在审批南宫婉提交的演化方向", topic.topicId, proposal.proposalId);
         continue;
+      }
+
+      // 该显式模式只可能来自已验证的历史证据，必须先于“提案已完成”终态处理。
+      if (proposal.status === "completed" && run.resumeMode === "post-completion-review") {
+        return this.#resumePostCompletionReview(state, topic, proposal, run);
       }
 
       const flowAction = this.#flow.next(proposal);

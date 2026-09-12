@@ -21,11 +21,11 @@ const selectorResult = await build({
 const selectorCompiled = { exports: {} };
 new Function("require", "module", "exports", selectorResult.outputFiles[0].text)(createRequire(import.meta.url), selectorCompiled, selectorCompiled.exports);
 const { latestActiveRecoveryAction } = selectorCompiled.exports;
-function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [], groupStatus = "blocked" } = {}) {
+function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [], groupStatus = "blocked", proposalStatus = "blocked", resumeMode = "standard" } = {}) {
   const group = { topicId: "topic-a", proposalId: "proposal-a", nodes, status: groupStatus };
   const evolution = {
-    state: { oneShotRun: { runId: "run-original", topicId, proposalId: "proposal-a", status: "blocked", blockingReason: reason },
-      proposals: [{ proposalId: "proposal-a", status: "blocked" }], automationRuntime: { status: "paused" } },
+    state: { oneShotRun: { runId: "run-original", topicId, proposalId: "proposal-a", status: "blocked", blockingReason: reason, resumeMode },
+      proposals: [{ proposalId: "proposal-a", status: proposalStatus }], automationRuntime: { status: "paused" } },
     resumingRunId: pending ? "run-original" : null, resumeFeedback: feedback,
   };
   return renderToStaticMarkup(createElement(TaskGroupRecovery, { group, evolution, locale: "zh" }));
@@ -98,4 +98,9 @@ test("专题已经恢复运行时不显示旧一次性运行的恢复入口", ()
   assert.equal(render({ groupStatus: "running" }), "");
   assert.equal(render({ groupStatus: "verifying" }), "");
   assert.equal(render({ groupStatus: "completed" }), "");
+});
+
+test("业务已完成时只有正式登记的完成态复核卡点显示恢复入口", () => {
+  assert.match(render({ proposalStatus: "completed", resumeMode: "post-completion-review" }), /从卡点继续/);
+  assert.equal(render({ proposalStatus: "completed", resumeMode: "standard" }), "");
 });

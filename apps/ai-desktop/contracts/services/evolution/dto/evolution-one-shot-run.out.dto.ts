@@ -27,6 +27,8 @@ export interface EvolutionOneShotRunOutDto {
   actorName: string;
   action: string;
   blockingReason: string | null;
+  /** 当前卡点允许恢复的阶段；完成态复核不会退回已经结束的业务流程。 */
+  resumeMode?: "standard" | "post-completion-review" | null;
   startedAt: string;
   updatedAt: string;
   completedAt: string | null;

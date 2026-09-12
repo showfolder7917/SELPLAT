@@ -148,6 +148,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       });
       audit.recordEvent("linghu.acceptance_scene.ready", { ...identity, plan, webContentsId: prepared.window.webContents.id });
       onSceneReady();
+      // 原业务已经完成时直接执行只读复核，禁止再次进入完成前门或调用业务完成回调。
+      if (goal.reviewMode === "post-completion-review") {
+        const review = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan }, prepared.window);
+        audit.recordEvent("hanli.acceptance.real_app_checked", { runId: review.runId, topicId: review.topicId, proposalId: review.proposalId, status: review.status, evidenceCount: review.evidenceAttachmentIds.length, resumedPostCompletionReview: true });
+        return review;
+      }
       const completionReviewRequired = plan.kind === "current-window" && plan.completionReviewRequired;
       const initialGoal = completionReviewRequired ? {
         ...goal,

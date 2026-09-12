@@ -5,6 +5,7 @@ import type { HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
+import { findCompletionReviewCheckpoint } from "../domain/completion-review-checkpoint.js";
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
@@ -112,7 +113,7 @@ export class EvolutionStateStore {
       state.automationRuntime.pausedAt = null;
       state.automationRuntime.stopReason = null;
       state.oneShotConfirmation = null;
-      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, startedAt: now, updatedAt: now, completedAt: null };
+      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, resumeMode: null, startedAt: now, updatedAt: now, completedAt: null };
     });
   }
 
@@ -143,6 +144,7 @@ export class EvolutionStateStore {
       run.actorName = required(actorName, "一次性运行当前人物", 160);
       run.action = required(action, "一次性运行当前动作", 2_000);
       run.blockingReason = null;
+      run.resumeMode = null;
       run.updatedAt = now;
     }, { phase, actor, actorName, action, status: "running", nextOwner: actorName });
   }
@@ -159,6 +161,7 @@ export class EvolutionStateStore {
       run.actorName = "南宫婉";
       run.action = "本轮演化已经完成并归档";
       run.blockingReason = null;
+      run.resumeMode = null;
       run.updatedAt = now;
       run.completedAt = now;
     }, { phase: "completed", actor: "nangong-wan", status: "completed", nextOwner: "user" });
@@ -176,6 +179,10 @@ export class EvolutionStateStore {
       run.actorName = "系统";
       run.action = "等待处理无法自动完成的阻塞";
       run.blockingReason = required(reason, "一次性运行阻塞原因", 8_000);
+      // 业务已完成时只能恢复最后的只读复核，其他阻塞继续使用原阶段恢复。
+      run.resumeMode = current.proposalId && findCompletionReviewCheckpoint(state, current.proposalId)
+        ? "post-completion-review"
+        : "standard";
       run.updatedAt = now;
       run.completedAt = now;
       state.automationRuntime.status = "blocked";
@@ -233,9 +240,12 @@ export class EvolutionStateStore {
     const current = this.#state.oneShotRun;
     if (!current || current.status === "completed" || (current.status !== "blocked" && this.#state.automationRuntime.status !== "paused") || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");
     const proposal = requireProposal(this.#state, current.proposalId);
-    if (!["supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
+    const completionReview = current.resumeMode === "post-completion-review"
+      ? findCompletionReviewCheckpoint(this.#state, proposal.proposalId)
+      : null;
+    if (!completionReview && !["supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
     // 依据提案的持久事实回到原阶段；验收故障不得重新分析、分发已经完成的任务。
-    const accepting = proposal.status === "pending-acceptance";
+    const accepting = proposal.status === "pending-acceptance" || Boolean(completionReview);
     const executing = proposal.status === "executing" || proposal.status === "verifying";
     const phase = accepting ? "accepting" : executing ? (proposal.status === "verifying" ? "testing" : "executing") : "revising";
     const now = new Date().toISOString();
@@ -245,7 +255,7 @@ export class EvolutionStateStore {
       run.phase = phase;
       run.actor = accepting ? "han-li" : "nangong-wan";
       run.actorName = accepting ? "韩立" : "南宫婉";
-      run.action = accepting ? "正在从原验收卡点继续真实界面验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
+      run.action = completionReview ? "正在从完成态复核卡点继续只读验收" : accepting ? "正在从原验收卡点继续真实界面验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
       run.blockingReason = null;
       run.updatedAt = now;
       run.completedAt = null;
@@ -830,7 +840,18 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
   } = state;
   const distribution = migrateDistributionValidation(current as EvolutionStateOutDto);
   const retiredSwitchFound = [_retiredEvolution, _retiredNangongApproval, _retiredLinghuApproval, _retiredExecution].some((value) => typeof value === "boolean");
-  return { state: distribution.state, changed: retiredSwitchFound || distribution.changed };
+  const resumeMode = migrateOneShotResumeMode(distribution.state);
+  return { state: resumeMode.state, changed: retiredSwitchFound || distribution.changed || resumeMode.changed };
+}
+
+/** 为旧状态补齐恢复模式，使升级后仍能从原卡点继续而不重建任务。 */
+function migrateOneShotResumeMode(state: EvolutionStateOutDto): { state: EvolutionStateOutDto; changed: boolean } {
+  const run = state.oneShotRun;
+  if (!run || run.resumeMode !== undefined) return { state, changed: false };
+  const resumeMode = run.status === "blocked"
+    ? run.proposalId && findCompletionReviewCheckpoint(state, run.proposalId) ? "post-completion-review" : "standard"
+    : null;
+  return { state: { ...state, oneShotRun: { ...run, resumeMode } }, changed: true };
 }
 
 /** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
