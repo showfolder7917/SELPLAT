@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { prepareIsolatedAcceptanceProject } from "./prepare-isolated-acceptance-project.mjs";
+import { prepareIsolatedAcceptanceRuntime } from "./prepare-isolated-acceptance-runtime.mjs";
 
 const applicationRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const formalProjectRoot = path.resolve(applicationRoot, "..", "..");
@@ -22,7 +22,7 @@ chmodSync(acceptanceRoot, 0o700);
 const projectRoot = path.join(acceptanceRoot, "project");
 const userDataRoot = path.join(acceptanceRoot, "user-data");
 // 完整源码含 ai-memory-paths.json；正式数据库与运行状态未纳入 Git，不进入副本。
-const { sourceSha } = prepareIsolatedAcceptanceProject(formalProjectRoot, projectRoot);
+const { sourceSha } = prepareIsolatedAcceptanceRuntime(formalProjectRoot, projectRoot);
 
 const executable = path.join(applicationPath, "Contents", "MacOS", "AI Desktop");
 const child = spawn(executable, [
