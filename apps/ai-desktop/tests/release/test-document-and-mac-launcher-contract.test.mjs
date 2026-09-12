@@ -43,7 +43,8 @@ test("共享测试文档使用独占锁、占用身份、心跳和过期恢复",
 test("韩立交互式验收超时先返回明确事实，再回收隔离 harness", () => {
   assert.match(electronMain, /const acceptanceTimeout = new Promise<never>/);
   assert.match(electronMain, /韩立交互式验收会话超过10分钟未完成，未代替韩立给出验收结论/);
-  assert.match(electronMain, /await Promise\.race\(\[\s*service\.send\([\s\S]*acceptanceTimeout,/);
+  assert.match(electronMain, /const sendAcceptanceTurn = \(promptId:[\s\S]*Promise\.race\(\[\s*service\.send\([\s\S]*acceptanceTimeout,/);
+  assert.match(electronMain, /await sendAcceptanceTurn\("hanli\.computer-acceptance"\);[\s\S]*if \(session\.beginFinalization\(\)\)[\s\S]*await sendAcceptanceTurn\("hanli\.computer-acceptance-finalization"\);/);
   assert.match(electronMain, /finally \{ if \(timer\) clearTimeout\(timer\); service\.dispose\(\); \}/);
   assert.doesNotMatch(electronMain, /setTimeout\(\(\) => service\.dispose\(\), 180_000\)/);
 });
