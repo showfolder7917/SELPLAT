@@ -13,11 +13,15 @@ const transformedAcceptance = await transform(acceptanceSource + "\nexport { saf
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
 const { HanliComputerAcceptance } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleBounds = null) {
   let n = 0;
-  const inputs = [], progress = [];
-  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => {
+  const inputs = [], progress = [], captureRects = [];
+  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async (rect) => {
+    captureRects.push(rect ?? null);
+    return { toDataURL: () => "data:image/png;base64,test", getSize: () => rect ? ({ width: rect.width, height: rect.height }) : ({ width: 1000, height: 800 }) };
+  }, executeJavaScript: async (script) => {
     const source = String(script);
+    if (/readVisibleTestConsoleBounds/.test(source)) return testConsoleBounds;
     if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
     if (/focusAcceptanceModelControl/.test(source)) {
       return { status: "focused", controlLabel: source.includes("nangong-model") ? "南宫婉对话模型" : "韩立对话模型" };
@@ -25,9 +29,10 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
+  return { inputs, captureRects, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
+const observeTestConsole = (tools, observationId) => tools.call("hanli_computer", { action: "observe-test-console", reason: "放大观察当前测试台", observationId });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
 const finish = (tools, observationId, status = "passed", evidenceId = observationId, layoutStatus = status === "blocked" ? "blocked" : "passed") => tools.call("hanli_computer", {
   action: "finish",
@@ -93,6 +98,30 @@ test("不安全点击被拒绝且可以真实报告受阻", async () => {
     await finish(tools, snapshot, "blocked");
   });
   assert.equal(result.status, "blocked");
+});
+test("测试台局部观察只捕获当前可见面板且不发送输入", async () => {
+  const bounds = { x: 58, y: 48, width: 480, height: 722 };
+  const f = fixture(true, undefined, bounds);
+  await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const focused = await observeTestConsole(tools, first);
+    const observation = JSON.parse(focused.contentItems[0].text);
+    assert.equal(observation.captureTarget, "test-console");
+    assert.deepEqual(observation.size, { width: 480, height: 722 });
+    assert.deepEqual(f.captureRects, [null, bounds]);
+    assert.deepEqual(f.inputs, []);
+    await finish(tools, id(focused), "blocked");
+  });
+});
+test("未显示测试台时拒绝局部观察", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    await assert.rejects(observeTestConsole(tools, first), /测试台未显示/);
+    assert.deepEqual(f.captureRects, [null]);
+    assert.deepEqual(f.inputs, []);
+    await finish(tools, first, "blocked");
+  });
 });
 test("设置浮层触发器是唯一允许的设置导航入口", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
