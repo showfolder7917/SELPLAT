@@ -297,7 +297,7 @@ export class HanliComputerAcceptance {
           let windowResizeEvidence: Record<string, unknown> | null = null;
           if (args.action === "send-test-message") {
             // 固定文案、当前人物输入框和人物维度单次上限共同限制真实发送的业务副作用。
-            const script = `(${sendAcceptanceMessage.toString()})(${JSON.stringify([...sentComposerLabels])})`;
+            const script = createAcceptancePersonaScript(sendAcceptanceMessage, [...sentComposerLabels]);
             const result = await window.webContents.executeJavaScript(script) as {
               status: string;
               composerLabel: string | null;
@@ -308,7 +308,7 @@ export class HanliComputerAcceptance {
             sentComposerLabels.add(result.composerLabel);
           } else if (args.action === "send-test-screenshot") {
             // 只通过当前可见人物会话的固定截图按钮生成附件，禁止工具输入任意路径或附件身份。
-            const script = `(${sendAcceptanceScreenshot.toString()})(${JSON.stringify([...sentComposerLabels])})`;
+            const script = createAcceptancePersonaScript(sendAcceptanceScreenshot, [...sentComposerLabels]);
             const result = await window.webContents.executeJavaScript(script) as {
               status: string;
               composerLabel: string | null;
@@ -697,6 +697,44 @@ async function sendAcceptanceScreenshot(sentComposerLabels: string[]): Promise<{
   if (sendButton.disabled) return { status: "截图附件发送按钮仍禁用", composerLabel: null };
   sendButton.click();
   return { status: "sent", composerLabel };
+}
+
+/**
+ * 受控验收从专题卡片开始时，先复用客户可见的韩立人物入口进入既有会话。
+ * 该路径不创建会话、不写任务，也不放宽任意页面或输入框选择；切换后仍只接受当前可见的固定人物输入框。
+ */
+async function findAcceptancePersonaComposer(sentComposerLabels: string[]): Promise<HTMLTextAreaElement | null> {
+  const findComposer = (): HTMLTextAreaElement | null => {
+    const candidates = document.querySelectorAll<HTMLTextAreaElement>(
+      'textarea.selconversation-input[data-sel-conversation-input]',
+    );
+    for (const candidate of candidates) {
+      const label = candidate.getAttribute("aria-label") || "";
+      const isPersonaComposer = /^(给韩立发送消息|给南宫婉发送消息)$/u.test(label);
+      if (candidate.offsetParent !== null && isPersonaComposer && !sentComposerLabels.includes(label)) return candidate;
+    }
+    return null;
+  };
+  const existing = findComposer();
+  if (existing) return existing;
+  const hanliEntry = [...document.querySelectorAll<HTMLButtonElement>("button.collaboration-member")]
+    .find((candidate) => candidate.offsetParent !== null && candidate.textContent?.trim().startsWith("韩立"));
+  if (!hanliEntry) return null;
+  hanliEntry.click();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  return findComposer();
+}
+
+/**
+ * 页面执行上下文没有主进程模块作用域；将发送函数依赖的固定人物输入框解析器一起注入。
+ * 真实传参示例：消息发送函数与已使用人物标签；返回示例：可 await 的页面 Promise。
+ * 异常或副作用示例：页面未找到允许的韩立入口时返回既有拒绝结果，不放宽选择器或创建会话。
+ */
+function createAcceptancePersonaScript(
+  action: (sentComposerLabels: string[]) => Promise<{ status: string; composerLabel: string | null }>,
+  sentComposerLabels: string[],
+): string {
+  return `(() => { ${findAcceptancePersonaComposer.toString()} return (${action.toString()})(${JSON.stringify(sentComposerLabels)}); })()`;
 }
 
 /**

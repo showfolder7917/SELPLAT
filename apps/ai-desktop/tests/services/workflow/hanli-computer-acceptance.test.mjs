@@ -15,11 +15,12 @@ const { HanliComputerAcceptance, mapScreenshotPointToViewport } = acceptanceModu
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }, screenshotScale = 1) {
   let n = 0;
-  const inputs = [], progress = [];
+  const inputs = [], progress = [], executedScripts = [];
   let bounds = { x: 0, y: 0, width: 1200, height: 800 };
   const boundsCalls = [];
   const window = { isDestroyed: () => false, getBounds: () => ({ ...bounds }), setBounds: (next) => { bounds = { ...next }; boundsCalls.push({ ...next }); }, getContentBounds: () => ({ width: bounds.width, height: bounds.height }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: bounds.width * screenshotScale, height: bounds.height * screenshotScale }) }), executeJavaScript: async (script) => {
     const source = String(script);
+    executedScripts.push(source);
     if (/readNavigationClickStatus/.test(source)) return typeof safe === "function" ? safe() : safe ? "allowed" : "restricted";
     if (/readAcceptanceViewport/.test(source)) return { width: bounds.width, height: bounds.height };
     if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
@@ -33,7 +34,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, boundsCalls, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
+  return { inputs, boundsCalls, executedScripts, controller, run: (model, currentGoal = goal) => controller.run(currentGoal, window, model, (text) => progress.push(text)), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
@@ -280,6 +281,28 @@ test("受控发送在输入框或发送按钮不可用时明确拒绝", async ()
     await finish(tools, snapshot, "blocked");
   });
   assert.equal(result.status, "blocked");
+});
+test("受控发送把人物输入框解析器与两种发送动作一起注入页面", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const message = await tools.call("hanli_computer", { action: "send-test-message", reason: "验证页面脚本闭包", observationId: first });
+    const screenshot = await tools.call("hanli_computer", { action: "send-test-screenshot", reason: "验证截图脚本闭包", observationId: id(message) });
+    await finish(tools, id(screenshot));
+  });
+  const scripts = f.executedScripts.filter((source) => /sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source));
+  assert.equal(scripts.length, 2);
+  for (const script of scripts) assert.match(script, /async function findAcceptancePersonaComposer/);
+  assert.match(scripts[0], /async function sendAcceptanceMessage/);
+  assert.match(scripts[1], /async function sendAcceptanceScreenshot/);
+});
+test("受控发送在专题卡片没有输入框时只复用既有韩立入口", () => {
+  const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(source, /findAcceptancePersonaComposer\(sentComposerLabels\)/);
+  assert.match(source, /button\.collaboration-member/);
+  assert.match(source, /startsWith\("韩立"\)/);
+  assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
+  assert.doesNotMatch(source, /desktop:select-collaboration-member|desktop:submit-collaboration-task/);
 });
 test("未提交判断但已有真实截图时归档为受阻，模型断线仍回收权限", async () => {
   const f = fixture(); let tools;
