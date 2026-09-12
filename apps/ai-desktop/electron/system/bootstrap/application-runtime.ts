@@ -123,6 +123,7 @@ import { createAtomicJsonPersistence, type DatabasePort as SqliteDatabase } from
 // 窗口工厂集中维护 BrowserWindow 安全配置和 Renderer 加载方式。
 import { createMainWindow } from "../window/create-main-window.js";
 import { createStartupContext } from "./startup-context.js";
+import { createInquiryRuntimeFacts } from "./inquiry-runtime-facts.js";
 import { createPersistenceContext, type PersistenceContext } from "./persistence.bootstrap.js";
 import { createCapabilityContext } from "./capabilities.bootstrap.js";
 import { createCollaborationContext } from "./collaboration.bootstrap.js";
@@ -597,7 +598,22 @@ export async function startApplication(): Promise<void> {
       const inquiryCodex = nangongInquiryCodex;
       if (!inquiryCodex) throw new Error("南宫婉只读核实服务尚未就绪。");
       const state = evolutionStateStore.state();
-      const facts = { capturedAt: new Date().toISOString(), topics: state.topics.slice(-12).map(({ topicId, title, status }) => ({ topicId, title, status })), proposals: state.proposals.slice(-12).map(({ proposalId, title, status, distributedTaskIds }) => ({ proposalId, title, status, distributedTaskIds })) };
+      // 运行身份由当前宿主提供；仅对原请求中的同一工程开放，不扩展读取根。
+      const runtime = createInquiryRuntimeFacts(request.workspaceState, {
+        projectRoot,
+        processId: process.pid,
+        applicationRoot: appRoot,
+        rendererRoot,
+        version: releaseVersion,
+        sourceSha: startup.runtimeSourceSha,
+        capturedAt: new Date().toISOString(),
+      });
+      const facts = {
+        capturedAt: new Date().toISOString(),
+        runtime,
+        topics: state.topics.slice(-12).map(({ topicId, title, status }) => ({ topicId, title, status })),
+        proposals: state.proposals.slice(-12).map(({ proposalId, title, status, distributedTaskIds }) => ({ proposalId, title, status, distributedTaskIds })),
+      };
       const prompt = prompts.render("nangong.progress-inquiry", {
         customerQuestion: inquiry.customerQuestion,
         understandingJson: JSON.stringify({ understoodGoal: inquiry.understoodGoal, verificationTarget: inquiry.verificationTarget, expectedAnswer: inquiry.expectedAnswer }),
