@@ -271,18 +271,25 @@ export async function startApplication(): Promise<void> {
   const corpusIngestion = aiMemoryDatabase
     ? createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
     : null;
-  // 外部 Codex App 使用用户默认 CODEX_HOME；只有设置明确开启后才读取。
-  const externalCodexHome = path.resolve(process.env.CODEX_HOME || path.join(app.getPath("home"), ".codex"));
+  // 隔离验收不初始化外部 Codex 语料链路，避免读取正式用户目录或创建无意义的轮询器。
+  // 正式启动仍按设置读取用户默认 CODEX_HOME。
+  const externalCorpusEnabled = process.env.AI_DESKTOP_ACCEPTANCE_ISOLATED !== "1";
+  const externalCodexHome = externalCorpusEnabled
+    ? path.resolve(process.env.CODEX_HOME || path.join(app.getPath("home"), ".codex"))
+    : null;
+  const externalCorpusRoots = externalCodexHome
+    ? [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")]
+    : [];
   // 活跃与已归档会话分别登记来源前缀，方便追踪语料来自哪个物理目录。
-  const externalCorpusIngestions = aiMemoryDatabase ? [
-    createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "sessions"), {
+  const externalCorpusIngestions = aiMemoryDatabase && externalCorpusEnabled ? [
+    createCodexConversationCorpusIngestion(aiMemoryDatabase, externalCorpusRoots[0]!, {
       sourceKeyPrefix: "codex-app/active",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: projectRoot,
       requiredOriginator: "codex_work_desktop",
       requireCompletedTurns: true,
     }),
-    createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(externalCodexHome, "archived_sessions"), {
+    createCodexConversationCorpusIngestion(aiMemoryDatabase, externalCorpusRoots[1]!, {
       sourceKeyPrefix: "codex-app/archived",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: projectRoot,
@@ -342,17 +349,16 @@ export async function startApplication(): Promise<void> {
   ingestTrainingCorpus("startup");
   // 用户刚打开外部语料开关时立即导入，不必等待目录下一次变化。
   settings.subscribe((next) => {
-    if (next.codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-enabled");
+    if (externalCorpusEnabled && next.codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-enabled");
   });
   // 只监听 Codex 的持久会话目录；开关关闭时回调不读取外部会话，开启后下一次变化或30秒兜底扫描立即补录。
-  codexAppCorpusWatcher = createCodexConversationCorpusWatcher(
-    [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")],
-    () => {
+  if (externalCorpusEnabled) {
+    codexAppCorpusWatcher = createCodexConversationCorpusWatcher(externalCorpusRoots, () => {
       if (settings.read().codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-changed");
-    },
-  );
-  // watcher 是长期后台资源，引用保存在外层以便退出时停止。
-  codexAppCorpusWatcher.start();
+    });
+    // watcher 是长期后台资源，引用保存在外层以便退出时停止。
+    codexAppCorpusWatcher.start();
+  }
   // 启动阶段创建的 WorkspaceStore 成为本次运行唯一工作区注册表。
   const workspaces = startupWorkspaces;
   // 主 Codex 使用文件会话仓库，并允许迁移旧版主会话记录。
@@ -467,9 +473,9 @@ export async function startApplication(): Promise<void> {
     return current;
   };
   // 数据库存在时才创建补齐任务；analyzer 把候选对话交给隔离 Codex，再严格解析返回协议。
-  const corpusSemanticBackfill = aiMemoryDatabase ? createCodexConversationSemanticBackfill({
+  const corpusSemanticBackfill = aiMemoryDatabase && externalCorpusEnabled ? createCodexConversationSemanticBackfill({
     database: aiMemoryDatabase,
-    roots: [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")],
+    roots: externalCorpusRoots,
     requiredWorkspaceRoot: projectRoot,
     analyzer: async (candidates) => {
       // 非空断言前先做运行时检查，启动装配异常时给出明确原因。
