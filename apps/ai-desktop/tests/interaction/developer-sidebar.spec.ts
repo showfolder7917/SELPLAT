@@ -211,6 +211,42 @@ test("用户可从左侧活动栏打开测试台并查看真实验收证据", as
   await page.evaluate(() => (window as any).desktop.setInteractionTestConsoleFixture(false));
 });
 
+test("后台更新保留设置与测试台的容器、滚动位置和焦点", async () => {
+  await page.evaluate(() => (window as any).desktop.setInteractionTestConsoleFixture(true));
+  try {
+    for (const panel of [
+      { open: "打开连接与执行设置", close: "关闭连接与执行设置", selector: ".dev-settings-content" },
+      { open: "打开测试台", close: "关闭测试台", selector: ".dev-test-console-content" },
+    ]) {
+      await page.getByRole("button", { name: panel.open, exact: true }).click();
+      const content = page.locator(panel.selector);
+      await expect(content).toBeVisible();
+      const original = await content.elementHandle();
+      if (!original) throw new Error("缺少真实浮层滚动容器");
+      const before = await original.evaluate((element) => {
+        element.scrollTop = Math.min(100, element.scrollHeight - element.clientHeight);
+        element.tabIndex = -1;
+        element.focus({ preventScroll: true });
+        return element.scrollTop;
+      });
+      expect(before).toBeGreaterThan(0);
+      for (let round = 0; round < 3; round += 1) {
+        // 通过既有 fixture 向生产 Renderer 发布真实状态事件。
+        await page.evaluate(() => (window as any).desktop.setInteractionTestConsoleFixture(true));
+        await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        expect(await original.evaluate((element) => element.isConnected)).toBe(true);
+        expect(await original.evaluate((element) => element.scrollTop)).toBe(before);
+        expect(await original.evaluate((element) => document.activeElement === element)).toBe(true);
+      }
+      await page.getByRole("button", { name: panel.close, exact: true }).click();
+      await expect(content).toBeHidden();
+      await original.dispose();
+    }
+  } finally {
+    await page.evaluate(() => (window as any).desktop.setInteractionTestConsoleFixture(false));
+  }
+});
+
 test("AI Memory 恢复状态显示明确提示且不暴露数据库路径", async () => {
   await page.goto(`${pathToFileURL(productionRendererFile).href}?interactionAiMemoryState=recovery-required`);
   const recovery = page.getByRole("alert").filter({ hasText: "AI Memory 数据库已停用" });

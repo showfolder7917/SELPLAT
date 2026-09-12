@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useCollaborationWorkspace } from "../../../features/collaboration";
 import { useCodexWorkspace, usePersonaConversation } from "../../../features/conversation";
@@ -31,17 +31,17 @@ export function useDeveloperApplicationController() {
   const sidebar = useDeveloperSidebar(settings.locale);
   const diagnostics = useDesktopDiagnostics(settingsOpen || testConsoleOpen, settings.locale);
 
-  /** 打开设置时关闭测试台，两个活动栏窗口始终只有一个接收用户操作。 */
-  const setSettingsPanelOpen = (open: boolean) => {
+  /** 固定回调身份，避免后台更新重建浮层；打开设置时关闭测试台。 */
+  const setSettingsPanelOpen = useCallback((open: boolean) => {
     setSettingsOpen(open);
     if (open) setTestConsoleOpen(false);
-  };
+  }, []);
 
-  /** 打开测试台时关闭设置，并触发模型与诊断状态刷新。 */
-  const setTestConsolePanelOpen = (open: boolean) => {
+  /** 固定回调身份以保留测试台滚动和焦点，打开时关闭设置。 */
+  const setTestConsolePanelOpen = useCallback((open: boolean) => {
     setTestConsoleOpen(open);
     if (open) setSettingsOpen(false);
-  };
+  }, []);
 
   // 工作区列表的“移除”只删除登记信息，不删除磁盘目录。
   const workspace = useWorkspaceRegistry({
