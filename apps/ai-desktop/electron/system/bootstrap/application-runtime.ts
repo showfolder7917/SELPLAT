@@ -112,7 +112,7 @@ import {
   type WorkflowSupervisorPort as WorkflowSupervisor,
 } from "../../services/workflow/index.js";
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
-import { acceptanceSceneRuntimeFacts, createAcceptanceSceneSubmission, createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
+import { createAcceptanceSceneSubmission, createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
 import { createHanliRuntime } from "../../services/personas/hanli/index.js";
 import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
@@ -827,12 +827,6 @@ export async function startApplication(): Promise<void> {
       const analysis = linghuGuidanceQueue.then(async () => {
         // 正式令狐的阶段连接只承载本轮工具，不能恢复未登记新工具的旧指导线程。
         const submission = createAcceptanceSceneSubmission();
-        // 场景判断使用应用内权威专题、提案和当前运行事实，不让只读模型从源码目录猜测运行数据是否存在。
-        const runtimeFacts = acceptanceSceneRuntimeFacts(
-          goal,
-          evolutionRuntime.facade.state(),
-          BrowserWindow.getAllWindows().some((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop"),
-        );
         const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
           codexHome, serviceName: "selplat_linghu_acceptance_scene", threadSource: "ai-desktop-linghu-acceptance-scene",
           migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
@@ -843,7 +837,7 @@ export async function startApplication(): Promise<void> {
         try {
           return await Promise.race([
             submission.run(goal, (requestId) => service.send(
-              prompts.render("linghu.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId, runtimeFacts }) }),
+              prompts.render("linghu.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) }),
               settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
             )),
             new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("令狐场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),

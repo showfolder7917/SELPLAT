@@ -18,6 +18,8 @@ export type { HanliConversationViewpointValue } from "./value/hanli-conversation
 
 /** 发起韩立真实窗口验收时传入的目标、提案和逐项验收条件。 */
 export type { HanliComputerAcceptanceInDto } from "./dto/computer-acceptance.in.dto.js";
+/** 令狐准备当前窗口场景时使用的只读专题、提案和运行身份快照。 */
+export type { AcceptanceSceneRuntimeContextOutDto } from "./dto/computer-acceptance.in.dto.js";
 
 /** 一轮韩立真实窗口验收的完整结果，包含运行状态、步骤和截图证据。 */
 export type { HanliAcceptanceRunOutDto } from "./dto/acceptance-run.out.dto.js";

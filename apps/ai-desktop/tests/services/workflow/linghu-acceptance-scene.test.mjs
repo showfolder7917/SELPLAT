@@ -7,28 +7,21 @@ async function sourceModule(file) {
   const { code } = await transform(readFileSync(file, "utf8"), { loader: "ts", format: "esm", target: "es2022" });
   return import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
 }
-const { acceptanceSceneRuntimeFacts, validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/linghu/internal/linghu-acceptance-scene.ts");
+const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/linghu/internal/linghu-acceptance-scene.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const goal = { topicId: "t", proposalId: "p", title: "引导", criteria: ["没有任务时，先告诉我怎么开始", "按钮和说明相邻"] };
+const currentWindowGoal = {
+  ...goal,
+  sceneContext: {
+    topic: { topicId: "t", status: "accepted" },
+    proposal: { proposalId: "p", topicId: "t", status: "pending-acceptance" },
+    oneShotRun: { topicId: "t", proposalId: "p", status: "running", phase: "accepting" },
+  },
+};
 const plan = { kind: "empty-task-group", reason: "两个条件需要零任务数据", conditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
 ] };
-
-test("场景准备直接读取当前专题、提案与运行的权威归属", () => {
-  const facts = acceptanceSceneRuntimeFacts({ ...goal, topicId: "topic-a", proposalId: "proposal-a" }, {
-    topics: [{ topicId: "topic-a", status: "pending-acceptance" }],
-    proposals: [{ proposalId: "proposal-a", topicId: "topic-a", status: "pending-acceptance", distributedTaskIds: ["task-a"] }],
-    oneShotRun: { topicId: "topic-a", proposalId: "proposal-a", status: "running", phase: "accepting" },
-  }, true);
-  assert.deepEqual(facts, {
-    source: "ai-desktop-authoritative-runtime", currentWindowAvailable: true,
-    targetTopicRegistered: true, targetTopicStatus: "pending-acceptance",
-    targetProposalRegistered: true, targetProposalStatus: "pending-acceptance",
-    distributedTaskIds: ["task-a"], currentRunMatchesTarget: true,
-    currentRunStatus: "running", currentRunPhase: "accepting",
-  });
-});
 
 test("令狐显式选择场景不依赖用户语言、页面名和词序", () => {
   assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
@@ -38,6 +31,15 @@ test("场景缺项、重复、未知类型不能默认进入正式窗口", () =>
   for (const invalid of [{ ...plan, kind: "guess" }, { ...plan, conditions: [] }, { ...plan, conditions: [plan.conditions[0], plan.conditions[0]] }, { ...plan, reason: "" }]) {
     assert.throws(() => validateAcceptanceScenePlan(invalid, goal));
   }
+});
+test("当前窗口必须使用运行时核验过的同一专题、提案和验收运行身份", () => {
+  const currentPlan = { ...plan, kind: "current-window", reason: "已核验目标专题正在验收" };
+  assert.deepEqual(validateAcceptanceScenePlan(currentPlan, currentWindowGoal), currentPlan);
+  assert.throws(() => validateAcceptanceScenePlan(currentPlan, goal), /只读专题、提案或运行记录/);
+  assert.throws(() => validateAcceptanceScenePlan(currentPlan, {
+    ...currentWindowGoal,
+    sceneContext: { ...currentWindowGoal.sceneContext, proposal: { ...currentWindowGoal.sceneContext.proposal, topicId: "other-topic" } },
+  }), /只读专题、提案或运行记录/);
 });
 function fixture(failure) {
   const registered = new Set(), events = [], handlers = {};
@@ -121,8 +123,10 @@ test("缺少工具提交和模型异常均释放请求，不解析文字JSON或�
 
 test("令狐场景工具通过本轮阶段连接装配，结束与应用退出都回收", () => {
   const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  const workflowRuntime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
   const scene = runtime.slice(runtime.indexOf("analyzeAcceptanceScene: (goal)"), runtime.indexOf("analyzeCustomerActionGuidance: (facts)"));
   assert.match(scene, /dynamicTools: submission.tools/);
+  assert.match(workflowRuntime, /sceneContext/);
   assert.match(scene, /read: \(\) => null/);
   assert.match(scene, /finally/);
   assert.match(scene, /service.dispose\(\)/);

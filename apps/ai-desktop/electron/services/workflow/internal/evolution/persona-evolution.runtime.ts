@@ -499,7 +499,25 @@ export class PersonaEvolutionRuntime {
         publishAcceptance("received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
         if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。");
         try {
-          const goal: HanliComputerAcceptanceInDto = { topicId: topic.topicId, proposalId: proposal.proposalId, title: proposal.title, criteria: proposal.acceptanceCriteria };
+          const sceneState = this.#store.state();
+          const sceneContext = {
+            topic: { topicId: topic.topicId, status: topic.status },
+            proposal: { proposalId: proposal.proposalId, topicId: proposal.topicId, status: proposal.status },
+            oneShotRun: sceneState.oneShotRun ? {
+              topicId: sceneState.oneShotRun.topicId,
+              proposalId: sceneState.oneShotRun.proposalId,
+              status: sceneState.oneShotRun.status,
+              phase: sceneState.oneShotRun.phase,
+            } : null,
+          };
+          // 场景规划仅接收该次验收目标的只读身份事实，不能自行查询或修改演化运行状态。
+          const goal: HanliComputerAcceptanceInDto = {
+            topicId: topic.topicId,
+            proposalId: proposal.proposalId,
+            title: proposal.title,
+            criteria: proposal.acceptanceCriteria,
+            sceneContext,
+          };
           this.#store.updateOneShotRun("accepting", "linghu-ancestor", "令狐老祖", "正在准备并核实验收场景", topic.topicId, proposal.proposalId);
           const runResult = await this.#computerAcceptanceSession(goal, () => {
             publishAcceptance("started", "令狐已准备验收场景，韩立正在观察真实页面并逐步操作验收。");
