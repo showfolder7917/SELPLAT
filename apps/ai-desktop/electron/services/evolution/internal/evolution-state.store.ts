@@ -144,7 +144,9 @@ export class EvolutionStateStore {
       run.actorName = required(actorName, "一次性运行当前人物", 160);
       run.action = required(action, "一次性运行当前动作", 2_000);
       run.blockingReason = null;
-      run.resumeMode = null;
+      // 恢复来源属于本次运行的上下文：完成态只读复核在结束或再次阻塞前必须保留，
+      // 否则通用进度更新会让任务卡重新投影为“验证中”，污染韩立正在检查的完成态页面。
+      // 新运行由 beginOneShotRun 明确初始化为 null，终态也由 finish/block 统一收口。
       run.updatedAt = now;
     }, { phase, actor, actorName, action, status: "running", nextOwner: actorName });
   }
@@ -850,7 +852,7 @@ function migrateOneShotResumeMode(state: EvolutionStateOutDto): { state: Evoluti
   if (!run) return { state, changed: false };
   const resumeMode = run.status === "blocked"
     ? run.proposalId && findCompletionReviewCheckpoint(state, run.proposalId) ? "post-completion-review" : "standard"
-    : null;
+    : run.status === "completed" ? null : run.resumeMode;
   // 早期版本把完成态复核的 failed 结果误记为 standard；加载时按不可变验收证据纠正。
   if (run.resumeMode === resumeMode) return { state, changed: false };
   return { state: { ...state, oneShotRun: { ...run, resumeMode } }, changed: true };

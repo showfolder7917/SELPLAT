@@ -792,7 +792,11 @@ test("完成态复核产品失败及旧 standard 状态仍恢复原只读复核"
   writePersistedState(key, legacy);
   const migrated = evolutionStore(key).state();
   assert.equal(migrated.oneShotRun.resumeMode, "post-completion-review");
-  assert.equal(evolutionStore(key).resumeOneShotRun().oneShotRun.phase, "accepting");
+  const resumedStore = evolutionStore(key);
+  let resumed = resumedStore.resumeOneShotRun();
+  assert.equal(resumed.oneShotRun.phase, "accepting");
+  resumed = resumedStore.updateOneShotRun("accepting", "han-li", "韩立", "正在只读复核完成态页面", topicId, proposalId);
+  assert.equal(resumed.oneShotRun.resumeMode, "post-completion-review");
 });
 
 test("完成提案缺少同一验收运行证据时拒绝伪造恢复", () => {

@@ -16,19 +16,23 @@ import type {
 
 /**
  * 把完成态复核的当前卡点投影到原专题卡。
- * 历史专题仍可保持 completed；只有同一运行正在等待继续时，界面显示 blocked。
+ * 历史专题在只读复核运行时保持 completed；只有等待用户继续时显示 blocked。
  */
 export function currentTaskGroupPresentation(
   group: CollaborationTimelineGroupOutDto,
   oneShotRun: EvolutionOneShotRunOutDto | null | undefined,
 ): CollaborationTimelineGroupOutDto {
-  const waitingForCompletionReview = oneShotRun?.topicId === group.topicId
+  const belongsToCompletionReview = oneShotRun?.topicId === group.topicId
     && oneShotRun.proposalId === group.proposalId
-    && oneShotRun.status === "blocked"
     && oneShotRun.resumeMode === "post-completion-review";
-  return waitingForCompletionReview && group.status !== "blocked"
-    ? { ...group, status: "blocked" }
-    : group;
+  if (!belongsToCompletionReview) return group;
+  if (oneShotRun.status === "blocked") {
+    return group.status === "blocked" ? group : { ...group, status: "blocked" };
+  }
+  if (oneShotRun.status === "running") {
+    return group.status === "completed" ? group : { ...group, status: "completed" };
+  }
+  return group;
 }
 
 /** 专题头部当前活动的显示事实，人数和姓名始终来自同一组当前节点。 */
