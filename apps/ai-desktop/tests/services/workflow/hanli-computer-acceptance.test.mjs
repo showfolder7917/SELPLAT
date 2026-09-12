@@ -214,12 +214,12 @@ test("旧计划执行器、补参数提示词和桌面接口不兼容退役", ()
 });
 
 
-test("测试台导航只放行固定按钮且继续拒绝危险操作", () => {
+test("测试台导航只放行活动栏内固定按钮且继续拒绝危险操作", () => {
   const previous = globalThis.document;
-  const check = (label, inside, nodeType = "button") => {
+  const check = (label, insideActivityBar, nodeType = "button") => {
     const node = { getAttribute: (key) => key === "aria-label" ? label : null,
       classList: { contains: (name) => name === "activity-test-console" },
-      closest: (selector) => selector === ".dev-test-console-control" && inside ? {} : null,
+      closest: (selector) => selector === ".dev-activitybar .dev-test-console-control" && insideActivityBar ? {} : null,
       matches: (selector) => selector === "button.activity-test-console" && nodeType === "button" };
     globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
     return acceptanceModule.safeNavigationClick(12, 30);
