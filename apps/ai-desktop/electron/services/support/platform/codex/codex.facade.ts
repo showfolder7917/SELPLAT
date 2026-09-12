@@ -71,6 +71,13 @@ export interface CodexServiceOptions {
   preserveThreadAcrossWorkspaceChanges?: boolean;
 }
 
+/** 人物交接由 AI Desktop 正式工作流负责；禁止底层临时子代理冒充已登记人物。 */
+export const CODEX_DESKTOP_FEATURE_ARGS = Object.freeze([
+  "--enable", "default_mode_request_user_input",
+  "--disable", "multi_agent",
+  "--disable", "multi_agent_v2",
+]);
+
 const EMPTY_ACCOUNT: CodexAccountOutDto = {
   authenticated: false,
   authMode: null,
@@ -519,7 +526,7 @@ export class CodexService {
     this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, version: runtime.version });
     if (runtime.electronRunAsNode) childEnvironment.ELECTRON_RUN_AS_NODE = "1";
     else delete childEnvironment.ELECTRON_RUN_AS_NODE;
-    const child = spawn(runtime.command, [...runtime.argsPrefix, "app-server", "--stdio", "--enable", "default_mode_request_user_input"], {
+    const child = spawn(runtime.command, [...runtime.argsPrefix, "app-server", "--stdio", ...CODEX_DESKTOP_FEATURE_ARGS], {
       cwd: this.#workingDirectory,
       env: childEnvironment,
       stdio: ["pipe", "pipe", "pipe"],

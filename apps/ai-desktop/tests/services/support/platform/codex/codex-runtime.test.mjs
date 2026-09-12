@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -25,4 +26,20 @@ test("源码只声明内置和校验下载两种固定运行时来源", () => {
   assert.match(source, /validatePackageMetadata/);
   assert.match(source, /verifyArchiveIntegrity/);
   assert.match(source, /TeamIdentifier=/);
+});
+
+
+test("桌面人物运行时覆盖外部子代理开关，但保留用户确认工具", async () => {
+  const { CODEX_DESKTOP_FEATURE_ARGS } = await import("../../../../../../../build/ai-desktop/electron/electron/services/support/platform/codex/codex.facade.js");
+  const runtime = await resolveCodexRuntime(process.env);
+  // 真实固定版本解析宿主显式开启与桌面禁用参数，防止仅靠提示词约束人物身份。
+  const output = execFileSync(runtime.command, [
+    ...runtime.argsPrefix,
+    "--enable", "multi_agent", "--enable", "multi_agent_v2",
+    ...CODEX_DESKTOP_FEATURE_ARGS,
+    "features", "list",
+  ], { encoding: "utf8", env: process.env });
+  assert.match(output, /^multi_agent\s+stable\s+false$/m);
+  assert.match(output, /^multi_agent_v2\s+stable\s+false$/m);
+  assert.match(output, /^default_mode_request_user_input\s+under development\s+true$/m);
 });
