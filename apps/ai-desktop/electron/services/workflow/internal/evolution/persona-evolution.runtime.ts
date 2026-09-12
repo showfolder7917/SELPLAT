@@ -524,6 +524,8 @@ export class PersonaEvolutionRuntime {
             publishAcceptance("started", "令狐已准备验收场景，韩立正在观察真实页面并逐步操作验收。");
             this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
           }, (initialRun) => {
+            // 先结束当前验收时间线节点，再提交业务完成决定；页面不会在完成态复核期间继续显示“韩立验收中”。
+            publishAcceptance("passed", `韩立已通过完成前验收门。运行记录：${initialRun.runId}\n截图证据：${initialRun.evidenceAttachmentIds.join("、")}`);
             // 完成态只能由原有完成动作产生；后续复核只观察该真实状态。
             this.#hanli.completeAutomaticAcceptance(initialRun, `one-shot-result:${run.runId}:${proposal.proposalId}:${initialRun.runId}`);
             completionAppliedDuringReview = true;

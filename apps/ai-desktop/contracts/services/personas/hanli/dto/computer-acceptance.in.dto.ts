@@ -32,4 +32,6 @@ export interface HanliComputerAcceptanceInDto {
   preparedScene?: AcceptanceScenePlanOutDto;
   /** 跨完成态验收的受控阶段；前置门只确认真实验收场景可用，后置阶段只读复核原条件。 */
   reviewMode?: "pre-completion-gate" | "post-completion-review";
+  /** 完成态复核可读取的上一阶段可信摘要；只传递已归档事实，不授予历史截图操作能力。 */
+  priorPhaseEvidence?: { summary: string; evidenceAttachmentIds: string[] };
 }

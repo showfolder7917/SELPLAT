@@ -93,6 +93,12 @@ test("完成态复核只允许只读导航并可用真实截图提交判断", as
   assert.equal(run.status, "passed");
   assert.equal(f.inputs.length, 0);
 });
+
+test("完成态复核提示使用已归档的上一阶段证据判断跨状态条件", () => {
+  const prompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
+  assert.match(prompt, /priorPhaseEvidence/);
+  assert.match(prompt, /当前截图只显示终态/);
+});
 test("功能通过但布局失败时整体验收仍不通过", async () => {
   const f = fixture();
   const result = await f.run(async (tools) => {

@@ -166,7 +166,11 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       }
       // 既有 Workflow 唯一负责完成状态写入；写入后才在同一窗口执行无业务输入的完成态复核。
       onInitialPass(run);
-      const review = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan, reviewMode: "post-completion-review" }, prepared.window);
+      const priorPhaseEvidence = {
+        summary: run.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
+        evidenceAttachmentIds: run.evidenceAttachmentIds,
+      };
+      const review = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan, reviewMode: "post-completion-review", priorPhaseEvidence }, prepared.window);
       const merged = {
         ...review,
         runId: run.runId,
