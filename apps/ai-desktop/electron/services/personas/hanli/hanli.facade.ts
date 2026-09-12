@@ -47,6 +47,8 @@ export interface HanliWorkflowPort {
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
   /** Workflow 提交真实验收结果的入口。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto;
+  /** 首次通过后的只读复核补充真实完成态截图，不触发第二次审批。 */
+  recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto;
 }
 
 /** 韩立 Runtime 的装配参数；共同状态仍由 Evolution 管理，人物应用服务在模块内创建。 */

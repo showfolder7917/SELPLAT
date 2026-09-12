@@ -135,7 +135,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady) => {
+  personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady, onInitialPass) => {
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
@@ -149,8 +149,23 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       audit.recordEvent("linghu.acceptance_scene.ready", { ...identity, plan, webContentsId: prepared.window.webContents.id });
       onSceneReady();
       const run = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan }, prepared.window);
-      audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
-      return run;
+      if (run.status !== "passed") {
+        audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
+        return run;
+      }
+      // 既有 Workflow 唯一负责完成状态写入；写入后才在同一窗口执行无业务输入的完成态复核。
+      onInitialPass(run);
+      const review = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan, reviewMode: "post-completion-review" }, prepared.window);
+      const merged = {
+        ...review,
+        runId: run.runId,
+        startedAt: run.startedAt,
+        initialBounds: run.initialBounds,
+        stepResults: [...run.stepResults, ...review.stepResults.map((step, index) => ({ ...step, operationIndex: run.stepResults.length + index }))],
+        evidenceAttachmentIds: [...new Set([...run.evidenceAttachmentIds, ...review.evidenceAttachmentIds])],
+      };
+      audit.recordEvent("hanli.acceptance.real_app_checked", { runId: merged.runId, topicId: merged.topicId, proposalId: merged.proposalId, status: merged.status, evidenceCount: merged.evidenceAttachmentIds.length, postCompletionReview: true });
+      return merged;
     } catch (error) {
       audit.recordEvent(prepared ? "hanli.acceptance.failed" : "linghu.acceptance_scene.failed", { ...identity, kind: plan.kind, reason: error instanceof Error ? error.message : String(error) });
       throw error;

@@ -82,6 +82,17 @@ test("无实际操作、旧截图、伪造证据、漏验条件都不能通过",
     await finish(tools, next);
   });
 });
+test("完成态复核只允许只读导航并可用真实截图提交判断", async () => {
+  const f = fixture();
+  const reviewGoal = { ...goal, reviewMode: "post-completion-review" };
+  const run = await f.run(async (tools) => {
+    const snapshot = id(await observe(tools));
+    await assert.rejects(tools.call("hanli_computer", { action: "send-test-message", reason: "不得在复核中发送", observationId: snapshot }), /完成态复核只允许只读观察和安全导航/);
+    await finish(tools, snapshot);
+  }, reviewGoal);
+  assert.equal(run.status, "passed");
+  assert.equal(f.inputs.length, 0);
+});
 test("功能通过但布局失败时整体验收仍不通过", async () => {
   const f = fixture();
   const result = await f.run(async (tools) => {

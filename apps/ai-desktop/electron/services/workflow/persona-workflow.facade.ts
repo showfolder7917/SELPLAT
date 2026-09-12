@@ -7,7 +7,7 @@ export interface PersonaWorkflowApplicationPort {
   start(): void;
   stop(): void;
   notifyWorkflowChanged(): void;
-  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void) => Promise<HanliAcceptanceRunOutDto>): void;
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void, onInitialPass: (run: HanliAcceptanceRunOutDto) => void) => Promise<HanliAcceptanceRunOutDto>): void;
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto;
   controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto;
   resumeOneShotRun(expectedRunId?: string): Promise<EvolutionStateOutDto>;
@@ -25,7 +25,7 @@ export class PersonaWorkflowFacade {
   /** 协作任务变化后立即检查下一节点，避免等待固定轮询时间。 */
   notifyWorkflowChanged() { this.#application.notifyWorkflowChanged(); }
   /** 登记真实应用验收执行端口；Workflow 只决定调用时机。 */
-  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void) => Promise<HanliAcceptanceRunOutDto>) { this.#application.setComputerAcceptanceSession(runner); }
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void, onInitialPass: (run: HanliAcceptanceRunOutDto) => void) => Promise<HanliAcceptanceRunOutDto>) { this.#application.setComputerAcceptanceSession(runner); }
   /** 保存自动化参数；此动作不会自行推进当前流程。 */
   configureAutomation(request: ConfigurePersonaWorkflowInDto) { return this.#application.configureAutomation(request); }
   /** 执行启动、暂停、恢复或停止控制并保存恢复点。 */

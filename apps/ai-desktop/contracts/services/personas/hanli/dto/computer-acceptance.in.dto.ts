@@ -30,4 +30,6 @@ export interface HanliComputerAcceptanceInDto {
   sceneContext?: AcceptanceSceneRuntimeContextOutDto;
   /** 令狐准备成功后附带的场景事实，不代表页面验收通过。 */
   preparedScene?: AcceptanceScenePlanOutDto;
+  /** 首轮通过后仅观察真实完成态；该阶段不允许发送、键盘输入或业务写入。 */
+  reviewMode?: "post-completion-review";
 }
