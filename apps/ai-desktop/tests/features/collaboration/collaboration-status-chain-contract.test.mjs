@@ -100,6 +100,10 @@ test("任务协作群空状态在窄窗口保持单列、换行和容器边界",
   assert.match(developerStyles, /\.task-collaboration-empty-action \{[\s\S]*max-width: 100%/);
 });
 
+test("任务协作群窄窗口不截断专题与节点摘要", () => {
+  assert.match(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*\.task-group-header-content small, \.task-node-main > small \{[\s\S]*overflow-wrap: anywhere[\s\S]*white-space: normal/);
+});
+
 test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {
   // 任务主协议只负责组合当前状态，执行、集成和提交快照分别由独立文件解释。
   assert.doesNotMatch(contractDefinitionSource, /interface CollaborationExecutionRecordOutDto|interface CollaborationIntegrationFailureOutDto|interface CollaborationTaskSnapshotOutDto/);
