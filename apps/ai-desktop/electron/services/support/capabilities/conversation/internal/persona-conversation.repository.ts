@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
+import { writePersonaConversationMessage } from "./persona-conversation-message.writer.js";
 
 import type { PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../../../contracts/services/personas/conversation/index.js";
 import type { DatabasePort } from "../../../platform/persistence/index.js";
@@ -88,7 +88,7 @@ export class PersonaConversationRepository {
         $createdAt: conversation.createdAt || conversation.messages[0]?.createdAt || conversation.updatedAt,
         $updatedAt: conversation.updatedAt,
       });
-      for (const message of conversation.messages) upsertMessage(connection, ownerPersonaId, conversationId, message);
+      for (const message of conversation.messages) writePersonaConversationMessage(connection, ownerPersonaId, conversationId, message, "update");
     });
     return this.read(ownerPersonaId, conversationId);
   }
@@ -147,39 +147,6 @@ function mapMessage(row: Record<string, unknown>): PersonaConversationMessageOut
   };
 }
 
-function upsertMessage(
-  connection: DatabaseSync,
-  ownerPersonaId: string,
-  conversationId: string,
-  message: PersonaConversationMessageOutDto,
-): void {
-  connection.prepare(`
-    INSERT INTO AiDesktopPersonaConversationMessage
-      (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content,
-       inferredIntent, attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
-    VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, $speakerType, $speakerPersonaId, $content,
-      $inferredIntent, $attachmentIds, $replyToMessageId, $deliveryStatus, $createdAt, $completedAt, $recordedAt)
-    ON CONFLICT(messageId) DO UPDATE SET
-      content=excluded.content, inferredIntent=excluded.inferredIntent, attachmentIdsJson=excluded.attachmentIdsJson,
-      replyToMessageId=excluded.replyToMessageId, deliveryStatus=excluded.deliveryStatus,
-      completedAt=excluded.completedAt, recordedAt=excluded.recordedAt
-  `).run({
-    $messageId: message.messageId,
-    $ownerPersonaId: ownerPersonaId,
-    $conversationId: conversationId,
-    $sequenceNumber: message.sequenceNumber,
-    $speakerType: message.speakerType,
-    $speakerPersonaId: message.speakerType === "persona" ? requiredPersonaId(message.speakerPersonaId || "") : null,
-    $content: message.content,
-    $inferredIntent: message.inferredIntent || null,
-    $attachmentIds: JSON.stringify(message.attachmentIds || []),
-    $replyToMessageId: message.replyToMessageId,
-    $deliveryStatus: message.deliveryStatus,
-    $createdAt: message.createdAt,
-    $completedAt: message.completedAt,
-    $recordedAt: new Date().toISOString(),
-  });
-}
 
 function emptyConversation(ownerPersonaId: string): PersonaConversationOutDto {
   return { ownerPersonaId: requiredPersonaId(ownerPersonaId), conversationId: null, selectedModel: null, messages: [], updatedAt: new Date(0).toISOString() };

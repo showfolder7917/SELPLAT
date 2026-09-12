@@ -14,7 +14,7 @@ import type {
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto } from "../../../../../../../contracts/services/personas/conversation/index.js";
-import { PersonaConversationRepository } from "../../../conversation/index.js";
+import { PersonaConversationRepository, writePersonaConversationMessage } from "../../../conversation/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 import { HanliSemanticMemoryRepository } from "./hanli-semantic-memory.repository.js";
 
@@ -91,19 +91,11 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     // 附件身份只保留非空唯一值，防止同一截图在一条内部交接中重复展示。
     const attachmentIds = [...new Set(input.attachmentIds || [])].filter((id) => id.trim()).slice(0, 20);
     this.#database.transaction((connection) => {
-      const maximum = connection.prepare(`SELECT COALESCE(MAX(sequenceNumber), -1) AS value
-        FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`)
-        .get({ $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId }) as { value: number | bigint };
-      connection.prepare(`INSERT INTO AiDesktopPersonaConversationMessage
-        (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
-         attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
-        VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, 'persona', $speakerPersonaId, $content, NULL,
-          $attachmentIds, $replyToMessageId, 'completed', $createdAt, $createdAt, $createdAt)
-        ON CONFLICT(messageId) DO NOTHING`).run({
-        $messageId: input.messageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
-        $sequenceNumber: Number(maximum.value) + 1, $speakerPersonaId: input.speakerPersonaId, $content: content,
-        $attachmentIds: JSON.stringify(attachmentIds), $replyToMessageId: input.replyToMessageId || null, $createdAt: input.createdAt,
-      });
+      writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
+        messageId: input.messageId, speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
+        content, attachmentIds, replyToMessageId: input.replyToMessageId || null,
+        deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
+      }, "append");
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
@@ -148,27 +140,16 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         .get({ $messageId: input.userMessageId });
       // Renderer 重试同一 clientMessageId 时整轮已经原子提交，不再分配新序号或复制语料。
       if (existing) return;
-      const maximum = connection.prepare(`SELECT COALESCE(MAX(sequenceNumber), -1) AS value
-        FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`)
-        .get({ $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId }) as { value: number | bigint };
-      const userSequence = Number(maximum.value) + 1;
-      const insertMessage = connection.prepare(`INSERT INTO AiDesktopPersonaConversationMessage
-        (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
-          attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
-        VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, $speakerType, $speakerPersonaId, $content, $intent,
-          $attachments, $replyToMessageId, 'completed', $createdAt, $completedAt, $completedAt)
-        ON CONFLICT(messageId) DO NOTHING`);
-      insertMessage.run({
-        $messageId: input.userMessageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId, $sequenceNumber: userSequence,
-        $speakerType: "user", $speakerPersonaId: null, $content: input.userContent, $intent: input.decision.userIntent || null,
-        $attachments: JSON.stringify(input.attachmentIds), $replyToMessageId: null,
-        $createdAt: input.createdAt, $completedAt: input.completedAt,
-      });
-      insertMessage.run({
-        $messageId: input.personaMessageId, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId, $sequenceNumber: userSequence + 1,
-        $speakerType: "persona", $speakerPersonaId: input.responderPersonaId, $content: input.personaContent, $intent: null, $attachments: "[]",
-        $replyToMessageId: input.userMessageId, $createdAt: input.completedAt, $completedAt: input.completedAt,
-      });
+      const userSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
+        messageId: input.userMessageId, speakerType: "user", speakerPersonaId: null, content: input.userContent,
+        inferredIntent: input.decision.userIntent || undefined, attachmentIds: input.attachmentIds, replyToMessageId: null,
+        deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.completedAt,
+      }, "append");
+      const personaSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
+        messageId: input.personaMessageId, speakerType: "persona", speakerPersonaId: input.responderPersonaId,
+        content: input.personaContent, attachmentIds: [], replyToMessageId: input.userMessageId,
+        deliveryStatus: "completed", createdAt: input.completedAt, completedAt: input.completedAt,
+      }, "append");
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.completedAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
@@ -205,7 +186,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       if (confirmed) insertCorpusMessage.run({
         $corpusMessageId: `corpus:${input.corpusSource}:${input.personaMessageId}`, $topicId: corpusTopicId, $source: input.corpusSource,
         $conversationId: input.conversationId, $turnId: input.userMessageId, $sourceMessageId: input.personaMessageId,
-        $sequenceNumber: userSequence + 1, $speakerRole: input.responderPersonaId, $content: input.decision.summary,
+        $sequenceNumber: personaSequence, $speakerRole: input.responderPersonaId, $content: input.decision.summary,
         $retention: "preview-300", $createdAt: input.completedAt, $recordedAt: input.completedAt,
       });
     });

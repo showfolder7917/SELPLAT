@@ -46,7 +46,7 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
   save(state: EvolutionStateOutDto): void {
     if (!this.#database) throw new Error("AI Memory 数据库当前不可用，专题演化状态未保存；请先恢复数据库后重试。");
     // 先保存统一人物会话，再保存不含正文的 Evolution 状态，杜绝两个权威副本。
-    this.#conversations.save(state.conversation);
+    const savedConversation = this.#conversations.save(state.conversation);
     const { conversation: _conversation, ...persistedState } = state;
     this.#database.transaction((connection) => connection.prepare(`
       INSERT INTO AiDesktopEvolutionState (singletonId, stateVersion, stateJson, updatedAt)
@@ -60,5 +60,7 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
       $stateJson: JSON.stringify(persistedState),
       $updatedAt: state.updatedAt,
     }));
+    // 返回统一仓储已分配的真实序号和同时追加的交接消息，避免下一轮继续使用旧投影。
+    state.conversation = savedConversation;
   }
 }

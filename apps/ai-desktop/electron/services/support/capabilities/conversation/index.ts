@@ -7,3 +7,6 @@ export {
 } from "./internal/collaboration-codex-sessions.js";
 // 人物共享的会话持久化能力由本模块统一提供，具体人物不直接操作 SQLite。
 export { PersonaConversationRepository } from "./internal/persona-conversation.repository.js";
+
+// 跨能力的原子业务事务统一复用消息写入器，序号与身份规则只维护一处。
+export { writePersonaConversationMessage } from "./internal/persona-conversation-message.writer.js";

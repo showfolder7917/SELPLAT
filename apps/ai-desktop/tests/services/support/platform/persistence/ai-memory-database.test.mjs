@@ -8,6 +8,8 @@ import { initializeAiMemoryDatabase } from "../../../../../../../build/ai-deskto
 import { EvolutionStateRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.repository.js";
 import { EvolutionStateStore } from "../../../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
 import { runSqliteTransaction } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-transaction.js";
+import { PersonaConversationRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation.repository.js";
+import { writePersonaConversationMessage } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation-message.writer.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -396,3 +398,36 @@ function installSchemaUpTo(fixture, maximumVersion) {
   }
   for (const fileName of allowedSql) copyFileSync(path.join(sourceSqlRoot, fileName), path.join(fixture.sqlRoot, fileName));
 }
+
+
+test("旧演化快照与内部交接交错追加仍保留全部原文和唯一序号", () => {
+  const fixture = createFixture("conversation-interleaved");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  const database = initialized.database;
+  try {
+    const repository = new PersonaConversationRepository(database);
+    repository.create("nangong-wan");
+    const evolution = new EvolutionStateStore(new EvolutionStateRepository(database));
+    evolution.appendConversation("user", "客户原问题");
+    const stale = structuredClone(evolution.state().conversation);
+    const internal = { messageId: "internal-interleaved", speakerType: "persona", speakerPersonaId: "han-li", content: "新追加的内部交接", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: stale.updatedAt, completedAt: stale.updatedAt };
+    database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, internal, "append"));
+    const saved = evolution.appendConversation("nangong", "验收完成结果").conversation;
+    assert.deepEqual(saved.messages.map((m) => m.content), ["客户原问题", "新追加的内部交接", "验收完成结果"]);
+    assert.deepEqual(saved.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
+    database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, content: "重复投递不覆盖原文" }, "append"));
+    stale.messages[0].content = "客户原问题补充";
+    const updated = repository.save(stale);
+    assert.deepEqual(updated.messages.map((m) => m.content), ["客户原问题补充", "新追加的内部交接", "验收完成结果"]);
+    assert.deepEqual(new EvolutionStateStore(new EvolutionStateRepository(database)).state().conversation.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
+    assert.throws(() => database.transaction((connection) => writePersonaConversationMessage(connection, "han-li", stale.conversationId, internal, "update")), /其他人物或会话/);
+    assert.throws(() => database.transaction((connection) => {
+      writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, messageId: "must-rollback" }, "append");
+      throw new Error("后续语料保存失败");
+    }), /后续语料保存失败/);
+    assert.equal(repository.readActive("nangong-wan").messages.length, 3);
+  } finally {
+    database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
