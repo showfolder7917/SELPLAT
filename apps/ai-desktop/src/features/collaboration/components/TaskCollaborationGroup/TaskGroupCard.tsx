@@ -118,7 +118,7 @@ function TaskGroupHeader({
         {/* 专题标题：直接显示后端时间线已经确定的专题名称。 */}
         <strong>{group.title}</strong>
         {/* 专题摘要：补充标题无法完整表达的处理范围。 */}
-        <small>{group.summary}</small>
+        <small>{compactTimelineText(presentTimelineText(group.summary))}</small>
       </span>
       {/* 专题事实区：集中展示状态、并行人数和从开始到现在的总耗时。 */}
       <span className="task-group-facts">
@@ -333,7 +333,20 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       trigger={<TaskGroupHeader group={group} presentation={model.presentation} />}
     >
       {/* 专题恢复入口：只在原始演化运行确实暂停或阻塞时提供恢复操作。 */}
-      <TaskGroupRecovery group={group} evolution={evolution} />
+      <TaskGroupRecovery group={group} evolution={evolution} locale={locale} />
+      {/* 历史记录之前显示唯一权威下一流程；阻塞时额外解释失败后的恢复方向。 */}
+      <div className="task-timeline-next">
+        {/* 下一流程引导线：与时间线视觉相连，不承载可读文字。 */}
+        <i />
+        {/* 下一流程标签：按当前界面语言说明这一栏的业务含义。 */}
+        <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
+        {/* 权威下一步骤：直接展示后端为当前专题计算的继续方向。 */}
+        <span>{group.nextStep}</span>
+        {/* 失败恢复方向：只有专题阻塞且后端提供说明时才追加显示。 */}
+        {group.status === "blocked" && group.failureNextStep && (
+          <small>{locale === "ja" ? "失敗時" : "失败后"}：{group.failureNextStep}</small>
+        )}
+      </div>
       {/* 人物时间线：按后端确定的稳定顺序展示过滤后的真实节点。 */}
       <div className="task-timeline-list">
         {visibleNodes.map((node, index) => (
@@ -349,19 +362,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       {/* 继续任务错误：恢复请求失败时向用户显示页面控制器返回的原因。 */}
       {continueError && <p className="task-recovery-error" role="alert">{continueError}</p>}
 
-      {/* 专题只显示一个权威下一流程；阻塞时额外解释失败后的恢复方向。 */}
-      <footer className="task-timeline-next">
-        {/* 下一流程引导线：与时间线视觉相连，不承载可读文字。 */}
-        <i />
-        {/* 下一流程标签：按当前界面语言说明这一栏的业务含义。 */}
-        <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
-        {/* 权威下一步骤：直接展示后端为当前专题计算的继续方向。 */}
-        <span>{group.nextStep}</span>
-        {/* 失败恢复方向：只有专题阻塞且后端提供说明时才追加显示。 */}
-        {group.status === "blocked" && group.failureNextStep && (
-          <small>{locale === "ja" ? "失敗時" : "失败后"}：{group.failureNextStep}</small>
-        )}
-      </footer>
+
     </SelUiDisclosure>
   );
 }

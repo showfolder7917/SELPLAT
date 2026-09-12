@@ -6,13 +6,34 @@
 import type {
   // 时间线专题：提供专题、提案和等待节点标识。
   CollaborationTimelineGroupOutDto,
+  LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 import type {
   // 演化控制器：读取原运行卡点并执行恢复操作。
   useEvolutionRuntime,
 } from "../../evolution";
 
+import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
+import { compactTimelineText, presentTimelineText } from "./TaskCollaborationGroup/timeline-display";
+
+/** 恢复提示先显示短摘要，完整原因仅在用户展开时展示。 */
+function RecoveryMessage({ message, role, locale }: { message: string; role?: "alert" | "status"; locale: LocaleValue }) {
+  const detail = presentTimelineText(message);
+  const summary = compactTimelineText(detail);
+  return <>
+    <p role={role}>{summary}</p>
+    {summary !== detail.replace(/\s+/g, " ").trim() && (
+      <SelUiDisclosure idPrefix="task-recovery-evidence" className="task-recovery-evidence" open={false}
+        trigger={<span>{locale === "ja" ? "停止理由の詳細を見る" : "查看完整原因与证据"}</span>}>
+        <pre>{detail}</pre>
+      </SelUiDisclosure>
+    )}
+  </>;
+}
+
 type TaskGroupRecoveryProps = {
+  /** 提示和证据入口与当前页面语言保持一致。 */
+  locale: LocaleValue;
   /** 当前正在渲染的时间线专题。 */
   group: CollaborationTimelineGroupOutDto;
   /** 专题演化状态及恢复操作。 */
@@ -20,7 +41,7 @@ type TaskGroupRecoveryProps = {
 };
 
 /** 仅为当前专题原运行提供唯一恢复入口。 */
-export function TaskGroupRecovery({ group, evolution }: TaskGroupRecoveryProps) {
+export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecoveryProps) {
   // 客户操作卡点已经在具体节点提供按钮时，专题顶部不能再显示重复入口。
   const hasCustomerActionNode = group.nodes.some((node) => {
     // 只有仍在等待客户操作的节点才算当前有效卡点。
@@ -96,11 +117,11 @@ export function TaskGroupRecovery({ group, evolution }: TaskGroupRecoveryProps) 
       {recoveryPending && <p role="status">正在恢复原任务，请勿重复操作。</p>}
       {/* 恢复反馈：失败使用警告语义，成功使用普通状态语义。 */}
       {!recoveryPending && recoveryFeedback && (
-        <p role={recoveryFeedback.error ? "alert" : "status"}>{recoveryFeedback.message}</p>
+        <RecoveryMessage message={recoveryFeedback.message} role={recoveryFeedback.error ? "alert" : "status"} locale={locale} />
       )}
       {/* 原始阻塞原因：尚未执行恢复且没有反馈时说明当前为什么停住。 */}
       {!recoveryPending && !recoveryFeedback && oneShotRun.blockingReason && (
-        <p>{oneShotRun.blockingReason}</p>
+        <RecoveryMessage message={oneShotRun.blockingReason} locale={locale} />
       )}
     </div>
   );
