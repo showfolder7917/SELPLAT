@@ -407,3 +407,23 @@ test("只读折叠标题含审批通过仍可查看，实际提交按钮仍拒�
   try { assert.equal(check(true), true); assert.equal(check(false), false); }
   finally { globalThis.document = previous; }
 });
+
+
+test("截图编号错误回执给出有效身份，拒绝动作后仍可重新观察并继续", async () => {
+  const f = fixture();
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    await assert.rejects(tools.call("hanli_computer", { action: "click", reason: "进入协作群", observationId: "step-1", x: 100, y: 100 }), (error) => {
+      assert.ok(error.message.includes(first));
+      assert.match(error.message, /动作未执行/);
+      return true;
+    });
+    assert.equal(f.inputs.length, 0);
+    const current = id(await observe(tools));
+    assert.notEqual(current, first);
+    const next = id(await tools.call("hanli_computer", { action: "click", reason: "依据重新观察的截图进入协作群", observationId: current, x: 100, y: 100 }));
+    await finish(tools, next);
+  });
+  assert.equal(run.status, "passed");
+  assert.equal(f.inputs.length, 2);
+});

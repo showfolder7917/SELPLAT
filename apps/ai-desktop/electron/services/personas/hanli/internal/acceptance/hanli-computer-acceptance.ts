@@ -118,7 +118,7 @@ export class HanliComputerAcceptance {
               type: "string",
               enum: ["observe", "click", "drag", "scroll", "scroll-test-console", "expand-test-console-evidence", "inspect-task-collaboration-state", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
             },
-            observationId: { type: "string" },
+            observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
             y: { type: "integer" },
             endX: { type: "integer" },
@@ -195,7 +195,8 @@ export class HanliComputerAcceptance {
             return await images();
           }
           if (!snapshot || args.observationId !== snapshot) {
-            throw new Error("必须基于最新截图操作，请重新observe。");
+            // 拒绝旧画面动作，同时回传可恢复的观察身份；不执行输入，也不放宽新鲜度校验。
+            throw new Error(`必须基于最新截图操作。当前 observationId：${snapshot || "尚未观察"}。本次动作未执行；请重新 observe 获取画面，再原样使用回执中的 observationId。`);
           }
           if (args.action === "finish") {
             if (!Array.isArray(args.findings) || args.findings.length !== goal.criteria.length) {
