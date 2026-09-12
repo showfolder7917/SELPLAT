@@ -162,7 +162,7 @@ export class CheckpointCoordinator {
     // 韩立验收发生在开发任务集成之后；此时 integrated 只能说明代码已交付，不能说明真实界面复验通过。
     const isAcceptanceCheckpoint = isAcceptanceOperation(event.payload.operation) || (state.sourcePhase === "accepting" && !directlyTargetsTask);
     // 一次性原流程明确 completed，才是验收卡点已经通过复验的权威事实。
-    const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.status === "completed");
+    const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.proposalId === state.proposalId && run.status === "completed");
     // 非验收任务仍沿用原规则：任务完成集成即可确认对应执行卡点已经解除。
     const originalTaskCompleted = !isAcceptanceCheckpoint && task?.state === "integrated";
     if (originalTaskCompleted || originalRunCompleted) {
@@ -204,8 +204,9 @@ export class CheckpointCoordinator {
       // 已耗尽卡点只能等待新增事实或人工处理。
       return;
     }
-    // 同一原运行的重复异常共享最早的持久处理记录；不同事件不能各派一份修复。
-    const relatedEvents = this.options.pending().filter((item) => item.payload.runId === state.runId);
+    // 同一运行可以承载用户后来确认的新提案；只有同一提案的卡点才能共享修复记录。
+    const relatedEvents = this.options.pending().filter((item) => item.payload.runId === state.runId
+      && item.payload.proposalId === state.proposalId);
     // 使用命名比较器选择已经建立修复任务或最早出现的主卡点。
     relatedEvents.sort(compareCheckpointPriority);
     // 第一条记录是同一原运行的唯一主卡点。
@@ -240,7 +241,7 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "received", `原点复验再次受阻：${run.blockingReason || event.message}。上一轮没有解除原故障，进入新的根因调查，禁止重复原修复方向。`);
     }
     // 用持久任务标记查重，覆盖创建任务后、保存关联前崩溃的窗口。
-    const marker = `卡点标识：${state.runId}:round:${state.round}`;
+    const marker = `卡点标识：${state.runId}:proposal:${state.proposalId}:round:${state.round}`;
     const repair = this.options.collaboration().tasks.find((item) => item.taskId === state.repairTaskId || item.snapshot.constraints.includes(marker));
     if (repair) {
       // 用真实任务标识修复创建任务后、保存关系前崩溃的窗口。

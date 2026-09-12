@@ -325,3 +325,38 @@ test("最新验收范围待确认时旧技术卡点不得派发修复", async ()
   assert.match(repair.confirmedIntent, /安全性不代表已获授权/);
   assert.match(repair.confirmedIntent, /等待明确授权/);
 });
+
+
+test("同一运行新确认提案不被旧提案卡点拦截，也不复用旧修复任务", async () => {
+  const f = fixture();
+  await f.run();
+  const originalCheckpoint = structuredClone(f.event.payload.checkpoint);
+  f.collaboration.tasks[0].state = "integrated";
+  f.evolution.topics.push({ topicId: "topic-2", title: "完整隔离验收", workspaceState: { roots: [] }, locale: "zh-CN" });
+  f.evolution.proposals.push({ proposalId: "proposal-2", topicId: "topic-2", title: "新确认范围" });
+  f.evolution.oneShotRun.proposalId = "proposal-2";
+  const current = { ...structuredClone(f.event), eventId: "new-proposal-failure", correlationId: "topic-2",
+    occurredAt: "2026-09-05T02:00:00Z", message: "隔离启动器未接入真实验收", payload: {
+      runId: "run-1", proposalId: "proposal-2", phase: "accepting", operation: "run_real_application_acceptance",
+      acceptanceFailureKind: "acceptance-capability-blocked",
+    } };
+  f.events.push(current);
+  await f.run(); await f.run();
+  assert.equal(f.effects.submitted.length, 2);
+  assert.equal(f.effects.submitted[1].evolutionProposalId, "proposal-2");
+  assert.match(f.effects.submitted[1].problemStatement, /隔离启动器未接入真实验收/);
+  assert.equal(current.payload.checkpoint.repairTaskId, "repair-2");
+  assert.equal(f.event.payload.checkpoint.repairTaskId, originalCheckpoint.repairTaskId);
+  assert.equal(f.event.payload.checkpoint.round, originalCheckpoint.round);
+  assert.deepEqual(f.effects.resumed, []);
+  // 新提案创建修复后崩溃，重建仍只能找回本提案的同一修复。
+  delete current.payload.checkpoint;
+  await f.run();
+  assert.equal(f.effects.submitted.length, 2);
+  assert.equal(current.payload.checkpoint.repairTaskId, "repair-2");
+  assert.deepEqual(f.effects.resolved, []);
+  // 完成新提案不能冒充旧提案的真实复验通过。
+  f.evolution.oneShotRun.status = "completed";
+  await f.run();
+  assert.deepEqual(f.effects.resolved, ["new-proposal-failure"]);
+});
