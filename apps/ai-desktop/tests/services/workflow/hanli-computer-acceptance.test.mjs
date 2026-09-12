@@ -290,3 +290,14 @@ test("finish 缺少最新截图编号时仍记录提交被拒绝", async () => {
   assert.match(run.stepResults[0].actual, /尝试提交 finish.*必须基于最新截图/);
   assert.doesNotMatch(run.stepResults[0].actual, /未尝试提交/);
 });
+
+
+test("验收收尾提示登记为可打包资源且变量匹配", () => {
+  const manifest = JSON.parse(readFileSync("prompts/manifest.json", "utf8"));
+  const entries = manifest.prompts.filter((item) => item.id === "hanli.computer-acceptance-finalization");
+  assert.equal(entries.length, 1);
+  assert.deepEqual(entries[0].variables, ["goalJson"]);
+  const content = readFileSync(`prompts/${entries[0].file}`, "utf8");
+  assert.match(content, /{{goalJson}}/);
+  assert.match(content, /finish/);
+});
