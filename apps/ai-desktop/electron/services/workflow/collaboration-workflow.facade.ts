@@ -266,6 +266,8 @@ export class CollaborationCoordinator {
     // 先保护在途修复，再处理可能已经过期的超时通知。
     if (this.#technicalRepairRuns.has(taskId)) return this.state();
     const task = this.#store.task(taskId);
+    // 已验证版本只能由真实新进程确认；旧超时通知不得重新集成或访问已回收的工作树。
+    if (task.state === "awaiting-restart" || task.state === "integrated" || task.state === "cancelled") return this.state();
     if (task.state !== "blocked" && task.state !== "recovering") await this.#blockTask(taskId, reason);
     return this.continueTask(taskId);
   }

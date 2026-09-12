@@ -2433,5 +2433,8 @@ test("令狐活跃调查期间晚到恢复不得重排旧结果，真实进展�
     assert.equal(store.task(task.taskId).versionWorkspace.resultSha, "new");
     assert.equal(store.task(task.taskId).state, "ready-for-integration");
     assert.ok(schedules > 0);
+    store.updateTask(task.taskId, "fixture.awaiting_restart", (current) => { current.state = "awaiting-restart"; });
+    await coordinator.recoverTask(task.taskId, "重启前晚到超时");
+    assert.equal(store.task(task.taskId).state, "awaiting-restart");
   } finally { finishDiagnosis?.("结束"); await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
 });

@@ -131,6 +131,18 @@ export class VersionIntegrationPipeline {
         }
       });
     }
+    // 只有已确认批次进入终态后才回收任务工作树；回收失败不会把已完成任务重新派发。
+    for (const task of this.#store.state().tasks) {
+      if (!generations.includes(task.integrationGeneration ?? -1) || !task.versionWorkspace) continue;
+      void this.#workspaces.retireWorkspace(task.versionWorkspace).then(() => {
+        if (this.#disposed) return;
+        this.#store.updateTask(task.taskId, "integration.worktrees_retired", (current) => {
+          if (current.versionWorkspace) current.versionWorkspace.retiredAt = new Date().toISOString();
+        });
+      }).catch((error) => {
+        this.#durations.instant(task.taskId, "integration.workspace_retirement_failed", { detail: errorMessage(error) });
+      });
+    }
     return generations;
   }
 
@@ -261,14 +273,7 @@ export class VersionIntegrationPipeline {
         }
       });
 
-      const retirements = await Promise.allSettled(tasks.map((task) => task.versionWorkspace ? this.#workspaces.retireWorkspace(task.versionWorkspace) : Promise.resolve()));
-      this.#store.updateTask(taskIds[0], "integration.worktrees_retired", (_first, mutable) => {
-        const retiredAt = new Date().toISOString();
-        for (const [index, taskId] of taskIds.entries()) {
-          const task = mutable.tasks.find((item) => item.taskId === taskId);
-          if (task?.versionWorkspace && retirements[index]?.status === "fulfilled") task.versionWorkspace.retiredAt = retiredAt;
-        }
-      });
+      // 原任务工作树必须保留到真实重启确认，失败时仍可在原任务继续修复。
       this.#durations.writeGenerationReport(generation, taskIds);
       releaseDocument.state = "published";
       releaseDocument.completedAt = new Date().toISOString();
