@@ -847,10 +847,12 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
 /** 为旧状态补齐恢复模式，使升级后仍能从原卡点继续而不重建任务。 */
 function migrateOneShotResumeMode(state: EvolutionStateOutDto): { state: EvolutionStateOutDto; changed: boolean } {
   const run = state.oneShotRun;
-  if (!run || run.resumeMode !== undefined) return { state, changed: false };
+  if (!run) return { state, changed: false };
   const resumeMode = run.status === "blocked"
     ? run.proposalId && findCompletionReviewCheckpoint(state, run.proposalId) ? "post-completion-review" : "standard"
     : null;
+  // 早期版本把完成态复核的 failed 结果误记为 standard；加载时按不可变验收证据纠正。
+  if (run.resumeMode === resumeMode) return { state, changed: false };
   return { state: { ...state, oneShotRun: { ...run, resumeMode } }, changed: true };
 }
 

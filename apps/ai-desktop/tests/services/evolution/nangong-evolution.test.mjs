@@ -771,6 +771,30 @@ test("完成态复核受阻后只从原复核卡点继续", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("完成态复核产品失败及旧 standard 状态仍恢复原只读复核", () => {
+  const key = "completion-review-failed-migration";
+  const store = evolutionStore(key);
+  store.beginOneShotRun(workspaceState, "zh-CN");
+  let state = store.createTopic(topicRequest("完成态复核失败恢复"));
+  const topicId = state.activeTopicId;
+  state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
+  const proposalId = state.proposals.at(-1).proposalId;
+  store.updateOneShotRun("accepting", "han-li", "韩立", "正在执行完成前验收", topicId, proposalId);
+  store.markProgress(proposalId, "pending-acceptance", "等待验收");
+  store.recordAcceptanceRun(computerRun("same-failed-review", topicId, proposalId, "passed", "pre-shot"));
+  store.decideResult(proposalId, "approved", "完成前验收通过", "automatic-han-li");
+  store.recordAcceptanceRun(computerRun("same-failed-review", topicId, proposalId, "failed", "failed-shot"));
+  state = store.blockOneShotRun("完成态页面复核发现产品问题");
+  assert.equal(state.oneShotRun.resumeMode, "post-completion-review");
+
+  const legacy = readPersistedState(key);
+  legacy.oneShotRun.resumeMode = "standard";
+  writePersistedState(key, legacy);
+  const migrated = evolutionStore(key).state();
+  assert.equal(migrated.oneShotRun.resumeMode, "post-completion-review");
+  assert.equal(evolutionStore(key).resumeOneShotRun().oneShotRun.phase, "accepting");
+});
+
 test("完成提案缺少同一验收运行证据时拒绝伪造恢复", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "completion-review-invalid-"));
   try {
