@@ -13,22 +13,19 @@ const transformedAcceptance = await transform(acceptanceSource + "\nexport { saf
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
 const { HanliComputerAcceptance } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleScroll = { status: "scrolled" }) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
   let n = 0;
   const inputs = [], progress = [];
-  let bounds = { x: 0, y: 0, width: 1000, height: 800 };
-  const resized = [];
-  const window = { isDestroyed: () => false, getBounds: () => bounds, setBounds: (next) => { bounds = next; resized.push(next); }, getContentBounds: () => ({ width: bounds.width, height: bounds.height }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: bounds.width, height: bounds.height }) }), executeJavaScript: async (script) => {
+  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => {
     const source = String(script);
     if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
-    if (/scrollTestConsole/.test(source)) return testConsoleScroll;
     if (/focusAcceptanceModelControl/.test(source)) {
       return { status: "focused", controlLabel: source.includes("nangong-model") ? "南宫婉对话模型" : "韩立对话模型" };
     }
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, resized, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
+  return { inputs, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
@@ -124,39 +121,6 @@ test("预览拖拽与受控截图发送都形成受限交互记录", async () =>
   assert.equal(run.status, "passed");
   assert.equal(run.stepResults[0].operation.type, "drag");
   assert.equal(run.stepResults[1].operation.type, "send");
-});
-test("测试台只允许固定内容容器滚动，未显示或无滚动变化时明确拒绝", async () => {
-  const f = fixture();
-  const run = await f.run(async (tools) => {
-    const first = id(await observe(tools));
-    const scrolled = await tools.call("hanli_computer", { action: "scroll-test-console", reason: "查看测试台执行记录和恢复点", observationId: first, deltaY: 640 });
-    assert.equal(f.inputs.length, 0);
-    await finish(tools, id(scrolled));
-  });
-  assert.equal(run.status, "passed");
-  assert.deepEqual(run.stepResults[0].operation, { type: "scroll", target: "test-console", deltaY: 640, reason: "查看测试台执行记录和恢复点" });
-
-  const blocked = fixture(true, undefined, { status: "测试台未显示" });
-  await blocked.run(async (tools) => {
-    const first = id(await observe(tools));
-    await assert.rejects(tools.call("hanli_computer", { action: "scroll-test-console", reason: "尝试滚动未显示测试台", observationId: first, deltaY: 640 }), /测试台不可受控滚动/);
-    await finish(tools, first, "blocked");
-  });
-});
-test("验收窗口只能切换固定窄窗口预设，并在结束时恢复初始尺寸", async () => {
-  const f = fixture();
-  const run = await f.run(async (tools) => {
-    const first = id(await observe(tools));
-    const narrow = await tools.call("hanli_computer", { action: "resize-acceptance-window", reason: "检查窄窗口下测试台布局", observationId: first, size: "narrow" });
-    const restored = await tools.call("hanli_computer", { action: "resize-acceptance-window", reason: "恢复默认窗口继续验收", observationId: id(narrow), size: "restore" });
-    await finish(tools, id(restored));
-  });
-  assert.equal(run.status, "passed");
-  assert.deepEqual(f.resized, [
-    { x: 0, y: 0, width: 640, height: 800 },
-    { x: 0, y: 0, width: 1000, height: 800 },
-    { x: 0, y: 0, width: 1000, height: 800 },
-  ]);
 });
 test("截图发送只允许当前人物固定截图按钮", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
