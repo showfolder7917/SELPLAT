@@ -360,3 +360,19 @@ test("同一运行新确认提案不被旧提案卡点拦截，也不复用旧�
   await f.run();
   assert.deepEqual(f.effects.resolved, ["new-proposal-failure"]);
 });
+
+
+test("混合验收失败同时传递能力阻塞且保留原授权排除项", async () => {
+  const f = fixture();
+  f.event.payload.acceptanceFailureKind = "product-defect";
+  f.event.payload.acceptanceBlockedSteps = [{ checkId: "criterion-4", status: "blocked", actual: "隔离窗口拒绝写入，未生成测试任务", layoutStatus: "blocked", screenshotAttachmentId: "blocked-shot" }];
+  f.evolution.proposals[0].exclusions = ["不得写入正式记录"];
+  await f.run(); await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+  const repair = f.effects.submitted[0];
+  assert.match(repair.confirmedIntent, /隔离窗口拒绝写入，未生成测试任务/);
+  assert.match(repair.confirmedIntent, /blocked-shot/);
+  assert.ok(repair.constraints.some(text => /同时逐项调查 acceptanceBlockedSteps/.test(text)));
+  assert.ok(repair.constraints.includes("原确认范围排除项：不得写入正式记录"));
+  assert.ok(repair.acceptanceCriteria.some(text => /原已确认范围/.test(text)));
+});

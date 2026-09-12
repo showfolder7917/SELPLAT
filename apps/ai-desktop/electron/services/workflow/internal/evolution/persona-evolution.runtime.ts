@@ -520,8 +520,13 @@ export class PersonaEvolutionRuntime {
           if (runResult.status === "failed") {
             // 先提取本轮真实新缺陷，再决定能否沿原验收范围自动修复。
             const scopeReview = this.#acceptanceFailureScope.review(proposal, runResult);
-            // 可见传达点名具体条件、实际结果、期望结果和范围判断。
-            const failureMessage = `韩立验收未通过。\n本轮真实新缺陷：\n${scopeReview.summary}\n范围判断：${scopeReview.reason}`;
+            // 产品失败不能覆盖同轮未能验收的条件；完整保留能力阻塞供原范围内调查，不将未验证项判成产品缺陷。
+            const acceptanceBlockedSteps = runResult.stepResults.filter((step) => step.status === "blocked" || step.layoutStatus === "blocked");
+            const blockedSummary = acceptanceBlockedSteps.length
+              ? `\n本轮仍未验证的条件（需单独调查能力或环境阻塞，不代表产品失败）：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：功能 ${step.actual}；布局 ${step.layoutActual || "未提供布局判断"}`).join("\n")}`
+              : "";
+            // 可见传达点名具体条件、实际结果、期望结果和范围判断，同时保留混合结果中的未验证事实。
+            const failureMessage = `韩立验收未通过。\n本轮真实新缺陷：\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
             publishAcceptance("failed", failureMessage);
             // 范围不明确时保留原验收点等待确认，不能把相邻问题自动写入修复任务。
             if (scopeReview.decision !== "within-original-acceptance") {
@@ -529,6 +534,7 @@ export class PersonaEvolutionRuntime {
                 acceptanceRunId: runResult.runId,
                 evidenceAttachmentIds: runResult.evidenceAttachmentIds,
                 acceptanceFailureScope: scopeReview,
+                acceptanceBlockedSteps,
               });
             }
             // 范围内失败进入统一卡点入口，由令狐建立新的修复任务并在完成后回到韩立复验。
@@ -536,6 +542,7 @@ export class PersonaEvolutionRuntime {
               acceptanceRunId: runResult.runId,
               evidenceAttachmentIds: runResult.evidenceAttachmentIds,
               acceptanceFailureScope: scopeReview,
+              acceptanceBlockedSteps,
               acceptanceFailureKind: "product-defect",
             });
           }

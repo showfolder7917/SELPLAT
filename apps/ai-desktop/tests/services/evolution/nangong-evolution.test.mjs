@@ -1616,6 +1616,7 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
       return {
         ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot"),
         criteria: [originalCriterion],
+        stepResults: computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot").stepResults.map(step => step.operation.type === "judgement" ? { ...step, layoutStatus: "blocked", layoutActual: "隔离环境未提供布局验收能力" } : step),
       };
     });
     state = await facade.resumeOneShotRun(runId);
@@ -1628,6 +1629,10 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
     assert.equal(failures.at(-1).flowImpact, "blocked");
     assert.equal(failures.at(-1).details.acceptanceFailureScope.decision, "within-original-acceptance");
     assert.match(failures.at(-1).details.acceptanceFailureScope.summary, /实际结果：滚动位置没有变化/);
+    assert.equal(failures.at(-1).details.acceptanceBlockedSteps.length, 1);
+    assert.equal(failures.at(-1).details.acceptanceBlockedSteps[0].layoutActual, "隔离环境未提供布局验收能力");
+    assert.match(state.oneShotRun.blockingReason, /本轮仍未验证的条件/);
+    assert.match(state.oneShotRun.blockingReason, /隔离环境未提供布局验收能力/);
     facade.start();
     await new Promise((resolve) => setTimeout(resolve, 20));
     facade.stop();
