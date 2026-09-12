@@ -30,8 +30,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   // 权威数据提供实时节点正文，显示状态提供当前界面语言。
   const { liveTextByNodeId } = model.data;
   const { locale } = model.presentation;
-  // 页面只读取人工审批操作，继续任务由页面控制器包装异步反馈。
-  const { onManualApproval } = model.actions;
+  // 页面只读取人工审批和需求入口操作，继续任务由页面控制器包装异步反馈。
+  const { onManualApproval, onOpenHanliConversation } = model.actions;
   // 页面控制器只消费模型，不再依赖组件外层的包装参数。
   const controller = useTaskCollaborationGroup(model);
   const {
@@ -52,6 +52,11 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     void continueTask(taskId);
   };
 
+  /** 空状态入口只打开韩立会话，不把用户带入任务提交流程。 */
+  const openHanliConversation = () => {
+    void onOpenHanliConversation();
+  };
+
   if (groups.length === 0) {
     return (
       <section className="task-collaboration-page">
@@ -62,6 +67,9 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               ? "申請、承認、配布と実行の履歴がここに表示されます。"
               : "审批、分发、执行和验证会按发生顺序显示在这里。"}
           </span>
+          <button type="button" className="task-collaboration-empty-action" onClick={openHanliConversation}>
+            {locale === "ja" ? "韓立に要望を伝える" : "找韩立说需求"}
+          </button>
         </div>
       </section>
     );

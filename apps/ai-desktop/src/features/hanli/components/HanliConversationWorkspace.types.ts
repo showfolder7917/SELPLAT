@@ -51,4 +51,6 @@ export interface HanliConversationWorkspaceProps {
   onPaste(files: File[]): void;
   /** 把当前错误同步回父页面；空字符串表示清除错误。 */
   onError(message: string): void;
+  /** 当前工作区页签是否为韩立会话；成为当前页时需要聚焦需求输入框。 */
+  isCurrentPage: boolean;
 }

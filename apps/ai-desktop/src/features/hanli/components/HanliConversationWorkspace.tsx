@@ -7,6 +7,7 @@
  */
 
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
+import { useEffect, useRef } from "react";
 
 import { ConversationMessageImage, MarkdownMessage, SelUiConversation } from "../../conversation";
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
@@ -17,6 +18,13 @@ import { useHanliConversationWorkspace } from "./useHanliConversationWorkspace";
 export function HanliConversationWorkspace(props: HanliConversationWorkspaceProps) {
   // 页面控制器（controller）提供已经整理好的数据和操作，页面结构不自行编排发送流程。
   const controller = useHanliConversationWorkspace(props);
+  // 需求输入框引用（messageInputRef）用于韩立会话成为当前页时交还键盘焦点。
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // 隐藏页不能抢占焦点；只有当前韩立页才能让客户立即继续描述需求。
+    if (props.isCurrentPage) messageInputRef.current?.focus();
+  }, [props.isCurrentPage]);
 
   // 当前会话（conversation）是后端已经保存的韩立会话，用于显示读取统计。
   const conversation = props.conversation;
@@ -132,6 +140,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
       {/* 文字输入区：接收客户问题，也允许从剪贴板粘贴截图。 */}
       <textarea
         className="selconversation-input"
+        ref={messageInputRef}
         data-sel-conversation-input
         aria-label="给韩立发送消息"
         placeholder="描述问题、真实目标或你不确定该怎么问的地方…（可粘贴截图）"

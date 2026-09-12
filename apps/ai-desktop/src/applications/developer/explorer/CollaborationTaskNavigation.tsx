@@ -51,14 +51,7 @@ export function CollaborationTaskNavigation({
   // 导航状态提供当前选中的页面。
   const { panel } = controller.navigation;
   // 导航操作集中负责选人和切换右侧页面。
-  const { setPanel, selectMember } = controller.actions;
-
-  /** 选择人物后把右侧页面明确切回人物页。 */
-  const openMemberPage = async (memberId: string) => {
-    const nextState = await selectMember(memberId);
-    if (!nextState) return;
-    setPanel("member");
-  };
+  const { setPanel, openMemberPage } = controller.actions;
 
   /** 任务群按钮只切换右侧面板，不修改协作任务数据。 */
   const openTaskGroup = () => setPanel("task-group");

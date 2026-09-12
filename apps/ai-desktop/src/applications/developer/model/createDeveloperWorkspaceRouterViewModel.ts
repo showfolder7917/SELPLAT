@@ -37,6 +37,8 @@ type HanliPageViewModel = PageBase & {
   workspaces: DeveloperWorkspaceRouterProps["workspaces"];
   hanli: DeveloperWorkspaceRouterProps["hanli"];
   screenshot: DeveloperWorkspaceRouterProps["screenshot"];
+  /** 当前页签是否正是韩立会话，用于把键盘焦点交给需求输入框。 */
+  isCurrentPage: boolean;
 };
 
 /** 南宫页只携带人物会话、Evolution、审批和截图输入。 */
@@ -115,6 +117,7 @@ export function createDeveloperWorkspaceRouterViewModel(
         workspaces: props.workspaces,
         hanli: props.hanli,
         screenshot: props.screenshot,
+        isCurrentPage: key === controller.tabId,
         tabAction: {
           visible: true,
           label: "重新建立韩立对话",
