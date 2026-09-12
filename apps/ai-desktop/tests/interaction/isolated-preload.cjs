@@ -40,6 +40,7 @@ let taskTimelineFixtureEnabled = false;
 let acceptanceTimelineFixtureStatus = null;
 let interruptedTimelineFixtureStatus = null;
 let customerActionTimelineFixtureEnabled = false;
+let collaborationTimelineRevision = 0;
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
@@ -195,7 +196,8 @@ const publishCollaborationState = (reason) => {
   return copy;
 };
 const publishCollaborationTimelineChanged = () => {
-  const event = { committedAt: new Date().toISOString(), groupIds: ["topic:interaction-timeline"], groupVersions: { "topic:interaction-timeline": 1 } };
+  collaborationTimelineRevision += 1;
+  const event = { committedAt: new Date().toISOString(), groupIds: ["topic:interaction-timeline"], groupVersions: { "topic:interaction-timeline": collaborationTimelineRevision } };
   for (const listener of collaborationTimelineListeners) listener(structuredClone(event));
 };
 const interactionTimelineSnapshot = () => {
@@ -254,6 +256,18 @@ const interactionTimelineSnapshot = () => {
   }
   const proposal = evolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
   if (!proposal) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
+  const oneShotBlocked = evolutionState.oneShotRun?.topicId === "interaction-timeline"
+    && evolutionState.oneShotRun?.proposalId === proposal.proposalId
+    && evolutionState.oneShotRun?.status === "blocked";
+  if (oneShotBlocked) {
+    return { version: 1, groups: [{
+      groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: proposal.proposalId,
+      title: "专题任务 01 · 修订截图按钮可用态", status: "blocked", summary: "验收连接中断，等待从原卡点继续。",
+      nodes: [], executingCount: 0, verifyingCount: 0, waitingCount: 0, completedCount: 0,
+      startedAt: proposal.createdAt, updatedAt: evolutionState.updatedAt, durationMs: 60_000,
+      nextStep: "等待恢复原验收流程", failureNextStep: "从原卡点继续",
+    }], updatedAt: evolutionState.updatedAt };
+  }
   const pending = proposal.status === "pending-approval";
   const startedAt = proposal.createdAt;
   const nodes = [{
@@ -320,7 +334,7 @@ const interactionTimelineSnapshot = () => {
   const currentCount = nodes.filter((node) => node.status === "current").length;
   return { version: 1, groups: [{
     groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: proposal.proposalId,
-    title: "专题任务 01 · 修订截图按钮可用态", status: pending ? "waiting-approval" : proposal.status === "approved" ? "running" : "running",
+    title: "专题任务 01 · 修订截图按钮可用态", status: pending ? "waiting-approval" : "running",
     summary: pending ? proposal.content : "多人并行执行与验证正在按时间顺序推进。", nodes,
     executingCount: nodes.filter((node) => node.kind === "execution" && node.status === "current").length,
     verifyingCount: nodes.filter((node) => node.kind === "verification" && node.status === "current").length,
@@ -492,7 +506,9 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     evolutionState.oneShotRun = { runId: "resume-fixture", topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal", status: "blocked", phase: "blocked", actor: "system", actorName: "系统", action: mode, blockingReason: "验收连接中断", startedAt: now, updatedAt: now, completedAt: now };
     evolutionState.proposals[0].status = "pending-acceptance";
-    return publishNangongEvolution("one-shot.blocked");
+    const state = publishNangongEvolution("one-shot.blocked");
+    publishCollaborationTimelineChanged();
+    return state;
   },
   resumeEvolutionOneShot: async (runId) => {
     if (evolutionState.oneShotRun?.runId !== runId) throw new Error("运行已变化");

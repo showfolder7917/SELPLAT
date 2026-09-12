@@ -90,7 +90,7 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
   // 提案必须真实存在并处于允许恢复的状态。
   const proposalCanResume = proposal && resumableProposalStates.includes(proposal.status);
   // 恢复按钮要求运行和提案两层状态同时允许继续。
-  const showResumeButton = Boolean(runCanResume && proposalCanResume);
+  const showResumeButton = Boolean(group.status === "blocked" && runCanResume && proposalCanResume);
 
   // 没有按钮、等待状态或历史反馈时，专题顶部不保留空恢复区域。
   if (!showResumeButton && !recoveryPending && !recoveryFeedback) return null;

@@ -51,11 +51,13 @@ test.afterAll(async () => {
 });
 
 test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async ({}, testInfo) => {
-  await page.evaluate(async () => {
+  const blockedTimeline = await page.evaluate(async () => {
     const api = (window as any).desktop;
     await api.setInteractionTaskTimelineFixture(true);
     await api.setInteractionResumeFixture("failure");
+    return api.getCollaborationTimeline();
   });
+  expect(blockedTimeline.groups[0]?.status).toBe("blocked");
   await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
   await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
   const resume = page.getByRole("button", { name: "从卡点继续", exact: true });
@@ -77,11 +79,13 @@ test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async
 });
 
 test("从卡点继续后仍受阻会明确反馈而不是看起来没反应", async () => {
-  await page.evaluate(async () => {
+  const blockedTimeline = await page.evaluate(async () => {
     const api = (window as any).desktop;
     await api.setInteractionTaskTimelineFixture(true);
     await api.setInteractionResumeFixture("blocked");
+    return api.getCollaborationTimeline();
   });
+  expect(blockedTimeline.groups[0]?.status).toBe("blocked");
   await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
   await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
   await page.getByRole("button", { name: "从卡点继续", exact: true }).click();

@@ -14,8 +14,8 @@ const result = await build({
 const compiled = { exports: {} };
 new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), compiled, compiled.exports);
 const { TaskGroupRecovery } = compiled.exports;
-function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [] } = {}) {
-  const group = { topicId: "topic-a", proposalId: "proposal-a", nodes };
+function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [], groupStatus = "blocked" } = {}) {
+  const group = { topicId: "topic-a", proposalId: "proposal-a", nodes, status: groupStatus };
   const evolution = {
     state: { oneShotRun: { runId: "run-original", topicId, proposalId: "proposal-a", status: "blocked", blockingReason: reason },
       proposals: [{ proposalId: "proposal-a", status: "blocked" }], automationRuntime: { status: "paused" } },
@@ -62,4 +62,10 @@ test("任务节点已有精确恢复入口时不再显示专题级重复按钮",
     eventType: "customer.action_required",
   }] });
   assert.equal(customerAction, "");
+});
+
+test("专题已经恢复运行时不显示旧一次性运行的恢复入口", () => {
+  assert.equal(render({ groupStatus: "running" }), "");
+  assert.equal(render({ groupStatus: "verifying" }), "");
+  assert.equal(render({ groupStatus: "completed" }), "");
 });
