@@ -44,6 +44,9 @@ export class HanliComputerAcceptance {
     const sentComposerLabels = new Set<string>();
     let verdict: "passed" | "failed" | "blocked" = "blocked";
     let completed = false;
+    // 仅记录 finish 的受限终态，供未完成验收回到同一提案时区分模型未调用与参数被拒绝。
+    let finishAttempted = false;
+    let finishRejection = "";
     const images = async (interactionEvidence?: Record<string, unknown>) => {
       if (window.isDestroyed()) {
         throw new Error("验收窗口已关闭");
@@ -164,6 +167,7 @@ export class HanliComputerAcceptance {
           throw new Error("本轮已达到60次工具调用上限，保留证据，禁止无限操作。");
         }
         busy = true;
+        let attemptedFinish = false;
         try {
           const args = raw as Record<string, unknown>;
           if (!args || typeof args.reason !== "string" || !args.reason.trim()) {
@@ -176,6 +180,8 @@ export class HanliComputerAcceptance {
             throw new Error("必须基于最新截图操作，请重新observe。");
           }
           if (args.action === "finish") {
+            attemptedFinish = true;
+            finishAttempted = true;
             if (!Array.isArray(args.findings) || args.findings.length !== goal.criteria.length) {
               throw new Error("每条验收条件都必须返回真实结果，不能漏项。");
             }
@@ -378,6 +384,12 @@ export class HanliComputerAcceptance {
           });
           progress(`第${inputCount}步：${args.action}；${args.reason}；已返回截图 ${snapshot}`);
           return output;
+        } catch (error) {
+          // 只保存 finish 的可读校验摘要；不记录模型正文、截图数据或其他工具参数。
+          if (attemptedFinish && !completed) {
+            finishRejection = error instanceof Error ? error.message : String(error);
+          }
+          throw error;
         } finally {
           busy = false;
         }
@@ -395,8 +407,13 @@ export class HanliComputerAcceptance {
       if (!snapshot || !evidence.includes(snapshot)) {
         throw new Error("韩立尚未通过交互工具提交完整验收判断，且未留下可归档的真实截图证据。");
       }
-      const actual = "验收模型未通过交互工具提交完整判断，当前条件未形成可归档的功能结论。";
-      const layoutActual = "验收模型未通过交互工具提交完整判断，当前条件未形成可归档的布局结论。";
+      const finishDiagnostic = !finishAttempted
+        ? "验收模型未尝试提交 finish。"
+        : finishRejection
+          ? `验收模型尝试提交 finish，但被现有校验拒绝：${finishRejection}`
+          : "验收模型尝试提交 finish，但未形成完成记录。";
+      const actual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的功能结论。${finishDiagnostic}`;
+      const layoutActual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的布局结论。${finishDiagnostic}`;
       for (const [index] of goal.criteria.entries()) {
         steps.push({
           checkId: `criterion-${index + 1}`,
