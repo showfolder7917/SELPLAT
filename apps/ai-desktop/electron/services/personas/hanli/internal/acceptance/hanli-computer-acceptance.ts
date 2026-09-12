@@ -52,6 +52,8 @@ export class HanliComputerAcceptance {
     // 仅记录 finish 的受限终态，供未完成验收回到同一提案时区分模型未调用与参数被拒绝。
     let finishAttempted = false;
     let finishRejection = "";
+    // 窄窗口只用于当前验收的固定预设；无论验收如何结束都还原起始尺寸。
+    let acceptanceWindowResized = false;
     const images = async (interactionEvidence?: Record<string, unknown>) => {
       if (window.isDestroyed()) {
         throw new Error("验收窗口已关闭");
@@ -108,13 +110,13 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。测试台历史只能用 scroll-test-console 滚动可见 .dev-test-console-content，技术证据只能用 expand-test-console-evidence 展开固定只读入口，窄窗口只能用 resize-acceptance-window 的 narrow/restore 预设；三者都不接受任意目标或尺寸。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
             },
             observationId: { type: "string" },
             x: { type: "integer" },
@@ -122,6 +124,11 @@ export class HanliComputerAcceptance {
             endX: { type: "integer" },
             endY: { type: "integer" },
             deltaY: { type: "integer" },
+            resizePreset: {
+              type: "string",
+              enum: ["narrow", "restore"],
+              description: "仅供 resize-acceptance-window 使用：切换固定窄窗口预设或恢复本轮起始尺寸。",
+            },
             key: {
               type: "string",
               enum: ["Tab", "Escape", "Home", "ArrowDown", "ArrowUp", "PageDown", "PageUp"],
@@ -279,6 +286,8 @@ export class HanliComputerAcceptance {
           window.show();
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
+          let testConsoleEvidence: Record<string, unknown> | null = null;
+          let windowResizeEvidence: Record<string, unknown> | null = null;
           if (args.action === "send-test-message") {
             // 固定文案、当前人物输入框和人物维度单次上限共同限制真实发送的业务副作用。
             const script = `(${sendAcceptanceMessage.toString()})(${JSON.stringify([...sentComposerLabels])})`;
@@ -311,6 +320,43 @@ export class HanliComputerAcceptance {
               throw new Error(`模型控件不可聚焦：${result.status}。`);
             }
             focusedModelControl = { control: String(args.control), label: result.controlLabel };
+          } else if (args.action === "scroll-test-console") {
+            const deltaY = Number(args.deltaY);
+            if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
+              throw new Error("测试台滚动距离必须为非零整数且不超过1000。");
+            }
+            const result = await window.webContents.executeJavaScript(`(${scrollTestConsole.toString()})(${deltaY})`) as Record<string, unknown>;
+            if (result.status !== "scrolled") {
+              throw new Error(`测试台内容未滚动：${String(result.status)}。`);
+            }
+            testConsoleEvidence = result;
+          } else if (args.action === "expand-test-console-evidence") {
+            const result = await window.webContents.executeJavaScript(`(${expandTestConsoleEvidence.toString()})()`) as Record<string, unknown>;
+            if (result.status !== "expanded") {
+              throw new Error(`测试台技术证据未展开：${String(result.status)}。`);
+            }
+            testConsoleEvidence = result;
+          } else if (args.action === "resize-acceptance-window") {
+            const state = await window.webContents.executeJavaScript(`(${readTestConsoleState.toString()})()`) as Record<string, unknown>;
+            if (state.status !== "visible") {
+              throw new Error("测试台未显示，不能调整验收窗口尺寸。");
+            }
+            if (args.resizePreset === "narrow") {
+              // 仅使用应用本身支持的最小窗口预设，保留初始位置，禁止模型提供任意尺寸。
+              window.setBounds({ ...initialBounds, width: 1000, height: 700 });
+              acceptanceWindowResized = true;
+              windowResizeEvidence = { preset: "narrow", bounds: window.getBounds() };
+            } else if (args.resizePreset === "restore") {
+              if (!acceptanceWindowResized) {
+                throw new Error("本轮尚未切换窄窗口，不能恢复尺寸。");
+              }
+              window.setBounds(initialBounds);
+              acceptanceWindowResized = false;
+              windowResizeEvidence = { preset: "restore", bounds: window.getBounds() };
+            } else {
+              throw new Error("窗口尺寸只允许 narrow 或 restore 预设。");
+            }
+            testConsoleEvidence = state;
           } else if (args.action === "hover") {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, width, height, "悬停坐标必须位于当前应用窗口内。");
@@ -359,6 +405,8 @@ export class HanliComputerAcceptance {
             imagePreview: previewEvidence,
             ...(focusedModelControl ? { focusedModelControl } : {}),
             ...(dragEvidence ? { imagePreviewDuringDrag: dragEvidence } : {}),
+            ...(testConsoleEvidence ? { testConsole: testConsoleEvidence } : {}),
+            ...(windowResizeEvidence ? { acceptanceWindow: windowResizeEvidence } : {}),
           };
           const output = await images(interactionEvidence);
           const previewActual = formatImagePreviewEvidence(previewEvidence, dragEvidence);
@@ -373,6 +421,12 @@ export class HanliComputerAcceptance {
             operation = { type: "key", key: String(args.key), reason: String(args.reason) };
           } else if (args.action === "scroll") {
             operation = { type: "scroll", x: Number(args.x), y: Number(args.y), deltaY: Number(args.deltaY), reason: String(args.reason) };
+          } else if (args.action === "scroll-test-console") {
+            operation = { type: "scroll-test-console", deltaY: Number(args.deltaY), reason: String(args.reason) };
+          } else if (args.action === "expand-test-console-evidence") {
+            operation = { type: "expand-test-console-evidence", reason: String(args.reason) };
+          } else if (args.action === "resize-acceptance-window") {
+            operation = { type: "resize-acceptance-window", preset: args.resizePreset as "narrow" | "restore", reason: String(args.reason) };
           } else if (args.action === "drag") {
             operation = { type: "drag", x: Number(args.x), y: Number(args.y), endX: Number(args.endX), endY: Number(args.endY), reason: String(args.reason) };
           } else {
@@ -416,6 +470,9 @@ export class HanliComputerAcceptance {
         },
       });
     } finally {
+      if (acceptanceWindowResized && !window.isDestroyed()) {
+        window.setBounds(initialBounds);
+      }
       closed = true;
       this.#active = false;
     }
@@ -474,6 +531,52 @@ export class HanliComputerAcceptance {
       completedAt: new Date().toISOString(),
     };
   }
+}
+
+/** 仅暴露可见测试台的滚动位置，不读取其中的业务内容。 */
+function readTestConsoleState(): Record<string, unknown> {
+  const panel = document.querySelector<HTMLElement>(".dev-activitybar .dev-test-console");
+  const content = panel?.querySelector<HTMLElement>(".dev-test-console-content");
+  if (!panel || !content || panel.offsetParent === null || content.offsetParent === null || content.clientHeight <= 0) {
+    return { status: "hidden" };
+  }
+  return {
+    status: "visible",
+    scrollTop: Math.round(content.scrollTop),
+    maxScrollTop: Math.max(0, Math.round(content.scrollHeight - content.clientHeight)),
+  };
+}
+
+/** 只滚动已显示的测试台内容容器，并回执位置变化，不接收任意坐标。 */
+function scrollTestConsole(deltaY: number): Record<string, unknown> {
+  const state = readTestConsoleState();
+  if (state.status !== "visible") return state;
+  const panel = document.querySelector<HTMLElement>(".dev-activitybar .dev-test-console");
+  const content = panel?.querySelector<HTMLElement>(".dev-test-console-content");
+  if (!content) return { status: "hidden" };
+  const before = content.scrollTop;
+  content.scrollTop = Math.max(0, Math.min(content.scrollHeight - content.clientHeight, before + deltaY));
+  const after = content.scrollTop;
+  return {
+    status: after === before ? "at-boundary" : "scrolled",
+    scrollTop: Math.round(after),
+    maxScrollTop: Math.max(0, Math.round(content.scrollHeight - content.clientHeight)),
+  };
+}
+
+/** 只展开测试台固定的只读技术证据 Disclosure，不允许操作其中的内容。 */
+function expandTestConsoleEvidence(): Record<string, unknown> {
+  const panel = document.querySelector<HTMLElement>(".dev-activitybar .dev-test-console");
+  const disclosure = panel?.querySelector<HTMLElement>(".test-console-disclosure");
+  const trigger = disclosure?.querySelector<HTMLButtonElement>("button.seldisclosure-trigger[data-sel-disclosure-trigger]");
+  if (!panel || !disclosure || !trigger || panel.offsetParent === null || trigger.offsetParent === null) {
+    return { status: "hidden" };
+  }
+  if (trigger.getAttribute("aria-expanded") === "true") {
+    return { status: "already-expanded" };
+  }
+  trigger.click();
+  return { status: trigger.getAttribute("aria-expanded") === "true" ? "expanded" : "not-expanded" };
 }
 
 async function sendAcceptanceMessage(sentComposerLabels: string[]): Promise<{ status: string; composerLabel: string | null }> {

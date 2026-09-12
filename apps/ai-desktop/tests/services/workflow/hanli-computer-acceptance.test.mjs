@@ -13,19 +13,24 @@ const transformedAcceptance = await transform(acceptanceSource + "\nexport { saf
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
 const { HanliComputerAcceptance } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true) {
   let n = 0;
   const inputs = [], progress = [];
-  const window = { isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 1000, height: 800 }), getContentBounds: () => ({ width: 1000, height: 800 }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: 1000, height: 800 }) }), executeJavaScript: async (script) => {
+  let bounds = { x: 0, y: 0, width: 1200, height: 800 };
+  const boundsCalls = [];
+  const window = { isDestroyed: () => false, getBounds: () => ({ ...bounds }), setBounds: (next) => { bounds = { ...next }; boundsCalls.push({ ...next }); }, getContentBounds: () => ({ width: bounds.width, height: bounds.height }), getTitle: () => "AI Desktop", show() {}, focus() {}, webContents: { capturePage: async () => ({ toDataURL: () => "data:image/png;base64,test", getSize: () => ({ width: bounds.width, height: bounds.height }) }), executeJavaScript: async (script) => {
     const source = String(script);
     if (/sendAcceptanceMessage|sendAcceptanceScreenshot/.test(source)) return sendResult;
     if (/focusAcceptanceModelControl/.test(source)) {
       return { status: "focused", controlLabel: source.includes("nangong-model") ? "南宫婉对话模型" : "韩立对话模型" };
     }
+    if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
+    if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
+    if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
+  return { inputs, boundsCalls, controller, run: (model) => controller.run(goal, window, model, (text) => progress.push(text)), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
@@ -108,6 +113,47 @@ test("图片预览只放行消息缩略图、预览控件和预览区域拖拽",
   assert.match(source, /getComputedStyle\(viewport\)\.cursor/);
   assert.match(source, /withinBounds/);
   assert.match(source, /imagePreviewDuringDrag/);
+});
+test("测试台验收能力只允许固定容器滚动、只读证据展开和尺寸预设", async () => {
+  const f = fixture();
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const scrolled = await tools.call("hanli_computer", { action: "scroll-test-console", reason: "查看测试台执行记录", observationId: first, deltaY: 320 });
+    const scrollEvidence = JSON.parse(scrolled.contentItems[0].text).interactionEvidence.testConsole;
+    assert.deepEqual(scrollEvidence, { status: "scrolled", scrollTop: 320, maxScrollTop: 640 });
+    const expanded = await tools.call("hanli_computer", { action: "expand-test-console-evidence", reason: "展开测试台只读技术证据", observationId: id(scrolled) });
+    assert.equal(JSON.parse(expanded.contentItems[0].text).interactionEvidence.testConsole.status, "expanded");
+    const narrow = await tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "检查固定窄窗口布局", observationId: id(expanded) });
+    assert.deepEqual(JSON.parse(narrow.contentItems[0].text).interactionEvidence.acceptanceWindow, { preset: "narrow", bounds: { x: 0, y: 0, width: 1000, height: 700 } });
+    await finish(tools, id(narrow));
+  });
+  assert.equal(run.status, "passed");
+  assert.deepEqual(f.boundsCalls, [{ x: 0, y: 0, width: 1000, height: 700 }, { x: 0, y: 0, width: 1200, height: 800 }]);
+  assert.deepEqual(run.stepResults.slice(0, 3).map((step) => step.operation.type), ["scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window"]);
+});
+test("隐藏测试台时固定验收能力全部拒绝", async () => {
+  const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, false);
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    await assert.rejects(tools.call("hanli_computer", { action: "scroll-test-console", reason: "尝试滚动隐藏测试台", observationId: first, deltaY: 320 }), /测试台内容未滚动：hidden/);
+    await assert.rejects(tools.call("hanli_computer", { action: "expand-test-console-evidence", reason: "尝试展开隐藏测试台", observationId: first }), /测试台技术证据未展开：hidden/);
+    await assert.rejects(tools.call("hanli_computer", { action: "resize-acceptance-window", resizePreset: "narrow", reason: "尝试调整隐藏测试台窗口", observationId: first }), /测试台未显示/);
+    await finish(tools, first, "blocked");
+  });
+  assert.equal(run.status, "blocked");
+  assert.deepEqual(f.boundsCalls, []);
+});
+test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
+  const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(source, /scroll-test-console/);
+  assert.match(source, /\.dev-test-console-content/);
+  assert.match(source, /expand-test-console-evidence/);
+  assert.match(source, /\.test-console-disclosure/);
+  assert.match(source, /resizePreset/);
+  assert.match(source, /width: 1000, height: 700/);
+  assert.match(source, /window\.setBounds\(initialBounds\)/);
+  const navigationBody = source.slice(source.indexOf("function safeNavigationClick"), source.indexOf("function safeImagePreviewDrag"));
+  assert.doesNotMatch(navigationBody, /test-console-disclosure/);
 });
 test("预览拖拽与受控截图发送都形成受限交互记录", async () => {
   const f = fixture();
