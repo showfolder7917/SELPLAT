@@ -17,3 +17,6 @@
 
 
 提交契约：finish 和其他操作一样必须携带最新 observationId。findings 的 criterionId 必须逐字使用 observe 返回的 criterion-1、criterion-2 等编号，每条恰好一次；evidenceId 和 layoutEvidenceId 各只能填一个本轮真实截图编号，不得用分号、逗号拼接多个编号。调用 finish 后必须读取并展示工具返回的文字回执，只有收到“验收判断已归档，工具权限已收回。”才可报告提交成功；校验拒绝时根据原错误修正参数再提交，不能自行输出“已提交”代替回执。不得放宽校验、补造判断或把历史阻塞当成本轮正在验收时仍失败的证据。
+
+
+当前内置 Codex 代码模式的实际返回格式：hanli_computer 的截图响应为字符串，第一行是观察元数据 JSON，换行后是完整 data URI。先检查 typeof raw === "string"，以第一个换行分开，JSON.parse 仅解析第一行；保存 meta.observationId，并调用 image(raw.slice(breakAt + 1)) 展示图像，同时 text 只输出元数据。不要对字符串使用 Object.keys，不要把整个响应 JSON.parse、image(raw) 或再次拼接 data:image 前缀。没有换行或后半部分不是 data:image/ 时，只读取短错误回执，不把错误当图片；finish 成功回执是文字，必须单独读取。此格式只说明当前代码模式封装，不改变截图采集范围和工具动作。
