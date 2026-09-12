@@ -142,3 +142,16 @@ test("失败状态和归档记录只使用当前专题的有效任务链", () =>
   assert.equal(viewModel.summary.statusCode, "failed");
   assert.deepEqual(viewModel.history.map((item) => item.id), ["current-record", "current-failure"]);
 });
+
+
+test("正式研讨等待确认且无任务时使用原范围状态，已回复或结束后不残留等待", () => {
+  const input = fixture({ oneShotRun: { status: "running", phase: "preparing-topic", proposalId: null } });
+  const confirmation = { offer: "测试台状态修正范围", reply: null, offeredAt: "2026-09-12T03:33:56.027Z" };
+  input.evolution.deliberations = [{ status: "ready-to-establish", rounds: [{ confirmation }] }];
+  assert.equal(createTestConsoleViewModel(input).summary.status, "等待用户确认");
+  confirmation.reply = "1";
+  assert.equal(createTestConsoleViewModel(input).summary.statusCode, "not-run");
+  confirmation.reply = null;
+  input.evolution.deliberations[0].status = "established";
+  assert.equal(createTestConsoleViewModel(input).summary.statusCode, "not-run");
+});

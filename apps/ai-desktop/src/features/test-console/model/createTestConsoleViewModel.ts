@@ -93,7 +93,11 @@ function createTestConsoleProjection(source: TestConsoleSource): TestConsoleProj
   const proposal = selectCurrentProposal(source);
   const topic = source.evolution?.topics.find((item) => item.topicId === proposal?.topicId) || null;
   const { effectiveTasks, missingTaskIds } = selectEffectiveTasks(source, proposal);
-  const awaitingConfirmation = source.evolution?.oneShotConfirmation?.status === "awaiting-user-confirmation"
+  // 正式韩立与南宫婉研讨在轮次中保存确认；不能只读取普通一次性确认字段。
+  const pendingDeliberation = source.evolution?.deliberations?.some((item) =>
+    item.status === "ready-to-establish" && Boolean(item.rounds.at(-1)?.confirmation)
+    && !item.rounds.at(-1)?.confirmation?.reply) === true;
+  const awaitingConfirmation = pendingDeliberation || source.evolution?.oneShotConfirmation?.status === "awaiting-user-confirmation"
     || effectiveTasks.some((task) => task.repairRequiresUserConfirmation === true);
   const failed = missingTaskIds.length > 0 || effectiveTasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
   const completed = effectiveTasks.length > 0 && effectiveTasks.every((task) => task.state === "integrated");
