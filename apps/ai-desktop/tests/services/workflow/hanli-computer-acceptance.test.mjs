@@ -13,7 +13,7 @@ const transformedAcceptance = await transform(acceptanceSource + "\nexport { saf
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
 const { HanliComputerAcceptance } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }) {
   let n = 0;
   const inputs = [], progress = [];
   let bounds = { x: 0, y: 0, width: 1200, height: 800 };
@@ -27,6 +27,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
     if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
     if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
+    if (/readTaskCollaborationState/.test(source)) return taskCollaborationState;
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
@@ -143,6 +144,20 @@ test("隐藏测试台不阻止当前页面的窄窗口验收", async () => {
   });
   assert.equal(run.status, "blocked");
   assert.equal(f.boundsCalls.length, 2);
+});
+test("任务协作群前置状态只读回执真实缺少空状态，不构成验收交互", async () => {
+  const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, true, { status: "has-topics" });
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const inspected = await tools.call("hanli_computer", { action: "inspect-task-collaboration-state", reason: "确认空状态验收前置条件", observationId: first });
+    const evidence = JSON.parse(inspected.contentItems[0].text).interactionEvidence.taskCollaboration;
+    assert.deepEqual(evidence, { status: "has-topics" });
+    assert.equal(f.inputs.length, 0);
+    await assert.rejects(finish(tools, id(inspected)), /尚未执行真实交互/);
+    await finish(tools, id(inspected), "blocked");
+  });
+  assert.equal(run.status, "blocked");
+  assert.equal(run.stepResults[0].operation.type, "inspect-task-collaboration-state");
 });
 test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");

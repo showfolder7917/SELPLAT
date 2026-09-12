@@ -110,13 +110,13 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-test-console", "expand-test-console-evidence", "inspect-task-collaboration-state", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
             },
             observationId: { type: "string" },
             x: { type: "integer" },
@@ -287,6 +287,7 @@ export class HanliComputerAcceptance {
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
           let testConsoleEvidence: Record<string, unknown> | null = null;
+          let taskCollaborationEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
           if (args.action === "send-test-message") {
             // 固定文案、当前人物输入框和人物维度单次上限共同限制真实发送的业务副作用。
@@ -336,6 +337,9 @@ export class HanliComputerAcceptance {
               throw new Error(`测试台技术证据未展开：${String(result.status)}。`);
             }
             testConsoleEvidence = result;
+          } else if (args.action === "inspect-task-collaboration-state") {
+            // 只确认验收前置状态，既不读取任务正文，也不通过测试夹具伪造空状态。
+            taskCollaborationEvidence = await window.webContents.executeJavaScript(`(${readTaskCollaborationState.toString()})()`) as Record<string, unknown>;
           } else if (args.action === "resize-acceptance-window") {
             // 全应用布局验收不依赖测试台是否打开；尺寸仍限应用支持的预设。
             if (args.resizePreset === "narrow") {
@@ -393,7 +397,8 @@ export class HanliComputerAcceptance {
             window.webContents.sendInputEvent({ type: "keyDown", keyCode: String(args.key) });
             window.webContents.sendInputEvent({ type: "keyUp", keyCode: String(args.key) });
           } else throw new Error("不支持的单步操作");
-          inputCount += 1;
+          // 前置状态读取不产生页面输入，不能成为通过或失败判断的交互证据。
+          if (args.action !== "inspect-task-collaboration-state") inputCount += 1;
           snapshot = "";
           await new Promise((resolve) => setTimeout(resolve, 150));
           const previewEvidence = await window.webContents.executeJavaScript(`(${readImagePreviewState.toString()})()`).catch(() => null);
@@ -402,6 +407,7 @@ export class HanliComputerAcceptance {
             ...(focusedModelControl ? { focusedModelControl } : {}),
             ...(dragEvidence ? { imagePreviewDuringDrag: dragEvidence } : {}),
             ...(testConsoleEvidence ? { testConsole: testConsoleEvidence } : {}),
+            ...(taskCollaborationEvidence ? { taskCollaboration: taskCollaborationEvidence } : {}),
             ...(windowResizeEvidence ? { acceptanceWindow: windowResizeEvidence } : {}),
           };
           const output = await images(interactionEvidence);
@@ -421,6 +427,8 @@ export class HanliComputerAcceptance {
             operation = { type: "scroll-test-console", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "expand-test-console-evidence") {
             operation = { type: "expand-test-console-evidence", reason: String(args.reason) };
+          } else if (args.action === "inspect-task-collaboration-state") {
+            operation = { type: "inspect-task-collaboration-state", reason: String(args.reason) };
           } else if (args.action === "resize-acceptance-window") {
             operation = { type: "resize-acceptance-window", preset: args.resizePreset as "narrow" | "restore", reason: String(args.reason) };
           } else if (args.action === "drag") {
@@ -541,6 +549,16 @@ function readTestConsoleState(): Record<string, unknown> {
     scrollTop: Math.round(content.scrollTop),
     maxScrollTop: Math.max(0, Math.round(content.scrollHeight - content.clientHeight)),
   };
+}
+
+/** 只回执任务协作群是否具备空状态前置条件，不读取专题数量、标题或历史正文。 */
+function readTaskCollaborationState(): Record<string, unknown> {
+  const page = document.querySelector<HTMLElement>(".task-collaboration-page");
+  if (!page || page.offsetParent === null) return { status: "hidden" };
+  const empty = page.querySelector<HTMLElement>(".task-collaboration-empty");
+  if (empty && empty.offsetParent !== null) return { status: "empty" };
+  const groups = page.querySelector<HTMLElement>(".task-collaboration-groups");
+  return groups && groups.offsetParent !== null ? { status: "has-topics" } : { status: "unrecognized" };
 }
 
 /** 只滚动已显示的测试台内容容器，并回执位置变化，不接收任意坐标。 */
