@@ -1104,3 +1104,26 @@ test("韩立排查显示真实阶段并从原阶段重试，保留输入草稿�
     });
   }
 });
+
+
+test("空任务起点连续排列并导航到可输入的韩立会话", async ({}, testInfo) => {
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+  const empty = page.locator(".task-collaboration-empty");
+  await expect(empty).toBeVisible();
+  for (const width of [1560, 1000]) {
+    await application.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 700), width);
+    const title = await empty.locator("strong").boundingBox();
+    const description = await empty.locator(":scope > span").boundingBox();
+    expect(description!.y - title!.y - title!.height).toBeLessThanOrEqual(12);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`empty-${width}.png`) });
+  }
+  await empty.getByRole("button", { name: "找韩立说需求" }).click();
+  const input = page.getByRole("textbox", { name: "给韩立发送消息" });
+  await expect(input).toBeFocused();
+  await page.keyboard.type("测试需求");
+  await expect(input).toHaveValue("测试需求");
+  await page.screenshot({ path: testInfo.outputPath("hanli-input.png") });
+  await expect(page.locator("#developer-task-list").getByRole("button", { name: /任务协作群.*0/ })).toBeVisible();
+});
