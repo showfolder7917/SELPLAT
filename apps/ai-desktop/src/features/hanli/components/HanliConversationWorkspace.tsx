@@ -39,7 +39,9 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
   // 错误更新操作（onError）让托管开关可以把失败原因显示在当前页面。
   const onError = props.onError;
 
-  return <SelUiConversation
+  // 专属布局根为时间线和固定输入区提供同一个有尺寸的定位上下文，长会话只能在时间线内滚动。
+  return <section className="hanli-conversation-workspace">
+    <SelUiConversation
     // 页面根节点：固定 ID 供样式、自动化测试和真实页面定位使用。
     id="selConversationHanLiPersonaId"
     // 页面提交入口：统一会话外壳提交时调用控制 Hook 的发送操作。
@@ -189,5 +191,6 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         </div>
       </div>
     </form>}
-  />;
+    />
+  </section>;
 }

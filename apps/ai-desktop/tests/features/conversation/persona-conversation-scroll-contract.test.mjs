@@ -24,6 +24,8 @@ test("可输入人物会话仅在用户停留底部时跟随新增消息", () =>
 });
 
 test("人物会话使用页面专属高度约束，不修改共享 SELUI 会话选择器", () => {
+  assert.match(hanli, /className="hanli-conversation-workspace"/);
+  assert.match(styles, /\.hanli-conversation-workspace \{ position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; \}/);
   assert.match(styles, /\.hanli-person-chat, \.nangong-person-chat \{ flex: 1 1 0; min-height: 0; \}/);
   assert.match(sharedStyles, /\.selconversation-timeline \{ min-height: 0; overflow-x: hidden; overflow-y: auto;/);
 });
