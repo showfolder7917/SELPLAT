@@ -214,19 +214,20 @@ test("旧计划执行器、补参数提示词和桌面接口不兼容退役", ()
 });
 
 
-test("测试台导航只放行固定触发器且继续拒绝危险操作", () => {
+test("测试台导航只放行固定按钮且继续拒绝危险操作", () => {
   const previous = globalThis.document;
-  const check = (label, inside) => {
+  const check = (label, inside, nodeType = "button") => {
     const node = { getAttribute: (key) => key === "aria-label" ? label : null,
       classList: { contains: (name) => name === "activity-test-console" },
       closest: (selector) => selector === ".dev-test-console-control" && inside ? {} : null,
-      matches: () => false };
+      matches: (selector) => selector === "button.activity-test-console" && nodeType === "button" };
     globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
     return acceptanceModule.safeNavigationClick(12, 30);
   };
   try {
     assert.equal(check("打开测试台", true), true);
     assert.equal(check("打开测试台", false), false);
+    assert.equal(check("打开测试台", true, "tab"), false);
     assert.equal(check("清空测试数据", true), false);
     assert.equal(check("开启自动托管", true), false);
   } finally { globalThis.document = previous; }
