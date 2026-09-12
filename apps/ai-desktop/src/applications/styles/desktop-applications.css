@@ -528,6 +528,8 @@ button { color: inherit; }
 @media (max-width: 1120px) {
   .task-group-header-content, .task-node-header-content { align-items: flex-start; flex-direction: column; gap: 8px; }
   .task-group-facts, .task-node-meta { flex-wrap: wrap; }
+  /* 窄窗口仍须完整呈现专题与节点摘要，不能以单行省略替代可读内容。 */
+  .task-group-header-content small, .task-node-main > small { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 }
 
 /* The shared tabs own their controls; only the application page layout lives here. */

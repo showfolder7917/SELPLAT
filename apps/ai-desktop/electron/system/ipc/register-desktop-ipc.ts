@@ -137,8 +137,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   personaWorkflow.setComputerAcceptanceSession(async (goal) => {
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
-    const requiresEmptyTaskGroup = goal.criteria.some((criterion) => /任务协作群/u.test(criterion)
-      && /空状态|无专题任务|找韩立说需求/u.test(criterion));
+    // 验收条件可使用用户文案或页面稳定 class；两者都必须进入同一个非持久化空状态窗口。
+    const requiresEmptyTaskGroup = goal.criteria.some((criterion) => /任务协作群[\s\S]*(空状态|无专题任务|找韩立说需求)|task-collaboration-empty(-action)?/u.test(criterion));
     let acceptanceWindow = targetWindow;
     if (requiresEmptyTaskGroup) {
       // 空状态只在零专题投影中可见；使用非持久化窗口而非清理正式任务数据。
