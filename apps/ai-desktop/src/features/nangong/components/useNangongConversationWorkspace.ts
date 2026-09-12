@@ -56,8 +56,6 @@ function splitEvolutionList(value: string): string[] {
 
 /** 为南宫婉会话页面准备可见数据，并提供页面可以触发的操作。 */
 export function useNangongConversationWorkspace(props: NangongConversationWorkspaceProps) {
-  // 待发送文字（chatText）保存问答输入框中尚未发送的内容。
-  const [chatText, setChatText] = useState("");
   // 课题草稿显示状态（topicDraftOpen）控制“整理为演化课题”表单是否显示。
   const [topicDraftOpen, setTopicDraftOpen] = useState(false);
   // 草稿生成等待状态（topicDraftBusy）表示南宫婉是否正在根据对话生成草稿。
@@ -69,6 +67,10 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
 
   // 人物会话运行状态（runtime）由公共控制器提供，切换页面后仍保留未完成消息。
   const runtime = props.runtime;
+  // 待发送文字由人物会话控制器持有，卸载隐藏页面不会丢失客户尚未发送的内容。
+  const chatText = runtime.draftText;
+  // 文字更新操作统一写回人物会话控制器，与附件和发送中消息共享生命周期。
+  const setChatText = runtime.setDraftText;
   // 当前演化状态（state）是后端权威结果，用于判断确认卡片和后台动作。
   const state = props.state;
   // 当前南宫婉会话（conversation）是后端保存的完整会话。

@@ -305,7 +305,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     >
       {/* 专题恢复入口：只在原始演化运行确实暂停或阻塞时提供恢复操作。 */}
       <TaskGroupRecovery group={presentedGroup} evolution={evolution} locale={locale} />
-      {/* 历史记录之前显示唯一权威下一流程；阻塞时额外解释失败后的恢复方向。 */}
+      {/* 历史记录之前显示唯一权威下一流程；完整失败证据保留在对应节点详情。 */}
       <div className="task-timeline-next">
         {/* 下一流程引导线：与时间线视觉相连，不承载可读文字。 */}
         <i />
@@ -328,10 +328,6 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             </button>
           )}
         </span>
-        {/* 失败恢复方向：只有专题阻塞且后端提供说明时才追加显示。 */}
-        {presentedGroup.status === "blocked" && presentedGroup.failureNextStep && (
-          <small>{locale === "ja" ? "失敗時" : "失败后"}：{presentedGroup.failureNextStep}</small>
-        )}
       </div>
       {/* 人物时间线：按后端确定的稳定顺序展示过滤后的真实节点。 */}
       <div className="task-timeline-list">

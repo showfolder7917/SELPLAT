@@ -238,8 +238,10 @@ test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南�
   assert.equal(f.messages.size, 1); assert.equal(f.events.size, 1);
   assert.deepEqual([...f.messages.values()].map((message) => message.ownerPersonaId), ["han-li"]);
   assert.equal([...f.events.values()][0].group.title, "原任务");
-  assert.match([...f.events.values()][0].fact.content, /发生位置：accepting/);
-  assert.match([...f.events.values()][0].fact.content, /遇到的问题：真实点击被工具拒绝/);
+  assert.equal([...f.events.values()][0].fact.content, "第 1 轮卡点处理 · 令狐已接收卡点");
+  assert.match([...f.events.values()][0].fact.detail, /发生位置：accepting/);
+  assert.match([...f.events.values()][0].fact.detail, /遇到的问题：真实点击被工具拒绝/);
+  assert.match([...f.events.values()][0].fact.detail, /当前进展：接收事实/);
   assert.match([...f.events.values()][0].fact.detail, /原提案：proposal-1/);
   state.round = 2; service.publish(fixture().event, state, "received", "第二轮");
   assert.equal(f.messages.size, 2); assert.equal(f.events.size, 2);

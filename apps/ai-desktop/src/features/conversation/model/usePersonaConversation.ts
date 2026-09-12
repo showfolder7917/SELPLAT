@@ -36,6 +36,8 @@ export interface PersonaPendingMessage {
  */
 export function usePersonaConversation(personaId: string) {
   const [conversation, setConversation] = useState<PersonaConversationOutDto>(() => emptyConversation(personaId));
+  // 待发送文字属于人物会话而不是页面实例；切换页签卸载长页面时仍要保留客户草稿。
+  const [draftText, setDraftText] = useState("");
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   // 发送中消息属于人物会话控制器；切换页面只卸载视图，不再丢失消息、失败状态或附件预览。
   const [pendingMessage, setPendingMessage] = useState<PersonaPendingMessage | null>(null);
@@ -151,6 +153,7 @@ export function usePersonaConversation(personaId: string) {
       const value = await getOptionalCollaborationDesktopApi()?.newPersonaConversation(personaId);
       if (!value) throw new Error("新建人物会话服务没有返回结果。");
       setConversation(value);
+      setDraftText("");
       setAttachments([]);
       setPendingMessage(null);
       setAttachmentPreviews({});
@@ -177,7 +180,7 @@ export function usePersonaConversation(personaId: string) {
   };
 
   return {
-    personaId, conversation, setConversation, attachments, setAttachments,
+    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,

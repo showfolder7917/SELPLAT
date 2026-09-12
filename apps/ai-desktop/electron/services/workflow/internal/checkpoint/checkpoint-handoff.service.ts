@@ -32,7 +32,10 @@ export class CheckpointHandoffService {
     const recoveryPoint = checkpoint.recoveryPoint || (typeof event.payload?.recoveryPoint === "string" ? event.payload.recoveryPoint : "未确认");
     const proposalId = checkpoint.proposalId || (typeof event.payload?.proposalId === "string" ? event.payload.proposalId : null);
     const runId = checkpoint.runId || (typeof event.payload?.runId === "string" ? event.payload.runId : null);
-    const readableContent = [
+    // 节点正文只说明当前处置动作，避免完整失败链挤占时间线与专题下一流程。
+    const progressSummary = `${title} · ${action}`;
+    // 完整故障、修复与测试证据只进入可展开详情，保留原始审计关系供恢复和复查使用。
+    const recoveryDetail = [
       `发生位置：${sourcePhase}`,
       `遇到的问题：${checkpoint.issue || event.message}`,
       `流程影响：${checkpoint.blockedImpact || "原流程尚不能继续。"}`,
@@ -41,18 +44,17 @@ export class CheckpointHandoffService {
       checkpoint.repairResult ? `修复结果：${checkpoint.repairResult}` : "",
       checkpoint.testResult ? `测试结果：${checkpoint.testResult}` : "",
       `当前进展：${content}`,
-    ].filter(Boolean).join("\n");
-    const recoveryDetail = [
+      "",
       `原始事件：${event.eventId}`,
       `原专题：${checkpoint.topicId || "未关联"}`,
       `原提案：${proposalId || "未关联"}`,
       `原运行：${runId || "未关联"}`,
       `恢复位置：${recoveryPoint}`,
       `修复任务：${checkpoint.repairTaskId || "尚未派发"}`,
-    ].join("\n");
+    ].filter(Boolean).join("\n");
     this.options.publish({ eventId: id, eventType: "checkpoint.progress",
       group: { groupId: checkpoint.topicId ? `topic:${checkpoint.topicId}` : `checkpoint:${event.eventId}`, topicId: checkpoint.topicId, proposalId, title: topic?.title || title, status: topic?.completed ? "completed" : phase === "resolved" || phase === "resuming" ? "running" : "blocked", summary: content, startedAt: topic?.createdAt || event.occurredAt, updatedAt: now },
-      fact: { nodeId: id, sourceFactKey: id, taskId: checkpoint.repairTaskId || checkpoint.taskId, proposalId, kind: "repair", actor, recipients, status: "completed", action: `${title} · ${action}`, summary: content, contentRole: phase === "resolved" || phase === "returned" ? "result-output" : "analysis-output", content: readableContent, detailRole: phase === "resolved" || phase === "returned" ? "result-evidence" : "recovery-conditions", detail: recoveryDetail, startedAt: now, completedAt: now, occurredAt: now, automaticOpen: false, manualApprovalProposalId: null },
+      fact: { nodeId: id, sourceFactKey: id, taskId: checkpoint.repairTaskId || checkpoint.taskId, proposalId, kind: "repair", actor, recipients, status: "completed", action: progressSummary, summary: content, contentRole: phase === "resolved" || phase === "returned" ? "result-output" : "analysis-output", content: progressSummary, detailRole: phase === "resolved" || phase === "returned" ? "result-evidence" : "recovery-conditions", detail: recoveryDetail, startedAt: now, completedAt: now, occurredAt: now, automaticOpen: false, manualApprovalProposalId: null },
     });
     if (!this.options.memory) return;
     for (const owner of participants.filter((id) => id === "han-li" || id === "nangong-wan")) {

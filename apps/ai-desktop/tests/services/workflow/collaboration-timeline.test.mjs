@@ -68,6 +68,22 @@ test("缺少专题关联的历史卡点只显示一张汇总卡且原始事实�
   } finally { fixture.close(); }
 });
 
+test("卡点下一流程只显示人物与当前动作，完整失败证据保留在节点详情", () => {
+  const fixture = createFixture("checkpoint-brief-next-step");
+  try {
+    fixture.append({
+      eventId: "checkpoint:issue-1:1:received", eventType: "checkpoint.progress",
+      group: { groupId: "topic:topic-1", topicId: "topic-1", proposalId: "proposal-1", title: "原专题", status: "blocked", summary: "令狐已接收卡点", startedAt: fixture.at(1), updatedAt: fixture.at(1) },
+      fact: { nodeId: "checkpoint:issue-1:1:received", sourceFactKey: "checkpoint:issue-1:1:received", taskId: "repair-1", proposalId: "proposal-1", kind: "repair", actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "completed", action: "第 1 轮卡点处理 · 令狐已接收卡点", summary: "令狐已接收卡点", contentRole: "analysis-output", content: "第 1 轮卡点处理 · 令狐已接收卡点", detailRole: "recovery-conditions", detail: "遇到的问题：恢复失败原因\\n测试结果：尚未测试\\n恢复位置：原验证步骤", startedAt: fixture.at(1), completedAt: fixture.at(1), automaticOpen: false, manualApprovalProposalId: null, occurredAt: fixture.at(1) },
+    });
+    const group = fixture.timeline.snapshot(fixture.at(2)).groups[0];
+    assert.equal(group.nextStep, "令狐老祖 · 第 1 轮卡点处理 · 令狐已接收卡点");
+    assert.doesNotMatch(group.nextStep, /恢复失败原因|尚未测试|原验证步骤/);
+    assert.match(group.nodes[0].detail, /恢复失败原因/);
+    assert.match(group.nodes[0].detail, /尚未测试/);
+  } finally { fixture.close(); }
+});
+
 test("审批时间线只按显式事件追加申请、退回、补充和通过", () => {
   const fixture = createFixture("approval");
   try {

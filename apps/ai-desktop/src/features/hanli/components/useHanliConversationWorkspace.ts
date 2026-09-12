@@ -5,12 +5,8 @@
  * 本文件负责输入、发送、附件、消息投影和错误状态，不负责描述任何可见页面节点。
  */
 
-import {
-  // 剪贴板事件类型（ClipboardEvent）描述输入框粘贴事件，只用于声明参数类型。
-  type ClipboardEvent,
-  // 状态记录方法（useState）由 React 提供，用于保存输入框中尚未发送的文字。
-  useState,
-} from "react";
+// 剪贴板事件类型（ClipboardEvent）描述输入框粘贴事件，只用于声明参数类型。
+import type { ClipboardEvent } from "react";
 
 // 截图附件类型（ComposerAttachment）表示一张已经保存、可以发送和预览的图片。
 import type { ComposerAttachment } from "../../conversation";
@@ -34,11 +30,12 @@ function readableDesktopError(error: unknown, fallback: string): string {
 
 /** 为韩立会话 View 准备页面数据，并提供用户可以触发的操作。 */
 export function useHanliConversationWorkspace(props: HanliConversationWorkspaceProps) {
-  // 待发送文字（text）保存输入框中尚未发送的内容，初始为空。
-  const [text, setText] = useState("");
-
   // 人物会话运行状态（runtime）由公共控制器提供，页面切换后仍保留发送和附件恢复状态。
   const runtime = props.runtime;
+  // 待发送文字由人物会话控制器持有，页面卸载和重新打开不会清空客户草稿。
+  const text = runtime.draftText;
+  // 文字更新操作把草稿写回人物会话控制器，而不是保存在短生命周期页面 Hook 中。
+  const setText = runtime.setDraftText;
   // 当前韩立会话（conversation）是后端已经保存的完整会话。
   const conversation = props.conversation;
   // 待发送截图（attachments）是客户本轮已经选择、但尚未发送的图片。
