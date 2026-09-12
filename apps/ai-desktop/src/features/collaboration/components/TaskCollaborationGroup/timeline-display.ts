@@ -30,7 +30,13 @@ export function currentTaskGroupPresentation(
     return group.status === "blocked" ? group : { ...group, status: "blocked" };
   }
   if (oneShotRun.status === "running") {
-    return group.status === "completed" ? group : { ...group, status: "completed" };
+    return {
+      ...group,
+      status: "completed",
+      summary: "本专题已完成",
+      nextStep: "本专题已完成",
+      failureNextStep: null,
+    };
   }
   return group;
 }

@@ -129,6 +129,8 @@ test("完成态复核卡点在原卡显示继续入口且恢复开始后立即�
   await resume.click();
   await expect(card).toHaveClass(/completed/);
   await expect(card).toContainText("已完成");
+  await expect(card).toContainText("本专题已完成");
+  await expect(card).not.toContainText("尚未认定整个任务通过");
   await expect(card.getByRole("button", { name: /恢复中|从卡点继续/ })).toHaveCount(0);
   await expect(card).not.toContainText("正在恢复原任务");
   await page.evaluate(async () => {
