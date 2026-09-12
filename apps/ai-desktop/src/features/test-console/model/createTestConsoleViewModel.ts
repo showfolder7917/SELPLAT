@@ -19,6 +19,16 @@ export type TestConsoleSource = {
   evolution: EvolutionStateOutDto | null;
 };
 
+type TestConsoleStatus = "awaiting-confirmation" | "running" | "completed" | "failed" | "not-run";
+
+type TestConsoleProjection = {
+  proposal: NonNullable<TestConsoleSource["evolution"]>["proposals"][number] | null;
+  topic: NonNullable<TestConsoleSource["evolution"]>["topics"][number] | null;
+  effectiveTasks: NonNullable<TestConsoleSource["collaboration"]>["tasks"];
+  missingTaskIds: string[];
+  status: TestConsoleStatus;
+};
+
 /** 隐藏记录中可能出现的本机绝对路径；测试台只保留足以验收的业务文字和相对文件名。 */
 export function redactTestConsoleText(value: string): string {
   return value
@@ -28,22 +38,86 @@ export function redactTestConsoleText(value: string): string {
     .slice(0, 1_200);
 }
 
-/** 选择当前演化提案对应任务；没有演化上下文时回退到最后更新的普通任务。 */
-function selectTask(source: TestConsoleSource) {
-  const tasks = source.collaboration?.tasks || [];
-  const proposalId = source.evolution?.oneShotRun?.proposalId || source.evolution?.proposals.at(-1)?.proposalId;
-  const candidates = proposalId ? tasks.filter((task) => task.evolutionProposalId === proposalId) : tasks;
-  return [...(candidates.length > 0 ? candidates : tasks)].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] || null;
+/** 只选择当前运行明确关联的提案，不能用历史提案填补当前专题的空状态。 */
+function selectCurrentProposal(source: TestConsoleSource) {
+  const proposalId = source.evolution?.oneShotRun?.proposalId;
+  if (!proposalId) return null;
+  return source.evolution?.proposals.find((item) => item.proposalId === proposalId) || null;
+}
+
+/** 沿明确的替代关系取得每条原任务当前真正生效的任务。 */
+function selectEffectiveTasks(source: TestConsoleSource, proposal: TestConsoleProjection["proposal"]) {
+  if (!proposal) return { effectiveTasks: [], missingTaskIds: [] };
+
+  const proposalTasks = (source.collaboration?.tasks || []).filter((task) => {
+    return proposal.distributedTaskIds.includes(task.taskId) || task.evolutionProposalId === proposal.proposalId;
+  });
+  const taskById = new Map(proposalTasks.map((task) => [task.taskId, task]));
+  const effectiveTasks = [] as typeof proposalTasks;
+  const missingTaskIds: string[] = [];
+
+  for (const originalTaskId of proposal.distributedTaskIds) {
+    let currentTask = taskById.get(originalTaskId) || null;
+    let currentTaskId = originalTaskId;
+    const visitedTaskIds = new Set<string>();
+    let resolutionComplete = false;
+
+    while (!visitedTaskIds.has(currentTaskId)) {
+      visitedTaskIds.add(currentTaskId);
+      const replacement = proposalTasks
+        .filter((task) => task.replacementForTaskId === currentTaskId)
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+        .at(-1) || null;
+      if (!replacement) {
+        resolutionComplete = true;
+        break;
+      }
+      currentTask = replacement;
+      currentTaskId = replacement.taskId;
+    }
+
+    if (!resolutionComplete) {
+      missingTaskIds.push(originalTaskId);
+    } else if (currentTask) {
+      effectiveTasks.push(currentTask);
+    } else {
+      missingTaskIds.push(originalTaskId);
+    }
+  }
+
+  return { effectiveTasks, missingTaskIds };
+}
+
+/** 用当前专题与其有效任务链生成测试台唯一状态，禁止各区块各自回退到历史数据。 */
+function createTestConsoleProjection(source: TestConsoleSource): TestConsoleProjection {
+  const proposal = selectCurrentProposal(source);
+  const topic = source.evolution?.topics.find((item) => item.topicId === proposal?.topicId) || null;
+  const { effectiveTasks, missingTaskIds } = selectEffectiveTasks(source, proposal);
+  const awaitingConfirmation = source.evolution?.oneShotConfirmation?.status === "awaiting-user-confirmation"
+    || effectiveTasks.some((task) => task.repairRequiresUserConfirmation === true);
+  const failed = missingTaskIds.length > 0 || effectiveTasks.some((task) => ["blocked", "cancelled", "test-failed"].includes(task.state));
+  const completed = effectiveTasks.length > 0 && effectiveTasks.every((task) => task.state === "integrated");
+  const running = effectiveTasks.some((task) => [
+    "preparing-worktree", "analyzing", "executing", "repairing-execution", "unified-testing", "integrating", "awaiting-restart",
+  ].includes(task.state));
+
+  let status: TestConsoleStatus = "not-run";
+  if (awaitingConfirmation) status = "awaiting-confirmation";
+  else if (failed) status = "failed";
+  else if (completed) status = "completed";
+  else if (running) status = "running";
+
+  return { proposal, topic, effectiveTasks, missingTaskIds, status };
 }
 
 /** 将内部状态名翻译成客户和验收人员都能理解的简短结论。 */
 function statusLabel(status: string, locale: LocaleValue): string {
   const zh: Record<string, string> = {
-    passed: "通过", failed: "未通过", pending: "等待中", running: "进行中", completed: "已完成",
+    passed: "通过", failed: "未通过", pending: "等待中", running: "进行中", completed: "已完成", "awaiting-confirmation": "等待用户确认",
     integrated: "已发布并重启", "pending-acceptance": "等待验收", blocked: "存在卡点", "not-run": "尚未执行",
   };
   const ja: Record<string, string> = {
-    passed: "合格", failed: "不合格", pending: "待機中", running: "実行中", completed: "完了",
+    passed: "合格", failed: "不合格", pending: "待機中", running: "実行中", completed: "完了", "awaiting-confirmation": "ユーザー確認待ち",
     integrated: "公開・再起動済み", "pending-acceptance": "受入確認待ち", blocked: "停止条件あり", "not-run": "未実行",
   };
   return (locale === "ja" ? ja : zh)[status] || status;
@@ -52,23 +126,20 @@ function statusLabel(status: string, locale: LocaleValue): string {
 /** 把已有权威状态整理成只读测试台；本函数不执行测试，也不自行把任务判为通过。 */
 export function createTestConsoleViewModel(source: TestConsoleSource) {
   const { locale } = source;
-  const task = selectTask(source);
-  const proposal = source.evolution?.proposals.find((item) => item.proposalId === task?.evolutionProposalId)
-    || source.evolution?.proposals.at(-1)
-    || null;
-  const topic = source.evolution?.topics.find((item) => item.topicId === proposal?.topicId)
-    || source.evolution?.topics.at(-1)
-    || null;
+  const projection = createTestConsoleProjection(source);
+  const { proposal, topic, effectiveTasks, missingTaskIds, status: effectiveStatus } = projection;
+  const task = [...effectiveTasks].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] || null;
   const run = source.evolution?.oneShotRun || null;
   const astraAppeared = source.modelCatalog.models.some((model) => `${model.id} ${model.displayName}`.toLocaleLowerCase().includes("astra"));
-  const releaseEvent = [...(task?.flowEvents || [])].reverse().find((event) => event.type === "release.restart_healthy");
-  const testEvent = [...(task?.flowEvents || [])].reverse().find((event) => event.type.startsWith("unified_test."));
-  const acceptanceArchive = [...(source.evolution?.archiveRecords || [])].reverse().find((record) => record.category === "acceptance");
+  const flowEvents = effectiveTasks.flatMap((item) => item.flowEvents || []);
+  const releaseEvent = [...flowEvents].reverse().find((event) => event.type === "release.restart_healthy");
+  const testEvent = [...flowEvents].reverse().find((event) => event.type.startsWith("unified_test."));
+  const acceptanceArchive = [...(source.evolution?.archiveRecords || [])].reverse().find((record) => record.category === "acceptance" && record.proposalId === proposal?.proposalId);
   const relevantArchive = (source.evolution?.archiveRecords || [])
     .filter((record) => ["execution", "test", "release", "acceptance", "recovery"].includes(record.category))
-    .filter((record) => !proposal || !record.proposalId || record.proposalId === proposal.proposalId)
+    .filter((record) => record.proposalId === proposal?.proposalId)
     .map((record) => ({ id: record.recordId, title: redactTestConsoleText(record.title), status: record.category, occurredAt: record.occurredAt }));
-  const taskHistory = (task?.flowEvents || []).map((event) => ({
+  const taskHistory = flowEvents.map((event) => ({
     id: event.eventId,
     title: redactTestConsoleText(event.summary),
     status: event.status,
@@ -77,15 +148,20 @@ export function createTestConsoleViewModel(source: TestConsoleSource) {
   const history = [...taskHistory, ...relevantArchive]
     .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
     .slice(0, 24);
-  const changedFiles = [...new Set((task?.executionRecords || []).flatMap((record) => record.changedFiles || []))]
+  const changedFiles = [...new Set(effectiveTasks.flatMap((item) => item.executionRecords || []).flatMap((record) => record.changedFiles || []))]
     .map(redactTestConsoleText)
     .slice(0, 40);
   const technicalEvidence = [
     ...(proposal?.evidence || []),
-    ...(task?.flowEvents || []).flatMap((event) => event.details?.technicalEvidence || []),
-    ...(source.audit?.latestTask?.reasons || []).map((reason) => `${reason.code}：${reason.message}`),
+    ...flowEvents.flatMap((event) => event.details?.technicalEvidence || []),
+    ...(source.audit?.latestTask && effectiveTasks.some((item) => item.taskId === source.audit?.latestTask?.taskId)
+      ? source.audit.latestTask.reasons.map((reason) => `${reason.code}：${reason.message}`)
+      : []),
   ].map(redactTestConsoleText).filter(Boolean).slice(0, 40);
-  const effectiveStatus = run?.status || task?.state || proposal?.status || "not-run";
+  const waitingForConfirmationWithoutTask = effectiveStatus === "awaiting-confirmation" && effectiveTasks.length === 0;
+  const summaryTitle = waitingForConfirmationWithoutTask
+    ? (locale === "ja" ? "ユーザー確認待ち" : "等待用户确认")
+    : redactTestConsoleText(topic?.title || proposal?.title || task?.snapshot.title || (locale === "ja" ? "修正タスクなし" : "暂无修复任务"));
 
   return {
     copy: locale === "ja" ? {
@@ -98,12 +174,12 @@ export function createTestConsoleViewModel(source: TestConsoleSource) {
       runtime: "运行版本", models: "模型列表", unifiedTest: "统一测试", restart: "打包与重启", acceptance: "韩立验收", files: "修改文件",
     },
     summary: {
-      title: redactTestConsoleText(topic?.title || proposal?.title || task?.snapshot.title || (locale === "ja" ? "現在の修正" : "当前修复")),
+      title: summaryTitle,
       status: statusLabel(effectiveStatus, locale),
       statusCode: effectiveStatus,
-      change: redactTestConsoleText(task?.resultSummary?.changes || task?.resultSummary?.solvedProblem || proposal?.content || task?.snapshot.confirmedIntent || ""),
-      remaining: redactTestConsoleText(task?.resultSummary?.remaining || run?.blockingReason || task?.blockingReason || ""),
-      updatedAt: task?.updatedAt || source.evolution?.updatedAt || source.collaboration?.updatedAt || "",
+      change: redactTestConsoleText(waitingForConfirmationWithoutTask ? "" : task?.resultSummary?.changes || task?.resultSummary?.solvedProblem || task?.snapshot.confirmedIntent || proposal?.content || ""),
+      remaining: redactTestConsoleText(missingTaskIds.length > 0 ? `关联任务记录缺失：${missingTaskIds.join("、")}` : task?.resultSummary?.remaining || run?.blockingReason || task?.blockingReason || ""),
+      updatedAt: task?.updatedAt || proposal?.updatedAt || (waitingForConfirmationWithoutTask ? source.evolution?.oneShotConfirmation?.createdAt || "" : ""),
     },
     checks: [
       {
