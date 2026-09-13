@@ -141,8 +141,7 @@ export class HanliApplicationService implements HanliApplicationPort {
         hasValidVersion: validation.hasValidVersion,
         criteria: validation.criteria,
       });
-      const invalidCriteria = validation.criteria.filter((criterion) => !criterion.valid).map((criterion) => criterion.criterionId);
-      throw new Error(`缺少真实交互验收证据：${invalidCriteria.length ? invalidCriteria.join("、") : "运行基础字段"}`);
+      throw new Error(`缺少真实交互验收证据：${validation.invalidCriterionIds.length ? validation.invalidCriterionIds.join("、") : "运行基础字段"}`);
     }
     return this.#store.recordAcceptanceRun(run);
   }

@@ -16,6 +16,7 @@ export interface AcceptanceRunEvidenceValidation {
   hasInteractionSteps: boolean;
   hasValidVersion: boolean;
   criteria: AcceptanceCriterionEvidenceDiagnostic[];
+  invalidCriterionIds: string[];
 }
 
 /**
@@ -45,5 +46,7 @@ export function inspectAcceptanceRunEvidence(run: HanliAcceptanceRunOutDto): Acc
   const hasValidVersion = run.version === 2;
   const hasInteractionSteps = run.stepResults.length > 0;
   const hasEvidence = run.evidenceAttachmentIds.length > 0;
-  return { valid: hasValidVersion && hasInteractionSteps && hasEvidence && criteria.every((criterion) => criterion.valid), hasEvidence, hasInteractionSteps, hasValidVersion, criteria };
+  // 统一生成不合格条件编号，避免不同调用方基于同一诊断再次推导而出现审计与拒绝原因不一致。
+  const invalidCriterionIds = criteria.filter((criterion) => !criterion.valid).map((criterion) => criterion.criterionId);
+  return { valid: hasValidVersion && hasInteractionSteps && hasEvidence && invalidCriterionIds.length === 0, hasEvidence, hasInteractionSteps, hasValidVersion, criteria, invalidCriterionIds };
 }
