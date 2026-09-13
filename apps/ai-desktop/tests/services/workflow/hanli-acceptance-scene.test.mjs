@@ -131,7 +131,7 @@ test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件",
         evidenceAttachmentIds: [`shot-${index}`], startedAt: `2026-09-13T00:00:0${index}.000Z`, completedAt: `2026-09-13T00:00:0${index + 1}.000Z`,
       };
     },
-    onSceneReady: () => { readyCount += 1; }, onInitialPass: () => assert.fail("没有完成态阶段时不应提前完成"), record() {},
+    onSceneReady: () => { readyCount += 1; }, onCompletionReviewReady: () => assert.fail("没有完成态阶段时不应进入完成态复核"), record() {},
   });
   assert.deepEqual(execution, [
     { criteria: [goal.criteria[0]], window: "child" },
@@ -141,6 +141,51 @@ test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件",
   assert.equal(active.size, 0);
   assert.deepEqual(result.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
   assert.equal(result.status, "passed");
+});
+
+test("完成前门禁只交付复核许可，最终全量记录才覆盖原始条件", async () => {
+  const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+  const child = { name: "child", webContents: { id: 88, executeJavaScript: async () => true }, isDestroyed: () => false, once() {}, loadFile: async () => undefined, show() {}, close() {} };
+  const execution = [];
+  const active = new Set();
+  let gate = null;
+  const completionPlan = {
+    reason: "先验证普通条件，再在完成态复核最终条件",
+    segments: [
+      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "current-window", completionReviewRequired: true, conditions: [segment.conditions[1]] },
+    ],
+  };
+  const result = await runHanliAcceptanceSceneSession({
+    goal: currentWindowGoal, plan: completionPlan, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
+    sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) }, createWindow: () => child,
+    execute: async (currentGoal, window) => {
+      execution.push({ criteria: currentGoal.criteria, reviewMode: currentGoal.reviewMode, window: window.name });
+      const index = execution.length;
+      return {
+        version: 2, runId: "completion-review-run", topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "passed", windowTitle: "AI Desktop",
+        initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+        stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: `功能通过 ${index}`, layoutStatus: "passed", layoutActual: `布局通过 ${index}`, layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: "2026-09-13T00:00:00.000Z" }],
+        evidenceAttachmentIds: [`shot-${index}`], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+      };
+    },
+    onSceneReady() {},
+    onCompletionReviewReady: (value) => { gate = value; },
+    record() {},
+  });
+  assert.deepEqual(execution.map((item) => item.reviewMode || "normal"), ["normal", "pre-completion-gate", "post-completion-review"]);
+  assert.deepEqual(gate.evidenceAttachmentIds, ["shot-1", "shot-2"]);
+  assert.equal("stepResults" in gate, false);
+  assert.deepEqual(result.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
+  assert.equal(result.status, "passed");
+  assert.equal(active.size, 0);
+});
+
+test("运行时不把完成前门禁作为自动验收结果提交", () => {
+  const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+  assert.match(runtime, /prepareOneShotCompletionReview\(topic\.topicId, proposal\.proposalId\)/);
+  assert.doesNotMatch(runtime, /completeAutomaticAcceptance\(initialRun/);
+  assert.match(runtime, /completeAutomaticAcceptance\(runResult/);
 });
 function fixture(failure) {
   const registered = new Set(), events = [], handlers = {};

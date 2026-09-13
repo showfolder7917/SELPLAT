@@ -151,6 +151,28 @@ export class EvolutionStateStore {
     }, { phase, actor, actorName, action, status: "running", nextOwner: actorName });
   }
 
+  /** 门禁通过后只投影完成态供只读复核；提案仍是 pending-acceptance，不能提前决定结果。 */
+  prepareOneShotCompletionReview(topicId: string, proposalId: string): EvolutionStateOutDto {
+    const current = this.#state.oneShotRun;
+    const proposal = this.#state.proposals.find((item) => item.proposalId === proposalId);
+    if (!current || current.status !== "running" || current.topicId !== topicId || current.proposalId !== proposalId
+      || proposal?.topicId !== topicId || proposal.status !== "pending-acceptance") {
+      throw new Error("当前运行不能进入完成态只读复核。");
+    }
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.completion_review_ready", topicId, proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.phase = "accepting";
+      run.actor = "han-li";
+      run.actorName = "韩立";
+      run.action = "正在只读复核完成态页面";
+      run.blockingReason = null;
+      // 仅供时间线投影完成态预览；真正完成仍由完整验收记录和结果决定产生。
+      run.resumeMode = "post-completion-review";
+      run.updatedAt = now;
+    }, { phase: "accepting", actor: "han-li", actorName: "韩立", action: "正在只读复核完成态页面", status: "running", nextOwner: "han-li" });
+  }
+
   finishOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();

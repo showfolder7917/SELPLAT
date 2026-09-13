@@ -1,5 +1,5 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
-import type { AcceptanceScenePlanOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
 import { createSegmentGoal, mergeAcceptanceRuns, remapAcceptanceRun } from "./hanli-acceptance-scene-results.js";
@@ -17,7 +17,7 @@ interface AcceptanceSceneSessionOptions {
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
   execute(goal: HanliComputerAcceptanceInDto, window: BrowserWindow): Promise<HanliAcceptanceRunOutDto>;
   onSceneReady(): void;
-  onInitialPass(run: HanliAcceptanceRunOutDto): void;
+  onCompletionReviewReady(gate: CompletionReviewGateOutDto): void;
   record(eventType: string, details: Record<string, unknown>): void;
 }
 
@@ -66,7 +66,14 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
       };
       if (gate.status !== "passed") return mergeAcceptanceRuns(options.goal, [...runs, gate]);
       const initialPass = mergeAcceptanceRuns(options.goal, [...runs, gate]);
-      options.onInitialPass(initialPass);
+      // 门禁记录没有本段原始条件，类型上也不能再被当作完整验收运行提交。
+      options.onCompletionReviewReady({
+        runId: initialPass.runId,
+        topicId: initialPass.topicId,
+        proposalId: initialPass.proposalId,
+        evidenceAttachmentIds: initialPass.evidenceAttachmentIds,
+        summary: initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
+      });
       const priorPhaseEvidence = {
         summary: initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
         evidenceAttachmentIds: initialPass.evidenceAttachmentIds,
