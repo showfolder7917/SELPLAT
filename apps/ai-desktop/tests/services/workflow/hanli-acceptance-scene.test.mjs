@@ -235,6 +235,45 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
   assert.equal(active.size, 0);
 });
 
+test("前序条件失败后仍采集完成态段的原条件证据，但不触发完成态切换", async () => {
+  const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+  const child = { name: "child", webContents: { id: 88, executeJavaScript: async () => true }, isDestroyed: () => false, once() {}, loadFile: async () => undefined, show() {}, close() {} };
+  const execution = [];
+  const records = [];
+  const active = new Set();
+  const completionPlan = {
+    reason: "先记录失败条件，再收集当前窗口条件的真实证据",
+    segments: [
+      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "current-window", completionReviewRequired: true, conditions: [segment.conditions[1]] },
+    ],
+  };
+  const result = await runHanliAcceptanceSceneSession({
+    goal: currentWindowGoal, plan: completionPlan, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
+    sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) }, createWindow: () => child,
+    execute: async (currentGoal, window) => {
+      execution.push({ criteria: currentGoal.criteria, reviewMode: currentGoal.reviewMode, window: window.name });
+      const index = execution.length;
+      const criterionId = currentGoal.criterionIds?.[0] || "criterion-1";
+      const failed = index === 1;
+      return {
+        version: 2, runId: `failure-then-evidence-${index}`, topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: failed ? "failed" : "passed", windowTitle: "AI Desktop",
+        initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+        stepResults: [{ checkId: criterionId, operationIndex: 0, operation: { type: "judgement", criterionId }, status: failed ? "failed" : "passed", actual: failed ? "条件未通过" : "条件已核对", layoutStatus: failed ? "failed" : "passed", layoutActual: failed ? "布局未通过" : "布局已核对", layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: "2026-09-13T00:00:00.000Z" }],
+        evidenceAttachmentIds: [`shot-${index}`], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+      };
+    },
+    onSceneReady() {}, onCompletionReviewReady: () => assert.fail("前序失败不能触发完成态切换"), record: (event, details) => records.push({ event, details }),
+  });
+  assert.deepEqual(execution.map((item) => item.reviewMode || "normal"), ["normal", "normal"]);
+  assert.equal(execution[1].window, "target");
+  assert.deepEqual(result.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
+  assert.equal(result.status, "failed");
+  assert.equal(inspectAcceptanceRunEvidence(result).valid, true);
+  assert.deepEqual(records.filter(({ event }) => event === "hanli.acceptance_scene.completion_review_skipped").map(({ details }) => details.priorStatuses), [["failed"]]);
+  assert.equal(active.size, 0);
+});
+
 test("完成前门禁受阻时只返回能力阻塞，不提交局部记录作为全量验收", async () => {
   const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
   const active = new Set();
