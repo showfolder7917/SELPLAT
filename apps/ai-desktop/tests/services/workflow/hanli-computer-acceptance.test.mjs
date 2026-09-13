@@ -375,9 +375,11 @@ test("工作区树滚动只操作可见固定容器并回执边界", () => {
         unchanged: true,
       },
     };
-    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300, ...expectedRegions });
-    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300, ...expectedRegions });
-    assert.deepEqual(scrollWorkspaceTree(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300, ...expectedRegions });
+    // 生产路径会以函数文本注入渲染器；测试同样在无模块闭包的上下文执行该文本。
+    const executeInjectedScroll = (deltaY) => Function(`return (${scrollWorkspaceTree.toString()})(${deltaY});`)();
+    assert.deepEqual(executeInjectedScroll(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300, ...expectedRegions });
+    assert.deepEqual(executeInjectedScroll(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300, ...expectedRegions });
+    assert.deepEqual(executeInjectedScroll(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300, ...expectedRegions });
   } finally { globalThis.document = previous; }
 });
 test("任务协作页滚动只操作可见的固定业务容器", () => {
