@@ -48,10 +48,18 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         options.onSceneReady();
       }
       const currentGoal = createSegmentGoal(options.goal, segment);
-      if (!segment.completionReviewRequired || options.goal.reviewMode === "post-completion-review") {
+      const canEnterCompletionReview = runs.every((run) => run.status === "passed");
+      if (!segment.completionReviewRequired || options.goal.reviewMode === "post-completion-review" || !canEnterCompletionReview) {
+        if (segment.completionReviewRequired && !canEnterCompletionReview) {
+          // 前序条件已有真实失败时，仍须采集本段原条件的证据，但不得触发业务完成状态变更。
+          options.record("hanli.acceptance_scene.completion_review_skipped", {
+            segmentIndex,
+            conditionIds: segment.conditions.map(({ criterionId }) => criterionId),
+            priorStatuses: runs.map((run) => run.status),
+          });
+        }
         const run = assertSegmentAcceptanceRun(await options.execute(currentGoal, prepared.window), segment);
         runs.push(run);
-        if (run.status !== "passed") return mergeAcceptanceRuns(options.goal, runs);
         continue;
       }
 
