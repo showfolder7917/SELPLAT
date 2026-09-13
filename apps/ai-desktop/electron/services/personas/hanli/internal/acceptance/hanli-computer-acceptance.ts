@@ -705,9 +705,10 @@ function scrollTestConsole(deltaY: number): Record<string, unknown> {
 
 /** 只滚动当前可见设置浮层的固定内容容器，并回执位置，不读取或修改设置内容。 */
 function scrollSettingsPanel(deltaY: number): Record<string, unknown> {
-  const panel = document.querySelector<HTMLElement>(".dev-activitybar .dev-settings");
+  // SELUI 面板使用 position: fixed；可见固定定位元素的 offsetParent 允许为 null，不能以它判断隐藏。
+  const panel = document.querySelector<HTMLElement>(".dev-settings[data-sel-floating-panel=\"developer-settings\"]");
   const content = panel?.querySelector<HTMLElement>(".dev-settings-content");
-  if (!panel || !content || panel.offsetParent === null || content.offsetParent === null || content.clientHeight <= 0) {
+  if (!panel || !content || panel.hidden || !panel.isConnected || !content.isConnected || content.getClientRects().length === 0 || content.clientHeight <= 0) {
     return { status: "hidden" };
   }
   const before = content.scrollTop;
