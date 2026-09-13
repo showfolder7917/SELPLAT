@@ -267,12 +267,13 @@ export class EvolutionStateStore {
     const completionReview = current.resumeMode === "post-completion-review"
       ? findCompletionReviewCheckpoint(this.#state, proposal.proposalId)
       : null;
-    if (!completionReview && !["pending-approval", "supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
+    const redistributing = proposal.status === "approved" && proposal.distributedTaskIds.length === 0;
+    if (!completionReview && !redistributing && !["pending-approval", "supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
     // 依据提案的持久事实回到原阶段；验收故障不得重新分析、分发已经完成的任务。
     const approving = proposal.status === "pending-approval";
     const accepting = proposal.status === "pending-acceptance" || Boolean(completionReview);
     const executing = proposal.status === "executing" || proposal.status === "verifying";
-    const phase = approving ? "approving" : accepting ? "accepting" : executing ? (proposal.status === "verifying" ? "testing" : "executing") : "revising";
+    const phase = redistributing ? "distributing" : approving ? "approving" : accepting ? "accepting" : executing ? (proposal.status === "verifying" ? "testing" : "executing") : "revising";
     const now = new Date().toISOString();
     return this.#commit("one-shot.resumed", current.topicId, current.proposalId, (state) => {
       const run = state.oneShotRun!;
@@ -280,7 +281,7 @@ export class EvolutionStateStore {
       run.phase = phase;
       run.actor = approving || accepting ? "han-li" : "nangong-wan";
       run.actorName = approving || accepting ? "韩立" : "南宫婉";
-      run.action = completionReview ? "正在从完成态复核卡点继续只读验收" : approving ? "正在从原审批卡点重新判断南宫婉提交的方向" : accepting ? "正在从原验收卡点继续真实界面验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
+      run.action = completionReview ? "正在从完成态复核卡点继续只读验收" : redistributing ? "正在从原分发卡点重新拆分并分发任务" : approving ? "正在从原审批卡点重新判断南宫婉提交的方向" : accepting ? "正在从原验收卡点继续真实界面验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
       run.blockingReason = null;
       run.updatedAt = now;
       run.completedAt = null;

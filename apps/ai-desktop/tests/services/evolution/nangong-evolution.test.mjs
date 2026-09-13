@@ -947,6 +947,33 @@ test("专题流程从同一提案卡点原位恢复统一自动运行", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("已审批提案在首次分发失败后从原卡点继续分发", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "approved-distribution-resume-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.beginOneShotRun(workspaceState, "zh-CN");
+    let state = store.createTopic(topicRequest("首次分发失败恢复"));
+    const topicId = state.activeTopicId;
+    state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.updateOneShotRun("approving", "han-li", "韩立", "正在审批", topicId, proposalId);
+    store.decide(proposalId, "approved", "方向通过，进入任务分发", "automatic-han-li", []);
+    store.blockOneShotRun("首次任务分发返回无效结构化结果");
+
+    state = store.resumeOneShotRun();
+
+    assert.equal(state.oneShotRun.runId.startsWith("evolution-one-shot-"), true);
+    assert.equal(state.oneShotRun.topicId, topicId);
+    assert.equal(state.oneShotRun.proposalId, proposalId);
+    assert.equal(state.oneShotRun.status, "running");
+    assert.equal(state.oneShotRun.phase, "distributing");
+    assert.equal(state.oneShotRun.actor, "nangong-wan");
+    assert.match(state.oneShotRun.action, /原分发卡点/);
+    assert.equal(state.automationRuntime.status, "running");
+    assert.deepEqual(state.proposals.at(-1).distributedTaskIds, []);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("自动控制台转人工后只观察且必须明确恢复才能继续", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-handover-"));
   try {
