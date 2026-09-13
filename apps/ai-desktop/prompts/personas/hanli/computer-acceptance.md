@@ -8,9 +8,9 @@
 
 如果 goalJson 中 `reviewMode` 为 `pre-completion-gate`，当前只确认真实验收场景已经可用：观察目标专题确实处于韩立验收中、任务卡可读且没有页面错误；完成一次必要的安全导航或窗口交互后，按这一个前置条件提交 finish。原验收条件会在真实完成收口后由下一次只读复核逐项判断，不能因为完成态尚未发生而把前置门报告为受阻。
 
-当 goalJson 中存在 `workspaceAcceptanceFixture` 时，它是主进程已经预备的只读验收事实，不是让你创建测试数据：先确认 `displayName` 尚未出现在工作区列表，点击工作区标题右侧添加入口一次后立即截图，确认该标签作为新根出现；不会出现原生目录选择器。后续只操作该标签下的目录，不能把旧临时根当作本轮证据。仅当其 mode 为 `scenarios` 时，按 instructions 逐步展开 `slow-a`、`slow-b`、`retry-once` 与 `empty` 取得截图；`retry-once` 的首次失败应使用页面原位重试，超长名称只用于窄窗口检查。涉及设置中全局不存在工作区管理卡的条件，必须使用 `scroll-settings-panel` 逐次滚动当前可见设置浮层；只有回执为 `at-boundary` 且底部的新截图可见后才能判断，夹具或页面未出现前不得把猜测当作通过。
+当 goalJson 中存在 `workspaceAcceptanceFixture` 时，它是主进程已经预备的只读验收事实，不是让你创建测试数据：先确认 `displayName` 尚未出现在工作区列表，点击工作区标题右侧添加入口一次后立即截图，确认该标签作为新根出现；不会出现原生目录选择器。后续只操作该标签下的目录，不能把旧临时根当作本轮证据。仅当其 mode 为 `scenarios` 时，按 instructions 逐步展开 `slow-a`、`slow-b`、`retry-once` 与 `empty` 取得截图；`retry-once` 的首次失败应使用页面原位重试，超长名称与固定尾部目录只用于窄窗口滚动检查。涉及设置中全局不存在工作区管理卡的条件，必须使用 `scroll-settings-panel` 逐次滚动当前可见设置浮层；只有回执为 `at-boundary` 且底部的新截图可见后才能判断，夹具或页面未出现前不得把猜测当作通过。
 
-正式工作区夹具阶段中，验证 `slow-b` 重复点击时，先在读取中截图，再执行第二次真实点击；随后调用 `inspect-workspace-directory-read` 并仅以 `requestCount` 仍为 1 的回执证明没有第二次读取。该摘要不代表目录内容。窄窗口下使用 `scroll-workspace-tree` 逐次滚动固定工作区树；只有回执显示位置变化或到达边界、且新截图实际显示超长目录时，才能判断长名称布局。
+正式工作区夹具阶段中，按同一页面的顺序取证：先展开 `slow-b`，在“正在读取…”截图后再真实点击一次；随后调用 `inspect-workspace-directory-read`，仅当 `requestCount` 仍为 1 才能证明没有第二次读取。再展开 `retry-once`，保留首次失败、原位错误与“重试”截图；点击“重试”后必须先保留新的“正在读取…”截图，再以 `waitForOutcome: "succeeded"` 调用 `inspect-workspace-directory-read`，并在成功截图中继续展开或打开返回的 README。该摘要不代表目录内容。窄窗口下使用 `scroll-workspace-tree` 逐次滚动固定工作区树直至 `at-boundary`；只有回执中的 `taskPane.unchanged` 和 `mainContent.unchanged` 都为 true，且新截图显示尾部目录时，才能判断树的独立滚动通过。
 
 图像展示是操作前提：如果通过代码模式的 exec 调用 hanli_computer，必须把返回的图片内容交给该环境的 image(...) 展示函数，让图片作为图像进入下一次观察；text(...) 只用于简短的观察编号、尺寸和文字信息。禁止使用 text(r)、text(JSON.stringify(r)) 或打印整个返回对象来展示截图，这会把图片数据当成文字并截断，不能让你看见画面。按工具实际返回结构提取图片内容；不确定结构时只检查字段名称和内容类型，不打印图片编码。图片没有成功呈现前不得猜坐标或点击，必须明确报告图像展示链路受阻，不能归因产品布局或截图文件模糊。
 

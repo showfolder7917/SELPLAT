@@ -140,7 +140,7 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；scroll-settings-panel 只滚动当前可见设置浮层的固定内容容器并回执位置，不读取或修改任何设置；scroll-task-collaboration 只滚动当前可见的任务协作页并回执位置变化，不接收坐标且不读取任务正文；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。正式工作区夹具场景可用 scroll-workspace-tree 滚动固定工作区树并回执位置，或 inspect-workspace-directory-read 读取固定夹具目录的请求次数与在途状态；两者不能读取用户目录内容。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；scroll-settings-panel 只滚动当前可见设置浮层的固定内容容器并回执位置，不读取或修改任何设置；scroll-task-collaboration 只滚动当前可见的任务协作页并回执位置变化，不接收坐标且不读取任务正文；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。正式工作区夹具场景可用 scroll-workspace-tree 滚动固定工作区树并回执树、任务区和主内容区的位置，或 inspect-workspace-directory-read 读取固定夹具目录的请求次数与在途状态；传入 waitForOutcome 时只等待既有读取结果，不发起第二次读取。两者不能读取用户目录内容。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
@@ -155,6 +155,7 @@ export class HanliComputerAcceptance {
             endY: { type: "integer" },
             deltaY: { type: "integer" },
             workspaceRelativePath: { type: "string", enum: ["slow-a", "slow-b", "retry-once"], description: "仅供 inspect-workspace-directory-read 使用：读取当前受控夹具固定目录的请求摘要。" },
+            waitForOutcome: { type: "string", enum: ["succeeded", "failed"], description: "仅供 inspect-workspace-directory-read 使用：等待已发起的夹具读取达到指定结果，不会发起新的目录请求。" },
             resizePreset: {
               type: "string",
               enum: ["narrow", "restore"],
@@ -428,7 +429,13 @@ export class HanliComputerAcceptance {
             if (!result) {
               throw new Error("当前夹具目录读取摘要不可用。");
             }
-            workspaceDirectoryReadEvidence = result;
+            workspaceDirectoryReadEvidence = args.waitForOutcome
+              ? await waitForWorkspaceDirectoryRead(
+                workspaceEvidence!,
+                relativePath as "slow-a" | "slow-b" | "retry-once",
+                args.waitForOutcome as "succeeded" | "failed",
+              )
+              : result;
           } else if (args.action === "resize-acceptance-window") {
             // 全应用布局验收不依赖测试台是否打开；尺寸仍限应用支持的预设。
             if (args.resizePreset === "narrow") {
@@ -725,15 +732,63 @@ function scrollSettingsPanel(deltaY: number): Record<string, unknown> {
 /** 只滚动当前可见的固定工作区树，并回执实际位置以证明超长目录检查命中了正确容器。 */
 function scrollWorkspaceTree(deltaY: number): Record<string, unknown> {
   const tree = document.querySelector<HTMLElement>(".workspace-pane .workspace-tree");
-  if (!tree || tree.offsetParent === null || tree.clientHeight <= 0) return { status: "hidden" };
+  const taskPane = document.querySelector<HTMLElement>(".tasks-pane");
+  const mainContent = document.querySelector<HTMLElement>(".workspace-stage-single .dev-main");
+  if (!tree || !taskPane || !mainContent || tree.offsetParent === null || taskPane.offsetParent === null || mainContent.offsetParent === null || tree.clientHeight <= 0) return { status: "hidden" };
+  const taskPaneBefore = readRegionPosition(taskPane);
+  const mainContentBefore = readRegionPosition(mainContent);
   const before = tree.scrollTop;
   tree.scrollTop = Math.max(0, Math.min(tree.scrollHeight - tree.clientHeight, before + deltaY));
   const after = tree.scrollTop;
+  const taskPaneAfter = readRegionPosition(taskPane);
+  const mainContentAfter = readRegionPosition(mainContent);
   return {
     status: after === before ? "at-boundary" : "scrolled",
     scrollTop: Math.round(after),
     maxScrollTop: Math.max(0, Math.round(tree.scrollHeight - tree.clientHeight)),
+    taskPane: { before: taskPaneBefore, after: taskPaneAfter, unchanged: sameRegionPosition(taskPaneBefore, taskPaneAfter) },
+    mainContent: { before: mainContentBefore, after: mainContentAfter, unchanged: sameRegionPosition(mainContentBefore, mainContentAfter) },
   };
+}
+
+/** 仅保存验收区域的可见几何与自身滚动位置，不读取其中的业务正文。 */
+function readRegionPosition(region: HTMLElement): { left: number; top: number; width: number; height: number; scrollTop: number } {
+  const bounds = region.getBoundingClientRect();
+  return {
+    left: Math.round(bounds.left),
+    top: Math.round(bounds.top),
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height),
+    scrollTop: Math.round(region.scrollTop),
+  };
+}
+
+/** 工作区树滚动只能改变自身位置；相邻任务区和主内容区必须保持原位。 */
+function sameRegionPosition(
+  left: { left: number; top: number; width: number; height: number; scrollTop: number },
+  right: { left: number; top: number; width: number; height: number; scrollTop: number },
+): boolean {
+  return left.left === right.left && left.top === right.top && left.width === right.width
+    && left.height === right.height && left.scrollTop === right.scrollTop;
+}
+
+/** 等待已开始的受控夹具读取结束；轮询只读取摘要，绝不触发新的目录请求。 */
+async function waitForWorkspaceDirectoryRead(
+  evidence: WorkspaceAcceptanceEvidencePort,
+  relativePath: "slow-a" | "slow-b" | "retry-once",
+  expectedOutcome: "succeeded" | "failed",
+): Promise<{ relativePath: string; requestCount: number; pending: boolean; outcome: string }> {
+  const deadline = Date.now() + 3_000;
+  let result = evidence.readDirectory(relativePath);
+  while (result?.pending && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    result = evidence.readDirectory(relativePath);
+  }
+  if (!result) throw new Error("当前夹具目录读取摘要不可用。");
+  if (result.pending || result.outcome !== expectedOutcome) {
+    throw new Error(`目录读取未在受控等待内得到 ${expectedOutcome} 结果。当前结果：${result.outcome}。`);
+  }
+  return result;
 }
 
 /** 只展开测试台固定的只读技术证据 Disclosure，不允许操作其中的内容。 */

@@ -30,7 +30,21 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     if (/scrollTaskCollaboration/.test(source)) return taskCollaborationState.status === "has-topics" ? { status: "scrolled", scrollTop: 360, maxScrollTop: 720 } : { status: "hidden" };
     if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
     if (/scrollSettingsPanel/.test(source)) return settingsPanelVisible ? { status: "at-boundary", scrollTop: 720, maxScrollTop: 720 } : { status: "hidden" };
-    if (/scrollWorkspaceTree/.test(source)) return { status: "scrolled", scrollTop: 280, maxScrollTop: 560 };
+    if (/scrollWorkspaceTree/.test(source)) return {
+      status: "scrolled",
+      scrollTop: 280,
+      maxScrollTop: 560,
+      taskPane: {
+        before: { left: 52, top: 322, width: 260, height: 38, scrollTop: 0 },
+        after: { left: 52, top: 322, width: 260, height: 38, scrollTop: 0 },
+        unchanged: true,
+      },
+      mainContent: {
+        before: { left: 312, top: 42, width: 888, height: 734, scrollTop: 0 },
+        after: { left: 312, top: 42, width: 888, height: 734, scrollTop: 0 },
+        unchanged: true,
+      },
+    };
     if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
     if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
     if (/readTaskCollaborationState/.test(source)) return taskCollaborationState;
@@ -273,13 +287,53 @@ test("工作区夹具只允许固定树滚动和当前目录请求摘要", async
   const run = await f.run(async (tools) => {
     const first = id(await observe(tools));
     const scrolled = await tools.call("hanli_computer", { action: "scroll-workspace-tree", reason: "滚动工作区树查看超长目录", observationId: first, deltaY: 280 });
-    assert.deepEqual(JSON.parse(scrolled.contentItems[0].text).interactionEvidence.workspaceTree, { status: "scrolled", scrollTop: 280, maxScrollTop: 560 });
+    assert.deepEqual(JSON.parse(scrolled.contentItems[0].text).interactionEvidence.workspaceTree, {
+      status: "scrolled",
+      scrollTop: 280,
+      maxScrollTop: 560,
+      taskPane: {
+        before: { left: 52, top: 322, width: 260, height: 38, scrollTop: 0 },
+        after: { left: 52, top: 322, width: 260, height: 38, scrollTop: 0 },
+        unchanged: true,
+      },
+      mainContent: {
+        before: { left: 312, top: 42, width: 888, height: 734, scrollTop: 0 },
+        after: { left: 312, top: 42, width: 888, height: 734, scrollTop: 0 },
+        unchanged: true,
+      },
+    });
     const inspected = await tools.call("hanli_computer", { action: "inspect-workspace-directory-read", workspaceRelativePath: "slow-b", reason: "确认重复点击未产生第二次目录读取", observationId: id(scrolled) });
     assert.deepEqual(JSON.parse(inspected.contentItems[0].text).interactionEvidence.workspaceDirectoryRead, { relativePath: "slow-b", requestCount: 1, pending: true, outcome: "started" });
     await finish(tools, id(inspected));
   }, workspaceGoal, { readDirectory: () => ({ relativePath: "slow-b", requestCount: 1, pending: true, outcome: "started" }) });
   assert.equal(run.status, "passed");
   assert.deepEqual(run.interactionSteps.map((step) => step.operation.type), ["scroll-workspace-tree", "inspect-workspace-directory-read"]);
+});
+test("工作区读取摘要可等待既有请求结束而不重复发起目录读取", async () => {
+  const f = fixture();
+  const workspaceGoal = {
+    ...goal,
+    interactionCapabilities: ["workspace-explorer", "workspace-explorer-scenarios"],
+    workspaceAcceptanceFixture: { kind: "workspace-explorer", mode: "scenarios", displayName: "韩立验收工作区-本轮", instructions: [] },
+    preparedScene: { kind: "workspace-explorer-fixture" },
+  };
+  let directoryRead = { relativePath: "retry-once", requestCount: 2, pending: true, outcome: "started" };
+  setTimeout(() => { directoryRead = { relativePath: "retry-once", requestCount: 2, pending: false, outcome: "succeeded" }; }, 60);
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const interacted = await tools.call("hanli_computer", { action: "key", key: "Tab", reason: "保留真实页面交互后等待目录读取完成", observationId: first });
+    const settled = await tools.call("hanli_computer", {
+      action: "inspect-workspace-directory-read",
+      workspaceRelativePath: "retry-once",
+      waitForOutcome: "succeeded",
+      reason: "等待既有重试读取成功，不发起第二次读取",
+      observationId: id(interacted),
+    });
+    assert.deepEqual(JSON.parse(settled.contentItems[0].text).interactionEvidence.workspaceDirectoryRead, { relativePath: "retry-once", requestCount: 2, pending: false, outcome: "succeeded" });
+    await finish(tools, id(settled));
+  }, workspaceGoal, { readDirectory: () => directoryRead });
+  assert.equal(run.status, "passed");
+  assert.deepEqual(run.interactionSteps.map((step) => step.operation.type), ["key", "inspect-workspace-directory-read"]);
 });
 test("工作区专用只读证据不向非夹具场景开放", async () => {
   const f = fixture();
@@ -293,12 +347,37 @@ test("工作区专用只读证据不向非夹具场景开放", async () => {
 test("工作区树滚动只操作可见固定容器并回执边界", () => {
   const previous = globalThis.document;
   let scrollTop = 0;
+  const createStableRegion = (left, top, width, height) => ({
+    offsetParent: {}, scrollTop: 0,
+    getBoundingClientRect: () => ({ left, top, width, height }),
+  });
   const tree = { offsetParent: {}, clientHeight: 200, scrollHeight: 500, get scrollTop() { return scrollTop; }, set scrollTop(value) { scrollTop = value; } };
+  const taskPane = createStableRegion(52, 322, 260, 38);
+  const mainContent = createStableRegion(312, 42, 888, 734);
   try {
-    globalThis.document = { querySelector: (selector) => selector === ".workspace-pane .workspace-tree" ? tree : null };
-    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300 });
-    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300 });
-    assert.deepEqual(scrollWorkspaceTree(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300 });
+    globalThis.document = {
+      querySelector: (selector) => {
+        if (selector === ".workspace-pane .workspace-tree") return tree;
+        if (selector === ".tasks-pane") return taskPane;
+        if (selector === ".workspace-stage-single .dev-main") return mainContent;
+        return null;
+      },
+    };
+    const expectedRegions = {
+      taskPane: {
+        before: { left: 52, top: 322, width: 260, height: 38, scrollTop: 0 },
+        after: { left: 52, top: 322, width: 260, height: 38, scrollTop: 0 },
+        unchanged: true,
+      },
+      mainContent: {
+        before: { left: 312, top: 42, width: 888, height: 734, scrollTop: 0 },
+        after: { left: 312, top: 42, width: 888, height: 734, scrollTop: 0 },
+        unchanged: true,
+      },
+    };
+    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300, ...expectedRegions });
+    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300, ...expectedRegions });
+    assert.deepEqual(scrollWorkspaceTree(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300, ...expectedRegions });
   } finally { globalThis.document = previous; }
 });
 test("任务协作页滚动只操作可见的固定业务容器", () => {
