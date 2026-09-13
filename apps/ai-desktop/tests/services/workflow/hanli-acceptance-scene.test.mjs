@@ -31,6 +31,7 @@ const workspaceFixtureGoal = {
   workspaceAcceptanceFixture: {
     kind: "workspace-explorer",
     mode: "scenarios",
+    displayName: "韩立验收工作区-本轮",
     instructions: ["添加入口会直接登记临时目录。"],
   },
 };
@@ -421,6 +422,8 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
   assert.match(desktopIpc, /hanli\.acceptance_scene\.planning/);
   assert.match(desktopIpc, /planAcceptanceScene\(acceptanceGoal\)/);
   assert.match(desktopIpc, /workspaceAcceptanceFixture\.reserve/);
+  assert.match(desktopIpc, /displayName: fixtureReservation!\.displayName/);
+  assert.match(desktopIpc, /fixtureLabel: fixtureReservation!\.displayName/);
   assert.ok(
     desktopIpc.indexOf("workspaceAcceptanceFixture.reserve") < desktopIpc.indexOf("planAcceptanceScene(acceptanceGoal)"),
     "已签发的受控工作区夹具必须在场景规划前准备好",
