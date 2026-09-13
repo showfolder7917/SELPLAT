@@ -32,6 +32,12 @@ export interface HanliAcceptanceRunOutDto {
   windowTitle: string;
   initialBounds: { x: number; y: number; width: number; height: number };
   finalBounds: { x: number; y: number; width: number; height: number };
+  /**
+   * 受控输入形成的真实操作轨迹；与逐条件结论分离，避免动作记录干扰原条件编号校验。
+   * 旧归档记录可能没有该字段，消费者必须按空轨迹兼容读取。
+   */
+  interactionSteps?: HanliAcceptanceStepResultOutDto[];
+  /** 每条原验收条件唯一的最终判断，不承载点击、滚动等操作轨迹。 */
   stepResults: HanliAcceptanceStepResultOutDto[];
   evidenceAttachmentIds: string[];
   startedAt: string;

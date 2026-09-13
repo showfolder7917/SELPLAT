@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { transform } from "esbuild";
 
-import { AcceptanceFailureScopePolicy } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/acceptance-failure-scope.policy.js";
+// 直接转换当前工作树源码，避免未构建的隔离工作树错误加载旧产物或不存在的构建目录。
+const source = readFileSync("electron/services/workflow/domain/acceptance-failure-scope.policy.ts", "utf8");
+const transformed = await transform(source, { loader: "ts", format: "esm", target: "es2022" });
+const { AcceptanceFailureScopePolicy } = await import(`data:text/javascript;base64,${Buffer.from(transformed.code).toString("base64")}`);
 
 /** 建立只包含范围判断所需字段的原提案。 */
 function proposal(criteria = ["右侧边缘可以拖动加宽", "放大图片后仍可拖动查看边缘"]) {
@@ -21,8 +26,10 @@ function failedRun(criteria = ["右侧边缘可以拖动加宽", "放大图片�
     windowTitle: "AI Desktop",
     initialBounds: { x: 0, y: 0, width: 1000, height: 800 },
     finalBounds: { x: 0, y: 0, width: 1000, height: 800 },
-    stepResults: [
+    interactionSteps: [
       { checkId: "interaction", operationIndex: 0, operation: { type: "click", x: 500, y: 300, reason: "打开图片预览" }, status: "passed", actual: "图片预览已打开", layoutStatus: "passed", layoutActual: "预览布局待判断", layoutScreenshotAttachmentId: "shot-1", screenshotAttachmentId: "shot-1", occurredAt: now },
+    ],
+    stepResults: [
       { checkId, operationIndex: 1, operation: { type: "judgement", criterionId: checkId }, status: "failed", actual: "向右拖动后图片完全离开预览区域", layoutStatus: "passed", layoutActual: "没有额外布局异常", layoutScreenshotAttachmentId: "shot-2", screenshotAttachmentId: "shot-2", occurredAt: now },
     ],
     evidenceAttachmentIds: ["shot-1", "shot-2"],
@@ -44,7 +51,7 @@ test("韩立本轮真实失败逐项对应原验收条件后才允许令狐修�
 
 test("功能成功但布局失败仍提取为原验收范围内缺陷", () => {
   const run = failedRun();
-  const judgement = run.stepResults[1];
+  const judgement = run.stepResults[0];
   judgement.status = "passed";
   judgement.actual = "控件可以选择";
   judgement.layoutStatus = "failed";

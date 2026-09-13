@@ -65,7 +65,8 @@ test("观察后逐步输入，再看真实返回截图才能形成验收记录",
     await finish(tools, id(next));
   });
   assert.equal(run.version, 2); assert.equal(run.status, "passed");
-  assert.equal(run.stepResults[0].operation.type, "click");
+  assert.equal(run.interactionSteps[0].operation.type, "click");
+  assert.equal(run.stepResults[0].operation.type, "judgement");
   assert.equal("planId" in run, false);
   await assert.rejects(observe(saved), /授权已收回/);
 });
@@ -225,7 +226,7 @@ test("测试台验收能力只允许固定容器滚动、只读证据展开和�
   });
   assert.equal(run.status, "passed");
   assert.deepEqual(f.boundsCalls, [{ x: 0, y: 0, width: 1000, height: 700 }, { x: 0, y: 0, width: 1200, height: 800 }]);
-  assert.deepEqual(run.stepResults.slice(0, 3).map((step) => step.operation.type), ["scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window"]);
+  assert.deepEqual(run.interactionSteps.map((step) => step.operation.type), ["scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window"]);
 });
 test("任务协作页只允许固定容器滚动并回执位置变化", async () => {
   const f = fixture(true, undefined, true, { status: "has-topics" });
@@ -236,7 +237,7 @@ test("任务协作页只允许固定容器滚动并回执位置变化", async ()
     await finish(tools, id(scrolled));
   });
   assert.equal(run.status, "passed");
-  assert.equal(run.stepResults[0].operation.type, "scroll-task-collaboration");
+  assert.equal(run.interactionSteps[0].operation.type, "scroll-task-collaboration");
 });
 test("任务协作页滚动只操作可见的固定业务容器", () => {
   const previous = globalThis.document;
@@ -278,7 +279,7 @@ test("任务协作群前置状态只读回执真实缺少空状态，不构成�
     await finish(tools, id(inspected), "blocked");
   });
   assert.equal(run.status, "blocked");
-  assert.equal(run.stepResults[0].operation.type, "inspect-task-collaboration-state");
+  assert.equal(run.interactionSteps[0].operation.type, "inspect-task-collaboration-state");
 });
 test("固定滚动能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
@@ -304,8 +305,8 @@ test("预览拖拽与受控截图发送都形成受限交互记录", async () =>
     await finish(tools, id(sent));
   });
   assert.equal(run.status, "passed");
-  assert.equal(run.stepResults[0].operation.type, "drag");
-  assert.equal(run.stepResults[1].operation.type, "send");
+  assert.equal(run.interactionSteps[0].operation.type, "drag");
+  assert.equal(run.interactionSteps[1].operation.type, "send");
 });
 test("截图发送只允许当前人物固定截图按钮", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
@@ -330,7 +331,7 @@ test("模型验收只聚焦韩立、南宫婉或设置模型控件，值仍由�
     await finish(tools, id(selected));
   });
   assert.equal(run.status, "passed");
-  assert.equal(run.stepResults[0].operation.key, "focus:hanli-model");
+  assert.equal(run.interactionSteps[0].operation.key, "focus:hanli-model");
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
   assert.match(source, /"hanli-model", "nangong-model", "default-model", "reasoning-effort", "service-tier"/);
   assert.match(source, /select\[aria-label="韩立对话模型"\]/);
@@ -372,9 +373,9 @@ test("受控验收消息发送后可作为真实截图证据，悬停也形成�
     await finish(tools, id(hovered));
   });
   assert.equal(run.status, "passed");
-  assert.equal(run.stepResults[0].operation.type, "send");
-  assert.equal(run.stepResults[0].operation.target, "persona-composer");
-  assert.equal(run.stepResults[1].operation.type, "hover");
+  assert.equal(run.interactionSteps[0].operation.type, "send");
+  assert.equal(run.interactionSteps[0].operation.target, "persona-composer");
+  assert.equal(run.interactionSteps[1].operation.type, "hover");
 });
 test("受控发送在输入框或发送按钮不可用时明确拒绝", async () => {
   const f = fixture(true, { status: "发送按钮仍禁用", composerLabel: null });

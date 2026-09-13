@@ -138,6 +138,21 @@ test("最终验收记录在提交前逐项诊断重复、缺失和未登记的�
   assert.equal(missingLayout.criteria[1].layoutScreenshotRegistered, false);
   assert.equal(missingLayout.criteria[1].valid, false);
 });
+test("操作轨迹与逐条件结论分离后仍能通过场景编号校验并保留复现顺序", () => {
+  const segmentWithTwoCriteria = { ...segment, conditions: [segment.conditions[0], { criterionId: "criterion-2", condition: goal.criteria[1] }] };
+  const run = {
+    version: 2, runId: "interaction-run", topicId: "t", proposalId: "p", criteria: goal.criteria, status: "passed", windowTitle: "AI Desktop",
+    initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+    interactionSteps: [{ checkId: "interaction", operationIndex: 0, operation: { type: "click", x: 10, y: 10, reason: "打开工作区" }, status: "passed", actual: "已点击", layoutStatus: "passed", layoutActual: "动作后截图已记录", layoutScreenshotAttachmentId: "interaction-shot", screenshotAttachmentId: "interaction-shot", occurredAt: "2026-09-13T00:00:00.000Z" }],
+    stepResults: goal.criteria.map((_criterion, index) => ({ checkId: `criterion-${index + 1}`, operationIndex: index + 1, operation: { type: "judgement", criterionId: `criterion-${index + 1}` }, status: "passed", actual: "条件已核对", layoutStatus: "passed", layoutActual: "布局已核对", layoutScreenshotAttachmentId: `criterion-shot-${index}`, screenshotAttachmentId: `criterion-shot-${index}`, occurredAt: "2026-09-13T00:00:01.000Z" })),
+    evidenceAttachmentIds: ["interaction-shot", "criterion-shot-0", "criterion-shot-1"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+  };
+  const asserted = assertSegmentAcceptanceRun(run, segmentWithTwoCriteria);
+  const merged = mergeAcceptanceRuns(goal, [asserted]);
+  assert.deepEqual(merged.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
+  assert.deepEqual(merged.interactionSteps.map((item) => item.operation.type), ["click"]);
+  assert.deepEqual([...merged.interactionSteps, ...merged.stepResults].sort((left, right) => left.operationIndex - right.operationIndex).map((item) => item.operation.type), ["click", "judgement", "judgement"]);
+});
 test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件", async () => {
   const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
   const child = {
