@@ -20,7 +20,7 @@ const selectorResult = await build({
 });
 const selectorCompiled = { exports: {} };
 new Function("require", "module", "exports", selectorResult.outputFiles[0].text)(createRequire(import.meta.url), selectorCompiled, selectorCompiled.exports);
-const { latestActiveRecoveryAction } = selectorCompiled.exports;
+const { currentTaskGroupPresentation, latestActiveRecoveryAction } = selectorCompiled.exports;
 function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [], groupStatus = "blocked", proposalStatus = "blocked", resumeMode = "standard", runStatus = "blocked" } = {}) {
   const group = { topicId: "topic-a", proposalId: "proposal-a", nodes, status: groupStatus };
   const evolution = {
@@ -104,4 +104,11 @@ test("业务已完成时只有正式登记的完成态复核卡点显示恢复�
   assert.match(render({ proposalStatus: "completed", resumeMode: "post-completion-review" }), /从卡点继续/);
   assert.equal(render({ proposalStatus: "completed", resumeMode: "standard" }), "");
   assert.equal(render({ pending: true, proposalStatus: "completed", resumeMode: null, runStatus: "running", groupStatus: "completed" }), "");
+});
+
+test("审批阶段发生运行卡点时显示真实阻塞状态和恢复入口", () => {
+  assert.match(render({ proposalStatus: "pending-approval" }), /从卡点继续/);
+  const group = { topicId: "topic-a", proposalId: "proposal-a", status: "waiting-approval" };
+  const run = { topicId: "topic-a", proposalId: "proposal-a", status: "blocked", resumeMode: "standard" };
+  assert.equal(currentTaskGroupPresentation(group, run).status, "blocked");
 });

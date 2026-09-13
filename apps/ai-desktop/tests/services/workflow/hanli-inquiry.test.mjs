@@ -5,7 +5,7 @@ import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/el
 import { nangongInquiryResult, nangongInquiryWithCorrection } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/index.js";
 import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.parser.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
-import { presentHanliTaskStatus } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-task-status.presenter.js";
+import { presentHanliTaskStatus, presentHanliWorkflowStatus } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-task-status.presenter.js";
 
 import { buildHanliRecentConversation } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-method-context.js";
 
@@ -31,6 +31,19 @@ test("韩立把任务失败转换成客户可判断的四段式进度", () => {
   assert.match(content, /失败原因：整体验证未通过/);
   assert.match(content, /接下来：令狐先查明原因/);
   assert.match(content, /需要你处理：暂时不需要/);
+});
+
+test("正式任务建立前的审批卡点也由韩立用客户语言反馈", () => {
+  const content = presentHanliWorkflowStatus({
+    oneShotRun: { runId: "run-1", topicId: "topic", proposalId: "proposal", status: "blocked", phase: "blocked", action: "等待恢复", blockingReason: "审批回答格式不完整", updatedAt: "2026-09-13T00:00:00.000Z" },
+    proposals: [{ proposalId: "proposal", title: "长会话按需加载" }],
+    topics: [{ topicId: "topic", title: "长会话按需加载" }],
+  });
+  assert.match(content, /任务：长会话按需加载/);
+  assert.match(content, /当前在做：当前步骤没有完成/);
+  assert.match(content, /失败原因：审批回答格式不完整/);
+  assert.match(content, /接下来：从原卡点恢复/);
+  assert.match(content, /需要你处理：需要/);
 });
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 

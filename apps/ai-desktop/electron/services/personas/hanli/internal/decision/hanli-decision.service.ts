@@ -45,8 +45,7 @@ export class HanliDecisionService {
       proposalContextJson: JSON.stringify({ proposal, topic }),
       semanticContextJson: JSON.stringify(semanticContext),
     });
-    const response = await this.#dependencies.askHanli(prompt, state);
-    const value = parseJsonObject(response);
+    const value = await this.#askForStructuredDecision(prompt, state);
     const decision = value.decision;
     let advice = "";
     if (typeof value.advice === "string") {
@@ -68,6 +67,22 @@ export class HanliDecisionService {
       decision: decision as "approved" | "rejected" | "supplement-required",
       advice: `${advice}\n\n韩立设计检查：\n${design.notes}`,
     };
+  }
+
+  /** 韩立自己修正偶发的结构化输出错误；三次仍无效才交回统一异常中心。 */
+  async #askForStructuredDecision(prompt: string, state: EvolutionStateOutDto): Promise<Record<string, unknown>> {
+    let request = prompt;
+    let lastError = "";
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const response = await this.#dependencies.askHanli(request, state);
+      try {
+        return parseJsonObject(response);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        request = `${prompt}\n\n上一次回答无法处理：${lastError}\n请重新返回一个完整 JSON 对象，不要附加 Markdown。必须包含 decision、advice 和 designReview；decision 只能是 approved、rejected 或 supplement-required。`;
+      }
+    }
+    throw new Error(`韩立连续 3 次未返回有效的结构化判断：${lastError}`);
   }
 
 }

@@ -14,22 +14,18 @@ import type {
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
 
-/**
- * 把完成态复核的当前卡点投影到原专题卡。
- * 历史专题在只读复核运行时保持 completed；只有等待用户继续时显示 blocked。
- */
+/** 把当前一次性运行的卡点投影到所属专题卡，避免后台已停住而页面仍显示自动处理中。 */
 export function currentTaskGroupPresentation(
   group: CollaborationTimelineGroupOutDto,
   oneShotRun: EvolutionOneShotRunOutDto | null | undefined,
 ): CollaborationTimelineGroupOutDto {
-  const belongsToCompletionReview = oneShotRun?.topicId === group.topicId
-    && oneShotRun.proposalId === group.proposalId
-    && oneShotRun.resumeMode === "post-completion-review";
-  if (!belongsToCompletionReview) return group;
+  const belongsToCurrentRun = oneShotRun?.topicId === group.topicId
+    && oneShotRun.proposalId === group.proposalId;
+  if (!belongsToCurrentRun) return group;
   if (oneShotRun.status === "blocked") {
     return group.status === "blocked" ? group : { ...group, status: "blocked" };
   }
-  if (oneShotRun.status === "running") {
+  if (oneShotRun.status === "running" && oneShotRun.resumeMode === "post-completion-review") {
     return {
       ...group,
       status: "completed",

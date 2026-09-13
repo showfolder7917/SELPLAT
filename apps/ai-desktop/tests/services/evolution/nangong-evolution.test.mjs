@@ -2,17 +2,37 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { build } from "esbuild";
 
-import { PersonaEvolutionRuntime as WorkflowPersonaEvolutionRuntime } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution/persona-evolution.runtime.js";
-import { EvolutionStateStore } from "../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
-import { EvolutionFlowPolicy as EvolutionFlowOrchestrator } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/evolution-flow.policy.js";
-import { HanliNangongDeliberationService } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/evolution/hanli-nangong-deliberation.service.js";
-import { createHanliRuntime } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/index.js";
-import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
-import { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-method-context.js";
-import { NangongConversationAggregate } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/domain/nangong-conversation.aggregate.js";
-import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { controlledTestRoot, projectPaths } from "#test-paths";
+
+// 回归测试只在内存中转换当前工作树源码，避免把其他候选的生成模块当作本轮验证结果。
+async function loadWorkflowSource(entryPoint) {
+  const result = await build({ entryPoints: [entryPoint], bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+
+const [
+  { PersonaEvolutionRuntime: WorkflowPersonaEvolutionRuntime },
+  { EvolutionStateStore },
+  { EvolutionFlowPolicy: EvolutionFlowOrchestrator },
+  { HanliNangongDeliberationService },
+  { createHanliRuntime },
+  { HanliConversationService },
+  { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET },
+  { NangongConversationAggregate },
+  { PromptLibraryFacade },
+] = await Promise.all([
+  loadWorkflowSource("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"),
+  loadWorkflowSource("electron/services/evolution/internal/evolution-state.store.ts"),
+  loadWorkflowSource("electron/services/workflow/domain/evolution-flow.policy.ts"),
+  loadWorkflowSource("electron/services/workflow/internal/evolution/hanli-nangong-deliberation.service.ts"),
+  loadWorkflowSource("electron/services/personas/hanli/index.ts"),
+  loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts"),
+  loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-method-context.ts"),
+  loadWorkflowSource("electron/services/personas/nangong/domain/nangong-conversation.aggregate.ts"),
+  loadWorkflowSource("electron/services/support/capabilities/prompts/index.ts"),
+]);
 
 const prompts = new PromptLibraryFacade(path.join(projectPaths.buildRoot, "prompt-bundle"));
 

@@ -7,4 +7,4 @@ export {
   type HanliRuntime,
   type HanliWorkflowPort,
 } from "./hanli.facade.js";
-export { presentHanliTaskStatus } from "./internal/conversation/hanli-task-status.presenter.js";
+export { presentHanliTaskStatus, presentHanliWorkflowStatus } from "./internal/conversation/hanli-task-status.presenter.js";

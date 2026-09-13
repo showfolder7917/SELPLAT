@@ -175,6 +175,11 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "waiting", "已保留卡点，当前为人工暂停或业务选择，需用户明确后继续，不自动改写授权。");
       return;
     }
+    // 审批尚未形成执行任务时，模型结构化输出异常只能保留给韩立和南宫婉重新处理，不能伪装成实施失败派发令狐。
+    if (event.payload.operation === "review_one_shot_proposal") {
+      this.#phase(event, state, "waiting", "韩立审批尚未形成执行任务，已保留运行时异常等待重新审批或提案调查；不创建令狐修复任务。");
+      return;
+    }
     // 验收卡点中的 task 只是已经集成的原开发任务；它不能代替令狐调查当前真实界面阻塞。
     if (task && !isAcceptanceCheckpoint) {
       const member = this.options.collaboration().members.find((item) => item.memberId === task.executorMemberId);

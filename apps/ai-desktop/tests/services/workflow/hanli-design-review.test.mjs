@@ -48,3 +48,32 @@ test("非界面方案可以说明布局不适用，但不能跳过架构检查",
   review.architecture.status = "not-applicable";
   assert.equal((await decide(review)).decision, "supplement-required");
 });
+
+test("韩立会自行重试偶发的无效 JSON，修正后继续原审批", async () => {
+  let attempts = 0;
+  const service = new HanliDecisionService({
+    store: { state: () => ({ topics: [{ topicId: "topic", evidence }] }) },
+    memory: null, prompts: { render: () => "review" },
+    askHanli: async (prompt) => {
+      attempts += 1;
+      if (attempts === 1) return '{"decision":"approved"';
+      assert.match(prompt, /上一次回答无法处理/);
+      return JSON.stringify({ decision: "approved", advice: "建议通过", designReview: reviewed() });
+    },
+    readStableUserId: () => "test", readProjectScope: () => "test",
+  });
+  assert.equal((await service.reviewOneShotProposal(proposal)).decision, "approved");
+  assert.equal(attempts, 2);
+});
+
+test("韩立连续三次无法形成有效 JSON 后才上报运行异常", async () => {
+  let attempts = 0;
+  const service = new HanliDecisionService({
+    store: { state: () => ({ topics: [{ topicId: "topic", evidence }] }) },
+    memory: null, prompts: { render: () => "review" },
+    askHanli: async () => { attempts += 1; return "无法解析"; },
+    readStableUserId: () => "test", readProjectScope: () => "test",
+  });
+  await assert.rejects(service.reviewOneShotProposal(proposal), /连续 3 次/);
+  assert.equal(attempts, 3);
+});

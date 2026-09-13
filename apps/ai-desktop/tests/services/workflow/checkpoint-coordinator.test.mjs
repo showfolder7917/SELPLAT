@@ -109,6 +109,17 @@ test("韩立工具受阻只允许修验收能力，不能反向修改产品页�
   assert.ok(repair.constraints.some((item) => item.includes("不得修改产品页面来迎合")));
 });
 
+test("韩立审批前的结构化结果异常保留历史，不派发令狐修复", async () => {
+  const f = fixture();
+  f.event.payload.operation = "review_one_shot_proposal";
+  f.event.payload.phase = "approving";
+  f.event.payload.recoveryPoint = "正在审批提案";
+  await f.run();
+  assert.equal(f.effects.submitted.length, 0);
+  assert.equal(f.event.payload.checkpoint.phase, "waiting");
+  assert.match(f.event.payload.checkpoint.latestProgress, /不创建令狐修复任务/);
+});
+
 test("非验收任务完成集成后仍可直接解除原执行卡点", async () => {
   // 普通执行阶段卡点仍以原任务完成集成为解除依据，避免影响已有恢复路径。
   const f = fixture();

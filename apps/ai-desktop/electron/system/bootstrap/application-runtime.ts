@@ -113,7 +113,7 @@ import {
 } from "../../services/workflow/index.js";
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
 import { createAcceptanceSceneSubmission, createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
-import { createHanliRuntime, presentHanliTaskStatus } from "../../services/personas/hanli/index.js";
+import { createHanliRuntime, presentHanliTaskStatus, presentHanliWorkflowStatus } from "../../services/personas/hanli/index.js";
 import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
@@ -496,8 +496,28 @@ export async function startApplication(): Promise<void> {
   }) : null;
   // IPC 首次读取和后续协作状态推送必须共用这一隔离会话，避免正式专题覆盖空状态窗口。
   const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession();
+  /** 把一条去重后的流程状态写入韩立会话，并立即推送给现有窗口。 */
+  const publishHanliInternalStatus = (messageId: string, content: string, createdAt: string, correlationId: string): boolean => {
+    if (!collaborationMemory) return false;
+    try {
+      const activeConversation = collaborationMemory.readPersonaConversation("han-li");
+      if (!activeConversation.conversationId) return false;
+      if (activeConversation.messages.some((message) => message.messageId === messageId)) return true;
+      const conversation = collaborationMemory.appendPersonaInternalMessage({
+        ownerPersonaId: "han-li", conversationId: activeConversation.conversationId,
+        messageId, speakerPersonaId: "han-li", content, createdAt,
+      });
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
+      return true;
+    } catch (error) {
+      eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "hanli-task-status", operation: "publish_customer_status", error, correlationId });
+      return false;
+    }
+  };
   // 同一业务事件只向韩立客户会话反馈一次；心跳和普通状态刷新不制造重复消息。
   const publishedHanliTaskStatusEventIds = new Set<string>();
+  // 一次性流程在正式任务建立前和最终验收阶段也只反馈一次。
+  const publishedHanliWorkflowStatusKeys = new Set<string>();
   let linghuRuntime: LinghuRuntime | undefined;
   const collaborationContext = createCollaborationContext({
     startup,
@@ -536,22 +556,9 @@ export async function startApplication(): Promise<void> {
           if (task.initiator?.memberId !== "han-li" && task.automationSource !== "linghu-safeguard") continue;
           const content = presentHanliTaskStatus(task, latest);
           if (!content) continue;
-          try {
-            const activeConversation = collaborationMemory.readPersonaConversation("han-li");
-            if (!activeConversation.conversationId) continue;
-            const messageId = `hanli-task-status:${task.taskId}:${latest.eventId}`;
-            if (activeConversation.messages.some((message) => message.messageId === messageId)) {
-              publishedHanliTaskStatusEventIds.add(latest.eventId);
-              continue;
-            }
-            const conversation = collaborationMemory.appendPersonaInternalMessage({
-              ownerPersonaId: "han-li", conversationId: activeConversation.conversationId,
-              messageId, speakerPersonaId: "han-li", content, createdAt: latest.occurredAt,
-            });
+          const messageId = `hanli-task-status:${task.taskId}:${latest.eventId}`;
+          if (publishHanliInternalStatus(messageId, content, latest.occurredAt, task.taskId)) {
             publishedHanliTaskStatusEventIds.add(latest.eventId);
-            for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
-          } catch (error) {
-            eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "hanli-task-status", operation: "publish_customer_status", error, correlationId: task.taskId });
           }
         }
       }
@@ -836,6 +843,17 @@ export async function startApplication(): Promise<void> {
       eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_evolution_state", error, correlationId: topicId || proposalId || undefined, details: { reason, topicId, proposalId } });
     }
     eventCenter.recordEvent("nangong.evolution.state_changed", { reason, topicId, proposalId, activeTopicId: state.activeTopicId });
+    const run = state.oneShotRun;
+    const workflowStatus = presentHanliWorkflowStatus(state);
+    if (run && workflowStatus) {
+      const statusKey = `${run.runId}:${run.updatedAt}`;
+      if (!publishedHanliWorkflowStatusKeys.has(statusKey)) {
+        const messageId = `hanli-workflow-status:${statusKey}`;
+        if (publishHanliInternalStatus(messageId, workflowStatus, run.updatedAt, proposalId || topicId || run.runId)) {
+          publishedHanliWorkflowStatusKeys.add(statusKey);
+        }
+      }
+    }
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:evolution-state", { state, reason, topicId, proposalId });
     }

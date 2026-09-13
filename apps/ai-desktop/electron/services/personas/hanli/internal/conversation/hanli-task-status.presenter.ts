@@ -1,4 +1,5 @@
 import type { CollaborationFlowEventOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
+import type { EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 
 const VISIBLE_EVENTS = new Set<CollaborationFlowEventOutDto["type"]>([
   "task.scope_revised", "executor.assigned", "executor.reassigned", "technical_analysis.ready",
@@ -21,6 +22,49 @@ export function presentHanliTaskStatus(task: CollaborationTaskOutDto, event: Col
       ? "需要。请确认任务卡中列出的修改范围后继续。"
       : "暂时不需要；需要你决定范围或授权时，我会明确说明。";
   return [`任务：${task.snapshot.title}`, `当前在做：${current}`, `失败原因：${failed}`, `接下来：${next}`, `需要你处理：${action}`].join("\n");
+}
+
+/** 在正式执行任务建立前及最终验收阶段，把统一流程状态转换成客户能读懂的反馈。 */
+export function presentHanliWorkflowStatus(state: EvolutionStateOutDto): string | null {
+  const run = state.oneShotRun;
+  if (!run) return null;
+  const proposal = run.proposalId ? state.proposals.find((item) => item.proposalId === run.proposalId) : null;
+  const topic = run.topicId ? state.topics.find((item) => item.topicId === run.topicId) : null;
+  const title = proposal?.title || topic?.title || "当前需求";
+  if (run.status === "running" && ["executing", "testing"].includes(run.phase)) return null;
+  const current = workflowCurrentStatus(run);
+  const failed = run.status === "blocked" ? run.blockingReason || "当前步骤没有完成。" : "目前没有新的失败。";
+  const next = workflowNextStep(run);
+  const action = run.status === "blocked"
+    ? "需要。请在任务协作群查看原因并选择“从卡点继续”；需要确认范围或授权时我会单独说明。"
+    : "暂时不需要；需要你决定范围或授权时，我会明确说明。";
+  return [`任务：${title}`, `当前在做：${current}`, `失败原因：${failed}`, `接下来：${next}`, `需要你处理：${action}`].join("\n");
+}
+
+function workflowCurrentStatus(run: NonNullable<EvolutionStateOutDto["oneShotRun"]>): string {
+  if (run.status === "blocked") return "当前步骤没有完成，流程已停在可恢复位置。";
+  if (run.status === "completed") return "本轮任务和真实页面验收已经完成。";
+  switch (run.phase) {
+    case "preparing-topic": return "韩立正在明确需求，南宫婉正在补齐事实。";
+    case "forming-proposal": return "南宫婉正在根据调查结果整理修复方案。";
+    case "approving": return "韩立正在检查方案的架构、页面布局和用户操作路径。";
+    case "distributing": return "方案已通过，南宫婉正在拆分并指派执行任务。";
+    case "accepting": return "韩立正在按真实用户路径检查新版本。";
+    default: return run.action;
+  }
+}
+
+function workflowNextStep(run: NonNullable<EvolutionStateOutDto["oneShotRun"]>): string {
+  if (run.status === "blocked") return "从原卡点恢复后重新执行当前步骤，不新建重复专题。";
+  if (run.status === "completed") return "归档本轮记录；自动托管开启时继续寻找下一个有证据的问题。";
+  switch (run.phase) {
+    case "preparing-topic": return "形成清楚的目标和范围后交给南宫婉整理方案。";
+    case "forming-proposal": return "方案形成后由韩立检查并决定是否可以执行。";
+    case "approving": return "审批通过后由南宫婉指派普通执行人。";
+    case "distributing": return "执行人接收任务后开始修改和自检。";
+    case "accepting": return "验收通过后完成本轮；失败则按真实原因回到对应步骤。";
+    default: return "完成当前步骤后继续下一阶段。";
+  }
 }
 
 function currentStatus(event: CollaborationFlowEventOutDto): string {

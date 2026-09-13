@@ -77,6 +77,7 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
     && (oneShotRun.status === "blocked" || evolutionState.automationRuntime.status === "paused");
   // 可恢复提案状态覆盖普通卡点；已完成提案只接受后端显式登记的完成态复核模式。
   const resumableProposalStates = [
+    "pending-approval",
     "supplement-required",
     "rejected",
     "blocked",
