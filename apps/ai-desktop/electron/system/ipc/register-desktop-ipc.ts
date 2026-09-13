@@ -18,6 +18,7 @@ import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.j
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
+import { WorkspaceAcceptanceFixture } from "./workspace-acceptance-fixture.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
 import { registerCodexIpc } from "./domains/register-codex-ipc.js";
 import { registerConversationIpc } from "./domains/register-conversation-ipc.js";
@@ -125,6 +126,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
+  // 临时夹具只在已签发的工作区验收中被原登记 IPC 消费，普通用户操作没有该选择来源。
+  const workspaceAcceptanceFixture = new WorkspaceAcceptanceFixture(workspaces, app.getPath("temp"));
   // 仅登记被韩立动态工具打开的短生命周期空状态窗口，正式窗口绝不进入该投影。
   let screenCaptureAttemptId = 0;
 
@@ -156,21 +159,29 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       const groups = snapshot?.groups.filter((group) => group.topicId === goal.topicId && group.proposalId === goal.proposalId) || [];
       return groups.length ? { version: snapshot!.version, groups: structuredClone(groups), updatedAt: snapshot!.updatedAt } : undefined;
     })() : undefined;
-    const run = await runHanliAcceptanceSceneSession({
-      goal,
-      plan,
-      targetWindow,
-      targetBounds,
-      preloadPath,
-      rendererRoot,
-      sessions: acceptanceEmptyTaskGroupSession,
-      taskHandoff,
-      createWindow: (options) => new BrowserWindow(options),
-      execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window),
-      onSceneReady,
-      onCompletionReviewReady,
-      record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
-    });
+    const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
+    if (workspaceExplorerAcceptance) workspaceAcceptanceFixture.reserve();
+    let run: Awaited<ReturnType<typeof runHanliAcceptanceSceneSession>> | null = null;
+    try {
+      run = await runHanliAcceptanceSceneSession({
+        goal,
+        plan,
+        targetWindow,
+        targetBounds,
+        preloadPath,
+        rendererRoot,
+        sessions: acceptanceEmptyTaskGroupSession,
+        taskHandoff,
+        createWindow: (options) => new BrowserWindow(options),
+        execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window),
+        onSceneReady,
+        onCompletionReviewReady,
+        record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
+      });
+    } finally {
+      if (workspaceExplorerAcceptance) workspaceAcceptanceFixture.cleanup();
+    }
+    if (!run) throw new Error("韩立验收未产生运行记录。");
     audit.recordEvent("hanli.acceptance.real_app_checked", {
       runId: run.runId,
       topicId: run.topicId,
@@ -303,7 +314,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
   registerSettingsIpc(settings, eventCenter);
-  registerWorkspaceIpc(workspaces, eventCenter);
+  registerWorkspaceIpc(workspaces, eventCenter, () => workspaceAcceptanceFixture.takeDirectory());
   registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints, acceptanceEmptyTaskGroupSession);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });

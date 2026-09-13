@@ -1,6 +1,14 @@
 import type { AcceptanceSceneSegmentOutDto } from "./acceptance-scene.out.dto.js";
 
 /**
+ * 运行时签发给韩立真实验收会话的最小交互范围。
+ *
+ * 生产者：演化运行时；消费者：韩立窗口验收器。
+ * 数据方向：已批准提案 -> 运行时 -> 验收器；禁止职责：模型和 Renderer 不能自行添加此范围。
+ */
+export type HanliAcceptanceInteractionCapability = "workspace-explorer";
+
+/**
  * 场景准备前由演化运行时生成的只读身份快照。
  *
  * 生产者：一次性演化运行时；消费者：韩立场景规划器。
@@ -26,6 +34,12 @@ export interface HanliComputerAcceptanceInDto {
   proposalId: string;
   title: string;
   criteria: string[];
+  /**
+   * 当前提案明确允许验收器执行的受限页面交互；缺省时保持既有导航白名单。
+   *
+   * 来源：演化运行时根据已批准范围签发；生命周期：仅当前验收运行有效；安全边界：不能由场景计划或模型文字提升。
+   */
+  interactionCapabilities?: HanliAcceptanceInteractionCapability[];
   /** 仅当前窗口场景必须提供的运行时身份事实，用于阻止模型臆测记录缺失。 */
   sceneContext?: AcceptanceSceneRuntimeContextOutDto;
   /** 韩立当前证据阶段的已准备场景，不代表页面验收通过。 */
