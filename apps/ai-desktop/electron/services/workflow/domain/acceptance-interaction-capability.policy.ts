@@ -10,10 +10,10 @@ import type { HanliAcceptanceInteractionCapability } from "../../../../contracts
  */
 export function resolveAcceptanceInteractionCapabilities(proposal: EvolutionProposalOutDto): HanliAcceptanceInteractionCapability[] {
   const approvedScope = [proposal.content, ...proposal.impactScope, ...proposal.acceptanceCriteria].join("\n");
-  const hasWorkspaceExplorerScope = /左侧.*(?:Explorer|资源浏览)|工作区.*(?:添加|目录|文件)/u.test(approvedScope)
-    && /添加工作区/u.test(approvedScope)
-    && /目录/u.test(approvedScope)
-    && /(?:只读.*(?:查看|预览)|文件.*(?:查看|预览))/u.test(approvedScope);
+  // 受控目录场景可能只验读取、重试或树滚动；以工作区表面和目录数据同时出现为准，不能强制要求无关的添加或文件预览文案。
+  const hasWorkspaceExplorerSurface = /左侧.*(?:Explorer|资源浏览)|(?:受控)?工作区.*(?:目录|树|资源浏览)|工作区树/u.test(approvedScope);
+  const hasWorkspaceExplorerDataScope = /(?:受控)?工作区.*(?:目录|树|读取|文件)|目录.*(?:读取|树|文件|滚动|溢出)|文件.*(?:查看|预览|读取)/u.test(approvedScope);
+  const hasWorkspaceExplorerScope = hasWorkspaceExplorerSurface && hasWorkspaceExplorerDataScope;
   // 任何一项明确的受控场景都需要 scenarios 夹具；要求所有场景同时出现会让重复读取或长目录验收错误退回 basic。
   const hasWorkspaceExplorerScenarioScope = hasWorkspaceExplorerScope && (
     /(?:加载|并行|重复(?:点击|读取|请求))/u.test(approvedScope)
