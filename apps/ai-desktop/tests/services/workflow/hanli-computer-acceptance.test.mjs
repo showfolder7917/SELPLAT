@@ -316,20 +316,22 @@ test("任务协作页滚动只操作可见的固定业务容器", () => {
     assert.deepEqual(scrollTaskCollaboration(1), { status: "at-boundary", scrollTop: 500, maxScrollTop: 500 });
   } finally { globalThis.document = previous; }
 });
-test("设置浮层滚动只操作当前可见的固定内容容器", () => {
+test("设置浮层滚动接受可见固定定位面板，并拒绝真正隐藏的容器", () => {
   const previous = globalThis.document;
   let scrollTop = 0;
   const content = {
-    offsetParent: {}, clientHeight: 200, scrollHeight: 500,
+    isConnected: true, clientHeight: 200, scrollHeight: 500, getClientRects: () => [{}],
     get scrollTop() { return scrollTop; },
     set scrollTop(value) { scrollTop = value; },
   };
-  const panel = { offsetParent: {}, querySelector: (selector) => selector === ".dev-settings-content" ? content : null };
+  const panel = { hidden: false, isConnected: true, offsetParent: null, querySelector: (selector) => selector === ".dev-settings-content" ? content : null };
   try {
-    globalThis.document = { querySelector: (selector) => selector === ".dev-activitybar .dev-settings" ? panel : null };
+    globalThis.document = { querySelector: (selector) => selector === ".dev-settings[data-sel-floating-panel=\"developer-settings\"]" ? panel : null };
     assert.deepEqual(scrollSettingsPanel(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300 });
     assert.deepEqual(scrollSettingsPanel(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300 });
     assert.deepEqual(scrollSettingsPanel(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300 });
+    panel.hidden = true;
+    assert.deepEqual(scrollSettingsPanel(1), { status: "hidden" });
   } finally { globalThis.document = previous; }
 });
 test("隐藏测试台不阻止当前页面的窄窗口验收", async () => {
@@ -366,8 +368,10 @@ test("固定滚动能力不放宽通用点击、拖拽或任意窗口尺寸", ()
   assert.match(source, /scroll-test-console/);
   assert.match(source, /\.dev-test-console-content/);
   assert.match(source, /scroll-settings-panel/);
-  assert.match(source, /\.dev-activitybar \.dev-settings/);
+  assert.match(source, /data-sel-floating-panel/);
   assert.match(source, /\.dev-settings-content/);
+  assert.match(source, /panel\.hidden/);
+  assert.doesNotMatch(source.slice(source.indexOf("function scrollSettingsPanel"), source.indexOf("function scrollWorkspaceTree")), /panel\.offsetParent\s*===/);
   assert.doesNotMatch(source, /settingsPanelSelector/);
   assert.match(source, /expand-test-console-evidence/);
   assert.match(source, /\.test-console-disclosure/);
