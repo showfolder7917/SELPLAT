@@ -9,7 +9,7 @@ import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } f
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions } from "./internal/application/hanli-application.service.js";
-import { HanliComputerAcceptance } from "./internal/acceptance/hanli-computer-acceptance.js";
+import { HanliComputerAcceptance, type WorkspaceAcceptanceEvidencePort } from "./internal/acceptance/hanli-computer-acceptance.js";
 import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semantic-extraction.runner.js";
 
 /** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */
@@ -122,14 +122,14 @@ export class HanliFacade {
     return this.#application.completeAutomaticAcceptance(run, idempotencyKey);
   }
   /** 每次工具调用返回真实截图，韩立自行选择下一步并形成结论。 */
-  executeComputerAcceptance(goal: HanliComputerAcceptanceInDto, targetWindow: BrowserWindow) {
+  executeComputerAcceptance(goal: HanliComputerAcceptanceInDto, targetWindow: BrowserWindow, workspaceEvidence?: WorkspaceAcceptanceEvidencePort) {
     if (!this.#options.computerAcceptance) {
       throw new Error("韩立Computer Use尚未接入");
     }
     return this.#computer.run(goal, targetWindow, (tools, session) => this.#options.computerAcceptance!(goal, tools, session), (content) => {
       // 验收步骤属于专题审计，不是客户与韩立的自由讨论；仅记录事件，避免污染客户可见会话及其上下文。
       this.#options.recordEvent("hanli.acceptance.computer_progress", { proposalId: goal.proposalId, content });
-    });
+    }, workspaceEvidence);
   }
   /** 审批最终执行结果；旧提案与既有验收证据不会被覆盖。 */
   decideResult(proposalId: string, request: DecideHanliResultInDto): EvolutionStateOutDto {

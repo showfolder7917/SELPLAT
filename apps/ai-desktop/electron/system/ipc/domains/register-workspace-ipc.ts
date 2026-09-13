@@ -7,6 +7,7 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../../services/suppor
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 interface WorkspaceAcceptanceFixturePort {
+  isDirectorySelectionBlocked(senderWebContentsId: number): boolean;
   takeDirectory(senderWebContentsId: number): string | null;
   registerWorkspace(senderWebContentsId: number, directory: string, state: WorkspaceStateOutDto): { displayName: string; workspaceId: string } | null;
   readDirectory(senderWebContentsId: number, workspaceId: string, relativePath: string): { fixtureLabel: string; scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
@@ -18,6 +19,10 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
   handle("desktop:get-workspaces", () => workspaces.read());
   handle("desktop:add-workspace", async (event) => {
     // 韩立验收只能消费主进程预备的一次性目录；不存在预备目录时保留用户原生选择流程。
+    if (acceptanceFixture?.isDirectorySelectionBlocked(event.sender.id)) {
+      eventCenter.recordEvent("workspace.fixture_selection_blocked", { source: "hanli-acceptance-fixture", reason: "fixture-scene-inactive-or-consumed" });
+      return workspaces.read();
+    }
     const acceptanceDirectory = acceptanceFixture?.takeDirectory(event.sender.id) || null;
     if (acceptanceDirectory) {
       const state = workspaces.add(acceptanceDirectory);

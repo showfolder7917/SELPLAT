@@ -4,6 +4,11 @@ import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/i
 import type { AttachmentFacade } from "../../../../support/platform/attachments/index.js";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
+/** 仅把当前受控夹具的目录读取计数投影给验收工具，禁止读取用户工作区路径、内容或普通审计。 */
+export interface WorkspaceAcceptanceEvidencePort {
+  readDirectory(relativePath: "slow-a" | "slow-b" | "retry-once"): { relativePath: string; requestCount: number; pending: boolean; outcome: string } | null;
+}
+
 /** 仅提供当前应用窗口的单步输入和真实截图，下一动作由模型看到结果后选择。 */
 export class HanliComputerAcceptance {
   /** 当前是否已有一轮窗口验收在执行；同一窗口不允许并发控制。 */
@@ -23,6 +28,7 @@ export class HanliComputerAcceptance {
       session: { beginFinalization: () => boolean },
     ) => Promise<void>,
     progress: (message: string) => void,
+    workspaceEvidence?: WorkspaceAcceptanceEvidencePort,
   ): Promise<HanliAcceptanceRunOutDto> {
     if (this.#active) {
       throw new Error("韩立正在验收，不能同时控制同一窗口。");
@@ -59,6 +65,10 @@ export class HanliComputerAcceptance {
     const personaConversationLifecycleScene = goal.preparedScene?.kind === "persona-conversation-lifecycle" || goal.preparedScene?.kind === "persona-conversation-with-task-handoff";
     // 工作区验收能力只能由运行时随当前已批准目标签发；场景计划和模型回合均不能自行扩大点击范围。
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
+    const workspaceFixtureEvidenceEnabled = workspaceExplorerAcceptance
+      && goal.preparedScene?.kind === "workspace-explorer-fixture"
+      && goal.workspaceAcceptanceFixture?.mode === "scenarios"
+      && !!workspaceEvidence;
     let completed = false;
     // 终态回合复用同一动态工具，但在模型遗漏 finish 时只保留提交判断这一条路径。
     let finalizationOnly = false;
@@ -130,13 +140,13 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；scroll-task-collaboration 只滚动当前可见的任务协作页并回执位置变化，不接收坐标且不读取任务正文；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；scroll-task-collaboration 只滚动当前可见的任务协作页并回执位置变化，不接收坐标且不读取任务正文；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。正式工作区夹具场景可用 scroll-workspace-tree 滚动固定工作区树并回执位置，或 inspect-workspace-directory-read 读取固定夹具目录的请求次数与在途状态；两者不能读取用户目录内容。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "scroll-test-console", "expand-test-console-evidence", "inspect-task-collaboration-state", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "scroll-test-console", "scroll-workspace-tree", "expand-test-console-evidence", "inspect-task-collaboration-state", "inspect-workspace-directory-read", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
             },
             observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
@@ -144,6 +154,7 @@ export class HanliComputerAcceptance {
             endX: { type: "integer" },
             endY: { type: "integer" },
             deltaY: { type: "integer" },
+            workspaceRelativePath: { type: "string", enum: ["slow-a", "slow-b", "retry-once"], description: "仅供 inspect-workspace-directory-read 使用：读取当前受控夹具固定目录的请求摘要。" },
             resizePreset: {
               type: "string",
               enum: ["narrow", "restore"],
@@ -317,6 +328,8 @@ export class HanliComputerAcceptance {
           let dragEvidence: Record<string, unknown> | null = null;
           let testConsoleEvidence: Record<string, unknown> | null = null;
           let taskCollaborationEvidence: Record<string, unknown> | null = null;
+          let workspaceTreeEvidence: Record<string, unknown> | null = null;
+          let workspaceDirectoryReadEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
           if (args.action === "send-test-message") {
             // 固定文案、当前人物输入框和人物维度单次上限共同限制真实发送的业务副作用。
@@ -370,6 +383,19 @@ export class HanliComputerAcceptance {
               throw new Error(`测试台内容未滚动：${String(result.status)}。`);
             }
             testConsoleEvidence = result;
+          } else if (args.action === "scroll-workspace-tree") {
+            if (!workspaceFixtureEvidenceEnabled) {
+              throw new Error("工作区树滚动回执只允许当前正式夹具验收阶段使用。");
+            }
+            const deltaY = Number(args.deltaY);
+            if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
+              throw new Error("工作区树滚动距离必须为非零整数且不超过1000。");
+            }
+            const result = await window.webContents.executeJavaScript(`(${scrollWorkspaceTree.toString()})(${deltaY})`) as Record<string, unknown>;
+            if (result.status !== "scrolled" && result.status !== "at-boundary") {
+              throw new Error(`工作区树不可滚动：${String(result.status)}。`);
+            }
+            workspaceTreeEvidence = result;
           } else if (args.action === "expand-test-console-evidence") {
             const result = await window.webContents.executeJavaScript(`(${expandTestConsoleEvidence.toString()})()`) as Record<string, unknown>;
             if (result.status !== "expanded") {
@@ -379,6 +405,19 @@ export class HanliComputerAcceptance {
           } else if (args.action === "inspect-task-collaboration-state") {
             // 只确认验收前置状态，既不读取任务正文，也不通过测试夹具伪造空状态。
             taskCollaborationEvidence = await window.webContents.executeJavaScript(`(${readTaskCollaborationState.toString()})()`) as Record<string, unknown>;
+          } else if (args.action === "inspect-workspace-directory-read") {
+            if (!workspaceFixtureEvidenceEnabled) {
+              throw new Error("目录读取摘要只允许当前正式夹具验收阶段使用。");
+            }
+            const relativePath = String(args.workspaceRelativePath);
+            if (!["slow-a", "slow-b", "retry-once"].includes(relativePath)) {
+              throw new Error("目录读取摘要只允许 slow-a、slow-b 或 retry-once。");
+            }
+            const result = workspaceEvidence!.readDirectory(relativePath as "slow-a" | "slow-b" | "retry-once");
+            if (!result) {
+              throw new Error("当前夹具目录读取摘要不可用。");
+            }
+            workspaceDirectoryReadEvidence = result;
           } else if (args.action === "resize-acceptance-window") {
             // 全应用布局验收不依赖测试台是否打开；尺寸仍限应用支持的预设。
             if (args.resizePreset === "narrow") {
@@ -446,7 +485,7 @@ export class HanliComputerAcceptance {
             window.webContents.sendInputEvent({ type: "keyUp", keyCode: String(args.key) });
           } else throw new Error("不支持的单步操作");
           // 前置状态读取不产生页面输入，不能成为通过或失败判断的交互证据。
-          if (args.action !== "inspect-task-collaboration-state") inputCount += 1;
+          if (args.action !== "inspect-task-collaboration-state" && args.action !== "inspect-workspace-directory-read") inputCount += 1;
           snapshot = "";
           await new Promise((resolve) => setTimeout(resolve, 150));
           const previewEvidence = await window.webContents.executeJavaScript(`(${readImagePreviewState.toString()})()`).catch(() => null);
@@ -456,6 +495,8 @@ export class HanliComputerAcceptance {
             ...(dragEvidence ? { imagePreviewDuringDrag: dragEvidence } : {}),
             ...(testConsoleEvidence ? { testConsole: testConsoleEvidence } : {}),
             ...(taskCollaborationEvidence ? { taskCollaboration: taskCollaborationEvidence } : {}),
+            ...(workspaceTreeEvidence ? { workspaceTree: workspaceTreeEvidence } : {}),
+            ...(workspaceDirectoryReadEvidence ? { workspaceDirectoryRead: workspaceDirectoryReadEvidence } : {}),
             ...(windowResizeEvidence ? { acceptanceWindow: windowResizeEvidence } : {}),
           };
           const output = await images(interactionEvidence);
@@ -475,10 +516,14 @@ export class HanliComputerAcceptance {
             operation = { type: "scroll-task-collaboration", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "scroll-test-console") {
             operation = { type: "scroll-test-console", deltaY: Number(args.deltaY), reason: String(args.reason) };
+          } else if (args.action === "scroll-workspace-tree") {
+            operation = { type: "scroll-workspace-tree", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "expand-test-console-evidence") {
             operation = { type: "expand-test-console-evidence", reason: String(args.reason) };
           } else if (args.action === "inspect-task-collaboration-state") {
             operation = { type: "inspect-task-collaboration-state", reason: String(args.reason) };
+          } else if (args.action === "inspect-workspace-directory-read") {
+            operation = { type: "inspect-workspace-directory-read", relativePath: args.workspaceRelativePath as "slow-a" | "slow-b" | "retry-once", reason: String(args.reason) };
           } else if (args.action === "resize-acceptance-window") {
             operation = { type: "resize-acceptance-window", preset: args.resizePreset as "narrow" | "restore", reason: String(args.reason) };
           } else if (args.action === "drag") {
@@ -641,6 +686,20 @@ function scrollTestConsole(deltaY: number): Record<string, unknown> {
     status: after === before ? "at-boundary" : "scrolled",
     scrollTop: Math.round(after),
     maxScrollTop: Math.max(0, Math.round(content.scrollHeight - content.clientHeight)),
+  };
+}
+
+/** 只滚动当前可见的固定工作区树，并回执实际位置以证明超长目录检查命中了正确容器。 */
+function scrollWorkspaceTree(deltaY: number): Record<string, unknown> {
+  const tree = document.querySelector<HTMLElement>(".workspace-pane .workspace-tree");
+  if (!tree || tree.offsetParent === null || tree.clientHeight <= 0) return { status: "hidden" };
+  const before = tree.scrollTop;
+  tree.scrollTop = Math.max(0, Math.min(tree.scrollHeight - tree.clientHeight, before + deltaY));
+  const after = tree.scrollTop;
+  return {
+    status: after === before ? "at-boundary" : "scrolled",
+    scrollTop: Math.round(after),
+    maxScrollTop: Math.max(0, Math.round(tree.scrollHeight - tree.clientHeight)),
   };
 }
 

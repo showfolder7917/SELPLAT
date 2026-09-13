@@ -5,13 +5,13 @@ import { transform } from "esbuild";
 
 // 单测直接转换当前工作树源码，避免测试把未构建的隔离工作树误判为运行时代码缺失。
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus, scrollTaskCollaboration };", {
+const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus, scrollTaskCollaboration, scrollWorkspaceTree };", {
   loader: "ts",
   format: "esm",
   target: "es2022",
 });
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
-const { HanliComputerAcceptance, safeNavigationClick, mapScreenshotPointToViewport, scrollTaskCollaboration } = acceptanceModule;
+const { HanliComputerAcceptance, safeNavigationClick, mapScreenshotPointToViewport, scrollTaskCollaboration, scrollWorkspaceTree } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }, screenshotScale = 1) {
   let n = 0;
@@ -29,13 +29,14 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     }
     if (/scrollTaskCollaboration/.test(source)) return taskCollaborationState.status === "has-topics" ? { status: "scrolled", scrollTop: 360, maxScrollTop: 720 } : { status: "hidden" };
     if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
+    if (/scrollWorkspaceTree/.test(source)) return { status: "scrolled", scrollTop: 280, maxScrollTop: 560 };
     if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
     if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
     if (/readTaskCollaborationState/.test(source)) return taskCollaborationState;
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, boundsCalls, executedScripts, controller, run: (model, currentGoal = goal) => controller.run(currentGoal, window, model, (text) => progress.push(text)), progress };
+  return { inputs, boundsCalls, executedScripts, controller, run: (model, currentGoal = goal, workspaceEvidence) => controller.run(currentGoal, window, model, (text) => progress.push(text), workspaceEvidence), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
@@ -238,6 +239,45 @@ test("任务协作页只允许固定容器滚动并回执位置变化", async ()
   });
   assert.equal(run.status, "passed");
   assert.equal(run.interactionSteps[0].operation.type, "scroll-task-collaboration");
+});
+test("工作区夹具只允许固定树滚动和当前目录请求摘要", async () => {
+  const f = fixture();
+  const workspaceGoal = {
+    ...goal,
+    interactionCapabilities: ["workspace-explorer", "workspace-explorer-scenarios"],
+    workspaceAcceptanceFixture: { kind: "workspace-explorer", mode: "scenarios", displayName: "韩立验收工作区-本轮", instructions: [] },
+    preparedScene: { kind: "workspace-explorer-fixture" },
+  };
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const scrolled = await tools.call("hanli_computer", { action: "scroll-workspace-tree", reason: "滚动工作区树查看超长目录", observationId: first, deltaY: 280 });
+    assert.deepEqual(JSON.parse(scrolled.contentItems[0].text).interactionEvidence.workspaceTree, { status: "scrolled", scrollTop: 280, maxScrollTop: 560 });
+    const inspected = await tools.call("hanli_computer", { action: "inspect-workspace-directory-read", workspaceRelativePath: "slow-b", reason: "确认重复点击未产生第二次目录读取", observationId: id(scrolled) });
+    assert.deepEqual(JSON.parse(inspected.contentItems[0].text).interactionEvidence.workspaceDirectoryRead, { relativePath: "slow-b", requestCount: 1, pending: true, outcome: "started" });
+    await finish(tools, id(inspected));
+  }, workspaceGoal, { readDirectory: () => ({ relativePath: "slow-b", requestCount: 1, pending: true, outcome: "started" }) });
+  assert.equal(run.status, "passed");
+  assert.deepEqual(run.interactionSteps.map((step) => step.operation.type), ["scroll-workspace-tree", "inspect-workspace-directory-read"]);
+});
+test("工作区专用只读证据不向非夹具场景开放", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    await assert.rejects(tools.call("hanli_computer", { action: "scroll-workspace-tree", reason: "尝试滚动工作区树", observationId: first, deltaY: 120 }), /正式夹具验收阶段/);
+    await assert.rejects(tools.call("hanli_computer", { action: "inspect-workspace-directory-read", workspaceRelativePath: "slow-b", reason: "尝试读取目录摘要", observationId: first }), /正式夹具验收阶段/);
+    await tools.call("hanli_computer", { action: "key", key: "Tab", reason: "保留真实操作后提交受阻判断", observationId: first });
+  });
+});
+test("工作区树滚动只操作可见固定容器并回执边界", () => {
+  const previous = globalThis.document;
+  let scrollTop = 0;
+  const tree = { offsetParent: {}, clientHeight: 200, scrollHeight: 500, get scrollTop() { return scrollTop; }, set scrollTop(value) { scrollTop = value; } };
+  try {
+    globalThis.document = { querySelector: (selector) => selector === ".workspace-pane .workspace-tree" ? tree : null };
+    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300 });
+    assert.deepEqual(scrollWorkspaceTree(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300 });
+    assert.deepEqual(scrollWorkspaceTree(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300 });
+  } finally { globalThis.document = previous; }
 });
 test("任务协作页滚动只操作可见的固定业务容器", () => {
   const previous = globalThis.document;

@@ -197,7 +197,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         sessions: acceptanceEmptyTaskGroupSession,
         taskHandoff,
         createWindow: (options) => new BrowserWindow(options),
-        execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window),
+        execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window, {
+          readDirectory: (relativePath) => workspaceAcceptanceFixture.getDirectoryReadEvidence(window.webContents.id, relativePath),
+        }),
+        setWorkspaceFixtureSceneActive: (active) => workspaceAcceptanceFixture.setSceneActive(active),
         onSceneReady,
         onCompletionReviewReady,
         record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
