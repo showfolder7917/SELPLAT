@@ -160,7 +160,14 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       return groups.length ? { version: snapshot!.version, groups: structuredClone(groups), updatedAt: snapshot!.updatedAt } : undefined;
     })() : undefined;
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
-    if (workspaceExplorerAcceptance) workspaceAcceptanceFixture.reserve();
+    const workspaceExplorerScenarioAcceptance = goal.interactionCapabilities?.includes("workspace-explorer-scenarios") === true;
+    if (workspaceExplorerAcceptance) {
+      workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic");
+      audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
+        ...identity,
+        mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
+      });
+    }
     let run: Awaited<ReturnType<typeof runHanliAcceptanceSceneSession>> | null = null;
     try {
       run = await runHanliAcceptanceSceneSession({
@@ -314,7 +321,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
   registerSettingsIpc(settings, eventCenter);
-  registerWorkspaceIpc(workspaces, eventCenter, () => workspaceAcceptanceFixture.takeDirectory());
+  registerWorkspaceIpc(workspaces, eventCenter, workspaceAcceptanceFixture);
   registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints, acceptanceEmptyTaskGroupSession);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });

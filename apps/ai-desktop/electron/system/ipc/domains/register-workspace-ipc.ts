@@ -1,19 +1,27 @@
 import { BrowserWindow, dialog } from "electron";
 
 import { WORKSPACE_PERMISSIONS, type WorkspacePermissionValue } from "../../../../contracts/foundation/index.js";
+import type { WorkspaceDirectoryOutDto, WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../../services/support/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
+interface WorkspaceAcceptanceFixturePort {
+  takeDirectory(): string | null;
+  registerWorkspace(directory: string, state: WorkspaceStateOutDto): void;
+  readDirectory(workspaceId: string, relativePath: string): { scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
+}
+
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */
-export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: EventCenterFacade, takeAcceptanceDirectory: () => string | null = () => null): void {
+export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: EventCenterFacade, acceptanceFixture?: WorkspaceAcceptanceFixturePort): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-workspaces", () => workspaces.read());
   handle("desktop:add-workspace", async (event) => {
     // 韩立验收只能消费主进程预备的一次性目录；不存在预备目录时保留用户原生选择流程。
-    const acceptanceDirectory = takeAcceptanceDirectory();
+    const acceptanceDirectory = acceptanceFixture?.takeDirectory() || null;
     if (acceptanceDirectory) {
       const state = workspaces.add(acceptanceDirectory);
+      acceptanceFixture?.registerWorkspace(acceptanceDirectory, state);
       eventCenter.recordEvent("workspace.added", { path: acceptanceDirectory, source: "hanli-acceptance-fixture" });
       return state;
     }
@@ -41,6 +49,11 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
     eventCenter.recordEvent("workspace.removed", { id });
     return state;
   });
-  handle("desktop:list-workspace-directory", (_event, id: string, relativePath: string = "") => workspaces.listDirectory(id, relativePath));
+  handle("desktop:list-workspace-directory", async (_event, id: string, relativePath: string = "") => {
+    const fixtureRead = acceptanceFixture?.readDirectory(id, relativePath);
+    if (!fixtureRead) return workspaces.listDirectory(id, relativePath);
+    eventCenter.recordEvent("workspace.directory_read", { source: "hanli-acceptance-fixture", scenario: fixtureRead.scenario, relativePath });
+    return fixtureRead.result;
+  });
   handle("desktop:read-workspace-file", (_event, id: string, relativePath: string) => workspaces.readFilePreview(id, relativePath));
 }
