@@ -20,6 +20,14 @@ test("工作区验收能力只由完整已批准范围签发", () => {
   assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({ acceptanceCriteria: ["添加工作区后立即出现。"] })), []);
 });
 
+test("加载、失败重试与空目录均在已批准范围时才签发场景夹具能力", () => {
+  const scoped = proposal({
+    acceptanceCriteria: ["添加工作区后立即出现；目录与文件可在应用内只读查看；目录加载时其他目录可浏览且重复点击不重复请求；目录失败后可在原位置重试；空目录显示非错误状态。"],
+  });
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(scoped), ["workspace-explorer", "workspace-explorer-scenarios"]);
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({ acceptanceCriteria: ["添加工作区后立即出现，可展开目录，文件可在应用内只读查看。", "目录加载时其他目录可浏览；失败后原位重试。"] })), ["workspace-explorer"]);
+});
+
 test("提案排除验收工具或原生目录时保持最小权限", () => {
   assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({ exclusions: ["禁止扩展验收工具的原生目录选择能力。"] })), []);
 });

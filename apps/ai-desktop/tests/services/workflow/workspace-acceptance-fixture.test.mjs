@@ -18,6 +18,7 @@ test("验收工作区夹具只交付一次，并在验收结束撤销登记和�
       const index = roots.findIndex((root) => root.id === id);
       if (index >= 0) roots.splice(index, 1);
     },
+    listDirectory: (id, relativePath) => ({ workspaceId: id, relativePath, entries: relativePath === "empty" ? [] : [{ name: "README.md", relativePath: `${relativePath ? `${relativePath}/` : ""}README.md`, kind: "file" }] }),
   };
   try {
     const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
@@ -30,6 +31,41 @@ test("验收工作区夹具只交付一次，并在验收结束撤销登记和�
     fixture.cleanup();
     assert.equal(roots.length, 0);
     assert.equal(existsSync(directory), false);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("场景夹具只为已登记临时根提供延迟、一次失败与空目录响应", async () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-scenario-test-"));
+  const roots = [];
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    remove: (id) => {
+      const index = roots.findIndex((root) => root.id === id);
+      if (index >= 0) roots.splice(index, 1);
+    },
+    listDirectory: (id, relativePath) => ({ workspaceId: id, relativePath, entries: relativePath === "empty" ? [] : [{ name: "README.md", relativePath: `${relativePath}/README.md`, kind: "file" }] }),
+  };
+  try {
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    fixture.reserve("scenarios");
+    const directory = fixture.takeDirectory();
+    assert.ok(directory);
+    roots.push({ id: "fixture-root", path: directory });
+    fixture.registerWorkspace(directory, { primaryId: "fixture-root", roots: [...roots] });
+
+    const delayed = fixture.readDirectory("fixture-root", "slow-a");
+    assert.equal(delayed?.scenario, "delayed");
+    assert.deepEqual(await delayed?.result, { workspaceId: "fixture-root", relativePath: "slow-a", entries: [{ name: "README.md", relativePath: "slow-a/README.md", kind: "file" }] });
+
+    const firstRetry = fixture.readDirectory("fixture-root", "retry-once");
+    assert.equal(firstRetry?.scenario, "retry-once");
+    await assert.rejects(firstRetry?.result, /模拟目录读取失败/);
+    assert.equal(fixture.readDirectory("fixture-root", "retry-once"), null);
+    assert.equal(fixture.readDirectory("unregistered-root", "slow-a"), null);
+    assert.equal(fixture.readDirectory("fixture-root", "empty"), null);
+    fixture.cleanup();
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }

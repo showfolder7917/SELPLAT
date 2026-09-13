@@ -14,6 +14,13 @@ export function resolveAcceptanceInteractionCapabilities(proposal: EvolutionProp
     && /添加工作区/u.test(approvedScope)
     && /目录/u.test(approvedScope)
     && /(?:只读.*(?:查看|预览)|文件.*(?:查看|预览))/u.test(approvedScope);
+  const hasWorkspaceExplorerScenarioScope = hasWorkspaceExplorerScope
+    && /(?:加载|并行|重复点击|重复请求)/u.test(approvedScope)
+    && /失败.*重试|重试.*失败/u.test(approvedScope)
+    && /(?:空(?:目录|状态)|目录.*为空|为空.*目录)/u.test(approvedScope);
   const excludesAcceptanceTool = proposal.exclusions.some((item) => /(?:验收工具|原生目录|工作区).*(?:不扩展|禁止|排除)|(?:不扩展|禁止|排除).*(?:验收工具|原生目录|工作区)/u.test(item));
-  return hasWorkspaceExplorerScope && !excludesAcceptanceTool ? ["workspace-explorer"] : [];
+  if (!hasWorkspaceExplorerScope || excludesAcceptanceTool) return [];
+  return hasWorkspaceExplorerScenarioScope
+    ? ["workspace-explorer", "workspace-explorer-scenarios"]
+    : ["workspace-explorer"];
 }

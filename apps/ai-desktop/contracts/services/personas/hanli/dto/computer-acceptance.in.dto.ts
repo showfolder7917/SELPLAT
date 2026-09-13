@@ -6,7 +6,7 @@ import type { AcceptanceSceneSegmentOutDto } from "./acceptance-scene.out.dto.js
  * 生产者：演化运行时；消费者：韩立窗口验收器。
  * 数据方向：已批准提案 -> 运行时 -> 验收器；禁止职责：模型和 Renderer 不能自行添加此范围。
  */
-export type HanliAcceptanceInteractionCapability = "workspace-explorer";
+export type HanliAcceptanceInteractionCapability = "workspace-explorer" | "workspace-explorer-scenarios";
 
 /**
  * 场景准备前由演化运行时生成的只读身份快照。
