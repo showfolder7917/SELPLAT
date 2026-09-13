@@ -9,6 +9,13 @@ import type { PromptLibraryPort } from "../../../../support/capabilities/prompts
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 
+/** 仅表示模型输出格式不能恢复；计划字段不完整仍由既有严格校验拒绝。 */
+class DistributionPlanFormatError extends Error {
+  constructor(readonly responseLength: number) {
+    super("AI 返回的结构化判断不是有效 JSON。");
+  }
+}
+
 export interface NangongTaskDistributionServiceOptions {
   store: EvolutionStatePort;
   mutations: EvolutionMutationPort;
@@ -52,7 +59,7 @@ export class NangongTaskDistributionService {
         this.#publishPlanning(proposal, topic, attempt, "current", "正在生成执行计划并分配执行人", feedback, planningStartedAt);
         let planned: PlanResult;
         try {
-          planned = parseDistributionPlan(await this.options.plan(
+          const response = await this.options.plan(
             this.options.prompts.render("nangong.distribution-plan", {
               topicTitle: topic.title,
               topicGoal: topic.goal,
@@ -65,8 +72,17 @@ export class NangongTaskDistributionService {
             topic.workspaceState,
             topic.locale,
             (event) => this.options.timelineStream?.(planningTaskId, proposal.submitterMemberId, event),
-          ));
+          );
+          planned = parseDistributionPlan(response);
         } catch (error) {
+          if (error instanceof DistributionPlanFormatError && attempt < 2) {
+            // 仅把安全格式诊断反馈给同一规划任务，禁止把模型原文或工作区内容写入审计。
+            this.options.recordEvent("nangong.evolution.distribution_format_retry", {
+              proposalId, attempt, responseLength: error.responseLength, reason: error.message,
+            });
+            feedback = `上一轮返回不是有效 JSON（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
+            continue;
+          }
           const detail = error instanceof Error ? error.message : String(error);
           this.#publishPlanning(proposal, topic, attempt, "failed", "生成执行计划失败", detail, planningStartedAt);
           throw error;
@@ -170,7 +186,15 @@ export class NangongTaskDistributionService {
 }
 
 function parseDistributionPlan(text: string): PlanResult {
-  const value = parseJsonObject(text);
+  const values = parseJsonObjects(text);
+  for (const value of values) {
+    const plan = normalizeDistributionPlan(value);
+    if (plan) return plan;
+  }
+  throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
+}
+
+function normalizeDistributionPlan(value: Record<string, unknown>): PlanResult | null {
   const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
   const rawUnits = Array.isArray(value.units) ? value.units : [];
   const units = rawUnits.flatMap((raw): EvolutionDistributionUnitOutDto[] => {
@@ -184,19 +208,57 @@ function parseDistributionPlan(text: string): PlanResult {
     const independentReason = typeof item.independentReason === "string" ? item.independentReason.trim().slice(0, 4_000) : "";
     return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, taskRuleIds, independentReason }] : [];
   });
-  if (!summary || !units.length) throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
-  return { summary, units };
+  return summary && units.length ? { summary, units } : null;
 }
 
 function normalizeDraftList(value: unknown): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : [];
 }
 
-function parseJsonObject(text: string): Record<string, unknown> {
-  const candidate = text.match(/\{[\s\S]*\}/)?.[0];
-  if (!candidate) throw new Error("AI 没有返回可解析的结构化判断。");
-  try { return JSON.parse(candidate) as Record<string, unknown>; }
-  catch { throw new Error("AI 返回的结构化判断不是有效 JSON。"); }
+function parseJsonObjects(text: string): Record<string, unknown>[] {
+  const candidates = extractBalancedJsonObjects(text);
+  const values = candidates.flatMap((candidate): Record<string, unknown>[] => {
+    try {
+      const value = JSON.parse(candidate);
+      return value && typeof value === "object" && !Array.isArray(value) ? [value as Record<string, unknown>] : [];
+    } catch { return []; }
+  });
+  if (!values.length) throw new DistributionPlanFormatError(text.length);
+  return values;
+}
+
+/** 提取独立、转义安全的对象候选，避免首尾贪婪匹配把相邻元数据拼成无效 JSON。 */
+function extractBalancedJsonObjects(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/iu)?.[1]?.trim();
+  const source = fenced || trimmed;
+  const candidates: string[] = [];
+  for (let start = 0; start < source.length; start += 1) {
+    if (source[start] !== "{") continue;
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (let index = start; index < source.length; index += 1) {
+      const character = source[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') quoted = false;
+        continue;
+      }
+      if (character === '"') quoted = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          candidates.push(source.slice(start, index + 1));
+          break;
+        }
+      }
+    }
+  }
+  return [...new Set(candidates)];
 }
 
 function distributionHardFindings(units: EvolutionDistributionUnitOutDto[]): string[] {

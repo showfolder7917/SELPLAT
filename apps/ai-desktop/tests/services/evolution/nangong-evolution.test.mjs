@@ -1078,6 +1078,52 @@ test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("分发计划会纠正首轮无效 JSON，并从围栏中的单个有效对象继续", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-json-retry-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const events = []; let attempts = 0; let submitted = 0;
+    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const facade = new PersonaEvolutionRuntime({
+      store, conversation, recordEvent: (type, details) => events.push({ type, details }),
+      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-retry-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      async planDistribution() { attempts += 1; return attempts === 1 ? "计划如下：{\"summary\":\"未闭合" : `\`\`\`json\n${validPlan}\n\`\`\``; },
+    });
+    let state = facade.createTopic(topicRequest("收起临时工作区"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    state = await facade.dispatch(proposalId);
+    assert.equal(attempts, 2);
+    assert.equal(submitted, 1);
+    assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details), [{ proposalId, attempt: 1, responseLength: "计划如下：{\"summary\":\"未闭合".length, reason: "AI 返回的结构化判断不是有效 JSON。" }]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("分发计划连续两次无效 JSON 时阻断且不记录模型原文", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-json-failure-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const events = []; let attempts = 0; let submitted = 0;
+    const rawFailure = "模型原文不得出现在审计中：{\"summary\":\"未闭合";
+    const facade = new PersonaEvolutionRuntime({
+      store, conversation, recordEvent: (type, details) => events.push({ type, details }),
+      collaboration: { submitTask() { submitted += 1; return { tasks: [] }; } },
+      async planDistribution() { attempts += 1; return rawFailure; },
+    });
+    let state = facade.createTopic(topicRequest("连续格式失败"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    await assert.rejects(() => facade.dispatch(proposalId), /AI 返回的结构化判断不是有效 JSON/);
+    assert.equal(attempts, 2);
+    assert.equal(submitted, 0);
+    assert.equal(JSON.stringify(events).includes(rawFailure), false);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.responseLength), [rawFailure.length]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("专题工作区缺失时返还执行显示业务错误而不是读取 null.roots", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-missing-workspace-"));
   const statePath = path.join(directory, "state.json");
