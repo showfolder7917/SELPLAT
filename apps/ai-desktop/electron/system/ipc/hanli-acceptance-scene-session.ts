@@ -49,7 +49,12 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         sceneReadyPublished = true;
         options.onSceneReady();
       }
-      const currentGoal = createSegmentGoal(options.goal, segment);
+      const priorPhaseEvidence = runs.length ? summarizePriorRuns(runs) : undefined;
+      // 后续证据段必须知道前序场景已经实际完成；否则临时夹具释放后，模型会误把“看不到旧夹具”当成当前页面故障。
+      const currentGoal = {
+        ...createSegmentGoal(options.goal, segment),
+        ...(priorPhaseEvidence ? { priorPhaseEvidence } : {}),
+      };
       const canEnterCompletionReview = runs.every((run) => run.status === "passed");
       if (!segment.completionReviewRequired || options.goal.reviewMode === "post-completion-review" || !canEnterCompletionReview) {
         if (segment.completionReviewRequired && !canEnterCompletionReview) {
@@ -96,14 +101,11 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         evidenceAttachmentIds: initialPass.evidenceAttachmentIds,
         summary: initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
       });
-      const priorPhaseEvidence = {
-        summary: initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
-        evidenceAttachmentIds: initialPass.evidenceAttachmentIds,
-      };
+      const completionPhaseEvidence = summarizePriorRuns([initialPass]);
       const review = assertSegmentAcceptanceRun(await options.execute({
         ...currentGoal,
         reviewMode: "post-completion-review",
-        priorPhaseEvidence,
+        priorPhaseEvidence: completionPhaseEvidence,
       }, prepared.window), segment);
       runs.push(review);
       return mergeAcceptanceRuns(options.goal, runs);
@@ -121,4 +123,14 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
     }
   }
   return mergeAcceptanceRuns(options.goal, runs);
+}
+
+/** 只传递已归档判断和附件身份；后续场景不能借此重新操作已释放的临时数据。 */
+function summarizePriorRuns(runs: HanliAcceptanceRunOutDto[]): NonNullable<HanliComputerAcceptanceInDto["priorPhaseEvidence"]> {
+  return {
+    summary: runs.flatMap((run) => run.stepResults)
+      .map((step) => `${step.checkId}：${step.actual}；布局：${step.layoutActual || "未记录"}`)
+      .join("\n"),
+    evidenceAttachmentIds: [...new Set(runs.flatMap((run) => run.evidenceAttachmentIds))],
+  };
 }

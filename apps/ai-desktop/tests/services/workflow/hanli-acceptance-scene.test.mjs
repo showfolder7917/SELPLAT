@@ -226,7 +226,7 @@ test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件",
     sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) },
     createWindow: () => child,
     execute: async (currentGoal, window) => {
-      execution.push({ criteria: currentGoal.criteria, window: window.name });
+      execution.push({ criteria: currentGoal.criteria, window: window.name, priorPhaseEvidence: currentGoal.priorPhaseEvidence });
       const index = execution.length;
       const criterionId = currentGoal.criterionIds?.[0] || "criterion-1";
       return {
@@ -239,8 +239,15 @@ test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件",
     onSceneReady: () => { readyCount += 1; }, onCompletionReviewReady: () => assert.fail("没有完成态阶段时不应进入完成态复核"), record() {},
   });
   assert.deepEqual(execution, [
-    { criteria: [goal.criteria[0]], window: "child" },
-    { criteria: [goal.criteria[1]], window: "target" },
+    { criteria: [goal.criteria[0]], window: "child", priorPhaseEvidence: undefined },
+    {
+      criteria: [goal.criteria[1]],
+      window: "target",
+      priorPhaseEvidence: {
+        summary: "criterion-1：功能通过；布局：布局通过",
+        evidenceAttachmentIds: ["shot-1"],
+      },
+    },
   ]);
   assert.equal(readyCount, 1);
   assert.equal(active.size, 0);
@@ -638,4 +645,11 @@ test("场景说明区分条件式规则与必须构造的验收状态", () => {
   assert.match(prompt, /recovery-action-lifecycle/);
   assert.match(prompt, /persona-conversation-lifecycle/);
   assert.match(prompt, /persona-conversation-with-task-handoff/);
+});
+
+test("后续场景被明确告知复用前序证据而不重复已释放夹具", () => {
+  const prompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
+  assert.match(prompt, /存在 `priorPhaseEvidence`/);
+  assert.match(prompt, /不得重复前序场景动作/);
+  assert.match(prompt, /一次性夹具已在段落结束时释放/);
 });
