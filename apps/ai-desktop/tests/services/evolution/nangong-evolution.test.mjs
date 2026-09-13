@@ -1151,6 +1151,28 @@ test("分发计划忽略说明中的相邻元数据对象并使用完整计划",
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("分发计划字段含转义字符和花括号时仍提取完整对象", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-json-escaped-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let submitted = 0;
+    const scope = "读取结果示例 {\"status\":\"ok\"}；路径 C:\\workspace\\fixture";
+    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope, acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const facade = new PersonaEvolutionRuntime({
+      store, conversation, recordEvent: () => undefined,
+      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-escaped-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      async planDistribution() { return validPlan; },
+    });
+    let state = facade.createTopic(topicRequest("收起临时工作区"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    state = await facade.dispatch(proposalId);
+    assert.equal(submitted, 1);
+    assert.equal(state.proposals[0].distributionPlan.units[0].scope, scope);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("分发计划连续两次无效 JSON 时阻断且不记录模型原文", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-json-failure-"));
   try {
