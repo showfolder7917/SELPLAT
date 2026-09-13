@@ -21,6 +21,11 @@ test("Developer 左侧任务区按可见职责拆分并保留折叠状态入口"
   assert.match(workspaceController, /selectedEntry/);
   assert.match(workspaceController, /pendingDirectoryLoads/);
   assert.match(workspaceController, /pendingLoad\) return pendingLoad/);
+  assert.match(workspaceController, /撤销登记后立即移除旧树和预览/);
+  assert.match(workspaceController, /setSelectedEntry\(\(current\) => current && !isRegisteredWorkspace\(current\.workspaceId\) \? null : current\)/);
+  assert.match(workspaceController, /setPreview\(\(current\) => current && !isRegisteredWorkspace\(current\.workspaceId\) \? null : current\)/);
+  assert.match(workspaceController, /previewErrorWorkspaceId && !isRegisteredWorkspace\(previewErrorWorkspaceId\)/);
+  assert.match(workspaceController, /!registeredWorkspaceIds\.current\.has\(workspaceId\)/);
 });
 
 test("Developer 磁盘结构直接区分左侧 explorer 和右侧 workspace", () => {
