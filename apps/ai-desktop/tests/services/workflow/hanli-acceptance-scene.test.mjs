@@ -132,6 +132,7 @@ test("最终验收记录在提交前逐项诊断重复、缺失和未登记的�
   const duplicate = { ...complete, stepResults: [...complete.stepResults, { ...complete.stepResults[0], operationIndex: 2 }] };
   const diagnostic = inspectAcceptanceRunEvidence(duplicate);
   assert.equal(diagnostic.valid, false);
+  assert.deepEqual(diagnostic.invalidCriterionIds, ["criterion-1"]);
   assert.deepEqual(diagnostic.criteria.map((criterion) => [criterion.criterionId, criterion.resultCount]), [["criterion-1", 2], ["criterion-2", 1]]);
   const missingLayout = inspectAcceptanceRunEvidence({ ...complete, stepResults: complete.stepResults.map((step) => step.checkId === "criterion-2" ? { ...step, layoutScreenshotAttachmentId: "missing-layout" } : step) });
   assert.equal(missingLayout.criteria[1].layoutScreenshotRegistered, false);
