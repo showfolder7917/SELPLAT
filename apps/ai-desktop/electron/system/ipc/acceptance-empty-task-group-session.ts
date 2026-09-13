@@ -33,7 +33,10 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#recoveryLifecycleStarted.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
-    if (sceneKind === "persona-conversation-lifecycle" || sceneKind === "persona-conversation-with-task-handoff") this.#personaConversations.set(webContentsId, personaConversationFixture());
+    // 空任务页验收需要沿真实入口进入韩立会话并发送固定验收文案；消息只保存在当前窗口内存。
+    if (sceneKind === "empty-task-group" || sceneKind === "persona-conversation-lifecycle" || sceneKind === "persona-conversation-with-task-handoff") {
+      this.#personaConversations.set(webContentsId, personaConversationFixture(sceneKind === "empty-task-group" ? 0 : undefined));
+    }
     // 复合场景只保存准备瞬间已筛选的任务交接快照，后续正式任务变化不能进入验收窗口。
     if (sceneKind === "persona-conversation-with-task-handoff" && taskHandoff?.groups.length) this.#taskHandoffs.set(webContentsId, structuredClone(taskHandoff));
   }
@@ -177,7 +180,7 @@ export class AcceptanceEmptyTaskGroupSession {
 }
 
 /** 为人物会话验收提供稳定、可分页且不落盘的消息集合。 */
-function personaConversationFixture(): Map<string, PersonaConversationOutDto> {
+function personaConversationFixture(hanliMessageCount = 66): Map<string, PersonaConversationOutDto> {
   const createdAt = new Date().toISOString();
   const create = (personaId: string, count: number): PersonaConversationOutDto => ({
     ownerPersonaId: personaId,
@@ -198,7 +201,7 @@ function personaConversationFixture(): Map<string, PersonaConversationOutDto> {
       completedAt: createdAt,
     })),
   });
-  return new Map([["han-li", create("han-li", 66)], ["nangong-wan", create("nangong-wan", 4)]]);
+  return new Map([["han-li", create("han-li", hanliMessageCount)], ["nangong-wan", create("nangong-wan", 4)]]);
 }
 
 /** 巡检验收场景在同一只读专题内保留普通、自动恢复和用户处理三类事实。 */

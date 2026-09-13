@@ -26,7 +26,8 @@ const acceptanceMutationNames = [
   "loginWithChatGPT", "logoutCodex", "resolveCodexApproval", "clearTrustedCommands", "resolveCodexUserInput", "newChat", "openExternalUrl",
   "openScreenRecordingSettings", "restartForScreenRecordingPermission", "showScreenshotWindow", "enterScreenshotAnnotation", "returnScreenshotSelection", "endScreenshotEditing", "saveScreenshot", "openTempDirectory", "clearTempFiles", "openAuditLogDirectory",
   "submitCollaborationTask", "continueCollaborationTask", "cancelCollaborationTask", "setLinghuAutomationEnabled", "newLinghuDisplayConversation",
-  "sendPersonaConversationMessage", "newPersonaConversation", "selectPersonaConversationModel", "generateNangongTopicDraft", "convertNangongConversationToTopic", "createEvolutionTopic", "updateEvolutionTopic", "configureEvolutionAutomation", "controlEvolutionAutomation", "resumeEvolutionOneShot", "createEvolutionProposal", "decideEvolutionProposal", "decideEvolutionResult", "reviseEvolutionProposal", "autoApproveEvolutionProposal", "dispatchEvolutionProposal",
+  // 人物消息由主进程按 webContents 身份收口：验收窗口只写窗口私有内存会话，正式窗口仍走真实服务。
+  "newPersonaConversation", "selectPersonaConversationModel", "generateNangongTopicDraft", "convertNangongConversationToTopic", "createEvolutionTopic", "updateEvolutionTopic", "configureEvolutionAutomation", "controlEvolutionAutomation", "resumeEvolutionOneShot", "createEvolutionProposal", "decideEvolutionProposal", "decideEvolutionResult", "reviseEvolutionProposal", "autoApproveEvolutionProposal", "dispatchEvolutionProposal",
   "enqueueMessage", "supplementQueuedMessage", "discardQueuedMessage", "recoverConversationTask", "discardConversationRecovery", "sendMessage", "cancel",
 ];
 const isolatedAcceptanceBridge = readOnlyAcceptanceWindow

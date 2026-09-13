@@ -18,7 +18,7 @@ const collaborationState = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
-test("独立空状态验收会话只遮蔽登记窗口的任务投影并拒绝写入", () => {
+test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人物消息", () => {
   const session = new AcceptanceEmptyTaskGroupSession();
   session.register(42);
   const isolated = session.collaborationState(42, collaborationState);
@@ -30,6 +30,15 @@ test("独立空状态验收会话只遮蔽登记窗口的任务投影并拒绝�
   assert.deepEqual(session.timeline().groups, []);
   assert.equal(session.evolutionState({ topics: ["formal"], proposals: ["formal"], deliberations: ["formal"], archiveRecords: ["formal"] }).activeTopicId, null);
   assert.throws(() => session.rejectMutation(), /只读/);
+  const sent = session.sendPersonaConversationMessage(42, "han-li", {
+    clientMessageId: "empty-scene-message",
+    message: "空状态入口验收",
+    attachmentIds: [],
+    workspaceState: { roots: [], primaryId: null },
+    locale: "zh-CN",
+  });
+  assert.equal(sent.messages.at(-2).content, "空状态入口验收");
+  assert.equal(session.timeline(42).groups.length, 0, "窗口私有消息不能创建或改变正式任务投影");
   assert.deepEqual(session.selectMember(42, "nangong-wan", collaborationState).tasks, []);
   const singleConversation = session.setMode(42, "single-conversation", collaborationState);
   assert.equal(singleConversation.mode, "single-conversation");
@@ -64,7 +73,8 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   assert.match(source, /tasks: \[\]/);
   assert.match(source, /失败原因：candidate\.txt:1: trailing whitespace/);
   assert.match(preloadSource, /readOnlyAcceptanceWindow/);
-  assert.match(preloadSource, /sendPersonaConversationMessage/);
+  const blockedMutationList = preloadSource.match(/const acceptanceMutationNames = \[([\s\S]*?)\n\];/)?.[1] || "";
+  assert.doesNotMatch(blockedMutationList, /sendPersonaConversationMessage/);
   assert.match(preloadSource, /独立空状态验收窗口为只读/);
 });
 
