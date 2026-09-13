@@ -61,6 +61,8 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
     const directory = fixture.takeDirectory(42);
     assert.ok(directory);
     assert.equal(existsSync(path.join(directory, "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定")), true);
+    assert.equal(existsSync(path.join(directory, "z-滚动验收目录-01")), true);
+    assert.equal(existsSync(path.join(directory, "z-滚动验收目录-48")), true);
     roots.push({ id: "fixture-root", path: directory });
     assert.equal(fixture.registerWorkspace(99, directory, { primaryId: "fixture-root", roots: [...roots] }), null);
     assert.deepEqual(fixture.registerWorkspace(42, directory, { primaryId: "fixture-root", roots: [...roots] }), { displayName: reservation.displayName, workspaceId: "fixture-root" });
@@ -85,6 +87,11 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
     assert.deepEqual(fixture.getDirectoryReadEvidence(42, "retry-once"), { relativePath: "retry-once", requestCount: 1, pending: false, outcome: "failed" });
     const retried = fixture.readDirectory(42, "fixture-root", "retry-once");
     assert.equal(retried?.scenario, "retry-once-retry");
+    let retriedSettled = false;
+    void retried?.result.then(() => { retriedSettled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(retriedSettled, false, "重试后的首张截图必须仍能观察到目录读取中");
+    assert.deepEqual(fixture.getDirectoryReadEvidence(42, "retry-once"), { relativePath: "retry-once", requestCount: 2, pending: true, outcome: "started" });
     assert.deepEqual(await retried?.result, { workspaceId: "fixture-root", relativePath: "retry-once", entries: [{ name: "README.md", relativePath: "retry-once/README.md", kind: "file" }] });
     assert.deepEqual(fixture.getDirectoryReadEvidence(42, "retry-once"), { relativePath: "retry-once", requestCount: 2, pending: false, outcome: "succeeded" });
     assert.equal(fixture.readDirectory(42, "unregistered-root", "slow-a"), null);

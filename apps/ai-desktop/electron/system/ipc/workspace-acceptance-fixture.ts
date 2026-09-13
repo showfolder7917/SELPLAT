@@ -71,6 +71,10 @@ export class WorkspaceAcceptanceFixture {
     writeFileSync(path.join(directory, "README.md"), "# 验收工作区\n\n用于验证左侧工作区的目录展开与只读文件预览。\n", "utf8");
     if (mode === "scenarios") {
       for (const name of ["empty", "slow-a", "slow-b", "retry-once", "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定"]) mkdirSync(path.join(directory, name));
+      // 固定数量的尾部目录让根目录在窄窗口中必然纵向溢出，且不会遮挡前置的加载与重试场景目录。
+      for (let index = 1; index <= 48; index += 1) {
+        mkdirSync(path.join(directory, `z-滚动验收目录-${String(index).padStart(2, "0")}`));
+      }
       writeFileSync(path.join(directory, "slow-a", "README.md"), "# 延迟目录 A\n", "utf8");
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");
@@ -126,10 +130,10 @@ export class WorkspaceAcceptanceFixture {
     }
     if (relativePath === "retry-once") {
       return {
-        // 重试仍调用真实存储；保留场景身份只为让验收审计能区分首次失败与恢复成功。
+        // 重试仍调用真实存储，并保持受控延迟，使截图能稳定观察原位“正在读取…”状态。
         fixtureLabel: fixture.displayName,
         scenario: "retry-once-retry",
-        result: this.#trackRead(fixture, relativePath, Promise.resolve(this.#workspaces.listDirectory(workspaceId, relativePath))),
+        result: this.#trackRead(fixture, relativePath, new Promise((resolve) => setTimeout(() => resolve(this.#workspaces.listDirectory(workspaceId, relativePath)), SCENARIO_DIRECTORY_DELAY_MS))),
       };
     }
     return null;
