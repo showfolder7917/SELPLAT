@@ -933,8 +933,8 @@ export async function startApplication(): Promise<void> {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         return await Promise.race([
-          submission.run(goal, (requestId) => service.send(
-            prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) }),
+          submission.run(goal, (requestId, attempt) => service.send(
+            `${attempt === 2 ? "上一回合没有调用场景提交工具。请保留原判断并立即通过 hanli_submit_acceptance_scene 提交；不要只回复说明文字。\n\n" : ""}${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
             settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
           )),
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("韩立场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),

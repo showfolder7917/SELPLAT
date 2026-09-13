@@ -90,13 +90,15 @@ export function createAcceptanceSceneSubmission() {
   };
   return {
     tools,
-    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
+    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
       if (active) throw new Error("韩立已有场景准备请求，不能并发覆盖。");
       const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null };
       active = request;
       try {
-        await model(request.requestId);
-        if (!request.plan) throw new Error("韩立未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
+        // 模型只输出说明文字属于可纠正的格式遗漏；原请求保持活动并限重试一次，避免把同一验收重新走完整修复发布链。
+        await model(request.requestId, 1);
+        if (!request.plan) await model(request.requestId, 2);
+        if (!request.plan) throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
         return request.plan;
       } finally { active = null; }
     },

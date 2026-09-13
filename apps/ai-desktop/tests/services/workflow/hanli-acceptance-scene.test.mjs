@@ -515,11 +515,27 @@ test("说明文字不污染场景结果，只接受本轮工具提交并在结�
 });
 test("缺少工具提交和模型异常均释放请求，不解析文字JSON或沿用上轮结果", async () => {
   const submission = createAcceptanceSceneSubmission();
-  await assert.rejects(submission.run(goal, async () => JSON.stringify(plan)), /未通过场景提交工具/);
+  let missingSubmissionAttempts = 0;
+  await assert.rejects(submission.run(goal, async () => {
+    missingSubmissionAttempts += 1;
+    return JSON.stringify(plan);
+  }), /两次都未通过场景提交工具/);
+  assert.equal(missingSubmissionAttempts, 2);
   await assert.rejects(submission.run(goal, async () => { throw new Error("disconnect"); }), /disconnect/);
   await submission.run(goal, async (requestId) => {
     assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
   });
+});
+
+test("韩立首次只回复说明文字时在原请求内纠正一次并接受工具提交", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  const attempts = [];
+  const result = await submission.run(goal, async (requestId, attempt) => {
+    attempts.push(attempt);
+    if (attempt === 2) assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
+  });
+  assert.deepEqual(attempts, [1, 2]);
+  assert.deepEqual(result, plan);
 });
 
 test("韩立场景工具通过本轮阶段连接装配，结束与应用退出都回收", () => {
