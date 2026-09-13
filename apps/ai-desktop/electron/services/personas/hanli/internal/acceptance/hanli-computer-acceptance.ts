@@ -49,6 +49,8 @@ export class HanliComputerAcceptance {
     const postCompletionReview = goal.reviewMode === "post-completion-review";
     const recoveryLifecycleScene = goal.preparedScene?.kind === "recovery-action-lifecycle";
     const personaConversationLifecycleScene = goal.preparedScene?.kind === "persona-conversation-lifecycle" || goal.preparedScene?.kind === "persona-conversation-with-task-handoff";
+    // 工作区验收能力只能由运行时随当前已批准目标签发；场景计划和模型回合均不能自行扩大点击范围。
+    const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
     let completed = false;
     // 终态回合复用同一动态工具，但在模型遗漏 finish 时只保留提交判断这一条路径。
     let finalizationOnly = false;
@@ -398,7 +400,7 @@ export class HanliComputerAcceptance {
             assertPointInsideWindow(point.x, point.y, width, height, "换算后的坐标必须位于当前应用窗口内。");
             if (args.action === "click") {
               // 只用DOM做安全拦截，绝不通过DOM替模型定位或断言成功。
-              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${recoveryLifecycleScene},${personaConversationLifecycleScene}))`) as "allowed" | "missed" | "restricted";
+              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${recoveryLifecycleScene},${personaConversationLifecycleScene},${workspaceExplorerAcceptance}))`) as "allowed" | "missed" | "restricted";
               if (closed) {
                 throw new Error("验收已终止，未执行点击。");
               }
@@ -807,7 +809,7 @@ function readNavigationClickStatus(x: number, y: number, isAllowed: (x: number, 
   return isAllowed(x, y) ? "allowed" : "restricted";
 }
 
-function safeNavigationClick(x: number, y: number, allowRecoveryLifecycle = false, allowPersonaConversationLifecycle = false): boolean {
+function safeNavigationClick(x: number, y: number, allowRecoveryLifecycle = false, allowPersonaConversationLifecycle = false, allowWorkspaceExplorer = false): boolean {
   const node = document.elementFromPoint(x, y)?.closest("button,[role=tab],[role=treeitem]");
   if (!node) {
     return false;
@@ -829,6 +831,11 @@ function safeNavigationClick(x: number, y: number, allowRecoveryLifecycle = fals
   if (node.classList.contains("activity-settings") && node.closest(".dev-settings-control")) {
     return true;
   }
+  // 已获授权的工作区验收仅能关闭遮挡浮层、登记目录及浏览已登记根；根管理动作仍一律拒绝。
+  if (allowWorkspaceExplorer && node.matches("button.selfloating-close") && node.closest(".dev-settings")) return true;
+  if (allowWorkspaceExplorer && node.matches("button.section-action") && node.closest(".workspace-pane")) return true;
+  if (allowWorkspaceExplorer && node.matches("button.workspace-tree-row") && node.closest(".workspace-pane") && !node.closest(".workspace-root-actions")) return true;
+  if (allowWorkspaceExplorer && node.matches("button") && node.closest(".workspace-tree-error")) return true;
   // 用户已批准的测试台只读导航仅放行左侧活动栏中固定容器的触发器。
   if (node.matches("button.activity-test-console") && node.closest(".dev-activitybar .dev-test-console-control")) {
     return true;

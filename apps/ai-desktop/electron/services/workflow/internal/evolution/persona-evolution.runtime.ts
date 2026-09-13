@@ -19,6 +19,7 @@ import { projectCurrentTopicStage } from "../../domain/current-topic-stage.proje
 import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
 import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
 import { AcceptanceFailureScopePolicy } from "../../domain/acceptance-failure-scope.policy.js";
+import { resolveAcceptanceInteractionCapabilities } from "../../domain/acceptance-interaction-capability.policy.js";
 import { AcceptanceHandoffService } from "../acceptance/acceptance-handoff.service.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../../personas/hanli/index.js";
@@ -588,6 +589,7 @@ export class PersonaEvolutionRuntime {
             proposalId: proposal.proposalId,
             title: proposal.title,
             criteria: proposal.acceptanceCriteria,
+            interactionCapabilities: resolveAcceptanceInteractionCapabilities(proposal),
             sceneContext,
           };
           // 首次验收仍由韩立负责；场景准备是窗口层的内部能力，不能形成令狐提前介入任务的交接事实。

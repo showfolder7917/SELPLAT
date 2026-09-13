@@ -140,6 +140,42 @@ test("人物会话场景只放行补载和既有重试按钮", () => {
   }
 });
 
+test("工作区验收能力只放行已批准的浏览控件，根管理动作继续拒绝", () => {
+  const previous = globalThis.document;
+  const check = ({ kind, capability = false, rootAction = false }) => {
+    const node = {
+      getAttribute: () => null,
+      textContent: "",
+      classList: { contains: () => false },
+      matches: (selector) => (kind === "add" && selector === "button.section-action")
+        || (kind === "tree" && selector === "button.workspace-tree-row")
+        || (kind === "close" && selector === "button.selfloating-close")
+        || (kind === "retry" && selector === "button"),
+      closest: (selector) => {
+        if (selector === ".workspace-pane") return kind === "add" || kind === "tree" || kind === "retry" ? {} : null;
+        if (selector === ".workspace-root-actions") return rootAction ? {} : null;
+        if (selector === ".workspace-tree-error") return kind === "retry" ? {} : null;
+        if (selector === ".dev-settings") return kind === "close" ? {} : null;
+        return null;
+      },
+    };
+    globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
+    return safeNavigationClick(12, 30, false, false, capability);
+  };
+  try {
+    assert.equal(check({ kind: "add" }), false);
+    assert.equal(check({ kind: "tree" }), false);
+    assert.equal(check({ kind: "close" }), false);
+    assert.equal(check({ kind: "add", capability: true }), true);
+    assert.equal(check({ kind: "tree", capability: true }), true);
+    assert.equal(check({ kind: "close", capability: true }), true);
+    assert.equal(check({ kind: "retry", capability: true }), true);
+    assert.equal(check({ kind: "tree", capability: true, rootAction: true }), false);
+  } finally {
+    globalThis.document = previous;
+  }
+});
+
 test("截图像素坐标按当前视口比例映射后再验证和输入", async () => {
   assert.deepEqual(mapScreenshotPointToViewport(800, 400, {
     screenshot: { width: 2400, height: 1600 }, viewport: { width: 1200, height: 800 },
