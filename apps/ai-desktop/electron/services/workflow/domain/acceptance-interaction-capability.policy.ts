@@ -14,10 +14,13 @@ export function resolveAcceptanceInteractionCapabilities(proposal: EvolutionProp
     && /添加工作区/u.test(approvedScope)
     && /目录/u.test(approvedScope)
     && /(?:只读.*(?:查看|预览)|文件.*(?:查看|预览))/u.test(approvedScope);
-  const hasWorkspaceExplorerScenarioScope = hasWorkspaceExplorerScope
-    && /(?:加载|并行|重复点击|重复请求)/u.test(approvedScope)
-    && /失败.*重试|重试.*失败/u.test(approvedScope)
-    && /(?:空(?:目录|状态)|目录.*为空|为空.*目录)/u.test(approvedScope);
+  // 任何一项明确的受控场景都需要 scenarios 夹具；要求所有场景同时出现会让重复读取或长目录验收错误退回 basic。
+  const hasWorkspaceExplorerScenarioScope = hasWorkspaceExplorerScope && (
+    /(?:加载|并行|重复(?:点击|读取|请求))/u.test(approvedScope)
+    || /失败.*重试|重试.*失败/u.test(approvedScope)
+    || /(?:空(?:目录|状态)|目录.*为空|为空.*目录)/u.test(approvedScope)
+    || /(?:超长.*目录|长目录|目录.*(?:滚动|溢出)|工作区树.*滚动)/u.test(approvedScope)
+  );
   const excludesAcceptanceTool = proposal.exclusions.some((item) => /(?:验收工具|原生目录|工作区).*(?:不扩展|禁止|排除)|(?:不扩展|禁止|排除).*(?:验收工具|原生目录|工作区)/u.test(item));
   if (!hasWorkspaceExplorerScope || excludesAcceptanceTool) return [];
   return hasWorkspaceExplorerScenarioScope
