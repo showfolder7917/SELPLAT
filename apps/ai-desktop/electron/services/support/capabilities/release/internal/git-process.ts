@@ -23,7 +23,8 @@ export function describeGitFailure(error: unknown, command: string, cwd: string,
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   const stderr = childOutput(error, "stderr");
   const stdout = childOutput(error, "stdout");
-  const detail = (stderr || stdout || message).slice(-2_000);
+  // Git 可同时把环境告警写入 stderr、把校验失败详情写入 stdout；两者都保留才能定位真实失败项。
+  const detail = ([stderr, stdout].filter(Boolean).join("\n") || message).slice(-2_000);
   const pathDetail = code === "ENOENT" ? `；PATH=${environment.PATH || "<missing>"}` : "";
   return new Error(`Git 命令失败：command=${command}；cwd=${cwd}${pathDetail}；${detail}`);
 }

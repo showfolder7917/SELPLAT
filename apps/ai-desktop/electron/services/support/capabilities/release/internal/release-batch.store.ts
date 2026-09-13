@@ -8,10 +8,12 @@ import type { ReleaseBatchDocumentOutDto } from "../../../../../../contracts/ser
 export class ReleaseBatchStore {
   readonly #runningRoot: string;
   readonly #archiveRoot: string;
+  readonly #stableBuildRoot: string | null;
 
-  constructor(runningRoot: string, archiveLogRoot: string) {
+  constructor(runningRoot: string, archiveLogRoot: string, stableBuildRoot?: string) {
     this.#runningRoot = path.resolve(runningRoot);
     this.#archiveRoot = path.join(path.resolve(archiveLogRoot), "发布归档");
+    this.#stableBuildRoot = stableBuildRoot ? path.resolve(stableBuildRoot) : null;
   }
 
   create(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTaskOutDto[], initiatorMemberId: string): ReleaseBatchDocumentOutDto {
@@ -41,11 +43,11 @@ export class ReleaseBatchStore {
   /**
    * 从当前运行文档与长期归档中避让已经使用的发布批次代次。
    * 真实传参示例：版本 0.1.1、请求代次 2，历史已有 release-0.1.1-g2 时返回 3。
-   * 返回值只负责分配新的批次标识，不改写历史批次或稳定应用。
+   * 稳定应用即使缺少历史归档也已占用批次标识；返回值只分配新标识，绝不改写稳定应用。
    */
   nextAvailableGeneration(version: string, requestedGeneration: number): number {
     let generation = Math.max(1, requestedGeneration);
-    while (this.#hasReleaseBatch(`release-${version}-g${generation}`)) generation += 1;
+    while (this.#hasReleaseBatch(`release-${version}-g${generation}`) || this.#hasStablePublishedApplication(`release-${version}-g${generation}`)) generation += 1;
     return generation;
   }
 
@@ -72,5 +74,10 @@ export class ReleaseBatchStore {
     return readdirSync(this.#archiveRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .some((month) => existsSync(path.join(this.#archiveRoot, month.name, releaseBatchId, "发布批次文档.json")));
+  }
+
+  /** 未归档的稳定应用同样不可复用，防止后续候选在提升阶段才发现覆盖冲突。 */
+  #hasStablePublishedApplication(releaseBatchId: string): boolean {
+    return Boolean(this.#stableBuildRoot && existsSync(path.join(this.#stableBuildRoot, "package", "published", releaseBatchId, "AI Desktop.app")));
   }
 }

@@ -5,6 +5,7 @@ import type { CollaborationIntegrationFailureKindValue, CollaborationMemberOutDt
 import type { IntegrationReleaseInDto, ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
 import type { CollaborationDurationPort, CollaborationStatePort } from "../../../../workflow/index.js";
 import { ReleaseBatchStore } from "./release-batch.store.js";
+import { StablePublishedApplicationCollisionError } from "./verified-package.release.js";
 import { LinghuAutomationFacade } from "../../../../personas/linghu/index.js";
 import { createCollaborationResultSummary } from "../../../../workflow/index.js";
 import {
@@ -311,7 +312,7 @@ export class VersionIntegrationPipeline {
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
       const mergeConflict = error instanceof MergeConflictError;
       const candidateBranchConflict = error instanceof CandidateBranchConflictError;
-      const infrastructureFailure = LinghuAutomationFacade.isUnifiedTestInfrastructureError(error);
+      const infrastructureFailure = LinghuAutomationFacade.isUnifiedTestInfrastructureError(error) || error instanceof StablePublishedApplicationCollisionError;
       const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
       const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
       const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error));
