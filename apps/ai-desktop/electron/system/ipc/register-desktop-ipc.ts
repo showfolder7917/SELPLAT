@@ -153,21 +153,25 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
     const workspaceExplorerScenarioAcceptance = goal.interactionCapabilities?.includes("workspace-explorer-scenarios") === true;
+    // 先回收带私有标记的遗留根并预备本轮标签，场景规划才能区分本轮新增与旧会话残留。
+    const fixtureReservation = workspaceExplorerAcceptance
+      ? workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic")
+      : null;
     const acceptanceGoal: HanliComputerAcceptanceInDto = workspaceExplorerAcceptance ? {
       ...goal,
       workspaceAcceptanceFixture: {
         kind: "workspace-explorer",
         mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
+        displayName: fixtureReservation!.displayName,
         instructions: workspaceExplorerScenarioAcceptance
-          ? ["点击工作区标题右侧添加入口会直接登记本轮临时目录，不会打开原生目录选择器。", "登记后展开根目录；slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
-          : ["点击工作区标题右侧添加入口会直接登记本轮临时目录，不会打开原生目录选择器。", "临时目录会在验收结束后自动撤销。"],
+          ? ["先确认本轮标签尚未出现在工作区列表；点击标题右侧添加入口一次后立即截图，确认本轮标签出现。", "只展开本轮标签对应根目录；slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
+          : ["先确认本轮标签尚未出现在工作区列表；点击标题右侧添加入口一次后立即截图，确认本轮标签出现。", "临时目录会在验收结束后自动撤销。"],
       },
     } : goal;
-    // 夹具必须先于场景规划预备，使韩立只能针对已签发、已存在的临时事实选择场景。
     if (workspaceExplorerAcceptance) {
-      workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic");
       audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
         ...identity,
+        fixtureLabel: fixtureReservation!.displayName,
         mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
         capabilities: goal.interactionCapabilities || [],
       });
