@@ -5,6 +5,7 @@ import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/el
 import { nangongInquiryResult, nangongInquiryWithCorrection } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/index.js";
 import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.parser.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
+import { presentHanliTaskStatus } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-task-status.presenter.js";
 
 import { buildHanliRecentConversation } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-method-context.js";
 
@@ -18,6 +19,19 @@ const request = { message: customerQuestion, clientMessageId: "u1", attachmentId
 const topic = { title: "进度核实", type: "核实", userIntent: request.message, tags: ["进度"], summary: "核实当前进度", switchTopic: false };
 const conclude = { answeredQuestion: customerQuestion, action: "conclude", reason: "可以说明源码与运行验证的区别", nextQuestion: "", missingEvidence: ["当前运行版本"] };
 const resultMessage = (conversation) => conversation.messages.find((message) => message.messageId === "inquiry:u1:result");
+
+test("韩立把任务失败转换成客户可判断的四段式进度", () => {
+  const content = presentHanliTaskStatus({
+    snapshot: { title: "修复任务卡" }, state: "test-failed", blockingReason: "整体验证未通过",
+    customerActionGuidance: null, repairRequiresUserConfirmation: false,
+  }, {
+    type: "unified_test.failed", status: "failed", error: true, summary: "内部测试命令退出",
+  });
+  assert.match(content, /当前在做：/);
+  assert.match(content, /失败原因：整体验证未通过/);
+  assert.match(content, /接下来：令狐先查明原因/);
+  assert.match(content, /需要你处理：暂时不需要/);
+});
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function fixture(investigate, explain = async () => ({ text: "源码已经修改，但当前运行版本尚未确认。建议先确认运行版本再复验。" }), assess = async () => conclude) {
@@ -398,6 +412,40 @@ test("托管将韩立设计交给现有研讨指派链，不运行人物内部�
   assert.equal(calls, 1);
   assert.equal(f.messages.filter((item) => item.speakerType === "user").length, 1);
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-control:automatic:u1").length, 1);
+});
+
+test("托管中的客户纠正会更新原令狐任务并明确反馈当前状态", async () => {
+  const f = fixture(async () => { throw new Error("不得启动另一条调查链"); });
+  const revisions = [];
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  f.memory.recordRequirementDiscussionContext = () => undefined;
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({
+      deliberations: [],
+      automationSettings: { automaticCustodyEnabled: true },
+      automationRuntime: { status: "running" },
+      oneShotRun: { runId: "run-4", proposalId: "proposal-4", status: "blocked" },
+    }) },
+    prompts: { render: () => "设计要求" },
+    conversation: {
+      activeConversationId: () => "provider",
+      send: async () => ({ threadId: "provider", text:
+        `测试台保持通用工具，令狐读取内部证据完成验收。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` }),
+    },
+    startInternalDeliberation: async () => { throw new Error("不能创建重复研讨"); },
+    reviseActiveRepairScope: async (revision) => {
+      revisions.push(revision);
+      return { updated: true, taskId: "task-4", taskRevision: 5, message: "已更新原任务范围并停止旧执行，正在按新范围重新分析。" };
+    },
+    recordEvent: () => {},
+  });
+  const result = await service.send({ ...request, clientMessageId: "scope-fix", message: "测试台保持通用，不承担韩立验收" });
+  assert.deepEqual(revisions, [{ runId: "run-4", proposalId: "proposal-4", instruction: "测试台保持通用，不承担韩立验收" }]);
+  assert.match(result.messages.at(-1).content, /当前在做：已更新原任务范围/);
+  assert.match(result.messages.at(-1).content, /失败原因：上一执行代次仍使用修正前的范围/);
+  assert.match(result.messages.at(-1).content, /接下来：令狐会在原任务中重新分析/);
+  assert.match(result.messages.at(-1).content, /需要你处理：暂时不需要/);
 });
 
 test("删除韩立托管排障旁路，不保留后台恢复或旧状态兼容入口", () => {

@@ -133,6 +133,8 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(coordinatorSource, /current\.automationSource !== "linghu-safeguard"/);
   assert.match(coordinatorSource, /ORCHESTRATOR_MEMBER_IDS/);
   assert.match(integrationPipelineSource, /release\.awaiting_restart/);
+  assert.match(coordinatorSource, /reviseActiveRepairScope[\s\S]*invalidateTask[\s\S]*task\.scope_revised/);
+  assert.match(integrationPipelineSource, /invalidateTask[\s\S]*integration\.batch_invalidated[\s\S]*publishedExecutable = null/);
   assert.match(integrationPipelineSource, /release\.restart_healthy/);
   assert.match(integrationPipelineSource, /unified_test\.passed/);
   assert.match(integrationPipelineSource, /unified_test\.failed/);
@@ -160,7 +162,7 @@ function createExecutionResultCoordinator(directory, store, executionResult) {
         dispose: async () => undefined,
       }),
     }),
-    integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+    integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, invalidateTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
     createTaskRuleContext: () => ({
       activeUserId: "XUNAN", role: "executor", ruleRevision: "revision-one",
       mandatoryRoleRuleIds: ["AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES"], matchedTaskRuleIds: [],
@@ -244,6 +246,50 @@ test("旧令狐卡点修复结果从返回南宫婉迁回集成队列", () => {
     assert.equal(migrated.currentHandler, null);
     assert.equal(migrated.versionWorkspace.resultSha, "result");
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("客户范围修订保留原令狐任务并使旧执行代次失效", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "scope-revision-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const seeded = store.submitTask({
+      title: "修复验收卡点",
+      problemStatement: "测试台被错误加入韩立验收。",
+      confirmedIntent: "先按旧范围修复。",
+      constraints: ["卡点标识：run-4:proposal:proposal-4:round:4"],
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "han-li",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+      evolutionProposalId: "proposal-4",
+      evolutionRoundId: "proposal-4",
+    });
+    store.updateTask(seeded.taskId, "test.completed_before_customer_correction", (task) => {
+      task.state = "integrated";
+      task.completedAt = new Date().toISOString();
+    });
+    const coordinator = createExecutionResultCoordinator(directory, store, { status: "code-verified", text: "", pendingActions: [], authorizedFiles: [] });
+    // 本用例只核对原子修订结果；关闭调度器，避免新租约在断言前已经开始。
+    await coordinator.dispose();
+    const revised = await coordinator.reviseActiveRepairScope({
+      runId: "run-4",
+      proposalId: "proposal-4",
+      instruction: "测试台保持通用工具，令狐改为读取内部证据并由韩立查看真实页面验收。",
+    });
+    const task = store.task(seeded.taskId);
+    assert.equal(revised.updated, true);
+    assert.equal(revised.taskId, seeded.taskId);
+    assert.equal(task.taskRevision, 2);
+    assert.equal(task.state, "queued-executor");
+    assert.equal(task.assignmentId, null);
+    assert.match(task.snapshot.confirmedIntent, /测试台保持通用工具/);
+    assert.match(task.snapshot.constraints.at(-1), /^客户最新范围修订：/);
+    assert.equal(task.flowEvents.at(-1).type, "task.scope_revised");
+    assert.equal(store.state().tasks.length, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("清空测试数据保留人物配置并重置令狐运行态", () => {

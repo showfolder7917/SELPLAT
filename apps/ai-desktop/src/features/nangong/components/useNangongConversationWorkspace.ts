@@ -67,7 +67,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
 
   // 人物会话运行状态（runtime）由公共控制器提供，切换页面后仍保留未完成消息。
   const runtime = props.runtime;
-  // 待发送文字由人物会话控制器持有，卸载隐藏页面不会丢失客户尚未发送的内容。
+  // 待发送文字（chatText）保存问答输入框中尚未发送的内容，由人物会话控制器跨页面切换持有。
   const chatText = runtime.draftText;
   // 文字更新操作统一写回人物会话控制器，与附件和发送中消息共享生命周期。
   const setChatText = runtime.setDraftText;

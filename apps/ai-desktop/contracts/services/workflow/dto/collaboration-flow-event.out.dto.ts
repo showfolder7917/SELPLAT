@@ -20,6 +20,12 @@ export interface CollaborationFlowEventDetailsOutDto {
   validationRound?: number;
   /** 与该事件关联的任务分配标识。 */
   assignmentId?: string;
+  /** 客户修正范围前的任务修订号。 */
+  previousRevision?: number;
+  /** 客户修正范围后的任务修订号。 */
+  taskRevision?: number;
+  /** 本轮客户确认的范围修订原文。 */
+  instruction?: string;
   /** 失败发生的业务阶段。 */
   failureStage?: string;
   /** 面向人员阅读的失败摘要。 */

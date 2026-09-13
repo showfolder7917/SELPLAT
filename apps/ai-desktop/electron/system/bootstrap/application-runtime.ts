@@ -113,7 +113,7 @@ import {
 } from "../../services/workflow/index.js";
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
 import { createAcceptanceSceneSubmission, createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
-import { createHanliRuntime } from "../../services/personas/hanli/index.js";
+import { createHanliRuntime, presentHanliTaskStatus } from "../../services/personas/hanli/index.js";
 import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
@@ -496,6 +496,8 @@ export async function startApplication(): Promise<void> {
   }) : null;
   // IPC 首次读取和后续协作状态推送必须共用这一隔离会话，避免正式专题覆盖空状态窗口。
   const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession();
+  // 同一业务事件只向韩立客户会话反馈一次；心跳和普通状态刷新不制造重复消息。
+  const publishedHanliTaskStatusEventIds = new Set<string>();
   let linghuRuntime: LinghuRuntime | undefined;
   const collaborationContext = createCollaborationContext({
     startup,
@@ -526,6 +528,33 @@ export async function startApplication(): Promise<void> {
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
       }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
+      if (collaborationMemory) {
+        for (const taskId of taskIds) {
+          const task = state.tasks.find((candidate) => candidate.taskId === taskId);
+          const latest = task?.flowEvents.at(-1);
+          if (!task || !latest || publishedHanliTaskStatusEventIds.has(latest.eventId)) continue;
+          if (task.initiator?.memberId !== "han-li" && task.automationSource !== "linghu-safeguard") continue;
+          const content = presentHanliTaskStatus(task, latest);
+          if (!content) continue;
+          try {
+            const activeConversation = collaborationMemory.readPersonaConversation("han-li");
+            if (!activeConversation.conversationId) continue;
+            const messageId = `hanli-task-status:${task.taskId}:${latest.eventId}`;
+            if (activeConversation.messages.some((message) => message.messageId === messageId)) {
+              publishedHanliTaskStatusEventIds.add(latest.eventId);
+              continue;
+            }
+            const conversation = collaborationMemory.appendPersonaInternalMessage({
+              ownerPersonaId: "han-li", conversationId: activeConversation.conversationId,
+              messageId, speakerPersonaId: "han-li", content, createdAt: latest.occurredAt,
+            });
+            publishedHanliTaskStatusEventIds.add(latest.eventId);
+            for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
+          } catch (error) {
+            eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "hanli-task-status", operation: "publish_customer_status", error, correlationId: task.taskId });
+          }
+        }
+      }
       for (const window of BrowserWindow.getAllWindows()) {
         if (window.isDestroyed()) continue;
         const isolated = acceptanceEmptyTaskGroupSession.isActive(window.webContents.id);
@@ -657,6 +686,10 @@ export async function startApplication(): Promise<void> {
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request) => startHanliInternalDeliberation(request),
+    reviseActiveRepairScope: (request) => {
+      if (!collaboration) throw new Error("协作流程尚未就绪，不能更新当前修复范围。");
+      return collaboration.reviseActiveRepairScope(request);
+    },
     resumeInternalDeliberation: async (deliberationId) => {
       if (!personaEvolution) throw new Error("人物内部研讨运行时尚未就绪。");
       personaEvolution.resumePendingDeliberation(deliberationId);

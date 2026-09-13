@@ -32,7 +32,7 @@ function readableDesktopError(error: unknown, fallback: string): string {
 export function useHanliConversationWorkspace(props: HanliConversationWorkspaceProps) {
   // 人物会话运行状态（runtime）由公共控制器提供，页面切换后仍保留发送和附件恢复状态。
   const runtime = props.runtime;
-  // 待发送文字由人物会话控制器持有，页面卸载和重新打开不会清空客户草稿。
+  // 待发送文字（text）保存输入框中尚未发送的内容，由人物会话控制器跨页面切换持有。
   const text = runtime.draftText;
   // 文字更新操作把草稿写回人物会话控制器，而不是保存在短生命周期页面 Hook 中。
   const setText = runtime.setDraftText;

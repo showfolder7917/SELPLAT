@@ -49,6 +49,8 @@ export class VersionIntegrationPipeline {
   readonly #loadedRuntimeSha: string | null;
   readonly #publishRelease: VersionIntegrationPipelineOptions["publishRelease"];
   readonly #waitSpans = new Map<string, string>();
+  readonly #runningTaskIds = new Set<string>();
+  readonly #invalidatedTaskIds = new Set<string>();
   #running = false;
   #disposed = false;
 
@@ -83,6 +85,11 @@ export class VersionIntegrationPipeline {
     if (!spanId) return;
     this.#durations.finish(spanId, outcome, details);
     this.#waitSpans.delete(taskId);
+  }
+
+  /** 客户修正任务范围时，只标记实际在途的旧批次；尚未开始的下一批不会被误伤。 */
+  invalidateTask(taskId: string): void {
+    if (this.#runningTaskIds.has(taskId)) this.#invalidatedTaskIds.add(taskId);
   }
 
   /** 合并工作串行自调度；重复通知只会复用当前运行中的批次。 */
@@ -158,6 +165,7 @@ export class VersionIntegrationPipeline {
     // 运行态可能在测试数据清空后从 1 重新计数，发布归档才是批次标识不可复用的长期事实。
     const generation = this.#releaseBatches.nextAvailableGeneration(this.#releaseVersion, state.nextIntegrationGeneration);
     const taskIds = eligible.map((task) => task.taskId);
+    for (const taskId of taskIds) this.#runningTaskIds.add(taskId);
     const releaseBatchId = `release-${this.#releaseVersion}-g${generation}`;
     let releaseLease: (() => void) | null = null;
     let releaseDocument: ReleaseBatchDocumentOutDto | null = null;
@@ -238,6 +246,26 @@ export class VersionIntegrationPipeline {
       releaseDocument.state = "testing";
       this.#releaseBatches.write(releaseDocument);
       publishedExecutable = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
+      if (taskIds.some((taskId) => this.#invalidatedTaskIds.has(taskId))) {
+        const reason = "客户已修正任务范围，本批旧候选已停止，等待原任务按新范围重新验证。";
+        releaseDocument.state = "failed";
+        releaseDocument.failureReason = reason;
+        releaseDocument.completedAt = new Date().toISOString();
+        this.#releaseBatches.write(releaseDocument);
+        this.#store.updateTask(taskIds[0], "integration.batch_invalidated", (_first, mutable) => {
+          const batch = mutable.integrationBatches.find((item) => item.generation === generation);
+          if (batch) {
+            batch.state = "failed";
+            batch.failureReason = reason;
+            batch.completedAt = new Date().toISOString();
+          }
+        });
+        this.#durations.finish(verifySpan, "interrupted", { releaseEvent: "integration.batch_invalidated" });
+        verifySpan = null;
+        this.#durations.finish(integrationSpan, "interrupted", { releaseEvent: "integration.batch_invalidated" });
+        publishedExecutable = null;
+        return;
+      }
       releaseDocument.state = "verified";
       releaseDocument.executable = publishedExecutable;
       this.#releaseBatches.write(releaseDocument);
@@ -350,6 +378,10 @@ export class VersionIntegrationPipeline {
         this.#durations.instant(taskIds[0], "integration.candidate_retirement_failed", { generation, error: errorMessage(error) });
       });
       releaseLease?.();
+      for (const taskId of taskIds) {
+        this.#runningTaskIds.delete(taskId);
+        this.#invalidatedTaskIds.delete(taskId);
+      }
       this.#running = false;
       this.schedule();
     }

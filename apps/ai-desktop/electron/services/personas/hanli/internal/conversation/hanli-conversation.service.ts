@@ -547,9 +547,14 @@ export class HanliConversationService {
     // Workflow 先持久化一次性运行态，再异步调度韩立向南宫婉提出第一问。
     const activeRun = this.#options.store.state().oneShotRun;
     const reusedRun = Boolean(automaticDecision && activeRun && ["running", "blocked"].includes(activeRun.status));
-    const started = reusedRun
-      ? { continuous: true }
-      : await start(request);
+    const scopeRevision = reusedRun && activeRun?.proposalId && this.#options.reviseActiveRepairScope
+      ? await this.#options.reviseActiveRepairScope({
+        runId: activeRun.runId,
+        proposalId: activeRun.proposalId,
+        instruction: request.message,
+      })
+      : null;
+    const started = reusedRun ? { continuous: true } : await start(request);
     // 根据真实托管设置生成启动回执，不从模型自由文案推断流程状态。
     let reply = "已启动韩立与南宫婉的内部研讨。南宫婉查清事实后，我会把修复范围和影响带回来请你确认，再进入实施。";
     // 自动托管开启时，韩立可以在已授权范围内继续作业务范围判断。
@@ -558,8 +563,10 @@ export class HanliConversationService {
       reply = "已启动韩立与南宫婉的内部研讨。自动托管已开启，我会代表你判断新发现应并入当前专题还是留到后续专题，并持续推进。";
     }
     if (reusedRun) {
-      reply = activeRun?.status === "blocked"
-        ? "原流程已保留在当前卡点；沿现有令狐故障恢复链处理，尚未完成。"
+      reply = scopeRevision?.updated
+        ? `当前在做：${scopeRevision.message}\n失败原因：上一执行代次仍使用修正前的范围。\n接下来：令狐会在原任务中重新分析、实施和验证，不会新建重复任务。\n需要你处理：暂时不需要；出现必须由你决定的范围或权限时我会明确说明。`
+        : activeRun?.status === "blocked"
+        ? "当前在做：原流程仍停在现有卡点。\n失败原因：没有找到可承接本次纠正的令狐修复任务。\n接下来：继续沿现有故障恢复链排查。\n需要你处理：暂时不需要。"
         : ["paused", "stopped"].includes(this.#options.store.state().automationRuntime.status)
           ? "原流程处于暂停状态，设计要求已经保存，等待恢复原流程。"
           : "原流程正在推进，继续沿现有调查、审批和指派链处理。";

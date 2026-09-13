@@ -73,6 +73,13 @@ export interface HanliApplicationServiceOptions {
   /** 用户明确继续时，恢复原有未完成研讨。 */
   resumeInternalDeliberation?: (deliberationId: string) => Promise<void>;
   startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
+  /** 自动托管已有修复任务时，把客户最新纠正写回原任务并废止旧执行代次。 */
+  reviseActiveRepairScope?: (request: { runId: string; proposalId: string; instruction: string }) => Promise<{
+    updated: boolean;
+    taskId: string | null;
+    taskRevision: number | null;
+    message: string;
+  }>;
   /** 把用户确认或纠正交回当前等待中的内部研讨轮次。 */
   replyInternalDeliberationConfirmation?: (reply: string) => Promise<{ customerReply: string }>;
   /** 返回 AGENTS.md 已确认的当前稳定用户标识。 */

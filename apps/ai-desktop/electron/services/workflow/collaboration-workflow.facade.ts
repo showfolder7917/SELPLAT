@@ -38,6 +38,13 @@ export interface CollaborationCoordinatorOptions {
   createTaskRuleContext?(taskRuleIds: string[]): NonNullable<CollaborationTaskOutDto["snapshot"]["ruleContext"]>;
 }
 
+export interface ActiveRepairScopeRevisionResult {
+  updated: boolean;
+  taskId: string | null;
+  taskRevision: number | null;
+  message: string;
+}
+
 /** 编排执行人的技术分析、实施、令狐验证和集成，业务方向审批由韩立专题线路负责。 */
 export class CollaborationCoordinator {
   readonly #store: CollaborationStore;
@@ -78,6 +85,96 @@ export class CollaborationCoordinator {
   state(): CollaborationStateOutDto { return this.#store.state(); }
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
   selectMember(memberId: string): CollaborationStateOutDto { return this.#store.selectMember(memberId); }
+
+  /**
+   * 把客户在韩立会话中的最新纠正写回当前演化修复任务。
+   * 保留同一 taskId 和历史记录，同时废止旧执行租约，避免旧范围的迟到结果继续进入集成。
+   */
+  async reviseActiveRepairScope(request: {
+    runId: string;
+    proposalId: string;
+    instruction: string;
+  }): Promise<ActiveRepairScopeRevisionResult> {
+    const instruction = request.instruction.trim().slice(0, 8_000);
+    if (!instruction) return { updated: false, taskId: null, taskRevision: null, message: "没有可写入的范围修订。" };
+    const task = [...this.state().tasks].reverse().find((candidate) =>
+      candidate.automationSource === "linghu-safeguard"
+      && candidate.evolutionProposalId === request.proposalId
+      // 活动的一次性运行已经固定 proposalId；运行标识只用于审计，旧数据可能使用全角冒号。
+      && candidate.state !== "cancelled");
+    if (!task) return { updated: false, taskId: null, taskRevision: null, message: "当前没有可更新的令狐修复任务。" };
+
+    const previousExecutorMemberId = task.executorMemberId;
+    const previousAssignmentId = task.assignmentId;
+    const previousRevision = task.taskRevision;
+    const now = new Date().toISOString();
+    const revisionConstraintPrefix = "客户最新范围修订：";
+    this.#integrationPipeline.invalidateTask(task.taskId);
+    this.#store.updateTask(task.taskId, "task.scope_revised", (current, state) => {
+      current.taskRevision += 1;
+      current.workerGeneration += 1;
+      current.snapshot.confirmedIntent = `${current.snapshot.confirmedIntent}\n\n${revisionConstraintPrefix}${instruction}`.slice(0, 20_000);
+      current.snapshot.constraints = [
+        ...current.snapshot.constraints.filter((item) => !item.startsWith(revisionConstraintPrefix)),
+        `${revisionConstraintPrefix}${instruction}`,
+      ];
+      current.snapshot.contentHash = sha256(current.snapshot.confirmedIntent);
+      for (const record of current.executionRecords.filter((item) => item.completedAt === null)) {
+        record.status = "transferred";
+        record.completedAt = now;
+        record.blockingReason = "客户修正了当前任务范围，旧执行代次已经失效";
+      }
+      current.assignmentId = null;
+      current.state = "queued-executor";
+      current.phase = null;
+      current.recoveryTargetState = null;
+      current.blockingReason = "已收到客户修正，正在按新范围重新分析同一任务";
+      current.integrationGeneration = null;
+      current.unifiedTest = null;
+      current.codeVerifiedAt = null;
+      current.completedAt = null;
+      current.finalResult = null;
+      current.resultSummary = null;
+      current.repairDiagnosis = null;
+      current.repairResult = null;
+      current.repairFailureReason = null;
+      current.repairRequiresUserConfirmation = false;
+      current.customerActionGuidance = null;
+      current.integrationFailure = null;
+      // 已完成任务的工作树可能已经退休；同一 taskId 用新修订重新签发，不复用已删除目录。
+      if (current.versionWorkspace?.retiredAt) current.versionWorkspace = null;
+      else if (current.versionWorkspace) current.versionWorkspace.resultSha = null;
+      if (previousExecutorMemberId) current.preferredExecutorMemberId = previousExecutorMemberId;
+      current.executorMemberId = previousExecutorMemberId;
+      for (const member of state.members) {
+        if (member.currentTaskId !== current.taskId) continue;
+        member.state = "idle";
+        member.role = null;
+        member.phase = null;
+        member.currentTaskId = null;
+        member.blockingReason = null;
+        member.updatedAt = now;
+      }
+      current.flowEvents.push({
+        eventId: randomUUID(), type: "task.scope_revised", stage: "recovery", status: "started",
+        actor: current.initiator, summary: `客户修正已写入原任务，旧执行已停止；正在按新范围重新分析（第 ${current.taskRevision} 版）`,
+        occurredAt: now, error: false,
+        details: { previousRevision, taskRevision: current.taskRevision, assignmentId: previousAssignmentId || undefined, instruction },
+      });
+    });
+    if (previousExecutorMemberId) {
+      this.#stopHeartbeat(`executor:${task.taskId}`);
+      try { await this.#executor.close(task.taskId); }
+      catch (error) { this.#durations.instant(task.taskId, "task.scope_revision_executor_close_failed", { error: errorMessage(error) }); }
+    }
+    this.#schedule();
+    return {
+      updated: true,
+      taskId: task.taskId,
+      taskRevision: previousRevision + 1,
+      message: "已更新原任务范围并停止旧执行，正在按新范围重新分析。",
+    };
+  }
 
   submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
     const enabledWorkers = this.state().members.filter((member) => member.kind === "worker" && member.enabled).length;
