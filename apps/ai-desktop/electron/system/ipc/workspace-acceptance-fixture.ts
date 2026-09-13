@@ -39,7 +39,7 @@ export class WorkspaceAcceptanceFixture {
     const directory = mkdtempSync(path.join(this.#temporaryRoot, "hanli-workspace-acceptance-"));
     writeFileSync(path.join(directory, "README.md"), "# 验收工作区\n\n用于验证左侧工作区的目录展开与只读文件预览。\n", "utf8");
     if (mode === "scenarios") {
-      for (const name of ["empty", "slow-a", "slow-b", "retry-once"]) mkdirSync(path.join(directory, name));
+      for (const name of ["empty", "slow-a", "slow-b", "retry-once", "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定"]) mkdirSync(path.join(directory, name));
       writeFileSync(path.join(directory, "slow-a", "README.md"), "# 延迟目录 A\n", "utf8");
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");

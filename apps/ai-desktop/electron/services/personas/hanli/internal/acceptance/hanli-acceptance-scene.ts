@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/index.js";
 import type { AcceptanceSceneKind, AcceptanceScenePlanOutDto, AcceptanceSceneSegmentOutDto, HanliComputerAcceptanceInDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
-const sceneKinds: AcceptanceSceneKind[] = ["current-window", "empty-task-group", "failure-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "blocked"];
+const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "empty-task-group", "failure-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "blocked"];
 
 /** 验证韩立的结构化准备计划，任何缺项都退回环境排障，不默认为当前窗口。 */
 export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanOutDto {
@@ -25,8 +25,11 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
       || segment.conditions.some((condition) => typeof condition?.prerequisite !== "string" || !condition.prerequisite.trim()))) {
     throw new Error("韩立验收场景计划未逐项覆盖原验收条件。");
   }
-  if (segments.some((segment) => segment.kind === "current-window") && !hasVerifiedCurrentWindowContext(goal)) {
+  if (segments.some((segment) => segment.kind === "current-window" || segment.kind === "workspace-explorer-fixture") && !hasVerifiedCurrentWindowContext(goal)) {
     throw new Error("当前窗口场景缺少与验收目标一致的只读专题、提案或运行记录，不能把模型推测当作页面事实。");
+  }
+  if (segments.some((segment) => segment.kind === "workspace-explorer-fixture") && goal.workspaceAcceptanceFixture?.mode !== "scenarios") {
+    throw new Error("工作区验收场景缺少已签发的受控夹具，不能把普通目录当作加载、失败或空目录证据。");
   }
   if (segments.some((segment) => segment.completionReviewRequired && segment.kind !== "current-window")) {
     throw new Error("跨完成态复核只能使用当前真实窗口，隔离或受阻场景不能触发业务完成动作。");

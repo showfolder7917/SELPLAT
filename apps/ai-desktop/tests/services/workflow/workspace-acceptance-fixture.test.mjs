@@ -52,6 +52,7 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
     fixture.reserve("scenarios");
     const directory = fixture.takeDirectory();
     assert.ok(directory);
+    assert.equal(existsSync(path.join(directory, "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定")), true);
     roots.push({ id: "fixture-root", path: directory });
     fixture.registerWorkspace(directory, { primaryId: "fixture-root", roots: [...roots] });
 
