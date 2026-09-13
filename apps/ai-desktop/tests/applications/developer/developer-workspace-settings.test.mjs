@@ -29,3 +29,14 @@ test("工作区资源树使用受控目录与文本预览 API", () => {
   assert.match(registry, /addWorkspace/);
   assert.doesNotMatch(activityBar, /Search24Regular|Branch24Regular|Bug24Regular|Folder24Regular/);
 });
+
+test("文件内容在右侧主工作区阅读，左侧只保留目录树", () => {
+  const explorer = readFileSync(new URL("../../../src/applications/developer/explorer/WorkspaceExplorerFeature.tsx", import.meta.url), "utf8");
+  const workspaceSection = readFileSync(new URL("../../../src/applications/developer/sections/DeveloperWorkspaceSection.tsx", import.meta.url), "utf8");
+  const preview = readFileSync(new URL("../../../src/applications/developer/workspace/WorkspaceFilePreview.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(explorer, /workspace-file-preview/);
+  assert.match(workspaceSection, /WorkspaceFilePreview/);
+  assert.match(preview, /workspace-file-preview-panel/);
+  assert.match(preview, /aria-label/);
+  assert.match(preview, /onClose/);
+});
