@@ -9,6 +9,9 @@ test("Developer 左侧任务区按可见职责拆分并保留折叠状态入口"
   const taskExplorer = source("src/applications/developer/explorer/TaskExplorerFeature.tsx");
   const workspaceExplorer = source("src/applications/developer/explorer/WorkspaceExplorerFeature.tsx");
   const workspaceController = source("src/applications/developer/explorer/useWorkspaceExplorerFeature.ts");
+  const workspaceSection = source("src/applications/developer/sections/DeveloperWorkspaceSection.tsx");
+  const applicationController = source("src/applications/developer/model/useDeveloperApplicationController.ts");
+  const styles = source("src/applications/styles/desktop-applications.css");
   assert.match(taskExplorer, /aria-expanded=\{expanded\}/);
   assert.match(taskExplorer, /OperatingModeSwitch/);
   assert.match(taskExplorer, /SingleConversationTaskSummary/);
@@ -21,11 +24,16 @@ test("Developer 左侧任务区按可见职责拆分并保留折叠状态入口"
   assert.match(workspaceController, /selectedEntry/);
   assert.match(workspaceController, /pendingDirectoryLoads/);
   assert.match(workspaceController, /pendingLoad\) return pendingLoad/);
-  assert.match(workspaceController, /撤销登记后立即移除旧树和预览/);
+  assert.match(workspaceController, /撤销登记后立即移除旧树和选择/);
   assert.match(workspaceController, /setSelectedEntry\(\(current\) => current && !isRegisteredWorkspace\(current\.workspaceId\) \? null : current\)/);
-  assert.match(workspaceController, /setPreview\(\(current\) => current && !isRegisteredWorkspace\(current\.workspaceId\) \? null : current\)/);
-  assert.match(workspaceController, /previewErrorWorkspaceId && !isRegisteredWorkspace\(previewErrorWorkspaceId\)/);
+  assert.match(workspaceController, /previewWorkspaceId/);
+  assert.match(workspaceController, /onFilePreviewChange\(\{ preview: null, error: "", workspaceId: null \}\)/);
   assert.match(workspaceController, /!registeredWorkspaceIds\.current\.has\(workspaceId\)/);
+  assert.doesNotMatch(workspaceExplorer, /workspace-file-preview/);
+  assert.match(applicationController, /workspaceFilePreview/);
+  assert.match(workspaceSection, /WorkspaceFilePreview/);
+  assert.match(styles, /\.workspace-tree-row\.selected/);
+  assert.match(styles, /\.workspace-file-preview-panel/);
 });
 
 test("Developer 磁盘结构直接区分左侧 explorer 和右侧 workspace", () => {
@@ -38,5 +46,6 @@ test("Developer 磁盘结构直接区分左侧 explorer 和右侧 workspace", ()
     "src/applications/developer/explorer/CollaborationTaskNavigation.tsx",
     "src/applications/developer/workspace/DeveloperWorkspace.tsx",
     "src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx",
+    "src/applications/developer/workspace/WorkspaceFilePreview.tsx",
   ]) assert.equal(existsSync(new URL(relativePath, appRoot)), true, relativePath);
 });

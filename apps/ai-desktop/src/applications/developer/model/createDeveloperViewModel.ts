@@ -86,6 +86,7 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       onToggleWorkspacePermission: (id, permission) => { void controller.workspace.updateWorkspacePermission(id, permission); },
       onMakePrimaryWorkspace: (id) => { void controller.workspace.setPrimaryWorkspace(id); },
       onRemoveWorkspace: (id, name) => { void controller.workspace.removeWorkspace(id, name); },
+      onFilePreviewChange: controller.workspaceFilePreview.set,
     },
     // 工作区把异常提示和页面路由分成两个明确输入。
     workspace: {
@@ -101,6 +102,8 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
         nangong: controller.nangong,
         screenshot: controller.screenshot,
       },
+      filePreview: controller.workspaceFilePreview.value,
+      onCloseFilePreview: controller.workspaceFilePreview.close,
     },
     // 状态栏不读取设置或诊断控制器的其他字段。
     statusBar: {

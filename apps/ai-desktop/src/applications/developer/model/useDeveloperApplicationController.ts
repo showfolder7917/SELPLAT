@@ -11,6 +11,7 @@ import { developerApplicationLabels } from "./developerApplicationLabels";
 import { getDeveloperPersonaActivities } from "./getDeveloperPersonaActivities";
 import { useDeveloperSidebar } from "./useDeveloperSidebar";
 import { useDeveloperTooltip } from "./useDeveloperTooltip";
+import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
 
 /** 准备 Developer 窗口需要的状态；主组件只负责展示窗体布局。 */
 export function useDeveloperApplicationController() {
@@ -25,6 +26,8 @@ export function useDeveloperApplicationController() {
   // 任务区域可以独立折叠，不影响左侧栏本身。
   const [tasksExpanded, setTasksExpanded] = useState(true);
   const [workspacesExpanded, setWorkspacesExpanded] = useState(true);
+  // 文件阅读结果属于右侧主内容；侧栏只负责发起受主进程校验的读取请求。
+  const [workspaceFilePreview, setWorkspaceFilePreview] = useState<WorkspaceFilePreviewState>({ preview: null, error: "", workspaceId: null });
 
   // 设置先提供语言和沙箱模式，后续控制器共享这些配置。
   const settings = useDesktopSettings(settingsOpen || testConsoleOpen);
@@ -53,6 +56,11 @@ export function useDeveloperApplicationController() {
       tone: "danger",
     }),
   });
+
+  /** Explorer 只能提交只读结果，主内容区统一决定展示、错误和关闭。 */
+  const setWorkspacePreview = useCallback((next: WorkspaceFilePreviewState) => {
+    setWorkspaceFilePreview(next);
+  }, []);
 
   // 协作、人物演化和两个人物会话分别持有自己的业务状态。
   const collaboration = useCollaborationWorkspace();
@@ -118,6 +126,7 @@ export function useDeveloperApplicationController() {
     testConsolePanel: { open: testConsoleOpen, setOpen: setTestConsolePanelOpen },
     tasks: { expanded: tasksExpanded, toggle: () => setTasksExpanded((current) => !current) },
     workspaceExplorer: { expanded: workspacesExpanded, toggle: () => setWorkspacesExpanded((current) => !current) },
+    workspaceFilePreview: { value: workspaceFilePreview, set: setWorkspacePreview, close: () => setWorkspaceFilePreview({ preview: null, error: "", workspaceId: null }) },
     text,
     settings,
     diagnostics,
