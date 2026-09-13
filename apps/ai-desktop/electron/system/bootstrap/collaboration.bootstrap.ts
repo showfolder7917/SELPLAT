@@ -51,7 +51,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     coordinationRoot: path.join(projectPaths.runningExecutionRoot, "_集成与发布协调"),
     recordEvent: (type, details) => eventCenter.recordEvent(type, details),
   });
-  const releaseBatches = createReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot);
+  const releaseBatches = createReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot, projectPaths.buildRoot);
   const taskTests = createTaskWorktreeTestRunner(
     projectRoot,
     applicationName,

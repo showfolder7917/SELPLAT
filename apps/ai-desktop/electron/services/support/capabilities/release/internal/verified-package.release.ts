@@ -1,6 +1,14 @@
 import { cpSync, existsSync, mkdirSync, readlinkSync, readdirSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
 
+/** 已存在的稳定应用属于发布基础设施占用，不得被归类为候选测试断言失败。 */
+export class StablePublishedApplicationCollisionError extends Error {
+  constructor(destinationApp: string) {
+    super(`发布批次稳定应用已存在，禁止覆盖：${destinationApp}`);
+    this.name = "StablePublishedApplicationCollisionError";
+  }
+}
+
 /** 只解析已经由固定打包与签名验证门禁生成的应用，不回退到源码、外部 build 或旧安装。 */
 export function resolveVerifiedDeveloperExecutable(buildRoot: string): string {
   if (process.platform !== "darwin") throw new Error("当前仅支持发布已验证的 macOS 开发版。");
@@ -22,7 +30,7 @@ export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stabl
   const destinationApp = path.join(destinationRoot, "AI Desktop.app");
   const destinationExecutable = path.join(destinationApp, "Contents", "MacOS", "AI Desktop");
   if (!existsSync(sourceExecutable)) throw new Error("候选工作区内的已验证启动程序不存在。");
-  if (existsSync(destinationApp)) throw new Error(`发布批次稳定应用已存在，禁止覆盖：${destinationApp}`);
+  if (existsSync(destinationApp)) throw new StablePublishedApplicationCollisionError(destinationApp);
   mkdirSync(destinationRoot, { recursive: true });
   // macOS 应用包大量使用相对符号链接；禁止 cpSync 把它们改写为候选 worktree 的绝对路径，
   // 否则候选回收后 Electron Framework 会变成断链，已发布应用无法启动。

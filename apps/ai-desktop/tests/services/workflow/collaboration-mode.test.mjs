@@ -26,12 +26,12 @@ import { ManagedTaskExecutor } from "../../../../../build/ai-desktop/electron/el
 import { TaskRepairScopeAggregate, TaskRepairScopeViolationError } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/execution/index.js";
 import { PromptLibraryFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/prompts/index.js";
 import { createAtomicJsonPersistence } from "../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/index.js";
-import { controlledTestRoot, projectPaths, projectRoot } from "#test-paths";
+import { appRoot, controlledTestRoot, projectPaths, projectRoot } from "#test-paths";
 
 const controlledTempRoot = controlledTestRoot;
 const prompts = new PromptLibraryFacade(path.join(projectPaths.buildRoot, "prompt-bundle"));
 mkdirSync(controlledTempRoot, { recursive: true });
-const activeStableUserId = readFileSync(path.join(projectRoot, "apps/ai-desktop/ruleengine/AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
+const activeStableUserId = readFileSync(path.join(appRoot, "ruleengine/AGENTS.md"), "utf8").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 const rendererCollaborationSources = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
@@ -45,6 +45,8 @@ const developerSource = rendererCollaborationSources.map((source) => readFileSyn
 const coordinatorSource = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const integrationPipelineSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
+const verifiedPackageReleaseSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/verified-package.release.ts", import.meta.url), "utf8");
+const collaborationBootstrapSource = readFileSync(new URL("../../../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
 // 入口存在性由边界测试负责；这里读取 Workflow 稳定 Value 验证完整状态枚举。
 const collaborationContractSource = readFileSync(new URL("../../../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
 const unifiedTestRunnerSource = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
@@ -1555,6 +1557,14 @@ test("清空运行态后发布批次仍避让历史归档代次", () => {
     assert.match(integrationPipelineSource, /nextAvailableGeneration\(this\.#releaseVersion, state\.nextIntegrationGeneration\)/);
     assert.match(integrationPipelineSource, /mutable\.nextIntegrationGeneration = generation \+ 1/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("稳定发布应用缺少归档时仍占用批次代次，并按发布基础设施失败处理", () => {
+  assert.match(releaseBatchStoreSource, /#hasStablePublishedApplication\(releaseBatchId: string\)/);
+  assert.match(releaseBatchStoreSource, /#hasReleaseBatch\(`release-\$\{version\}-g\$\{generation\}`\) \|\| this\.#hasStablePublishedApplication/);
+  assert.match(collaborationBootstrapSource, /createReleaseBatchStore\(projectPaths\.runningExecutionRoot, projectPaths\.archiveLogRoot, projectPaths\.buildRoot\)/);
+  assert.match(verifiedPackageReleaseSource, /class StablePublishedApplicationCollisionError extends Error/);
+  assert.match(integrationPipelineSource, /error instanceof StablePublishedApplicationCollisionError/);
 });
 
 test("一键清空把候选回收与数据库清理解耦并核对全部持久状态", () => {
