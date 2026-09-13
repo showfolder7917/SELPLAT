@@ -593,6 +593,8 @@ export class CollaborationCoordinator {
       await this.#resumeOrAnalyze(taskId);
     } catch (error) {
       if (startupSpan) this.#durations.finish(startupSpan, "failed", { error: errorMessage(error) });
+      // 客户修正范围会主动废止旧租约；旧分析稍后返回属于预期收口，不能再次转成执行故障。
+      if (error instanceof StaleExecutorLeaseError) return;
       if (this.#store.task(taskId).state === "cancelled") return;
       await this.#blockTask(taskId, `执行人初始化失败：${errorMessage(error)}`);
     } finally {
@@ -753,6 +755,8 @@ export class CollaborationCoordinator {
     } catch (error) {
       if (changeSpan) this.#durations.finish(changeSpan, "failed", { error: errorMessage(error) });
       if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { error: errorMessage(error) });
+      // 范围修订后的旧执行结果已被租约门拒绝，这不是需要令狐再次修复的故障。
+      if (error instanceof StaleExecutorLeaseError) return;
       if (this.#store.task(taskId).state === "cancelled") return;
       await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`);
     }
@@ -1149,8 +1153,16 @@ export class CollaborationCoordinator {
     const current = this.#store.task(taskId);
     const member = requireMember(this.state(), memberId);
     if (!assignmentId || current.assignmentId !== assignmentId || current.workerGeneration !== workerGeneration || current.executorMemberId !== memberId || member.generation !== workerGeneration || member.currentTaskId !== taskId) {
-      throw new Error("执行结果来自已经过期的任务租约，已拒绝写入。");
+      throw new StaleExecutorLeaseError();
     }
+  }
+}
+
+/** 范围修订或重新分配后，迟到的旧执行只结束自身，不进入故障修复。 */
+class StaleExecutorLeaseError extends Error {
+  constructor() {
+    super("执行结果来自已经过期的任务租约，已拒绝写入。");
+    this.name = "StaleExecutorLeaseError";
   }
 }
 

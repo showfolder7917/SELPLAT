@@ -14,6 +14,9 @@ export const CODEX_TARGET_VERSION = "0.154.0";
 const OPENAI_MAC_TEAM_ID = "2DC432GLL2";
 const MAX_ARCHIVE_BYTES = 200 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
+const CODEX_SIGNATURE_TIMEOUT_MS = 15_000;
+// 全量并行测试或启动恢复时磁盘与签名校验会短时占用资源，版本读取应给原生程序完整启动时间。
+const CODEX_VERSION_TIMEOUT_MS = 15_000;
 
 interface PlatformRuntimeManifest {
   packageName: string;
@@ -271,7 +274,7 @@ async function isExecutable(filePath: string): Promise<boolean> {
 
 function executeFile(command: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { timeout: 5_000 }, (error, stdout, stderr) => {
+    execFile(command, args, { timeout: CODEX_SIGNATURE_TIMEOUT_MS }, (error, stdout, stderr) => {
       if (error) reject(error);
       else resolve(`${stdout}${stderr}`);
     });
@@ -289,7 +292,7 @@ function readCodexVersion(command: string, environment: NodeJS.ProcessEnv): Prom
       shell: false,
     });
     let output = "";
-    const timeout = setTimeout(() => child.kill(), 4_000);
+    const timeout = setTimeout(() => child.kill(), CODEX_VERSION_TIMEOUT_MS);
     child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); });
     child.once("error", (error) => {

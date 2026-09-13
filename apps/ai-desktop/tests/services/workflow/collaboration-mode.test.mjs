@@ -292,6 +292,75 @@ test("客户范围修订保留原令狐任务并使旧执行代次失效", async
   }
 });
 
+test("客户范围修订后迟到的旧执行结果只被丢弃，不触发令狐重复修复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "scope-revision-late-result-"));
+  let finishOldExecution;
+  let oldExecutionStarted;
+  const oldExecutionGate = new Promise((resolve) => { finishOldExecution = resolve; });
+  const startedGate = new Promise((resolve) => { oldExecutionStarted = resolve; });
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const workspace = { workspaceId: "worktree:late-result", rootPath: directory, branchName: "codex/late-result", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { prepareTask: async () => workspace, resumeTask: async () => workspace, commitTaskResult: async () => "result" },
+      executor: new ExecutorFacade({
+        createExecutor: async () => ({
+          isAlive: () => true,
+          analyze: async () => "按旧范围实施",
+          optimize: async () => "",
+          execute: async () => {
+            oldExecutionStarted();
+            return oldExecutionGate;
+          },
+          investigateRepair: async () => "不应进入修复",
+          executeRepair: async () => ({ status: "code-verified", text: "不应进入修复", pendingActions: [], authorizedFiles: [] }),
+          dispose: async () => undefined,
+        }),
+      }),
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, invalidateTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      createTaskRuleContext: () => ({
+        activeUserId: "XUNAN", role: "executor", ruleRevision: "revision-one",
+        mandatoryRoleRuleIds: ["AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES"], matchedTaskRuleIds: [],
+        dependencyRuleIds: [], loadedRuleHashes: {}, loadedRuleContents: {}, agentsContent: "# AGENTS", indexCatalog: "# index", ruleReceipt: [],
+      }),
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+    const submitted = coordinator.submitTask({
+      title: "修复验收卡点",
+      problemStatement: "测试台被错误加入韩立验收。",
+      confirmedIntent: "先按旧范围修复。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "han-li",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+      evolutionProposalId: "proposal-late",
+      evolutionRoundId: "proposal-late",
+    });
+    const seeded = submitted.tasks.at(-1);
+    await startedGate;
+    const revised = await coordinator.reviseActiveRepairScope({
+      runId: "run-late",
+      proposalId: "proposal-late",
+      instruction: "停止旧范围，改查内部证据链。",
+    });
+    await coordinator.dispose();
+    finishOldExecution({ status: "code-verified", text: "旧结果", pendingActions: [], authorizedFiles: [] });
+    await new Promise((resolve) => setImmediate(resolve));
+    const task = store.task(seeded.taskId);
+    assert.equal(revised.updated, true);
+    assert.equal(task.state, "queued-executor");
+    assert.equal(task.taskRevision, 2);
+    assert.equal(task.flowEvents.at(-1).type, "task.scope_revised");
+    assert.equal(task.flowEvents.some((event) => event.type === "execution.repair_started"), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("清空测试数据保留人物配置并重置令狐运行态", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "clear-test-data-"));
   try {
