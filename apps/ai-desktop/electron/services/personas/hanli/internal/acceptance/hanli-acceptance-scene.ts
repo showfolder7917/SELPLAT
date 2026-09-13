@@ -65,7 +65,12 @@ function hasVerifiedCurrentWindowContext(goal: HanliComputerAcceptanceInDto): bo
 
 /** 固定韩立验收会话通过工具提交场景；说明文字不进入机器协议，回合外与旧请求都不能写入。 */
 export function createAcceptanceSceneSubmission() {
-  let active: { requestId: string; goal: HanliComputerAcceptanceInDto; plan: AcceptanceScenePlanOutDto | null } | null = null;
+  let active: {
+    requestId: string;
+    goal: HanliComputerAcceptanceInDto;
+    plan: AcceptanceScenePlanOutDto | null;
+    lastRejection: string | null;
+  } | null = null;
   const tools: CodexDynamicToolsPort = {
     definitions: [{ type: "function", name: "hanli_submit_acceptance_scene",
       description: "提交本轮逐项验收场景计划。必须填写当前请求编号；说明文字不能替代此提交。工具只记录计划，不修改页面或原任务数据。",
@@ -82,23 +87,32 @@ export function createAcceptanceSceneSubmission() {
         if (name !== "hanli_submit_acceptance_scene" || !active || !input || typeof input !== "object" || !("requestId" in input) || input.requestId !== active.requestId) throw new Error("不是当前场景准备请求，拒绝提交。");
         if (active.plan) throw new Error("本轮场景已提交，不能覆盖。");
         active.plan = validateAcceptanceScenePlan(input, active.goal);
+        active.lastRejection = null;
         return { success: true, contentItems: [{ type: "inputText", text: "场景计划已登记；实际就绪由准备器验证，页面结果由韩立验收。" }] };
       } catch (error) {
-        return { success: false, contentItems: [{ type: "inputText", text: error instanceof Error ? error.message : String(error) }] };
+        const message = error instanceof Error ? error.message : String(error);
+        if (active && name === "hanli_submit_acceptance_scene" && input && typeof input === "object"
+          && "requestId" in input && input.requestId === active.requestId && !active.plan) {
+          active.lastRejection = message;
+        }
+        return { success: false, contentItems: [{ type: "inputText", text: message }] };
       }
     },
   };
   return {
     tools,
-    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
+    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, previousRejection: string | null) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
       if (active) throw new Error("韩立已有场景准备请求，不能并发覆盖。");
-      const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null };
+      const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null, lastRejection: null as string | null };
       active = request;
       try {
         // 模型只输出说明文字属于可纠正的格式遗漏；原请求保持活动并限重试一次，避免把同一验收重新走完整修复发布链。
-        await model(request.requestId, 1);
-        if (!request.plan) await model(request.requestId, 2);
-        if (!request.plan) throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
+        await model(request.requestId, 1, null);
+        if (!request.plan) await model(request.requestId, 2, request.lastRejection);
+        if (!request.plan) {
+          if (request.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${request.lastRejection}`);
+          throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
+        }
         return request.plan;
       } finally { active = null; }
     },

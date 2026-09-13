@@ -538,6 +538,53 @@ test("韩立首次只回复说明文字时在原请求内纠正一次并接受�
   assert.deepEqual(result, plan);
 });
 
+test("首次工具参数被拒绝时把真实校验原因交给第二回合并接受修正", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  const splitFixturePlan = {
+    ...plan,
+    segments: [
+      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+    ],
+  };
+  const mergedFixturePlan = {
+    ...plan,
+    segments: [{
+      kind: "workspace-explorer-fixture",
+      reason: "同一临时工作区完成全部取证",
+      completionReviewRequired: false,
+      conditions: plan.segments.flatMap((item) => item.conditions),
+    }],
+  };
+  const result = await submission.run(workspaceFixtureGoal, async (requestId, attempt, previousRejection) => {
+    if (attempt === 1) {
+      assert.equal(previousRejection, null);
+      assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...splitFixturePlan, requestId })).success, false);
+      return;
+    }
+    assert.match(previousRejection, /一次性工作区夹具只能使用一个验收阶段/);
+    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...mergedFixturePlan, requestId })).success, true);
+  });
+  assert.deepEqual(result, mergedFixturePlan);
+});
+
+test("两次工具参数均被拒绝时报告最后一次真实校验原因", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  await assert.rejects(
+    submission.run(workspaceFixtureGoal, async (requestId) => {
+      await submission.tools.call("hanli_submit_acceptance_scene", {
+        ...plan,
+        segments: [
+          { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
+          { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+        ],
+        requestId,
+      });
+    }),
+    /两次提交的场景计划均未通过校验：一次性工作区夹具只能使用一个验收阶段/,
+  );
+});
+
 test("韩立场景工具通过本轮阶段连接装配，结束与应用退出都回收", () => {
   const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   const workflowRuntime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
