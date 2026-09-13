@@ -6,7 +6,15 @@ export function createSegmentGoal(goal: HanliComputerAcceptanceInDto, segment: A
     const index = Number(criterionId.replace("criterion-", "")) - 1;
     return goal.criteria[index];
   });
-  return { ...goal, criteria, criterionIds: segment.conditions.map(({ criterionId }) => criterionId), preparedScene: segment };
+  const { workspaceAcceptanceFixture, ...segmentBase } = goal;
+  // 一次性夹具只能交给正式夹具段，避免前置当前窗口段提前登记并消耗本轮场景状态。
+  return {
+    ...segmentBase,
+    ...(segment.kind === "workspace-explorer-fixture" && workspaceAcceptanceFixture ? { workspaceAcceptanceFixture } : {}),
+    criteria,
+    criterionIds: segment.conditions.map(({ criterionId }) => criterionId),
+    preparedScene: segment,
+  };
 }
 
 /** 场景结果必须直接携带原提案编号；禁止在汇总时按位置猜测并重编号。 */
