@@ -121,6 +121,20 @@ test("分段目标直接携带原条件编号并拒绝按局部位置重编号",
   assert.deepEqual(merged.evidenceAttachmentIds, ["shot-1", "shot-2"]);
   assert.deepEqual(merged.stepResults.map((item) => item.operationIndex), [0, 1]);
 });
+
+test("一次性工作区夹具只投影给正式夹具场景", () => {
+  const currentWindowSegment = { ...segment, kind: "current-window", conditions: [segment.conditions[0]] };
+  const fixtureSegment = { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] };
+
+  const currentWindowGoal = createSegmentGoal(workspaceFixtureGoal, currentWindowSegment);
+  const fixtureGoal = createSegmentGoal(workspaceFixtureGoal, fixtureSegment);
+
+  assert.equal("workspaceAcceptanceFixture" in currentWindowGoal, false, "前置当前窗口段不能提前消费一次性夹具");
+  assert.deepEqual(fixtureGoal.workspaceAcceptanceFixture, workspaceFixtureGoal.workspaceAcceptanceFixture);
+  assert.deepEqual(currentWindowGoal.criteria, [workspaceFixtureGoal.criteria[0]]);
+  assert.deepEqual(fixtureGoal.criteria, [workspaceFixtureGoal.criteria[1]]);
+});
+
 test("最终验收记录在提交前逐项诊断重复、缺失和未登记的双截图证据", () => {
   const complete = {
     version: 2, runId: "evidence-run", topicId: "t", proposalId: "p", criteria: goal.criteria, status: "passed", windowTitle: "AI Desktop",
