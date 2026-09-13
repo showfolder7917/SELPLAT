@@ -40,7 +40,7 @@ import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFac
 import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 import { ActiveUserRuleFacade as RuleService } from "../../services/support/capabilities/rules/index.js";
 import type { PromptLibraryPort } from "../../services/support/capabilities/prompts/index.js";
-import type { AcceptanceScenePlanOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto;
@@ -142,7 +142,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady, onInitialPass) => {
+  personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady, onCompletionReviewReady: (gate: CompletionReviewGateOutDto) => void) => {
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
     // 规划期间主窗口可能被关闭；独立场景只复用此刻冻结的可见尺寸。
@@ -168,7 +168,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       createWindow: (options) => new BrowserWindow(options),
       execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window),
       onSceneReady,
-      onInitialPass,
+      onCompletionReviewReady,
       record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
     });
     audit.recordEvent("hanli.acceptance.real_app_checked", {
