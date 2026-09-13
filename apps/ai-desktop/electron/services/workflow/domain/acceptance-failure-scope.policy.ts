@@ -76,7 +76,8 @@ export class AcceptanceFailureScopePolicy {
           step.layoutStatus === "failed" ? `布局：${step.layoutActual.trim()}` : "",
         ].filter(Boolean).join("；") || "本轮真实界面结果未达到验收条件",
         expected,
-        reproductionOperations: run.stepResults
+        reproductionOperations: [...(run.interactionSteps || []), ...run.stepResults]
+          .sort((left, right) => left.operationIndex - right.operationIndex)
           .slice(0, step.operationIndex + 1)
           .map((item) => structuredClone(item.operation)),
         screenshotAttachmentIds,

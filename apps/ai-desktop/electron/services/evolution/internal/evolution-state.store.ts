@@ -656,7 +656,10 @@ export class EvolutionStateStore {
         checkId: step.checkId,
         target: "真实应用界面",
         severity: step.status === "blocked" || step.layoutStatus === "blocked" ? "blocking" : "major",
-        reproductionOperations: run.stepResults.slice(0, step.operationIndex + 1).map((item) => structuredClone(item.operation)),
+        reproductionOperations: [...(run.interactionSteps || []), ...run.stepResults]
+          .sort((left, right) => left.operationIndex - right.operationIndex)
+          .slice(0, step.operationIndex + 1)
+          .map((item) => structuredClone(item.operation)),
         actual: [step.status !== "passed" ? step.actual : "", step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : ""].filter(Boolean).join("；"),
         expected: run.criteria?.[Number(step.checkId.replace("criterion-", "")) - 1] || "符合专题验收条件",
         screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, step.layoutScreenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],

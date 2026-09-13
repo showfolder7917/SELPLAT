@@ -39,7 +39,10 @@ export class HanliComputerAcceptance {
     const runId = `hanli-computer-${randomUUID()}`;
     const startedAt = new Date().toISOString();
     const initialBounds = window.getBounds();
-    const steps: HanliAcceptanceStepResultOutDto[] = [];
+    // 操作轨迹只证明真实输入已经发生，不能作为某条原验收条件的最终判断。
+    const interactionSteps: HanliAcceptanceStepResultOutDto[] = [];
+    // 逐条件结果只保存 finish 或受阻兜底形成的 judgement，供场景编号和证据门禁使用。
+    const stepResults: HanliAcceptanceStepResultOutDto[] = [];
     const evidence: string[] = [];
     const postInputEvidence = new Set<string>();
     // 最近一次受控模型聚焦只用于帮助模型理解下一张截图，不读取或暴露已选模型值。
@@ -276,9 +279,9 @@ export class HanliComputerAcceptance {
               verdict = "passed";
             }
             for (const item of findings) {
-              steps.push({
+              stepResults.push({
                 checkId: String(item.criterionId),
-                operationIndex: steps.length,
+                operationIndex: interactionSteps.length + stepResults.length,
                 operation: {
                   type: "judgement",
                   criterionId: String(item.criterionId),
@@ -306,7 +309,7 @@ export class HanliComputerAcceptance {
             progress(`韩立验收${verdictLabel}：\n${findingLines.join("\n")}`);
             return { success: true, contentItems: [{ type: "inputText", text: "验收判断已归档，工具权限已收回。" }] };
           }
-          if (steps.length >= 40) {
+          if (interactionSteps.length >= 40) {
             throw new Error("本轮达到40步操作上限，需保留证据并说明未完成项。");
           }
           window.show();
@@ -483,9 +486,9 @@ export class HanliComputerAcceptance {
           } else {
             operation = { type: "click", x: Number(args.x), y: Number(args.y), reason: String(args.reason) };
           }
-          steps.push({
+          interactionSteps.push({
             checkId: "interaction",
-            operationIndex: steps.length,
+            operationIndex: interactionSteps.length,
             operation,
             status: "passed",
             actual: `已发送输入，效果由韩立观察截图判断：${args.reason}；${previewActual}`,
@@ -542,9 +545,9 @@ export class HanliComputerAcceptance {
       const layoutActual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的布局结论。${finishDiagnostic}`;
       for (const [index] of goal.criteria.entries()) {
         const criterionId = criterionIds[index];
-        steps.push({
+        stepResults.push({
           checkId: criterionId,
-          operationIndex: steps.length,
+          operationIndex: interactionSteps.length + stepResults.length,
           operation: {
             type: "judgement",
             criterionId,
@@ -577,7 +580,8 @@ export class HanliComputerAcceptance {
       windowTitle,
       initialBounds,
       finalBounds,
-      stepResults: steps,
+      interactionSteps,
+      stepResults,
       evidenceAttachmentIds: evidence,
       startedAt,
       completedAt: new Date().toISOString(),

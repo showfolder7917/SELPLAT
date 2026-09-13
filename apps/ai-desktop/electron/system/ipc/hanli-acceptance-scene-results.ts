@@ -33,8 +33,12 @@ export function mergeAcceptanceRuns(goal: HanliComputerAcceptanceInDto, runs: Ha
   const status = runs.some((run) => run.status === "failed")
     ? "failed"
     : runs.some((run) => run.status === "blocked") ? "blocked" : "passed";
-  const stepResults: HanliAcceptanceStepResultOutDto[] = runs.flatMap((run) => run.stepResults)
+  // 先按每段原始操作顺序拼接，再分别投影操作轨迹与逐条件结论，保证失败复现不会因场景汇总丢失真实输入。
+  const timeline = runs.flatMap((run) => [...(run.interactionSteps || []), ...run.stepResults]
+    .sort((left, right) => left.operationIndex - right.operationIndex))
     .map((step, operationIndex) => ({ ...step, operationIndex }));
+  const interactionSteps: HanliAcceptanceStepResultOutDto[] = timeline.filter((step) => step.checkId === "interaction");
+  const stepResults: HanliAcceptanceStepResultOutDto[] = timeline.filter((step) => step.operation.type === "judgement");
   return {
     ...last,
     runId: first.runId,
@@ -43,6 +47,7 @@ export function mergeAcceptanceRuns(goal: HanliComputerAcceptanceInDto, runs: Ha
     criteria: goal.criteria,
     status,
     initialBounds: first.initialBounds,
+    interactionSteps,
     stepResults,
     evidenceAttachmentIds: [...new Set(runs.flatMap((run) => run.evidenceAttachmentIds))],
     startedAt: first.startedAt,
