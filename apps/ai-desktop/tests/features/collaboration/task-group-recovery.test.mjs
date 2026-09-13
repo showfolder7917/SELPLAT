@@ -13,14 +13,24 @@ const result = await build({
 });
 const compiled = { exports: {} };
 new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), compiled, compiled.exports);
-const { TaskGroupRecovery } = compiled.exports;
+const { TaskGroupRecovery, canResumeOneShotForGroup } = compiled.exports;
 const selectorResult = await build({
   entryPoints: [fileURLToPath(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts", import.meta.url))],
   bundle: true, format: "cjs", platform: "node", packages: "external", write: false,
 });
 const selectorCompiled = { exports: {} };
 new Function("require", "module", "exports", selectorResult.outputFiles[0].text)(createRequire(import.meta.url), selectorCompiled, selectorCompiled.exports);
-const { currentTaskGroupPresentation, latestActiveRecoveryAction } = selectorCompiled.exports;
+const { currentTaskGroupPresentation, latestActiveRecoveryAction, taskGroupPrimaryPresentation } = selectorCompiled.exports;
+
+function primaryPresentation({ status = "running", recoveryAction = null, oneShotRecoveryRequired = false } = {}) {
+  return taskGroupPrimaryPresentation({
+    summary: "令狐老祖正在处理验证结果。",
+    status,
+    nodes: [],
+    nextOwner: { displayName: "令狐老祖" },
+    nextStep: "完成后会同步结果。",
+  }, "zh", recoveryAction, oneShotRecoveryRequired);
+}
 function render({ reason = "等待重新验证", pending = false, feedback = null, topicId = "topic-a", nodes = [], groupStatus = "blocked", proposalStatus = "blocked", resumeMode = "standard", runStatus = "blocked" } = {}) {
   const group = { topicId: "topic-a", proposalId: "proposal-a", nodes, status: groupStatus };
   const evolution = {
@@ -83,15 +93,32 @@ test("同一任务出现更新节点后旧等待节点不再压住专题恢复�
 
 test("恢复选择器只认同一任务的最新事实", () => {
   assert.deepEqual(latestActiveRecoveryAction([
-    { taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
-  ]), { taskId: "task-a", customerAction: true });
+    { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+  ]), { nodeId: "customer-wait", taskId: "task-a", customerAction: true });
   assert.equal(latestActiveRecoveryAction([
-    { taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
-    { taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
+    { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+    { nodeId: "recovery-running", taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
   ]), null);
   assert.deepEqual(latestActiveRecoveryAction([
-    { taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
-  ]), { taskId: "task-a", customerAction: false });
+    { nodeId: "interrupted-wait", taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
+  ]), { nodeId: "interrupted-wait", taskId: "task-a", customerAction: false });
+  assert.deepEqual(latestActiveRecoveryAction([
+    { nodeId: "history-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+    { nodeId: "current-wait", taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
+  ]), { nodeId: "current-wait", taskId: "task-a", customerAction: false });
+});
+
+test("自动处理明确告知用户暂不需要操作，客户待办保持原有提示", () => {
+  assert.equal(primaryPresentation().customerAction, "正在自动处理中，暂不需要你操作。");
+  assert.equal(primaryPresentation({ status: "verifying" }).customerAction, "正在自动处理中，暂不需要你操作。");
+  assert.equal(primaryPresentation({ status: "completed" }).customerAction, "当前无需你操作。");
+  assert.equal(primaryPresentation({
+    status: "blocked",
+    recoveryAction: { taskId: "task-a", customerAction: true },
+  }).customerAction, "需要你完成一项操作。");
+  const oneShot = primaryPresentation({ status: "blocked", oneShotRecoveryRequired: true });
+  assert.equal(oneShot.customerAction, "需要你完成一项操作。");
+  assert.equal(oneShot.nextAction, "查看卡点原因后点击“从卡点继续”。");
 });
 
 test("专题已经恢复运行时不显示旧一次性运行的恢复入口", () => {
@@ -110,5 +137,11 @@ test("审批阶段发生运行卡点时显示真实阻塞状态和恢复入口",
   assert.match(render({ proposalStatus: "pending-approval" }), /从卡点继续/);
   const group = { topicId: "topic-a", proposalId: "proposal-a", status: "waiting-approval" };
   const run = { topicId: "topic-a", proposalId: "proposal-a", status: "blocked", resumeMode: "standard" };
-  assert.equal(currentTaskGroupPresentation(group, run).status, "blocked");
+  const presented = currentTaskGroupPresentation(group, run);
+  assert.equal(presented.status, "blocked");
+  assert.equal(canResumeOneShotForGroup(presented, {
+    oneShotRun: run,
+    proposals: [{ proposalId: "proposal-a", status: "pending-approval" }],
+    automationRuntime: { status: "running" },
+  }), true);
 });

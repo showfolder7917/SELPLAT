@@ -40,6 +40,21 @@ type TaskGroupRecoveryProps = {
   evolution: ReturnType<typeof useEvolutionRuntime>;
 };
 
+/** 统一判断当前专题是否存在可恢复的一次性运行，卡头和按钮必须读取同一结论。 */
+export function canResumeOneShotForGroup(
+  group: CollaborationTimelineGroupOutDto,
+  evolutionState: NonNullable<ReturnType<typeof useEvolutionRuntime>["state"]>,
+): boolean {
+  const run = evolutionState.oneShotRun;
+  if (!run?.proposalId || run.topicId !== group.topicId || run.proposalId !== group.proposalId) return false;
+  const proposal = evolutionState.proposals.find((item) => item.proposalId === run.proposalId);
+  const runCanResume = run.status !== "completed" && (run.status === "blocked" || evolutionState.automationRuntime.status === "paused");
+  const resumableProposalStates = ["pending-approval", "supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"];
+  const proposalCanResume = proposal && (resumableProposalStates.includes(proposal.status)
+    || (proposal.status === "completed" && run.resumeMode === "post-completion-review"));
+  return Boolean(group.status === "blocked" && runCanResume && proposalCanResume);
+}
+
 /** 仅为当前专题原运行提供唯一恢复入口。 */
 export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecoveryProps) {
   // 任务节点已有精确恢复入口时，专题级运行恢复不能再显示第二个入口。
@@ -62,8 +77,6 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
   // 当前一次性运行不属于这张专题卡时不显示任何恢复信息。
   if (!belongsToCurrentGroup) return null;
 
-  // 正式提案用于判断当前业务状态是否仍允许恢复。
-  const proposal = evolutionState.proposals.find((item) => item.proposalId === oneShotRun.proposalId);
   // 恢复等待状态只匹配当前运行，不能被其他专题的恢复请求污染。
   // 后端已经把原运行切回 running 后，提交中的按钮必须立即离开被验收页面。
   const recoveryPending = evolution.resumingRunId === oneShotRun.runId && oneShotRun.status === "blocked";
@@ -73,23 +86,8 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
     : null;
 
   // 原运行只有未完成且处于阻塞或暂停状态时才允许继续。
-  const runCanResume = oneShotRun.status !== "completed"
-    && (oneShotRun.status === "blocked" || evolutionState.automationRuntime.status === "paused");
-  // 可恢复提案状态覆盖普通卡点；已完成提案只接受后端显式登记的完成态复核模式。
-  const resumableProposalStates = [
-    "pending-approval",
-    "supplement-required",
-    "rejected",
-    "blocked",
-    "pending-acceptance",
-    "executing",
-    "verifying",
-  ];
-  // 提案必须真实存在并处于允许恢复的状态。
-  const proposalCanResume = proposal && (resumableProposalStates.includes(proposal.status)
-    || (proposal.status === "completed" && oneShotRun.resumeMode === "post-completion-review"));
-  // 恢复按钮要求运行和提案两层状态同时允许继续。
-  const showResumeButton = Boolean(group.status === "blocked" && runCanResume && proposalCanResume);
+  // 恢复按钮与卡头共用唯一选择器，避免一边要求用户操作、一边声称正在自动处理。
+  const showResumeButton = canResumeOneShotForGroup(group, evolutionState);
 
   // 没有按钮、等待状态或历史反馈时，专题顶部不保留空恢复区域。
   if (!showResumeButton && !recoveryPending && !recoveryFeedback) return null;

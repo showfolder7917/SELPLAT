@@ -70,13 +70,63 @@ export function groupActivityPresentation(
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
 }
 
-/** 卡片顶部当前可执行的恢复动作；历史节点只作审计展示，不再各自承载按钮。 */
+/** 当前等待节点可执行的恢复动作；历史节点只作审计展示，不再承载按钮。 */
 export type ActiveRecoveryAction = {
+  /** 当前仍等待客户确认的时间线节点；用于阻止同任务历史节点重复显示入口。 */
+  nodeId: string;
   /** 继续接口需要的原任务标识。 */
   taskId: string;
   /** 客户卡点使用更明确的按钮文字。 */
   customerAction: boolean;
 };
+
+/** 任务卡主区域固定展示的四项用户信息。 */
+export type TaskGroupPrimaryPresentation = {
+  /** 当前正在发生的事项。 */
+  matter: string;
+  /** 当前处理人及其状态。 */
+  ownerAndStatus: string;
+  /** 用户是否需要执行操作。 */
+  customerAction: string;
+  /** 紧接着会发生的用户可读步骤。 */
+  nextAction: string;
+};
+
+/**
+ * 将专题权威状态转换成卡片主区域的四项用户语言。
+ * 不解释技术流程，不读取或改写时间线事实。
+ */
+export function taskGroupPrimaryPresentation(
+  group: CollaborationTimelineGroupOutDto,
+  locale: LocaleValue,
+  recoveryAction: ActiveRecoveryAction | null,
+  oneShotRecoveryRequired = false,
+): TaskGroupPrimaryPresentation {
+  const activity = groupActivityPresentation(group, locale);
+  const nextOwner = group.nextOwner?.displayName;
+  // 运行或验证中的专题没有客户卡点时，明确告知用户系统仍在自动处理。
+  const recoveryRequired = Boolean(recoveryAction) || oneShotRecoveryRequired;
+  const automaticallyProcessing = !recoveryRequired
+    && ["waiting-approval", "running", "verifying"].includes(group.status);
+  if (locale === "ja") {
+    return {
+      matter: compactTimelineText(group.summary),
+      ownerAndStatus: nextOwner ? `${nextOwner}：${activity.statusLabel}` : activity.statusLabel,
+      customerAction: recoveryAction?.customerAction || oneShotRecoveryRequired
+        ? "お客様の操作が必要です。"
+        : automaticallyProcessing ? "自動処理中です。お客様の操作は不要です。" : "お客様の操作は不要です。",
+      nextAction: recoveryRequired ? "停止理由を確認してから「続行」を選んでください。" : group.nextStep,
+    };
+  }
+  return {
+    matter: compactTimelineText(group.summary),
+    ownerAndStatus: nextOwner ? `${nextOwner} · ${activity.statusLabel}` : activity.statusLabel,
+    customerAction: recoveryAction?.customerAction || oneShotRecoveryRequired
+      ? "需要你完成一项操作。"
+      : automaticallyProcessing ? "正在自动处理中，暂不需要你操作。" : "当前无需你操作。",
+    nextAction: recoveryRequired ? "查看卡点原因后点击“从卡点继续”。" : group.nextStep,
+  };
+}
 
 /**
  * 从每个任务的最新权威节点选择唯一恢复入口。
@@ -92,6 +142,7 @@ export function latestActiveRecoveryAction(nodes: CollaborationTimelineNodeOutDt
       && (node.eventType === "customer.action_required" || node.eventType === "task.interrupted");
     if (!isRecoveryWait) continue;
     return {
+      nodeId: node.nodeId,
       taskId: node.taskId,
       customerAction: node.eventType === "customer.action_required",
     };
