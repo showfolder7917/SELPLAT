@@ -110,6 +110,8 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
   const sharedInternalMessages = runtime.sharedInternalMessages;
   // 新建会话反馈（newConversationFeedback）是重新建立会话后的可见说明。
   const newConversationFeedback = runtime.newConversationFeedback;
+  const hasEarlier = runtime.hasEarlier;
+  const loadEarlier = runtime.loadEarlier;
 
   // 新会话是页面草稿的生命周期边界，不能继续显示旧会话未保存内容。
   useEffect(() => {
@@ -388,6 +390,8 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     chatText,
     // 文字更新操作（setChatText）让页面在客户输入时保存最新内容。
     setChatText,
+    hasEarlier,
+    loadEarlier,
     // 消息发送等待状态（chatBusy）控制发送按钮和等待提示。
     chatBusy,
     // 课题草稿显示状态（topicDraftOpen）控制草稿区域是否显示。

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { writePersonaConversationMessage } from "./persona-conversation-message.writer.js";
 
-import type { PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
 import type { DatabasePort } from "../../../platform/persistence/index.js";
 
 /**
@@ -57,6 +57,39 @@ export class PersonaConversationRepository {
         messages: rows.map(mapMessage),
         updatedAt: header.updatedAt,
       };
+    });
+  }
+
+  /**
+   * 按稳定序号读取一个有限窗口。
+   * 真实传参示例：beforeSequenceNumber=null、limit=60 返回最新六十条；补载时传当前最早序号。
+   * 真实返回示例：messages 保持升序，hasEarlier 表示页面是否还能继续向上读取。
+   * 异常或副作用示例：不存在的会话返回空窗口，不修改历史消息或会话头。
+   */
+  readWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto = {}): PersonaConversationWindowOutDto {
+    if (!this.database) return emptyWindow(ownerPersonaId);
+    const owner = requiredPersonaId(ownerPersonaId);
+    const limit = normalizedWindowLimit(request.limit);
+    const conversationId = request.conversationId?.trim() || this.database.withConnection((connection) => {
+      const row = connection.prepare("SELECT conversationId FROM AiDesktopPersonaConversation WHERE ownerPersonaId=$owner AND status='active' LIMIT 1")
+        .get({ $owner: owner }) as { conversationId: string } | undefined;
+      return row?.conversationId || null;
+    });
+    if (!conversationId) return emptyWindow(owner);
+    return this.database.withConnection((connection) => {
+      const header = connection.prepare("SELECT conversationId, selectedModel, createdAt, updatedAt FROM AiDesktopPersonaConversation WHERE ownerPersonaId=$owner AND conversationId=$conversation")
+        .get({ $owner: owner, $conversation: conversationId }) as { conversationId: string; selectedModel: string | null; createdAt: string; updatedAt: string } | undefined;
+      if (!header) return emptyWindow(owner);
+      const before = Number.isInteger(request.beforeSequenceNumber) ? Number(request.beforeSequenceNumber) : Number.MAX_SAFE_INTEGER;
+      const rows = connection.prepare(`SELECT messageId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
+        attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt
+        FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$owner AND conversationId=$conversation AND sequenceNumber<$before
+        ORDER BY sequenceNumber DESC LIMIT $limit`).all({ $owner: owner, $conversation: conversationId, $before: before, $limit: limit }) as unknown as Array<Record<string, unknown>>;
+      const messages = rows.reverse().map(mapMessage);
+      const earliest = messages[0]?.sequenceNumber;
+      const hasEarlier = earliest === undefined ? false : Boolean(connection.prepare("SELECT 1 FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$owner AND conversationId=$conversation AND sequenceNumber<$earliest LIMIT 1")
+        .get({ $owner: owner, $conversation: conversationId, $earliest: earliest }));
+      return { ownerPersonaId: owner, conversationId: header.conversationId, selectedModel: header.selectedModel, createdAt: header.createdAt, updatedAt: header.updatedAt, messages, hasEarlier };
     });
   }
 
@@ -150,6 +183,14 @@ function mapMessage(row: Record<string, unknown>): PersonaConversationMessageOut
 
 function emptyConversation(ownerPersonaId: string): PersonaConversationOutDto {
   return { ownerPersonaId: requiredPersonaId(ownerPersonaId), conversationId: null, selectedModel: null, messages: [], updatedAt: new Date(0).toISOString() };
+}
+
+function emptyWindow(ownerPersonaId: string): PersonaConversationWindowOutDto {
+  return { ownerPersonaId: requiredPersonaId(ownerPersonaId), conversationId: null, selectedModel: null, messages: [], hasEarlier: false, updatedAt: new Date(0).toISOString() };
+}
+
+function normalizedWindowLimit(value: number | undefined): number {
+  return Number.isInteger(value) ? Math.max(20, Math.min(Number(value), 100)) : 60;
 }
 
 function normalizedModel(value: string | null | undefined): string | null {

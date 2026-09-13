@@ -1,0 +1,354 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+import { build, transform } from "esbuild";
+
+async function sourceModule(file) {
+  const { code } = await transform(readFileSync(file, "utf8"), { loader: "ts", format: "esm", target: "es2022" });
+  return import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+}
+async function bundledSourceModule(file) {
+  const result = await build({ entryPoints: [file], bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-scene.ts");
+const { createSegmentGoal, remapAcceptanceRun, mergeAcceptanceRuns } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
+const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
+const { AcceptanceEmptyTaskGroupSession } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
+const { runHanliAcceptanceSceneSession } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-session.ts");
+const goal = { topicId: "t", proposalId: "p", title: "引导", criteria: ["没有任务时，先告诉我怎么开始", "按钮和说明相邻"] };
+const currentWindowGoal = {
+  ...goal,
+  sceneContext: {
+    topic: { topicId: "t", status: "accepted" },
+    proposal: { proposalId: "p", topicId: "t", status: "pending-acceptance" },
+    oneShotRun: { topicId: "t", proposalId: "p", status: "running", phase: "accepting" },
+  },
+};
+const segment = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, conditions: [
+  { criterionId: "criterion-1", prerequisite: "没有专题任务" },
+  { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
+] };
+const plan = { reason: "使用隔离空任务场景", segments: [segment] };
+
+test("韩立显式选择场景不依赖用户语言、页面名和词序", () => {
+  assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
+  assert.deepEqual(validateAcceptanceScenePlan(plan, { ...goal, criteria: ["Empty tasks guidance", "Adjacent button"] }), plan);
+  const recoveryPlan = { ...plan, segments: [{ ...segment, kind: "failure-recovery-timeline", reason: "条件要求核对失败与恢复的完整事实" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(recoveryPlan, goal), recoveryPlan);
+  const inspectionPlan = { ...plan, segments: [{ ...segment, kind: "inspection-lifecycle-timeline", reason: "条件要求核对三类巡检记录" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(inspectionPlan, goal), inspectionPlan);
+  const detailPlan = { ...plan, segments: [{ ...segment, kind: "user-language-detail-timeline", reason: "条件同时要求技术详情和客户待办" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(detailPlan, goal), detailPlan);
+  const lifecyclePlan = { ...plan, segments: [{ ...segment, kind: "recovery-action-lifecycle", reason: "条件要求观察当前等待节点继续后的状态收口" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(lifecyclePlan, goal), lifecyclePlan);
+  const conversationPlan = { ...plan, segments: [{ ...segment, kind: "persona-conversation-lifecycle", reason: "条件要求核对人物会话补载、重试和附件" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(conversationPlan, goal), conversationPlan);
+  const compositePlan = { ...plan, segments: [{ ...segment, kind: "persona-conversation-with-task-handoff", reason: "条件同时要求人物会话与当前专题的原任务交接记录" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(compositePlan, goal), compositePlan);
+});
+test("场景缺项、重复、未知类型不能默认进入正式窗口", () => {
+  for (const invalid of [
+    { ...plan, segments: [{ ...segment, kind: "guess" }] },
+    { ...plan, segments: [] },
+    { ...plan, segments: [{ ...segment, conditions: [segment.conditions[0], segment.conditions[0]] }] },
+    { ...plan, reason: "" },
+    { ...plan, segments: [{ ...segment, completionReviewRequired: undefined }] },
+    { ...plan, segments: [{ ...segment, completionReviewRequired: true }] },
+  ]) {
+    assert.throws(() => validateAcceptanceScenePlan(invalid, goal));
+  }
+});
+test("当前窗口必须使用运行时核验过的同一专题、提案和验收运行身份", () => {
+  const currentPlan = { ...plan, segments: [{ ...segment, kind: "current-window", reason: "已核验目标专题正在验收", completionReviewRequired: true }] };
+  assert.deepEqual(validateAcceptanceScenePlan(currentPlan, currentWindowGoal), currentPlan);
+  assert.throws(() => validateAcceptanceScenePlan(currentPlan, goal), /只读专题、提案或运行记录/);
+  assert.throws(() => validateAcceptanceScenePlan(currentPlan, {
+    ...currentWindowGoal,
+    sceneContext: { ...currentWindowGoal.sceneContext, proposal: { ...currentWindowGoal.sceneContext.proposal, topicId: "other-topic" } },
+  }), /只读专题、提案或运行记录/);
+});
+test("不同证据源可以分段覆盖原条件且每项只能出现一次", () => {
+  const composite = {
+    reason: "功能行为与真实交接分别取证",
+    segments: [
+      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "current-window", conditions: [segment.conditions[1]] },
+    ],
+  };
+  assert.deepEqual(validateAcceptanceScenePlan(composite, currentWindowGoal), composite);
+  assert.throws(() => validateAcceptanceScenePlan({
+    ...composite,
+    segments: composite.segments.map((item) => ({ ...item, conditions: [segment.conditions[0]] })),
+  }, currentWindowGoal), /逐项覆盖/);
+});
+test("分段结果恢复原条件编号并按失败优先级汇总", () => {
+  const secondSegment = { ...segment, conditions: [segment.conditions[1]] };
+  const localRun = {
+    version: 2, runId: "run-1", topicId: "t", proposalId: "p", criteria: [goal.criteria[1]], status: "passed",
+    windowTitle: "AI Desktop", initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+    stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: "功能可见", layoutStatus: "passed", layoutActual: "布局清楚", layoutScreenshotAttachmentId: "shot-1", screenshotAttachmentId: "shot-1", occurredAt: "2026-09-13T00:00:00.000Z" }],
+    evidenceAttachmentIds: ["shot-1"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+  };
+  assert.deepEqual(createSegmentGoal(goal, secondSegment).criteria, [goal.criteria[1]]);
+  const remapped = remapAcceptanceRun(localRun, secondSegment);
+  assert.equal(remapped.stepResults[0].checkId, "criterion-2");
+  assert.equal(remapped.stepResults[0].operation.criterionId, "criterion-2");
+  const blocked = { ...remapped, runId: "run-2", status: "blocked", evidenceAttachmentIds: ["shot-1", "shot-2"] };
+  const merged = mergeAcceptanceRuns(goal, [remapped, blocked]);
+  assert.equal(merged.status, "blocked");
+  assert.deepEqual(merged.criteria, goal.criteria);
+  assert.deepEqual(merged.evidenceAttachmentIds, ["shot-1", "shot-2"]);
+  assert.deepEqual(merged.stepResults.map((item) => item.operationIndex), [0, 1]);
+});
+test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件", async () => {
+  const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+  const child = {
+    name: "child", webContents: { id: 88, executeJavaScript: async () => true }, isDestroyed: () => false,
+    once() {}, loadFile: async () => undefined, show() {}, close() {},
+  };
+  const active = new Set();
+  const execution = [];
+  let readyCount = 0;
+  const composite = {
+    reason: "功能和审计分别取证",
+    segments: [
+      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "current-window", conditions: [segment.conditions[1]] },
+    ],
+  };
+  const result = await runHanliAcceptanceSceneSession({
+    goal: currentWindowGoal, plan: composite, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
+    sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) },
+    createWindow: () => child,
+    execute: async (currentGoal, window) => {
+      execution.push({ criteria: currentGoal.criteria, window: window.name });
+      const index = execution.length;
+      return {
+        version: 2, runId: `run-${index}`, topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "passed", windowTitle: "AI Desktop",
+        initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+        stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: "功能通过", layoutStatus: "passed", layoutActual: "布局通过", layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: `2026-09-13T00:00:0${index}.000Z` }],
+        evidenceAttachmentIds: [`shot-${index}`], startedAt: `2026-09-13T00:00:0${index}.000Z`, completedAt: `2026-09-13T00:00:0${index + 1}.000Z`,
+      };
+    },
+    onSceneReady: () => { readyCount += 1; }, onInitialPass: () => assert.fail("没有完成态阶段时不应提前完成"), record() {},
+  });
+  assert.deepEqual(execution, [
+    { criteria: [goal.criteria[0]], window: "child" },
+    { criteria: [goal.criteria[1]], window: "target" },
+  ]);
+  assert.equal(readyCount, 1);
+  assert.equal(active.size, 0);
+  assert.deepEqual(result.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
+  assert.equal(result.status, "passed");
+});
+function fixture(failure) {
+  const registered = new Set(), events = [], handlers = {};
+  let destroyed = false;
+  const window = { webContents: { id: 12, executeJavaScript: async () => failure !== "not-mounted" },
+    once: (event, action) => { handlers[event] = action; },
+    isDestroyed: () => destroyed, show: () => events.push("show"),
+    close: () => { destroyed = true; events.push("close"); handlers.closed?.(); },
+    loadFile: async () => { if (failure === "load") throw new Error("load failed"); if (failure === "closed") window.close(); },
+  };
+  let targetDestroyed = false;
+  const targetBounds = { x: 1, y: 1, width: 1200, height: 800 };
+  const target = { isDestroyed: () => targetDestroyed, getBounds: () => targetBounds };
+  const options = { target, targetBounds, preloadPath: "preload.cjs", rendererRoot: "renderer", sessions: {
+    register: (id) => registered.add(id), remove: (id) => registered.delete(id), isActive: (id) => registered.has(id),
+  }, createWindow: (settings) => { events.push("create"); assert.equal(settings.webPreferences.partition.startsWith("persist:"), false); return window; } };
+  return { options, registered, events, window, closeTarget: () => { targetDestroyed = true; } };
+}
+test("当前场景沿用原窗口，释放时不关闭原应用", async () => {
+  const f = fixture();
+  const prepared = await prepareAcceptanceSceneWindow({ ...segment, kind: "current-window" }, f.options);
+  assert.equal(prepared.window, f.options.target);
+  prepared.dispose();
+  assert.deepEqual(f.events, []);
+});
+
+test("主窗口在规划后关闭时，独立场景仍使用开始时冻结的边界", async () => {
+  const f = fixture();
+  f.closeTarget();
+  await prepareAcceptanceSceneWindow(segment, f.options);
+  assert.deepEqual(f.events, ["create", "show"]);
+});
+
+test("主窗口在规划后关闭时，当前窗口场景明确拒绝复用失效页面", async () => {
+  const f = fixture();
+  f.closeTarget();
+  await assert.rejects(prepareAcceptanceSceneWindow({ ...segment, kind: "current-window" }, f.options), /验收主窗口已经关闭/);
+  assert.deepEqual(f.events, []);
+});
+
+test("复合场景缺少交接快照时拒绝启动验收窗口", async () => {
+  const f = fixture();
+  await assert.rejects(prepareAcceptanceSceneWindow({ ...segment, kind: "persona-conversation-with-task-handoff" }, f.options), /缺少当前专题的只读交接记录/);
+});
+test("失败恢复场景创建同样只读的非持久化窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "failure-recovery-timeline", reason: "核对失败和恢复详情" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+test("巡检生命周期场景创建同样只读的非持久化窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "inspection-lifecycle-timeline", reason: "核对三类巡检记录" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+test("用户语言与技术详情场景创建同样只读的非持久化窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "user-language-detail-timeline", reason: "核对技术详情与客户待办" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+test("恢复入口生命周期场景创建同样非持久化的验收窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "recovery-action-lifecycle", reason: "核对唯一入口和恢复中的收口状态" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+test("人物会话生命周期场景创建同样非持久化的验收窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "persona-conversation-lifecycle", reason: "核对人物会话补载和附件" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+
+test("人物会话场景只在内存提供分页、一次失败重试和附件回显", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(91, "persona-conversation-lifecycle");
+  const latest = session.conversationWindow(91, "han-li");
+  assert.equal(latest.messages.length, 60);
+  assert.equal(latest.hasEarlier, true);
+  const before = latest.messages[0].sequenceNumber;
+  assert.throws(() => session.conversationWindow(91, "han-li", { beforeSequenceNumber: before }), /模拟补载失败/);
+  const retried = session.conversationWindow(91, "han-li", { beforeSequenceNumber: before });
+  assert.equal(retried.messages.length, 6);
+  const sent = session.sendPersonaConversationMessage(91, "nangong-wan", { clientMessageId: "fixture-message", message: "附件验收", attachmentIds: ["fixture-image"], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  assert.equal(sent.messages.at(-2).attachmentIds[0], "fixture-image");
+  assert.equal(sent.messages.at(-1).replyToMessageId, "fixture-message");
+  const screenshot = session.createPersonaConversationScreenshot(91);
+  assert.match(screenshot.attachment.id, /^00000000-0000-4000-8000-/);
+  assert.match(screenshot.dataUrl, /^data:image\/png;base64,/);
+  session.remove(91);
+  assert.equal(session.isActive(91), false);
+});
+
+// 复合场景的交接事实在窗口准备时冻结，人物消息仍不能回退读取正式会话。
+test("人物会话复合场景只保留当前专题的交接快照", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  const handoff = { version: 1, updatedAt: "2026-01-01T00:00:00.000Z", groups: [{ topicId: "t", proposalId: "p", title: "原任务交接" }] };
+  session.register(92, "persona-conversation-with-task-handoff", handoff);
+  assert.equal(session.conversationWindow(92, "han-li").messages.length, 60);
+  const timeline = session.timeline(92);
+  assert.deepEqual(timeline.groups, handoff.groups);
+  timeline.groups[0].title = "已篡改的验收窗口数据";
+  assert.equal(session.timeline(92).groups[0].title, "原任务交接");
+});
+
+test("隔离场景成功后只回收自己登记的窗口，重复清理幂等", async () => {
+  const f = fixture();
+  const prepared = await prepareAcceptanceSceneWindow(segment, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.deepEqual(f.events, ["create", "show"]);
+  prepared.dispose(); prepared.dispose();
+  assert.equal(f.registered.size, 0);
+  assert.deepEqual(f.events, ["create", "show", "close"]);
+});
+test("加载失败、页面未挂载和用户中途关闭都释放临时注册", async () => {
+  for (const failure of ["load", "not-mounted", "closed"]) {
+    const f = fixture(failure);
+    await assert.rejects(prepareAcceptanceSceneWindow(segment, f.options));
+    assert.equal(f.registered.size, 0);
+    assert.equal(f.events.filter((event) => event === "close").length, 1);
+  }
+});
+test("不支持的场景不启动验收窗口", async () => {
+  const f = fixture();
+  await assert.rejects(prepareAcceptanceSceneWindow({ ...segment, kind: "blocked" }, f.options));
+  assert.deepEqual(f.events, []);
+});
+
+test("渲染器无响应时准备超时仍关闭临时窗口", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = fixture();
+  f.window.webContents.executeJavaScript = () => new Promise(() => {});
+  const pending = prepareAcceptanceSceneWindow(segment, f.options);
+  const rejected = assert.rejects(pending, /准备超时/);
+  await Promise.resolve();
+  t.mock.timers.tick(15000);
+  await rejected;
+  assert.equal(f.registered.size, 0);
+  assert.equal(f.events.filter((event) => event === "close").length, 1);
+});
+
+test("说明文字不污染场景结果，只接受本轮工具提交并在结束后关闭", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  let lastId;
+  const result = await submission.run(goal, async (requestId) => {
+    lastId = requestId;
+    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId: "old" })).success, false);
+    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
+    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, false);
+    return "我会先核对工程协议。这里有普通说明文字。";
+  });
+  assert.deepEqual(result, plan);
+  assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId: lastId })).success, false);
+});
+test("缺少工具提交和模型异常均释放请求，不解析文字JSON或沿用上轮结果", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  await assert.rejects(submission.run(goal, async () => JSON.stringify(plan)), /未通过场景提交工具/);
+  await assert.rejects(submission.run(goal, async () => { throw new Error("disconnect"); }), /disconnect/);
+  await submission.run(goal, async (requestId) => {
+    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
+  });
+});
+
+test("韩立场景工具通过本轮阶段连接装配，结束与应用退出都回收", () => {
+  const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  const workflowRuntime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+  const scene = runtime.slice(runtime.indexOf("const planAcceptanceScene = (goal:"), runtime.indexOf("const personaContext"));
+  assert.match(scene, /dynamicTools: submission.tools/);
+  assert.match(workflowRuntime, /sceneContext/);
+  assert.match(scene, /read: \(\) => null/);
+  assert.match(scene, /finally/);
+  assert.match(scene, /service.dispose\(\)/);
+  assert.match(runtime, /hanliSceneCodex\?\.dispose\(\)/);
+  assert.doesNotMatch(scene, /JSON.parse/);
+});
+
+test("首次真实验收不把场景准备投影为令狐任务交接", () => {
+  const workflowRuntime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+  const acceptance = workflowRuntime.slice(workflowRuntime.indexOf('if (flowAction === "accept-result")'), workflowRuntime.indexOf('if (flowAction === "accept-result")') + 5000);
+  assert.match(acceptance, /updateOneShotRun\("accepting", "han-li", "韩立", "正在准备真实界面验收场景"/);
+  assert.match(acceptance, /publishAcceptance\("started", "韩立已准备验收场景/);
+  assert.doesNotMatch(acceptance, /令狐已准备验收场景/);
+  assert.doesNotMatch(acceptance, /updateOneShotRun\("accepting", "linghu-ancestor", "令狐老祖", "正在准备并核验/);
+  const desktopIpc = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
+  const sceneSession = readFileSync("electron/system/ipc/hanli-acceptance-scene-session.ts", "utf8");
+  const applicationRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  assert.match(desktopIpc, /hanli\.acceptance_scene\.planning/);
+  assert.match(desktopIpc, /planAcceptanceScene\(goal\)/);
+  assert.match(sceneSession, /hanli\.acceptance_scene\.ready/);
+  assert.doesNotMatch(desktopIpc, /linghuAutomation\.planAcceptanceScene/);
+  assert.doesNotMatch(applicationRuntime, /linghu\.acceptance_scene\.(tool_policy|thread)/);
+  const manifest = JSON.parse(readFileSync("prompts/manifest.json", "utf8"));
+  const hanliPrompt = manifest.prompts.find((item) => item.id === "hanli.acceptance-scene");
+  assert.deepEqual(hanliPrompt && { owner: hanliPrompt.owner, file: hanliPrompt.file }, { owner: "hanli", file: "personas/hanli/acceptance-scene.md" });
+  assert.equal(manifest.prompts.some((item) => item.id === "linghu.acceptance-scene"), false);
+});
+
+test("场景说明区分条件式规则与必须构造的验收状态", () => {
+  const prompt = readFileSync("prompts/personas/hanli/acceptance-scene.md", "utf8");
+  assert.match(prompt, /若、如果、存在时、出现时/);
+  assert.match(prompt, /不代表验收场景必须人为创建/);
+  assert.match(prompt, /不得因此选择 blocked/);
+  assert.match(prompt, /failure-recovery-timeline/);
+  assert.match(prompt, /inspection-lifecycle-timeline/);
+  assert.match(prompt, /user-language-detail-timeline/);
+  assert.match(prompt, /recovery-action-lifecycle/);
+  assert.match(prompt, /persona-conversation-lifecycle/);
+  assert.match(prompt, /persona-conversation-with-task-handoff/);
+});

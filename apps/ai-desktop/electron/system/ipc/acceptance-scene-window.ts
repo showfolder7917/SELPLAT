@@ -1,24 +1,34 @@
 import path from "node:path";
 import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
-import type { AcceptanceScenePlanOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceSceneSegmentOutDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
+import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
 
 interface SceneWindowOptions {
-  target: BrowserWindow;
+  /** 只有复用真实页面时才需要持续持有主窗口；独立场景只使用规划前冻结的尺寸。 */
+  target?: BrowserWindow;
+  targetBounds: { x: number; y: number; width: number; height: number };
   preloadPath: string;
   rendererRoot: string;
   sessions: AcceptanceEmptyTaskGroupSession;
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
+  taskHandoff?: CollaborationTimelineSnapshotOutDto;
 }
 
 /** 场景窗口拥有创建、就绪验证和回收，失败也不会留下注册或多余窗口。 */
-export async function prepareAcceptanceSceneWindow(plan: AcceptanceScenePlanOutDto, options: SceneWindowOptions): Promise<{ window: BrowserWindow; dispose(): void }> {
+export async function prepareAcceptanceSceneWindow(plan: AcceptanceSceneSegmentOutDto, options: SceneWindowOptions): Promise<{ window: BrowserWindow; dispose(): void }> {
   if (plan.kind === "blocked") throw new Error(`验收场景尚未就绪：${plan.reason}`);
-  if (options.target.isDestroyed()) throw new Error("验收主窗口已经关闭。");
-  if (plan.kind === "current-window") return { window: options.target, dispose() {} };
+  if (plan.kind === "persona-conversation-with-task-handoff" && !options.taskHandoff?.groups.length) {
+    throw new Error("人物会话与任务交接复合场景缺少当前专题的只读交接记录。");
+  }
+  if (plan.kind === "current-window") {
+    if (!options.target || options.target.isDestroyed()) throw new Error("验收主窗口已经关闭。");
+    return { window: options.target, dispose() {} };
+  }
   const window = options.createWindow({
-    ...options.target.getBounds(), frame: false, show: false, backgroundColor: "#080b12",
-    title: plan.kind === "failure-recovery-timeline" ? "AI Desktop 独立失败恢复验收" : "AI Desktop 独立空状态验收",
+    // 场景规划可能等待模型响应；独立窗口沿用开始时的可见尺寸，不读取已关闭的主窗口对象。
+    ...options.targetBounds, frame: false, show: false, backgroundColor: "#080b12",
+    title: plan.kind === "failure-recovery-timeline" ? "AI Desktop 独立失败恢复验收" : plan.kind === "inspection-lifecycle-timeline" ? "AI Desktop 独立巡检生命周期验收" : plan.kind === "user-language-detail-timeline" ? "AI Desktop 独立任务卡详情验收" : plan.kind === "recovery-action-lifecycle" ? "AI Desktop 独立恢复入口验收" : plan.kind === "persona-conversation-lifecycle" || plan.kind === "persona-conversation-with-task-handoff" ? "AI Desktop 独立人物会话验收" : "AI Desktop 独立空状态验收",
     webPreferences: { preload: options.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true,
       // 不使用 persist 前缀，关闭后不会向正式会话写入空状态。
       partition: `acceptance-empty-${Date.now()}`,
@@ -32,7 +42,7 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceScenePlanOutD
     options.sessions.remove(contentsId);
     if (!window.isDestroyed()) window.close();
   };
-  options.sessions.register(contentsId, plan.kind);
+  options.sessions.register(contentsId, plan.kind, options.taskHandoff);
   window.once("closed", dispose);
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {

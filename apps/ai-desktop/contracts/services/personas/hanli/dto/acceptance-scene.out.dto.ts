@@ -1,9 +1,17 @@
-/** 令狐根据逐项验收前提选择场景；程序只执行已登记场景，不解析用户文案。 */
-export interface AcceptanceScenePlanOutDto {
-  kind: "current-window" | "empty-task-group" | "failure-recovery-timeline" | "blocked";
+export type AcceptanceSceneKind = "current-window" | "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "blocked";
+
+/** 一个证据阶段只负责同一数据来源下的验收条件，避免隔离数据与真实审计互相假设。 */
+export interface AcceptanceSceneSegmentOutDto {
+  kind: AcceptanceSceneKind;
   reason: string;
   /** 原条件是否必须跨越“验收中 -> 已完成”才能取得完整证据；仅当前窗口可以启用。 */
   completionReviewRequired: boolean;
-  /** 与原验收条件逐项对应的前提，不能省略未覆盖条件。 */
+  /** 本阶段负责的原验收条件及其前提。 */
   conditions: { criterionId: string; prerequisite: string }[];
+}
+
+/** 韩立可以组合多个只读证据阶段；程序按顺序执行并按原条件编号汇总结论。 */
+export interface AcceptanceScenePlanOutDto {
+  reason: string;
+  segments: AcceptanceSceneSegmentOutDto[];
 }

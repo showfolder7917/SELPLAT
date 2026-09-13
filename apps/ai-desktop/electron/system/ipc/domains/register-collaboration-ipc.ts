@@ -1,7 +1,7 @@
 import type { DesktopOperatingModeValue, SubmitCollaborationTaskInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionMutationInDto } from "../../../../contracts/services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto } from "../../../../contracts/services/personas/hanli/index.js";
-import type { SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import type { ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type {
   ConvertNangongConversationToTopicInDto,
   CreateNangongProposalInDto,
@@ -65,7 +65,16 @@ export function registerCollaborationIpc(
     return isolated;
   });
   handle("desktop:submit-collaboration-task", (event, request: SubmitCollaborationTaskInDto) => { rejectIsolatedMutation(event.sender.id); return collaboration.submitTask(request); });
-  handle("desktop:continue-collaboration-task", (event, taskId: string) => { rejectIsolatedMutation(event.sender.id); return collaboration.continueTask(taskId); });
+  handle("desktop:continue-collaboration-task", (event, taskId: string) => {
+    if (isIsolatedAcceptance(event.sender.id)) {
+      const timeline = acceptanceEmptyTaskGroupSession!.continueRecoveryLifecycle(event.sender.id, taskId);
+      // Renderer 的继续调用契约始终返回协作状态；时间线只能经专用事件刷新。
+      const isolated = acceptanceEmptyTaskGroupSession!.collaborationState(event.sender.id, collaboration.state());
+      event.sender.send("desktop:collaboration-timeline-changed", timeline);
+      return isolated;
+    }
+    return collaboration.continueTask(taskId);
+  });
   handle("desktop:cancel-collaboration-task", (event, taskId: string) => { rejectIsolatedMutation(event.sender.id); return collaboration.cancelTask(taskId); });
   handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
   handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
@@ -78,9 +87,16 @@ export function registerCollaborationIpc(
   // 人物会话统一通过读取、发送、新建和模型选择四类入口访问；新人物只需注册处理器。
   handle("desktop:get-persona-conversation", (event, personaId: string) => {
     const conversation = personaConversations.conversation(personaId);
-    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.conversation(personaId, conversation) : conversation;
+    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.conversation(event.sender.id, personaId, conversation) : conversation;
   });
-  handle("desktop:send-persona-conversation-message", (event, personaId: string, request: SendPersonaConversationMessageInDto) => { rejectIsolatedMutation(event.sender.id); return personaConversations.send(personaId, request); });
+  handle("desktop:get-persona-conversation-window", (event, personaId: string, request?: ReadPersonaConversationWindowInDto) => {
+    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.conversationWindow(event.sender.id, personaId, request || {});
+    return personaConversations.conversationWindow(personaId, request || {});
+  });
+  handle("desktop:send-persona-conversation-message", (event, personaId: string, request: SendPersonaConversationMessageInDto) => {
+    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.sendPersonaConversationMessage(event.sender.id, personaId, request);
+    return personaConversations.send(personaId, request);
+  });
   handle("desktop:new-persona-conversation", (event, personaId: string) => { rejectIsolatedMutation(event.sender.id); return personaConversations.newConversation(personaId); });
   handle("desktop:select-persona-conversation-model", (event, personaId: string, selectedModel: string | null) => { rejectIsolatedMutation(event.sender.id); return personaConversations.selectModel(personaId, selectedModel); });
   handle("desktop:generate-nangong-topic-draft", (event, request: GenerateNangongTopicDraftInDto) => { rejectIsolatedMutation(event.sender.id); return nangong.generateTopicDraft(request); });

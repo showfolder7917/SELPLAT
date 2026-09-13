@@ -1,4 +1,4 @@
-import { prepareAcceptanceSceneWindow } from "./acceptance-scene-window.js";
+import { runHanliAcceptanceSceneSession } from "./hanli-acceptance-scene-session.js";
 import { execFile } from "node:child_process";
 import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
@@ -40,6 +40,7 @@ import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFac
 import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 import { ActiveUserRuleFacade as RuleService } from "../../services/support/capabilities/rules/index.js";
 import type { PromptLibraryPort } from "../../services/support/capabilities/prompts/index.js";
+import type { AcceptanceScenePlanOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto;
@@ -51,6 +52,8 @@ interface DesktopIpcDependencies {
   dispatch: ConversationDispatchStore;
   collaboration: CollaborationCoordinator;
   linghuAutomation: LinghuAutomationFacade;
+  /** 首次验收由韩立准备场景，令狐不会在失败前写入介入审计。 */
+  planAcceptanceScene(goal: HanliComputerAcceptanceInDto): Promise<AcceptanceScenePlanOutDto>;
   nangong: NangongFacade;
   hanli: HanliFacade;
   personaConversations: PersonaConversationFacade;
@@ -118,7 +121,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, acceptanceEmptyTaskGroupSession } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, planAcceptanceScene, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, acceptanceEmptyTaskGroupSession } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -138,65 +141,42 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady, onInitialPass) => {
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
-    const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
-    const plan = await linghuAutomation.planAcceptanceScene(goal);
-    let prepared: Awaited<ReturnType<typeof prepareAcceptanceSceneWindow>> | undefined;
-    try {
-      prepared = await prepareAcceptanceSceneWindow(plan, {
-        target: targetWindow, preloadPath, rendererRoot, sessions: acceptanceEmptyTaskGroupSession,
-        createWindow: (options) => new BrowserWindow(options),
-      });
-      audit.recordEvent("linghu.acceptance_scene.ready", { ...identity, plan, webContentsId: prepared.window.webContents.id });
-      onSceneReady();
-      // 原业务已经完成时直接执行只读复核，禁止再次进入完成前门或调用业务完成回调。
-      if (goal.reviewMode === "post-completion-review") {
-        const review = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan }, prepared.window);
-        audit.recordEvent("hanli.acceptance.real_app_checked", { runId: review.runId, topicId: review.topicId, proposalId: review.proposalId, status: review.status, evidenceCount: review.evidenceAttachmentIds.length, resumedPostCompletionReview: true });
-        return review;
-      }
-      const completionReviewRequired = plan.kind === "current-window" && plan.completionReviewRequired;
-      const initialGoal = completionReviewRequired ? {
-        ...goal,
-        criteria: ["确认当前真实窗口已进入目标专题的韩立验收阶段，任务卡可读、尚未误示为已完成，且页面没有阻止完成收口的错误。"],
-        preparedScene: plan,
-        reviewMode: "pre-completion-gate" as const,
-      } : { ...goal, preparedScene: plan };
-      const run = await hanli.executeComputerAcceptance(initialGoal, prepared.window);
-      if (run.status !== "passed") {
-        audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
-        return run;
-      }
-      if (!completionReviewRequired) {
-        audit.recordEvent("hanli.acceptance.real_app_checked", { runId: run.runId, topicId: run.topicId, proposalId: run.proposalId, status: run.status, evidenceCount: run.evidenceAttachmentIds.length });
-        return run;
-      }
-      // 既有 Workflow 唯一负责完成状态写入；写入后才在同一窗口执行无业务输入的完成态复核。
-      onInitialPass(run);
-      const priorPhaseEvidence = {
-        summary: run.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
-        evidenceAttachmentIds: run.evidenceAttachmentIds,
-      };
-      const review = await hanli.executeComputerAcceptance({ ...goal, preparedScene: plan, reviewMode: "post-completion-review", priorPhaseEvidence }, prepared.window);
-      const merged = {
-        ...review,
-        runId: run.runId,
-        startedAt: run.startedAt,
-        initialBounds: run.initialBounds,
-        stepResults: [
-          ...run.stepResults.map((step) => ({ ...step, checkId: "pre-completion-gate" })),
-          ...review.stepResults.map((step, index) => ({ ...step, operationIndex: run.stepResults.length + index })),
-        ],
-        evidenceAttachmentIds: [...new Set([...run.evidenceAttachmentIds, ...review.evidenceAttachmentIds])],
-      };
-      audit.recordEvent("hanli.acceptance.real_app_checked", { runId: merged.runId, topicId: merged.topicId, proposalId: merged.proposalId, status: merged.status, evidenceCount: merged.evidenceAttachmentIds.length, postCompletionReview: true });
-      return merged;
-    } catch (error) {
-      audit.recordEvent(prepared ? "hanli.acceptance.failed" : "linghu.acceptance_scene.failed", { ...identity, kind: plan.kind, reason: error instanceof Error ? error.message : String(error) });
-      throw error;
-    } finally {
-      prepared?.dispose();
-      if (prepared) audit.recordEvent("linghu.acceptance_scene.released", { ...identity, kind: plan.kind });
-    }
+    // 规划期间主窗口可能被关闭；独立场景只复用此刻冻结的可见尺寸。
+    const targetBounds = targetWindow.getBounds();
+    const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
+    // 首次场景准备先留下韩立审计事实，任务卡不能再以令狐准备场景作为起始记录。
+    audit.recordEvent("hanli.acceptance_scene.planning", identity);
+    const plan = await planAcceptanceScene(goal);
+    const taskHandoff = plan.segments.some((segment) => segment.kind === "persona-conversation-with-task-handoff") ? (() => {
+      const snapshot = collaborationTimeline?.getTimelineSnapshot();
+      const groups = snapshot?.groups.filter((group) => group.topicId === goal.topicId && group.proposalId === goal.proposalId) || [];
+      return groups.length ? { version: snapshot!.version, groups: structuredClone(groups), updatedAt: snapshot!.updatedAt } : undefined;
+    })() : undefined;
+    const run = await runHanliAcceptanceSceneSession({
+      goal,
+      plan,
+      targetWindow,
+      targetBounds,
+      preloadPath,
+      rendererRoot,
+      sessions: acceptanceEmptyTaskGroupSession,
+      taskHandoff,
+      createWindow: (options) => new BrowserWindow(options),
+      execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window),
+      onSceneReady,
+      onInitialPass,
+      record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
+    });
+    audit.recordEvent("hanli.acceptance.real_app_checked", {
+      runId: run.runId,
+      topicId: run.topicId,
+      proposalId: run.proposalId,
+      status: run.status,
+      evidenceCount: run.evidenceAttachmentIds.length,
+      segmentCount: plan.segments.length,
+      resumedPostCompletionReview: goal.reviewMode === "post-completion-review",
+    });
+    return run;
   });
 
   const recordScreenCaptureStage = (
@@ -359,6 +339,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const parent = BrowserWindow.fromWebContents(event.sender);
     if (request && typeof request.hideOwnerWindow !== "undefined" && typeof request.hideOwnerWindow !== "boolean") {
       throw new Error("Invalid screenshot capture mode.");
+    }
+    // 人物会话验收只回放场景私有附件，避免真实屏幕录制、截图窗口和正式附件目录参与验证。
+    if (acceptanceEmptyTaskGroupSession?.isPersonaConversationLifecycle(event.sender.id)) {
+      const completed = acceptanceEmptyTaskGroupSession.createPersonaConversationScreenshot(event.sender.id);
+      event.sender.send("desktop:screenshot-completed", completed);
+      return { dataUrl: completed.dataUrl, width: 1, height: 1 };
     }
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
     const hideOwnerWindow = request?.hideOwnerWindow === true;

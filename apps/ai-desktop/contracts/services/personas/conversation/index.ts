@@ -6,6 +6,7 @@ export type {
   PersonaConversationOutDto,
   PersonaConversationSpeakerTypeValue,
 } from "./dto/persona-conversation.out.dto.js";
+export type { PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "./dto/persona-conversation-window.out.dto.js";
 export type {
   PersonaConversationSubjectInDto,
   SendPersonaConversationMessageInDto,

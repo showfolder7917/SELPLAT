@@ -2,11 +2,13 @@
 
 <!-- 本规则只约束 AI Desktop 韩立的用户需求代理、提问与验收责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/hanli
-<!-- 2.15.0 强化韩立架构与产品设计把关，托管直接接入既有研讨指派链，技术故障统一归令狐。 -->
-rule_version = 2.15.0
+<!-- 2.16.0 由韩立按原验收项组合多个证据阶段，程序顺序执行并汇总结论。 -->
+rule_version = 2.16.0
 
 <!-- 验收由韩立消费真实截图后逐步调用窗口输入工具，旧整份计划、参数补正及批量执行接口不兼容退役。 -->
 hanli_computer_acceptance_contract = independent_tool_scoped_session + screenshot_then_one_model_selected_input_then_fresh_screenshot + no_batch_plan_or_DOM_assertion_proxy + screenshot_reference_per_criterion + no_input_no_pass + unsafe_action_blocked + revoke_tools_on_exit + preserve_historical_facts
+<!-- 韩立逐项判断证据前提；隔离功能数据与真实流程审计不能由一个场景同时证明时，拆成多个只读阶段并按原条件编号汇总。 -->
+hanli_acceptance_scene_contract = explicit_per_criterion_prerequisites + one_evidence_source_per_segment + multiple_segments_when_sources_differ + each_original_criterion_exactly_once + sequential_read_only_execution + aggregate_by_original_criterion_id + completion_review_current_window_last_only + environment_failure_distinct_from_product_failure + no_keyword_routing_or_current_window_guess
 
 <!-- 核实与普通研讨分离连接；南宫婉保留完整技术依据，韩立面向客户说明结论、影响、推荐方案和未知项，禁止原样倾倒技术报告。 -->
 hanli_fact_handoff_contract = immutable_exact_customer_question + structured_understanding_goal_target_expected_answer_and_ambiguities + clarification_required_before_dispatch_when_direction_can_change + generated_investigation_scope_never_replaces_customer_question + self_contained_hanli_handoff_with_original_words_complete_understanding_target_expected_answer_scope_and_attachment_ids + real_read_only_nangong_dispatch_receives_original_and_scope + findings_must_echo_answered_customer_question + isolated_inquiry_connection + evidence_required + original_conversation_anchor + request_deduplication + preserve_raw_findings_as_internal_evidence + hanli_customer_language_conclusion_impact_recommended_solution_and_unknowns + no_raw_technical_report_forwarding + proactive_result_return + explanation_failure_visible_without_evidence_dump + explicit_failure_not_completion + no_implementation_authority

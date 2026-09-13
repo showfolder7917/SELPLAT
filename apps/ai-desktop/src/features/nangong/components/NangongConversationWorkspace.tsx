@@ -94,6 +94,7 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       </div>}
 
       {/* 问答与内部研讨区：按真实时间展示当前会话的全部可见消息。 */}
+      {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>读取更早消息</button>}
       {controller.visibleMessages.map((message) => {
         // 是否为内部消息（internal）表示当前内容是否来自人物内部研讨。
         const internal = controller.internalIds.has(message.messageId);

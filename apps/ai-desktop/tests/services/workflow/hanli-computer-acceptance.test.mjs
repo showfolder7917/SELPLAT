@@ -5,13 +5,13 @@ import { transform } from "esbuild";
 
 // 单测直接转换当前工作树源码，避免测试把未构建的隔离工作树误判为运行时代码缺失。
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus };", {
+const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus, scrollTaskCollaboration };", {
   loader: "ts",
   format: "esm",
   target: "es2022",
 });
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
-const { HanliComputerAcceptance, mapScreenshotPointToViewport } = acceptanceModule;
+const { HanliComputerAcceptance, safeNavigationClick, mapScreenshotPointToViewport, scrollTaskCollaboration } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
 function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }, screenshotScale = 1) {
   let n = 0;
@@ -27,6 +27,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     if (/focusAcceptanceModelControl/.test(source)) {
       return { status: "focused", controlLabel: source.includes("nangong-model") ? "南宫婉对话模型" : "韩立对话模型" };
     }
+    if (/scrollTaskCollaboration/.test(source)) return taskCollaborationState.status === "has-topics" ? { status: "scrolled", scrollTop: 360, maxScrollTop: 720 } : { status: "hidden" };
     if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
     if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
     if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
@@ -121,6 +122,24 @@ test("不安全点击被拒绝且可以真实报告受阻", async () => {
   assert.equal(result.status, "blocked");
 });
 
+test("人物会话场景只放行补载和既有重试按钮", () => {
+  const previous = globalThis.document;
+  const button = {
+    matches: (selector) => selector === "button",
+    closest: (selector) => selector === ".hanli-person-chat, .nangong-person-chat" ? {} : null,
+    classList: { contains: () => false },
+    getAttribute: () => null,
+    textContent: "读取更早消息",
+  };
+  try {
+    globalThis.document = { elementFromPoint: () => ({ closest: () => button }) };
+    assert.equal(safeNavigationClick(1, 1, false, false), false);
+    assert.equal(safeNavigationClick(1, 1, false, true), true);
+  } finally {
+    globalThis.document = previous;
+  }
+});
+
 test("截图像素坐标按当前视口比例映射后再验证和输入", async () => {
   assert.deepEqual(mapScreenshotPointToViewport(800, 400, {
     screenshot: { width: 2400, height: 1600 }, viewport: { width: 1200, height: 800 },
@@ -169,6 +188,32 @@ test("测试台验收能力只允许固定容器滚动、只读证据展开和�
   assert.deepEqual(f.boundsCalls, [{ x: 0, y: 0, width: 1000, height: 700 }, { x: 0, y: 0, width: 1200, height: 800 }]);
   assert.deepEqual(run.stepResults.slice(0, 3).map((step) => step.operation.type), ["scroll-test-console", "expand-test-console-evidence", "resize-acceptance-window"]);
 });
+test("任务协作页只允许固定容器滚动并回执位置变化", async () => {
+  const f = fixture(true, undefined, true, { status: "has-topics" });
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const scrolled = await tools.call("hanli_computer", { action: "scroll-task-collaboration", reason: "滚动任务协作页查看客户待办", observationId: first, deltaY: 360 });
+    assert.deepEqual(JSON.parse(scrolled.contentItems[0].text).interactionEvidence.taskCollaboration, { status: "scrolled", scrollTop: 360, maxScrollTop: 720 });
+    await finish(tools, id(scrolled));
+  });
+  assert.equal(run.status, "passed");
+  assert.equal(run.stepResults[0].operation.type, "scroll-task-collaboration");
+});
+test("任务协作页滚动只操作可见的固定业务容器", () => {
+  const previous = globalThis.document;
+  let scrollTop = 0;
+  const page = {
+    offsetParent: {}, clientHeight: 200, scrollHeight: 700,
+    get scrollTop() { return scrollTop; },
+    set scrollTop(value) { scrollTop = value; },
+  };
+  try {
+    globalThis.document = { querySelector: (selector) => selector === ".task-collaboration-page" ? page : null };
+    assert.deepEqual(scrollTaskCollaboration(360), { status: "scrolled", scrollTop: 360, maxScrollTop: 500 });
+    assert.deepEqual(scrollTaskCollaboration(360), { status: "scrolled", scrollTop: 500, maxScrollTop: 500 });
+    assert.deepEqual(scrollTaskCollaboration(1), { status: "at-boundary", scrollTop: 500, maxScrollTop: 500 });
+  } finally { globalThis.document = previous; }
+});
 test("隐藏测试台不阻止当前页面的窄窗口验收", async () => {
   const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, false);
   const run = await f.run(async (tools) => {
@@ -196,8 +241,10 @@ test("任务协作群前置状态只读回执真实缺少空状态，不构成�
   assert.equal(run.status, "blocked");
   assert.equal(run.stepResults[0].operation.type, "inspect-task-collaboration-state");
 });
-test("测试台固定能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
+test("固定滚动能力不放宽通用点击、拖拽或任意窗口尺寸", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(source, /scroll-task-collaboration/);
+  assert.match(source, /\.task-collaboration-page/);
   assert.match(source, /scroll-test-console/);
   assert.match(source, /\.dev-test-console-content/);
   assert.match(source, /expand-test-console-evidence/);
@@ -315,8 +362,7 @@ test("受控发送把人物输入框解析器与两种发送动作一起注入�
 });
 test("受控发送在专题卡片没有输入框时只复用既有韩立入口", () => {
   const source = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-  assert.match(source, /createAcceptancePersonaScript\(sendAcceptanceMessage/);
-  assert.match(source, /findAcceptancePersonaComposer\.toString\(\)/);
+  assert.match(source, /findAcceptancePersonaComposer\(sentComposerLabels\)/);
   assert.match(source, /button\.collaboration-member/);
   assert.match(source, /startsWith\("韩立"\)/);
   assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame/);
@@ -452,6 +498,19 @@ test("验收收尾提示登记为可打包资源且变量匹配", () => {
 });
 
 
+// 韩立在真实验收前请求该提示词，清单遗漏会使打包后的只读提示词库直接阻断验收。
+test("验收场景提示登记为韩立可打包资源且变量匹配", () => {
+  const manifest = JSON.parse(readFileSync("prompts/manifest.json", "utf8"));
+  const entries = manifest.prompts.filter((item) => item.id === "hanli.acceptance-scene");
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].owner, "hanli");
+  assert.equal(entries[0].file, "personas/hanli/acceptance-scene.md");
+  assert.deepEqual(entries[0].variables, ["goalJson"]);
+  const content = readFileSync(`prompts/${entries[0].file}`, "utf8");
+  assert.match(content, /{{goalJson}}/);
+});
+
+
 test("只读折叠标题含审批通过仍可查看，实际提交按钮仍拒绝", () => {
   const previous = globalThis.document;
   const check = (disclosure) => {
@@ -466,6 +525,25 @@ test("只读折叠标题含审批通过仍可查看，实际提交按钮仍拒�
   };
   try { assert.equal(check(true), true); assert.equal(check(false), false); }
   finally { globalThis.document = previous; }
+});
+
+test("恢复按钮只在恢复生命周期场景的当前等待节点允许点击", () => {
+  const previous = globalThis.document;
+  const check = (nodeId, allowed) => {
+    const node = {
+      getAttribute: () => null,
+      classList: { contains: () => false },
+      matches: (selector) => selector === "button.task-node-recovery-action",
+      closest: (selector) => selector === `[data-task-timeline-node-id="${nodeId}"]` ? {} : null,
+    };
+    globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
+    return acceptanceModule.safeNavigationClick(12, 30, allowed);
+  };
+  try {
+    assert.equal(check("acceptance:recovery-current", false), false);
+    assert.equal(check("acceptance:recovery-history", true), false);
+    assert.equal(check("acceptance:recovery-current", true), true);
+  } finally { globalThis.document = previous; }
 });
 
 

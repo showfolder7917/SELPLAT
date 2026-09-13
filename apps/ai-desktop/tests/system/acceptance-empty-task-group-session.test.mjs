@@ -44,13 +44,18 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   const runtimeSource = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   const preloadSource = readFileSync("electron/system/preload/preload.cts", "utf8");
   const sceneSource = readFileSync("electron/system/ipc/acceptance-scene-window.ts", "utf8");
-  assert.match(desktopIpcSource, /linghuAutomation\.planAcceptanceScene\(goal\)/);
+  const sceneSessionSource = readFileSync("electron/system/ipc/hanli-acceptance-scene-session.ts", "utf8");
+  assert.match(desktopIpcSource, /planAcceptanceScene\(goal\)/);
   assert.doesNotMatch(desktopIpcSource, /requiresEmptyTaskGroup/);
-  assert.match(desktopIpcSource, /prepareAcceptanceSceneWindow/);
+  assert.match(desktopIpcSource, /runHanliAcceptanceSceneSession/);
+  assert.match(sceneSessionSource, /prepareAcceptanceSceneWindow/);
   assert.match(sceneSource, /--hanli-empty-task-group-acceptance/);
   assert.match(sceneSource, /failure-recovery-timeline/);
+  assert.match(sceneSource, /user-language-detail-timeline/);
   assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession/);
   assert.match(collaborationIpcSource, /rejectIsolatedMutation/);
+  assert.match(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*collaborationState\(event\.sender\.id, collaboration\.state\(\)\)[\s\S]*collaboration-timeline-changed[\s\S]*return isolated/);
+  assert.doesNotMatch(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*return timeline/);
   assert.match(runtimeSource, /const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession\(\)/);
   assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.isActive\(window\.webContents\.id\)/);
   assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.collaborationState\(window\.webContents\.id, state\)/);
@@ -69,6 +74,8 @@ test("失败恢复验收场景只投影完整历史事实和只读恢复入口",
   session.register(43, "failure-recovery-timeline");
   const [group] = session.timeline(43).groups;
   assert.equal(group.status, "blocked");
+  assert.equal(group.nextStep, "令狐老祖 · 等待恢复操作");
+  assert.doesNotMatch(group.nextStep, /失败原因|调查：|修复：|测试：/);
   assert.equal(group.nodes.length, 3);
   assert.match(group.nodes[0].detail, /失败原因/);
   assert.match(group.nodes[1].detail, /调查：/);
@@ -77,5 +84,55 @@ test("失败恢复验收场景只投影完整历史事实和只读恢复入口",
   assert.equal(group.nodes[2].eventType, "task.interrupted");
   assert.equal(group.nodes[2].status, "waiting");
   assert.match(group.nodes[2].detail, /恢复标识/);
+  assert.throws(() => session.rejectMutation(), /只读/);
+});
+
+test("巡检生命周期验收场景在同一专题保留三类只读记录", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(44, "inspection-lifecycle-timeline");
+  const [group] = session.timeline(44).groups;
+  assert.equal(group.title, "巡检记录与任务卡分层验收场景");
+  assert.equal(group.nextStep, "韩立 · 确认恢复条件");
+  assert.deepEqual(group.nodes.map((node) => node.action), ["完成例行巡检", "自动恢复已完成", "等待用户确认恢复条件"]);
+  assert.match(group.nodes[0].detail, /无需创建恢复或等待节点/);
+  assert.match(group.nodes[1].detail, /已自动重新建立连接/);
+  assert.equal(group.nodes[2].eventType, "customer.action_required");
+  assert.match(group.nodes[2].detail, /确认范围后可继续执行/);
+  assert.throws(() => session.rejectMutation(), /只读/);
+});
+
+test("用户语言与技术详情场景分开保留客户待办和自动处理事实", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(45, "user-language-detail-timeline");
+  const [group, automaticGroup] = session.timeline(45).groups;
+  assert.equal(group.title, "任务卡用户语言与技术详情分层验收场景");
+  assert.equal(group.nextStep, "韩立 · 确认恢复条件");
+  assert.equal(group.nodes[0].action, "第1次自测未通过");
+  assert.match(group.nodes[0].detail, /测试日志/);
+  assert.match(group.nodes[1].detail, /完整操作清单/);
+  assert.equal(group.nodes[2].eventType, "customer.action_required");
+  assert.match(group.nodes[2].detail, /确认范围后可继续执行/);
+  assert.equal(automaticGroup.status, "running");
+  assert.equal(automaticGroup.nodes[0].status, "current");
+  assert.equal(automaticGroup.nodes[0].summary, "正在自动处理中，暂不需要你操作。");
+  assert.throws(() => session.rejectMutation(), /只读/);
+});
+
+test("恢复入口生命周期场景只在内存中收口当前等待并投影自动恢复", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(46, "recovery-action-lifecycle");
+  const [before] = session.timeline(46).groups;
+  assert.deepEqual(before.nodes.map((node) => [node.nodeId, node.status]), [
+    ["acceptance:recovery-history", "completed"],
+    ["acceptance:recovery-current", "waiting"],
+  ]);
+  const after = session.continueRecoveryLifecycle(46, "acceptance-failure-recovery-task");
+  assert.deepEqual(after.groups[0].nodes.map((node) => [node.nodeId, node.status]), [
+    ["acceptance:recovery-history", "completed"],
+    ["acceptance:recovery-current", "completed"],
+    ["acceptance:recovery-started", "current"],
+  ]);
+  assert.throws(() => session.continueRecoveryLifecycle(46, "acceptance-failure-recovery-task"), /不能重复继续/);
+  assert.throws(() => session.continueRecoveryLifecycle(46, "formal-task"), /不允许继续此任务/);
   assert.throws(() => session.rejectMutation(), /只读/);
 });

@@ -47,6 +47,8 @@ export class HanliComputerAcceptance {
     const sentComposerLabels = new Set<string>();
     let verdict: "passed" | "failed" | "blocked" = "blocked";
     const postCompletionReview = goal.reviewMode === "post-completion-review";
+    const recoveryLifecycleScene = goal.preparedScene?.kind === "recovery-action-lifecycle";
+    const personaConversationLifecycleScene = goal.preparedScene?.kind === "persona-conversation-lifecycle" || goal.preparedScene?.kind === "persona-conversation-with-task-handoff";
     let completed = false;
     // 终态回合复用同一动态工具，但在模型遗漏 finish 时只保留提交判断这一条路径。
     let finalizationOnly = false;
@@ -118,13 +120,13 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
+        description: "观察当前AI Desktop窗口，基于最新截图执行一个鼠标/键盘/悬停动作、发送受控验收文字或截图，或提交带证据的验收判断；每条条件必须独立提交功能结果和布局结果，布局必须检查位置、遮挡、拥挤、尺寸与整体协调性，不能以操作成功代替。可切换应用页面、展开只读详情并按坐标滚动；scroll-task-collaboration 只滚动当前可见的任务协作页并回执位置变化，不接收坐标且不读取任务正文；inspect-task-collaboration-state 只回执任务协作群是空状态、已有专题还是未显示，不读取任务正文且不能代替真实交互。任意当前页面都可用 resize-acceptance-window 的 narrow/restore 预设验收整窗布局。测试台也提供 scroll-test-console 与 expand-test-console-evidence 固定动作。涉及本轮截图发送、附件显示或历史关联时必须使用 send-test-screenshot，不能以 send-test-message 代替。截图无法辨识模型选择器时，可用 focus-model-control 聚焦韩立、南宫婉或设置页的固定白名单控件，再通过真实键盘选择；该动作不能读取或设置模型值。每次动作返回新截图。禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-test-console", "expand-test-console-evidence", "inspect-task-collaboration-state", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "scroll-test-console", "expand-test-console-evidence", "inspect-task-collaboration-state", "resize-acceptance-window", "key", "hover", "focus-model-control", "send-test-message", "send-test-screenshot", "finish"],
             },
             observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
@@ -337,6 +339,16 @@ export class HanliComputerAcceptance {
               throw new Error(`模型控件不可聚焦：${result.status}。`);
             }
             focusedModelControl = { control: String(args.control), label: result.controlLabel };
+          } else if (args.action === "scroll-task-collaboration") {
+            const deltaY = Number(args.deltaY);
+            if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
+              throw new Error("任务协作页滚动距离必须为非零整数且不超过1000。");
+            }
+            const result = await window.webContents.executeJavaScript(`(${scrollTaskCollaboration.toString()})(${deltaY})`) as Record<string, unknown>;
+            if (result.status !== "scrolled") {
+              throw new Error(`任务协作页未滚动：${String(result.status)}。`);
+            }
+            taskCollaborationEvidence = result;
           } else if (args.action === "scroll-test-console") {
             const deltaY = Number(args.deltaY);
             if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
@@ -386,7 +398,7 @@ export class HanliComputerAcceptance {
             assertPointInsideWindow(point.x, point.y, width, height, "换算后的坐标必须位于当前应用窗口内。");
             if (args.action === "click") {
               // 只用DOM做安全拦截，绝不通过DOM替模型定位或断言成功。
-              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},${safeNavigationClick.toString()})`) as "allowed" | "missed" | "restricted";
+              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${recoveryLifecycleScene},${personaConversationLifecycleScene}))`) as "allowed" | "missed" | "restricted";
               if (closed) {
                 throw new Error("验收已终止，未执行点击。");
               }
@@ -448,6 +460,8 @@ export class HanliComputerAcceptance {
             operation = { type: "key", key: String(args.key), reason: String(args.reason) };
           } else if (args.action === "scroll") {
             operation = { type: "scroll", x: Number(args.x), y: Number(args.y), deltaY: Number(args.deltaY), reason: String(args.reason) };
+          } else if (args.action === "scroll-task-collaboration") {
+            operation = { type: "scroll-task-collaboration", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "scroll-test-console") {
             operation = { type: "scroll-test-console", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "expand-test-console-evidence") {
@@ -584,6 +598,20 @@ function readTaskCollaborationState(): Record<string, unknown> {
   if (empty && empty.offsetParent !== null) return { status: "empty" };
   const groups = page.querySelector<HTMLElement>(".task-collaboration-groups");
   return groups && groups.offsetParent !== null ? { status: "has-topics" } : { status: "unrecognized" };
+}
+
+/** 只滚动当前可见任务协作页，并回执位置变化以证明滚动命中业务容器。 */
+function scrollTaskCollaboration(deltaY: number): Record<string, unknown> {
+  const page = document.querySelector<HTMLElement>(".task-collaboration-page");
+  if (!page || page.offsetParent === null || page.clientHeight <= 0) return { status: "hidden" };
+  const before = page.scrollTop;
+  page.scrollTop = Math.max(0, Math.min(page.scrollHeight - page.clientHeight, before + deltaY));
+  const after = page.scrollTop;
+  return {
+    status: after === before ? "at-boundary" : "scrolled",
+    scrollTop: Math.round(after),
+    maxScrollTop: Math.max(0, Math.round(page.scrollHeight - page.clientHeight)),
+  };
 }
 
 /** 只滚动已显示的测试台内容容器，并回执位置变化，不接收任意坐标。 */
@@ -779,13 +807,19 @@ function readNavigationClickStatus(x: number, y: number, isAllowed: (x: number, 
   return isAllowed(x, y) ? "allowed" : "restricted";
 }
 
-function safeNavigationClick(x: number, y: number): boolean {
+function safeNavigationClick(x: number, y: number, allowRecoveryLifecycle = false, allowPersonaConversationLifecycle = false): boolean {
   const node = document.elementFromPoint(x, y)?.closest("button,[role=tab],[role=treeitem]");
   if (!node) {
     return false;
   }
   // 折叠标题可能含历史“审批通过”等文字，按真实只读控件身份判断，不按内容误拦截。
   if (node.matches("button[data-sel-disclosure-trigger]") && node.closest("[data-sel-disclosure]")) return true;
+  if (allowRecoveryLifecycle && node.matches("button.task-node-recovery-action") && node.closest('[data-task-timeline-node-id="acceptance:recovery-current"]')) return true;
+  // 人物会话场景只放行分页和其既有失败重试入口，不能扩展到发送或会话管理动作。
+  if (allowPersonaConversationLifecycle && node.matches("button") && node.closest(".hanli-person-chat, .nangong-person-chat")) {
+    const label = (node.getAttribute("aria-label") || node.textContent || "").trim();
+    if (/^(读取更早消息|重新读取模型|从原阶段继续排查)$/u.test(label)) return true;
+  }
   if (node.matches("button.test-console-disclosure") && node.closest(".dev-test-console")) return true;
   const label = (node.getAttribute("aria-label") || node.getAttribute("title") || node.textContent || "").trim();
   if (/删除|清空|移除|提交|保存|确认|通过|退回|分发|发布|重启|自动巡检|自动托管/u.test(label)) {

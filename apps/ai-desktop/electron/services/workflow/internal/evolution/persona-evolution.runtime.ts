@@ -590,10 +590,11 @@ export class PersonaEvolutionRuntime {
             criteria: proposal.acceptanceCriteria,
             sceneContext,
           };
-          this.#store.updateOneShotRun("accepting", "linghu-ancestor", "令狐老祖", "正在准备并核实验收场景", topic.topicId, proposal.proposalId);
+          // 首次验收仍由韩立负责；场景准备是窗口层的内部能力，不能形成令狐提前介入任务的交接事实。
+          this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在准备真实界面验收场景", topic.topicId, proposal.proposalId);
           let completionAppliedDuringReview = false;
           const runResult = await this.#computerAcceptanceSession(goal, () => {
-            publishAcceptance("started", "令狐已准备验收场景，韩立正在观察真实页面并逐步操作验收。");
+            publishAcceptance("started", "韩立已准备验收场景，正在观察真实页面并逐步操作验收。");
             this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
           }, (initialRun) => {
             // 先结束当前验收时间线节点，再提交业务完成决定；页面不会在完成态复核期间继续显示“韩立验收中”。

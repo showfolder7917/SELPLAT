@@ -46,14 +46,20 @@ try {
 }
 
 function runCommand(dependencyRoot, appRoot, nodeCompileCache) {
+  // 隔离依赖缓存只链接项目依赖的二进制，通常不包含 npm 自己的 npx 包装器。
+  // 将 npx 规范化为 npm exec 后，仍由当前 PATH 中的缓存 .bin 解析 tsc、vite 等项目工具。
+  const isNpx = command === "npx";
   const executable = command === "node"
     ? process.execPath
+    : isNpx
+      ? "npm"
     : path.join(dependencyRoot, ".bin", process.platform === "win32" ? `${command}.cmd` : command);
+  const commandArguments = isNpx ? ["exec", "--", ...args] : args;
   const usesWindowsCommandInterpreter = process.platform === "win32" && command !== "node";
   const quoteWindowsArgument = (value) => `"${String(value).replaceAll('"', '""')}"`;
-  const windowsCommandLine = `"${[quoteWindowsArgument(executable), ...args.map(quoteWindowsArgument)].join(" ")}"`;
+  const windowsCommandLine = `"${[quoteWindowsArgument(executable), ...commandArguments.map(quoteWindowsArgument)].join(" ")}"`;
   const launchExecutable = usesWindowsCommandInterpreter ? process.env.ComSpec || "cmd.exe" : executable;
-  const launchArguments = usesWindowsCommandInterpreter ? ["/d", "/s", "/c", windowsCommandLine] : args;
+  const launchArguments = usesWindowsCommandInterpreter ? ["/d", "/s", "/c", windowsCommandLine] : commandArguments;
   const result = spawnSync(launchExecutable, launchArguments, {
     cwd: appRoot,
     stdio: "inherit",

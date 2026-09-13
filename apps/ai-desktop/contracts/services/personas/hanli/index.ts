@@ -45,4 +45,4 @@ export type { HanliTopicCandidateOutDto } from "./dto/deliberation.out.dto.js";
 /** 韩立内部研讨的稳定状态枚举，用于区分提问中、待建立、已建立和阻塞。 */
 export type { HanliDeliberationStatusValue } from "./value/deliberation.value.js";
 
-export type { AcceptanceScenePlanOutDto } from "./dto/acceptance-scene.out.dto.js";
+export type { AcceptanceSceneKind, AcceptanceScenePlanOutDto, AcceptanceSceneSegmentOutDto } from "./dto/acceptance-scene.out.dto.js";

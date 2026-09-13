@@ -1,4 +1,4 @@
-import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 
 /** 每个人物只实现这一组公共会话动作；人物特有业务继续留在自己的 Facade。 */
 export interface PersonaConversationHandler {
@@ -16,6 +16,12 @@ export interface PersonaConversationHandler {
  */
 export class PersonaConversationFacade {
   readonly #handlers = new Map<string, PersonaConversationHandler>();
+  #windowReader: ((personaId: string, request: ReadPersonaConversationWindowInDto) => PersonaConversationWindowOutDto) | null = null;
+
+  /** 组合根注册统一 SQLite 窗口读取器；人物 Facade 不自行持有数据库实现。 */
+  registerWindowReader(reader: (personaId: string, request: ReadPersonaConversationWindowInDto) => PersonaConversationWindowOutDto): void {
+    this.#windowReader = reader;
+  }
 
   register(personaId: string, handler: PersonaConversationHandler): void {
     const normalized = requiredPersonaId(personaId);
@@ -25,6 +31,13 @@ export class PersonaConversationFacade {
 
   conversation(personaId: string): PersonaConversationOutDto {
     return this.#requireHandler(personaId).conversation();
+  }
+
+  /** 读取当前人物会话的有限窗口；缺少受控读取器时明确阻断，禁止回退全量快照。 */
+  conversationWindow(personaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto {
+    const reader = this.#windowReader;
+    if (!reader) throw new Error("人物会话窗口读取器尚未就绪。");
+    return reader(requiredPersonaId(personaId), request);
   }
 
   send(personaId: string, request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> {

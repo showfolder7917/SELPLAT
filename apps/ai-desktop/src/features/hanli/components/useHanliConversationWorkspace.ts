@@ -69,6 +69,8 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   const setAttachmentPreviews = runtime.setAttachmentPreviews;
   // 截图恢复错误（attachmentPreviewErrors）保存历史附件无法恢复时的可见原因。
   const attachmentPreviewErrors = runtime.attachmentPreviewErrors;
+  const hasEarlier = runtime.hasEarlier;
+  const loadEarlier = runtime.loadEarlier;
 
   /** 用户按发送按钮或提交表单时，完成一整轮韩立对话。 */
   async function send(): Promise<void> {
@@ -274,6 +276,8 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     timelineRef,
     // 截图恢复错误（attachmentPreviewErrors）为无法恢复的历史附件提供可读原因。
     attachmentPreviewErrors,
+    hasEarlier,
+    loadEarlier,
     // 是否允许发送（canSend）是发送按钮使用的统一判断结果。
     canSend,
     // 消息发送操作（send）执行一次完整的客户到韩立发送流程。

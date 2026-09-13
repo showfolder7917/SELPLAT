@@ -1,9 +1,9 @@
-import type { AcceptanceScenePlanOutDto } from "./acceptance-scene.out.dto.js";
+import type { AcceptanceSceneSegmentOutDto } from "./acceptance-scene.out.dto.js";
 
 /**
  * 场景准备前由演化运行时生成的只读身份快照。
  *
- * 生产者：一次性演化运行时；消费者：令狐场景规划器。
+ * 生产者：一次性演化运行时；消费者：韩立场景规划器。
  * 数据方向：运行时 -> 场景规划；禁止职责：不能作为任务、提案或验收状态的写入入口。
  */
 export interface AcceptanceSceneRuntimeContextOutDto {
@@ -18,7 +18,7 @@ export interface AcceptanceSceneRuntimeContextOutDto {
 /**
  * 只携带验收目标、只读场景上下文和准备结果；不携带预生成的操作清单。
  *
- * 生产者：演化运行时；消费者：令狐场景规划与韩立验收器。
+ * 生产者：演化运行时；消费者：韩立场景规划与验收器。
  * 数据方向：运行时 -> 场景准备 -> 验收器；禁止职责：不能由此 DTO 修改产品、任务或验收状态。
  */
 export interface HanliComputerAcceptanceInDto {
@@ -28,8 +28,8 @@ export interface HanliComputerAcceptanceInDto {
   criteria: string[];
   /** 仅当前窗口场景必须提供的运行时身份事实，用于阻止模型臆测记录缺失。 */
   sceneContext?: AcceptanceSceneRuntimeContextOutDto;
-  /** 令狐准备成功后附带的场景事实，不代表页面验收通过。 */
-  preparedScene?: AcceptanceScenePlanOutDto;
+  /** 韩立当前证据阶段的已准备场景，不代表页面验收通过。 */
+  preparedScene?: AcceptanceSceneSegmentOutDto;
   /** 跨完成态验收的受控阶段；前置门只确认真实验收场景可用，后置阶段只读复核原条件。 */
   reviewMode?: "pre-completion-gate" | "post-completion-review";
   /** 完成态复核可读取的上一阶段可信摘要；只传递已归档事实，不授予历史截图操作能力。 */

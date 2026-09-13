@@ -19,7 +19,7 @@ import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto }
 import type { LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto } from "../../../services/personas/linghu/index.js";
 import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto } from "../../../services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
-import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
+import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
 import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotAttachmentPreviewOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
@@ -168,6 +168,8 @@ export interface DesktopApi {
   getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossierOutDto>;
   /** 读取韩立当前固定人物会话。 */
   getPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
+  /** 按稳定序号读取有限窗口；不会截断或迁移数据库历史。 */
+  getPersonaConversationWindow(personaId: string, request?: ReadPersonaConversationWindowInDto): Promise<PersonaConversationWindowOutDto>;
   /** 订阅人物会话持久消息变化；内部研讨每新增一条消息都会返回同一权威会话快照。 */
   onPersonaConversationChanged(listener: (conversation: PersonaConversationOutDto) => void): () => void;
   /** 向韩立发送自由讨论消息；韩立只读取语义记忆并进行只读分析。 */

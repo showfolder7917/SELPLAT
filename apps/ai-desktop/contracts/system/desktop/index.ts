@@ -23,7 +23,7 @@ export type { ApprovalMemoryEvidenceOutDto, CollaborationMemoryMessageOutDto, Co
 export type { IntegrationReleaseEventTypeValue, IntegrationReleaseHolderOutDto, IntegrationReleaseInDto, ReleaseBatchDocumentOutDto, ReleaseBatchTaskSnapshotOutDto } from "../../services/support/capabilities/release/index.js";
 export type { AutomaticTestPreflightCheckOutDto, AutomaticTestPreflightResultOutDto, TestResourceCoordinatorStateOutDto, TestResourceEventTypeValue, TestResourceHolderOutDto, TestResourceInDto, TestResourceWaiterOutDto } from "../../services/support/capabilities/testing/index.js";
 export type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto, RuntimeRuleSourceValue } from "../../services/support/capabilities/rules/index.js";
-export type { PersonaConversationMessageOutDto, PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../services/personas/conversation/index.js";
+export type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../services/personas/conversation/index.js";
 
 export type {
   ApprovalGovernanceDomainValue,

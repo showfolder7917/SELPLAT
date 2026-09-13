@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { CodexModelOptionOutDto, PersonaConversationMessageOutDto, PersonaConversationOutDto } from "../../../../contracts/system/desktop/index";
+import type { CodexModelOptionOutDto, PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
 import { loadOfficialModelCatalog } from "../../../foundation/model-catalog";
@@ -14,6 +14,34 @@ function emptyConversation(personaId: string): PersonaConversationOutDto {
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
+}
+
+function windowConversation(window: PersonaConversationWindowOutDto): PersonaConversationOutDto {
+  return {
+    ownerPersonaId: window.ownerPersonaId,
+    conversationId: window.conversationId,
+    selectedModel: window.selectedModel,
+    createdAt: window.createdAt,
+    messages: window.messages,
+    updatedAt: window.updatedAt,
+    activity: window.activity,
+  };
+}
+
+/**
+ * 正式桥接按窗口读取，隔离或旧版桥接尚未暴露新能力时保留完整会话可见，避免只读升级中断整页渲染。
+ */
+async function readPersonaConversationWindow(
+  desktop: ReturnType<typeof getOptionalCollaborationDesktopApi>,
+  personaId: string,
+  request?: ReadPersonaConversationWindowInDto,
+): Promise<PersonaConversationWindowOutDto | undefined> {
+  if (!desktop) return undefined;
+  if (typeof desktop.getPersonaConversationWindow === "function") {
+    return desktop.getPersonaConversationWindow(personaId, request);
+  }
+  const conversation = await desktop.getPersonaConversation(personaId);
+  return conversation ? { ...conversation, hasEarlier: false } : undefined;
 }
 
 export interface PersonaPendingMessage {
@@ -50,6 +78,8 @@ export function usePersonaConversation(personaId: string) {
   // 新线程建立成功后只提示当前页面，不把旧线程的错误或等待状态带入新对话。
   const [newConversationFeedback, setNewConversationFeedback] = useState("");
   const [error, setError] = useState("");
+  const [hasEarlier, setHasEarlier] = useState(false);
+  const requestGeneration = useRef(0);
   // 官方模型目录只从 Codex bridge 读取，人物页面不维护固定模型列表。
   const [modelCatalog, setModelCatalog] = useState<CodexModelOptionOutDto[]>([]);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
@@ -65,10 +95,10 @@ export function usePersonaConversation(personaId: string) {
     let active = true;
     let receivedOwnUpdate = false;
     let receivedInternalUpdate = false;
-    setConversation(emptyConversation(personaId));
+    const generation = ++requestGeneration.current;
     const desktop = getOptionalCollaborationDesktopApi();
-    void desktop?.getPersonaConversation(personaId)
-      .then((value) => { if (active && !receivedOwnUpdate && value) setConversation(value); })
+    void readPersonaConversationWindow(desktop, personaId)
+      .then((value) => { if (active && generation === requestGeneration.current && !receivedOwnUpdate && value) { setConversation(windowConversation(value)); setHasEarlier(value.hasEarlier); } })
       .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取人物会话。")); });
     if (personaId === "nangong-wan") {
       void desktop?.getPersonaConversation("han-li")
@@ -79,7 +109,19 @@ export function usePersonaConversation(personaId: string) {
       if (!active) return;
       if (value.ownerPersonaId === personaId) {
         receivedOwnUpdate = true;
-        setConversation((current) => ({ ...value, contextReadStats: value.contextReadStats || current.contextReadStats }));
+        const currentConversationId = conversation.conversationId;
+        void readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId })
+          .then((window) => {
+            if (active && window && (!currentConversationId || window.conversationId === currentConversationId)) {
+              setConversation((current) => ({
+                ...windowConversation(window),
+                activity: value.activity,
+                contextReadStats: value.contextReadStats || current.contextReadStats,
+              }));
+              setHasEarlier(window.hasEarlier);
+            }
+          })
+          .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法刷新人物会话。")); });
       }
       if (personaId === "nangong-wan" && value.ownerPersonaId === "han-li") {
         receivedInternalUpdate = true;
@@ -87,7 +129,18 @@ export function usePersonaConversation(personaId: string) {
       }
     });
     return () => { active = false; removeListener?.(); };
-  }, [personaId]);
+  }, [personaId, conversation.conversationId]);
+
+  const loadEarlier = useCallback(async () => {
+    const earliest = conversation.messages[0];
+    if (!earliest || !hasEarlier) return;
+    try {
+      const page = await readPersonaConversationWindow(getOptionalCollaborationDesktopApi(), personaId, { conversationId: conversation.conversationId, beforeSequenceNumber: earliest.sequenceNumber });
+      if (!page || page.conversationId !== conversation.conversationId) return;
+      setConversation((current) => ({ ...current, messages: [...page.messages, ...current.messages.filter((message) => !page.messages.some((loaded) => loaded.messageId === message.messageId))] }));
+      setHasEarlier(page.hasEarlier);
+    } catch (reason) { setError(readableDesktopError(reason, "无法读取更早消息，请重试。")); }
+  }, [conversation.conversationId, conversation.messages, hasEarlier, personaId]);
 
   useEffect(() => {
     let active = true;
@@ -180,7 +233,7 @@ export function usePersonaConversation(personaId: string) {
   };
 
   return {
-    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments,
+    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,

@@ -2,6 +2,7 @@ export type HanliAcceptanceOperationValue =
   | { type: "click"; x: number; y: number; reason: string }
   | { type: "drag"; x: number; y: number; endX: number; endY: number; reason: string }
   | { type: "scroll"; x: number; y: number; deltaY: number; reason: string }
+  | { type: "scroll-task-collaboration"; deltaY: number; reason: string }
   | { type: "scroll-test-console"; deltaY: number; reason: string }
   | { type: "expand-test-console-evidence"; reason: string }
   | { type: "inspect-task-collaboration-state"; reason: string }

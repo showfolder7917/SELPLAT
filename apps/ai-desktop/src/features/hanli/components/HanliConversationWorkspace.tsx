@@ -67,6 +67,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
       </p>}
 
       {/* 客户问答区：按发生顺序展示客户提问和韩立回答。 */}
+      {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>读取更早消息</button>}
       {controller.messages.map((message) => {
         // 消息截图预览（previews）是当前问答消息已经可以直接展示的图片。
         const previews = controller.previewsForMessage(message.messageId);

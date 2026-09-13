@@ -13,7 +13,7 @@ import type {
 } from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
-import type { PersonaConversationOutDto } from "../../../../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../../../../contracts/services/personas/conversation/index.js";
 import { PersonaConversationRepository, writePersonaConversationMessage } from "../../../conversation/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 import { HanliSemanticMemoryRepository } from "./hanli-semantic-memory.repository.js";
@@ -69,6 +69,11 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     return conversationId
       ? this.#conversations.read(ownerPersonaId, conversationId)
       : this.#conversations.readActive(ownerPersonaId);
+  }
+
+  /** 为页面返回有限消息窗口；人物业务仍可通过完整读取保持既有上下文策略。 */
+  readPersonaConversationWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto {
+    return this.#conversations.readWindow(ownerPersonaId, request);
   }
 
   /** 建立新的活动业务会话；旧会话只归档，不删除原始消息。 */
