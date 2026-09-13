@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { WorkspaceRootOutDto, WorkspaceStateOutDto } from "../../../../../../contracts/services/support/platform/workspace/index.js";
+import type { WorkspaceDirectoryEntryOutDto, WorkspaceDirectoryOutDto, WorkspaceFilePreviewOutDto, WorkspaceRootOutDto, WorkspaceStateOutDto } from "../../../../../../contracts/services/support/platform/workspace/index.js";
 import type { WorkspacePermissionValue } from "../../../../../../contracts/foundation/index.js";
 
 const MAX_ROOTS = 24;
 const CURRENT_PERMISSION_DEFAULTS_VERSION = 1;
+const MAX_PREVIEW_BYTES = 512 * 1024;
 
 type StoredWorkspaceState = Partial<WorkspaceStateOutDto> & {
   permissionDefaultsVersion?: number;
@@ -79,11 +80,61 @@ export class WorkspaceStore {
     return this.#write({ primaryId: state.primaryId === id ? roots[0].id : state.primaryId, roots });
   }
 
+  /** 列出登记根内的一层目录；符号链接不作为可浏览项返回，避免跨根追踪。 */
+  listDirectory(id: string, relativePath = ""): WorkspaceDirectoryOutDto {
+    const directory = this.#resolveInsideWorkspace(id, relativePath, "directory");
+    const entries: WorkspaceDirectoryEntryOutDto[] = readdirSync(directory, { withFileTypes: true })
+      .flatMap((entry) => {
+        if (!entry.isDirectory() && !entry.isFile()) return [];
+        return [{
+          name: entry.name,
+          relativePath: relativePath ? `${relativePath}/${entry.name}` : entry.name,
+          kind: entry.isDirectory() ? "directory" as const : "file" as const,
+        }];
+      })
+      .sort((left, right) => left.kind === right.kind
+        ? left.name.localeCompare(right.name)
+        : left.kind === "directory" ? -1 : 1);
+    return { workspaceId: id, relativePath, entries };
+  }
+
+  /** 读取登记根内的 UTF-8 常规文件；大文件和二进制文件不会进入 Renderer。 */
+  readFilePreview(id: string, relativePath: string): WorkspaceFilePreviewOutDto {
+    const filePath = this.#resolveInsideWorkspace(id, relativePath, "file");
+    const bytes = readFileSync(filePath);
+    if (bytes.byteLength > MAX_PREVIEW_BYTES) throw new Error("文件超过应用内预览大小限制。");
+    if (bytes.includes(0)) throw new Error("该文件不是可预览的文本文件。");
+    let content: string;
+    try {
+      content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new Error("该文件不是 UTF-8 文本，无法在应用内预览。");
+    }
+    return { workspaceId: id, relativePath, content };
+  }
+
   #requireRoot(state: WorkspaceStateOutDto, id: string): WorkspaceRootOutDto {
     if (typeof id !== "string") throw new Error("Invalid workspace id.");
     const root = state.roots.find((candidate) => candidate.id === id);
     if (!root) throw new Error("Workspace is not registered.");
     return root;
+  }
+
+  /** 把 Renderer 提供的相对位置绑定到已登记根，并在解析符号链接后再次验证边界。 */
+  #resolveInsideWorkspace(id: string, relativePath: string, expectedKind: "directory" | "file"): string {
+    if (typeof relativePath !== "string" || path.isAbsolute(relativePath)) throw new Error("工作区路径必须是相对路径。");
+    const segments = relativePath.split(/[\\/]/u).filter(Boolean);
+    if (segments.some((segment) => segment === "." || segment === "..")) throw new Error("工作区路径包含不允许的层级。");
+    const root = this.#requireRoot(this.read(), id);
+    const rootPath = realpathSync.native(root.path);
+    const candidate = path.resolve(rootPath, ...segments);
+    assertInsideRoot(rootPath, candidate);
+    const resolved = realpathSync.native(candidate);
+    assertInsideRoot(rootPath, resolved);
+    const stats = lstatSync(resolved);
+    if (expectedKind === "directory" && !stats.isDirectory()) throw new Error("目标不是目录。");
+    if (expectedKind === "file" && !stats.isFile()) throw new Error("目标不是普通文件。");
+    return resolved;
   }
 
   #write(state: WorkspaceStateOutDto): WorkspaceStateOutDto {
@@ -139,4 +190,10 @@ function samePath(left: string, right: string): boolean {
 function normalizeForComparison(value: string): string {
   const normalized = path.normalize(value);
   return process.platform === "win32" ? normalized.toLocaleLowerCase("en-US") : normalized;
+}
+
+function assertInsideRoot(rootPath: string, candidatePath: string): void {
+  const relative = path.relative(rootPath, candidatePath);
+  if (relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) return;
+  throw new Error("工作区读取路径超出已登记目录。");
 }

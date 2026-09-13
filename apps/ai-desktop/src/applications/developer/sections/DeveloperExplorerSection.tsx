@@ -1,5 +1,6 @@
 import { DeveloperExplorer } from "../explorer/DeveloperExplorer";
 import { TaskExplorerFeature } from "../explorer/TaskExplorerFeature";
+import { WorkspaceExplorerFeature } from "../explorer/WorkspaceExplorerFeature";
 import type { DeveloperExplorerViewModel } from "../model/developerViewModelTypes";
 
 type DeveloperExplorerSectionProps = {
@@ -11,6 +12,7 @@ type DeveloperExplorerSectionProps = {
 export function DeveloperExplorerSection({ viewModel }: DeveloperExplorerSectionProps) {
   return (
     <DeveloperExplorer>
+      <WorkspaceExplorerFeature expanded={viewModel.workspaceExpanded} locale={viewModel.locale} workspaces={viewModel.workspaces} workspaceError={viewModel.workspaceError} onToggle={viewModel.onToggleWorkspace} onAdd={viewModel.onAddWorkspace} onTogglePermission={viewModel.onToggleWorkspacePermission} onMakePrimary={viewModel.onMakePrimaryWorkspace} onRemove={viewModel.onRemoveWorkspace} />
       <TaskExplorerFeature
         evolution={viewModel.evolution}
         expanded={viewModel.expanded}

@@ -72,8 +72,6 @@ export type DeveloperActivityViewModel = {
   collaborationState: Controller["collaboration"]["data"]["state"];
   /** 当前演化状态为测试台提供专题、提案和韩立验收记录。 */
   evolutionState: Controller["evolution"]["state"];
-  /** 设置 Feature 自己持有的工作区控制器。 */
-  workspace: Controller["workspace"];
   /** 登录按钮触发主会话登录流程。 */
   onLogin: () => void;
   /** 退出按钮触发主会话退出流程。 */
@@ -98,6 +96,14 @@ export type DeveloperExplorerViewModel = {
   collaboration: Controller["collaboration"];
   /** 点击标题时切换任务区域展开状态。 */
   onToggle: Controller["tasks"]["toggle"];
+  workspaceExpanded: Controller["workspaceExplorer"]["expanded"];
+  workspaces: Controller["workspace"]["workspaces"];
+  workspaceError: Controller["workspace"]["workspaceError"];
+  onToggleWorkspace: Controller["workspaceExplorer"]["toggle"];
+  onAddWorkspace: () => void;
+  onToggleWorkspacePermission: (id: string, permission: "read-only" | "workspace-write") => void;
+  onMakePrimaryWorkspace: (id: string) => void;
+  onRemoveWorkspace: (id: string, name: string) => void;
 };
 
 /** AI Memory 异常时显示的纯提示数据。 */

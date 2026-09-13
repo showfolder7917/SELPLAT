@@ -10,25 +10,22 @@ const registry = readFileSync(new URL("../../../src/features/workspace/model/use
 const activityBar = readFileSync(new URL("../../../src/applications/developer/layout/DeveloperActivityBar.tsx", import.meta.url), "utf8");
 const desktopApi = readFileSync(new URL("../../../contracts/system/desktop/api/desktop.api.ts", import.meta.url), "utf8");
 
-test("工作区管理位于设置页并复用既有控制器", () => {
-  assert.match(applicationViewModel, /workspace: controller\.workspace/);
-  assert.match(settingsView, /workspace-settings-card/);
-  assert.match(settingsViewModel, /workspace\.addWorkspace\(\)/);
-  assert.match(settingsViewModel, /workspace\.updateWorkspacePermission/);
-  assert.match(settingsViewModel, /workspace\.setPrimaryWorkspace/);
-  assert.match(settingsViewModel, /workspace\.removeWorkspace/);
+test("工作区管理进入左侧 Explorer，并复用既有登记控制器", () => {
+  const explorer = readFileSync(new URL("../../../src/applications/developer/explorer/WorkspaceExplorerFeature.tsx", import.meta.url), "utf8");
+  assert.match(applicationViewModel, /workspaces: controller\.workspace\.workspaces/);
+  assert.match(applicationViewModel, /onAddWorkspace/);
+  assert.match(explorer, /onAdd/);
+  assert.doesNotMatch(settingsView, /workspace-settings-card/);
+  assert.doesNotMatch(settingsViewModel, /workspace\.addWorkspace\(\)/);
 });
 
-test("资源树和整体侧栏恢复入口已删除", () => {
-  const retiredExplorer = ["Workspace", "Explorer", "Feature"].join("");
+test("工作区资源树使用受控目录与文本预览 API", () => {
   const retiredShellState = ["explorer", "Expanded"].join("");
   const retiredResizer = ["explorer", "-resizer"].join("");
-  const retiredDirectoryApi = ["list", "Workspace", "Entries"].join("");
-  const retiredDirectoryState = ["workspace", "Entries"].join("");
-  const retiredExpansionState = ["expanded", "Workspaces"].join("");
-  const retiredToggle = ["toggle", "Workspace"].join("");
-  assert.doesNotMatch(application, new RegExp(`${retiredExplorer}|${retiredShellState}|${retiredResizer}`));
-  assert.doesNotMatch(registry, new RegExp(`${retiredDirectoryApi}|${retiredDirectoryState}|${retiredExpansionState}|${retiredToggle}`));
+  const directoryApi = ["list", "Workspace", "Directory"].join("");
+  const fileApi = ["read", "Workspace", "File"].join("");
+  assert.doesNotMatch(application, new RegExp(`${retiredShellState}|${retiredResizer}`));
+  assert.match(desktopApi, new RegExp(`${directoryApi}|${fileApi}`));
+  assert.match(registry, /addWorkspace/);
   assert.doesNotMatch(activityBar, /Search24Regular|Branch24Regular|Bug24Regular|Folder24Regular/);
-  assert.doesNotMatch(desktopApi, new RegExp(retiredDirectoryApi));
 });

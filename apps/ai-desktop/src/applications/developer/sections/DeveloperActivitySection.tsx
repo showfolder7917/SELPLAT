@@ -36,7 +36,6 @@ export function DeveloperActivitySection({ viewModel }: DeveloperActivitySection
           text={viewModel.text}
           settings={viewModel.settings}
           diagnostics={viewModel.diagnostics}
-          workspace={viewModel.workspace}
           onLogin={viewModel.onLogin}
           onLogout={viewModel.onLogout}
           onTempFilesCleared={viewModel.onTempFilesCleared}

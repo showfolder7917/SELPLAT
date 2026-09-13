@@ -23,7 +23,7 @@ import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPe
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
 import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
 import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotAttachmentPreviewOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
-import type { WorkspaceStateOutDto } from "../../../services/support/platform/workspace/index.js";
+import type { WorkspaceDirectoryOutDto, WorkspaceFilePreviewOutDto, WorkspaceStateOutDto } from "../../../services/support/platform/workspace/index.js";
 import type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto } from "../../../services/support/capabilities/rules/index.js";
 
 /** 定义 preload 向渲染层公开的完整白名单；各领域数据结构保留在独立契约文件。 */
@@ -58,6 +58,10 @@ export interface DesktopApi {
   setPrimaryWorkspace(id: string): Promise<WorkspaceStateOutDto>;
   /** 从登记列表移除工作区，不删除磁盘目录。 */
   removeWorkspace(id: string): Promise<WorkspaceStateOutDto>;
+  /** 读取已登记工作区中的一层目录，不接受绝对路径。 */
+  listWorkspaceDirectory(workspaceId: string, relativePath?: string): Promise<WorkspaceDirectoryOutDto>;
+  /** 读取已登记工作区内经大小和 UTF-8 校验的文本文件预览。 */
+  readWorkspaceFile(workspaceId: string, relativePath: string): Promise<WorkspaceFilePreviewOutDto>;
   /** 读取官方 Codex Harness 的连接、认证和运行版本。 */
   getCodexStatus(): Promise<CodexHarnessStatusOutDto>;
   /** 读取 Harness 当前可选模型目录。 */

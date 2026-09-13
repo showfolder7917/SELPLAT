@@ -1,13 +1,4 @@
-import {
-  Add24Regular,
-  Delete16Regular,
-  Delete24Regular,
-  FolderOpen24Regular,
-  ShieldLock16Filled,
-  ShieldLock16Regular,
-  Star16Filled,
-  Star16Regular,
-} from "@fluentui/react-icons";
+import { Delete24Regular, FolderOpen24Regular } from "@fluentui/react-icons";
 
 import { RuleManagementFeature } from "../../rules";
 import { ChatGPTLoginAction } from "../../shell";
@@ -21,7 +12,7 @@ type DeveloperSettingsViewProps = {
 
 /** 设置浮层的纯 View，不读取业务 Controller 或 Desktop API。 */
 export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps) {
-  const { account, testData, model, corpus, preferences, workspaces, diagnostics } = viewModel;
+  const { account, testData, model, corpus, preferences, diagnostics } = viewModel;
 
   return (
     <SettingsFloatingPanel
@@ -154,64 +145,6 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
           <option value="workspace-write">{preferences.writeLabel}</option>
         </select>
       </label>
-
-      {/* 工作区设置管理 Codex 的工程目录和每个目录的写入权限。 */}
-      <section className="workspace-settings-card" aria-labelledby="workspace-settings-title">
-        <header>
-          <div>
-            <span id="workspace-settings-title">{workspaces.title}</span>
-            <small>{workspaces.summary}</small>
-          </div>
-          <button type="button" aria-label={workspaces.addLabel} onClick={workspaces.onAdd}>
-            <Add24Regular />{workspaces.addLabel}
-          </button>
-        </header>
-        <div className="workspace-settings-list">
-          {workspaces.items.map((item) => (
-            <article className="workspace-settings-item" key={item.id}>
-              <div>
-                <strong title={item.path}>{item.name}</strong>
-                <small title={item.path}>{item.path}</small>
-              </div>
-              <div className="workspace-settings-actions">
-                <button
-                  type="button"
-                  className={item.readOnly ? "read-only" : "workspace-write"}
-                  data-sel-tooltip={item.permissionLabel}
-                  data-sel-tooltip-mode="always"
-                  aria-label={item.permissionLabel}
-                  aria-pressed={item.readOnly}
-                  onClick={item.onTogglePermission}
-                >
-                  {item.readOnly ? <ShieldLock16Filled /> : <ShieldLock16Regular />}
-                </button>
-                <button
-                  type="button"
-                  className={item.primary ? "primary-root" : ""}
-                  data-sel-tooltip={item.primaryLabel}
-                  data-sel-tooltip-mode="always"
-                  aria-label={item.primaryLabel}
-                  disabled={item.primary}
-                  onClick={item.onMakePrimary}
-                >
-                  {item.primary ? <Star16Filled /> : <Star16Regular />}
-                </button>
-                <button
-                  type="button"
-                  data-sel-tooltip={item.removeLabel}
-                  data-sel-tooltip-mode="always"
-                  aria-label={item.removeLabel}
-                  disabled={item.removeDisabled}
-                  onClick={item.onRemove}
-                >
-                  <Delete16Regular />
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-        {workspaces.error && <em role="alert">{workspaces.error}</em>}
-      </section>
 
       {/* 诊断区提供临时文件、可信命令和业务日志操作。 */}
       <div className="temp-card">
