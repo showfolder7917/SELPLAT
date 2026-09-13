@@ -25,6 +25,9 @@ test("验收工作区夹具只交付一次，并在验收结束撤销登记和�
     const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
     const reservation = fixture.reserve("basic", 41);
     assert.equal(fixture.takeDirectory(99), null, "其他 Renderer 不能消费验收目录");
+    assert.equal(fixture.takeDirectory(41), null, "前置场景不能提前消费一次性验收目录");
+    assert.equal(fixture.isDirectorySelectionBlocked(41), true, "前置场景不能退回原生目录选择器");
+    fixture.setSceneActive(true);
     const directory = fixture.takeDirectory(41);
     assert.ok(directory);
     assert.equal(reservation.displayName, path.basename(directory));
@@ -54,6 +57,7 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
   try {
     const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
     const reservation = fixture.reserve("scenarios", 42);
+    fixture.setSceneActive(true);
     const directory = fixture.takeDirectory(42);
     assert.ok(directory);
     assert.equal(existsSync(path.join(directory, "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定")), true);
@@ -103,6 +107,7 @@ test("夹具以真实路径绑定和清理 macOS 临时目录别名登记", () =
     symlinkSync(physicalRoot, aliasRoot, "dir");
     const fixture = new WorkspaceAcceptanceFixture(workspaces, aliasRoot);
     fixture.reserve("scenarios", 45);
+    fixture.setSceneActive(true);
     const directory = fixture.takeDirectory(45);
     assert.ok(directory);
     const persistedDirectory = realpathSync.native(directory);
@@ -136,6 +141,7 @@ test("新验收只回收带私有标记的遗留夹具，并生成可区分的�
   try {
     const interruptedFixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
     const interruptedReservation = interruptedFixture.reserve("scenarios", 43);
+    interruptedFixture.setSceneActive(true);
     const interruptedDirectory = interruptedFixture.takeDirectory(43);
     assert.ok(interruptedDirectory);
     roots.push({ id: "stale-fixture", path: interruptedDirectory });
@@ -166,6 +172,8 @@ test("受控目录读取记录起始、失败和重试成功结果，但不归�
   assert.match(directoryReadHandler, /outcome: "failed"/);
   assert.doesNotMatch(directoryReadHandler, /acceptanceDirectory|fixture\.directory/);
   assert.match(workspaceIpcSource, /takeDirectory\(event\.sender\.id\)/);
+  assert.match(workspaceIpcSource, /isDirectorySelectionBlocked\(event\.sender\.id\)/);
+  assert.match(workspaceIpcSource, /workspace\.fixture_selection_blocked/);
   assert.match(workspaceIpcSource, /registerWorkspace\(event\.sender\.id/);
   assert.match(directoryReadHandler, /readDirectory\(event\.sender\.id/);
 });

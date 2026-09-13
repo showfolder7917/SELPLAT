@@ -7,7 +7,7 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/p
 type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
 type FixtureRegistration = { displayName: string; workspaceId: string };
-type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; workspaceId: string | null; failedPaths: Set<string> };
+type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; failedPaths: Set<string> };
 const FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
 const FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 };
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
@@ -65,20 +65,31 @@ export class WorkspaceAcceptanceFixture {
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");
     }
-    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, workspaceId: null, failedPaths: new Set() };
+    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, failedPaths: new Set() };
     return { displayName };
+  }
+
+  /** 只有正式夹具阶段能够消费临时目录，前置真实窗口阶段必须保留夹具的初始观察状态。 */
+  setSceneActive(active: boolean): void {
+    if (this.#reserved) this.#reserved.sceneActive = active;
+  }
+
+  /** 已预备但尚未进入正式夹具阶段时，阻止同一验收窗口意外打开原生目录选择器。 */
+  isDirectorySelectionBlocked(senderWebContentsId: number): boolean {
+    const fixture = this.#reserved;
+    return !!fixture && fixture.trustedWebContentsId === senderWebContentsId && (!fixture.sceneActive || fixture.consumed);
   }
 
   /** 原工作区添加按钮只能消费一次主进程预备的目录，未预备时仍走正常系统目录选择器。 */
   takeDirectory(senderWebContentsId: number): string | null {
-    if (!this.#reserved || this.#reserved.consumed || this.#reserved.trustedWebContentsId !== senderWebContentsId) return null;
+    if (!this.#reserved || this.#reserved.consumed || !this.#reserved.sceneActive || this.#reserved.trustedWebContentsId !== senderWebContentsId) return null;
     this.#reserved.consumed = true;
     return this.#reserved.directory;
   }
 
   /** 夹具目录被原登记 IPC 接纳后才允许为这个根提供受控目录响应。 */
   registerWorkspace(senderWebContentsId: number, directory: string, state: WorkspaceStateOutDto): FixtureRegistration | null {
-    if (!this.#reserved || this.#reserved.trustedWebContentsId !== senderWebContentsId || !resolvesToSameDirectory(this.#reserved.directory, directory)) return null;
+    if (!this.#reserved || !this.#reserved.sceneActive || this.#reserved.trustedWebContentsId !== senderWebContentsId || !resolvesToSameDirectory(this.#reserved.directory, directory)) return null;
     const workspaceId = state.roots.find((root) => resolvesToSameDirectory(root.path, directory))?.id || null;
     if (!workspaceId) return null;
     this.#reserved.workspaceId = workspaceId;
@@ -91,7 +102,7 @@ export class WorkspaceAcceptanceFixture {
    */
   readDirectory(senderWebContentsId: number, workspaceId: string, relativePath: string): WorkspaceAcceptanceDirectoryRead | null {
     const fixture = this.#reserved;
-    if (!fixture || fixture.trustedWebContentsId !== senderWebContentsId || fixture.mode !== "scenarios" || fixture.workspaceId !== workspaceId) return null;
+    if (!fixture || !fixture.sceneActive || fixture.trustedWebContentsId !== senderWebContentsId || fixture.mode !== "scenarios" || fixture.workspaceId !== workspaceId) return null;
     if (relativePath === "slow-a" || relativePath === "slow-b") {
       return {
         fixtureLabel: fixture.displayName,

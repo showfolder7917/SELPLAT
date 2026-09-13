@@ -31,6 +31,9 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   if (segments.some((segment) => segment.kind === "workspace-explorer-fixture") && goal.workspaceAcceptanceFixture?.mode !== "scenarios") {
     throw new Error("工作区验收场景缺少已签发的受控夹具，不能把普通目录当作加载、失败或空目录证据。");
   }
+  if (segments.filter((segment) => segment.kind === "workspace-explorer-fixture").length > 1) {
+    throw new Error("一次性工作区夹具只能使用一个验收阶段，相关条件必须合并取证。");
+  }
   if (segments.some((segment) => segment.completionReviewRequired && segment.kind !== "current-window")) {
     throw new Error("跨完成态复核只能使用当前真实窗口，隔离或受阻场景不能触发业务完成动作。");
   }

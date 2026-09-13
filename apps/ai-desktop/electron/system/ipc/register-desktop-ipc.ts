@@ -198,6 +198,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         taskHandoff,
         createWindow: (options) => new BrowserWindow(options),
         execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window),
+        setWorkspaceFixtureSceneActive: (active) => workspaceAcceptanceFixture.setSceneActive(active),
         onSceneReady,
         onCompletionReviewReady,
         record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
