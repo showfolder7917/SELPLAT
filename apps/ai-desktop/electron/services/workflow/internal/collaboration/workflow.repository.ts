@@ -10,7 +10,8 @@ import type { LinghuAutomationStateOutDto } from "../../../../../contracts/servi
 import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../../support/platform/persistence/index.js";
 
-const STALE_AFTER_MS = 120_000;
+// 模型可能执行较长的定向测试；十分钟没有任何协议事件才判定停滞，避免把正常命令误杀。
+const STALE_AFTER_MS = 600_000;
 const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);
 
 /** 把现有协同控制面投影到统一 SQLite；JSON 继续负责恢复对象图，数据库负责跨角色查询、异常和审计。 */
@@ -553,7 +554,10 @@ export class WorkflowRepository {
 
   #upsertTask(connection: DatabaseSync, state: CollaborationStateOutDto, task: CollaborationTaskOutDto): void {
     const member = new CollaborationTaskAggregate({ task }).activeOwner(state.members);
-    const heartbeatAt = latestTime(member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt);
+    const activeExecution = task.executionRecords.find((record) => record.assignmentId === task.assignmentId);
+    // 进程存活心跳只说明 app-server 仍在，不能掩盖工具调用或模型回合长期无输出。
+    // 任务超时以真实协议进展为准；刚分配且尚无输出时从本次执行起点开始计时。
+    const heartbeatAt = latestTime(member?.lastProtocolProgressAt, activeExecution?.executionStartedAt, activeExecution?.assignedAt, task.startedAt);
     const timeoutAt = new CollaborationTaskAggregate({ task }).requiresExecutionHeartbeat()
       ? new Date(Date.parse(heartbeatAt) + STALE_AFTER_MS).toISOString() : null;
     const workflowId = task.evolutionProposalId ? `evolution:${task.evolutionProposalId}` : `collaboration:${task.taskId}`;
@@ -580,7 +584,7 @@ export class WorkflowRepository {
       $taskId: task.taskId, $workflowId: task.evolutionProposalId ? `evolution:${task.evolutionProposalId}` : workflowId,
       $proposalId: task.evolutionProposalId, $title: task.snapshot.title, $initiatorMemberId: task.initiator?.memberId || null,
       $executorMemberId: task.executorMemberId, $state: task.state, $phase: task.phase, $runtimeStatus: runtimeStatus,
-      $heartbeatAt: heartbeatAt, $timeoutAt: timeoutAt, $retryCount: Math.min(task.workerGeneration, 3),
+      $heartbeatAt: heartbeatAt, $timeoutAt: timeoutAt, $retryCount: Math.min(Math.max(0, task.executionRecords.length - 1), 3),
       $recoveryPoint: task.recoveryTargetState, $blockingKind: taskBlockingKind(task), $blockingReason: task.blockingReason,
       $acceptanceState: task.state === "integrated" ? "passed" : task.state === "cancelled" ? "cancelled" : task.state === "test-failed" ? "failed" : "pending",
       $startedAt: task.startedAt, $completedAt: task.completedAt, $updatedAt: task.updatedAt,

@@ -7,7 +7,7 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/p
 type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
 type FixtureRegistration = { displayName: string; workspaceId: string };
-type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; workspaceId: string | null; failedPaths: Set<string> };
+type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; workspaceId: string | null; failedPaths: Set<string> };
 const FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
 const FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 };
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
@@ -41,7 +41,8 @@ export class WorkspaceAcceptanceFixture {
    * 真实传参示例：传入应用临时目录；真实返回示例：后续 takeDirectory 返回该目录一次。
    * 异常或副作用示例：创建失败会阻断验收；成功后目录只在 cleanup 前存在。
    */
-  reserve(mode: FixtureMode = "basic"): FixtureReservation {
+  reserve(mode: FixtureMode = "basic", trustedWebContentsId: number): FixtureReservation {
+    if (!Number.isSafeInteger(trustedWebContentsId) || trustedWebContentsId <= 0) throw new Error("验收窗口身份无效，不能签发工作区夹具。");
     this.cleanup();
     this.#cleanupStaleFixtures();
     const directory = mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-"));
@@ -55,20 +56,20 @@ export class WorkspaceAcceptanceFixture {
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");
     }
-    this.#reserved = { directory, displayName, consumed: false, mode, workspaceId: null, failedPaths: new Set() };
+    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, workspaceId: null, failedPaths: new Set() };
     return { displayName };
   }
 
   /** 原工作区添加按钮只能消费一次主进程预备的目录，未预备时仍走正常系统目录选择器。 */
-  takeDirectory(): string | null {
-    if (!this.#reserved || this.#reserved.consumed) return null;
+  takeDirectory(senderWebContentsId: number): string | null {
+    if (!this.#reserved || this.#reserved.consumed || this.#reserved.trustedWebContentsId !== senderWebContentsId) return null;
     this.#reserved.consumed = true;
     return this.#reserved.directory;
   }
 
   /** 夹具目录被原登记 IPC 接纳后才允许为这个根提供受控目录响应。 */
-  registerWorkspace(directory: string, state: WorkspaceStateOutDto): FixtureRegistration | null {
-    if (!this.#reserved || this.#reserved.directory !== directory) return null;
+  registerWorkspace(senderWebContentsId: number, directory: string, state: WorkspaceStateOutDto): FixtureRegistration | null {
+    if (!this.#reserved || this.#reserved.trustedWebContentsId !== senderWebContentsId || this.#reserved.directory !== directory) return null;
     const workspaceId = state.roots.find((root) => root.path === directory)?.id || null;
     if (!workspaceId) return null;
     this.#reserved.workspaceId = workspaceId;
@@ -79,9 +80,9 @@ export class WorkspaceAcceptanceFixture {
    * 仅为已签发的夹具根制造可观察的异步读取边界；普通工作区继续由真实存储同步读取。
    * 首次 retry-once 故意失败，后续重试回到真实目录读取，确保界面验证的仍是产品重试路径。
    */
-  readDirectory(workspaceId: string, relativePath: string): WorkspaceAcceptanceDirectoryRead | null {
+  readDirectory(senderWebContentsId: number, workspaceId: string, relativePath: string): WorkspaceAcceptanceDirectoryRead | null {
     const fixture = this.#reserved;
-    if (!fixture || fixture.mode !== "scenarios" || fixture.workspaceId !== workspaceId) return null;
+    if (!fixture || fixture.trustedWebContentsId !== senderWebContentsId || fixture.mode !== "scenarios" || fixture.workspaceId !== workspaceId) return null;
     if (relativePath === "slow-a" || relativePath === "slow-b") {
       return {
         fixtureLabel: fixture.displayName,

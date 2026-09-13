@@ -47,6 +47,11 @@ export interface HanliComputerAcceptanceInDto {
   title: string;
   criteria: string[];
   /**
+   * 当前场景中每条条件对应的原提案稳定编号；缺省时按完整提案顺序生成。
+   * 该字段只由主进程拆分场景时写入，避免模型把局部序号冒充原条件编号。
+   */
+  criterionIds?: string[];
+  /**
    * 当前提案明确允许验收器执行的受限页面交互；缺省时保持既有导航白名单。
    *
    * 来源：演化运行时根据已批准范围签发；生命周期：仅当前验收运行有效；安全边界：不能由场景计划或模型文字提升。

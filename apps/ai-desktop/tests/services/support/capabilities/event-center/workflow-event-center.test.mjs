@@ -624,13 +624,18 @@ test("成员任务心跳超时只登记一次卡住事件并交给有限重试�
   const fixture = createFixture("stalled");
   try {
     const now = new Date("2026-08-26T00:10:00.000Z");
-    const heartbeat = new Date(now.getTime() - 180_000).toISOString();
-    fixture.repository.syncCollaborationState(collaborationState(heartbeat));
+    const protocolProgress = new Date(now.getTime() - 660_000).toISOString();
+    const state = collaborationState(protocolProgress);
+    state.members[0].lastHeartbeatAt = now.toISOString();
+    state.members[0].updatedAt = now.toISOString();
+    state.tasks[0].updatedAt = now.toISOString();
+    fixture.repository.syncCollaborationState(state);
     const first = fixture.repository.detectStalledTasks(now.toISOString());
     const second = fixture.repository.detectStalledTasks(new Date(now.getTime() + 30_000).toISOString());
     assert.equal(first.length, 1);
     assert.equal(first[0].taskId, "task-1");
     assert.equal(first[0].maxRetries, 3);
+    assert.equal(first[0].retryCount, 0, "成员全局代次不能冒充当前任务的恢复次数");
     assert.equal(second.length, 0);
     const events = fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopEvent WHERE category='stalled' AND correlationId='task-1'").get());
     assert.equal(Number(events.count), 1);
@@ -703,7 +708,7 @@ test("卡点重复上报和进度回流保留处理状态，仅原点验证可�
 test("独立监督器同步全流程后把卡住任务交给令狐入口", async () => {
   const fixture = createFixture("supervisor");
   const now = new Date("2026-08-26T00:10:00.000Z");
-  const heartbeat = new Date(now.getTime() - 180_000).toISOString();
+  const heartbeat = new Date(now.getTime() - 660_000).toISOString();
   const handedOff = [];
   const handedOffExceptions = [];
   let linghuEnabled = false;

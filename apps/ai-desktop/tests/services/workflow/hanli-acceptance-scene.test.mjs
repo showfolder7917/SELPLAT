@@ -12,7 +12,8 @@ async function bundledSourceModule(file) {
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
 }
 const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-scene.ts");
-const { createSegmentGoal, remapAcceptanceRun, mergeAcceptanceRuns } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
+const { inspectAcceptanceRunEvidence } = await sourceModule("electron/services/personas/hanli/domain/acceptance-run-evidence.policy.ts");
+const { assertSegmentAcceptanceRun, createSegmentGoal, mergeAcceptanceRuns } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const { AcceptanceEmptyTaskGroupSession } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
 const { runHanliAcceptanceSceneSession } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-session.ts");
@@ -101,24 +102,40 @@ test("不同证据源可以分段覆盖原条件且每项只能出现一次", ()
     segments: composite.segments.map((item) => ({ ...item, conditions: [segment.conditions[0]] })),
   }, currentWindowGoal), /逐项覆盖/);
 });
-test("分段结果恢复原条件编号并按失败优先级汇总", () => {
+test("分段目标直接携带原条件编号并拒绝按局部位置重编号", () => {
   const secondSegment = { ...segment, conditions: [segment.conditions[1]] };
   const localRun = {
     version: 2, runId: "run-1", topicId: "t", proposalId: "p", criteria: [goal.criteria[1]], status: "passed",
     windowTitle: "AI Desktop", initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
-    stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: "功能可见", layoutStatus: "passed", layoutActual: "布局清楚", layoutScreenshotAttachmentId: "shot-1", screenshotAttachmentId: "shot-1", occurredAt: "2026-09-13T00:00:00.000Z" }],
+    stepResults: [{ checkId: "criterion-2", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-2" }, status: "passed", actual: "功能可见", layoutStatus: "passed", layoutActual: "布局清楚", layoutScreenshotAttachmentId: "shot-1", screenshotAttachmentId: "shot-1", occurredAt: "2026-09-13T00:00:00.000Z" }],
     evidenceAttachmentIds: ["shot-1"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
   };
-  assert.deepEqual(createSegmentGoal(goal, secondSegment).criteria, [goal.criteria[1]]);
-  const remapped = remapAcceptanceRun(localRun, secondSegment);
-  assert.equal(remapped.stepResults[0].checkId, "criterion-2");
-  assert.equal(remapped.stepResults[0].operation.criterionId, "criterion-2");
-  const blocked = { ...remapped, runId: "run-2", status: "blocked", evidenceAttachmentIds: ["shot-1", "shot-2"] };
-  const merged = mergeAcceptanceRuns(goal, [remapped, blocked]);
+  assert.deepEqual(createSegmentGoal(goal, secondSegment), { ...goal, criteria: [goal.criteria[1]], criterionIds: ["criterion-2"], preparedScene: secondSegment });
+  const preserved = assertSegmentAcceptanceRun(localRun, secondSegment);
+  assert.equal(preserved.stepResults[0].checkId, "criterion-2");
+  assert.throws(() => assertSegmentAcceptanceRun({ ...localRun, stepResults: localRun.stepResults.map((step) => ({ ...step, checkId: "criterion-1", operation: { type: "judgement", criterionId: "criterion-1" } })) }, secondSegment), /原条件编号不一致/);
+  const blocked = { ...preserved, runId: "run-2", status: "blocked", evidenceAttachmentIds: ["shot-1", "shot-2"] };
+  const merged = mergeAcceptanceRuns(goal, [preserved, blocked]);
   assert.equal(merged.status, "blocked");
   assert.deepEqual(merged.criteria, goal.criteria);
   assert.deepEqual(merged.evidenceAttachmentIds, ["shot-1", "shot-2"]);
   assert.deepEqual(merged.stepResults.map((item) => item.operationIndex), [0, 1]);
+});
+test("最终验收记录在提交前逐项诊断重复、缺失和未登记的双截图证据", () => {
+  const complete = {
+    version: 2, runId: "evidence-run", topicId: "t", proposalId: "p", criteria: goal.criteria, status: "passed", windowTitle: "AI Desktop",
+    initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+    stepResults: goal.criteria.map((_criterion, index) => ({ checkId: `criterion-${index + 1}`, operationIndex: index, operation: { type: "judgement", criterionId: `criterion-${index + 1}` }, status: "passed", actual: "功能已核对", layoutStatus: "passed", layoutActual: "布局已核对", screenshotAttachmentId: `function-${index}`, layoutScreenshotAttachmentId: `layout-${index}`, occurredAt: "2026-09-13T00:00:00.000Z" })),
+    evidenceAttachmentIds: ["function-0", "layout-0", "function-1", "layout-1"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+  };
+  assert.equal(inspectAcceptanceRunEvidence(complete).valid, true);
+  const duplicate = { ...complete, stepResults: [...complete.stepResults, { ...complete.stepResults[0], operationIndex: 2 }] };
+  const diagnostic = inspectAcceptanceRunEvidence(duplicate);
+  assert.equal(diagnostic.valid, false);
+  assert.deepEqual(diagnostic.criteria.map((criterion) => [criterion.criterionId, criterion.resultCount]), [["criterion-1", 2], ["criterion-2", 1]]);
+  const missingLayout = inspectAcceptanceRunEvidence({ ...complete, stepResults: complete.stepResults.map((step) => step.checkId === "criterion-2" ? { ...step, layoutScreenshotAttachmentId: "missing-layout" } : step) });
+  assert.equal(missingLayout.criteria[1].layoutScreenshotRegistered, false);
+  assert.equal(missingLayout.criteria[1].valid, false);
 });
 test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件", async () => {
   const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
@@ -143,10 +160,11 @@ test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件",
     execute: async (currentGoal, window) => {
       execution.push({ criteria: currentGoal.criteria, window: window.name });
       const index = execution.length;
+      const criterionId = currentGoal.criterionIds?.[0] || "criterion-1";
       return {
         version: 2, runId: `run-${index}`, topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "passed", windowTitle: "AI Desktop",
         initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
-        stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: "功能通过", layoutStatus: "passed", layoutActual: "布局通过", layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: `2026-09-13T00:00:0${index}.000Z` }],
+        stepResults: [{ checkId: criterionId, operationIndex: 0, operation: { type: "judgement", criterionId }, status: "passed", actual: "功能通过", layoutStatus: "passed", layoutActual: "布局通过", layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: `2026-09-13T00:00:0${index}.000Z` }],
         evidenceAttachmentIds: [`shot-${index}`], startedAt: `2026-09-13T00:00:0${index}.000Z`, completedAt: `2026-09-13T00:00:0${index + 1}.000Z`,
       };
     },
@@ -181,10 +199,11 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
     execute: async (currentGoal, window) => {
       execution.push({ criteria: currentGoal.criteria, reviewMode: currentGoal.reviewMode, window: window.name });
       const index = execution.length;
+      const criterionId = currentGoal.criterionIds?.[0] || "criterion-1";
       return {
         version: 2, runId: "completion-review-run", topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "passed", windowTitle: "AI Desktop",
         initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
-        stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: `功能通过 ${index}`, layoutStatus: "passed", layoutActual: `布局通过 ${index}`, layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: "2026-09-13T00:00:00.000Z" }],
+        stepResults: [{ checkId: criterionId, operationIndex: 0, operation: { type: "judgement", criterionId }, status: "passed", actual: `功能通过 ${index}`, layoutStatus: "passed", layoutActual: `布局通过 ${index}`, layoutScreenshotAttachmentId: `shot-${index}`, screenshotAttachmentId: `shot-${index}`, occurredAt: "2026-09-13T00:00:00.000Z" }],
         evidenceAttachmentIds: [`shot-${index}`], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
       };
     },

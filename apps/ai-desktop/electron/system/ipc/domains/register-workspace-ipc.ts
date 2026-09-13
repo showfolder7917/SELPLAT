@@ -7,9 +7,9 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../../services/suppor
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 interface WorkspaceAcceptanceFixturePort {
-  takeDirectory(): string | null;
-  registerWorkspace(directory: string, state: WorkspaceStateOutDto): { displayName: string; workspaceId: string } | null;
-  readDirectory(workspaceId: string, relativePath: string): { fixtureLabel: string; scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
+  takeDirectory(senderWebContentsId: number): string | null;
+  registerWorkspace(senderWebContentsId: number, directory: string, state: WorkspaceStateOutDto): { displayName: string; workspaceId: string } | null;
+  readDirectory(senderWebContentsId: number, workspaceId: string, relativePath: string): { fixtureLabel: string; scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
 }
 
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */
@@ -18,10 +18,10 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
   handle("desktop:get-workspaces", () => workspaces.read());
   handle("desktop:add-workspace", async (event) => {
     // 韩立验收只能消费主进程预备的一次性目录；不存在预备目录时保留用户原生选择流程。
-    const acceptanceDirectory = acceptanceFixture?.takeDirectory() || null;
+    const acceptanceDirectory = acceptanceFixture?.takeDirectory(event.sender.id) || null;
     if (acceptanceDirectory) {
       const state = workspaces.add(acceptanceDirectory);
-      const fixtureRegistration = acceptanceFixture?.registerWorkspace(acceptanceDirectory, state);
+      const fixtureRegistration = acceptanceFixture?.registerWorkspace(event.sender.id, acceptanceDirectory, state);
       // 验收归档只记录可见标签和工作区身份，避免临时绝对路径泄露且能证明本轮新增。
       eventCenter.recordEvent("workspace.added", { fixtureLabel: fixtureRegistration?.displayName || null, source: "hanli-acceptance-fixture", workspaceId: fixtureRegistration?.workspaceId || null });
       return state;
@@ -50,8 +50,8 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
     eventCenter.recordEvent("workspace.removed", { id });
     return state;
   });
-  handle("desktop:list-workspace-directory", async (_event, id: string, relativePath: string = "") => {
-    const fixtureRead = acceptanceFixture?.readDirectory(id, relativePath);
+  handle("desktop:list-workspace-directory", async (event, id: string, relativePath: string = "") => {
+    const fixtureRead = acceptanceFixture?.readDirectory(event.sender.id, id, relativePath);
     if (!fixtureRead) return workspaces.listDirectory(id, relativePath);
     const details = { fixtureLabel: fixtureRead.fixtureLabel, source: "hanli-acceptance-fixture", workspaceId: id, scenario: fixtureRead.scenario, relativePath };
     // 审计仅记录受控场景身份和结果，避免临时目录绝对路径进入验收归档。

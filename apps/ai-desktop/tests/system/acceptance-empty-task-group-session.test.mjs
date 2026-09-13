@@ -59,7 +59,8 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   const eventCenterIpcSource = readFileSync("electron/system/ipc/event-center-ipc.ts", "utf8");
   const sceneSource = readFileSync("electron/system/ipc/acceptance-scene-window.ts", "utf8");
   const sceneSessionSource = readFileSync("electron/system/ipc/hanli-acceptance-scene-session.ts", "utf8");
-  assert.match(desktopIpcSource, /planAcceptanceScene\(goal\)/);
+  assert.match(desktopIpcSource, /planAcceptanceScene\(acceptanceGoal\)/);
+  assert.match(desktopIpcSource, /workspaceAcceptanceFixture\.reserve\([\s\S]*targetWindow\.webContents\.id/);
   assert.doesNotMatch(desktopIpcSource, /requiresEmptyTaskGroup/);
   assert.match(desktopIpcSource, /runHanliAcceptanceSceneSession/);
   assert.match(sceneSessionSource, /prepareAcceptanceSceneWindow/);

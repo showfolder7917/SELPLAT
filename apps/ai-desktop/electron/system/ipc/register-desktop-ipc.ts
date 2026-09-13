@@ -155,7 +155,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const workspaceExplorerScenarioAcceptance = goal.interactionCapabilities?.includes("workspace-explorer-scenarios") === true;
     // 先回收带私有标记的遗留根并预备本轮标签，场景规划才能区分本轮新增与旧会话残留。
     const fixtureReservation = workspaceExplorerAcceptance
-      ? workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic")
+      ? workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow.webContents.id)
       : null;
     const acceptanceGoal: HanliComputerAcceptanceInDto = workspaceExplorerAcceptance ? {
       ...goal,

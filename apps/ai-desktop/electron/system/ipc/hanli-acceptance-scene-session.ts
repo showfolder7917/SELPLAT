@@ -2,7 +2,7 @@ import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
 import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
-import { createSegmentGoal, mergeAcceptanceRuns, remapAcceptanceRun } from "./hanli-acceptance-scene-results.js";
+import { assertSegmentAcceptanceRun, createSegmentGoal, mergeAcceptanceRuns } from "./hanli-acceptance-scene-results.js";
 import { prepareAcceptanceSceneWindow } from "./acceptance-scene-window.js";
 
 interface AcceptanceSceneSessionOptions {
@@ -49,7 +49,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
       }
       const currentGoal = createSegmentGoal(options.goal, segment);
       if (!segment.completionReviewRequired || options.goal.reviewMode === "post-completion-review") {
-        const run = remapAcceptanceRun(await options.execute(currentGoal, prepared.window), segment);
+        const run = assertSegmentAcceptanceRun(await options.execute(currentGoal, prepared.window), segment);
         runs.push(run);
         if (run.status !== "passed") return mergeAcceptanceRuns(options.goal, runs);
         continue;
@@ -90,7 +90,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         summary: initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
         evidenceAttachmentIds: initialPass.evidenceAttachmentIds,
       };
-      const review = remapAcceptanceRun(await options.execute({
+      const review = assertSegmentAcceptanceRun(await options.execute({
         ...currentGoal,
         reviewMode: "post-completion-review",
         priorPhaseEvidence,

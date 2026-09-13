@@ -26,6 +26,7 @@ const taskGroupSource = [
   "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
   "../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const taskGroupCardSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", import.meta.url), "utf8");
 const collaborationModelSource = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
 const collaborationViewModelSource = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
@@ -64,7 +65,8 @@ test("普通中断和客户卡点的唯一恢复入口都位于下一流程", ()
   assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(recoveryAction\.taskId\)/);
   assert.match(taskGroupSource, /recoveryAction\.customerAction \? "从卡点继续"/);
   assert.doesNotMatch(taskGroupSource, /task-node-recovery-action/);
-  assert.doesNotMatch(taskGroupSource, /task-timeline-next[\s\S]*failureNextStep/);
+  const nextFlowBlock = taskGroupCardSource.slice(taskGroupCardSource.indexOf('<div className="task-timeline-next">'), taskGroupCardSource.indexOf('<div className="task-timeline-list">'));
+  assert.doesNotMatch(nextFlowBlock, /failureNextStep/);
   assert.match(taskGroupSource, /!open && <span className="task-group-primary-next"/);
   assert.doesNotMatch(taskGroupSource, /continueCurrentTask/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);

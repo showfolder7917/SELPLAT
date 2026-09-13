@@ -30,6 +30,11 @@ export class HanliComputerAcceptance {
     if (!goal.criteria.length) {
       throw new Error("缺少用户验收条件。");
     }
+    const criterionIds = goal.criterionIds || goal.criteria.map((_, index) => `criterion-${index + 1}`);
+    if (criterionIds.length !== goal.criteria.length || new Set(criterionIds).size !== criterionIds.length
+      || criterionIds.some((criterionId) => !/^criterion-[1-9]\d*$/.test(criterionId))) {
+      throw new Error("验收条件与原提案编号不一致。");
+    }
     this.#active = true;
     const runId = `hanli-computer-${randomUUID()}`;
     const startedAt = new Date().toISOString();
@@ -82,7 +87,7 @@ export class HanliComputerAcceptance {
       const criteria: Array<{ id: string; text: string }> = [];
       for (const [index, text] of goal.criteria.entries()) {
         criteria.push({
-          id: `criterion-${index + 1}`,
+          id: criterionIds[index],
           text,
         });
       }
@@ -156,7 +161,7 @@ export class HanliComputerAcceptance {
               items: {
                 type: "object",
                 properties: {
-                  criterionId: { type: "string" },
+                  criterionId: { type: "string", enum: criterionIds },
                   status: {
                     type: "string",
                     enum: ["passed", "failed", "blocked"],
@@ -224,7 +229,8 @@ export class HanliComputerAcceptance {
               throw new Error("尚未执行真实交互，功能和布局都只能报告受阻，不能声称验收通过或失败。");
             }
             for (const [index] of goal.criteria.entries()) {
-              const matching = findings.filter((item) => item.criterionId === `criterion-${index + 1}`);
+              const criterionId = criterionIds[index];
+              const matching = findings.filter((item) => item.criterionId === criterionId);
               const finding = matching[0];
               const hasSingleFinding = matching.length === 1;
               const hasKnownStatus = finding
@@ -257,7 +263,7 @@ export class HanliComputerAcceptance {
               }
               if (!hasSingleFinding || !hasKnownStatus || !hasActualResult || !hasValidEvidence
                 || !hasKnownLayoutStatus || !hasLayoutResult || !hasValidLayoutEvidence) {
-                throw new Error(`criterion-${index + 1}缺少唯一功能判断、布局判断或操作后的真实截图依据`);
+                throw new Error(`${criterionId}缺少唯一功能判断、布局判断或操作后的真实截图依据`);
               }
             }
             const containsFailure = findings.some((item) => item.status === "failed" || item.layoutStatus === "failed");
@@ -535,12 +541,13 @@ export class HanliComputerAcceptance {
       const actual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的功能结论。${finishDiagnostic}`;
       const layoutActual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的布局结论。${finishDiagnostic}`;
       for (const [index] of goal.criteria.entries()) {
+        const criterionId = criterionIds[index];
         steps.push({
-          checkId: `criterion-${index + 1}`,
+          checkId: criterionId,
           operationIndex: steps.length,
           operation: {
             type: "judgement",
-            criterionId: `criterion-${index + 1}`,
+            criterionId,
           },
           status: "blocked",
           actual,

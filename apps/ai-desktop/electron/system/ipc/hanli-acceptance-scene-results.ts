@@ -6,25 +6,23 @@ export function createSegmentGoal(goal: HanliComputerAcceptanceInDto, segment: A
     const index = Number(criterionId.replace("criterion-", "")) - 1;
     return goal.criteria[index];
   });
-  return { ...goal, criteria, preparedScene: segment };
+  return { ...goal, criteria, criterionIds: segment.conditions.map(({ criterionId }) => criterionId), preparedScene: segment };
 }
 
-/** 把阶段内局部编号还原为原提案编号，最终任务卡只保存一套可追溯条件。 */
-export function remapAcceptanceRun(run: HanliAcceptanceRunOutDto, segment: AcceptanceSceneSegmentOutDto): HanliAcceptanceRunOutDto {
-  const mapCriterionId = (criterionId: string) => {
-    const index = Number(criterionId.replace("criterion-", "")) - 1;
-    return segment.conditions[index]?.criterionId || criterionId;
-  };
-  return {
-    ...run,
-    stepResults: run.stepResults.map((step) => ({
-      ...step,
-      checkId: mapCriterionId(step.checkId),
-      operation: step.operation.type === "judgement"
-        ? { ...step.operation, criterionId: mapCriterionId(step.operation.criterionId) }
-        : step.operation,
-    })),
-  };
+/** 场景结果必须直接携带原提案编号；禁止在汇总时按位置猜测并重编号。 */
+export function assertSegmentAcceptanceRun(run: HanliAcceptanceRunOutDto, segment: AcceptanceSceneSegmentOutDto): HanliAcceptanceRunOutDto {
+  const expectedIds = segment.conditions.map(({ criterionId }) => criterionId);
+  const resultIds = run.stepResults.map(({ checkId }) => checkId);
+  const hasExactResults = resultIds.length === expectedIds.length
+    && new Set(resultIds).size === resultIds.length
+    && expectedIds.every((criterionId) => resultIds.includes(criterionId));
+  const judgementIds = run.stepResults.flatMap((step) => step.operation.type === "judgement" ? [step.operation.criterionId] : []);
+  const hasMatchingJudgements = judgementIds.length === expectedIds.length
+    && expectedIds.every((criterionId) => judgementIds.includes(criterionId));
+  if (!hasExactResults || !hasMatchingJudgements) {
+    throw new Error(`验收场景结果与原条件编号不一致：应为 ${expectedIds.join("、")}，实际为 ${resultIds.join("、") || "空"}`);
+  }
+  return run;
 }
 
 /** 多阶段只在此处合并状态和证据，人物验收器继续保持单窗口、单数据源职责。 */

@@ -11,6 +11,7 @@ import { EvolutionApprovalService } from "../decision/evolution-approval.service
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 import { HanliDecisionService } from "../decision/hanli-decision.service.js";
 import { HanliConversationService } from "../conversation/hanli-conversation.service.js";
+import { inspectAcceptanceRunEvidence } from "../../domain/acceptance-run-evidence.policy.js";
 
 export type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
 
@@ -129,25 +130,19 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
-    const hasValidVersion = run.version === 2;
-    const hasInteractionSteps = run.stepResults.length > 0;
-    const hasEvidence = run.evidenceAttachmentIds.length > 0;
-    const hasCriterionEvidence = run.criteria.every((_criterion, index) => {
-      const matches = run.stepResults.filter((step) => step.checkId === `criterion-${index + 1}`);
-      const step = matches[0];
-      return matches.length === 1
-        && step !== undefined
-        && ["passed", "failed", "blocked"].includes(step.status)
-        && Boolean(step.actual?.trim())
-        && Boolean(step.screenshotAttachmentId)
-        && run.evidenceAttachmentIds.includes(step.screenshotAttachmentId!)
-        && ["passed", "failed", "blocked"].includes(step.layoutStatus)
-        && Boolean(step.layoutActual?.trim())
-        && Boolean(step.layoutScreenshotAttachmentId)
-        && run.evidenceAttachmentIds.includes(step.layoutScreenshotAttachmentId!);
-    });
-    if (!hasValidVersion || !hasInteractionSteps || !hasEvidence || !hasCriterionEvidence) {
-      throw new Error("缺少真实交互验收证据");
+    const validation = inspectAcceptanceRunEvidence(run);
+    if (!validation.valid) {
+      // 拒绝前保留字段级事实，令修复链可区分汇总丢项、重复项和截图关联断裂而不读取截图内容。
+      this.#recordEvent("hanli.acceptance.evidence_rejected", {
+        proposalId: run.proposalId,
+        runId: run.runId,
+        hasEvidence: validation.hasEvidence,
+        hasInteractionSteps: validation.hasInteractionSteps,
+        hasValidVersion: validation.hasValidVersion,
+        criteria: validation.criteria,
+      });
+      const invalidCriteria = validation.criteria.filter((criterion) => !criterion.valid).map((criterion) => criterion.criterionId);
+      throw new Error(`缺少真实交互验收证据：${invalidCriteria.length ? invalidCriteria.join("、") : "运行基础字段"}`);
     }
     return this.#store.recordAcceptanceRun(run);
   }
