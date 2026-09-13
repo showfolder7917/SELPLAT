@@ -61,8 +61,8 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
 test("普通中断和客户卡点的唯一恢复入口都位于下一流程", () => {
   assert.match(taskGroupSource, /latestActiveRecoveryAction[\s\S]*node\.eventType === "customer\.action_required"[\s\S]*node\.eventType === "task\.interrupted"/);
   assert.match(taskGroupSource, /visitedTaskIds[\s\S]*node\.status === "waiting"/);
-  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(recoveryAction\.taskId\)/);
-  assert.match(taskGroupSource, /recoveryAction\.customerAction \? "从卡点继续"/);
+  assert.match(taskGroupSource, /task-node-actions[\s\S]*onContinueTask\(nodeRecoveryAction\.taskId\)/);
+  assert.match(taskGroupSource, /nodeRecoveryAction\.customerAction \? "从卡点继续"/);
   assert.doesNotMatch(taskGroupSource, /continueCurrentTask/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);

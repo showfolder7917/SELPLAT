@@ -747,6 +747,27 @@ test("验收阻塞和暂停从同一提案继续，不重建任务且拒绝重�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立审批输出异常后从原审批卡点继续", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "approval-resume-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const runId = store.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
+    const topicId = store.createTopic(topicRequest("恢复方向审批")).activeTopicId;
+    const proposalId = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉").proposals.at(-1).proposalId;
+    store.updateOneShotRun("approving", "han-li", "韩立", "审批方向", topicId, proposalId);
+    store.blockOneShotRun("韩立方向审批结果无法处理");
+
+    const resumed = store.resumeOneShotRun();
+
+    assert.equal(resumed.oneShotRun.runId, runId);
+    assert.equal(resumed.oneShotRun.phase, "approving");
+    assert.equal(resumed.oneShotRun.actor, "han-li");
+    assert.equal(resumed.oneShotRun.topicId, topicId);
+    assert.equal(resumed.oneShotRun.proposalId, proposalId);
+    assert.equal(resumed.proposals.at(-1).status, "pending-approval");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("完成态复核受阻后只从原复核卡点继续", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "completion-review-resume-"));
   try {
