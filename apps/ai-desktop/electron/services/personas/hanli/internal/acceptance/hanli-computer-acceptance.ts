@@ -731,6 +731,22 @@ function scrollSettingsPanel(deltaY: number): Record<string, unknown> {
 
 /** 只滚动当前可见的固定工作区树，并回执实际位置以证明超长目录检查命中了正确容器。 */
 function scrollWorkspaceTree(deltaY: number): Record<string, unknown> {
+  // 此函数会序列化后注入渲染器，区域取证逻辑必须保留在函数体内，不能依赖主进程模块闭包。
+  const readRegionPosition = (region: HTMLElement): { left: number; top: number; width: number; height: number; scrollTop: number } => {
+    const bounds = region.getBoundingClientRect();
+    return {
+      left: Math.round(bounds.left),
+      top: Math.round(bounds.top),
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+      scrollTop: Math.round(region.scrollTop),
+    };
+  };
+  const sameRegionPosition = (
+    left: { left: number; top: number; width: number; height: number; scrollTop: number },
+    right: { left: number; top: number; width: number; height: number; scrollTop: number },
+  ): boolean => left.left === right.left && left.top === right.top && left.width === right.width
+    && left.height === right.height && left.scrollTop === right.scrollTop;
   const tree = document.querySelector<HTMLElement>(".workspace-pane .workspace-tree");
   const taskPane = document.querySelector<HTMLElement>(".tasks-pane");
   const mainContent = document.querySelector<HTMLElement>(".workspace-stage-single .dev-main");
@@ -749,27 +765,6 @@ function scrollWorkspaceTree(deltaY: number): Record<string, unknown> {
     taskPane: { before: taskPaneBefore, after: taskPaneAfter, unchanged: sameRegionPosition(taskPaneBefore, taskPaneAfter) },
     mainContent: { before: mainContentBefore, after: mainContentAfter, unchanged: sameRegionPosition(mainContentBefore, mainContentAfter) },
   };
-}
-
-/** 仅保存验收区域的可见几何与自身滚动位置，不读取其中的业务正文。 */
-function readRegionPosition(region: HTMLElement): { left: number; top: number; width: number; height: number; scrollTop: number } {
-  const bounds = region.getBoundingClientRect();
-  return {
-    left: Math.round(bounds.left),
-    top: Math.round(bounds.top),
-    width: Math.round(bounds.width),
-    height: Math.round(bounds.height),
-    scrollTop: Math.round(region.scrollTop),
-  };
-}
-
-/** 工作区树滚动只能改变自身位置；相邻任务区和主内容区必须保持原位。 */
-function sameRegionPosition(
-  left: { left: number; top: number; width: number; height: number; scrollTop: number },
-  right: { left: number; top: number; width: number; height: number; scrollTop: number },
-): boolean {
-  return left.left === right.left && left.top === right.top && left.width === right.width
-    && left.height === right.height && left.scrollTop === right.scrollTop;
 }
 
 /** 等待已开始的受控夹具读取结束；轮询只读取摘要，绝不触发新的目录请求。 */
