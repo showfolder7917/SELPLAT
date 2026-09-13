@@ -20,6 +20,8 @@ export const SYSTEM_DESKTOP_API_METHODS = [
   "updateWorkspacePermission",
   "setPrimaryWorkspace",
   "removeWorkspace",
+  "listWorkspaceDirectory",
+  "readWorkspaceFile",
   "openExternalUrl",
   "getTempDirectoryInfo",
   "openTempDirectory",

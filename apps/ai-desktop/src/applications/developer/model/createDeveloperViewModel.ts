@@ -65,7 +65,6 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       diagnostics: controller.diagnostics,
       collaborationState: controller.collaboration.data.state,
       evolutionState: controller.evolution.state,
-      workspace: controller.workspace,
       onLogin: () => { void controller.codex.interaction.login(); },
       onLogout: () => { void controller.codex.interaction.logout(); },
       onTempFilesCleared: () => controller.codex.conversation.setAttachments([]),
@@ -79,6 +78,14 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       personaConversationActivities: controller.personaConversationActivities,
       collaboration: controller.collaboration,
       onToggle: controller.tasks.toggle,
+      workspaceExpanded: controller.workspaceExplorer.expanded,
+      workspaces: controller.workspace.workspaces,
+      workspaceError: controller.workspace.workspaceError,
+      onToggleWorkspace: controller.workspaceExplorer.toggle,
+      onAddWorkspace: () => { void controller.workspace.addWorkspace(); },
+      onToggleWorkspacePermission: (id, permission) => { void controller.workspace.updateWorkspacePermission(id, permission); },
+      onMakePrimaryWorkspace: (id) => { void controller.workspace.setPrimaryWorkspace(id); },
+      onRemoveWorkspace: (id, name) => { void controller.workspace.removeWorkspace(id, name); },
     },
     // 工作区把异常提示和页面路由分成两个明确输入。
     workspace: {

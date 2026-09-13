@@ -24,6 +24,7 @@ export function useDeveloperApplicationController() {
   const [testConsoleOpen, setTestConsoleOpen] = useState(false);
   // 任务区域可以独立折叠，不影响左侧栏本身。
   const [tasksExpanded, setTasksExpanded] = useState(true);
+  const [workspacesExpanded, setWorkspacesExpanded] = useState(true);
 
   // 设置先提供语言和沙箱模式，后续控制器共享这些配置。
   const settings = useDesktopSettings(settingsOpen || testConsoleOpen);
@@ -116,6 +117,7 @@ export function useDeveloperApplicationController() {
     settingsPanel: { open: settingsOpen, setOpen: setSettingsPanelOpen },
     testConsolePanel: { open: testConsoleOpen, setOpen: setTestConsolePanelOpen },
     tasks: { expanded: tasksExpanded, toggle: () => setTasksExpanded((current) => !current) },
+    workspaceExplorer: { expanded: workspacesExpanded, toggle: () => setWorkspacesExpanded((current) => !current) },
     text,
     settings,
     diagnostics,
