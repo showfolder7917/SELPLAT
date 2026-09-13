@@ -13,6 +13,15 @@ const FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
 const SCENARIO_DIRECTORY_DELAY_MS = 2_000;
 
+/** macOS 会把 /var 中的临时目录登记为 /private/var；夹具和工作区必须按同一真实路径识别。 */
+function resolvesToSameDirectory(left: string, right: string): boolean {
+  try {
+    return realpathSync.native(left) === realpathSync.native(right);
+  } catch {
+    return path.normalize(left) === path.normalize(right);
+  }
+}
+
 export interface WorkspaceAcceptanceDirectoryRead {
   fixtureLabel: string;
   scenario: "delayed" | "retry-once" | "retry-once-retry";
@@ -45,7 +54,7 @@ export class WorkspaceAcceptanceFixture {
     if (!Number.isSafeInteger(trustedWebContentsId) || trustedWebContentsId <= 0) throw new Error("验收窗口身份无效，不能签发工作区夹具。");
     this.cleanup();
     this.#cleanupStaleFixtures();
-    const directory = mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-"));
+    const directory = realpathSync.native(mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-")));
     const displayName = path.basename(directory);
     // 标记只供主进程回收异常中断的夹具，避免按目录前缀误删用户工作区。
     writeFileSync(path.join(directory, FIXTURE_MARKER_NAME), JSON.stringify(FIXTURE_MARKER), "utf8");
@@ -69,8 +78,8 @@ export class WorkspaceAcceptanceFixture {
 
   /** 夹具目录被原登记 IPC 接纳后才允许为这个根提供受控目录响应。 */
   registerWorkspace(senderWebContentsId: number, directory: string, state: WorkspaceStateOutDto): FixtureRegistration | null {
-    if (!this.#reserved || this.#reserved.trustedWebContentsId !== senderWebContentsId || this.#reserved.directory !== directory) return null;
-    const workspaceId = state.roots.find((root) => root.path === directory)?.id || null;
+    if (!this.#reserved || this.#reserved.trustedWebContentsId !== senderWebContentsId || !resolvesToSameDirectory(this.#reserved.directory, directory)) return null;
+    const workspaceId = state.roots.find((root) => resolvesToSameDirectory(root.path, directory))?.id || null;
     if (!workspaceId) return null;
     this.#reserved.workspaceId = workspaceId;
     return { displayName: this.#reserved.displayName, workspaceId };
@@ -109,7 +118,7 @@ export class WorkspaceAcceptanceFixture {
   cleanup(): void {
     const fixture = this.#reserved;
     if (!fixture) return;
-    const root = this.#workspaces.read().roots.find((candidate) => candidate.path === fixture.directory);
+    const root = this.#workspaces.read().roots.find((candidate) => resolvesToSameDirectory(candidate.path, fixture.directory));
     if (root) this.#workspaces.remove(root.id);
     rmSync(fixture.directory, { recursive: true, force: true });
     this.#reserved = null;
@@ -132,7 +141,7 @@ export class WorkspaceAcceptanceFixture {
       try {
         const directory = realpathSync(candidate);
         if (path.dirname(directory) !== temporaryRoot || !this.#hasFixtureMarker(directory)) continue;
-        const root = this.#workspaces.read().roots.find((item) => path.normalize(item.path) === path.normalize(directory));
+        const root = this.#workspaces.read().roots.find((item) => resolvesToSameDirectory(item.path, directory));
         if (root) this.#workspaces.remove(root.id);
         rmSync(directory, { recursive: true, force: true });
       } catch {

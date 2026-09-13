@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { transform } from "esbuild";
@@ -83,6 +83,42 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
     fixture.cleanup();
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("夹具以真实路径绑定和清理 macOS 临时目录别名登记", () => {
+  const physicalRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-realpath-test-"));
+  const aliasParent = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-alias-test-"));
+  const aliasRoot = path.join(aliasParent, "temporary-root-alias");
+  const roots = [];
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    remove: (id) => {
+      const index = roots.findIndex((root) => root.id === id);
+      if (index >= 0) roots.splice(index, 1);
+    },
+    listDirectory: () => ({ entries: [] }),
+  };
+  try {
+    symlinkSync(physicalRoot, aliasRoot, "dir");
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, aliasRoot);
+    fixture.reserve("scenarios", 45);
+    const directory = fixture.takeDirectory(45);
+    assert.ok(directory);
+    const persistedDirectory = realpathSync.native(directory);
+    assert.equal(directory, persistedDirectory, "夹具必须返回与工作区持久化一致的真实路径");
+    roots.push({ id: "fixture-realpath-root", path: persistedDirectory });
+    assert.deepEqual(
+      fixture.registerWorkspace(45, persistedDirectory, { primaryId: "fixture-realpath-root", roots: [...roots] }),
+      { displayName: path.basename(directory), workspaceId: "fixture-realpath-root" },
+    );
+    assert.equal(fixture.readDirectory(45, "fixture-realpath-root", "slow-a")?.scenario, "delayed");
+    fixture.cleanup();
+    assert.equal(roots.length, 0, "清理应移除使用真实路径登记的夹具根");
+    assert.equal(existsSync(persistedDirectory), false);
+  } finally {
+    rmSync(aliasParent, { recursive: true, force: true });
+    rmSync(physicalRoot, { recursive: true, force: true });
   }
 });
 
