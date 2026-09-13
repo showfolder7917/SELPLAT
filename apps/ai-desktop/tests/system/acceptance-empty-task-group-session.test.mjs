@@ -26,6 +26,7 @@ test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人�
   assert.doesNotThrow(() => session.assertIpcAllowed(42, "desktop:get-collaboration-state"));
   assert.doesNotThrow(() => session.assertIpcAllowed(42, "desktop:send-persona-conversation-message"));
   assert.throws(() => session.assertIpcAllowed(42, "desktop:submit-collaboration-task"), /持久状态/);
+  assert.throws(() => session.assertIpcAllowed(42, "desktop:get-evolution-topic-dossier"), /持久状态/);
   assert.doesNotThrow(() => session.assertIpcAllowed(999, "desktop:submit-collaboration-task"), "正式窗口不受验收策略影响");
   assert.equal(isolated.mode, "collaboration");
   assert.equal(isolated.selectedMemberId, "han-li");
@@ -33,7 +34,6 @@ test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人�
   assert.deepEqual(isolated.integrationBatches, []);
   assert.deepEqual(session.timeline().groups, []);
   assert.equal(session.evolutionState({ topics: ["formal"], proposals: ["formal"], deliberations: ["formal"], archiveRecords: ["formal"] }).activeTopicId, null);
-  assert.throws(() => session.rejectMutation(), /只读/);
   const sent = session.sendPersonaConversationMessage(42, "han-li", {
     clientMessageId: "empty-scene-message",
     message: "空状态入口验收",
@@ -67,14 +67,14 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   assert.match(sceneSource, /failure-recovery-timeline/);
   assert.match(sceneSource, /user-language-detail-timeline/);
   assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession/);
-  assert.match(collaborationIpcSource, /rejectIsolatedMutation/);
+  assert.doesNotMatch(collaborationIpcSource, /rejectIsolatedMutation|rejectMutation/);
   assert.match(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*collaborationState\(event\.sender\.id, collaboration\.state\(\)\)[\s\S]*collaboration-timeline-changed[\s\S]*return isolated/);
   assert.doesNotMatch(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*return timeline/);
   assert.match(runtimeSource, /const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession\(\)/);
   assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.isActive\(window\.webContents\.id\)/);
   assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.collaborationState\(window\.webContents\.id, state\)/);
   assert.match(runtimeSource, /taskIds: isolated \? \[\] : taskIds/);
-  assert.match(source, /独立验收会话为只读/);
+  assert.match(source, /不允许执行会改变应用持久状态的操作/);
   assert.match(source, /tasks: \[\]/);
   assert.match(source, /失败原因：candidate\.txt:1: trailing whitespace/);
   assert.doesNotMatch(preloadSource, /readOnlyAcceptanceWindow|acceptanceMutationNames|isolatedAcceptanceBridge/);
@@ -99,7 +99,7 @@ test("失败恢复验收场景只投影完整历史事实和只读恢复入口",
   assert.equal(group.nodes[2].eventType, "task.interrupted");
   assert.equal(group.nodes[2].status, "waiting");
   assert.match(group.nodes[2].detail, /恢复标识/);
-  assert.throws(() => session.rejectMutation(), /只读/);
+  assert.throws(() => session.assertIpcAllowed(43, "desktop:submit-collaboration-task"), /持久状态/);
 });
 
 test("巡检生命周期验收场景在同一专题保留三类只读记录", () => {
@@ -113,7 +113,7 @@ test("巡检生命周期验收场景在同一专题保留三类只读记录", ()
   assert.match(group.nodes[1].detail, /已自动重新建立连接/);
   assert.equal(group.nodes[2].eventType, "customer.action_required");
   assert.match(group.nodes[2].detail, /确认范围后可继续执行/);
-  assert.throws(() => session.rejectMutation(), /只读/);
+  assert.throws(() => session.assertIpcAllowed(44, "desktop:submit-collaboration-task"), /持久状态/);
 });
 
 test("用户语言与技术详情场景分开保留客户待办和自动处理事实", () => {
@@ -130,7 +130,7 @@ test("用户语言与技术详情场景分开保留客户待办和自动处理�
   assert.equal(automaticGroup.status, "running");
   assert.equal(automaticGroup.nodes[0].status, "current");
   assert.equal(automaticGroup.nodes[0].summary, "正在自动处理中，暂不需要你操作。");
-  assert.throws(() => session.rejectMutation(), /只读/);
+  assert.throws(() => session.assertIpcAllowed(45, "desktop:submit-collaboration-task"), /持久状态/);
 });
 
 test("恢复入口生命周期场景只在内存中收口当前等待并投影自动恢复", () => {
@@ -149,5 +149,5 @@ test("恢复入口生命周期场景只在内存中收口当前等待并投影�
   ]);
   assert.throws(() => session.continueRecoveryLifecycle(46, "acceptance-failure-recovery-task"), /不能重复继续/);
   assert.throws(() => session.continueRecoveryLifecycle(46, "formal-task"), /不允许继续此任务/);
-  assert.throws(() => session.rejectMutation(), /只读/);
+  assert.throws(() => session.assertIpcAllowed(46, "desktop:submit-collaboration-task"), /持久状态/);
 });

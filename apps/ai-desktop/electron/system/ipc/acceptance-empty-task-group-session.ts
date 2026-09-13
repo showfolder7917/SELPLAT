@@ -60,14 +60,16 @@ export class AcceptanceEmptyTaskGroupSession {
   assertIpcAllowed(webContentsId: number, channel: string): void {
     const scene = this.#scenarios.get(webContentsId);
     if (!scene) return;
-    const readOnlyChannel = /^(desktop:(get|list)-|desktop:resolve-effective-rule$|desktop:read-attachment-previews$)/u.test(channel);
+    const readsApplicationState = /^(desktop:(get|list)-|desktop:resolve-effective-rule$|desktop:read-attachment-previews$)/u.test(channel);
+    // 专题档案会暴露正式演进内容；隔离窗口没有自己的档案投影，因此即使是读取也必须拒绝。
+    const readsFormalEvolutionDossier = channel === "desktop:get-evolution-topic-dossier";
     const privateNavigationChannel = channel === "desktop:set-operating-mode" || channel === "desktop:select-collaboration-member";
     const privatePersonaMessage = channel === "desktop:send-persona-conversation-message"
       && (scene === "empty-task-group" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
     const privatePersonaScreenshot = channel === "desktop:capture-screen"
       && (scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
     const privateRecovery = channel === "desktop:continue-collaboration-task" && scene === "recovery-action-lifecycle";
-    if (readOnlyChannel || privateNavigationChannel || privatePersonaMessage || privatePersonaScreenshot || privateRecovery) return;
+    if ((readsApplicationState && !readsFormalEvolutionDossier) || privateNavigationChannel || privatePersonaMessage || privatePersonaScreenshot || privateRecovery) return;
     throw new Error("独立验收窗口不允许执行会改变应用持久状态的操作。");
   }
 
@@ -189,9 +191,6 @@ export class AcceptanceEmptyTaskGroupSession {
     return { ...next, messages: next.messages.slice(-60) };
   }
 
-  rejectMutation(): never {
-    throw new Error("独立验收会话为只读，不能修改正式协作数据或人物会话。");
-  }
 }
 
 /** 为人物会话验收提供稳定、可分页且不落盘的消息集合。 */
