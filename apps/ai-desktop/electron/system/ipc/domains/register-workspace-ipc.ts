@@ -8,8 +8,8 @@ import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 interface WorkspaceAcceptanceFixturePort {
   takeDirectory(): string | null;
-  registerWorkspace(directory: string, state: WorkspaceStateOutDto): void;
-  readDirectory(workspaceId: string, relativePath: string): { scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
+  registerWorkspace(directory: string, state: WorkspaceStateOutDto): { displayName: string; workspaceId: string } | null;
+  readDirectory(workspaceId: string, relativePath: string): { fixtureLabel: string; scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
 }
 
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */
@@ -21,8 +21,9 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
     const acceptanceDirectory = acceptanceFixture?.takeDirectory() || null;
     if (acceptanceDirectory) {
       const state = workspaces.add(acceptanceDirectory);
-      acceptanceFixture?.registerWorkspace(acceptanceDirectory, state);
-      eventCenter.recordEvent("workspace.added", { path: acceptanceDirectory, source: "hanli-acceptance-fixture" });
+      const fixtureRegistration = acceptanceFixture?.registerWorkspace(acceptanceDirectory, state);
+      // 验收归档只记录可见标签和工作区身份，避免临时绝对路径泄露且能证明本轮新增。
+      eventCenter.recordEvent("workspace.added", { fixtureLabel: fixtureRegistration?.displayName || null, source: "hanli-acceptance-fixture", workspaceId: fixtureRegistration?.workspaceId || null });
       return state;
     }
     const parent = BrowserWindow.fromWebContents(event.sender);
@@ -52,7 +53,7 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
   handle("desktop:list-workspace-directory", async (_event, id: string, relativePath: string = "") => {
     const fixtureRead = acceptanceFixture?.readDirectory(id, relativePath);
     if (!fixtureRead) return workspaces.listDirectory(id, relativePath);
-    const details = { source: "hanli-acceptance-fixture", workspaceId: id, scenario: fixtureRead.scenario, relativePath };
+    const details = { fixtureLabel: fixtureRead.fixtureLabel, source: "hanli-acceptance-fixture", workspaceId: id, scenario: fixtureRead.scenario, relativePath };
     // 审计仅记录受控场景身份和结果，避免临时目录绝对路径进入验收归档。
     eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "started" });
     void fixtureRead.result.then(

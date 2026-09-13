@@ -23,9 +23,11 @@ test("验收工作区夹具只交付一次，并在验收结束撤销登记和�
   };
   try {
     const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
-    fixture.reserve();
+    const reservation = fixture.reserve();
     const directory = fixture.takeDirectory();
     assert.ok(directory);
+    assert.equal(reservation.displayName, path.basename(directory));
+    assert.match(reservation.displayName, /^韩立验收工作区-/);
     assert.equal(fixture.takeDirectory(), null);
     assert.match(readFileSync(path.join(directory, "README.md"), "utf8"), /验收工作区/);
     roots.push({ id: "fixture-root", path: directory });
@@ -50,15 +52,16 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
   };
   try {
     const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
-    fixture.reserve("scenarios");
+    const reservation = fixture.reserve("scenarios");
     const directory = fixture.takeDirectory();
     assert.ok(directory);
     assert.equal(existsSync(path.join(directory, "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定")), true);
     roots.push({ id: "fixture-root", path: directory });
-    fixture.registerWorkspace(directory, { primaryId: "fixture-root", roots: [...roots] });
+    assert.deepEqual(fixture.registerWorkspace(directory, { primaryId: "fixture-root", roots: [...roots] }), { displayName: reservation.displayName, workspaceId: "fixture-root" });
 
     const delayed = fixture.readDirectory("fixture-root", "slow-a");
     assert.equal(delayed?.scenario, "delayed");
+    assert.equal(delayed?.fixtureLabel, reservation.displayName);
     let delayedSettled = false;
     void delayed?.result.then(() => { delayedSettled = true; });
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -67,6 +70,7 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
 
     const firstRetry = fixture.readDirectory("fixture-root", "retry-once");
     assert.equal(firstRetry?.scenario, "retry-once");
+    assert.equal(firstRetry?.fixtureLabel, reservation.displayName);
     await assert.rejects(firstRetry?.result, /模拟目录读取失败/);
     const retried = fixture.readDirectory("fixture-root", "retry-once");
     assert.equal(retried?.scenario, "retry-once-retry");
@@ -79,12 +83,45 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
   }
 });
 
+test("新验收只回收带私有标记的遗留夹具，并生成可区分的新标签", () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-stale-test-"));
+  const roots = [];
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    remove: (id) => {
+      const index = roots.findIndex((root) => root.id === id);
+      if (index >= 0) roots.splice(index, 1);
+    },
+    listDirectory: () => ({ entries: [] }),
+  };
+  try {
+    const interruptedFixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    const interruptedReservation = interruptedFixture.reserve("scenarios");
+    const interruptedDirectory = interruptedFixture.takeDirectory();
+    assert.ok(interruptedDirectory);
+    roots.push({ id: "stale-fixture", path: interruptedDirectory });
+    const unrelatedDirectory = mkdtempSync(path.join(temporaryRoot, "customer-workspace-"));
+
+    const nextFixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    const nextReservation = nextFixture.reserve("scenarios");
+
+    assert.equal(existsSync(interruptedDirectory), false, "仅带私有标记的遗留目录应在下一轮启动前回收");
+    assert.equal(roots.some((root) => root.id === "stale-fixture"), false, "遗留夹具登记不得进入新一轮选择列表");
+    assert.equal(existsSync(unrelatedDirectory), true, "未标记目录不能按名称或临时根位置被删除");
+    assert.notEqual(nextReservation.displayName, interruptedReservation.displayName, "本轮标签必须能在页面中区分旧夹具");
+    nextFixture.cleanup();
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test("受控目录读取记录起始、失败和重试成功结果，但不归档临时绝对路径", () => {
   const directoryReadHandler = workspaceIpcSource.slice(
     workspaceIpcSource.indexOf('handle("desktop:list-workspace-directory"'),
     workspaceIpcSource.indexOf('handle("desktop:read-workspace-file"'),
   );
   assert.match(directoryReadHandler, /workspaceId: id/);
+  assert.match(directoryReadHandler, /fixtureLabel: fixtureRead\.fixtureLabel/);
   assert.match(directoryReadHandler, /outcome: "started"/);
   assert.match(directoryReadHandler, /outcome: "succeeded"/);
   assert.match(directoryReadHandler, /outcome: "failed"/);

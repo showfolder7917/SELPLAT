@@ -15,6 +15,8 @@ export type HanliAcceptanceInteractionCapability = "workspace-explorer" | "works
 export interface WorkspaceAcceptanceFixtureContextOutDto {
   kind: "workspace-explorer";
   mode: "basic" | "scenarios";
+  /** 本轮临时根的可见名称；用于在不泄露路径的前提下确认添加前后状态。 */
+  displayName: string;
   instructions: string[];
 }
 
