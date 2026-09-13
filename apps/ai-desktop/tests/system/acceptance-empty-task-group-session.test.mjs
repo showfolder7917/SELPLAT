@@ -23,6 +23,10 @@ test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人�
   session.register(42);
   const isolated = session.collaborationState(42, collaborationState);
   assert.equal(session.isActive(42), true);
+  assert.doesNotThrow(() => session.assertIpcAllowed(42, "desktop:get-collaboration-state"));
+  assert.doesNotThrow(() => session.assertIpcAllowed(42, "desktop:send-persona-conversation-message"));
+  assert.throws(() => session.assertIpcAllowed(42, "desktop:submit-collaboration-task"), /持久状态/);
+  assert.doesNotThrow(() => session.assertIpcAllowed(999, "desktop:submit-collaboration-task"), "正式窗口不受验收策略影响");
   assert.equal(isolated.mode, "collaboration");
   assert.equal(isolated.selectedMemberId, "han-li");
   assert.deepEqual(isolated.tasks, []);
@@ -52,6 +56,7 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   const collaborationIpcSource = readFileSync("electron/system/ipc/domains/register-collaboration-ipc.ts", "utf8");
   const runtimeSource = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   const preloadSource = readFileSync("electron/system/preload/preload.cts", "utf8");
+  const eventCenterIpcSource = readFileSync("electron/system/ipc/event-center-ipc.ts", "utf8");
   const sceneSource = readFileSync("electron/system/ipc/acceptance-scene-window.ts", "utf8");
   const sceneSessionSource = readFileSync("electron/system/ipc/hanli-acceptance-scene-session.ts", "utf8");
   assert.match(desktopIpcSource, /planAcceptanceScene\(goal\)/);
@@ -72,10 +77,10 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   assert.match(source, /独立验收会话为只读/);
   assert.match(source, /tasks: \[\]/);
   assert.match(source, /失败原因：candidate\.txt:1: trailing whitespace/);
-  assert.match(preloadSource, /readOnlyAcceptanceWindow/);
-  const blockedMutationList = preloadSource.match(/const acceptanceMutationNames = \[([\s\S]*?)\n\];/)?.[1] || "";
-  assert.doesNotMatch(blockedMutationList, /sendPersonaConversationMessage/);
-  assert.match(preloadSource, /独立空状态验收窗口为只读/);
+  assert.doesNotMatch(preloadSource, /readOnlyAcceptanceWindow|acceptanceMutationNames|isolatedAcceptanceBridge/);
+  assert.match(preloadSource, /主进程持有可信 webContents/);
+  assert.match(eventCenterIpcSource, /desktopIpcAuthorizationPolicy\(event, channel\)/);
+  assert.match(desktopIpcSource, /installDesktopIpcAuthorizationPolicy/);
 });
 
 

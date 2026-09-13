@@ -22,7 +22,7 @@ import { registerRulesIpc } from "./domains/register-rules-ipc.js";
 import { registerCodexIpc } from "./domains/register-codex-ipc.js";
 import { registerConversationIpc } from "./domains/register-conversation-ipc.js";
 import { registerSystemIpc } from "./domains/register-system-ipc.js";
-import { registerEventCenterIpcHandler } from "./event-center-ipc.js";
+import { installDesktopIpcAuthorizationPolicy, registerEventCenterIpcHandler } from "./event-center-ipc.js";
 import { CodexFacade as CodexService } from "../../services/support/platform/codex/index.js";
 import { ConversationFacade as ConversationDispatchStore } from "../../services/support/capabilities/conversation/index.js";
 import { CollaborationCodexRegistry } from "../../services/support/capabilities/conversation/index.js";
@@ -127,6 +127,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   const activeAuditTasks = new Map<number, string>();
   // 仅登记被韩立动态工具打开的短生命周期空状态窗口，正式窗口绝不进入该投影。
   let screenCaptureAttemptId = 0;
+
+  installDesktopIpcAuthorizationPolicy((event, channel) => {
+    acceptanceEmptyTaskGroupSession.assertIpcAllowed(event.sender.id, channel);
+  });
 
   registerRulesIpc(rules, eventCenter);
 

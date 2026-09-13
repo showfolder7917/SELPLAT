@@ -56,6 +56,21 @@ export class AcceptanceEmptyTaskGroupSession {
     return this.#scenarios.has(webContentsId);
   }
 
+  /** 主进程按可信窗口身份与场景集中授权；未登记的正式窗口不受验收策略影响。 */
+  assertIpcAllowed(webContentsId: number, channel: string): void {
+    const scene = this.#scenarios.get(webContentsId);
+    if (!scene) return;
+    const readOnlyChannel = /^(desktop:(get|list)-|desktop:resolve-effective-rule$|desktop:read-attachment-previews$)/u.test(channel);
+    const privateNavigationChannel = channel === "desktop:set-operating-mode" || channel === "desktop:select-collaboration-member";
+    const privatePersonaMessage = channel === "desktop:send-persona-conversation-message"
+      && (scene === "empty-task-group" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
+    const privatePersonaScreenshot = channel === "desktop:capture-screen"
+      && (scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
+    const privateRecovery = channel === "desktop:continue-collaboration-task" && scene === "recovery-action-lifecycle";
+    if (readOnlyChannel || privateNavigationChannel || privatePersonaMessage || privatePersonaScreenshot || privateRecovery) return;
+    throw new Error("独立验收窗口不允许执行会改变应用持久状态的操作。");
+  }
+
   /** 仅人物会话验收场景接收内存截图完成事件，正式窗口仍使用真实截图能力。 */
   isPersonaConversationLifecycle(webContentsId: number): boolean {
     const scene = this.#scenarios.get(webContentsId);

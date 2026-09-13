@@ -18,20 +18,5 @@ const desktopBridge = {
   ...conversationBridge(),
 };
 
-// 韩立空状态验收窗口仅用于观察和固定导航；即使 Renderer 被错误操作也不能写入正式应用状态。
-const readOnlyAcceptanceWindow = process.argv.includes("--hanli-empty-task-group-acceptance");
-const rejectAcceptanceMutation = () => Promise.reject(new Error("独立空状态验收窗口为只读，不能执行写入操作。"));
-const acceptanceMutationNames = [
-  "clearTestData", "startCorpusSemanticBackfill", "updateSettings", "addWorkspace", "updateWorkspacePermission", "setPrimaryWorkspace", "removeWorkspace",
-  "loginWithChatGPT", "logoutCodex", "resolveCodexApproval", "clearTrustedCommands", "resolveCodexUserInput", "newChat", "openExternalUrl",
-  "openScreenRecordingSettings", "restartForScreenRecordingPermission", "showScreenshotWindow", "enterScreenshotAnnotation", "returnScreenshotSelection", "endScreenshotEditing", "saveScreenshot", "openTempDirectory", "clearTempFiles", "openAuditLogDirectory",
-  "submitCollaborationTask", "continueCollaborationTask", "cancelCollaborationTask", "setLinghuAutomationEnabled", "newLinghuDisplayConversation",
-  // 人物消息由主进程按 webContents 身份收口：验收窗口只写窗口私有内存会话，正式窗口仍走真实服务。
-  "newPersonaConversation", "selectPersonaConversationModel", "generateNangongTopicDraft", "convertNangongConversationToTopic", "createEvolutionTopic", "updateEvolutionTopic", "configureEvolutionAutomation", "controlEvolutionAutomation", "resumeEvolutionOneShot", "createEvolutionProposal", "decideEvolutionProposal", "decideEvolutionResult", "reviseEvolutionProposal", "autoApproveEvolutionProposal", "dispatchEvolutionProposal",
-  "enqueueMessage", "supplementQueuedMessage", "discardQueuedMessage", "recoverConversationTask", "discardConversationRecovery", "sendMessage", "cancel",
-];
-const isolatedAcceptanceBridge = readOnlyAcceptanceWindow
-  ? Object.fromEntries(acceptanceMutationNames.map((name) => [name, rejectAcceptanceMutation]))
-  : {};
-
-contextBridge.exposeInMainWorld("desktop", { ...desktopBridge, ...isolatedAcceptanceBridge });
+// preload 只发布协议，不判断窗口业务权限；主进程持有可信 webContents 与验收场景身份并统一授权。
+contextBridge.exposeInMainWorld("desktop", desktopBridge);
