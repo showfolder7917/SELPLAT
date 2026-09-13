@@ -21,7 +21,6 @@ const [
   { HanliConversationService },
   { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET },
   { NangongConversationAggregate },
-  { PromptLibraryFacade },
 ] = await Promise.all([
   loadWorkflowSource("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"),
   loadWorkflowSource("electron/services/evolution/internal/evolution-state.store.ts"),
@@ -31,10 +30,52 @@ const [
   loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts"),
   loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-method-context.ts"),
   loadWorkflowSource("electron/services/personas/nangong/domain/nangong-conversation.aggregate.ts"),
-  loadWorkflowSource("electron/services/support/capabilities/prompts/index.ts"),
 ]);
 
-const prompts = new PromptLibraryFacade(path.join(projectPaths.buildRoot, "prompt-bundle"));
+/**
+ * 演进回归直接核验当前工作树的提示词源码，避免把候选源码测试耦合到主工程的旧构建产物。
+ * 生产服务仍只能由 PromptLibraryFacade 读取构建后的只读 bundle。
+ */
+function createSourcePromptLibrary() {
+  const promptRoot = new URL("../../../prompts/", import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL("manifest.json", promptRoot), "utf8"));
+  const promptsById = new Map(manifest.prompts.map((entry) => {
+    assert.equal(typeof entry.id, "string", "提示词必须有稳定 ID。");
+    assert.equal(typeof entry.file, "string", `提示词 ${entry.id} 必须登记源码文件。`);
+    assert.equal(entry.file.includes(".."), false, `提示词 ${entry.id} 不得逃逸提示词目录。`);
+    const content = readFileSync(new URL(entry.file, promptRoot), "utf8").trim();
+    const actualVariables = [...new Set([...content.matchAll(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g)].map((match) => match[1]))].sort();
+    assert.deepEqual([...entry.variables].sort(), actualVariables, `提示词 ${entry.id} 的变量声明必须与正文一致。`);
+    return [entry.id, { ...entry, content }];
+  }));
+
+  function resolveChain(promptId, chain = []) {
+    if (chain.includes(promptId)) throw new Error(`提示词 include 循环：${[...chain, promptId].join(" -> ")}`);
+    const prompt = promptsById.get(promptId);
+    if (!prompt) throw new Error(`提示词不存在：${promptId}`);
+    return [...prompt.includes.flatMap((includedId) => resolveChain(includedId, [...chain, promptId])), prompt];
+  }
+
+  return {
+    render(promptId, variables = {}) {
+      const chain = resolveChain(promptId);
+      const expected = new Set(chain.flatMap((entry) => entry.variables));
+      const supplied = Object.keys(variables);
+      const missing = [...expected].filter((name) => !Object.prototype.hasOwnProperty.call(variables, name));
+      const unknown = supplied.filter((name) => !expected.has(name));
+      if (missing.length || unknown.length) throw new Error(`提示词 ${promptId} 变量不匹配：缺少 ${missing.join(",") || "无"}；未知 ${unknown.join(",") || "无"}`);
+      return chain.map((entry) => entry.variables.reduce(
+        (content, name) => content.split(`{{${name}}}`).join(String(variables[name])),
+        entry.content,
+      )).join("\n\n");
+    },
+    list() {
+      return [...promptsById.values()].map(({ content: _content, file: _file, ...descriptor }) => structuredClone(descriptor));
+    },
+  };
+}
+
+const prompts = createSourcePromptLibrary();
 
 // 业务回归继续复用既有测试正文；测试适配器把南宫和韩立动作显式转交各自 Facade，生产 Workflow 不保留人物兼容方法。
 class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
@@ -795,10 +836,9 @@ test("完成态复核受阻后只从原复核卡点继续", async () => {
     });
     let receivedGoal;
     let completionCallbacks = 0;
-    facade.setComputerAcceptanceSession(async (goal, onSceneReady, onInitialPass) => {
+    facade.setComputerAcceptanceSession(async (goal, onSceneReady, _onCompletionReviewReady) => {
       receivedGoal = goal;
       onSceneReady();
-      if (goal.reviewMode !== "post-completion-review") onInitialPass(initialPass);
       completionCallbacks += goal.reviewMode === "post-completion-review" ? 0 : 1;
       return computerRun("resumed-review", topicId, proposalId, "passed", "review-shot");
     });

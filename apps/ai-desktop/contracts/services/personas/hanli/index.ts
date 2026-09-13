@@ -27,6 +27,9 @@ export type { HanliAcceptanceRunOutDto } from "./dto/acceptance-run.out.dto.js";
 /** 韩立真实窗口验收中的单步结果，用于关联操作、判断和对应截图。 */
 export type { HanliAcceptanceStepResultOutDto } from "./dto/acceptance-run.out.dto.js";
 
+/** 完成前门禁的只读事实；不能替代完整验收运行。 */
+export type { CompletionReviewGateOutDto } from "./dto/completion-review-gate.out.dto.js";
+
 /** 用户向韩立提交人工提案审批决定时使用的输入协议。 */
 export type { DecideHanliProposalInDto } from "./dto/decide-proposal.in.dto.js";
 
