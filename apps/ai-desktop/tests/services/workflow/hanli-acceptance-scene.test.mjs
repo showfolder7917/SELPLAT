@@ -25,6 +25,15 @@ const currentWindowGoal = {
     oneShotRun: { topicId: "t", proposalId: "p", status: "running", phase: "accepting" },
   },
 };
+const workspaceFixtureGoal = {
+  ...currentWindowGoal,
+  interactionCapabilities: ["workspace-explorer", "workspace-explorer-scenarios"],
+  workspaceAcceptanceFixture: {
+    kind: "workspace-explorer",
+    mode: "scenarios",
+    instructions: ["添加入口会直接登记临时目录。"],
+  },
+};
 const segment = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, conditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
@@ -67,6 +76,15 @@ test("当前窗口必须使用运行时核验过的同一专题、提案和验�
     ...currentWindowGoal,
     sceneContext: { ...currentWindowGoal.sceneContext, proposal: { ...currentWindowGoal.sceneContext.proposal, topicId: "other-topic" } },
   }), /只读专题、提案或运行记录/);
+});
+test("工作区夹具场景只能使用已签发的场景说明并复用真实窗口", async () => {
+  const fixturePlan = { ...plan, segments: [{ ...segment, kind: "workspace-explorer-fixture", reason: "已签发加载、重试与空目录夹具", completionReviewRequired: false }] };
+  assert.deepEqual(validateAcceptanceScenePlan(fixturePlan, workspaceFixtureGoal), fixturePlan);
+  assert.throws(() => validateAcceptanceScenePlan(fixturePlan, currentWindowGoal), /缺少已签发的受控夹具/);
+  const f = fixture();
+  const prepared = await prepareAcceptanceSceneWindow(fixturePlan.segments[0], f.options);
+  assert.equal(prepared.window, f.options.target);
+  prepared.dispose();
 });
 test("不同证据源可以分段覆盖原条件且每项只能出现一次", () => {
   const composite = {
@@ -401,7 +419,13 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
   const sceneSession = readFileSync("electron/system/ipc/hanli-acceptance-scene-session.ts", "utf8");
   const applicationRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   assert.match(desktopIpc, /hanli\.acceptance_scene\.planning/);
-  assert.match(desktopIpc, /planAcceptanceScene\(goal\)/);
+  assert.match(desktopIpc, /planAcceptanceScene\(acceptanceGoal\)/);
+  assert.match(desktopIpc, /workspaceAcceptanceFixture\.reserve/);
+  assert.ok(
+    desktopIpc.indexOf("workspaceAcceptanceFixture.reserve") < desktopIpc.indexOf("planAcceptanceScene(acceptanceGoal)"),
+    "已签发的受控工作区夹具必须在场景规划前准备好",
+  );
+  assert.match(desktopIpc, /goal: acceptanceGoal/);
   assert.match(sceneSession, /hanli\.acceptance_scene\.ready/);
   assert.doesNotMatch(desktopIpc, /linghuAutomation\.planAcceptanceScene/);
   assert.doesNotMatch(applicationRuntime, /linghu\.acceptance_scene\.(tool_policy|thread)/);

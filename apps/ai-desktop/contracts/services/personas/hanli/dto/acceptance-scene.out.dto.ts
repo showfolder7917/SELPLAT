@@ -1,4 +1,4 @@
-export type AcceptanceSceneKind = "current-window" | "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "blocked";
+export type AcceptanceSceneKind = "current-window" | "workspace-explorer-fixture" | "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "blocked";
 
 /** 一个证据阶段只负责同一数据来源下的验收条件，避免隔离数据与真实审计互相假设。 */
 export interface AcceptanceSceneSegmentOutDto {

@@ -9,6 +9,16 @@ import type { AcceptanceSceneSegmentOutDto } from "./acceptance-scene.out.dto.js
 export type HanliAcceptanceInteractionCapability = "workspace-explorer" | "workspace-explorer-scenarios";
 
 /**
+ * 已签发工作区验收夹具的只读操作说明。
+ * 生产者：桌面 IPC 组合根；消费者：韩立场景规划和界面验收；禁止职责：不暴露临时路径，不允许模型创建、选择或修改夹具。
+ */
+export interface WorkspaceAcceptanceFixtureContextOutDto {
+  kind: "workspace-explorer";
+  mode: "basic" | "scenarios";
+  instructions: string[];
+}
+
+/**
  * 场景准备前由演化运行时生成的只读身份快照。
  *
  * 生产者：一次性演化运行时；消费者：韩立场景规划器。
@@ -40,6 +50,8 @@ export interface HanliComputerAcceptanceInDto {
    * 来源：演化运行时根据已批准范围签发；生命周期：仅当前验收运行有效；安全边界：不能由场景计划或模型文字提升。
    */
   interactionCapabilities?: HanliAcceptanceInteractionCapability[];
+  /** 当前运行已预备的临时验收数据说明；只用于选择并执行受控验收场景。 */
+  workspaceAcceptanceFixture?: WorkspaceAcceptanceFixtureContextOutDto;
   /** 仅当前窗口场景必须提供的运行时身份事实，用于阻止模型臆测记录缺失。 */
   sceneContext?: AcceptanceSceneRuntimeContextOutDto;
   /** 韩立当前证据阶段的已准备场景，不代表页面验收通过。 */
