@@ -573,7 +573,10 @@ export async function startApplication(): Promise<void> {
       if (reason !== "member.selected" && reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
     },
     onStream: (taskId, memberId, event) => {
-      eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
+      // 原始逐字增量已保存在时间线流表；全局事件中心只记录阶段事实，避免同一内容重复膨胀数据库。
+      if (event.type !== "message-delta" && event.type !== "reasoning-summary-delta") {
+        eventCenter.recordEvent(`collaboration.harness.${event.type}`, { memberId, turnId: event.turnId, status: event.status || null }, taskId);
+      }
       let timelineNodeId: string | null = null;
       try { timelineNodeId = collaborationTimeline?.appendStream(taskId, memberId, event) || null; }
       catch (error) {

@@ -117,6 +117,27 @@ test("时间线门面只在事务提交后通知页面读取已落库事实", ()
   } finally { fixture.close(); }
 });
 
+test("流式增量不触发全量时间线刷新，正文完成后只刷新一次", () => {
+  const fixture = createFixture("stream-refresh-boundary");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    const facade = new CollaborationTimelineFacade(fixture.database);
+    facade.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
+    const received = [];
+    const unsubscribe = facade.subscribeTimelineChanged((event) => received.push(event));
+
+    facade.appendStream(running.taskId, "worker-1", { type: "message-delta", turnId: "turn-1", delta: "逐字内容" });
+    facade.appendStream(running.taskId, "worker-1", { type: "reasoning-summary-delta", turnId: "turn-1", segmentId: "reasoning", delta: "思考摘要" });
+    assert.equal(received.length, 0);
+
+    facade.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", text: "完整正文" });
+    unsubscribe();
+    assert.equal(received.length, 1);
+    assert.equal(facade.getTimelineSnapshot().groups[0].nodes.find((node) => node.status === "current").content, "完整正文\n\n思考摘要");
+  } finally { fixture.close(); }
+});
+
 test("十人并行只消费 flowEvents，执行和自检分开统计", () => {
   const fixture = createFixture("parallel");
   try {
@@ -257,6 +278,33 @@ test("卡点修复任务沿用原专题时间线而不另建分叉专题", () =>
     assert.equal(snapshot.groups[0].proposalId, "proposal-1");
     assert.ok(snapshot.groups[0].nodes.some((node) => node.taskId === repair.taskId && node.actor.memberId === "linghu-ancestor"));
     assert.ok(snapshot.groups.every((group) => group.groupId !== `task:${repair.taskId}`));
+  } finally { fixture.close(); }
+});
+
+test("启动顺序产生的空任务占位不显示为重复专题", () => {
+  const fixture = createFixture("empty-task-placeholder");
+  try {
+    const repair = task(fixture, 9, false);
+    repair.taskId = "early-repair-task";
+    repair.evolutionProposalId = "proposal-1";
+    repair.snapshot.title = "修复流程卡点：原专题";
+    repair.flowEvents = [];
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(1), [repair]), [repair.taskId]);
+
+    fixture.append(approvalApplication(fixture, "proposal-1", 2, "审批申请"));
+    fixture.database.withConnection((connection) => connection.prepare(`INSERT INTO AiDesktopTaskTimelineTopic
+      (groupId, topicId, proposalId, title, status, summary, revision, startedAt, updatedAt, createdAt)
+      VALUES ('task:stale-repair', NULL, 'proposal-1', '修复流程卡点：原专题', 'running', '旧修复占位', 0,
+        $startedAt, $updatedAt, $createdAt)`).run({
+      $startedAt: fixture.at(1),
+      $updatedAt: fixture.at(1),
+      $createdAt: fixture.at(3),
+    }));
+
+    const snapshot = fixture.timeline.snapshot(fixture.at(4));
+    assert.equal(snapshot.groups.length, 1);
+    assert.equal(snapshot.groups[0].groupId, "topic:topic-1");
+    assert.ok(snapshot.groups.every((group) => group.groupId !== "task:stale-repair"));
   } finally { fixture.close(); }
 });
 

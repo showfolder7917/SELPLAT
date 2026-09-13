@@ -59,7 +59,9 @@ export class CollaborationTimelineFacade {
   appendStream(taskId: string, memberId: string, event: CodexStreamEventOutDto): string | null {
     const commit = this.#repository.appendStream(taskId, memberId, event);
     if (!commit) return null;
-    this.#publish(commit);
+    // 流式增量已经通过专用 IPC 直接送到页面；逐字发布“时间线已变化”会让页面反复全量读取历史。
+    // 一轮正文完成或报错时再通知完整快照收口，既保留持久化记录，也避免长任务拖慢人物切换。
+    if (event.type === "message-completed" || event.type === "error") this.#publish(commit);
     return commit.nodeId;
   }
 

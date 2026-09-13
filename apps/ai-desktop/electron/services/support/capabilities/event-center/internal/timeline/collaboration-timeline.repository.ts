@@ -71,7 +71,8 @@ export class CollaborationTimelineRepository {
     this.#database.transaction((connection) => {
       for (const task of state.tasks.filter((candidate) => taskIds.includes(candidate.taskId))) {
         let group = task.evolutionProposalId ? connection.prepare(`SELECT groupId, topicId, proposalId, title, startedAt
-          FROM AiDesktopTaskTimelineTopic WHERE proposalId=$proposalId ORDER BY updatedAt DESC LIMIT 1`)
+          FROM AiDesktopTaskTimelineTopic WHERE proposalId=$proposalId
+          ORDER BY (topicId IS NOT NULL) DESC, updatedAt DESC LIMIT 1`)
           .get({ $proposalId: task.evolutionProposalId }) as Record<string, unknown> | undefined : undefined;
         if (!group) {
           const groupId = `task:${task.taskId}`;
@@ -157,7 +158,10 @@ export class CollaborationTimelineRepository {
     return this.#database.withConnection((connection) => {
       const topics = connection.prepare(`SELECT groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt
         FROM AiDesktopTaskTimelineTopic ORDER BY updatedAt DESC, groupId`).all() as Array<Record<string, unknown>>;
-      const groups = aggregateUnlinkedCheckpoints(topics.map((topic) => this.#group(connection, topic, now)), now);
+      // 没有任何事实的无专题任务卡只是初始化顺序留下的占位，不属于用户可见历史。
+      const visibleGroups = topics.map((topic) => this.#group(connection, topic, now))
+        .filter((group) => Boolean(group.topicId) || group.nodes.length > 0);
+      const groups = aggregateUnlinkedCheckpoints(visibleGroups, now);
       return { version: 1, groups, updatedAt: groups.map((group) => group.updatedAt).sort().at(-1) || now };
     });
   }
@@ -176,6 +180,14 @@ export class CollaborationTimelineRepository {
       $groupId: input.groupId, $topicId: input.topicId, $proposalId: input.proposalId, $title: input.title,
       $status: input.status, $summary: input.summary, $startedAt: input.startedAt,
       $updatedAt: input.updatedAt, $createdAt: new Date().toISOString(),
+    });
+    // 正式专题稍后到达时，清理由启动顺序产生且从未承载事实的任务占位卡。
+    if (input.topicId && input.proposalId) connection.prepare(`DELETE FROM AiDesktopTaskTimelineTopic
+      WHERE topicId IS NULL AND proposalId=$proposalId AND groupId<>$groupId
+      AND NOT EXISTS (SELECT 1 FROM AiDesktopTaskTimelineEvent event
+        WHERE event.groupId=AiDesktopTaskTimelineTopic.groupId)`).run({
+      $proposalId: input.proposalId,
+      $groupId: input.groupId,
     });
   }
 

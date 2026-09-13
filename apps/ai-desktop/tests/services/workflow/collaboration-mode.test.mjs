@@ -52,6 +52,10 @@ const linghuRuntimeSource = readFileSync(new URL("../../../electron/services/per
 const integrationVerifierSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/integration.verifier.ts", import.meta.url), "utf8");
 const startupContextSource = readFileSync(new URL("../../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
 const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+
+test("原始逐字流只进入时间线流表，不重复写入全局事件中心", () => {
+  assert.match(applicationRuntimeSource, /event\.type !== "message-delta" && event\.type !== "reasoning-summary-delta"/);
+});
 const collaborationSessionsSource = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
