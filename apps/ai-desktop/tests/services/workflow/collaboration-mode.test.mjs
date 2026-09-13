@@ -1569,7 +1569,7 @@ test("一键清空把候选回收与数据库清理解耦并核对全部持久�
   assert.match(resetService, /candidateCleanupWarnings: candidateCleanup\.failures/);
 });
 
-test("已有同代成功候选时自动分配重试分支而不阻断统一测试", async () => {
+test("已有同代候选工作树时分支与路径同步重试而不阻断统一测试", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "candidate-retry-branch-"));
   const repositoryRoot = path.join(directory, "repository");
   try {
@@ -1583,9 +1583,15 @@ test("已有同代成功候选时自动分配重试分支而不阻断统一测�
     const resultSha = git(repositoryRoot, "rev-parse", "HEAD");
     git(repositoryRoot, "branch", "release/0.1.1-rc");
     git(repositoryRoot, "branch", "release/0.1.1-rc-g1");
-    const manager = new VersionWorkspaceManager(repositoryRoot, path.join(directory, "managed-worktrees"));
+    const managedRoot = path.join(directory, "managed-worktrees");
+    const existingRoot = path.join(managedRoot, "release", "release-0.1.1-g1-retry");
+    git(repositoryRoot, "worktree", "add", existingRoot, "release/0.1.1-rc-g1");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
     const candidate = await manager.createReleaseCandidate("release-0.1.1-g1-retry", "0.1.1", 1, [{ taskId: "TASK-RETRY", versionWorkspace: { resultSha } }]);
     assert.equal(candidate.branchName, "release/0.1.1-rc-g1-r2");
+    assert.equal(path.basename(candidate.rootPath), "release-0.1.1-g1-retry-r2");
+    assert.notEqual(candidate.rootPath, existingRoot);
+    assert.equal(candidate.candidateSha, resultSha);
     await manager.retireCandidate(candidate);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
