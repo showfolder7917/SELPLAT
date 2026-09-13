@@ -361,6 +361,68 @@ test("客户范围修订后迟到的旧执行结果只被丢弃，不触发令�
   }
 });
 
+test("客户范围修订后迟到的旧执行人初始化失败不会阻塞新范围", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "scope-revision-late-startup-"));
+  let rejectOldStartup;
+  let oldStartupStarted;
+  const oldStartupGate = new Promise((_, reject) => { rejectOldStartup = reject; });
+  const startedGate = new Promise((resolve) => { oldStartupStarted = resolve; });
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const workspace = { workspaceId: "worktree:late-startup", rootPath: directory, branchName: "codex/late-startup", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { prepareTask: async () => workspace, resumeTask: async () => workspace, commitTaskResult: async () => "result" },
+      executor: new ExecutorFacade({
+        createExecutor: async () => {
+          oldStartupStarted();
+          return oldStartupGate;
+        },
+      }),
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, invalidateTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      createTaskRuleContext: () => ({
+        activeUserId: "XUNAN", role: "executor", ruleRevision: "revision-one",
+        mandatoryRoleRuleIds: ["AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES"], matchedTaskRuleIds: [],
+        dependencyRuleIds: [], loadedRuleHashes: {}, loadedRuleContents: {}, agentsContent: "# AGENTS", indexCatalog: "# index", ruleReceipt: [],
+      }),
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+    const submitted = coordinator.submitTask({
+      title: "修复长会话性能",
+      problemStatement: "长会话切换变慢。",
+      confirmedIntent: "保留历史并按需渲染。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "han-li",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+      evolutionProposalId: "proposal-late-startup",
+      evolutionRoundId: "proposal-late-startup",
+    });
+    const seeded = submitted.tasks.at(-1);
+    await startedGate;
+    await coordinator.dispose();
+    const revised = await coordinator.reviseActiveRepairScope({
+      runId: "run-late-startup",
+      proposalId: "proposal-late-startup",
+      instruction: "停止旧令狐执行，交由南宫婉调查后分配普通执行人。",
+    });
+    rejectOldStartup(new Error("旧执行人初始化失败"));
+    await new Promise((resolve) => setImmediate(resolve));
+    const task = store.task(seeded.taskId);
+    assert.equal(revised.updated, true);
+    assert.equal(task.state, "queued-executor");
+    assert.equal(task.taskRevision, 2);
+    assert.equal(task.flowEvents.at(-1).type, "task.scope_revised");
+    assert.equal(task.flowEvents.some((event) => event.type === "task.blocked"), false);
+  } finally {
+    rejectOldStartup?.(new Error("测试结束"));
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("客户范围修订会取消已经排队但尚未开始的旧令狐恢复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "scope-revision-pending-repair-"));
   let releaseClose;

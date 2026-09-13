@@ -524,6 +524,7 @@ export class CollaborationCoordinator {
     if (queueSpan) this.#durations.finish(queueSpan, "completed", { releaseEvent: "executor.assigned", memberId });
     this.#waitSpans.delete(taskId);
     let startupSpan: string | null = null;
+    let startupLease: { assignmentId: string | null; workerGeneration: number } | null = null;
     try {
       this.#store.updateTask(taskId, "executor.assigned", (task, state) => {
         const member = requireMember(state, memberId);
@@ -572,11 +573,14 @@ export class CollaborationCoordinator {
           previousAssignment ? { repairResult: task.repairResult || undefined, returnToExecutor: participantSnapshot(member), routedBy: task.initiator } : null);
       });
       const assignedTask = this.#store.task(taskId);
+      // 初始化可能跨越客户范围修订；记录本轮租约，避免旧工作树或旧会话晚到后污染新范围。
+      startupLease = { assignmentId: assignedTask.assignmentId, workerGeneration: assignedTask.workerGeneration };
       const worktreeSpan = this.#durations.start(taskId, "worktree-prepare", { memberId });
       try {
         const workspace = assignedTask.versionWorkspace
           ? await this.#workspaces.resumeTask(assignedTask)
           : await this.#workspaces.prepareTask(assignedTask, memberId);
+        this.#assertExecutorLease(taskId, memberId, startupLease.assignmentId, startupLease.workerGeneration);
         this.#store.updateTask(taskId, assignedTask.versionWorkspace ? "version_workspace.resumed" : "version_workspace.ready", (task) => { task.versionWorkspace = workspace; });
         this.#durations.finish(worktreeSpan, "completed", { branchName: workspace.branchName, resumed: Boolean(assignedTask.versionWorkspace) });
       } catch (error) {
@@ -587,14 +591,18 @@ export class CollaborationCoordinator {
       const member = requireMember(this.state(), memberId);
       startupSpan = this.#durations.start(taskId, "codex-startup", { memberId, role: "executor", generation: member.generation });
       await this.#executor.open(task, member);
+      this.#assertExecutorLease(taskId, memberId, startupLease.assignmentId, startupLease.workerGeneration);
       this.#startHeartbeat(`executor:${taskId}`, taskId, memberId, { isAlive: () => this.#executor.isAlive(taskId) });
       this.#durations.finish(startupSpan, "completed", { releaseEvent: "executor.codex.ready" });
       startupSpan = null;
       await this.#resumeOrAnalyze(taskId);
     } catch (error) {
       if (startupSpan) this.#durations.finish(startupSpan, "failed", { error: errorMessage(error) });
-      // 客户修正范围会主动废止旧租约；旧分析稍后返回属于预期收口，不能再次转成执行故障。
-      if (error instanceof StaleExecutorLeaseError) return;
+      // 客户修正范围会主动废止旧租约；工作树或会话初始化的迟到结果只关闭自身，不能阻塞新范围。
+      if (error instanceof StaleExecutorLeaseError || (startupLease && !this.#hasExecutorLease(taskId, memberId, startupLease.assignmentId, startupLease.workerGeneration))) {
+        await this.#executor.close(taskId);
+        return;
+      }
       if (this.#store.task(taskId).state === "cancelled") return;
       await this.#blockTask(taskId, `执行人初始化失败：${errorMessage(error)}`);
     } finally {
@@ -1167,11 +1175,21 @@ export class CollaborationCoordinator {
   }
 
   #assertExecutorLease(taskId: string, memberId: string, assignmentId: string | null, workerGeneration: number): void {
-    const current = this.#store.task(taskId);
-    const member = requireMember(this.state(), memberId);
-    if (!assignmentId || current.assignmentId !== assignmentId || current.workerGeneration !== workerGeneration || current.executorMemberId !== memberId || member.generation !== workerGeneration || member.currentTaskId !== taskId) {
+    if (!this.#hasExecutorLease(taskId, memberId, assignmentId, workerGeneration)) {
       throw new StaleExecutorLeaseError();
     }
+  }
+
+  /** 初始化、分析与实施共用同一租约事实，任何阶段都不得把旧代次结果写回当前任务。 */
+  #hasExecutorLease(taskId: string, memberId: string, assignmentId: string | null, workerGeneration: number): boolean {
+    const current = this.#store.task(taskId);
+    const member = requireMember(this.state(), memberId);
+    return Boolean(assignmentId)
+      && current.assignmentId === assignmentId
+      && current.workerGeneration === workerGeneration
+      && current.executorMemberId === memberId
+      && member.generation === workerGeneration
+      && member.currentTaskId === taskId;
   }
 
   #assertTaskRevision(taskId: string, taskRevision: number): void {
