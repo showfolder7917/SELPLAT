@@ -5,6 +5,7 @@ import test from "node:test";
 import { transform } from "esbuild";
 
 const source = readFileSync("electron/system/ipc/workspace-acceptance-fixture.ts", "utf8");
+const workspaceIpcSource = readFileSync("electron/system/ipc/domains/register-workspace-ipc.ts", "utf8");
 const transformed = await transform(source, { loader: "ts", format: "esm", target: "es2022" });
 const { WorkspaceAcceptanceFixture } = await import(`data:text/javascript;base64,${Buffer.from(transformed.code).toString("base64")}`);
 
@@ -58,16 +59,34 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
 
     const delayed = fixture.readDirectory("fixture-root", "slow-a");
     assert.equal(delayed?.scenario, "delayed");
+    let delayedSettled = false;
+    void delayed?.result.then(() => { delayedSettled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(delayedSettled, false, "受控点击后的首张截图必须仍能观察到目录读取中");
     assert.deepEqual(await delayed?.result, { workspaceId: "fixture-root", relativePath: "slow-a", entries: [{ name: "README.md", relativePath: "slow-a/README.md", kind: "file" }] });
 
     const firstRetry = fixture.readDirectory("fixture-root", "retry-once");
     assert.equal(firstRetry?.scenario, "retry-once");
     await assert.rejects(firstRetry?.result, /模拟目录读取失败/);
-    assert.equal(fixture.readDirectory("fixture-root", "retry-once"), null);
+    const retried = fixture.readDirectory("fixture-root", "retry-once");
+    assert.equal(retried?.scenario, "retry-once-retry");
+    assert.deepEqual(await retried?.result, { workspaceId: "fixture-root", relativePath: "retry-once", entries: [{ name: "README.md", relativePath: "retry-once/README.md", kind: "file" }] });
     assert.equal(fixture.readDirectory("unregistered-root", "slow-a"), null);
     assert.equal(fixture.readDirectory("fixture-root", "empty"), null);
     fixture.cleanup();
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
+});
+
+test("受控目录读取记录起始、失败和重试成功结果，但不归档临时绝对路径", () => {
+  const directoryReadHandler = workspaceIpcSource.slice(
+    workspaceIpcSource.indexOf('handle("desktop:list-workspace-directory"'),
+    workspaceIpcSource.indexOf('handle("desktop:read-workspace-file"'),
+  );
+  assert.match(directoryReadHandler, /workspaceId: id/);
+  assert.match(directoryReadHandler, /outcome: "started"/);
+  assert.match(directoryReadHandler, /outcome: "succeeded"/);
+  assert.match(directoryReadHandler, /outcome: "failed"/);
+  assert.doesNotMatch(directoryReadHandler, /acceptanceDirectory|fixture\.directory/);
 });

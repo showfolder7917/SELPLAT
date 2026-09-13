@@ -52,7 +52,13 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
   handle("desktop:list-workspace-directory", async (_event, id: string, relativePath: string = "") => {
     const fixtureRead = acceptanceFixture?.readDirectory(id, relativePath);
     if (!fixtureRead) return workspaces.listDirectory(id, relativePath);
-    eventCenter.recordEvent("workspace.directory_read", { source: "hanli-acceptance-fixture", scenario: fixtureRead.scenario, relativePath });
+    const details = { source: "hanli-acceptance-fixture", workspaceId: id, scenario: fixtureRead.scenario, relativePath };
+    // 审计仅记录受控场景身份和结果，避免临时目录绝对路径进入验收归档。
+    eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "started" });
+    void fixtureRead.result.then(
+      () => eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "succeeded" }),
+      () => eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "failed" }),
+    );
     return fixtureRead.result;
   });
   handle("desktop:read-workspace-file", (_event, id: string, relativePath: string) => workspaces.readFilePreview(id, relativePath));

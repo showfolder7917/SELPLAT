@@ -6,9 +6,11 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/p
 
 type FixtureMode = "basic" | "scenarios";
 type ReservedFixture = { directory: string; consumed: boolean; mode: FixtureMode; workspaceId: string | null; failedPaths: Set<string> };
+// 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
+const SCENARIO_DIRECTORY_DELAY_MS = 2_000;
 
 export interface WorkspaceAcceptanceDirectoryRead {
-  scenario: "delayed" | "retry-once";
+  scenario: "delayed" | "retry-once" | "retry-once-retry";
   result: Promise<WorkspaceDirectoryOutDto>;
 }
 
@@ -70,12 +72,19 @@ export class WorkspaceAcceptanceFixture {
     if (relativePath === "slow-a" || relativePath === "slow-b") {
       return {
         scenario: "delayed",
-        result: new Promise((resolve) => setTimeout(() => resolve(this.#workspaces.listDirectory(workspaceId, relativePath)), 350)),
+        result: new Promise((resolve) => setTimeout(() => resolve(this.#workspaces.listDirectory(workspaceId, relativePath)), SCENARIO_DIRECTORY_DELAY_MS)),
       };
     }
     if (relativePath === "retry-once" && !fixture.failedPaths.has(relativePath)) {
       fixture.failedPaths.add(relativePath);
       return { scenario: "retry-once", result: Promise.reject(new Error("验收夹具模拟目录读取失败，请在原位置重试。")) };
+    }
+    if (relativePath === "retry-once") {
+      return {
+        // 重试仍调用真实存储；保留场景身份只为让验收审计能区分首次失败与恢复成功。
+        scenario: "retry-once-retry",
+        result: Promise.resolve(this.#workspaces.listDirectory(workspaceId, relativePath)),
+      };
     }
     return null;
   }
