@@ -112,7 +112,7 @@ function TaskGroupHeader({
   oneShotRecoveryRequired: boolean;
 }) {
   // 界面语言（locale）决定专题状态和耗时使用中文还是日文。
-  const { locale, nowMs } = presentation;
+  const { locale, nowMs, open } = presentation;
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
   const groupStopped = group.status === "blocked" || group.status === "completed" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
@@ -137,7 +137,8 @@ function TaskGroupHeader({
         <span className="task-group-primary-matter"><b>{locale === "ja" ? "内容" : "发生事项"}</b><small>{primary.matter}</small></span>
         <span className="task-group-primary-owner"><b>{locale === "ja" ? "担当" : "处理人和状态"}</b><small>{primary.ownerAndStatus}</small></span>
         <span className={`task-group-primary-customer-action${recoveryAction?.customerAction ? " customer-action" : ""}`}><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
-        <span className="task-group-primary-next"><b>{locale === "ja" ? "次の対応" : "下一步"}</b><small>{primary.nextAction}</small></span>
+        {/* 卡片展开后由时间线中的“下一流程”独占该状态，避免同一文案重复。 */}
+        {!open && <span className="task-group-primary-next"><b>{locale === "ja" ? "次の対応" : "下一步"}</b><small>{primary.nextAction}</small></span>}
       </span>
       {/* 专题事实区：集中展示状态、并行人数和从开始到现在的总耗时。 */}
       <span className="task-group-facts">
@@ -212,7 +213,6 @@ function TaskTimelineNode({
   model,
   node,
   index,
-  recoveryAction,
 }: {
   /** 当前专题卡模型，统一提供专题、显示状态和用户操作。 */
   model: TaskGroupCardModel;
@@ -220,35 +220,29 @@ function TaskTimelineNode({
   node: CollaborationTimelineNodeOutDto;
   /** 当前节点在可见时间线中的顺序。 */
   index: number;
-  /** 当前专题唯一有效的恢复动作，仅与对应等待节点并排显示。 */
-  recoveryAction: ReturnType<typeof latestActiveRecoveryAction>;
 }) {
   // 专题数据（group）用于审批窗口标题和节点所属专题判断。
   const { group } = model;
   // 显示状态统一提供语言、时间、继续状态和实时正文。
   const { locale, nowMs, liveTextByNodeId } = model.presentation;
-  // 用户操作统一提供展开查询、展开保存、审批和恢复能力。
-  const { isNodeOpen, onNodeOpenChange, onManualApproval, onContinueTask } = model.actions;
+  // 用户操作统一提供展开查询、展开保存和审批能力；恢复只由专题下一流程承载。
+  const { isNodeOpen, onNodeOpenChange, onManualApproval } = model.actions;
   // 节点展开状态（nodeOpen）同时尊重后端自动展开提示和用户手动选择。
   const nodeOpen = isNodeOpen(node.nodeId, node.automaticOpen);
   // 实时输出属于技术记录，只能在详情中展开查看，不能覆盖节点正文。
   const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] || "" : "";
-  // 恢复动作必须同时匹配任务和等待节点，历史等待记录即使属于同一任务也不能再次显示入口。
-  const nodeRecoveryAction = recoveryAction?.taskId === node.taskId && recoveryAction.nodeId === node.nodeId
-    ? recoveryAction
-    : null;
   // 可操作状态（hasAction）决定节点右侧是否需要预留操作区域。
-  const hasAction = Boolean(node.manualApprovalProposalId || nodeRecoveryAction);
+  const hasAction = Boolean(node.manualApprovalProposalId);
 
   /** 把当前节点绑定的提案交给工作区打开正式审批窗口。 */
   const approveCurrentProposal = () => {
     // 没有提案标识时不允许构造虚假的审批请求。
     if (!node.manualApprovalProposalId) return;
     // 审批请求同时携带专题标题和节点正文，供正式审批窗口完整展示。
-    onManualApproval(node.manualApprovalProposalId, group.title, node.detail || node.content);
+    onManualApproval(node.manualApprovalProposalId, group.title, node.content);
   };
 
-  // 节点操作区只承载与当前节点直接相关的审批或恢复操作。
+  // 节点操作区只承载与当前节点直接相关的审批操作。
   const actionButtons = hasAction ? (
     <span className="task-node-actions">
       {/* 人工审批入口：仅为绑定了待审批提案的节点显示。 */}
@@ -259,20 +253,6 @@ function TaskTimelineNode({
           onClick={approveCurrentProposal}
         >
           {locale === "ja" ? "手動承認" : "手动审批"}
-        </button>
-      )}
-      {/* 当前等待节点旁的继续入口只推进原任务，不允许历史节点重复提交。 */}
-      {nodeRecoveryAction && (
-        <button
-          type="button"
-          className="task-recovery-continue task-node-recovery-action"
-          disabled={nodeRecoveryAction.taskId === model.presentation.continuingTaskId}
-          onClick={() => onContinueTask(nodeRecoveryAction.taskId)}
-        >
-          <i className={nodeRecoveryAction.taskId === model.presentation.continuingTaskId ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
-          {nodeRecoveryAction.taskId === model.presentation.continuingTaskId
-            ? locale === "ja" ? "続行中…" : "继续中…"
-            : nodeRecoveryAction.customerAction ? "从卡点继续" : locale === "ja" ? "実行を続ける" : "继续执行"}
         </button>
       )}
     </span>
@@ -339,6 +319,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const visibleNodes = visibleTimelineNodes(group.nodes);
   // 当前恢复动作（recoveryAction）只来自某个任务的最新等待事实，历史节点不能重新获得按钮。
   const recoveryAction = latestActiveRecoveryAction(visibleNodes);
+  // 恢复提交中（recoveryPending）仅禁用下一流程的唯一入口，避免重复请求。
+  const recoveryPending = recoveryAction?.taskId === model.presentation.continuingTaskId;
   // 一次性运行恢复与按钮共用同一选择器，卡头不会再把阻塞状态说成自动处理中。
   const oneShotRecoveryRequired = evolution.state
     ? canResumeOneShotForGroup(presentedGroup, evolution.state)
@@ -355,6 +337,27 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     >
       {/* 专题恢复入口：只在原始演化运行确实暂停或阻塞时提供恢复操作。 */}
       <TaskGroupRecovery group={presentedGroup} evolution={evolution} locale={locale} />
+      {/* 下一流程统一显示当前专题的权威状态，并承载唯一恢复入口。 */}
+      <div className="task-timeline-next">
+        <i aria-hidden="true" />
+        <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
+        <span className="task-timeline-next-current">
+          <span>{presentedGroup.nextStep}</span>
+          {recoveryAction && (
+            <button
+              type="button"
+              className="task-recovery-continue"
+              disabled={recoveryPending}
+              onClick={() => model.actions.onContinueTask(recoveryAction.taskId)}
+            >
+              <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
+              {recoveryPending
+                ? locale === "ja" ? "続行中…" : "继续中…"
+                : recoveryAction.customerAction ? "从卡点继续" : locale === "ja" ? "実行を続ける" : "继续执行"}
+            </button>
+          )}
+        </span>
+      </div>
       {/* 人物时间线：按后端确定的稳定顺序展示过滤后的真实节点。 */}
       <div className="task-timeline-list">
         {visibleNodes.map((node, index) => (
@@ -363,7 +366,6 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             model={model}
             node={node}
             index={index}
-            recoveryAction={recoveryAction}
           />
         ))}
       </div>

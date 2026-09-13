@@ -359,7 +359,7 @@ button { color: inherit; }
 .screenshot-toolbar button.primary { border-color: color-mix(in srgb, var(--sel-theme-workbench-accent) 53.33%, transparent); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); font-weight: 650; }
 .screenshot-toolbar button:disabled { cursor: not-allowed; opacity: .42; }
 .screenshot-actions > span { max-width: 320px; overflow: hidden; color: var(--sel-theme-semantic-error); font-size: var(--sel-theme-font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
-/* 任务侧栏保留独立展开状态，工作区管理已迁入设置面板。 */
+/* 工作区与任务在同一 Explorer 内独立展开，收起时保留树和预览状态。 */
 .dev-explorer-sections { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .explorer-pane { min-height: 38px; flex: 0 0 38px; display: flex; flex-direction: column; overflow: hidden; }
 .explorer-pane.expanded { flex: 1 1 auto; }
@@ -374,6 +374,25 @@ button { color: inherit; }
 .task-summary strong { overflow: hidden; color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-label); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .task-summary span, .task-empty { color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); }
 .task-empty { display: block; padding: 8px; }
+.workspace-pane { border-bottom: 1px solid var(--sel-theme-line); }
+.workspace-tree { min-width: 0; min-height: 0; flex: 1 1 auto; padding: 4px 6px 10px; overflow: auto; }
+.workspace-tree-root, .workspace-tree-directory, .workspace-tree-children { min-width: 0; }
+.workspace-tree-children { display: grid; }
+.workspace-tree-row { width: 100%; min-width: 0; min-height: 30px; display: flex; align-items: center; gap: 5px; border: 0; border-radius: 5px; color: var(--sel-theme-workbench-text-muted); background: transparent; cursor: pointer; font-size: var(--sel-theme-font-size-label); text-align: left; }
+.workspace-tree-row:hover, .workspace-tree-row:focus-visible { color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface); }
+.workspace-tree-row svg { flex: 0 0 auto; width: 16px; }
+.workspace-root-header { min-width: 0; display: flex; align-items: center; }
+.workspace-root-header .workspace-tree-row { flex: 1 1 auto; }
+.workspace-root-actions { display: flex; flex: 0 0 auto; gap: 1px; }
+.workspace-root-actions button { width: 25px; height: 25px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; color: var(--sel-theme-workbench-text-muted); background: transparent; cursor: pointer; }
+.workspace-root-actions button:hover:not(:disabled), .workspace-root-actions button:focus-visible { color: var(--sel-theme-workbench-accent); background: var(--sel-theme-workbench-surface); }
+.workspace-root-actions button:disabled { cursor: default; opacity: .45; }
+.workspace-tree-row > span, .workspace-file-preview strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-tree-message, .workspace-tree-error { display: grid; gap: 5px; padding: 7px 8px; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); overflow-wrap: anywhere; }
+.workspace-tree-error { color: var(--sel-theme-semantic-error); }
+.workspace-tree-error button { justify-self: start; border: 0; color: var(--sel-theme-workbench-accent); background: transparent; cursor: pointer; }
+.workspace-file-preview { min-width: 0; display: grid; gap: 5px; margin-top: 8px; padding: 8px; border: 1px solid var(--sel-theme-line); border-radius: 6px; background: var(--sel-theme-workbench-surface); }
+.workspace-file-preview pre { min-width: 0; max-height: 180px; margin: 0; overflow: auto; color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-caption); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* 协同模式只展示人物当前状态、阻塞原因和结果；阶段耗时保留在分析日志，不在这里构造时间线。 */
 .operating-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; padding: 3px; border: 1px solid var(--sel-theme-line); border-radius: 7px; background: var(--sel-theme-workbench-surface); }

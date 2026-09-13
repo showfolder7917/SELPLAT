@@ -287,8 +287,10 @@ export class VersionWorkspaceManager {
     await Promise.all(tasks.map((task) => this.#assertTaskResultIsCurrent(task)));
     const baseSha = await this.#integrationBaseSha();
     const safeVersion = safeVersionSegment(version);
-    const branchName = legacyIntegrationBranch ? `codex/collab/integration-g${generation}` : await this.#availableReleaseBranch(safeVersion, generation);
-    const rootPath = this.#managedPath(legacyIntegrationBranch ? "integration" : "release", legacyIntegrationBranch ? `g${generation}` : safeSegment(releaseBatchId));
+    const releaseCandidate = legacyIntegrationBranch
+      ? { branchName: `codex/collab/integration-g${generation}`, rootPath: this.#managedPath("integration", `g${generation}`) }
+      : await this.#availableReleaseCandidate(safeVersion, generation, releaseBatchId);
+    const { branchName, rootPath } = releaseCandidate;
     await this.#git(this.#repositoryRoot, ["worktree", "add", "-b", branchName, rootPath, baseSha]);
     try {
       for (const task of tasks) {
@@ -397,16 +399,19 @@ export class VersionWorkspaceManager {
     return this.currentBaseSha();
   }
 
-  /** 首批保留 release/<version>-rc；同一版本的后续批次追加代次，既不覆盖历史发布证据也不会永久阻塞。 */
-  async #availableReleaseBranch(version: string, generation: number): Promise<string> {
+  /** 分支和工作树路径必须使用同一重试代次，避免分支避让后仍撞上旧候选目录。 */
+  async #availableReleaseCandidate(version: string, generation: number, releaseBatchId: string): Promise<{ branchName: string; rootPath: string }> {
     const primary = `release/${version}-rc`;
     const primaryExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${primary}`]).then(() => true, () => false);
-    if (!primaryExists) return primary;
     const generated = `${primary}-g${generation}`;
+    const rootSegment = safeSegment(releaseBatchId);
+    const registeredRoots = new Set(parseGitWorktrees(await this.#gitRaw(this.#repositoryRoot, ["worktree", "list", "--porcelain"])).map((worktree) => path.resolve(worktree.rootPath)));
     for (let retry = 1; retry <= 1_000; retry += 1) {
-      const candidate = retry === 1 ? generated : `${generated}-r${retry}`;
-      const exists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${candidate}`]).then(() => true, () => false);
-      if (!exists) return candidate;
+      const branchName = !primaryExists && retry === 1 ? primary : retry === 1 ? generated : `${generated}-r${retry}`;
+      const rootPath = this.#managedPath("release", retry === 1 ? rootSegment : `${rootSegment}-r${retry}`);
+      const branchExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${branchName}`]).then(() => true, () => false);
+      const rootExists = existsSync(rootPath) || registeredRoots.has(path.resolve(rootPath));
+      if (!branchExists && !rootExists) return { branchName, rootPath };
     }
     throw new CandidateBranchConflictError(`${generated}-r1000`);
   }

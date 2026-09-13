@@ -28,10 +28,9 @@ export function createDeveloperSettingsViewModel(
   props: DeveloperSettingsFeatureProps,
   controller: DeveloperSettingsSectionController,
 ) {
-  const { settings, diagnostics, workspace, status, text } = props;
+  const { settings, diagnostics, status, text } = props;
   const locale = settings.locale;
   const resetCopy = testDataResetCopy[locale];
-  const workspaces = workspace.workspaces;
   const selectedModelName = settings.selectedModel?.displayName
     || (locale === "ja" ? "Codex の既定値" : "Codex 默认");
   const runtimeDescription = status.runtime
@@ -130,32 +129,6 @@ export function createDeveloperSettingsViewModel(
       writeLabel: text.write,
       onLocaleChange: (value: string) => settings.updateSettings({ locale: value as LocaleValue }),
       onSandboxModeChange: (value: string) => settings.updateSettings({ sandboxMode: value as SandboxModeValue }),
-    },
-    workspaces: {
-      title: text.workspaces,
-      summary: locale === "ja" ? "Codex の作業ディレクトリと書き込み範囲を管理" : "管理 Codex 的工作目录与写入范围",
-      addLabel: text.addWorkspace,
-      onAdd: () => { void workspace.addWorkspace(); },
-      items: (workspaces?.roots || []).map((root) => {
-        const primary = root.id === workspaces?.primaryId;
-        const readOnly = root.permission === "read-only";
-        const onlyWorkspace = workspaces?.roots.length === 1;
-        return {
-          id: root.id,
-          name: root.name,
-          path: root.path,
-          primary,
-          readOnly,
-          permissionLabel: readOnly ? text.readOnlyTip : text.writeTip,
-          primaryLabel: primary ? text.primary : text.makePrimary,
-          removeLabel: onlyWorkspace ? text.minimumWorkspace : text.remove,
-          removeDisabled: onlyWorkspace,
-          onTogglePermission: () => { void workspace.updateWorkspacePermission(root.id, readOnly ? "workspace-write" : "read-only"); },
-          onMakePrimary: () => { void workspace.setPrimaryWorkspace(root.id); },
-          onRemove: () => { void workspace.removeWorkspace(root.id, root.name); },
-        };
-      }),
-      error: workspace.workspaceError,
     },
     diagnostics: {
       tempTitle: text.tempFiles,
