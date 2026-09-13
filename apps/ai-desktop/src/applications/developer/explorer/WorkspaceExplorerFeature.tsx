@@ -63,10 +63,6 @@ export function WorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps) {
           {expanded && <div className="workspace-tree-children">{renderEntries(root.id, "", 1)}</div>}
         </div>;
       })}
-      {(controller.preview || controller.previewError) && <section className="workspace-file-preview" aria-label={text.preview}>
-        <strong>{controller.preview?.relativePath || text.preview}</strong>
-        {controller.previewError ? <span role="alert">{controller.previewError}</span> : <pre>{controller.preview?.content}</pre>}
-      </section>}
     </div>
   </section>;
 }

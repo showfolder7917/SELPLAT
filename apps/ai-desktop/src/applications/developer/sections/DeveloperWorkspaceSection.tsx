@@ -2,6 +2,7 @@ import { AiMemoryRecoveryBanner } from "../components/AiMemoryRecoveryBanner";
 import type { DeveloperWorkspaceViewModel } from "../model/developerViewModelTypes";
 import { DeveloperWorkspace } from "../workspace/DeveloperWorkspace";
 import { DeveloperWorkspaceRouter } from "../workspace/DeveloperWorkspaceRouter";
+import { WorkspaceFilePreview } from "../workspace/WorkspaceFilePreview";
 
 type DeveloperWorkspaceSectionProps = {
   /** 工作区显示模型包含可选恢复提示和页面路由输入。 */
@@ -29,6 +30,7 @@ export function DeveloperWorkspaceSection({ viewModel }: DeveloperWorkspaceSecti
         nangong={viewModel.router.nangong}
         screenshot={viewModel.router.screenshot}
       />
+      <WorkspaceFilePreview locale={viewModel.router.locale} preview={viewModel.filePreview} onClose={viewModel.onCloseFilePreview} />
     </DeveloperWorkspace>
   );
 }

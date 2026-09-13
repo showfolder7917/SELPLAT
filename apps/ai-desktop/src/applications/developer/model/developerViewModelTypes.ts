@@ -1,5 +1,6 @@
 import type { DeveloperApplicationController } from "./useDeveloperApplicationController";
 import type { DeveloperWorkspaceRouterProps } from "./developerWorkspaceRouterTypes";
+import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
 
 /** 应用控制器类型只作为 ViewModel 字段来源，不直接传给任何 Section。 */
 type Controller = DeveloperApplicationController;
@@ -104,6 +105,7 @@ export type DeveloperExplorerViewModel = {
   onToggleWorkspacePermission: (id: string, permission: "read-only" | "workspace-write") => void;
   onMakePrimaryWorkspace: (id: string) => void;
   onRemoveWorkspace: (id: string, name: string) => void;
+  onFilePreviewChange: (next: WorkspaceFilePreviewState) => void;
 };
 
 /** AI Memory 异常时显示的纯提示数据。 */
@@ -125,6 +127,9 @@ export type DeveloperWorkspaceViewModel = {
   memoryRecovery: AiMemoryRecoveryViewModel | null;
   /** 路由只接收自己需要的应用状态。 */
   router: DeveloperWorkspaceRouterInputViewModel;
+  /** 已打开文件覆盖当前会话页面，但不改变会话或页签路由。 */
+  filePreview: Controller["workspaceFilePreview"]["value"];
+  onCloseFilePreview: Controller["workspaceFilePreview"]["close"];
 };
 
 /** 底部状态栏显示当前运行权限和数据库状态。 */
