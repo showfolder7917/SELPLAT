@@ -7,7 +7,9 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/p
 type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
 type FixtureRegistration = { displayName: string; workspaceId: string };
-type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; failedPaths: Set<string> };
+type FixtureReadPath = "slow-a" | "slow-b" | "retry-once";
+type FixtureReadState = { requestCount: number; pending: boolean; outcome: "not-requested" | "started" | "succeeded" | "failed" };
+type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; failedPaths: Set<string>; reads: Map<FixtureReadPath, FixtureReadState> };
 const FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
 const FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 };
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
@@ -26,6 +28,14 @@ export interface WorkspaceAcceptanceDirectoryRead {
   fixtureLabel: string;
   scenario: "delayed" | "retry-once" | "retry-once-retry";
   result: Promise<WorkspaceDirectoryOutDto>;
+}
+
+/** 仅供当前正式夹具阶段核对请求去重的摘要，不含工作区绝对路径、目录内容或用户数据。 */
+export interface WorkspaceAcceptanceDirectoryReadEvidence {
+  relativePath: FixtureReadPath;
+  requestCount: number;
+  pending: boolean;
+  outcome: FixtureReadState["outcome"];
 }
 
 /**
@@ -65,7 +75,7 @@ export class WorkspaceAcceptanceFixture {
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");
     }
-    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, failedPaths: new Set() };
+    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, failedPaths: new Set(), reads: new Map() };
     return { displayName };
   }
 
@@ -107,22 +117,51 @@ export class WorkspaceAcceptanceFixture {
       return {
         fixtureLabel: fixture.displayName,
         scenario: "delayed",
-        result: new Promise((resolve) => setTimeout(() => resolve(this.#workspaces.listDirectory(workspaceId, relativePath)), SCENARIO_DIRECTORY_DELAY_MS)),
+        result: this.#trackRead(fixture, relativePath, new Promise((resolve) => setTimeout(() => resolve(this.#workspaces.listDirectory(workspaceId, relativePath)), SCENARIO_DIRECTORY_DELAY_MS))),
       };
     }
     if (relativePath === "retry-once" && !fixture.failedPaths.has(relativePath)) {
       fixture.failedPaths.add(relativePath);
-      return { fixtureLabel: fixture.displayName, scenario: "retry-once", result: Promise.reject(new Error("验收夹具模拟目录读取失败，请在原位置重试。")) };
+      return { fixtureLabel: fixture.displayName, scenario: "retry-once", result: this.#trackRead(fixture, relativePath, Promise.reject(new Error("验收夹具模拟目录读取失败，请在原位置重试。"))) };
     }
     if (relativePath === "retry-once") {
       return {
         // 重试仍调用真实存储；保留场景身份只为让验收审计能区分首次失败与恢复成功。
         fixtureLabel: fixture.displayName,
         scenario: "retry-once-retry",
-        result: Promise.resolve(this.#workspaces.listDirectory(workspaceId, relativePath)),
+        result: this.#trackRead(fixture, relativePath, Promise.resolve(this.#workspaces.listDirectory(workspaceId, relativePath))),
       };
     }
     return null;
+  }
+
+  /** 当前韩立窗口只能读取已签发夹具的固定目录请求摘要，用于验证重复点击未产生第二次读取。 */
+  getDirectoryReadEvidence(senderWebContentsId: number, relativePath: FixtureReadPath): WorkspaceAcceptanceDirectoryReadEvidence | null {
+    const fixture = this.#reserved;
+    if (!fixture || !fixture.sceneActive || fixture.mode !== "scenarios" || fixture.trustedWebContentsId !== senderWebContentsId) return null;
+    const state: FixtureReadState = fixture.reads.get(relativePath) || { requestCount: 0, pending: false, outcome: "not-requested" };
+    return { relativePath, ...state };
+  }
+
+  /** 将夹具实际进入 IPC 的请求数与 Promise 生命周期绑定，避免截图外的推断成为验收依据。 */
+  #trackRead(fixture: ReservedFixture, relativePath: FixtureReadPath, result: Promise<WorkspaceDirectoryOutDto>): Promise<WorkspaceDirectoryOutDto> {
+    const state: FixtureReadState = fixture.reads.get(relativePath) || { requestCount: 0, pending: false, outcome: "not-requested" };
+    state.requestCount += 1;
+    state.pending = true;
+    state.outcome = "started";
+    fixture.reads.set(relativePath, state);
+    return result.then(
+      (value) => {
+        state.pending = false;
+        state.outcome = "succeeded";
+        return value;
+      },
+      (error: unknown) => {
+        state.pending = false;
+        state.outcome = "failed";
+        throw error;
+      },
+    );
   }
 
   /** 验收结束后撤销临时登记并删除目录，不把验收夹具留在用户工作区列表。 */

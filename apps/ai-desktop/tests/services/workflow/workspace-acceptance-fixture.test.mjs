@@ -69,19 +69,24 @@ test("场景夹具只为已登记临时根提供延迟、一次失败与空目�
     const delayed = fixture.readDirectory(42, "fixture-root", "slow-a");
     assert.equal(delayed?.scenario, "delayed");
     assert.equal(delayed?.fixtureLabel, reservation.displayName);
+    assert.deepEqual(fixture.getDirectoryReadEvidence(42, "slow-a"), { relativePath: "slow-a", requestCount: 1, pending: true, outcome: "started" });
+    assert.equal(fixture.getDirectoryReadEvidence(99, "slow-a"), null, "其他 Renderer 不能读取夹具请求摘要");
     let delayedSettled = false;
     void delayed?.result.then(() => { delayedSettled = true; });
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(delayedSettled, false, "受控点击后的首张截图必须仍能观察到目录读取中");
     assert.deepEqual(await delayed?.result, { workspaceId: "fixture-root", relativePath: "slow-a", entries: [{ name: "README.md", relativePath: "slow-a/README.md", kind: "file" }] });
+    assert.deepEqual(fixture.getDirectoryReadEvidence(42, "slow-a"), { relativePath: "slow-a", requestCount: 1, pending: false, outcome: "succeeded" });
 
     const firstRetry = fixture.readDirectory(42, "fixture-root", "retry-once");
     assert.equal(firstRetry?.scenario, "retry-once");
     assert.equal(firstRetry?.fixtureLabel, reservation.displayName);
     await assert.rejects(firstRetry?.result, /模拟目录读取失败/);
+    assert.deepEqual(fixture.getDirectoryReadEvidence(42, "retry-once"), { relativePath: "retry-once", requestCount: 1, pending: false, outcome: "failed" });
     const retried = fixture.readDirectory(42, "fixture-root", "retry-once");
     assert.equal(retried?.scenario, "retry-once-retry");
     assert.deepEqual(await retried?.result, { workspaceId: "fixture-root", relativePath: "retry-once", entries: [{ name: "README.md", relativePath: "retry-once/README.md", kind: "file" }] });
+    assert.deepEqual(fixture.getDirectoryReadEvidence(42, "retry-once"), { relativePath: "retry-once", requestCount: 2, pending: false, outcome: "succeeded" });
     assert.equal(fixture.readDirectory(42, "unregistered-root", "slow-a"), null);
     assert.equal(fixture.readDirectory(42, "fixture-root", "empty"), null);
     fixture.cleanup();
