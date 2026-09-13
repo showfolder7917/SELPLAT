@@ -361,6 +361,88 @@ test("客户范围修订后迟到的旧执行结果只被丢弃，不触发令�
   }
 });
 
+test("客户范围修订会取消已经排队但尚未开始的旧令狐恢复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "scope-revision-pending-repair-"));
+  let releaseClose;
+  let reportCloseStarted;
+  const closeGate = new Promise((resolve) => { releaseClose = resolve; });
+  const closeStarted = new Promise((resolve) => { reportCloseStarted = resolve; });
+  let closeReported = false;
+  let executionCount = 0;
+  let transientRepairCount = 0;
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const workspace = { workspaceId: "worktree:pending-repair", rootPath: directory, branchName: "codex/pending-repair", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    const executor = {
+      open: async () => undefined,
+      isAlive: () => true,
+      session: () => ({}),
+      analyze: async () => "按当前范围实施",
+      execute: async () => {
+        executionCount += 1;
+        return executionCount === 1
+          ? { status: "incomplete", text: "", pendingActions: ["旧执行失败"], authorizedFiles: [] }
+          : { status: "code-verified", text: "新范围完成", pendingActions: [], authorizedFiles: [] };
+      },
+      close: async () => {
+        if (!closeReported) {
+          closeReported = true;
+          reportCloseStarted();
+        }
+        await closeGate;
+      },
+      closeAll: async () => undefined,
+      createTransient: async () => {
+        transientRepairCount += 1;
+        throw new Error("范围修订后不得创建旧令狐恢复会话");
+      },
+    };
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { prepareTask: async () => workspace, resumeTask: async () => workspace, commitTaskResult: async () => "result" },
+      executor,
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, invalidateTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      createTaskRuleContext: () => ({
+        activeUserId: "XUNAN", role: "executor", ruleRevision: "revision-one",
+        mandatoryRoleRuleIds: ["AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES"], matchedTaskRuleIds: [],
+        dependencyRuleIds: [], loadedRuleHashes: {}, loadedRuleContents: {}, agentsContent: "# AGENTS", indexCatalog: "# index", ruleReceipt: [],
+      }),
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+    const submitted = coordinator.submitTask({
+      title: "修复验收卡点",
+      problemStatement: "旧执行失败后准备交给令狐。",
+      confirmedIntent: "按旧范围修复。",
+      workspaceState,
+      locale: "zh-CN",
+      initiatorMemberId: "han-li",
+      preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard",
+      evolutionProposalId: "proposal-pending-repair",
+      evolutionRoundId: "proposal-pending-repair",
+    });
+    const seeded = submitted.tasks.at(-1);
+    await closeStarted;
+    const revision = coordinator.reviseActiveRepairScope({
+      runId: "run-pending-repair",
+      proposalId: "proposal-pending-repair",
+      instruction: "停止旧恢复，按新范围继续。",
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    releaseClose();
+    await revision;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(transientRepairCount, 0);
+    assert.equal(store.task(seeded.taskId).flowEvents.some((event) => event.type === "execution.repair_started"), false);
+    await coordinator.dispose();
+  } finally {
+    releaseClose?.();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("清空测试数据保留人物配置并重置令狐运行态", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "clear-test-data-"));
   try {

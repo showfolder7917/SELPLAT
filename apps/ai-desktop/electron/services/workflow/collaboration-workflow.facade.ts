@@ -480,7 +480,7 @@ export class CollaborationCoordinator {
       && !candidate.repairRequiresUserConfirmation);
     if (!task) return;
     queueMicrotask(() => {
-      if (!this.#disposed) void this.#repairFailedExecution(task.taskId, task.repairFailureReason || "执行故障等待恢复");
+      if (!this.#disposed) void this.#repairFailedExecution(task.taskId, task.repairFailureReason || "执行故障等待恢复", false, task.taskRevision);
     });
   }
 
@@ -679,6 +679,7 @@ export class CollaborationCoordinator {
 
   async #execute(taskId: string): Promise<void> {
     const task = this.#store.task(taskId);
+    const taskRevision = task.taskRevision;
     const memberId = task.executorMemberId;
     const session = this.#executor.session(taskId);
     const plan = task.plans.find((candidate) => candidate.version === task.currentPlanVersion);
@@ -744,6 +745,7 @@ export class CollaborationCoordinator {
           result.pendingActions.join("；") || "当前修改尚未完成代码验证",
           // 结构化失败类别决定是否需要等待用户重新确认文件范围。
           result.failureKind === "scope-confirmation",
+          taskRevision,
         );
       }
       if (changeSpan) this.#durations.finish(changeSpan, "completed", { releaseEvent: "task.code_verified" });
@@ -758,7 +760,7 @@ export class CollaborationCoordinator {
       // 范围修订后的旧执行结果已被租约门拒绝，这不是需要令狐再次修复的故障。
       if (error instanceof StaleExecutorLeaseError) return;
       if (this.#store.task(taskId).state === "cancelled") return;
-      await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`);
+      await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`, false, taskRevision);
     }
   }
 
@@ -828,13 +830,17 @@ export class CollaborationCoordinator {
         });
   }
 
-  async #repairFailedExecution(taskId: string, reason: string, requiresScopeConfirmation = false): Promise<void> {
+  async #repairFailedExecution(taskId: string, reason: string, requiresScopeConfirmation = false, expectedTaskRevision?: number): Promise<void> {
     // 每次处理都重新读取任务，避免使用失败发生前的旧状态。
     const failedTask = this.#store.task(taskId);
+    const failureRevision = expectedTaskRevision ?? failedTask.taskRevision;
+    // 排队恢复可能与客户范围修订同时发生；旧修订只能自行收口，不能关闭新会话或再次派发令狐。
+    if (failedTask.taskRevision !== failureRevision) return;
     // 保存本次真实执行人，后续恢复仍能回到正确负责人。
     const originalId = failedTask.executorMemberId;
     // 失败会话已经结束，先释放底层连接，避免下一次恢复复用坏会话。
     await this.#executor.close(taskId);
+    if (this.#store.task(taskId).taskRevision !== failureRevision) return;
     // 文件范围不足是授权边界，不属于能够自动尝试解决的代码错误。
     if (requiresScopeConfirmation) {
       // 把任务放入稳定等待节点；用户继续后会按真实 Git 重新冻结范围。
@@ -909,8 +915,16 @@ export class CollaborationCoordinator {
         });
       });
       const task = this.#store.task(taskId);
+      const repairRevision = task.taskRevision;
+      const emitRepairProgress = (event: CodexStreamEventOutDto) => {
+        try { this.#assertTaskRevision(taskId, repairRevision); }
+        catch { return; }
+        this.#emitRepairProgress(taskId, event);
+      };
       repairSession = await this.#executor.createTransient(task, requireMember(this.state(), LINGHU_MEMBER_ID));
-      const diagnosisText = await repairSession.investigateRepair(task, reason, (event) => this.#emitRepairProgress(taskId, event));
+      this.#assertTaskRevision(taskId, repairRevision);
+      const diagnosisText = await repairSession.investigateRepair(task, reason, emitRepairProgress);
+      this.#assertTaskRevision(taskId, repairRevision);
       const diagnosis = repairDiagnosis(task, diagnosisText, reason, participantSnapshot(requireMember(this.state(), LINGHU_MEMBER_ID)));
       this.#store.updateTask(taskId, "execution.repair_investigated", (current, state) => {
         current.repairDiagnosis = diagnosis;
@@ -919,12 +933,14 @@ export class CollaborationCoordinator {
         current.blockingReason = "令狐老祖已完成失败现场只读调查，正在按调查结论修复";
         appendFlow(current, "execution.repair_investigated", "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
       });
-      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitRepairProgress(taskId, event));
+      const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, emitRepairProgress);
+      this.#assertTaskRevision(taskId, repairRevision);
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "修复未完成代码验证");
       // 修复通过代码验证仍不等于原需求完成；只读核对当前源码与原验收条件。
       const completionText = await repairSession.investigateRepair(this.#store.task(taskId),
         `修复后的只读完成核对，不要再次实施。原需求：${task.snapshot.confirmedIntent}\n验收条件：${JSON.stringify(task.snapshot.acceptanceCriteria)}\n修复结果：${repaired.text}\n检查当前源码和验证证据。最终单独输出 REPAIR_COMPLETION={"complete":true或false,"remaining":"真实剩余工作或空串","evidence":"具体证据"}。只有全部原需求已满足且无剩余工作才允许true。`,
-        (event) => this.#emitRepairProgress(taskId, event));
+        emitRepairProgress);
+      this.#assertTaskRevision(taskId, repairRevision);
       const completionLine = completionText.split("\n").find((line) => line.trim().startsWith("REPAIR_COMPLETION="));
       let completion: { complete?: boolean; remaining?: string; evidence?: string } = {};
       try { if (completionLine) completion = JSON.parse(completionLine.trim().slice("REPAIR_COMPLETION=".length)); }
@@ -969,6 +985,7 @@ export class CollaborationCoordinator {
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
     } catch (error) {
+      if (error instanceof StaleExecutorLeaseError) return;
       this.#holdForLinghuRecovery(taskId, errorMessage(error));
     } finally {
       await repairSession?.dispose();
@@ -1155,6 +1172,10 @@ export class CollaborationCoordinator {
     if (!assignmentId || current.assignmentId !== assignmentId || current.workerGeneration !== workerGeneration || current.executorMemberId !== memberId || member.generation !== workerGeneration || member.currentTaskId !== taskId) {
       throw new StaleExecutorLeaseError();
     }
+  }
+
+  #assertTaskRevision(taskId: string, taskRevision: number): void {
+    if (this.#store.task(taskId).taskRevision !== taskRevision) throw new StaleExecutorLeaseError();
   }
 }
 
