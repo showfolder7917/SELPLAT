@@ -181,11 +181,37 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
   assert.equal(active.size, 0);
 });
 
+test("完成前门禁受阻时只返回能力阻塞，不提交局部记录作为全量验收", async () => {
+  const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+  const active = new Set();
+  const completionPlan = {
+    reason: "完成前门禁必须先确认当前窗口可用于复核",
+    segments: [{ ...segment, kind: "current-window", completionReviewRequired: true }],
+  };
+  const result = await runHanliAcceptanceSceneSession({
+    goal: currentWindowGoal, plan: completionPlan, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
+    sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) }, createWindow: () => assert.fail("当前窗口不应创建子窗口"),
+    execute: async (currentGoal) => ({
+      version: 2, runId: "blocked-gate", topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "failed", windowTitle: "AI Desktop",
+      initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+      stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "failed", actual: "门禁窗口无法继续复核", layoutStatus: "failed", layoutActual: "门禁窗口布局无法继续确认", layoutScreenshotAttachmentId: "gate-shot", screenshotAttachmentId: "gate-shot", occurredAt: "2026-09-13T00:00:00.000Z" }],
+      evidenceAttachmentIds: ["gate-shot"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+    }),
+    onSceneReady() {}, onCompletionReviewReady: () => assert.fail("受阻门禁不能进入完成态复核"), record() {},
+  });
+  assert.equal(result.status, "blocked");
+  assert.deepEqual(result.stepResults.map((item) => item.checkId), ["pre-completion-gate"]);
+  assert.equal(result.stepResults[0].status, "blocked");
+  assert.equal(result.stepResults[0].layoutStatus, "blocked");
+  assert.equal(active.size, 0);
+});
+
 test("运行时不把完成前门禁作为自动验收结果提交", () => {
   const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
   assert.match(runtime, /prepareOneShotCompletionReview\(topic\.topicId, proposal\.proposalId\)/);
   assert.doesNotMatch(runtime, /completeAutomaticAcceptance\(initialRun/);
   assert.match(runtime, /completeAutomaticAcceptance\(runResult/);
+  assert.ok(runtime.indexOf('if (runResult.status === "blocked")') < runtime.indexOf("completeAutomaticAcceptance(runResult"));
 });
 function fixture(failure) {
   const registered = new Set(), events = [], handlers = {};

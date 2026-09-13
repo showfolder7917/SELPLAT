@@ -64,7 +64,19 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         ...gateRun,
         stepResults: gateRun.stepResults.map((step) => ({ ...step, checkId: "pre-completion-gate" })),
       };
-      if (gate.status !== "passed") return mergeAcceptanceRuns(options.goal, [...runs, gate]);
+      if (gate.status !== "passed") {
+        // 完成前门禁没有覆盖原始验收条件，只能报告验收能力受阻，不能伪装成产品未通过。
+        const blockedGate = {
+          ...gate,
+          status: "blocked" as const,
+          stepResults: gate.stepResults.map((step) => ({
+            ...step,
+            status: "blocked" as const,
+            layoutStatus: "blocked" as const,
+          })),
+        };
+        return mergeAcceptanceRuns(options.goal, [...runs, blockedGate]);
+      }
       const initialPass = mergeAcceptanceRuns(options.goal, [...runs, gate]);
       // 门禁记录没有本段原始条件，类型上也不能再被当作完整验收运行提交。
       options.onCompletionReviewReady({

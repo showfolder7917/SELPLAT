@@ -604,8 +604,6 @@ export class PersonaEvolutionRuntime {
           if (runResult.status === "passed") {
             publishAcceptance("passed", `韩立真实界面验收通过。运行记录：${runResult.runId}\n逐步结果：\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
           }
-          // 完成态复核也覆盖全部原始条件后，才可写入验收记录并提交业务完成。
-          this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "blocked") {
             const reason = runResult.stepResults
               .filter((step) => step.status === "blocked" || step.layoutStatus === "blocked")
@@ -619,6 +617,8 @@ export class PersonaEvolutionRuntime {
               acceptanceFailureKind: "acceptance-capability-blocked",
             });
           }
+          // 受阻的门禁记录没有覆盖原始条件，不能送入正式验收记录校验；其余最终记录必须先通过该校验。
+          this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "failed") {
             // 先提取本轮真实新缺陷，再决定能否沿原验收范围自动修复。
             const scopeReview = this.#acceptanceFailureScope.review(proposal, runResult);
