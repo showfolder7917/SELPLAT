@@ -16,6 +16,7 @@ interface AcceptanceSceneSessionOptions {
   taskHandoff?: CollaborationTimelineSnapshotOutDto;
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
   execute(goal: HanliComputerAcceptanceInDto, window: BrowserWindow): Promise<HanliAcceptanceRunOutDto>;
+  setWorkspaceFixtureSceneActive?(active: boolean): void;
   onSceneReady(): void;
   onCompletionReviewReady(gate: CompletionReviewGateOutDto): void;
   record(eventType: string, details: Record<string, unknown>): void;
@@ -27,6 +28,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
   let sceneReadyPublished = false;
   for (const [segmentIndex, segment] of options.plan.segments.entries()) {
     let prepared: Awaited<ReturnType<typeof prepareAcceptanceSceneWindow>> | undefined;
+    options.setWorkspaceFixtureSceneActive?.(segment.kind === "workspace-explorer-fixture");
     try {
       prepared = await prepareAcceptanceSceneWindow(segment, {
         target: options.targetWindow,
@@ -113,6 +115,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
       });
       throw error;
     } finally {
+      options.setWorkspaceFixtureSceneActive?.(false);
       prepared?.dispose();
       if (prepared) options.record("hanli.acceptance_scene.released", { segmentIndex, kind: segment.kind });
     }

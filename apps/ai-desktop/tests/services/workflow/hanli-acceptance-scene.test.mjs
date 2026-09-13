@@ -88,6 +88,16 @@ test("工作区夹具场景只能使用已签发的场景说明并复用真实�
   assert.equal(prepared.window, f.options.target);
   prepared.dispose();
 });
+test("一次性工作区夹具不能被拆分到多个正式验收阶段", () => {
+  const splitFixturePlan = {
+    ...plan,
+    segments: [
+      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+    ],
+  };
+  assert.throws(() => validateAcceptanceScenePlan(splitFixturePlan, workspaceFixtureGoal), /一次性工作区夹具只能使用一个验收阶段/);
+});
 test("不同证据源可以分段覆盖原条件且每项只能出现一次", () => {
   const composite = {
     reason: "功能行为与真实交接分别取证",
@@ -133,6 +143,34 @@ test("一次性工作区夹具只投影给正式夹具场景", () => {
   assert.deepEqual(fixtureGoal.workspaceAcceptanceFixture, workspaceFixtureGoal.workspaceAcceptanceFixture);
   assert.deepEqual(currentWindowGoal.criteria, [workspaceFixtureGoal.criteria[0]]);
   assert.deepEqual(fixtureGoal.criteria, [workspaceFixtureGoal.criteria[1]]);
+});
+
+test("场景会话只在正式夹具阶段激活一次性目录", async () => {
+  const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+  const sceneActivity = [];
+  const fixturePlan = {
+    reason: "前置真实窗口后再操作夹具",
+    segments: [
+      { ...segment, kind: "current-window", conditions: [segment.conditions[0]] },
+      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+    ],
+  };
+  await runHanliAcceptanceSceneSession({
+    goal: workspaceFixtureGoal, plan: fixturePlan, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
+    sessions: { register() {}, remove() {}, isActive: () => false }, createWindow: () => assert.fail("两个阶段都应复用真实窗口"),
+    setWorkspaceFixtureSceneActive: (active) => sceneActivity.push(active),
+    execute: async (currentGoal) => {
+      const criterionId = currentGoal.criterionIds?.[0] || "criterion-1";
+      return {
+        version: 2, runId: criterionId, topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "passed", windowTitle: "AI Desktop",
+        initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+        stepResults: [{ checkId: criterionId, operationIndex: 0, operation: { type: "judgement", criterionId }, status: "passed", actual: "功能通过", layoutStatus: "passed", layoutActual: "布局通过", layoutScreenshotAttachmentId: `${criterionId}-layout`, screenshotAttachmentId: `${criterionId}-function`, occurredAt: "2026-09-13T00:00:00.000Z" }],
+        evidenceAttachmentIds: [`${criterionId}-function`, `${criterionId}-layout`], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+      };
+    },
+    onSceneReady() {}, onCompletionReviewReady: () => assert.fail("本计划没有完成态复核"), record() {},
+  });
+  assert.deepEqual(sceneActivity, [false, false, true, false]);
 });
 
 test("最终验收记录在提交前逐项诊断重复、缺失和未登记的双截图证据", () => {
