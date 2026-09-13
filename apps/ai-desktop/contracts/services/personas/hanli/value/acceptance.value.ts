@@ -4,6 +4,7 @@ export type HanliAcceptanceOperationValue =
   | { type: "scroll"; x: number; y: number; deltaY: number; reason: string }
   | { type: "scroll-task-collaboration"; deltaY: number; reason: string }
   | { type: "scroll-test-console"; deltaY: number; reason: string }
+  | { type: "scroll-settings-panel"; deltaY: number; reason: string }
   | { type: "scroll-workspace-tree"; deltaY: number; reason: string }
   | { type: "expand-test-console-evidence"; reason: string }
   | { type: "inspect-task-collaboration-state"; reason: string }

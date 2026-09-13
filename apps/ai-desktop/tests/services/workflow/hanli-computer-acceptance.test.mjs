@@ -5,15 +5,15 @@ import { transform } from "esbuild";
 
 // 单测直接转换当前工作树源码，避免测试把未构建的隔离工作树误判为运行时代码缺失。
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
-const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus, scrollTaskCollaboration, scrollWorkspaceTree };", {
+const transformedAcceptance = await transform(acceptanceSource + "\nexport { safeNavigationClick, mapScreenshotPointToViewport, readNavigationClickStatus, scrollTaskCollaboration, scrollSettingsPanel, scrollWorkspaceTree };", {
   loader: "ts",
   format: "esm",
   target: "es2022",
 });
 const acceptanceModule = await import(`data:text/javascript;base64,${Buffer.from(transformedAcceptance.code).toString("base64")}`);
-const { HanliComputerAcceptance, safeNavigationClick, mapScreenshotPointToViewport, scrollTaskCollaboration, scrollWorkspaceTree } = acceptanceModule;
+const { HanliComputerAcceptance, safeNavigationClick, mapScreenshotPointToViewport, scrollTaskCollaboration, scrollSettingsPanel, scrollWorkspaceTree } = acceptanceModule;
 const goal = { topicId: "t", proposalId: "p", title: "检查导航", criteria: ["可以切换页面"] };
-function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }, screenshotScale = 1) {
+function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给韩立发送消息" }, testConsoleVisible = true, taskCollaborationState = { status: "has-topics" }, screenshotScale = 1, settingsPanelVisible = true) {
   let n = 0;
   const inputs = [], progress = [], executedScripts = [];
   let bounds = { x: 0, y: 0, width: 1200, height: 800 };
@@ -29,6 +29,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     }
     if (/scrollTaskCollaboration/.test(source)) return taskCollaborationState.status === "has-topics" ? { status: "scrolled", scrollTop: 360, maxScrollTop: 720 } : { status: "hidden" };
     if (/scrollTestConsole/.test(source)) return testConsoleVisible ? { status: "scrolled", scrollTop: 320, maxScrollTop: 640 } : { status: "hidden" };
+    if (/scrollSettingsPanel/.test(source)) return settingsPanelVisible ? { status: "at-boundary", scrollTop: 720, maxScrollTop: 720 } : { status: "hidden" };
     if (/scrollWorkspaceTree/.test(source)) return { status: "scrolled", scrollTop: 280, maxScrollTop: 560 };
     if (/expandTestConsoleEvidence/.test(source)) return testConsoleVisible ? { status: "expanded" } : { status: "hidden" };
     if (/readTestConsoleState/.test(source)) return testConsoleVisible ? { status: "visible", scrollTop: 0, maxScrollTop: 640 } : { status: "hidden" };
@@ -103,7 +104,8 @@ test("完成态复核提示使用已归档的上一阶段证据判断跨状态�
   assert.match(prompt, /当前截图只显示终态/);
   assert.match(prompt, /workspaceAcceptanceFixture/);
   assert.match(prompt, /displayName/);
-  assert.match(prompt, /设置浮层滚动至底部/);
+  assert.match(prompt, /scroll-settings-panel/);
+  assert.match(prompt, /at-boundary/);
 });
 test("功能通过但布局失败时整体验收仍不通过", async () => {
   const f = fixture();
@@ -240,6 +242,26 @@ test("任务协作页只允许固定容器滚动并回执位置变化", async ()
   assert.equal(run.status, "passed");
   assert.equal(run.interactionSteps[0].operation.type, "scroll-task-collaboration");
 });
+test("设置浮层只允许固定内容容器滚动，并可在完成态复核取证", async () => {
+  const f = fixture();
+  const reviewGoal = { ...goal, reviewMode: "post-completion-review" };
+  const run = await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const scrolled = await tools.call("hanli_computer", { action: "scroll-settings-panel", reason: "滚动设置浮层到底部检查全部卡片", observationId: first, deltaY: 720 });
+    assert.deepEqual(JSON.parse(scrolled.contentItems[0].text).interactionEvidence.settingsPanel, { status: "at-boundary", scrollTop: 720, maxScrollTop: 720 });
+    await finish(tools, id(scrolled));
+  }, reviewGoal);
+  assert.equal(run.status, "passed");
+  assert.equal(run.interactionSteps[0].operation.type, "scroll-settings-panel");
+});
+test("设置浮层隐藏时拒绝固定滚动动作", async () => {
+  const f = fixture(true, undefined, true, { status: "has-topics" }, 1, false);
+  await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    await assert.rejects(tools.call("hanli_computer", { action: "scroll-settings-panel", reason: "尝试滚动未打开的设置浮层", observationId: first, deltaY: 320 }), /设置浮层未滚动：hidden/);
+    await tools.call("hanli_computer", { action: "key", key: "Tab", reason: "保留真实操作后提交受阻判断", observationId: first });
+  });
+});
 test("工作区夹具只允许固定树滚动和当前目录请求摘要", async () => {
   const f = fixture();
   const workspaceGoal = {
@@ -294,6 +316,22 @@ test("任务协作页滚动只操作可见的固定业务容器", () => {
     assert.deepEqual(scrollTaskCollaboration(1), { status: "at-boundary", scrollTop: 500, maxScrollTop: 500 });
   } finally { globalThis.document = previous; }
 });
+test("设置浮层滚动只操作当前可见的固定内容容器", () => {
+  const previous = globalThis.document;
+  let scrollTop = 0;
+  const content = {
+    offsetParent: {}, clientHeight: 200, scrollHeight: 500,
+    get scrollTop() { return scrollTop; },
+    set scrollTop(value) { scrollTop = value; },
+  };
+  const panel = { offsetParent: {}, querySelector: (selector) => selector === ".dev-settings-content" ? content : null };
+  try {
+    globalThis.document = { querySelector: (selector) => selector === ".dev-activitybar .dev-settings" ? panel : null };
+    assert.deepEqual(scrollSettingsPanel(220), { status: "scrolled", scrollTop: 220, maxScrollTop: 300 });
+    assert.deepEqual(scrollSettingsPanel(220), { status: "scrolled", scrollTop: 300, maxScrollTop: 300 });
+    assert.deepEqual(scrollSettingsPanel(1), { status: "at-boundary", scrollTop: 300, maxScrollTop: 300 });
+  } finally { globalThis.document = previous; }
+});
 test("隐藏测试台不阻止当前页面的窄窗口验收", async () => {
   const f = fixture(true, { status: "sent", composerLabel: "给韩立发送消息" }, false);
   const run = await f.run(async (tools) => {
@@ -327,6 +365,10 @@ test("固定滚动能力不放宽通用点击、拖拽或任意窗口尺寸", ()
   assert.match(source, /\.task-collaboration-page/);
   assert.match(source, /scroll-test-console/);
   assert.match(source, /\.dev-test-console-content/);
+  assert.match(source, /scroll-settings-panel/);
+  assert.match(source, /\.dev-activitybar \.dev-settings/);
+  assert.match(source, /\.dev-settings-content/);
+  assert.doesNotMatch(source, /settingsPanelSelector/);
   assert.match(source, /expand-test-console-evidence/);
   assert.match(source, /\.test-console-disclosure/);
   assert.match(source, /resizePreset/);
