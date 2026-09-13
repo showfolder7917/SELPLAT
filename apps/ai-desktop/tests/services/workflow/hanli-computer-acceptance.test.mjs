@@ -99,6 +99,8 @@ test("完成态复核提示使用已归档的上一阶段证据判断跨状态�
   const prompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
   assert.match(prompt, /priorPhaseEvidence/);
   assert.match(prompt, /当前截图只显示终态/);
+  assert.match(prompt, /workspaceAcceptanceFixture/);
+  assert.match(prompt, /设置浮层滚动至底部/);
 });
 test("功能通过但布局失败时整体验收仍不通过", async () => {
   const f = fixture();

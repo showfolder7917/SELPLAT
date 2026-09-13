@@ -21,7 +21,7 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceSceneSegmentO
   if (plan.kind === "persona-conversation-with-task-handoff" && !options.taskHandoff?.groups.length) {
     throw new Error("人物会话与任务交接复合场景缺少当前专题的只读交接记录。");
   }
-  if (plan.kind === "current-window") {
+  if (plan.kind === "current-window" || plan.kind === "workspace-explorer-fixture") {
     if (!options.target || options.target.isDestroyed()) throw new Error("验收主窗口已经关闭。");
     return { window: options.target, dispose() {} };
   }
