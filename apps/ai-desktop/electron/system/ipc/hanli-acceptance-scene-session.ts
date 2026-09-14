@@ -39,6 +39,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         rendererRoot: options.rendererRoot,
         sessions: options.sessions,
         taskHandoff: segment.kind === "persona-conversation-with-task-handoff" ? options.taskHandoff : undefined,
+        crossTaskMemberOccupancyFixture: segment.kind === "cross-task-member-occupancy" ? options.goal.crossTaskMemberOccupancyFixture : undefined,
         createWindow: options.createWindow,
       });
       options.record("hanli.acceptance_scene.ready", {

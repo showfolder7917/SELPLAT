@@ -51,6 +51,31 @@ test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人�
   assert.equal(session.isActive(42), false);
 });
 
+test("跨任务人物占用场景只在登记窗口投影令狐的另一项任务", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  const actual = {
+    ...collaborationState,
+    members: [
+      ...collaborationState.members,
+      { memberId: "linghu-ancestor", displayName: "令狐老祖", state: "idle", role: null, phase: null, currentTaskId: null, blockingReason: null, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ],
+  };
+  session.register(47, "cross-task-member-occupancy", undefined, { kind: "cross-task-member-occupancy", instructions: ["只读。"] });
+  const projected = session.collaborationState(47, actual);
+  const linghu = projected.members.find((member) => member.memberId === "linghu-ancestor");
+  assert.equal(projected.selectedMemberId, "linghu-ancestor");
+  assert.equal(linghu.currentTaskId, "acceptance-linghu-other-active-task");
+  assert.equal(linghu.phase, "verifying");
+  assert.equal(projected.tasks[0].taskId, linghu.currentTaskId);
+  assert.equal(projected.tasks[0].state, "unified-testing");
+  assert.equal(actual.members.at(-1).currentTaskId, null, "正式状态不能被窗口夹具写入");
+  assert.equal(actual.tasks[0].taskId, "formal-task", "正式任务不能被窗口夹具替换");
+  assert.equal(session.timeline(47).groups[0].status, "completed");
+  session.remove(47);
+  assert.equal(session.isActive(47), false);
+  assert.deepEqual(session.collaborationState(47, actual).tasks, []);
+});
+
 test("空状态条件只创建非持久化验收窗口，并在验收后关闭", () => {
   const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
   const collaborationIpcSource = readFileSync("electron/system/ipc/domains/register-collaboration-ipc.ts", "utf8");

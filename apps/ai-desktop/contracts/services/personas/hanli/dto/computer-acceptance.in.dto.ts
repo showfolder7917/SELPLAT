@@ -10,7 +10,8 @@ export type HanliAcceptanceInteractionCapability =
   | "workspace-explorer"
   | "workspace-explorer-scenarios"
   | "workspace-cleanup-recovery"
-  | "workspace-startup-recovery";
+  | "workspace-startup-recovery"
+  | "cross-task-member-occupancy";
 
 /**
  * 已签发工作区验收夹具的只读操作说明。
@@ -21,6 +22,12 @@ export interface WorkspaceAcceptanceFixtureContextOutDto {
   mode: "basic" | "scenarios";
   /** 本轮临时根的可见名称；用于在不泄露路径的前提下确认添加前后状态。 */
   displayName: string;
+  instructions: string[];
+}
+
+/** 主进程签发的窗口私有跨任务人物占用夹具，模型不能选择其任务或阶段。 */
+export interface CrossTaskMemberOccupancyFixtureContextOutDto {
+  kind: "cross-task-member-occupancy";
   instructions: string[];
 }
 
@@ -89,6 +96,8 @@ export interface HanliComputerAcceptanceInDto {
   interactionCapabilities?: HanliAcceptanceInteractionCapability[];
   /** 当前运行已预备的临时验收数据说明；只用于选择并执行受控验收场景。 */
   workspaceAcceptanceFixture?: WorkspaceAcceptanceFixtureContextOutDto;
+  /** 仅专用隔离场景可消费的跨任务人物占用夹具。 */
+  crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto;
   /** 当前已打包应用在隔离数据根中执行的真实重启回收结果；只用于对应重启条件的事实判断。 */
   workspaceStartupRecoveryEvidence?: WorkspaceStartupRecoveryEvidenceOutDto;
   /** 当前夹具由同一生命周期控制器完成失败记录、重试、清理和页面同步后的只读结果。 */

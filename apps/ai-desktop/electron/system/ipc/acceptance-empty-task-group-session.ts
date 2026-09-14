@@ -2,12 +2,14 @@ import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, Perso
 import type { ScreenshotCompletedEventOutDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CollaborationStateOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue } from "../../../contracts/services/workflow/index.js";
+import type { CrossTaskMemberOccupancyFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
 
-type IsolatedAcceptanceScenario = "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff";
+type IsolatedAcceptanceScenario = "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy";
 
 const scenarioTaskId = "acceptance-failure-recovery-task";
 const scenarioTopicId = "acceptance-failure-recovery-topic";
 const scenarioProposalId = "acceptance-failure-recovery-proposal";
+const crossTaskId = "acceptance-linghu-other-active-task";
 const hanli = { memberId: "han-li", displayName: "韩立" };
 const linghu = { memberId: "linghu-laozu", displayName: "令狐老祖" };
 
@@ -23,12 +25,13 @@ export class AcceptanceEmptyTaskGroupSession {
   #recoveryLifecycleStarted = new Set<number>();
   #personaConversations = new Map<number, Map<string, PersonaConversationOutDto>>();
   #taskHandoffs = new Map<number, CollaborationTimelineSnapshotOutDto>();
+  #crossTaskMemberOccupancyFixtures = new Set<number>();
   #failedEarlierReads = new Set<string>();
   #personaScreenshotSequences = new Map<number, number>();
 
-  register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto): void {
+  register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto, crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto): void {
     this.#scenarios.set(webContentsId, sceneKind);
-    this.#selectedMembers.set(webContentsId, "han-li");
+    this.#selectedMembers.set(webContentsId, sceneKind === "cross-task-member-occupancy" ? "linghu-ancestor" : "han-li");
     this.#operatingModes.set(webContentsId, "collaboration");
     this.#recoveryLifecycleStarted.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
@@ -39,6 +42,9 @@ export class AcceptanceEmptyTaskGroupSession {
     }
     // 复合场景只保存准备瞬间已筛选的任务交接快照，后续正式任务变化不能进入验收窗口。
     if (sceneKind === "persona-conversation-with-task-handoff" && taskHandoff?.groups.length) this.#taskHandoffs.set(webContentsId, structuredClone(taskHandoff));
+    if (sceneKind === "cross-task-member-occupancy" && crossTaskMemberOccupancyFixture?.kind === "cross-task-member-occupancy") {
+      this.#crossTaskMemberOccupancyFixtures.add(webContentsId);
+    }
   }
 
   remove(webContentsId: number): void {
@@ -48,6 +54,7 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#recoveryLifecycleStarted.delete(webContentsId);
     this.#personaConversations.delete(webContentsId);
     this.#taskHandoffs.delete(webContentsId);
+    this.#crossTaskMemberOccupancyFixtures.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
   }
@@ -97,6 +104,10 @@ export class AcceptanceEmptyTaskGroupSession {
   }
 
   collaborationState(webContentsId: number, actual: CollaborationStateOutDto): CollaborationStateOutDto {
+    if (this.#scenarios.get(webContentsId) === "cross-task-member-occupancy") {
+      if (!this.#crossTaskMemberOccupancyFixtures.has(webContentsId)) throw new Error("跨任务人物占用验收场景缺少已签发夹具。");
+      return crossTaskMemberOccupancyState(actual, this.#operatingModes.get(webContentsId) || "collaboration", this.#selectedMembers.get(webContentsId) || "linghu-ancestor");
+    }
     return {
       ...actual,
       mode: this.#operatingModes.get(webContentsId) || "collaboration",
@@ -128,6 +139,7 @@ export class AcceptanceEmptyTaskGroupSession {
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "inspection-lifecycle-timeline") return inspectionLifecycleTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "user-language-detail-timeline") return userLanguageDetailTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "recovery-action-lifecycle") return recoveryActionLifecycleTimeline(this.#recoveryLifecycleStarted.has(webContentsId));
+    if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "cross-task-member-occupancy") return crossTaskMemberOccupancyTimeline();
     return { version: 1, groups: [], updatedAt: new Date().toISOString() };
   }
 
@@ -191,6 +203,158 @@ export class AcceptanceEmptyTaskGroupSession {
     return { ...next, messages: next.messages.slice(-60) };
   }
 
+}
+
+/**
+ * 跨任务占用验收只在登记窗口内投影完整快照；正式 Store 从不接收这份任务或成员状态。
+ */
+function crossTaskMemberOccupancyState(
+  actual: CollaborationStateOutDto,
+  mode: DesktopOperatingModeValue,
+  selectedMemberId: string,
+): CollaborationStateOutDto {
+  const now = new Date().toISOString();
+  const linghuMember = actual.members.find((member) => member.memberId === "linghu-ancestor");
+  if (!linghuMember) throw new Error("跨任务人物占用验收场景缺少令狐成员入口。");
+  return {
+    ...actual,
+    mode,
+    selectedMemberId,
+    members: actual.members.map((member) => member.memberId === "linghu-ancestor" ? {
+      ...member,
+      state: "working",
+      role: "executor",
+      phase: "verifying",
+      currentTaskId: crossTaskId,
+      blockingReason: null,
+      updatedAt: now,
+    } : structuredClone(member)),
+    tasks: [crossTaskMemberOccupancyTask(now, linghuMember.displayName)],
+    integrationBatches: [],
+    updatedAt: now,
+  };
+}
+
+/** 返回完整任务协议，避免成员 currentTaskId 指向不存在的演示任务。 */
+function crossTaskMemberOccupancyTask(now: string, displayName: string): CollaborationStateOutDto["tasks"][number] {
+  return {
+    taskId: crossTaskId,
+    taskRevision: 1,
+    assignmentId: "acceptance-linghu-other-assignment",
+    workerGeneration: 1,
+    state: "unified-testing",
+    phase: "verifying",
+    executorMemberId: "linghu-ancestor",
+    preferredExecutorMemberId: "linghu-ancestor",
+    originalExecutor: null,
+    currentHandler: { memberId: "linghu-ancestor", displayName },
+    repairKind: null,
+    repairFailureReason: null,
+    repairRequiresUserConfirmation: false,
+    repairDiagnosis: null,
+    repairResult: null,
+    unifiedTest: { status: "running", owner: { memberId: "linghu-ancestor", displayName }, failureReason: null, startedAt: now, completedAt: null },
+    currentPlanVersion: 1,
+    infrastructureFailureCount: 0,
+    mergeStrategy: "INDEPENDENT",
+    atomicGroupId: null,
+    dependencyTaskIds: [],
+    integrationGeneration: 1,
+    initiator: { memberId: "han-li", displayName: "韩立" },
+    automationSource: null,
+    evolutionProposalId: null,
+    evolutionRoundId: null,
+    replacementForTaskId: null,
+    returnedToNangongAt: null,
+    selfUpgradeTargetMemberId: null,
+    selfUpgradeCapabilityScope: null,
+    sourceEvolutionApprovalId: null,
+    historyCompleteness: "complete",
+    snapshot: {
+      title: "令狐另一项在途任务",
+      problemStatement: "仅用于韩立验收场景验证人物当前占用状态。",
+      confirmedIntent: "只读验证令狐处理另一项任务时的状态投影。",
+      constraints: ["窗口私有", "不得写入正式协作状态"],
+      acceptanceCriteria: ["令狐显示当前真实阶段"],
+      sourceMessageIds: [],
+      attachmentIds: [],
+      workspaceState: { roots: [], primaryId: "acceptance-cross-task-member-occupancy" },
+      locale: "zh-CN",
+      contentHash: "acceptance-cross-task-member-occupancy",
+      ruleContext: null,
+    },
+    plans: [],
+    executionRecords: [],
+    flowEvents: [{
+      eventId: "acceptance-linghu-other-task-started",
+      type: "unified_test.started",
+      stage: "integration",
+      status: "started",
+      actor: { memberId: "linghu-ancestor", displayName },
+      summary: "令狐正在统一测试另一项任务。",
+      occurredAt: now,
+      error: false,
+    }],
+    versionWorkspace: null,
+    integrationFailure: null,
+    customerActionGuidance: null,
+    finalResult: null,
+    resultSummary: null,
+    blockingReason: null,
+    recoveryTargetState: null,
+    startedAt: now,
+    codeVerifiedAt: now,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null,
+  };
+}
+
+/** 已完成专题与另一项在途任务分开投影，专题时间线不得覆盖人物当前占用。 */
+function crossTaskMemberOccupancyTimeline(): CollaborationTimelineSnapshotOutDto {
+  const now = new Date().toISOString();
+  return {
+    version: 1,
+    updatedAt: now,
+    groups: [{
+      groupId: "acceptance-completed-topic",
+      topicId: "acceptance-completed-topic",
+      proposalId: "acceptance-completed-proposal",
+      title: "完成专题状态收口验收场景",
+      status: "completed",
+      summary: "专题已完成；令狐当前状态由另一项任务决定。",
+      executingCount: 0,
+      verifyingCount: 0,
+      waitingCount: 0,
+      completedCount: 1,
+      startedAt: now,
+      updatedAt: now,
+      durationMs: 0,
+      nextStep: "专题已完成",
+      failureNextStep: "无",
+      nextOwner: hanli,
+      nodes: [{
+        nodeId: "acceptance-completed-topic:resolved",
+        taskId: scenarioTaskId,
+        eventType: "checkpoint.resolved",
+        kind: "repair",
+        actor: linghu,
+        recipients: [hanli],
+        status: "completed",
+        action: "本轮恢复已完成",
+        summary: "同一恢复轮次已收口为一个完成事实。",
+        content: "专题完成结论只留在任务协作卡。",
+        contentRole: "repair-output",
+        detailRole: "result-evidence",
+        detail: "异常均已关闭并保留审计详情。令狐当前状态不从本历史节点推断。",
+        startedAt: now,
+        completedAt: now,
+        durationMs: 0,
+        automaticOpen: false,
+        manualApprovalProposalId: null,
+      }],
+    }],
+  };
 }
 
 /** 为人物会话验收提供稳定、可分页且不落盘的消息集合。 */
