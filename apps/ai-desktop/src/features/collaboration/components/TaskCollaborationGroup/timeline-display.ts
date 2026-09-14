@@ -23,14 +23,33 @@ export function currentTaskGroupPresentation(
     && oneShotRun.proposalId === group.proposalId;
   if (!belongsToCurrentRun) return group;
   if (oneShotRun.status === "blocked") {
-    return group.status === "blocked" ? group : { ...group, status: "blocked" };
+    // 原运行是当前专题的唯一停留事实；卡片必须同步显示原因和恢复路径，不能保留发布前的旧摘要。
+    const reason = oneShotRun.blockingReason || oneShotRun.action;
+    return {
+      ...group,
+      status: "blocked",
+      summary: reason,
+      nextStep: "查看停留原因并从卡点继续。",
+      failureNextStep: reason,
+    };
   }
+  // 完成态复核仍会进入 accepting 阶段，但它只能复核已完成专题，不能把原卡倒退为验收中。
   if (oneShotRun.status === "running" && oneShotRun.resumeMode === "post-completion-review") {
     return {
       ...group,
       status: "completed",
       summary: "本专题已完成",
       nextStep: "本专题已完成",
+      failureNextStep: null,
+    };
+  }
+  if (oneShotRun.status === "running" && oneShotRun.phase === "accepting") {
+    // 韩立验收占用不创建协作任务，只把当前一次性运行的真实动作投影到所属专题卡。
+    return {
+      ...group,
+      status: "verifying",
+      summary: oneShotRun.action,
+      nextStep: "韩立正在验收，完成当前检查后继续收口结果。",
       failureNextStep: null,
     };
   }
@@ -49,6 +68,7 @@ export type GroupActivityPresentation = {
 export function groupActivityPresentation(
   group: CollaborationTimelineGroupOutDto,
   locale: LocaleValue,
+  oneShotRun?: EvolutionOneShotRunOutDto | null,
 ): GroupActivityPresentation {
   const activeOwnerLabels = new Map<string, string>();
   let acceptanceNode: CollaborationTimelineNodeOutDto | undefined;
@@ -64,7 +84,13 @@ export function groupActivityPresentation(
     activeOwnerLabels.set(node.actor.memberId, `${node.actor.displayName}${roleLabel}`);
   }
 
-  const statusLabel = group.status === "verifying" && acceptanceNode
+  const oneShotAcceptance = oneShotRun?.status === "running"
+    && oneShotRun.phase === "accepting"
+    && oneShotRun.topicId === group.topicId
+    && oneShotRun.proposalId === group.proposalId;
+  const statusLabel = oneShotAcceptance
+    ? locale === "ja" ? "韓立が受入確認中" : "韩立验收中"
+    : group.status === "verifying" && acceptanceNode
     ? locale === "ja" ? `${acceptanceNode.actor.displayName}が受入確認中` : `${acceptanceNode.actor.displayName}验收中`
     : groupStatusLabel(group.status, locale);
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
@@ -101,8 +127,9 @@ export function taskGroupPrimaryPresentation(
   locale: LocaleValue,
   recoveryAction: ActiveRecoveryAction | null,
   oneShotRecoveryRequired = false,
+  oneShotRun?: EvolutionOneShotRunOutDto | null,
 ): TaskGroupPrimaryPresentation {
-  const activity = groupActivityPresentation(group, locale);
+  const activity = groupActivityPresentation(group, locale, oneShotRun);
   const nextOwner = group.nextOwner?.displayName;
   // 运行或验证中的专题没有客户卡点时，明确告知用户系统仍在自动处理。
   const recoveryRequired = Boolean(recoveryAction) || oneShotRecoveryRequired;
