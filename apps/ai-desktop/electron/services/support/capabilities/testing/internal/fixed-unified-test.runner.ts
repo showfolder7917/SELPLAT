@@ -13,7 +13,8 @@ import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.faca
 // 只有经过验证的 Developer 可执行文件才能进入重启与发布流程。
 
 // 固定清单阻止令狐文案扩大测试范围或注入任意 shell 命令。
-const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
+// 全量测试先于交互和发布；单个领域测试不能替代全部测试收集器。
+const FIXED_UNIFIED_SCRIPTS = ["test", "test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
 // 仅接受开发包预检写出的固定记录，避免把任意命令中的 ENOSPC 文本误判为等待授权。
 const DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER = "AI_DESKTOP_PACKAGE_CAPACITY_BLOCKED:";
 const UNIFIED_TEST_CAPACITY_BLOCKED_ERROR_CODE = "unified-test-capacity-blocked";

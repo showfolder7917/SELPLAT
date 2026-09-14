@@ -13,8 +13,6 @@ import { ChatGPTLoginAction } from "../../../shell";
 import { ConversationMessageImage } from "../ConversationMessageImage";
 // 主会话消息类型来自对话模型，用于限定托管操作的目标消息。
 import type { Message } from "../../model/chat-message";
-// 结构化追问面板负责收集 Codex 继续执行前需要的客户答案。
-import { CodexUserInputPanel } from "../CodexUserInputPanel";
 // 协作状态链负责显示某条 Codex 回复关联任务的真实执行阶段。
 import { CollaborationStatusChain } from "../CollaborationStatusChain";
 // 托管阶段操作负责把已确认回复推进到需求、任务或测试阶段。
@@ -38,17 +36,8 @@ function messageHeader(message: Message): string {
 export function CodexConversationTimeline(props: CodexConversationTimelineProps) {
   const { locale, controller, collaboration, text } = props;
   const { conversation, interaction, latestManagedAssistantId } = controller;
-  const { executionMode, setExecutionMode, messages, chatRef, activeAssistantIdRef } = conversation;
-  const {
-    userInputRequest,
-    userInputAnswers,
-    setUserInputAnswers,
-    customAnswerIds,
-    setCustomAnswerIds,
-    confirmedQuestionIds,
-    userInputSubmitting,
-    loginHint,
-  } = interaction;
+  const { executionMode, setExecutionMode, messages, chatRef } = conversation;
+  const { loginHint } = interaction;
 
   /** 登录操作：把客户点击交给会话控制器，页面不直接调用桌面桥。 */
   function loginWithChatGPT() {
@@ -58,32 +47,6 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
   /** 协作任务重试：把关联任务标识交给协作控制器继续执行。 */
   async function retryCollaborationTask(taskId: string): Promise<void> {
     await collaboration.actions.continueTask(taskId);
-  }
-
-  /** 预设答案选择：保存选中文本，并退出该问题的自定义输入模式。 */
-  function chooseUserInputAnswer(questionId: string, value: string) {
-    setCustomAnswerIds((current) => {
-      const next = new Set(current);
-      next.delete(questionId);
-      return next;
-    });
-    setUserInputAnswers((current) => ({ ...current, [questionId]: value }));
-  }
-
-  /** 自定义答案选择：清空旧预设值，等待客户输入真实答案。 */
-  function chooseCustomUserInput(questionId: string) {
-    setCustomAnswerIds((current) => new Set(current).add(questionId));
-    setUserInputAnswers((current) => ({ ...current, [questionId]: "" }));
-  }
-
-  /** 自定义答案输入：按问题标识保存客户正在编辑的文本。 */
-  function changeCustomUserInput(questionId: string, value: string) {
-    setUserInputAnswers((current) => ({ ...current, [questionId]: value }));
-  }
-
-  /** 答案确认：由会话控制器判断是否已收齐全部问题并提交。 */
-  function confirmUserInput(questionId: string) {
-    void interaction.submitUserInput(questionId);
   }
 
   /** 托管阶段推进：协作模式提交真实协作任务，单会话模式发送确认命令。 */
@@ -133,9 +96,6 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
           ? collaboration.data.state?.tasks.find((task) => task.taskId === collaborationTaskId) || null
           : null;
         const isAssistantMessage = message.role === "assistant";
-        const showsUserInput = isAssistantMessage
-          && message.id === activeAssistantIdRef.current
-          && Boolean(userInputRequest);
         const showsManagedStage = isAssistantMessage
           && !message.streamError
           && (message.actionTriggered || message.id === latestManagedAssistantId);
@@ -164,20 +124,6 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
               {isAssistantMessage && <StreamDetails message={message} locale={locale} />}
               {isAssistantMessage && messageTask && (
                 <CollaborationStatusChain task={messageTask} locale={locale} onRetry={retryCollaborationTask} />
-              )}
-              {showsUserInput && userInputRequest && (
-                <CodexUserInputPanel
-                  request={userInputRequest}
-                  answers={userInputAnswers}
-                  customAnswerIds={customAnswerIds}
-                  confirmedQuestionIds={confirmedQuestionIds}
-                  locale={locale}
-                  submitting={userInputSubmitting}
-                  onChoose={chooseUserInputAnswer}
-                  onChooseCustom={chooseCustomUserInput}
-                  onCustomChange={changeCustomUserInput}
-                  onConfirm={confirmUserInput}
-                />
               )}
               {showsManagedStage && (
                 <ManagedStageAction

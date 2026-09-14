@@ -577,3 +577,23 @@ button { color: inherit; }
 .collaboration-member-page { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .collaboration-member-page > header { flex: 0 0 auto; }
 .collaboration-member-page .selconversation-timeline { flex: 1; min-height: 0; padding: 24px 0; }
+
+/* 全窗口待答面板不占消息滚动区，也不遮挡底部输入区；长问题在面板内滚动。 */
+.codex-user-input-dialog {
+  position: fixed;
+  z-index: 1100;
+  top: 56px;
+  right: 20px;
+  width: min(560px, calc(100vw - 40px));
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  padding: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--sel-theme-line);
+  border-radius: 12px;
+  background: var(--sel-theme-workbench-surface);
+  color: var(--sel-theme-workbench-text);
+  box-shadow: 0 12px 36px color-mix(in srgb, var(--sel-theme-workbench-canvas) 70%, transparent);
+}
+.codex-user-input-dialog h2 { margin: 0 0 12px; font-size: var(--sel-theme-font-size-body); }
+.codex-user-input-dialog .codex-user-input { margin: 0; }

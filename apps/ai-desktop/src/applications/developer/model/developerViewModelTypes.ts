@@ -139,7 +139,7 @@ export type DeveloperStatusBarViewModel = {
 };
 
 /** 全窗口审批弹窗只接收主会话控制器和语言。 */
-export type DeveloperApprovalDialogViewModel = {
+export type DeveloperInteractionDialogViewModel = {
   /** 主会话控制器提供当前审批内容和提交动作。 */
   controller: Controller["codex"];
   /** 当前界面语言。 */
@@ -155,5 +155,5 @@ export type DeveloperViewModel = {
   explorer: DeveloperExplorerViewModel;
   workspace: DeveloperWorkspaceViewModel;
   statusBar: DeveloperStatusBarViewModel;
-  approvalDialog: DeveloperApprovalDialogViewModel;
+  interactionDialog: DeveloperInteractionDialogViewModel;
 };

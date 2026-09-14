@@ -19,6 +19,7 @@ let desktopSettings = { locale: "zh-CN", sandboxMode: "workspace-write", default
 let codexModelCatalogFailure = null;
 let pendingCodexApproval = null;
 let pendingUserInput = null;
+let interactionUserInputAnswers = null;
 let finishManagedTurn = null;
 let clarificationAnswers = {};
 let activeThreadId = "interaction-thread";
@@ -456,10 +457,18 @@ contextBridge.exposeInMainWorld("desktop", {
       { id: "command", status: "passed", label: "固定测试命令", detail: "固定入口已授权。" },
     ],
   }),
+  // 独立场景直接提供人物待答请求，不创建正式会话或执行任务。
+  setInteractionUserInput: async (request) => { pendingUserInput = request; interactionUserInputAnswers = null; },
+  getInteractionUserInputAnswers: async () => interactionUserInputAnswers,
   getCodexUserInputs: async () => pendingUserInput ? [pendingUserInput] : [],
   resolveCodexUserInput: async ({ requestId, answers }) => {
     if (!pendingUserInput || pendingUserInput.requestId !== requestId || Object.keys(answers || {}).length !== 1) {
       throw new Error("Invalid isolated user input response.");
+    }
+    if (requestId >= 1_000_000) {
+      interactionUserInputAnswers = { requestId, answers };
+      pendingUserInput = null;
+      return;
     }
     clarificationAnswers = { ...clarificationAnswers, ...answers };
     if (requestId === 7001) {

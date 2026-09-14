@@ -1314,3 +1314,35 @@ test("空任务起点连续排列并导航到可输入的韩立会话", async ({
   await page.screenshot({ path: testInfo.outputPath("hanli-input.png") });
   await expect(page.locator("#developer-task-list").getByRole("button", { name: /任务协作群.*0/ })).toBeVisible();
 });
+
+test("人物待答问题在无主会话活动消息时仍可确认并返回确切请求", async ({}, testInfo) => {
+  await page.getByRole("button", { name: "协同模式", exact: true }).click();
+  for (const name of ["韩立", "南宫婉", "令狐老祖"]) {
+    await page.getByRole("button", { name: new RegExp("^" + name + " ") }).click();
+    const request = {
+      requestId: 1_000_071,
+      questions: [{ id: "build_authorization", header: "令狐老祖 · 验证方式",
+        question: "当前修改已完成，是否交回统一验证？",
+        options: [{ label: "交回统一验证", description: "保留修改，由验证流程构建。" }] }],
+    };
+    await page.evaluate((value) => (window as any).desktop.setInteractionUserInput(value), request);
+    const dialog = page.getByRole("dialog").filter({ has: page.getByRole("region", { name: "待确认问题" }) });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole("region", { name: "待确认问题" })).toHaveCount(1);
+    await expect(dialog.getByRole("button", { name: "确认", exact: true })).toBeDisabled();
+    await dialog.getByRole("radio", { name: /交回统一验证/ }).click();
+    await page.getByRole("button", { name: /^任务协作群/ }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: /交回统一验证/ })).toHaveAttribute("aria-checked", "true");
+    const bounds = await dialog.boundingBox();
+    const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+    expect(bounds!.y + bounds!.height).toBeLessThan(viewport.height - 100);
+    if (name === "令狐老祖") await page.screenshot({ path: testInfo.outputPath("persona-pending-input.png") });
+    await dialog.getByRole("button", { name: "确认", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => page.evaluate(() => (window as any).desktop.getInteractionUserInputAnswers()))
+      .toEqual({ requestId: request.requestId, answers: { build_authorization: ["交回统一验证"] } });
+  }
+});

@@ -5,7 +5,7 @@
  * 状态计算和事件细节统一放在 model/useDeveloperApplicationController.ts 中。
  */
 
-import { CodexApprovalDialog } from "../../features/conversation";
+import { CodexInteractionDialog } from "../../features/conversation";
 import { DeveloperSidebarControls } from "./components/DeveloperSidebarControls";
 import { DeveloperShell, DeveloperTitleBar } from "./layout/DeveloperShell";
 import { DeveloperStatusBar } from "./layout/DeveloperStatusBar";
@@ -51,7 +51,7 @@ export function DeveloperApplication() {
   const explorer = viewModel.explorer;
   const workspace = viewModel.workspace;
   const statusBar = viewModel.statusBar;
-  const approvalDialog = viewModel.approvalDialog;
+  const interactionDialog = viewModel.interactionDialog;
 
   // 第四步：按照用户实际看到的窗口结构，从外到内、从上到下组合页面。
   return (
@@ -91,9 +91,9 @@ export function DeveloperApplication() {
       />
 
       {/* 审批对话框以模态方式覆盖整个窗口，不占据网格位置。 */}
-      <CodexApprovalDialog
-        controller={approvalDialog.controller}
-        locale={approvalDialog.locale}
+      <CodexInteractionDialog
+        controller={interactionDialog.controller}
+        locale={interactionDialog.locale}
       />
     </DeveloperShell>
   );

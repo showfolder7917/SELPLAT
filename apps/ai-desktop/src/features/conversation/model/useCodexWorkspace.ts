@@ -38,7 +38,6 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
   } = conversation;
   const interaction = useCodexInteractionRequests({
     browserOpenedMessage: options.browserOpenedMessage,
-    onError: (message) => dispatch.setError(message),
     onLogout: () => { activeAssistantIdRef.current = null; setMessages([]); },
     onTrustedCommandChanged: options.onTrustedCommandChanged,
   });

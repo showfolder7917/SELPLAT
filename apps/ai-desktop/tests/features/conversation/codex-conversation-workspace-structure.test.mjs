@@ -25,7 +25,9 @@ test("Codex 会话页按 Section、数据结构和专属可见区域分开职责
 
 test("Codex 会话子模块使用具名操作而不在 JSX 中压缩异步流程", () => {
   assert.match(timeline, /async function advanceManagedStage/);
-  assert.match(timeline, /function chooseUserInputAnswer/);
+  const interactions = read("../../../src/features/conversation/components/CodexInteractionDialog.tsx");
+  assert.match(interactions, /function chooseUserInputAnswer/);
+  assert.doesNotMatch(timeline, /CodexUserInputPanel|showsUserInput/);
   assert.match(composer, /function submitConversation/);
   assert.match(composer, /function recoverInterruptedTask/);
   assert.match(composer, /function captureScreenWithoutDesktop/);

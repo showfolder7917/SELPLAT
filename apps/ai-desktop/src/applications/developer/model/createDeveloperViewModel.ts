@@ -110,7 +110,7 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       locale: controller.settings.locale,
     },
     // 审批弹窗继续复用主会话控制器，但不接触其他应用状态。
-    approvalDialog: {
+    interactionDialog: {
       controller: controller.codex,
       locale: controller.settings.locale,
     },

@@ -4,7 +4,7 @@
  */
 
 /** Codex 授权对话框：显示命令授权并回传客户决定。 */
-export { CodexApprovalDialog } from "./components/CodexApprovalDialog";
+export { CodexInteractionDialog } from "./components/CodexInteractionDialog";
 /** Codex 会话工作区：展示消息、实时输出和发送区域。 */
 export { CodexConversationWorkspace } from "./components/CodexConversationWorkspace";
 /** Markdown 消息视图：供人物与协作页面一致渲染 AI 回复。 */

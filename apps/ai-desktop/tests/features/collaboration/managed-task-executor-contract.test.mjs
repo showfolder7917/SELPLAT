@@ -30,7 +30,7 @@ const ipc = [
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const developerApp = [
   "../../../src/applications/developer/DeveloperApplication.tsx",
-  "../../../src/features/conversation/components/CodexApprovalDialog.tsx",
+  "../../../src/features/conversation/components/CodexInteractionDialog.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace.tsx",
   "../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer.tsx",
   "../../../src/features/conversation/components/ManagedStageAction.tsx",

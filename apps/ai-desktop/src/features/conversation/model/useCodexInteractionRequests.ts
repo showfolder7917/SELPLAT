@@ -8,13 +8,12 @@ const EMPTY_STATUS: CodexHarnessStatusOutDto = { connected: false, account: EMPT
 
 type InteractionRequestOptions = {
   browserOpenedMessage: string;
-  onError: (message: string) => void;
   onLogout: () => void;
   onTrustedCommandChanged: () => void;
 };
 
 /** Codex 账号状态、审批请求和结构化追问的唯一 Renderer 状态所有者。 */
-export function useCodexInteractionRequests({ browserOpenedMessage, onError, onLogout, onTrustedCommandChanged }: InteractionRequestOptions) {
+export function useCodexInteractionRequests({ browserOpenedMessage, onLogout, onTrustedCommandChanged }: InteractionRequestOptions) {
   const [status, setStatus] = useState<CodexHarnessStatusOutDto>(EMPTY_STATUS);
   const [approval, setApproval] = useState<CodexApprovalOutDto | null>(null);
   const [userInputRequest, setUserInputRequest] = useState<CodexUserInputRequestOutDto | null>(null);
@@ -22,6 +21,7 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
   const [customAnswerIds, setCustomAnswerIds] = useState<Set<string>>(new Set());
   const [confirmedQuestionIds, setConfirmedQuestionIds] = useState<Set<string>>(new Set());
   const [userInputSubmitting, setUserInputSubmitting] = useState(false);
+  const [userInputError, setUserInputError] = useState("");
   const [loginHint, setLoginHint] = useState("");
 
   useEffect(() => {
@@ -38,6 +38,7 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
   }, []);
 
   useEffect(() => {
+    setUserInputError("");
     if (!userInputRequest) {
       setUserInputAnswers({});
       setCustomAnswerIds(new Set());
@@ -83,11 +84,12 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
     const answers: Record<string, string[]> = Object.fromEntries(userInputRequest.questions.map((question) => [question.id, [userInputAnswers[question.id]?.trim() || ""]]));
     if (Object.values(answers).some((values) => !values[0])) return;
     setUserInputSubmitting(true);
+    setUserInputError("");
     try {
       await getOptionalCodexDesktopApi()?.resolveCodexUserInput({ requestId: userInputRequest.requestId, answers });
       setUserInputRequest(null);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Unable to submit clarification answers.");
+      setUserInputError(error instanceof Error ? error.message : "Unable to submit clarification answers.");
       setConfirmedQuestionIds((current) => {
         const next = new Set(current);
         next.delete(questionId);
@@ -99,6 +101,6 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onError, onL
 
   return {
     status, approval, userInputRequest, setUserInputRequest, userInputAnswers, setUserInputAnswers, customAnswerIds,
-    setCustomAnswerIds, confirmedQuestionIds, userInputSubmitting, loginHint, setLoginHint, login, logout, resolveApproval, submitUserInput,
+    setCustomAnswerIds, confirmedQuestionIds, userInputSubmitting, userInputError, loginHint, setLoginHint, login, logout, resolveApproval, submitUserInput,
   };
 }
