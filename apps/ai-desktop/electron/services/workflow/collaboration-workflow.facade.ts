@@ -240,7 +240,7 @@ export class CollaborationCoordinator {
     return this.repairTechnicalFailure(taskId);
   }
 
-  /** 统一处理验证、发布基础设施和本地修改来源三类已有技术证据的调查修复。 */
+  /** 统一处理可由当前任务工作树修复的验证与发布基础设施故障。 */
   async repairTechnicalFailure(taskId: string): Promise<boolean> {
     const existing = this.#technicalRepairRuns.get(taskId);
     if (existing) return existing;
@@ -254,15 +254,13 @@ export class CollaborationCoordinator {
     // 冻结本轮统一测试失败事实，避免后续状态更新使可空字段与本次修复依据脱节。
     const integrationFailure = failedTask.integrationFailure;
     const repairableFailure = integrationFailure?.kind === "verification"
-      || integrationFailure?.kind === "infrastructure"
-      || integrationFailure?.kind === "local-change-ownership";
+      || integrationFailure?.kind === "infrastructure";
     if (!repairableFailure || !["test-failed", "blocked"].includes(failedTask.state)) return false;
     const originalFailureKind = integrationFailure.kind;
-    const ownershipFailure = originalFailureKind === "local-change-ownership";
-    const repairStartedEvent = ownershipFailure ? "execution.repair_started" : "unified_test.repair_started";
-    const repairInvestigatedEvent = ownershipFailure ? "execution.repair_investigated" : "unified_test.repair_investigated";
-    const repairCompletedEvent = ownershipFailure ? "execution.repair_completed" : "unified_test.repair_completed";
-    const repairFailedEvent = ownershipFailure ? "execution.repair_waiting" : "unified_test.repair_failed";
+    const repairStartedEvent = "unified_test.repair_started";
+    const repairInvestigatedEvent = "unified_test.repair_investigated";
+    const repairCompletedEvent = "unified_test.repair_completed";
+    const repairFailedEvent = "unified_test.repair_failed";
     const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
     if (linghu.state !== "idle") return false;
 
@@ -288,7 +286,7 @@ export class CollaborationCoordinator {
         current.repairKind = "execution";
         current.repairFailureReason = originalReason;
         current.currentHandler = participantSnapshot(handler);
-        const failureSource = ownershipFailure ? "本地修改目录和文件" : originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试";
+        const failureSource = originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试";
         current.blockingReason = `${handler.displayName}正在依据${failureSource}证据调查根本原因`;
         appendFlow(current, repairStartedEvent, "recovery", "started", current.blockingReason, handler, false, {
           failureStage: current.integrationFailure?.phase || "verification", failureSummary: originalReason,
@@ -305,12 +303,12 @@ export class CollaborationCoordinator {
         current.repairDiagnosis = diagnosis;
         current.phase = "implementing";
         requireMember(state, LINGHU_MEMBER_ID).phase = "implementing";
-        current.blockingReason = ownershipFailure ? "令狐老祖已查明本地修改来源，正在按调查结论修复" : "令狐老祖已完成失败候选只读调查，正在按调查结论修复";
+        current.blockingReason = "令狐老祖已完成失败候选只读调查，正在按调查结论修复";
         appendFlow(current, repairInvestigatedEvent, "recovery", "completed", current.blockingReason, requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis));
       });
       const repaired = await repairSession.executeRepair(this.#store.task(taskId), diagnosis, (event) => this.#emitRepairProgress(taskId, event));
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；")
-        || (ownershipFailure ? "本地修改来源修复未完成代码级验证" : "统一测试修复未完成代码级验证"));
+        || "统一测试修复未完成代码级验证");
       const resultSha = await this.#workspaces.commitTaskResult(
         this.#store.task(taskId),
         linghu.displayName,
@@ -332,31 +330,27 @@ export class CollaborationCoordinator {
         current.finalResult = repaired.text;
         current.resultSummary = createCollaborationResultSummary(current, repaired.text, repaired.pendingActions);
         current.unifiedTest = { status: "pending", owner: participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), failureReason: null, startedAt: null, completedAt: null };
-        appendFlow(current, repairCompletedEvent, "recovery", "completed", ownershipFailure
-          ? "令狐老祖已完成本地修改来源修复并生成新结果版本，等待重新集成验证"
-          : "令狐老祖已完成失败项修复并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis, repaired.text));
+        appendFlow(current, repairCompletedEvent, "recovery", "completed", "令狐老祖已完成失败项修复并生成新结果版本，等待重新统一测试", requireMember(state, LINGHU_MEMBER_ID), false, flowRepairDetails(current, diagnosis, repaired.text));
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
       this.#integrationPipeline.trackWaitingTask(taskId, {
         segment: "integration-wait",
         waitType: "recovery-wait",
-        reasonCode: ownershipFailure ? "local-change-repair-completed" : "unified-test-repair-completed",
+        reasonCode: "unified-test-repair-completed",
         resource: "integration-coordinator",
         resourceOwner: null,
       });
       this.#integrationPipeline.schedule();
       return true;
     } catch (error) {
-      // 调查修复未解除时保留原始证据；本地归属问题随后才进入客户操作兜底。
+      // 调查修复未解除时保留原始证据，后续由统一测试失败路径继续处理。
       this.#store.updateTask(taskId, repairFailedEvent, (current, state) => {
         current.state = originalFailureKind === "verification" ? "test-failed" : "blocked";
         current.phase = null;
         current.repairKind = null;
         current.repairFailureReason = errorMessage(error);
         current.blockingReason = originalReason;
-        appendFlow(current, repairFailedEvent, "recovery", ownershipFailure ? "waiting" : "failed", ownershipFailure
-          ? `令狐老祖已完成来源调查，但尚不能安全处理这些本地修改：${errorMessage(error)}`
-          : `令狐老祖修复统一测试失败：${errorMessage(error)}`, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
+        appendFlow(current, repairFailedEvent, "recovery", "failed", `令狐老祖修复统一测试失败：${errorMessage(error)}`, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), true);
         releaseMemberFromState(state, LINGHU_MEMBER_ID);
       });
       return true;
@@ -391,12 +385,36 @@ export class CollaborationCoordinator {
   }
 
   resumePendingWork(): void {
-    // 应用重建后的统一恢复入口先接续全部失败类型，再恢复普通执行和集成队列。
+    // 旧版曾把本地归属等待误写为源码修复；恢复时先还原为客户处理卡点，避免重启后继续执行无权处理的修改。
+    this.#restoreLegacyLocalChangeOwnershipWaits();
+    // 应用重建后的统一恢复入口先接续全部可修复失败，再恢复普通执行和集成队列。
     const state = this.state();
     this.#scheduleUnifiedTestRepairs(state);
     this.#scheduleMergeConflictCorrections(state);
     this.#scheduleExecutionRepairs(state);
     this.#schedule();
+  }
+
+  /** 保留任务结果和原始归属证据，退役旧版错误创建的源码修复状态。 */
+  #restoreLegacyLocalChangeOwnershipWaits(): void {
+    const taskIds = this.state().tasks
+      .filter((task) => task.state === "repairing-execution" && task.integrationFailure?.kind === "local-change-ownership")
+      .map((task) => task.taskId);
+    for (const taskId of taskIds) {
+      this.#store.updateTask(taskId, "integration.local_change_ownership_wait_restored", (current, state) => {
+        if (current.state !== "repairing-execution" || current.integrationFailure?.kind !== "local-change-ownership") return;
+        current.state = "blocked";
+        current.phase = null;
+        current.repairKind = null;
+        current.repairFailureReason = null;
+        current.currentHandler = null;
+        current.blockingReason = current.integrationFailure.summary || "合并前无法确认本地修改归属";
+        for (const member of state.members.filter((candidate) => candidate.currentTaskId === current.taskId)) {
+          releaseMemberFromState(state, member.memberId);
+        }
+        appendFlow(current, "integration.local_change_ownership_wait_restored", "recovery", "waiting", "已保留未登记本地修改证据，等待客户确认文件归属", null, false);
+      });
+    }
   }
 
   confirmPublishedRestart(): number[] { return this.#integrationPipeline.confirmPublishedRestart(); }

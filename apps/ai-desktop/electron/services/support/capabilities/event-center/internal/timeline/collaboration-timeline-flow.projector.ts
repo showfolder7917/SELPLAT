@@ -328,12 +328,13 @@ export function projectCollaborationFlowEvent(
     })]);
   }
 
-  if (event.type === "integration.local_change_ownership_blocked" || event.type === "integration.merge_conflict") {
-    const ownership = event.type === "integration.local_change_ownership_blocked";
+  if (event.type === "integration.local_change_ownership_blocked" || event.type === "integration.local_change_ownership_wait_restored" || event.type === "integration.merge_conflict") {
+    const ownership = event.type === "integration.local_change_ownership_blocked" || event.type === "integration.local_change_ownership_wait_restored";
+    const ownershipWaitRestored = event.type === "integration.local_change_ownership_wait_restored";
     const facts = [fact({
       nodeId: `integration-blocked:${task.taskId}:${task.integrationGeneration || 0}:${event.type}`, kind: "repair",
       actor: event.actor || LINGHU, recipients: [initiator], status: "waiting",
-      action: ownership ? "检测到本地未提交修改" : "等待修正合并冲突", summary: event.summary, content: event.summary,
+      action: ownershipWaitRestored ? "本地修改归属等待已恢复" : ownership ? "检测到本地未提交修改" : "等待修正合并冲突", summary: event.summary, content: event.summary,
       detail: task.integrationFailure?.detail || task.blockingReason || event.summary, startedAt: event.occurredAt,
       completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
     })];

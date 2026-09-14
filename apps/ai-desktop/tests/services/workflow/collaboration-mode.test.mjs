@@ -791,7 +791,7 @@ test("同一统一测试故障只触发一次令狐源码修复", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("令狐先调查本地修改来源，未能安全修复后才给客户具体目录和文件", async () => {
+test("令狐为未登记本地修改直接生成客户处理步骤，不启动源码修复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-local-change-ownership-"));
   try {
     const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -823,7 +823,7 @@ test("令狐先调查本地修改来源，未能安全修复后才给客户具�
       setMode: (mode) => collaborationStore.setMode(mode),
       continueTask: () => { continueRequests += 1; return collaborationStore.state(); },
       recoverTask: () => { continueRequests += 1; return collaborationStore.state(); },
-      repairTechnicalFailure: async () => { repairRequests += 1; return true; },
+      repairTechnicalFailure: async () => { repairRequests += 1; throw new Error("本地修改归属不得进入源码修复"); },
       recordCustomerActionGuidance: (taskId, guidance) => collaborationStore.updateTask(taskId, "customer.action_required", (task) => {
         task.customerActionGuidance = guidance;
         task.flowEvents.push({ eventId: guidance.guidanceId, type: "customer.action_required", stage: "recovery", status: "waiting", actor: guidance.generatedBy, summary: guidance.title, occurredAt: guidance.createdAt, error: false, details: { customerActionGuidance: guidance } });
@@ -850,7 +850,7 @@ test("令狐先调查本地修改来源，未能安全修复后才给客户具�
     await facade.checkNow();
     await facade.checkNow();
     assert.equal(continueRequests, 0);
-    assert.equal(repairRequests, 1);
+    assert.equal(repairRequests, 0);
     assert.equal(guidanceAnalysisRequests, 1);
     assert.equal(guidanceFacts.workspaceRoot, projectRoot);
     assert.deepEqual(guidanceFacts.uncommittedFiles, ["apps/ai-desktop/electron/main.ts"]);
@@ -913,48 +913,6 @@ test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失�
     assert.equal(repaired.unifiedTest.status, "pending");
     assert.equal(repaired.flowEvents.some((event) => event.type === "unified_test.repair_completed"), true);
     assert.ok(integrationSchedules >= 1);
-    await coordinator.dispose();
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
-test("本地修改归属技术卡点沿统一技术修复入口先调查再重新集成", async () => {
-  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-local-change-repair-"));
-  try {
-    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
-    store.setMode("collaboration");
-    const submitted = store.submitTask({ title: "调查本地修改来源", problemStatement: "主工作区出现未知修改", confirmedIntent: "查明来源并修复后重新集成", workspaceState, locale: "zh-CN" });
-    store.updateTask(submitted.taskId, "fixture.local_change_blocked", (task) => {
-      task.state = "blocked";
-      task.versionWorkspace = { workspaceId: "worktree:local", rootPath: directory, branchName: "codex/local", baseSha: "base", resultSha: "old-result", createdAt: new Date().toISOString(), retiredAt: null };
-      task.blockingReason = "合并前无法确认本地修改归属";
-      task.integrationFailure = { kind: "local-change-ownership", phase: "preparation", workspaceRoot: projectRoot,
-        detail: "main.ts 未登记到任何待集成任务", conflictFiles: ["apps/ai-desktop/electron/main.ts"], baseSha: "base", resultSha: "old-result", generation: 3, occurredAt: new Date().toISOString() };
-    });
-    let investigation = "";
-    let schedules = 0;
-    const coordinator = new CollaborationCoordinator({
-      store,
-      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
-      workspaces: { commitTaskResult: async () => "local-repair-result" },
-      executor: new ExecutorFacade({ createExecutor: async () => ({
-        isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async () => { throw new Error("不得执行原专题方案"); },
-        investigateRepair: async (_task, failure) => { investigation = failure; return "修复产生主工作区副本的依赖隔离错误"; },
-        executeRepair: async () => ({ status: "code-verified", text: "已修复副本来源", pendingActions: [], changedFiles: ["dependency.ts"], successfulCommands: ["npm test"] }),
-        dispose: async () => undefined,
-      }) }),
-      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => { schedules += 1; }, dispose: () => undefined },
-      emitState: () => undefined, emitStream: () => undefined,
-    });
-    assert.equal(await coordinator.repairTechnicalFailure(submitted.taskId), true);
-    const repaired = store.task(submitted.taskId);
-    assert.ok(investigation.includes(projectRoot));
-    assert.match(investigation, /apps\/ai-desktop\/electron\/main\.ts/);
-    assert.equal(repaired.state, "ready-for-integration");
-    assert.equal(repaired.integrationFailure, null);
-    assert.equal(repaired.versionWorkspace.resultSha, "local-repair-result");
-    assert.equal(repaired.flowEvents.some((event) => event.type === "execution.repair_investigated"), true);
-    assert.equal(repaired.flowEvents.some((event) => event.type === "execution.repair_completed"), true);
-    assert.ok(schedules >= 1);
     await coordinator.dispose();
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -1719,6 +1677,50 @@ test("本地修改归属未形成客户操作指导时禁止进入虚假恢复",
     assert.equal(continued.customerActionGuidance, null);
     assert.match(continued.flowEvents.at(-1).summary, /令狐老祖正在复查客户处理结果/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("恢复旧版本地归属修复状态时只等待客户处理，不启动令狐源码修复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "ownership-no-source-repair-"));
+  let coordinator;
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    store.setMode("collaboration");
+    const submitted = store.submitTask({ title: "本地修改归属", problemStatement: "主工作区有未登记文件", confirmedIntent: "等待文件所有者确认归属。", workspaceState, locale: "zh-CN" });
+    store.updateTask(submitted.taskId, "fixture.legacy_ownership_repair", (task, state) => {
+      task.state = "repairing-execution";
+      task.phase = "analyzing";
+      task.repairKind = "execution";
+      task.repairFailureReason = "合并前无法确认本地修改归属";
+      task.blockingReason = "合并前无法确认本地修改归属";
+      task.versionWorkspace = { workspaceId: "legacy-worktree", rootPath: directory, branchName: "codex/legacy", baseSha: "base", resultSha: "result", createdAt: new Date().toISOString(), retiredAt: null };
+      task.integrationFailure = { kind: "local-change-ownership", summary: "合并前无法确认本地修改归属", detail: "docs/问题.md 未登记", conflictFiles: ["docs/问题.md"], baseSha: "base", resultSha: "result", generation: 170, occurredAt: new Date().toISOString() };
+      const linghu = state.members.find((member) => member.memberId === "linghu-ancestor");
+      linghu.state = "working";
+      linghu.role = "executor";
+      linghu.phase = "analyzing";
+      linghu.currentTaskId = task.taskId;
+    });
+    let executorCreated = false;
+    coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { commitTaskResult: async () => "unexpected-result" },
+      executor: new ExecutorFacade({ createExecutor: async () => { executorCreated = true; throw new Error("本地归属等待不得创建源码修复会话"); } }),
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+
+    coordinator.resumePendingWork();
+    assert.equal(executorCreated, false);
+    const blocked = store.task(submitted.taskId);
+    assert.equal(blocked.state, "blocked");
+    assert.equal(blocked.versionWorkspace.resultSha, "result");
+    assert.equal(blocked.integrationFailure.kind, "local-change-ownership");
+    assert.equal(store.state().members.find((member) => member.memberId === "linghu-ancestor").state, "idle");
+    assert.equal(blocked.flowEvents.some((event) => event.type === "integration.local_change_ownership_wait_restored"), true);
+    assert.equal(blocked.flowEvents.some((event) => event.type === "execution.repair_started"), false);
+  } finally { await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("重启后的恢复态合并冲突不依赖主动巡检或人工点击并自动交给令狐修正", async () => {
