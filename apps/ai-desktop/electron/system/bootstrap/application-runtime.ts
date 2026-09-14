@@ -1010,12 +1010,12 @@ export async function startApplication(): Promise<void> {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         return await Promise.race([
-          submission.run(goal, (requestId, attempt, retryContext) => service.send(
+          submission.run(goal, (requestId, attempt, planningContext) => service.send(
             `${attempt === 2
-              ? retryContext
-                ? `上一回合已经调用场景提交工具，但参数未通过校验：${retryContext.rejectionMessage}\n本轮目标要求的夹具场景：${JSON.stringify({ requiredSceneKinds: retryContext.requiredSceneKinds })}\n请按当前目标重新生成场景计划，把必需场景绑定到能证明该夹具的原条件后调用 hanli_submit_acceptance_scene；不要读取、沿用或补写被拒绝的计划，也不要只回复说明文字。\n\n`
-                : "上一回合没有调用场景提交工具。请保留原判断并立即通过 hanli_submit_acceptance_scene 提交；不要只回复说明文字。\n\n"
-              : ""}${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
+              ? planningContext.rejectionMessage
+                ? `上一回合已经调用场景提交工具，但参数未通过校验：${planningContext.rejectionMessage}\n`
+                : "上一回合没有调用场景提交工具。\n"
+              : ""}本轮结构化场景计划契约：${JSON.stringify({ criteria: planningContext.criteria, requiredSceneKinds: planningContext.requiredSceneKinds })}\n每个 criterionId 必须在全部 segments 中恰好出现一次；请按当前目标重新生成后调用 hanli_submit_acceptance_scene。不要读取、沿用或补写被拒绝的计划，也不要只回复说明文字。\n\n${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
             settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
           )),
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("韩立场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),
