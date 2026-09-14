@@ -488,6 +488,12 @@ test("截图发送验收条件明确引导受控截图动作，不能退回纯�
   assert.match(prompt, /截图发送、附件显示或历史关联时，必须改用 `send-test-screenshot`/);
   assert.match(prompt, /不能用 `send-test-message` 替代/);
 });
+test("一次性恢复入口的焦点证据必须在点击前取得", () => {
+  const prompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
+  assert.match(prompt, /点击“从卡点继续”前先用 `hover`/);
+  assert.match(prompt, /`key: "Tab"`/);
+  assert.match(prompt, /不能倒序补验焦点/);
+});
 test("模型验收只聚焦韩立、南宫婉或设置模型控件，值仍由真实键盘输入改变", async () => {
   const f = fixture();
   const run = await f.run(async (tools) => {
