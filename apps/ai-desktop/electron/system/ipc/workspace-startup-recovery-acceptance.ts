@@ -22,14 +22,17 @@ export async function runWorkspaceStartupRecoveryAcceptance(options: {
   const isolationRoot = mkdtempSync(path.join(options.temporaryParent, "ai-desktop-workspace-restart-"));
   const projectRoot = path.join(isolationRoot, "project");
   const applicationRoot = path.join(projectRoot, "apps", "ai-desktop");
+  const databaseRoot = path.join(applicationRoot, "db");
   const userDataRoot = path.join(isolationRoot, "user-data");
   const temporaryRoot = path.join(isolationRoot, "temp");
   const staleRoot = path.join(temporaryRoot, "stale-fixture");
   const unmarkedRoot = path.join(temporaryRoot, "unmarked-workspace");
   const resultFile = path.join(isolationRoot, "result", "workspace-startup-recovery.json");
   try {
-    for (const directory of [applicationRoot, userDataRoot, staleRoot, unmarkedRoot]) mkdirSync(directory, { recursive: true });
+    for (const directory of [applicationRoot, databaseRoot, userDataRoot, staleRoot, unmarkedRoot]) mkdirSync(directory, { recursive: true });
     writeFileSync(path.join(applicationRoot, "package.json"), `${JSON.stringify({ name: "ai-desktop", version: "0.1.1" })}\n`, "utf8");
+    // 启动路径审计会先读取工程内唯一数据库配置；夹具必须提供完整的最小工程结构，不能依赖正式工程文件。
+    writeFileSync(path.join(databaseRoot, "ai-memory-paths.json"), `${JSON.stringify({ schemaVersion: 2, databaseFile: "events.sqlite3" })}\n`, "utf8");
     writeFileSync(path.join(staleRoot, WORKSPACE_ACCEPTANCE_FIXTURE_MARKER_NAME), JSON.stringify(WORKSPACE_ACCEPTANCE_FIXTURE_MARKER), "utf8");
     writeFileSync(path.join(userDataRoot, "workspace-profiles.json"), `${JSON.stringify({
       permissionDefaultsVersion: 1,

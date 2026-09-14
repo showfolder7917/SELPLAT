@@ -46,6 +46,7 @@ test("工作区重启检查使用独立工程用户目录和临时根，并在�
   assert.ok(startApplication.indexOf("if (workspaceRecoveryCheck)") < startApplication.indexOf("createPersistenceContext"));
   assert.match(workspaceRecovery, /--ai-desktop-acceptance-isolation-root=/);
   assert.match(workspaceRecovery, /--ai-desktop-user-data-dir=/);
+  assert.match(workspaceRecovery, /ai-memory-paths\.json[\s\S]*schemaVersion: 2[\s\S]*events\.sqlite3/);
   assert.match(workspaceRecovery, /new WorkspaceAcceptanceFixture\(workspaces, check\.temporaryRoot\)/);
   assert.match(workspaceRecovery, /staleDirectoryRemoved.*staleRegistrationRemoved.*unmarkedWorkspacePreserved.*primaryWorkspacePreserved/s);
   assert.doesNotMatch(workspaceRecovery, /writeFileSync\([^\n]*(formalProjectRoot|formalUserDataRoot)/);
