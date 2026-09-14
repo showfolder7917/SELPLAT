@@ -14,7 +14,7 @@ async function bundledSourceModule(file) {
 const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-scene.ts");
 const { inspectAcceptanceRunEvidence } = await sourceModule("electron/services/personas/hanli/domain/acceptance-run-evidence.policy.ts");
 const { createCompletionGateGoal, createSegmentGoal } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-goals.ts");
-const { assertSegmentAcceptanceRun, mergeAcceptanceRuns } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
+const { appendRelatedAcceptanceRun, assertSegmentAcceptanceRun, mergeAcceptanceRuns } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const { AcceptanceEmptyTaskGroupSession } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
 const { runHanliAcceptanceSceneSession } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-session.ts");
@@ -54,10 +54,10 @@ const collaborationStateProjectionGoal = {
     instructions: ["只观察状态读取结果。"],
   },
 };
-const segment = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, conditions: [
+const segment = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, ownedConditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
-] };
+], relatedCriterionIds: [] };
 const plan = { reason: "使用隔离空任务场景", segments: [segment] };
 
 async function registerPlan(submission, requestId, candidate) {
@@ -92,7 +92,7 @@ test("场景缺项、重复、未知类型不能默认进入正式窗口", () =>
   for (const invalid of [
     { ...plan, segments: [{ ...segment, kind: "guess" }] },
     { ...plan, segments: [] },
-    { ...plan, segments: [{ ...segment, conditions: [segment.conditions[0], segment.conditions[0]] }] },
+    { ...plan, segments: [{ ...segment, ownedConditions: [segment.ownedConditions[0], segment.ownedConditions[0]] }] },
     { ...plan, reason: "" },
     { ...plan, segments: [{ ...segment, completionReviewRequired: undefined }] },
     { ...plan, segments: [{ ...segment, completionReviewRequired: true }] },
@@ -143,8 +143,8 @@ test("协作状态夹具只能覆盖同步中与状态暂未更新", () => {
 });
 test("工作区收尾与重启证据必须在夹具之后由专用生命周期场景复核", () => {
   const lifecycleGoal = { ...workspaceFixtureGoal, interactionCapabilities: ["workspace-explorer", "workspace-cleanup-recovery", "workspace-startup-recovery"] };
-  const fixtureSegment = { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] };
-  const lifecycleSegment = { ...segment, kind: "workspace-lifecycle-review", conditions: [segment.conditions[1]] };
+  const fixtureSegment = { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[0]] };
+  const lifecycleSegment = { ...segment, kind: "workspace-lifecycle-review", ownedConditions: [segment.ownedConditions[1]] };
   assert.deepEqual(validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, lifecycleSegment] }, lifecycleGoal), { ...plan, segments: [fixtureSegment, lifecycleSegment] });
   assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [lifecycleSegment, fixtureSegment] }, lifecycleGoal), /紧接夹具阶段/);
   assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, { ...lifecycleSegment, kind: "completed-recovery-timeline" }] }, lifecycleGoal), /生命周期复核/);
@@ -153,8 +153,8 @@ test("一次性工作区夹具不能被拆分到多个正式验收阶段", () =>
   const splitFixturePlan = {
     ...plan,
     segments: [
-      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+      { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   assert.throws(() => validateAcceptanceScenePlan(splitFixturePlan, workspaceFixtureGoal), /一次性工作区夹具只能使用一个验收阶段/);
@@ -163,18 +163,18 @@ test("不同证据源可以分段覆盖原条件且每项只能出现一次", ()
   const composite = {
     reason: "功能行为与真实交接分别取证",
     segments: [
-      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "current-window", conditions: [segment.conditions[1]] },
+      { ...segment, kind: "persona-conversation-lifecycle", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "current-window", ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   assert.deepEqual(validateAcceptanceScenePlan(composite, currentWindowGoal), composite);
   assert.throws(() => validateAcceptanceScenePlan({
     ...composite,
-    segments: composite.segments.map((item) => ({ ...item, conditions: [segment.conditions[0]] })),
-  }, currentWindowGoal), /逐项覆盖/);
+    segments: composite.segments.map((item) => ({ ...item, ownedConditions: [segment.ownedConditions[0]] })),
+  }, currentWindowGoal), /重复占用/);
 });
 test("分段目标直接携带原条件编号并拒绝按局部位置重编号", () => {
-  const secondSegment = { ...segment, conditions: [segment.conditions[1]] };
+  const secondSegment = { ...segment, ownedConditions: [segment.ownedConditions[1]] };
   const localRun = {
     version: 2, runId: "run-1", topicId: "t", proposalId: "p", criteria: [goal.criteria[1]], status: "passed",
     windowTitle: "AI Desktop", initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
@@ -202,8 +202,8 @@ test("完成前内部检查不继承多项客户条件编号", () => {
 });
 
 test("一次性工作区夹具只投影给正式夹具场景", () => {
-  const currentWindowSegment = { ...segment, kind: "current-window", conditions: [segment.conditions[0]] };
-  const fixtureSegment = { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] };
+  const currentWindowSegment = { ...segment, kind: "current-window", ownedConditions: [segment.ownedConditions[0]] };
+  const fixtureSegment = { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[1]] };
 
   const currentWindowGoal = createSegmentGoal(workspaceFixtureGoal, currentWindowSegment);
   const fixtureGoal = createSegmentGoal(workspaceFixtureGoal, fixtureSegment);
@@ -233,8 +233,8 @@ test("场景会话只在正式夹具阶段激活一次性目录", async () => {
   const fixturePlan = {
     reason: "前置真实窗口后再操作夹具",
     segments: [
-      { ...segment, kind: "current-window", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+      { ...segment, kind: "current-window", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   await runHanliAcceptanceSceneSession({
@@ -273,7 +273,7 @@ test("最终验收记录在提交前逐项诊断重复、缺失和未登记的�
   assert.equal(missingLayout.criteria[1].valid, false);
 });
 test("操作轨迹与逐条件结论分离后仍能通过场景编号校验并保留复现顺序", () => {
-  const segmentWithTwoCriteria = { ...segment, conditions: [segment.conditions[0], { criterionId: "criterion-2", condition: goal.criteria[1] }] };
+  const segmentWithTwoCriteria = { ...segment, ownedConditions: [segment.ownedConditions[0], { criterionId: "criterion-2", condition: goal.criteria[1] }] };
   const run = {
     version: 2, runId: "interaction-run", topicId: "t", proposalId: "p", criteria: goal.criteria, status: "passed", windowTitle: "AI Desktop",
     initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
@@ -299,8 +299,8 @@ test("多阶段编排依次使用隔离会话与真实窗口并汇总原条件",
   const composite = {
     reason: "功能和审计分别取证",
     segments: [
-      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "current-window", conditions: [segment.conditions[1]] },
+      { ...segment, kind: "persona-conversation-lifecycle", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "current-window", ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   const result = await runHanliAcceptanceSceneSession({
@@ -347,8 +347,8 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
   const completionPlan = {
     reason: "先验证普通条件，再在完成态复核最终条件",
     segments: [
-      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "current-window", completionReviewRequired: true, conditions: [segment.conditions[1]] },
+      { ...segment, kind: "persona-conversation-lifecycle", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "current-window", completionReviewRequired: true, ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   const result = await runHanliAcceptanceSceneSession({
@@ -385,8 +385,8 @@ test("工作区生命周期复核先统一收尾，再把恢复证据和前序�
   const execution = [], lifecycle = [];
   const cleanupEvidence = { status: "passed", failureSimulated: true, firstFailurePhase: "directory", firstFailureReason: "受控失败", recovered: true, workspaceRegistrationRemoved: true, directoryRemoved: true, windowProjectionReleased: true };
   const lifecyclePlan = { ...plan, segments: [
-    { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
-    { ...segment, kind: "workspace-lifecycle-review", conditions: [segment.conditions[1]] },
+    { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[0]] },
+    { ...segment, kind: "workspace-lifecycle-review", ownedConditions: [segment.ownedConditions[1]] },
   ] };
   const result = await runHanliAcceptanceSceneSession({
     goal: { ...workspaceFixtureGoal, interactionCapabilities: ["workspace-explorer", "workspace-cleanup-recovery"] }, plan: lifecyclePlan,
@@ -418,8 +418,8 @@ test("前序条件失败后仍采集完成态段的原条件证据，但不触�
   const completionPlan = {
     reason: "先记录失败条件，再收集当前窗口条件的真实证据",
     segments: [
-      { ...segment, kind: "persona-conversation-lifecycle", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "current-window", completionReviewRequired: true, conditions: [segment.conditions[1]] },
+      { ...segment, kind: "persona-conversation-lifecycle", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "current-window", completionReviewRequired: true, ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   const result = await runHanliAcceptanceSceneSession({
@@ -673,8 +673,8 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
   const splitFixturePlan = {
     ...plan,
     segments: [
-      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
-      { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+      { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[0]] },
+      { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[1]] },
     ],
   };
   const mergedFixturePlan = {
@@ -683,7 +683,8 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
       kind: "workspace-explorer-fixture",
       reason: "同一临时工作区完成全部取证",
       completionReviewRequired: false,
-      conditions: plan.segments.flatMap((item) => item.conditions),
+      ownedConditions: plan.segments.flatMap((item) => item.ownedConditions),
+      relatedCriterionIds: [],
     }],
   };
   const result = await submission.run(workspaceFixtureGoal, async (requestId, attempt, planningContext) => {
@@ -692,12 +693,12 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
         { criterionId: "criterion-1", text: goal.criteria[0] },
         { criterionId: "criterion-2", text: goal.criteria[1] },
       ]);
-      assert.deepEqual(planningContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
+      assert.deepEqual(planningContext.requirements, [{ requirementId: "workspace-acceptance-fixture", acceptedKinds: ["workspace-explorer-fixture"], completed: false }]);
       assert.equal((await registerPlan(submission, requestId, splitFixturePlan)).success, false);
       return;
     }
-    assert.match(planningContext.rejectionMessage, /一次性工作区夹具只能使用一个验收阶段/);
-    assert.deepEqual(planningContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
+    assert.match(planningContext.previousAttemptFailure, /一次性工作区夹具只能使用一个验收阶段/);
+    assert.deepEqual(planningContext.remainingRequirementIds, ["workspace-acceptance-fixture"]);
     assert.equal("submittedSceneKinds" in planningContext, false);
     assert.equal((await registerPlan(submission, requestId, mergedFixturePlan)).success, true);
   });
@@ -707,7 +708,7 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
 test("原条件遗漏时第二回合按当前目标重新生成完整编号计划且审计只保存结果", async () => {
   const rejections = [];
   const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
-  const omittedCriterionPlan = { ...plan, segments: [{ ...segment, conditions: [segment.conditions[0]] }] };
+  const omittedCriterionPlan = { ...plan, segments: [{ ...segment, ownedConditions: [segment.ownedConditions[0]] }] };
   let firstPlanningContext;
   let firstRequestId;
   const result = await submission.run(goal, async (requestId, attempt, planningContext) => {
@@ -726,7 +727,7 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
     }
     assert.notEqual(planningContext, firstPlanningContext);
     assert.notEqual(requestId, firstRequestId);
-    assert.equal(planningContext.rejectionMessage, "韩立验收场景计划未逐项覆盖原验收条件。");
+    assert.equal(planningContext.previousAttemptFailure, "韩立验收场景计划未逐项覆盖原验收条件。");
     assert.deepEqual(planningContext.criteria, [
       { criterionId: "criterion-1", text: goal.criteria[0] },
       { criterionId: "criterion-2", text: goal.criteria[1] },
@@ -735,10 +736,10 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
-  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件。", invalidFields: undefined, missingCriterionIds: ["criterion-2"], duplicateCriterionIds: undefined, unknownCriterionIds: undefined }]);
+  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件。" }]);
 });
 
-test("无效阶段返回脱敏字段摘要，第二回合按当前协议重新登记", async () => {
+test("无效阶段返回真实拒绝原因，第二回合从空权威模型重新登记", async () => {
   const rejections = [];
   const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
   let firstRequestId;
@@ -756,13 +757,12 @@ test("无效阶段返回脱敏字段摘要，第二回合按当前协议重新�
       return;
     }
     assert.notEqual(requestId, firstRequestId);
-    assert.deepEqual(planningContext.rejectionSummary, { invalidFields: ["kind"], missingCriterionIds: undefined, duplicateCriterionIds: undefined, unknownCriterionIds: undefined });
+    assert.equal(planningContext.previousAttemptFailure, "韩立未提交有效的验收场景阶段。");
+    assert.deepEqual(planningContext.remainingCriterionIds, ["criterion-1", "criterion-2"]);
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
-  assert.deepEqual(rejections, [{ message: "韩立未提交有效的验收场景阶段。", invalidFields: ["kind"], missingCriterionIds: undefined, duplicateCriterionIds: undefined, unknownCriterionIds: undefined }]);
-  assert.match(submission.planningInstruction, /"allowedKinds"/);
-  assert.match(submission.planningInstruction, /"empty-task-group"/);
+  assert.deepEqual(rejections, [{ message: "韩立未提交有效的验收场景阶段。" }]);
 });
 
 test("协作状态夹具的两种允许阶段由同一需求规则校验和纠正", async () => {
@@ -774,11 +774,69 @@ test("协作状态夹具的两种允许阶段由同一需求规则校验和纠�
       assert.equal((await registerPlan(submission, requestId, omittedFixturePlan)).success, false);
       return;
     }
-    assert.equal(planningContext.rejectionMessage, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
-    assert.deepEqual(planningContext.requiredSceneKinds, ["collaboration-state-syncing", "collaboration-state-unavailable"]);
+    assert.equal(planningContext.previousAttemptFailure, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
+    assert.deepEqual(planningContext.requirements, [{ requirementId: "collaboration-state-projection", acceptedKinds: ["collaboration-state-syncing", "collaboration-state-unavailable"], completed: false }]);
     assert.equal((await registerPlan(submission, requestId, correctedPlan)).success, true);
   });
   assert.deepEqual(result, correctedPlan);
+});
+
+test("一个条件需要多个受控场景时分别推进条件归属和场景完成状态", async () => {
+  const submission = createAcceptanceSceneSubmission();
+  const multiRequirementGoal = {
+    ...crossTaskMemberOccupancyGoal,
+    criteria: [goal.criteria[0]],
+    interactionCapabilities: ["cross-task-member-occupancy", "collaboration-state-projection"],
+    collaborationStateProjectionFixture: collaborationStateProjectionGoal.collaborationStateProjectionFixture,
+  };
+  const owner = {
+    kind: "cross-task-member-occupancy",
+    reason: "先核对人物占用事实",
+    completionReviewRequired: false,
+    ownedConditions: [{ criterionId: "criterion-1", prerequisite: "人物占用夹具已签发" }],
+    relatedCriterionIds: [],
+  };
+  const related = {
+    kind: "collaboration-state-syncing",
+    reason: "再核对同一条件要求的同步状态",
+    completionReviewRequired: false,
+    ownedConditions: [],
+    relatedCriterionIds: ["criterion-1"],
+  };
+  const expected = { reason: "同一条件需要两个独立证据源", segments: [owner, related] };
+  const result = await submission.run(multiRequirementGoal, async (requestId) => {
+    const first = await submission.tools.call("hanli_register_acceptance_scene_segment", { ...owner, requestId });
+    assert.equal(first.success, true);
+    assert.deepEqual(JSON.parse(first.contentItems[0].text).remainingCriterionIds, []);
+    assert.deepEqual(JSON.parse(first.contentItems[0].text).remainingRequirementIds, ["collaboration-state-projection"]);
+    const second = await submission.tools.call("hanli_register_acceptance_scene_segment", { ...related, requestId });
+    assert.equal(second.success, true);
+    assert.deepEqual(JSON.parse(second.contentItems[0].text).remainingRequirementIds, []);
+    assert.equal((await submission.tools.call("hanli_finalize_acceptance_scene", { requestId, reason: expected.reason })).success, true);
+  });
+  assert.deepEqual(result, expected);
+  assert.deepEqual(validateAcceptanceScenePlan(expected, multiRequirementGoal), expected);
+});
+
+test("关联场景发现的问题合入唯一条件结论并保留新增证据", () => {
+  const ownerRun = {
+    version: 2, runId: "owner", topicId: "t", proposalId: "p", criteria: [goal.criteria[0]], status: "passed", windowTitle: "AI Desktop",
+    initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 }, interactionSteps: [],
+    stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "passed", actual: "人物占用正确", layoutStatus: "passed", layoutActual: "占用状态清楚", screenshotAttachmentId: "owner-shot", layoutScreenshotAttachmentId: "owner-layout", occurredAt: "2026-09-14T00:00:00.000Z" }],
+    evidenceAttachmentIds: ["owner-shot", "owner-layout"], startedAt: "2026-09-14T00:00:00.000Z", completedAt: "2026-09-14T00:00:01.000Z",
+  };
+  const relatedRun = {
+    ...ownerRun, runId: "related", status: "failed", evidenceAttachmentIds: ["related-shot", "related-layout"],
+    stepResults: [{ ...ownerRun.stepResults[0], status: "failed", actual: "同步状态没有收口", screenshotAttachmentId: "related-shot", layoutStatus: "failed", layoutActual: "状态说明相互矛盾", layoutScreenshotAttachmentId: "related-layout" }],
+  };
+  const runs = [ownerRun];
+  appendRelatedAcceptanceRun(runs, relatedRun, { kind: "collaboration-state-syncing", reason: "同步状态复验", completionReviewRequired: false, ownedConditions: [], relatedCriterionIds: ["criterion-1"] });
+  const merged = mergeAcceptanceRuns({ ...goal, criteria: [goal.criteria[0]] }, runs);
+  assert.equal(merged.status, "failed");
+  assert.equal(merged.stepResults.length, 1);
+  assert.match(merged.stepResults[0].actual, /同步状态没有收口/);
+  assert.equal(merged.stepResults[0].screenshotAttachmentId, "related-shot");
+  assert.deepEqual(merged.evidenceAttachmentIds, ["owner-shot", "owner-layout", "related-shot", "related-layout"]);
 });
 
 test("两次工具参数均被拒绝时报告最后一次真实校验原因", async () => {
@@ -788,8 +846,8 @@ test("两次工具参数均被拒绝时报告最后一次真实校验原因", as
       await registerPlan(submission, requestId, {
         ...plan,
         segments: [
-          { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
-          { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
+          { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[0]] },
+          { ...segment, kind: "workspace-explorer-fixture", ownedConditions: [segment.ownedConditions[1]] },
         ],
       });
     }),
@@ -804,11 +862,11 @@ test("韩立场景工具通过本轮阶段连接装配，结束与应用退出�
   assert.match(scene, /dynamicTools: submission.tools/);
   assert.match(workflowRuntime, /sceneContext/);
   assert.match(scene, /read: \(\) => null/);
-  assert.match(scene, /criteria: planningContext\.criteria/);
-  assert.match(scene, /requiredSceneKinds: planningContext\.requiredSceneKinds/);
-  assert.match(scene, /submission\.planningInstruction/);
-  assert.match(scene, /planningContext\.rejectionSummary/);
-  assert.match(scene, /invalidFields: rejection\.invalidFields/);
+  assert.match(scene, /JSON\.stringify\(planningContext\)/);
+  assert.doesNotMatch(scene, /requiredSceneKinds/);
+  assert.doesNotMatch(scene, /planningInstruction/);
+  assert.doesNotMatch(scene, /rejectionSummary/);
+  assert.doesNotMatch(scene, /invalidFields/);
   assert.doesNotMatch(scene, /retryContext/);
   assert.match(scene, /finally/);
   assert.match(scene, /service.dispose\(\)/);
@@ -852,7 +910,7 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
 
 test("场景说明区分条件式规则与必须构造的验收状态", () => {
   const prompt = readFileSync("prompts/personas/hanli/acceptance-scene.md", "utf8");
-  assert.match(prompt, /阶段登记协议/);
+  assert.match(prompt, /动态 Schema/);
   assert.doesNotMatch(prompt, /"kind":"场景类型"/);
   assert.match(prompt, /若、如果、存在时、出现时/);
   assert.match(prompt, /不代表验收场景必须人为创建/);

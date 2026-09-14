@@ -2,8 +2,8 @@ import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
 import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto, WorkspaceCleanupRecoveryEvidenceOutDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
-import { createCompletionGateGoal, createSegmentGoal } from "./hanli-acceptance-scene-goals.js";
-import { assertSegmentAcceptanceRun, mergeAcceptanceRuns } from "./hanli-acceptance-scene-results.js";
+import { acceptanceSceneSegmentCriterionIds, createCompletionGateGoal, createSegmentGoal } from "./hanli-acceptance-scene-goals.js";
+import { appendRelatedAcceptanceRun, assertSegmentAcceptanceRun, mergeAcceptanceRuns } from "./hanli-acceptance-scene-results.js";
 import { prepareAcceptanceSceneWindow } from "./acceptance-scene-window.js";
 
 interface AcceptanceSceneSessionOptions {
@@ -47,7 +47,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
       options.record("hanli.acceptance_scene.ready", {
         segmentIndex,
         kind: segment.kind,
-        conditionIds: segment.conditions.map(({ criterionId }) => criterionId),
+        conditionIds: acceptanceSceneSegmentCriterionIds(segment),
         webContentsId: prepared.window.webContents.id,
       });
       if (!sceneReadyPublished) {
@@ -70,12 +70,13 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
           // 前序条件已有真实失败时，仍须采集本段原条件的证据，但不得触发业务完成状态变更。
           options.record("hanli.acceptance_scene.completion_review_skipped", {
             segmentIndex,
-            conditionIds: segment.conditions.map(({ criterionId }) => criterionId),
+            conditionIds: acceptanceSceneSegmentCriterionIds(segment),
             priorStatuses: runs.map((run) => run.status),
           });
         }
         const run = assertSegmentAcceptanceRun(await options.execute(currentGoal, prepared.window), segment);
-        runs.push(run);
+        if (segment.ownedConditions.length) runs.push(run);
+        else appendRelatedAcceptanceRun(runs, run, segment);
         continue;
       }
 
@@ -114,7 +115,8 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         reviewMode: "post-completion-review",
         priorPhaseEvidence: completionPhaseEvidence,
       }, prepared.window), segment);
-      runs.push(review);
+      if (segment.ownedConditions.length) runs.push(review);
+      else appendRelatedAcceptanceRun(runs, review, segment);
       return mergeAcceptanceRuns(options.goal, runs);
     } catch (error) {
       options.record(prepared ? "hanli.acceptance.failed" : "hanli.acceptance_scene.preparation_failed", {

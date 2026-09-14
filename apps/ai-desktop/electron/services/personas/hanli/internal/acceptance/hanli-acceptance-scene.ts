@@ -3,10 +3,9 @@ import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/i
 import type { AcceptanceSceneKind, AcceptanceScenePlanOutDto, AcceptanceSceneSegmentOutDto, HanliComputerAcceptanceInDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
 const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "workspace-lifecycle-review", "empty-task-group", "completed-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "cross-task-member-occupancy", "member-idle", "collaboration-state-syncing", "collaboration-state-unavailable", "blocked"];
-const stageRegistrationRequiredFields = ["requestId", "kind", "reason", "completionReviewRequired", "conditions"] as const;
+const stageRegistrationRequiredFields = ["requestId", "kind", "reason", "completionReviewRequired", "ownedConditions", "relatedCriterionIds"] as const;
 const stageConditionRequiredFields = ["criterionId", "prerequisite"] as const;
 
-// 场景工具 Schema、运行时说明和字段级拒绝摘要共用这一份协议，避免模型照抄过期示例词。
 const stageRegistrationInputSchema = {
   type: "object",
   additionalProperties: false,
@@ -16,9 +15,8 @@ const stageRegistrationInputSchema = {
     kind: { type: "string", enum: sceneKinds },
     reason: { type: "string" },
     completionReviewRequired: { type: "boolean" },
-    conditions: {
+    ownedConditions: {
       type: "array",
-      minItems: 1,
       items: {
         type: "object",
         additionalProperties: false,
@@ -26,25 +24,24 @@ const stageRegistrationInputSchema = {
         properties: { criterionId: { type: "string" }, prerequisite: { type: "string" } },
       },
     },
+    relatedCriterionIds: { type: "array", uniqueItems: true, items: { type: "string" } },
   },
 } as const;
 
 interface AcceptanceScenePlanRejection {
   message: string;
-  invalidFields?: string[];
-  missingCriterionIds?: string[];
-  duplicateCriterionIds?: string[];
-  unknownCriterionIds?: string[];
 }
 
 interface AcceptanceScenePlanningContext {
   criteria: Array<{ criterionId: string; text: string }>;
-  requiredSceneKinds: AcceptanceSceneKind[];
-  rejectionMessage?: string;
-  rejectionSummary?: Omit<AcceptanceScenePlanRejection, "message">;
+  requirements: Array<{ requirementId: string; acceptedKinds: AcceptanceSceneKind[]; completed: boolean }>;
+  remainingCriterionIds: string[];
+  remainingRequirementIds: string[];
+  previousAttemptFailure?: string;
 }
 
 interface AcceptanceSceneRequirement {
+  requirementId: string;
   acceptedKinds: AcceptanceSceneKind[];
   missingMessage: string;
 }
@@ -52,9 +49,73 @@ interface AcceptanceSceneRequirement {
 interface ActiveAcceptanceSceneAttempt {
   requestId: string;
   goal: HanliComputerAcceptanceInDto;
-  segments: AcceptanceSceneSegmentOutDto[];
+  model: AcceptanceScenePlanModel;
   plan: AcceptanceScenePlanOutDto | null;
   lastRejection: AcceptanceScenePlanRejection | null;
+}
+
+/** 条件归属和受控场景完成由同一模型推进，避免计划、重试和最终校验各自推断状态。 */
+class AcceptanceScenePlanModel {
+  readonly #expectedCriterionIds: string[];
+  readonly #requirements: AcceptanceSceneRequirement[];
+  readonly #segments: AcceptanceSceneSegmentOutDto[] = [];
+
+  constructor(readonly goal: HanliComputerAcceptanceInDto) {
+    this.#expectedCriterionIds = goal.criteria.map((_, index) => `criterion-${index + 1}`);
+    this.#requirements = sceneRequirementsFor(goal);
+  }
+
+  get segments(): AcceptanceSceneSegmentOutDto[] { return this.#segments; }
+
+  planningContext(previousAttemptFailure?: string): AcceptanceScenePlanningContext {
+    const ownedCriterionIds = this.#segments.flatMap((segment) => segment.ownedConditions.map(({ criterionId }) => criterionId));
+    const completedRequirementIds = this.completedRequirementIds();
+    const context: AcceptanceScenePlanningContext = {
+      criteria: this.goal.criteria.map((text, index) => ({ criterionId: `criterion-${index + 1}`, text })),
+      requirements: this.#requirements.map((requirement) => ({
+        requirementId: requirement.requirementId,
+        acceptedKinds: requirement.acceptedKinds,
+        completed: completedRequirementIds.includes(requirement.requirementId),
+      })),
+      remainingCriterionIds: this.#expectedCriterionIds.filter((id) => !ownedCriterionIds.includes(id)),
+      remainingRequirementIds: this.#requirements.map(({ requirementId }) => requirementId).filter((id) => !completedRequirementIds.includes(id)),
+    };
+    return previousAttemptFailure ? { ...context, previousAttemptFailure } : context;
+  }
+
+  register(segment: AcceptanceSceneSegmentOutDto): AcceptanceScenePlanningContext {
+    const ownedCriterionIds = this.#segments.flatMap((item) => item.ownedConditions.map(({ criterionId }) => criterionId));
+    const newOwnedIds = segment.ownedConditions.map(({ criterionId }) => criterionId);
+    const relatedCriterionIds = segment.relatedCriterionIds;
+    if ((!newOwnedIds.length && !relatedCriterionIds.length) || (newOwnedIds.length && relatedCriterionIds.length)) {
+      throw new Error("验收场景阶段必须唯一占用条件，或关联已有条件完成剩余场景。");
+    }
+    if (new Set(newOwnedIds).size !== newOwnedIds.length || newOwnedIds.some((id) => ownedCriterionIds.includes(id))) {
+      throw new Error("验收场景阶段不能重复占用原验收条件。");
+    }
+    if (newOwnedIds.some((id) => !this.#expectedCriterionIds.includes(id))) {
+      throw new Error("验收场景阶段包含未知的原验收条件。");
+    }
+    if (new Set(relatedCriterionIds).size !== relatedCriterionIds.length || relatedCriterionIds.some((id) => !ownedCriterionIds.includes(id))) {
+      throw new Error("验收场景阶段只能关联先前已占用的原验收条件。");
+    }
+    this.#segments.push(segment);
+    return this.planningContext();
+  }
+
+  assertCompleted(): void {
+    const context = this.planningContext();
+    if (context.remainingCriterionIds.length) throw new Error("韩立验收场景计划未逐项覆盖原验收条件。");
+    const missingRequirement = this.#requirements.find((requirement) => context.remainingRequirementIds.includes(requirement.requirementId));
+    if (missingRequirement) throw new Error(missingRequirement.missingMessage);
+  }
+
+  private completedRequirementIds(): string[] {
+    return this.#requirements
+      .filter((requirement) => this.#segments.some((segment) => requirement.acceptedKinds.includes(segment.kind)
+        && (segment.ownedConditions.length > 0 || segment.relatedCriterionIds.length > 0)))
+      .map(({ requirementId }) => requirementId);
+  }
 }
 
 /** 验证韩立的结构化准备计划，任何缺项都退回环境排障，不默认为当前窗口。 */
@@ -64,22 +125,18 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
     || !Array.isArray(value.segments) || value.segments.length === 0) {
     throw new Error("韩立未提交有效的验收场景计划。");
   }
-  const expectedIds = goal.criteria.map((_, index) => `criterion-${index + 1}`);
   const segments = value.segments as AcceptanceSceneSegmentOutDto[];
-  // 校验、纠正回合和失败审计都消费同一份签发需求，避免新增夹具后只更新其中一条路径。
-  const sceneRequirements = sceneRequirementsFor(goal);
-  const ids = segments.flatMap((segment) => Array.isArray(segment?.conditions)
-    ? segment.conditions.map((condition) => condition?.criterionId)
-    : []);
-  if (ids.length !== expectedIds.length || new Set(ids).size !== ids.length
-    || expectedIds.some((id) => !ids.includes(id))
-    || segments.some((segment) => !segment || !sceneKinds.includes(segment.kind)
+  if (segments.some((segment) => !segment || !sceneKinds.includes(segment.kind)
       || typeof segment.reason !== "string" || !segment.reason.trim()
       || typeof segment.completionReviewRequired !== "boolean"
-      || !Array.isArray(segment.conditions) || segment.conditions.length === 0
-      || segment.conditions.some((condition) => typeof condition?.prerequisite !== "string" || !condition.prerequisite.trim()))) {
-    throw new Error("韩立验收场景计划未逐项覆盖原验收条件。");
+      || !Array.isArray(segment.ownedConditions) || !Array.isArray(segment.relatedCriterionIds)
+      || segment.ownedConditions.some((condition) => typeof condition?.criterionId !== "string" || typeof condition?.prerequisite !== "string" || !condition.prerequisite.trim())
+      || segment.relatedCriterionIds.some((criterionId) => typeof criterionId !== "string"))) {
+    throw new Error("韩立未提交有效的验收场景阶段。");
   }
+  const model = new AcceptanceScenePlanModel(goal);
+  for (const segment of segments) model.register(segment);
+  model.assertCompleted();
   if (segments.some((segment) => segment.kind === "current-window" || segment.kind === "workspace-explorer-fixture" || segment.kind === "workspace-lifecycle-review") && !hasVerifiedCurrentWindowContext(goal)) {
     throw new Error("当前窗口场景缺少与验收目标一致的只读专题、提案或运行记录，不能把模型推测当作页面事实。");
   }
@@ -105,7 +162,6 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   if (usesStateProjection && !goal.collaborationStateProjectionFixture) {
     throw new Error("协作状态验收场景缺少主进程签发的受控夹具。");
   }
-  assertRequiredSceneRequirements(segments, sceneRequirements);
   if (segments.filter((segment) => segment.kind === "collaboration-state-syncing").length > 1
     || segments.filter((segment) => segment.kind === "collaboration-state-unavailable").length > 1) {
     throw new Error("每种协作状态夹具只能使用一个验收阶段。");
@@ -135,7 +191,8 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
       kind: segment.kind,
       reason: segment.reason.trim(),
       completionReviewRequired: segment.completionReviewRequired,
-      conditions: segment.conditions.map(({ criterionId, prerequisite }) => ({ criterionId, prerequisite: prerequisite.trim() })),
+      ownedConditions: segment.ownedConditions.map(({ criterionId, prerequisite }) => ({ criterionId, prerequisite: prerequisite.trim() })),
+      relatedCriterionIds: [...segment.relatedCriterionIds],
     })),
   };
 }
@@ -155,106 +212,61 @@ function hasVerifiedCurrentWindowContext(goal: HanliComputerAcceptanceInDto): bo
 function sceneRequirementsFor(goal: HanliComputerAcceptanceInDto): AcceptanceSceneRequirement[] {
   const requirements: AcceptanceSceneRequirement[] = [];
   if (goal.workspaceAcceptanceFixture) requirements.push({
+    requirementId: "workspace-acceptance-fixture",
     acceptedKinds: ["workspace-explorer-fixture"],
     missingMessage: "本轮已经签发工作区验收夹具，场景计划必须包含一个工作区夹具阶段；不能只观察普通工作区后报告临时根缺失。",
   });
   if (goal.crossTaskMemberOccupancyFixture) requirements.push({
+    requirementId: "cross-task-member-occupancy",
     acceptedKinds: ["cross-task-member-occupancy"],
     missingMessage: "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。",
   });
   if (goal.memberIdleFixture) requirements.push({
+    requirementId: "member-idle",
     acceptedKinds: ["member-idle"],
     missingMessage: "本轮已经签发人物空闲夹具，场景计划必须使用该夹具阶段。",
   });
   if (goal.collaborationStateProjectionFixture) requirements.push({
+    requirementId: "collaboration-state-projection",
     acceptedKinds: ["collaboration-state-syncing", "collaboration-state-unavailable"],
     missingMessage: "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ",
   });
   return requirements;
 }
 
-/** 每份已签发夹具在候选计划中必须由一个允许的阶段消费，不能由普通窗口替代。 */
-function assertRequiredSceneRequirements(segments: AcceptanceSceneSegmentOutDto[], requirements: AcceptanceSceneRequirement[]): void {
-  for (const requirement of requirements) {
-    if (!segments.some((segment) => requirement.acceptedKinds.includes(segment.kind))) throw new Error(requirement.missingMessage);
-  }
-}
-
-/** 每次提交都从当前权威目标派生完整契约，拒绝结果不携带或读取上一份候选计划。 */
-function createPlanningContext(goal: HanliComputerAcceptanceInDto, rejection?: AcceptanceScenePlanRejection): AcceptanceScenePlanningContext {
-  const context = {
-    // 明确交给规划器每条原条件的稳定编号，避免它在纠正回合自行推断并遗漏条件。
-    criteria: goal.criteria.map((text, index) => ({ criterionId: `criterion-${index + 1}`, text })),
-    requiredSceneKinds: sceneRequirementsFor(goal).flatMap((requirement) => requirement.acceptedKinds),
-  };
-  if (!rejection) return context;
-  const { message: rejectionMessage, ...rejectionSummary } = rejection;
-  return { ...context, rejectionMessage, rejectionSummary };
-}
-
-/** 只输出字段路径，不保留模型提交的文本、页面数据或被拒绝的计划。 */
-function invalidStageFields(input: unknown, requestId: string): string[] {
-  const value = input as Partial<AcceptanceSceneSegmentOutDto> & { requestId?: unknown };
-  if (!value || typeof value !== "object") return ["arguments"];
-  const invalidFields: string[] = [];
-  if (value.requestId !== requestId) invalidFields.push("requestId");
-  if (!sceneKinds.includes(value.kind as AcceptanceSceneKind)) invalidFields.push("kind");
-  if (typeof value.reason !== "string" || !value.reason.trim()) invalidFields.push("reason");
-  if (typeof value.completionReviewRequired !== "boolean") invalidFields.push("completionReviewRequired");
-  if (!Array.isArray(value.conditions) || value.conditions.length === 0) invalidFields.push("conditions");
-  else {
-    if (value.conditions.some((condition) => typeof condition?.criterionId !== "string")) invalidFields.push("conditions[].criterionId");
-    if (value.conditions.some((condition) => typeof condition?.prerequisite !== "string" || !condition.prerequisite.trim())) invalidFields.push("conditions[].prerequisite");
-  }
-  return invalidFields;
-}
-
-/** 分段登记只接受当前目标中尚未覆盖的条件，并立即返回剩余集合供下一次工具调用使用。 */
-function registerAcceptanceSceneSegment(input: unknown, attempt: ActiveAcceptanceSceneAttempt): { remainingCriterionIds: string[]; readyToFinalize: boolean } {
+/** 分段登记把唯一归属和关联场景一并交给权威模型，工具不得自行补写条件或夹具状态。 */
+function registerAcceptanceSceneSegment(input: unknown, attempt: ActiveAcceptanceSceneAttempt): AcceptanceScenePlanningContext {
   const value = input as AcceptanceSceneSegmentOutDto & { requestId?: string };
-  const invalidFields = invalidStageFields(value, attempt.requestId);
-  if (invalidFields.length) {
-    const error = new Error("韩立未提交有效的验收场景阶段。");
-    Object.assign(error, { invalidFields });
-    throw error;
+  if (!value || value.requestId !== attempt.requestId || !sceneKinds.includes(value.kind)
+    || typeof value.reason !== "string" || !value.reason.trim()
+    || typeof value.completionReviewRequired !== "boolean"
+    || !Array.isArray(value.ownedConditions) || !Array.isArray(value.relatedCriterionIds)
+    || value.ownedConditions.some((condition) => typeof condition?.criterionId !== "string"
+      || typeof condition?.prerequisite !== "string" || !condition.prerequisite.trim())
+    || value.relatedCriterionIds.some((criterionId) => typeof criterionId !== "string")) {
+    throw new Error("韩立未提交有效的验收场景阶段。");
   }
-  const expectedIds = attempt.goal.criteria.map((_, index) => `criterion-${index + 1}`);
-  const registeredIds = attempt.segments.flatMap((segment) => segment.conditions.map((condition) => condition.criterionId));
-  const ids = value.conditions.map((condition) => condition.criterionId);
-  const duplicateCriterionIds = ids.filter((id, index) => ids.indexOf(id) !== index || registeredIds.includes(id));
-  const unknownCriterionIds = ids.filter((id) => !expectedIds.includes(id));
-  if (duplicateCriterionIds.length || unknownCriterionIds.length) {
-    const error = new Error("韩立验收场景阶段包含重复或未知的原验收条件。");
-    Object.assign(error, { duplicateCriterionIds: [...new Set(duplicateCriterionIds)], unknownCriterionIds: [...new Set(unknownCriterionIds)] });
-    throw error;
-  }
-  // 只保存已通过单条件归属检查的阶段；程序不根据模型输出补写剩余条件。
-  attempt.segments.push({ kind: value.kind, reason: value.reason.trim(), completionReviewRequired: value.completionReviewRequired,
-    conditions: value.conditions.map(({ criterionId, prerequisite }) => ({ criterionId, prerequisite: prerequisite.trim() })) });
-  const remainingCriterionIds = expectedIds.filter((id) => !ids.includes(id) && !registeredIds.includes(id));
-  return { remainingCriterionIds, readyToFinalize: remainingCriterionIds.length === 0 };
+  return attempt.model.register({
+    kind: value.kind,
+    reason: value.reason.trim(),
+    completionReviewRequired: value.completionReviewRequired,
+    ownedConditions: value.ownedConditions.map(({ criterionId, prerequisite }) => ({ criterionId, prerequisite: prerequisite.trim() })),
+    relatedCriterionIds: [...value.relatedCriterionIds],
+  });
 }
 
 /** 将已逐项登记的阶段交给原有严格校验，保留夹具和完成态边界。 */
 function finalizeAcceptanceScenePlan(input: unknown, attempt: ActiveAcceptanceSceneAttempt): AcceptanceScenePlanOutDto {
   const value = input as { requestId?: string; reason?: string };
   if (!value || value.requestId !== attempt.requestId || typeof value.reason !== "string" || !value.reason.trim()) throw new Error("韩立未提交有效的验收场景完成请求。");
-  const expectedIds = attempt.goal.criteria.map((_, index) => `criterion-${index + 1}`);
-  const registeredIds = attempt.segments.flatMap((segment) => segment.conditions.map((condition) => condition.criterionId));
-  const missingCriterionIds = expectedIds.filter((id) => !registeredIds.includes(id));
-  if (missingCriterionIds.length) {
-    const error = new Error("韩立验收场景计划未逐项覆盖原验收条件。");
-    Object.assign(error, { missingCriterionIds });
-    throw error;
-  }
-  return validateAcceptanceScenePlan({ reason: value.reason, segments: attempt.segments }, attempt.goal);
+  attempt.model.assertCompleted();
+  return validateAcceptanceScenePlan({ reason: value.reason, segments: attempt.model.segments }, attempt.goal);
 }
 
 /** 失败审计只记录条件编号摘要，避免候选计划或页面数据离开本次准备请求。 */
 function rejectionFrom(error: unknown): AcceptanceScenePlanRejection {
-  const source = error && typeof error === "object" ? error as { message?: unknown; invalidFields?: unknown; missingCriterionIds?: unknown; duplicateCriterionIds?: unknown; unknownCriterionIds?: unknown } : {};
-  const ids = (value: unknown) => Array.isArray(value) && value.every((item) => typeof item === "string") ? value : undefined;
-  return { message: typeof source.message === "string" ? source.message : String(error), invalidFields: ids(source.invalidFields), missingCriterionIds: ids(source.missingCriterionIds), duplicateCriterionIds: ids(source.duplicateCriterionIds), unknownCriterionIds: ids(source.unknownCriterionIds) };
+  const source = error && typeof error === "object" ? error as { message?: unknown } : {};
+  return { message: typeof source.message === "string" ? source.message : String(error) };
 }
 
 /** 固定韩立验收会话通过工具提交场景；说明文字不进入机器协议，回合外与旧请求都不能写入。 */
@@ -263,7 +275,7 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
   const tools: CodexDynamicToolsPort = {
     definitions: [
       { type: "function", name: "hanli_register_acceptance_scene_segment",
-        description: "登记一个验收场景阶段。只能登记当前请求中尚未覆盖的原条件；工具会返回剩余条件编号。",
+        description: "登记一个验收场景阶段。ownedConditions 唯一占用原条件；relatedCriterionIds 只能关联先前已占用条件完成剩余受控场景。工具返回当前权威模型的剩余状态。",
         inputSchema: stageRegistrationInputSchema },
       { type: "function", name: "hanli_finalize_acceptance_scene",
         description: "仅当所有原条件已登记后完成本轮验收场景计划；程序仍会严格校验夹具和完成态边界。",
@@ -297,22 +309,17 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
   };
   return {
     tools,
-    planningInstruction: JSON.stringify({
-      requiredFields: stageRegistrationRequiredFields,
-      allowedKinds: sceneKinds,
-      conditionRequiredFields: stageConditionRequiredFields,
-    }),
     async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, planningContext: AcceptanceScenePlanningContext) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
       if (active) throw new Error("韩立已有场景准备请求，不能并发覆盖。");
       try {
-        const beginAttempt = (): ActiveAcceptanceSceneAttempt => ({ requestId: randomUUID(), goal, segments: [], plan: null, lastRejection: null });
+        const beginAttempt = (): ActiveAcceptanceSceneAttempt => ({ requestId: randomUUID(), goal, model: new AcceptanceScenePlanModel(goal), plan: null, lastRejection: null });
         const firstAttempt = beginAttempt();
         active = firstAttempt;
-        await model(firstAttempt.requestId, 1, createPlanningContext(goal));
+        await model(firstAttempt.requestId, 1, firstAttempt.model.planningContext());
         if (firstAttempt.plan) return firstAttempt.plan;
         const secondAttempt = beginAttempt();
         active = secondAttempt;
-        await model(secondAttempt.requestId, 2, createPlanningContext(goal, firstAttempt.lastRejection ?? undefined));
+        await model(secondAttempt.requestId, 2, secondAttempt.model.planningContext(firstAttempt.lastRejection?.message));
         if (!secondAttempt.plan) {
           if (secondAttempt.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${secondAttempt.lastRejection.message}`);
           throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");

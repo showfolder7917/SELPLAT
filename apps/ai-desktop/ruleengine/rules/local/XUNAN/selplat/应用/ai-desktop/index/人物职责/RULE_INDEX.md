@@ -9,5 +9,5 @@ AI_DESKTOP_NANGONG_ANALYSIS_PLANNING_RULES = local/XUNAN/selplat/应用/ai-deskt
 <!-- 动态执行人物只实施已确认任务并保存任务规则快照和加载回执。 -->
 AI_DESKTOP_EXECUTOR_SOURCE_IMPLEMENTATION_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop执行者源码实施规则.md
 
-<!-- v1.4.0：令狐只处理真实失败、环境故障、重构和统一测试；首次验收场景由韩立负责，修复后返回同一提案复验。 -->
+<!-- v1.5.0：令狐处理真实失败、环境故障、重构和统一测试；协议矛盾必须重构权威模型并退役旧入口，不能只补提示或兼容读取。 -->
 AI_DESKTOP_LINGHU_FAILURE_TEST_RULES = local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop令狐故障修复与统一测试规则.md
