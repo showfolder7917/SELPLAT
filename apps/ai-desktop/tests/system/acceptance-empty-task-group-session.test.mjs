@@ -18,7 +18,7 @@ const collaborationState = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
-test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人物消息", () => {
+test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人物消息", async () => {
   const session = new AcceptanceEmptyTaskGroupSession();
   session.register(42);
   const isolated = session.collaborationState(42, collaborationState);
@@ -34,7 +34,7 @@ test("独立空状态验收会话遮蔽正式任务并只允许窗口私有人�
   assert.deepEqual(isolated.integrationBatches, []);
   assert.deepEqual(session.timeline().groups, []);
   assert.equal(session.evolutionState({ topics: ["formal"], proposals: ["formal"], deliberations: ["formal"], archiveRecords: ["formal"] }).activeTopicId, null);
-  const sent = session.sendPersonaConversationMessage(42, "han-li", {
+  const sent = await session.sendPersonaConversationMessage(42, "han-li", {
     clientMessageId: "empty-scene-message",
     message: "空状态入口验收",
     attachmentIds: [],

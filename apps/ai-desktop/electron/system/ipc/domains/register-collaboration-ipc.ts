@@ -93,7 +93,7 @@ export function registerCollaborationIpc(
     if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.conversationWindow(event.sender.id, personaId, request || {});
     return personaConversations.conversationWindow(personaId, request || {});
   });
-  handle("desktop:send-persona-conversation-message", (event, personaId: string, request: SendPersonaConversationMessageInDto) => {
+  handle("desktop:send-persona-conversation-message", async (event, personaId: string, request: SendPersonaConversationMessageInDto) => {
     if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.sendPersonaConversationMessage(event.sender.id, personaId, request);
     return personaConversations.send(personaId, request);
   });

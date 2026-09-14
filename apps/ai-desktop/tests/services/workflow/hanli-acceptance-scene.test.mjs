@@ -594,7 +594,8 @@ test("首次使用人物会话场景创建两个人物都为空的非持久化�
   assert.equal(f.events.includes("show"), true);
 });
 
-test("人物会话场景只在内存提供分页、一次失败重试和附件回显", () => {
+test("人物会话场景只在内存提供分页、一次失败重试、可观察发送中和附件回显", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const session = new AcceptanceEmptyTaskGroupSession();
   session.register(91, "persona-conversation-lifecycle");
   const latest = session.conversationWindow(91, "han-li");
@@ -604,7 +605,13 @@ test("人物会话场景只在内存提供分页、一次失败重试和附件�
   assert.throws(() => session.conversationWindow(91, "han-li", { beforeSequenceNumber: before }), /模拟补载失败/);
   const retried = session.conversationWindow(91, "han-li", { beforeSequenceNumber: before });
   assert.equal(retried.messages.length, 6);
-  const sent = session.sendPersonaConversationMessage(91, "nangong-wan", { clientMessageId: "fixture-message", message: "附件验收", attachmentIds: ["fixture-image"], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  const pending = session.sendPersonaConversationMessage(91, "nangong-wan", { clientMessageId: "fixture-message", message: "附件验收", attachmentIds: ["fixture-image"], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  let settled = false;
+  void pending.then(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  t.mock.timers.tick(600);
+  const sent = await pending;
   assert.equal(sent.messages.at(-2).attachmentIds[0], "fixture-image");
   assert.equal(sent.messages.at(-1).replyToMessageId, "fixture-message");
   const screenshot = session.createPersonaConversationScreenshot(91);
@@ -614,7 +621,7 @@ test("人物会话场景只在内存提供分页、一次失败重试和附件�
   assert.equal(session.isActive(91), false);
 });
 
-test("首次使用人物会话场景保持两个人物为空且只在窗口内接收后续消息", () => {
+test("首次使用人物会话场景保持两个人物为空且只在窗口内接收后续消息", async () => {
   const session = new AcceptanceEmptyTaskGroupSession();
   session.register(93, "persona-empty-conversation");
   assert.equal(session.isPersonaConversationLifecycle(93), true);
@@ -624,11 +631,20 @@ test("首次使用人物会话场景保持两个人物为空且只在窗口内�
   assert.equal(initialHanli.hasEarlier, false);
   assert.equal(initialNangong.messages.length, 0);
   assert.equal(initialNangong.hasEarlier, false);
-  const sent = session.sendPersonaConversationMessage(93, "han-li", { clientMessageId: "empty-fixture-message", message: "首次使用验收", attachmentIds: [], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  const sent = await session.sendPersonaConversationMessage(93, "han-li", { clientMessageId: "empty-fixture-message", message: "首次使用验收", attachmentIds: [], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
   assert.equal(sent.messages.length, 2);
   assert.equal(session.conversationWindow(93, "han-li").messages.length, 2);
   assert.equal(session.conversationWindow(93, "nangong-wan").messages.length, 0);
   assert.equal(session.conversationWindow(93, "nangong-wan").hasEarlier, false);
+});
+
+test("人物会话发送等待在隔离窗口关闭后不补写确认消息", async () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(95, "persona-conversation-lifecycle");
+  const pending = session.sendPersonaConversationMessage(95, "han-li", { clientMessageId: "closing-fixture-message", message: "关闭前发送", attachmentIds: [], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  session.remove(95);
+  await assert.rejects(pending, /独立验收会话已关闭/);
+  assert.equal(session.isActive(95), false);
 });
 
 // 复合场景的交接事实在窗口准备时冻结，人物消息仍不能回退读取正式会话。
