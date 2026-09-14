@@ -7,11 +7,13 @@ import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/p
 
 type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
-export type WorkspaceAcceptanceEnvironment = FixtureReservation & { dispose(): void };
+type CleanupPhase = "workspace" | "directory";
+export type WorkspaceAcceptanceCleanupResult = { status: "completed"; recovered: boolean; workspaceId: string | null } | { status: "failed"; phase: CleanupPhase; reason: string; workspaceId: string | null };
+export type WorkspaceAcceptanceEnvironment = FixtureReservation & { dispose(): WorkspaceAcceptanceCleanupResult };
 type FixtureRegistration = { displayName: string; workspaceId: string };
 type FixtureReadPath = "slow-a" | "slow-b" | "retry-once";
 type FixtureReadState = { requestCount: number; pending: boolean; outcome: "not-requested" | "started" | "succeeded" | "failed" };
-type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; failedPaths: Set<string>; reads: Map<FixtureReadPath, FixtureReadState> };
+type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; cleanupFailed: boolean; failedPaths: Set<string>; reads: Map<FixtureReadPath, FixtureReadState> };
 export const WORKSPACE_ACCEPTANCE_FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
 export const WORKSPACE_ACCEPTANCE_FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 } as const;
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
@@ -49,11 +51,13 @@ export interface WorkspaceAcceptanceDirectoryReadEvidence {
 export class WorkspaceAcceptanceFixture {
   readonly #workspaces: WorkspaceStore;
   readonly #temporaryRoot: string;
+  readonly #removeDirectory: (directory: string) => void;
   #reserved: ReservedFixture | null = null;
 
-  constructor(workspaces: WorkspaceStore, temporaryRoot: string) {
+  constructor(workspaces: WorkspaceStore, temporaryRoot: string, removeDirectory: (directory: string) => void = (directory) => rmSync(directory, { recursive: true, force: true })) {
     this.#workspaces = workspaces;
     this.#temporaryRoot = temporaryRoot;
+    this.#removeDirectory = removeDirectory;
     // 该服务在主进程启动阶段、Renderer 首次读取工作区之前创建；此处回收上次异常退出留下的私有夹具。
     this.#cleanupStaleFixtures();
   }
@@ -72,14 +76,10 @@ export class WorkspaceAcceptanceFixture {
       await this.#addFixtureThroughVisibleWorkspacePage(targetWindow, reservation.displayName);
       if (!this.#reserved?.workspaceId) throw new Error("临时工作区未完成登记，不能开始韩立验收。");
       this.setSceneActive(false);
-      let disposed = false;
       return {
         ...reservation,
-        dispose: () => {
-          if (disposed) return;
-          disposed = true;
-          this.cleanup();
-        },
+        // 完成状态只存在于夹具的唯一保留状态中；失败后同一句柄可再次尝试清理。
+        dispose: () => this.cleanup(),
       };
     } catch (error) {
       this.cleanup();
@@ -95,7 +95,8 @@ export class WorkspaceAcceptanceFixture {
    */
   reserve(mode: FixtureMode = "basic", trustedWebContentsId: number): FixtureReservation {
     if (!Number.isSafeInteger(trustedWebContentsId) || trustedWebContentsId <= 0) throw new Error("验收窗口身份无效，不能签发工作区夹具。");
-    this.cleanup();
+    const priorCleanup = this.cleanup();
+    if (priorCleanup.status === "failed") throw new Error(`上一轮验收夹具清理失败：${priorCleanup.reason}`);
     const directory = realpathSync.native(mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-")));
     const displayName = path.basename(directory);
     // 标记只供主进程回收异常中断的夹具，避免按目录前缀误删用户工作区。
@@ -111,7 +112,7 @@ export class WorkspaceAcceptanceFixture {
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");
     }
-    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, failedPaths: new Set(), reads: new Map() };
+    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, cleanupFailed: false, failedPaths: new Set(), reads: new Map() };
     return { displayName };
   }
 
@@ -239,14 +240,40 @@ export class WorkspaceAcceptanceFixture {
     );
   }
 
-  /** 验收结束后撤销临时登记并删除目录，不把验收夹具留在用户工作区列表。 */
-  cleanup(): void {
+  /**
+   * 验收结束后撤销临时登记并删除目录；只有两个目标都确认移除后才结束当前句柄。
+   *
+   * 真实返回示例：首次目录删除失败返回 failed，重试成功返回 completed 且 recovered=true。
+   * 异常或副作用示例：失败保留夹具状态，调用方可在同一次运行内再次调用本方法。
+   */
+  cleanup(): WorkspaceAcceptanceCleanupResult {
     const fixture = this.#reserved;
-    if (!fixture) return;
-    const root = this.#workspaces.read().roots.find((candidate) => resolvesToSameDirectory(candidate.path, fixture.directory));
-    if (root) this.#workspaces.remove(root.id);
-    rmSync(fixture.directory, { recursive: true, force: true });
+    if (!fixture) return { status: "completed", recovered: false, workspaceId: null };
+    let root: WorkspaceStateOutDto["roots"][number] | undefined;
+    try {
+      root = this.#workspaces.read().roots.find((candidate) => resolvesToSameDirectory(candidate.path, fixture.directory));
+    } catch (error) {
+      fixture.cleanupFailed = true;
+      return { status: "failed", phase: "workspace", reason: error instanceof Error ? error.message : String(error), workspaceId: fixture.workspaceId };
+    }
+    if (root) {
+      try {
+        this.#workspaces.remove(root.id);
+      } catch (error) {
+        fixture.cleanupFailed = true;
+        return { status: "failed", phase: "workspace", reason: error instanceof Error ? error.message : String(error), workspaceId: fixture.workspaceId };
+      }
+    }
+    try {
+      this.#removeDirectory(fixture.directory);
+    } catch (error) {
+      fixture.cleanupFailed = true;
+      return { status: "failed", phase: "directory", reason: error instanceof Error ? error.message : String(error), workspaceId: fixture.workspaceId };
+    }
+    const recovered = fixture.cleanupFailed;
+    const workspaceId = fixture.workspaceId;
     this.#reserved = null;
+    return { status: "completed", recovered, workspaceId };
   }
 
   /**

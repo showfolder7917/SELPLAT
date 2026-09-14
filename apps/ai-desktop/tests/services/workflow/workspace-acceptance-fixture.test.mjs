@@ -92,6 +92,48 @@ test("统一准备入口在页面未就绪时撤销目录并阻止验收开始",
   }
 });
 
+test("隔离清理失败恢复场景在目录删除成功前保持同一环境可重试", async () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-cleanup-recovery-test-"));
+  const roots = [];
+  let removeAttempts = 0;
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    add: (directory) => {
+      const root = { id: "recovery-fixture", path: directory };
+      roots.push(root);
+      return { primaryId: root.id, roots: [...roots] };
+    },
+    remove: (id) => {
+      const index = roots.findIndex((root) => root.id === id);
+      if (index >= 0) roots.splice(index, 1);
+    },
+    listDirectory: () => ({ entries: [] }),
+  };
+  try {
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot, (directory) => {
+      removeAttempts += 1;
+      if (removeAttempts === 1) throw new Error("模拟目录正在被占用");
+      rmSync(directory, { recursive: true, force: true });
+    });
+    const target = { isDestroyed: () => false, webContents: { id: 79, executeJavaScript: async () => {
+      const directory = fixture.takeDirectory(79);
+      const state = workspaces.add(directory);
+      fixture.registerWorkspace(79, directory, state);
+      return "ready";
+    } } };
+    const environment = await fixture.prepare("basic", target);
+    const first = environment.dispose();
+    assert.deepEqual(first, { status: "failed", phase: "directory", reason: "模拟目录正在被占用", workspaceId: "recovery-fixture" });
+    assert.equal(roots.length, 0, "已移除工作区不能阻止同一环境重试目录清理");
+    assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), true);
+    const second = environment.dispose();
+    assert.deepEqual(second, { status: "completed", recovered: true, workspaceId: "recovery-fixture" });
+    assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), false);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test("场景夹具只为已登记临时根提供延迟、一次失败与空目录响应", async () => {
   const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-scenario-test-"));
   const roots = [];

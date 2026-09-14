@@ -644,6 +644,9 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
   assert.match(desktopIpc, /workspaceAcceptanceFixture\.prepare/);
   assert.match(desktopIpc, /displayName: workspaceAcceptanceEnvironment!\.displayName/);
   assert.match(desktopIpc, /fixtureLabel: workspaceAcceptanceEnvironment!\.displayName/);
+  assert.match(desktopIpc, /hanli\.acceptance_workspace_fixture\.cleanup_failed/);
+  assert.match(desktopIpc, /hanli\.acceptance_workspace_fixture\.cleanup_recovered/);
+  assert.match(desktopIpc, /cleanup = workspaceAcceptanceEnvironment!\.dispose\(\)/);
   assert.ok(
     desktopIpc.indexOf("workspaceAcceptanceFixture.prepare") < desktopIpc.indexOf("planAcceptanceScene(acceptanceGoal)"),
     "已确认页面可用的受控工作区必须在场景规划前准备好",

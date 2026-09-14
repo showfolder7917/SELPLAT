@@ -221,7 +221,21 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
       });
     } finally {
-      workspaceAcceptanceEnvironment?.dispose();
+      let cleanup = workspaceAcceptanceEnvironment?.dispose();
+      if (cleanup?.status === "failed") {
+        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_failed", {
+          ...identity, fixtureLabel: workspaceAcceptanceEnvironment!.displayName, workspaceId: cleanup.workspaceId,
+          phase: cleanup.phase, reason: cleanup.reason,
+        });
+        // 清理句柄保留唯一状态；同一次验收立即重试一次，以便记录瞬时失败后的恢复。
+        cleanup = workspaceAcceptanceEnvironment!.dispose();
+        if (cleanup.status === "failed") throw new Error(`临时验收工作区清理失败：${cleanup.phase}。`);
+      }
+      if (cleanup?.recovered) {
+        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_recovered", {
+          ...identity, fixtureLabel: workspaceAcceptanceEnvironment!.displayName, workspaceId: cleanup.workspaceId,
+        });
+      }
     }
     if (!run || !plan) throw new Error("韩立验收未产生运行记录。");
     audit.recordEvent("hanli.acceptance.real_app_checked", {
