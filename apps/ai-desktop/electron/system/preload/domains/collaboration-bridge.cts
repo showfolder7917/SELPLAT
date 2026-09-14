@@ -32,7 +32,7 @@ export function collaborationBridge() {
     updateEvolutionTopic: (topicId: string, request: unknown) => invoke("desktop:update-evolution-topic", topicId, request),
     configureEvolutionAutomation: (request: unknown) => invoke("desktop:configure-evolution-automation", request),
     controlEvolutionAutomation: (action: string) => invoke("desktop:control-evolution-automation", action),
-    resumeEvolutionOneShot: (runId: string) => invoke("desktop:resume-nangong-one-shot-evolution", runId),
+    resumeEvolutionOneShot: (request: unknown) => invoke("desktop:resume-nangong-one-shot-evolution", request),
     createEvolutionProposal: (topicId: string, request: unknown) => invoke("desktop:create-evolution-proposal", topicId, request),
     decideEvolutionProposal: (proposalId: string, request: unknown) => invoke("desktop:decide-evolution-proposal", proposalId, request),
     decideEvolutionResult: (proposalId: string, request: unknown) => invoke("desktop:decide-evolution-result", proposalId, request),

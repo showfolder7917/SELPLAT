@@ -5,7 +5,7 @@ import type { CompletionReviewGateOutDto, HanliComputerAcceptanceInDto, HanliAcc
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../../contracts/services/workflow/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto } from "../../../../../contracts/services/workflow/index.js";
 import type { SendMessageOutDto } from "../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { EventCenterExceptionInDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../contracts/services/workflow/index.js";
@@ -366,6 +366,32 @@ export class PersonaEvolutionRuntime {
     } finally {
       this.#resuming = false;
     }
+  }
+
+  /** 校验专题、当前提案和原运行后，恢复已关联的补验请求。 */
+  async requestSupplementalAcceptance(request: RequestSupplementalAcceptanceInDto): Promise<EvolutionStateOutDto> {
+    const topicId = request.topicId.trim();
+    const proposalId = request.proposalId.trim();
+    const runId = request.runId.trim();
+    if (!topicId || !proposalId || !runId) throw new Error("补验请求必须包含原专题、当前提案和原运行标识。");
+
+    const state = this.state();
+    const run = state.oneShotRun;
+    const proposal = state.proposals.find((item) => item.proposalId === proposalId);
+    const linked = run?.runId === runId
+      && run.topicId === topicId
+      && run.proposalId === proposalId
+      && proposal?.topicId === topicId
+      && new ProposalRevisionChain(state.proposals).isCurrent(proposalId);
+    if (!linked) {
+      this.#recordEvent("evolution.supplemental_acceptance_unlinked", { topicId, proposalId, runId, reason: "补验未能关联原专题、当前提案和原运行。" });
+      throw new Error("补验未能关联原专题、当前提案和原运行；已保留回执，不会创建新专题。");
+    }
+    if (this.#resuming || this.#running) {
+      this.#recordEvent("evolution.supplemental_acceptance_waiting", { topicId, proposalId, runId, reason: "同一原专题正在恢复，保留当前等待结果。" });
+      return state;
+    }
+    return this.resumeOneShotRun(runId);
   }
 
   async #dispatch(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
@@ -785,7 +811,8 @@ export class PersonaEvolutionRuntime {
       if (state.automationRuntime.status !== "running") return;
       for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "await-approval")) state = this.#hanli.autoApprove(proposal.proposalId);
       for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "dispatch")) state = await this.#dispatch(proposal.proposalId);
-      const hasActiveWork = state.proposals.some((item) => !["completed", "rejected"].includes(item.status))
+      const hasActiveWork = new ProposalRevisionChain(state.proposals).currentProposals()
+        .some((item) => !["completed", "rejected"].includes(item.status))
         || state.topics.some((item) => !["completed", "rejected"].includes(item.status));
       const activeDeliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
       if (this.#deliberation && (activeDeliberation || (!hasActiveWork && state.automationSettings.automaticCustodyEnabled === true))) {

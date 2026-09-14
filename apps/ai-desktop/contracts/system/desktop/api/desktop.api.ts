@@ -11,7 +11,7 @@ import type { DesktopEnvironmentOutDto } from "../dto/desktop-environment.out.dt
 import type { CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexLoginResponseOutDto, CodexModelCatalogOutDto, CodexStreamEventOutDto, CodexUserInputRequestOutDto, ResolveCodexApprovalOutDto, ResolveCodexUserInputInDto } from "../../../services/support/platform/codex/index.js";
 import type { TrustedCommandInfoOutDto } from "../../../services/support/platform/security/index.js";
 import type { AutomaticTestPreflightResultOutDto } from "../../../services/support/capabilities/testing/index.js";
-import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, SubmitCollaborationTaskInDto } from "../../../services/workflow/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto, SubmitCollaborationTaskInDto } from "../../../services/workflow/index.js";
 import type { AuditLogInfoOutDto, RendererExceptionInDto } from "../../../services/support/capabilities/event-center/index.js";
 import type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../../services/support/capabilities/conversation/index.js";
 import type { TestDataResetResultOutDto } from "../../../services/support/application/index.js";
@@ -190,8 +190,8 @@ export interface DesktopApi {
   configureEvolutionAutomation(request: ConfigurePersonaWorkflowInDto): Promise<EvolutionStateOutDto>;
   /** 启动、暂停、恢复或停止演化自动化。 */
   controlEvolutionAutomation(action: PersonaWorkflowActionInDto): Promise<EvolutionStateOutDto>;
-  /** 从已持久化卡点恢复同一专题和提案链。 */
-  resumeEvolutionOneShot(runId: string): Promise<EvolutionStateOutDto>;
+  /** 校验原专题、当前提案和原运行后恢复同一条补验链。 */
+  resumeEvolutionOneShot(request: RequestSupplementalAcceptanceInDto): Promise<EvolutionStateOutDto>;
   /** 向南宫调查会话发送消息并记录来源。 */
   /** 清空当前南宫会话并创建新会话。 */
   /** 根据冻结对话生成专题草案，不直接创建专题。 */

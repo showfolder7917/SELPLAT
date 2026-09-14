@@ -110,6 +110,8 @@ export type { CollaborationTimelineBusinessEventTypeValue } from "./value/collab
 export type { ConfigurePersonaWorkflowInDto } from "./dto/configure-persona-workflow.in.dto.js";
 // PersonaWorkflowActionInDto 是启动、暂停、恢复、停止或交接自动演化的命令。
 export type { PersonaWorkflowActionInDto } from "./dto/persona-workflow-action.in.dto.js";
+// RequestSupplementalAcceptanceInDto 是专题卡提交原专题补验恢复时的关联身份。
+export type { RequestSupplementalAcceptanceInDto } from "./dto/request-supplemental-acceptance.in.dto.js";
 // PersonaRuntimePort 是 Workflow 可以调用的人物运行时最小接口。
 export type { PersonaRuntimePort } from "./port/persona-runtime.port.js";
 // WorkflowStateReaderPort 是其他领域读取 Workflow 状态的只读接口。
