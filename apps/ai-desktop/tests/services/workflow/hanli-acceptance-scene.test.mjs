@@ -735,7 +735,34 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
-  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件。", missingCriterionIds: ["criterion-2"], duplicateCriterionIds: undefined, unknownCriterionIds: undefined }]);
+  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件。", invalidFields: undefined, missingCriterionIds: ["criterion-2"], duplicateCriterionIds: undefined, unknownCriterionIds: undefined }]);
+});
+
+test("无效阶段返回脱敏字段摘要，第二回合按当前协议重新登记", async () => {
+  const rejections = [];
+  const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
+  let firstRequestId;
+  const result = await submission.run(goal, async (requestId, attempt, planningContext) => {
+    if (attempt === 1) {
+      firstRequestId = requestId;
+      const rejected = await submission.tools.call("hanli_register_acceptance_scene_segment", {
+        ...segment,
+        requestId,
+        // 模拟发布版实际可见的说明词被当成参数值，不能默认替换成任意有效场景。
+        kind: "场景类型",
+      });
+      assert.equal(rejected.success, false);
+      assert.match(rejected.contentItems[0].text, /未提交有效的验收场景阶段/);
+      return;
+    }
+    assert.notEqual(requestId, firstRequestId);
+    assert.deepEqual(planningContext.rejectionSummary, { invalidFields: ["kind"], missingCriterionIds: undefined, duplicateCriterionIds: undefined, unknownCriterionIds: undefined });
+    assert.equal((await registerPlan(submission, requestId, plan)).success, true);
+  });
+  assert.deepEqual(result, plan);
+  assert.deepEqual(rejections, [{ message: "韩立未提交有效的验收场景阶段。", invalidFields: ["kind"], missingCriterionIds: undefined, duplicateCriterionIds: undefined, unknownCriterionIds: undefined }]);
+  assert.match(submission.planningInstruction, /"allowedKinds"/);
+  assert.match(submission.planningInstruction, /"empty-task-group"/);
 });
 
 test("协作状态夹具的两种允许阶段由同一需求规则校验和纠正", async () => {
@@ -779,6 +806,9 @@ test("韩立场景工具通过本轮阶段连接装配，结束与应用退出�
   assert.match(scene, /read: \(\) => null/);
   assert.match(scene, /criteria: planningContext\.criteria/);
   assert.match(scene, /requiredSceneKinds: planningContext\.requiredSceneKinds/);
+  assert.match(scene, /submission\.planningInstruction/);
+  assert.match(scene, /planningContext\.rejectionSummary/);
+  assert.match(scene, /invalidFields: rejection\.invalidFields/);
   assert.doesNotMatch(scene, /retryContext/);
   assert.match(scene, /finally/);
   assert.match(scene, /service.dispose\(\)/);
@@ -822,6 +852,8 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
 
 test("场景说明区分条件式规则与必须构造的验收状态", () => {
   const prompt = readFileSync("prompts/personas/hanli/acceptance-scene.md", "utf8");
+  assert.match(prompt, /阶段登记协议/);
+  assert.doesNotMatch(prompt, /"kind":"场景类型"/);
   assert.match(prompt, /若、如果、存在时、出现时/);
   assert.match(prompt, /不代表验收场景必须人为创建/);
   assert.match(prompt, /不得因此选择 blocked/);

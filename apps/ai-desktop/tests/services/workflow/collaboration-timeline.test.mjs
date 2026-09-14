@@ -2,11 +2,26 @@ import assert from "node:assert/strict";
 import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { build } from "esbuild";
 
-import { CollaborationTimelineRepository } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.js";
-import { CollaborationTimelineFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.facade.js";
-import { SqliteDatabase } from "../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
+
+// 测试直接装载当前工作树源码，禁止构建受限时把缺失产物误判为时间线产品故障。
+async function loadWorkflowSource(entryPoint) {
+  const result = await build({
+    entryPoints: [entryPoint],
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "es2022",
+    write: false,
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+
+const { CollaborationTimelineRepository } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts");
+const { CollaborationTimelineFacade } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.facade.ts");
+const { SqliteDatabase } = await loadWorkflowSource("electron/services/support/platform/persistence/internal/sqlite-database.ts");
 
 const member = (memberId, displayName) => ({ memberId, displayName });
 

@@ -999,6 +999,11 @@ export async function startApplication(): Promise<void> {
           topicId: goal.topicId,
           actor: { memberId: "han-li", displayName: "韩立" },
           message: rejection.message,
+          // 失败历史仅保留字段路径和编号摘要，供下一轮纠正且不泄露候选内容或页面数据。
+          invalidFields: rejection.invalidFields,
+          missingCriterionIds: rejection.missingCriterionIds,
+          duplicateCriterionIds: rejection.duplicateCriterionIds,
+          unknownCriterionIds: rejection.unknownCriterionIds,
         }),
       });
       const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
@@ -1013,9 +1018,9 @@ export async function startApplication(): Promise<void> {
           submission.run(goal, (requestId, attempt, planningContext) => service.send(
             `${attempt === 2
               ? planningContext.rejectionMessage
-                ? `上一回合已经调用场景提交工具，但参数未通过校验：${planningContext.rejectionMessage}\n`
+                ? `上一回合已经调用场景提交工具，但参数未通过校验：${planningContext.rejectionMessage}\n拒绝字段摘要：${JSON.stringify(planningContext.rejectionSummary ?? {})}\n`
                 : "上一回合没有调用场景提交工具。\n"
-              : ""}本轮结构化场景计划契约：${JSON.stringify({ criteria: planningContext.criteria, requiredSceneKinds: planningContext.requiredSceneKinds })}\n逐个或分组调用 hanli_register_acceptance_scene_segment，并根据每次返回的 remainingCriterionIds 继续登记；只有剩余集合为空时才调用 hanli_finalize_acceptance_scene。不要读取、沿用或补写被拒绝的计划，也不要只回复说明文字。\n\n${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
+              : ""}本轮结构化场景计划契约：${JSON.stringify({ criteria: planningContext.criteria, requiredSceneKinds: planningContext.requiredSceneKinds })}\n阶段登记协议：${submission.planningInstruction}\n逐个或分组调用 hanli_register_acceptance_scene_segment，并根据每次返回的 remainingCriterionIds 继续登记；只有剩余集合为空时才调用 hanli_finalize_acceptance_scene。不要读取、沿用或补写被拒绝的计划，也不要只回复说明文字。\n\n${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
             settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
           )),
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("韩立场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),
