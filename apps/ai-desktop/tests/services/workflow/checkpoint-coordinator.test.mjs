@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { build } from "esbuild";
 
@@ -20,6 +22,7 @@ const { createOneShotFailureFingerprint } = await loadWorkflowSource("electron/s
 const { selectCurrentAcceptanceFailure } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-failure-selection.ts");
 const { CheckpointHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.ts");
 const { AcceptanceHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts");
+const { CollaborationTimelineRepository } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts");
 
 test("真实验收每轮使用独立故障身份，普通轮询仍保持稳定去重", () => {
   const base = { runId: "run-1", proposalId: "proposal-1" };
@@ -286,6 +289,94 @@ test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南�
   assert.match([...f.events.values()][0].fact.detail, /原提案：proposal-1/);
   state.round = 2; service.publish(fixture().event, state, "received", "第二轮");
   assert.equal(f.messages.size, 2); assert.equal(f.events.size, 2);
+});
+
+test("协调器把同轮多异常收口为一个完成事实，重放稳定且新轮次独立追加", async () => {
+  const connection = new DatabaseSync(":memory:", { enableForeignKeyConstraints: true });
+  connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineTopic.sql", import.meta.url), "utf8"));
+  connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineEvent.sql", import.meta.url), "utf8"));
+  connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineStream.sql", import.meta.url), "utf8"));
+  const database = {
+    // 本测试仅验证仓库的同步业务事实写入，不开启额外运行时或构建产物。
+    transaction(operation) { return operation(connection); },
+    withConnection(operation) { return operation(connection); },
+  };
+  const timeline = new CollaborationTimelineRepository(database);
+  const resolved = [];
+  const originalTask = {
+    taskId: "original-task", state: "integrated", phase: "integrated", updatedAt: "2026-09-14T00:00:00.000Z",
+    executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: { constraints: [] },
+  };
+  const event = (eventId, message, checkpoint) => ({
+    eventId, correlationId: "original-task", category: "technical-error", flowImpact: "blocked", message,
+    occurredAt: "2026-09-14T00:00:00.000Z", payload: {
+      taskId: "original-task", runId: "run-1", proposalId: "proposal-1", phase: "implementing", recoveryPoint: "原任务验证",
+      ...(checkpoint ? { checkpoint } : {}),
+    },
+  });
+  const roundOneCheckpoint = (issue, investigation, repairResult, testResult) => ({
+    round: 1, phase: "returned", repairTaskId: "repair-1", runId: "run-1", proposalId: "proposal-1", topicId: "topic-1",
+    taskId: "original-task", sourceMemberId: "mo-caihuan", conversations: {}, sourcePhase: "implementing", recoveryPoint: "原任务验证",
+    issue, blockedImpact: "原流程尚不能继续完成专题。", repairGoal: "回到原节点复验。", investigation, repairResult, testResult,
+    latestProgress: "修复结果已返回，等待原任务验证。",
+  });
+  const events = [
+    event("issue-first", "首个异常已解除", roundOneCheckpoint("首个异常已解除", "第一项调查", "第一项修复", "第一项验证")),
+    event("issue-second", "同轮第二个异常已解除", roundOneCheckpoint("同轮第二个异常已解除", "第二项调查", "第二项修复", "第二项验证")),
+  ];
+  const evolution = {
+    automationSettings: { automaticCustodyEnabled: false }, automationRuntime: { status: "idle" },
+    oneShotRun: { runId: "run-1", proposalId: "proposal-1", status: "completed" },
+    topics: [{ topicId: "topic-1", title: "原专题", workspaceState: { roots: [] }, locale: "zh-CN" }],
+    proposals: [{ proposalId: "proposal-1", topicId: "topic-1", title: "原提案", distributedTaskIds: ["original-task"] }],
+  };
+  const collaboration = { tasks: [originalTask], members: [] };
+  const coordinator = new CheckpointCoordinator({
+    evolution: () => evolution,
+    collaboration: () => collaboration,
+    pending: () => events,
+    save: (eventId, state) => { events.find((item) => item.eventId === eventId).payload.checkpoint = structuredClone(state); },
+    resolve: (eventId) => resolved.push(eventId),
+    resume: async () => evolution,
+    handleTask: async () => {},
+    submitRepair: () => collaboration,
+    handoff: new CheckpointHandoffService({
+      memory: null,
+      publish: (timelineEvent) => { timeline.appendBusinessEvent(timelineEvent); },
+      changed: () => {},
+      name: (memberId) => ({ "mo-caihuan": "墨彩环", "linghu-ancestor": "令狐老祖" })[memberId] || memberId,
+      topic: () => ({ title: "原专题", createdAt: "2026-09-14T00:00:00.000Z", completed: false }),
+    }),
+  });
+  try {
+    await coordinator.process(events);
+    const completed = () => timeline.snapshot().groups.flatMap((group) => group.nodes)
+      .filter((node) => node.action.includes("原流程已验证卡点解除"));
+    assert.equal(completed().length, 1);
+    assert.equal(completed()[0].nodeId, "checkpoint-resolution:task:original-task:round:1");
+    assert.match(completed()[0].detail, /issue-first：首个异常已解除/);
+    assert.match(completed()[0].detail, /issue-second：同轮第二个异常已解除/);
+    assert.match(completed()[0].detail, /调查结论：第一项调查/);
+    assert.match(completed()[0].detail, /修复结果：第二项修复/);
+    assert.match(completed()[0].detail, /测试结果：第二项验证/);
+    assert.deepEqual(resolved, ["issue-first", "issue-second"]);
+
+    await coordinator.process(events);
+    assert.equal(completed().length, 1, "重放只能复用规范完成事实");
+
+    events.push(event("issue-next-round", "新恢复轮次异常已解除", {
+      round: 2, phase: "returned", repairTaskId: "repair-2", runId: "run-1", proposalId: "proposal-1", topicId: "topic-1",
+      taskId: "original-task", sourceMemberId: "mo-caihuan", conversations: {}, sourcePhase: "implementing", recoveryPoint: "原任务验证",
+      issue: "新恢复轮次异常已解除", blockedImpact: "原流程尚不能继续完成专题。", repairGoal: "回到原节点复验。",
+    }));
+    await coordinator.process(events);
+    assert.deepEqual(completed().map((node) => node.nodeId), [
+      "checkpoint-resolution:task:original-task:round:1",
+      "checkpoint-resolution:task:original-task:round:2",
+    ]);
+  } finally {
+    connection.close();
+  }
 });
 
 test("验收每轮独立身份，结果留在专题时间线而不写入客户会话", () => {
