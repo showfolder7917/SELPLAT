@@ -377,6 +377,8 @@ async function sendNangongTestConversation(request) {
 }
 
 contextBridge.exposeInMainWorld("desktop", {
+  // 启动诊断只供隔离交互测试读取，业务 Renderer 仍只依赖正式桌面接口。
+  getInteractionLaunchDiagnostics: async () => ipcRenderer.invoke("interaction:get-launch-diagnostics"),
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
   getAiMemoryDatabaseStatus: async () => ({ ...readInteractionAiMemoryDatabaseStatus() }),
   clearTestData: async () => { document.documentElement.dataset.interactionTestDataReset = "true"; return { cleared: true, clearedRecordCount: 42, clearedCandidateBranchCount: 0, clearedCandidateWorktreeCount: 0, candidateCleanupWarnings: [], restartScheduled: true }; },

@@ -18,6 +18,22 @@ function interactionServerDiagnostics() {
   }
 }
 
+async function waitForDeveloperPage() {
+  try {
+    await page.waitForLoadState("domcontentloaded");
+    await page.getByRole("button", { name: "折叠任务" }).waitFor();
+  } catch (error) {
+    const diagnostics = await page.evaluate(async () => {
+      try {
+        return await (window as any).desktop.getInteractionLaunchDiagnostics();
+      } catch (diagnosticError) {
+        return { unavailable: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError) };
+      }
+    }).catch((diagnosticError) => ({ unavailable: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError) }));
+    throw new Error(`隔离 Electron 未完成 Developer 页面加载：${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostics)}`);
+  }
+}
+
 async function openScreenshotInteractionHarness() {
   try {
     const health = await page.request.get("http://127.0.0.1:4197/", { timeout: 3_000 });
@@ -43,7 +59,7 @@ test.beforeAll(async () => {
     env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_FILE: productionRendererFile },
   });
   page = await application.firstWindow();
-  await page.getByRole("button", { name: "折叠任务" }).waitFor();
+  await waitForDeveloperPage();
 });
 
 test.afterAll(async () => {
