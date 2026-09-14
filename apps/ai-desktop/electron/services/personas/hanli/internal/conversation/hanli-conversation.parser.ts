@@ -14,6 +14,8 @@ export interface ParsedHanliConversationResponse {
   topic: ConversationRoundTopicDecisionInDto;
   /** 只有模型返回有效调查门禁时才存在的结构化理解。 */
   inquiry?: HanliInquiryUnderstanding;
+  /** 明确的普通答复也是流程决定；缺失不能被当成无需调查。 */
+  inquiryNotNeeded?: boolean;
 }
 
 /** 分离韩立可见正文和训练语义坐标；元数据异常时保留正文并等待后续补齐。 */
@@ -69,7 +71,7 @@ export function parseHanliConversationResponse(text: string): ParsedHanliConvers
     // value 是模型返回的候选元数据，所有字段仍需逐项校验。
     const value = JSON.parse(markerText) as Partial<ConversationRoundTopicDecisionInDto> & {
       // inquiry 是模型可选返回的调查理解候选。
-      inquiry?: Partial<HanliInquiryUnderstanding>;
+      inquiry?: Partial<HanliInquiryUnderstanding> | { status: "not-needed" };
     };
     // title 限制为一百二十个 Unicode 字符并合并多余空白。
     const title = normalizedText(value.title, 120);
@@ -87,13 +89,17 @@ export function parseHanliConversationResponse(text: string): ParsedHanliConvers
       throw new Error("incomplete metadata");
     }
     // 调查理解使用独立门禁校验，缺失时允许普通对话继续。
-    const inquiry = parseInquiryUnderstanding(value.inquiry);
+    const inquiryNotNeeded = value.inquiry?.status === "not-needed";
+    const inquiry = value.inquiry?.status === "not-needed"
+      ? undefined
+      : parseInquiryUnderstanding(value.inquiry);
     // 返回可见正文和全部通过校验的结构化语义。
     return {
       // reply 不包含内部 HANLI_TOPIC_META 行。
       reply,
       // inquiry 只在模型给出有效结构时存在。
       inquiry,
+      inquiryNotNeeded,
       // topic 是完整且可归档的主题决定。
       topic: {
         // title 是模型生成并经过长度校验的本轮主题。

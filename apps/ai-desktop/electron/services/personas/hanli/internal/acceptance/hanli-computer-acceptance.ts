@@ -13,6 +13,8 @@ export interface WorkspaceAcceptanceEvidencePort {
 export type AcceptancePrivateAction = "recovery" | "persona-message" | "persona-screenshot" | "persona-navigation";
 export interface AcceptanceWindowInteractionPort {
   allows(action: AcceptancePrivateAction): boolean;
+  /** 主进程收到真实截图归档回执后推进私有场景，不扩大模型工具权限。 */
+  captureObservationReceipt?(): () => void;
 }
 
 /** 仅提供当前应用窗口的单步输入和真实截图，下一动作由模型看到结果后选择。 */
@@ -87,6 +89,7 @@ export class HanliComputerAcceptance {
       if (window.isDestroyed()) {
         throw new Error("验收窗口已关闭");
       }
+      const acknowledgeObservation = interactions.captureObservationReceipt?.();
       const bitmap = await window.webContents.capturePage();
       const screenshotSize = bitmap.getSize();
       const viewport = await window.webContents.executeJavaScript(`(${readAcceptanceViewport.toString()})()`).catch(() => screenshotSize) as AcceptanceViewport;
@@ -99,6 +102,7 @@ export class HanliComputerAcceptance {
       });
       snapshot = attachment.id;
       evidence.push(snapshot);
+      acknowledgeObservation?.();
       if (inputCount > 0) {
         postInputEvidence.add(snapshot);
       }

@@ -288,7 +288,8 @@ export class HanliConversationService {
     // 没有澄清锚点时，本轮用户原话就是当前问题。
     const customerQuestion = pendingCustomerQuestion || request.message.trim();
     // 提示词只生成内容和结构化理解，不再控制输入 1 的流程路由。
-    const prompt = this.#options.prompts.render("hanli.conversation", {
+    const renderPrompt = (routingFeedback: string) => this.#options.prompts.render("hanli.conversation", {
+      routingFeedback,
       // 方法资料帮助韩立学习如何调查，不提供旧问题结论。
       methodContextJson: methodContext,
       // 当前会话帮助韩立理解用户正在回答哪一个问题。
@@ -298,6 +299,7 @@ export class HanliConversationService {
       // 最新用户原话仍单独提供，模型不得把它伪装成历史消息。
       userMessage: request.message.trim(),
     });
+    const prompt = renderPrompt("");
     // 创建时间记录本轮用户消息真实进入模型调用的时刻。
     const createdAt = new Date().toISOString();
     // 普通韩立模型运行在只读工作区，但可以返回调查请求和观点。
@@ -308,7 +310,18 @@ export class HanliConversationService {
       throw new Error("韩立会话没有返回稳定 Codex 线程标识。");
     }
     // 解析可见回复、主题判断和可选调查理解。
-    const parsed = parseHanliConversationResponse(response.text);
+    let parsed = parseHanliConversationResponse(response.text);
+    const workflow = this.#options.store.state();
+    const requiresRoutingDecision = workflow.automationSettings.automaticCustodyEnabled === true
+      && !!workflow.oneShotRun && ["running", "blocked"].includes(workflow.oneShotRun.status);
+    // 活动任务中的每轮反馈必须明确选择调查、澄清或仅答复，不能用遗漏元数据吞掉纠偏。
+    if (requiresRoutingDecision && !parsed.inquiry && !parsed.inquiryNotNeeded) {
+      const corrected = await chat.send(request, renderPrompt("missing-routing-decision"), conversation.selectedModel);
+      parsed = parseHanliConversationResponse(corrected.text);
+      if (!parsed.inquiry && !parsed.inquiryNotNeeded) {
+        throw new Error("韩立未明确本轮反馈的处理方式，尚未交给执行流程；请重试本条消息。");
+      }
+    }
     // 模型明确切换话题时，本轮原话成为新的客户问题。
     let effectiveCustomerQuestion = customerQuestion;
     // switchTopic 表示用户已经明确放弃旧问题并提出新目标。
@@ -651,12 +664,11 @@ export class HanliConversationService {
     const memory = this.#options.memory!;
     // 旧事实包提供已经完成的调查依据；没有调查时允许为空。
     const priorInvestigation = memory.readLatestRequirementDiscussionContext?.("han-li", conversationId) || null;
-    // 普通同话题追问接续调查；新设计启动只复用其自身请求的依据，切换话题必须隔离。
-    const investigated = !decision.switchTopic && (
-      !viewpoint || priorInvestigation?.sourceRequestId === viewpoint.sourceUserMessageId
-    ) ? priorInvestigation : null;
     // 优先使用 Aggregate 找到的用户来源消息，否则使用本轮前端消息标识。
     const sourceRequestId = viewpoint?.sourceUserMessageId || request.clientMessageId || viewpoint?.sourceMessageId || randomUUID();
+    // 同一话题可以包含多轮不同纠正；只有同一来源请求才能继承已核实结论。
+    const investigated = !decision.switchTopic && priorInvestigation?.sourceRequestId === sourceRequestId
+      ? priorInvestigation : null;
     // 观点正文必须非空，空白模型回复不能覆盖上一份有效研讨方向。
     const normalizedViewpoint = viewpointContent.trim();
     // 空白观点没有可保存的业务意义。

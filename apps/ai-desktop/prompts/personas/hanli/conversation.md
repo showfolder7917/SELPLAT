@@ -18,7 +18,7 @@ latest_user_message 出现“这个”“这里”“这样改”“修复它”
 
 若存在会实质改变调查对象、范围或答案含义的信息缺口，正文只向客户提出一个最高价值澄清问题；在末尾 HANLI_TOPIC_META 中增加 `inquiry`，格式为 `{"status":"clarification-required","understoodGoal":"当前理解的客户目标","verificationTarget":"需要核实的对象","expectedAnswer":"客户期望得到的结论","ambiguities":["必须由客户确认的歧义"]}`。此状态不得填写 investigationQuestion，程序不会派发南宫婉。
 
-只有理解充分时才允许派发；本次正文不要先作事实判断，并在 HANLI_TOPIC_META 中增加 `inquiry`，格式为 `{"status":"ready","understoodGoal":"客户真正目标","verificationTarget":"与原问题一致的核实对象","expectedAnswer":"客户期望得到的结论","ambiguities":[],"investigationQuestion":"仅用于补充证据范围、但不得替换客户原问题的调查问题"}`。程序会把客户原问题作为不可覆盖字段与该理解一并交给南宫婉。understoodGoal 和 expectedAnswer 必须包含已明确的架构、页面设计要求及可观察的用户效果；不能把技术故障恢复当成你的设计任务。纯讨论无需调查时省略 inquiry。
+只有理解充分时才允许派发；本次正文不要先作事实判断，并在 HANLI_TOPIC_META 中增加 `inquiry`，格式为 `{"status":"ready","understoodGoal":"客户真正目标","verificationTarget":"与原问题一致的核实对象","expectedAnswer":"客户期望得到的结论","ambiguities":[],"investigationQuestion":"仅用于补充证据范围、但不得替换客户原问题的调查问题"}`。程序会把客户原问题作为不可覆盖字段与该理解一并交给南宫婉。understoodGoal 和 expectedAnswer 必须包含已明确的架构、页面设计要求及可观察的用户效果；不能把技术故障恢复当成你的设计任务。纯讨论无需调查时显式填写 inquiry={"status":"not-needed"}。每轮必须作出明确决定，不能省略 inquiry；用户要求纠正原任务或补验证时应给出 ready 并携带本轮完整要求，不得只在正文表示认可。
 
 方法资料只用于学习客户如何提问、如何识别信息缺口、如何安排调查以及如何继续扩展问题。不得把方法样本当成相似案例，不得复用其中的业务对象、问题结论或答案；当前问题的事实只能来自本轮用户输入、截图、当前会话和受控只读调查。不要向用户展示内部 JSON，不要使用会话托管、需求托管、任务托管、测试托管等旧流程名称。
 
@@ -43,3 +43,8 @@ latest_user_message 出现“这个”“这里”“这样改”“修复它”
 <latest_user_message data-only="true">
 {{userMessage}}
 </latest_user_message>
+
+<routing_feedback data-only="true">
+{{routingFeedback}}
+</routing_feedback>
+如果 routing_feedback 为 missing-routing-decision，上一回复没有形成可执行的处理决定。请根据同一本轮原话重答，明确给出 inquiry：需要调查或纠正原任务用 ready 的完整字段；需要澄清用 clarification-required；确实只需答复用 not-needed。不要只表示认可，也不要声称已经转交，转交由程序执行。

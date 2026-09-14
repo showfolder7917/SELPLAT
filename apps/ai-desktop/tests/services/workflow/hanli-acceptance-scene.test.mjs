@@ -610,7 +610,10 @@ test("人物会话场景只在内存提供分页、一次失败重试、可观�
   void pending.then(() => { settled = true; });
   await Promise.resolve();
   assert.equal(settled, false);
-  t.mock.timers.tick(600);
+  t.mock.timers.tick(60_000);
+  await Promise.resolve();
+  assert.equal(settled, false, "任意耗时不推进尚未观察的发送");
+  session.capturePersonaSendingObservation(91)();
   const sent = await pending;
   assert.equal(sent.messages.at(-2).attachmentIds[0], "fixture-image");
   assert.equal(sent.messages.at(-1).replyToMessageId, "fixture-message");
@@ -1052,4 +1055,24 @@ test("验收输入权限复用主进程会话登记与IPC边界，释放后立�
   for (const action of actions.slice(1)) assert.equal(sessions.allowsComputerAction(702, action), true);
   sessions.remove(701); sessions.remove(702);
   for (const id of [701, 702]) for (const action of actions) assert.equal(sessions.allowsComputerAction(id, action), false);
+});
+
+test("重新登记同一窗口会取消旧发送，旧观察不能把旧消息送入新会话", async () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(95, "persona-conversation-lifecycle");
+  const request = { clientMessageId: "old-message", message: "旧发送", attachmentIds: [], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" };
+  const old = session.sendPersonaConversationMessage(95, "han-li", request);
+  const lateReceipt = session.capturePersonaSendingObservation(95);
+  session.register(95, "persona-conversation-lifecycle");
+  await assert.rejects(old, /独立验收会话已关闭/);
+  assert.equal(session.conversationWindow(95, "han-li").messages.some(m => m.messageId === "old-message"), false);
+  const next = session.sendPersonaConversationMessage(95, "han-li", { ...request, clientMessageId: "new-message" });
+  let settled = false;
+  void next.then(() => { settled = true; });
+  lateReceipt();
+  await Promise.resolve();
+  assert.equal(settled, false);
+  session.capturePersonaSendingObservation(95)();
+  assert.equal((await next).messages.at(-2).messageId, "new-message");
+  session.remove(95);
 });

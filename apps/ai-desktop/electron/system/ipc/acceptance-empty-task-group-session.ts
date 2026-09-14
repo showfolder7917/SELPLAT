@@ -12,8 +12,6 @@ const scenarioProposalId = "acceptance-failure-recovery-proposal";
 const crossTaskId = "acceptance-linghu-other-active-task";
 const hanli = { memberId: "han-li", displayName: "韩立" };
 const linghu = { memberId: "linghu-laozu", displayName: "令狐老祖" };
-// 验收工具会在输入后等待一帧并截图；此时长只服务窗口私有会话的发送中观察。
-const acceptancePersonaSendingObservationMs = 600;
 export const acceptanceRecoveryFailureMessage = "受控验收恢复失败：隔离场景已完成“恢复中”状态观察，现按既定验收条件模拟恢复无法继续。\n原因：此失败只存在于窗口私有时间线，不会写入正式任务、提案或人物会话。\n建议：查看完整错误证据后结束本场景，并使用正式验收流程继续。";
 
 /**
@@ -34,9 +32,10 @@ export class AcceptanceEmptyTaskGroupSession {
   #collaborationStateProjectionFixtures = new Set<number>();
   #failedEarlierReads = new Set<string>();
   #personaScreenshotSequences = new Map<number, number>();
-  #personaMessageDelayResolvers = new Map<number, Set<() => void>>();
+  #pendingPersonaObservations = new Map<number, { resolve: () => void; reject: (error: Error) => void }>();
 
   register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto, crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto, collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto, memberIdleFixture?: MemberIdleFixtureContextOutDto): void {
+    this.remove(webContentsId);
     this.#scenarios.set(webContentsId, sceneKind);
     this.#selectedMembers.set(webContentsId, sceneKind === "cross-task-member-occupancy" || sceneKind === "member-idle" ? "linghu-ancestor" : "han-li");
     this.#operatingModes.set(webContentsId, "collaboration");
@@ -44,7 +43,7 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#recoveryLifecycleFailed.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
-    this.#resolvePersonaMessageDelays(webContentsId);
+
     // 人物会话验收沿真实页面入口发送固定验收文案；消息只保存在当前窗口内存。
     if (sceneKind === "empty-task-group" || sceneKind === "persona-empty-conversation" || sceneKind === "persona-conversation-lifecycle" || sceneKind === "persona-conversation-with-task-handoff") {
       const emptyPersonaConversation = sceneKind === "persona-empty-conversation";
@@ -80,7 +79,9 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#collaborationStateProjectionFixtures.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
-    this.#resolvePersonaMessageDelays(webContentsId);
+    const pending = this.#pendingPersonaObservations.get(webContentsId);
+    this.#pendingPersonaObservations.delete(webContentsId);
+    pending?.reject(new Error("独立验收会话已关闭，未写入人物消息。"));
   }
 
   isActive(webContentsId: number): boolean {
@@ -264,7 +265,7 @@ export class AcceptanceEmptyTaskGroupSession {
     if (!clientMessageId) throw new Error("人物会话验收消息缺少稳定消息标识。");
     if (this.#scenarios.get(webContentsId) === "persona-conversation-lifecycle") {
       await this.#waitForPersonaSendingObservation(webContentsId);
-      if (!this.isPersonaConversationLifecycle(webContentsId)) {
+      if (this.#personaConversations.get(webContentsId) !== conversations) {
         throw new Error("独立验收会话已关闭，未写入人物消息。");
       }
     }
@@ -283,26 +284,24 @@ export class AcceptanceEmptyTaskGroupSession {
     return { ...next, messages: next.messages.slice(-60) };
   }
 
-  /** 关闭窗口会提前释放等待，但不会在已撤销的会话中补写确认消息。 */
-  #waitForPersonaSendingObservation(webContentsId: number): Promise<void> {
-    return new Promise((resolve) => {
-      const resolvers = this.#personaMessageDelayResolvers.get(webContentsId) || new Set<() => void>();
-      this.#personaMessageDelayResolvers.set(webContentsId, resolvers);
-      const complete = () => {
-        clearTimeout(timer);
-        resolvers.delete(complete);
-        if (resolvers.size === 0) this.#personaMessageDelayResolvers.delete(webContentsId);
-        resolve();
-      };
-      const timer = setTimeout(complete, acceptancePersonaSendingObservationMs);
-      resolvers.add(complete);
-    });
+  /** 捕获本次观察对应的请求，迟到的截图不能释放新登记会话的发送。 */
+  capturePersonaSendingObservation(webContentsId: number): () => void {
+    const pending = this.#pendingPersonaObservations.get(webContentsId);
+    return () => {
+      if (!pending || this.#pendingPersonaObservations.get(webContentsId) !== pending) return;
+      this.#pendingPersonaObservations.delete(webContentsId);
+      pending.resolve();
+    };
   }
 
-  #resolvePersonaMessageDelays(webContentsId: number): void {
-    const resolvers = this.#personaMessageDelayResolvers.get(webContentsId);
-    if (!resolvers) return;
-    for (const resolve of [...resolvers]) resolve();
+  /** 由窗口私有会话持有唯一待观察请求，关闭或重新登记都取消旧请求。 */
+  #waitForPersonaSendingObservation(webContentsId: number): Promise<void> {
+    if (this.#pendingPersonaObservations.has(webContentsId)) {
+      throw new Error("当前隔离会话仍有发送请求等待观察。");
+    }
+    return new Promise((resolve, reject) => {
+      this.#pendingPersonaObservations.set(webContentsId, { resolve, reject });
+    });
   }
 
 }

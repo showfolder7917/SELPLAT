@@ -259,6 +259,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         createWindow: (options) => new BrowserWindow(options),
         execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window, {
           allows: (action) => acceptanceEmptyTaskGroupSession.allowsComputerAction(window.webContents.id, action),
+          captureObservationReceipt: () => acceptanceEmptyTaskGroupSession.capturePersonaSendingObservation(window.webContents.id),
         }, {
           readDirectory: (relativePath) => workspaceAcceptanceFixture.getDirectoryReadEvidence(window.webContents.id, relativePath),
         }),

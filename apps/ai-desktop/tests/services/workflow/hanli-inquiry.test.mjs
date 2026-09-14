@@ -371,8 +371,10 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
   await service.send({ message: "按这个调查结果修正", clientMessageId: "u2", attachmentIds: [], workspaceState, locale: "zh-CN" });
   assert.equal(starts, 0);
   assert.equal(recorded.length, 1);
-  assert.equal(recorded[0].customerQuestion, customerQuestion);
-  assert.equal(recorded[0].findingSummary, findings.summary);
+  assert.equal(recorded[0].customerQuestion, "按这个调查结果修正");
+  assert.equal(recorded[0].findingStatus, "unknown");
+  assert.deepEqual(recorded[0].evidence, []);
+  assert.notEqual(recorded[0].verificationTarget, prior.verificationTarget);
   assert.equal(recorded[0].understoodGoal, decision.userIntent);
   decision.switchTopic = true;
   await service.send({ message: "改谈设置页面", clientMessageId: "u3", attachmentIds: [], workspaceState, locale: "zh-CN" });
@@ -503,4 +505,59 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
   assert.deepEqual(replies, ["不要旧方案，仅修测试台状态"]);
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").length, 1);
+});
+
+test("托管纠偏缺调查决定时补全同一回合，再实际更新原任务", async () => {
+  const f = fixture(async () => { throw new Error("不得另开调查链"); });
+  let calls = 0;
+  const revisions = [], contexts = [];
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  f.memory.recordRequirementDiscussionContext = c => contexts.push(c);
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true },
+      oneShotRun: { runId: "original-run", proposalId: "original-proposal", status: "running" } }) },
+    prompts: { render: (_id, vars) => JSON.stringify(vars) },
+    conversation: { activeConversationId: () => "provider", send: async (_r, prompt) => {
+      calls++;
+      if (calls === 1) return { threadId: "provider", text: "应补真实交互证据。\nHANLI_TOPIC_META=" + JSON.stringify(topic) };
+      assert.equal(JSON.parse(prompt).routingFeedback, "missing-routing-decision");
+      return { threadId: "provider", text: "交原流程核实。\nHANLI_TOPIC_META=" + JSON.stringify({ ...topic, inquiry: understanding }) };
+    } },
+    reviseActiveRepairScope: async value => { revisions.push(value); return { updated: true, message: "已更新原任务" }; },
+    startInternalDeliberation: async () => { throw new Error("不得新建"); },
+    recordEvent() {},
+  });
+  await service.send(request);
+  assert.equal(calls, 2);
+  assert.equal(revisions.length, 1);
+  assert.equal(revisions[0].instruction, request.message);
+  assert.equal(revisions[0].runId, "original-run");
+  assert.equal(contexts.at(-1).sourceRequestId, request.clientMessageId);
+  await service.send(request);
+  assert.equal(revisions.length, 1);
+});
+
+test("托管回合连续遗漏决定不能伪装已交接，明确纯答复不启动执行", async () => {
+  for (const explicit of [false, true]) {
+    const f = fixture(async () => {});
+    let calls = 0, revisions = 0;
+    f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+    const service = new HanliConversationService({
+      memory: f.memory,
+      store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true },
+        oneShotRun: { runId: "run", proposalId: "proposal", status: "blocked" } }) },
+      prompts: { render: () => "原消息" },
+      conversation: { activeConversationId: () => "provider", send: async () => {
+        calls++;
+        return { threadId: "provider", text: "当前暂无完成证据。\nHANLI_TOPIC_META=" + JSON.stringify({ ...topic, ...(explicit ? { inquiry: { status: "not-needed" } } : {}) }) };
+      } },
+      reviseActiveRepairScope: async () => { revisions++; },
+      recordEvent() {},
+    });
+    if (explicit) await service.send(request);
+    else await assert.rejects(service.send(request), /未明确本轮反馈的处理方式/);
+    assert.equal(revisions, 0);
+    assert.equal(calls, explicit ? 1 : 2);
+  }
 });
