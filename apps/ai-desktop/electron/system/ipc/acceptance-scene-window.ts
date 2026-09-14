@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
-import type { AcceptanceSceneSegmentOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceSceneSegmentOutDto, CrossTaskMemberOccupancyFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
 
@@ -13,6 +13,7 @@ interface SceneWindowOptions {
   sessions: AcceptanceEmptyTaskGroupSession;
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
   taskHandoff?: CollaborationTimelineSnapshotOutDto;
+  crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto;
 }
 
 /** 场景窗口拥有创建、就绪验证和回收，失败也不会留下注册或多余窗口。 */
@@ -42,7 +43,7 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceSceneSegmentO
     options.sessions.remove(contentsId);
     if (!window.isDestroyed()) window.close();
   };
-  options.sessions.register(contentsId, plan.kind, options.taskHandoff);
+  options.sessions.register(contentsId, plan.kind, options.taskHandoff, options.crossTaskMemberOccupancyFixture);
   window.once("closed", dispose);
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {

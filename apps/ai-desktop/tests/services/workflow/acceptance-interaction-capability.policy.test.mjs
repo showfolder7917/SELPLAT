@@ -53,6 +53,19 @@ test("提案排除验收工具或原生目录时保持最小权限", () => {
   assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({ exclusions: ["禁止扩展验收工具的原生目录选择能力。"] })), []);
 });
 
+test("跨任务人物占用只由已批准的明确验收条件签发", () => {
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
+    content: "完成专题状态收口与人物真实状态同步。",
+    impactScope: ["左侧人物栏和人物页只读取协作状态存储。"],
+    acceptanceCriteria: ["令狐关联另一项在途任务时，人物栏和人物页显示该任务真实阶段，不显示已完成专题的历史等待状态。"],
+  })), ["cross-task-member-occupancy"]);
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
+    content: "完成专题状态收口与人物真实状态同步。",
+    impactScope: ["左侧人物栏和人物页只读取协作状态存储。"],
+    acceptanceCriteria: ["令狐没有 currentTaskId 时显示空闲。"],
+  })), []);
+});
+
 test("重启后回收临时工作区由批准范围签发独立能力", () => {
   assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
     acceptanceCriteria: ["左侧工作区树可以读取文件，应用重启后自动清理验收临时工作区。"],

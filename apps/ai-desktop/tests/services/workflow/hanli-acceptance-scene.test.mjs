@@ -18,6 +18,7 @@ const { assertSegmentAcceptanceRun, mergeAcceptanceRuns } = await sourceModule("
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const { AcceptanceEmptyTaskGroupSession } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
 const { runHanliAcceptanceSceneSession } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-session.ts");
+const hanliContractBarrel = readFileSync("contracts/services/personas/hanli/index.ts", "utf8");
 const goal = { topicId: "t", proposalId: "p", title: "引导", criteria: ["没有任务时，先告诉我怎么开始", "按钮和说明相邻"] };
 const currentWindowGoal = {
   ...goal,
@@ -37,11 +38,23 @@ const workspaceFixtureGoal = {
     instructions: ["添加入口会直接登记临时目录。"],
   },
 };
+const crossTaskMemberOccupancyGoal = {
+  ...currentWindowGoal,
+  interactionCapabilities: ["cross-task-member-occupancy"],
+  crossTaskMemberOccupancyFixture: {
+    kind: "cross-task-member-occupancy",
+    instructions: ["只观察令狐另一项任务的当前状态。"],
+  },
+};
 const segment = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, conditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
 ] };
 const plan = { reason: "使用隔离空任务场景", segments: [segment] };
+
+test("跨任务人物占用夹具从韩立契约桶导出", () => {
+  assert.match(hanliContractBarrel, /CrossTaskMemberOccupancyFixtureContextOutDto/);
+});
 
 test("韩立显式选择场景不依赖用户语言、页面名和词序", () => {
   assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
@@ -98,6 +111,12 @@ test("已经签发工作区夹具时拒绝只观察普通工作区", () => {
     () => validateAcceptanceScenePlan(ordinaryWindowOnly, workspaceFixtureGoal),
     /必须包含一个工作区夹具阶段/,
   );
+});
+test("跨任务人物占用场景只能消费主进程已签发的窗口私有夹具", () => {
+  const crossTaskPlan = { ...plan, segments: [{ ...segment, kind: "cross-task-member-occupancy", reason: "核对令狐另一项任务的当前占用", completionReviewRequired: false }] };
+  assert.deepEqual(validateAcceptanceScenePlan(crossTaskPlan, crossTaskMemberOccupancyGoal), crossTaskPlan);
+  assert.throws(() => validateAcceptanceScenePlan(crossTaskPlan, currentWindowGoal), /缺少主进程签发/);
+  assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [{ ...segment, kind: "current-window", reason: "跳过已签发夹具", completionReviewRequired: false }] }, crossTaskMemberOccupancyGoal), /必须使用该夹具阶段/);
 });
 test("工作区收尾与重启证据必须在夹具之后由专用生命周期场景复核", () => {
   const lifecycleGoal = { ...workspaceFixtureGoal, interactionCapabilities: ["workspace-explorer", "workspace-cleanup-recovery", "workspace-startup-recovery"] };
@@ -170,6 +189,13 @@ test("一次性工作区夹具只投影给正式夹具场景", () => {
   assert.deepEqual(fixtureGoal.workspaceAcceptanceFixture, workspaceFixtureGoal.workspaceAcceptanceFixture);
   assert.deepEqual(currentWindowGoal.criteria, [workspaceFixtureGoal.criteria[0]]);
   assert.deepEqual(fixtureGoal.criteria, [workspaceFixtureGoal.criteria[1]]);
+});
+
+test("跨任务人物夹具只投影给专用场景", () => {
+  const segmentGoal = createSegmentGoal(crossTaskMemberOccupancyGoal, { ...segment, kind: "cross-task-member-occupancy" });
+  const ordinaryGoal = createSegmentGoal(crossTaskMemberOccupancyGoal, { ...segment, kind: "empty-task-group" });
+  assert.deepEqual(segmentGoal.crossTaskMemberOccupancyFixture, crossTaskMemberOccupancyGoal.crossTaskMemberOccupancyFixture);
+  assert.equal("crossTaskMemberOccupancyFixture" in ordinaryGoal, false);
 });
 
 test("场景会话只在正式夹具阶段激活一次性目录", async () => {

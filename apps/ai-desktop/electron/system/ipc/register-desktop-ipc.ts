@@ -218,6 +218,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
             ? ["本轮临时工作区已通过真实页面添加并确认显示；只展开本轮标签对应根目录。slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
             : ["本轮临时工作区已通过真实页面添加并确认显示。", "临时目录会在验收结束后自动撤销。"],
         } } : {}),
+        ...(goal.interactionCapabilities?.includes("cross-task-member-occupancy") ? { crossTaskMemberOccupancyFixture: {
+          kind: "cross-task-member-occupancy" as const,
+          instructions: ["仅观察令狐持有另一项在途任务时的当前状态；不得读取或修改正式协作任务。"],
+        } } : {}),
       };
       if (workspaceExplorerAcceptance) {
         audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
