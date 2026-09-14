@@ -124,6 +124,12 @@ export class AcceptanceEmptyTaskGroupSession {
     return scene === "persona-empty-conversation" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff";
   }
 
+  /** 首张受控截图保存后才允许私有会话结束发送，避免定时器与真实截图竞争。 */
+  completePersonaSendingObservation(webContentsId: number): void {
+    if (this.#scenarios.get(webContentsId) !== "persona-conversation-lifecycle") return;
+    this.#resolvePersonaMessageDelays(webContentsId);
+  }
+
   /** 生成只在隔离窗口内可见的 PNG 附件回执，供既有 composer 回调验证附件保持。 */
   createPersonaConversationScreenshot(webContentsId: number): ScreenshotCompletedEventOutDto {
     if (!this.isPersonaConversationLifecycle(webContentsId)) {
@@ -283,7 +289,7 @@ export class AcceptanceEmptyTaskGroupSession {
     return { ...next, messages: next.messages.slice(-60) };
   }
 
-  /** 关闭窗口会提前释放等待，但不会在已撤销的会话中补写确认消息。 */
+  /** 截图完成或窗口关闭会释放等待，但不会在已撤销的会话中补写确认消息。 */
   #waitForPersonaSendingObservation(webContentsId: number): Promise<void> {
     return new Promise((resolve) => {
       const resolvers = this.#personaMessageDelayResolvers.get(webContentsId) || new Set<() => void>();
