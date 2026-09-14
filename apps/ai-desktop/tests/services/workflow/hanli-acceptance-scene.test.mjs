@@ -697,8 +697,8 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
       assert.equal((await registerPlan(submission, requestId, splitFixturePlan)).success, false);
       return;
     }
-    assert.match(planningContext.previousAttemptFailure, /一次性工作区夹具只能使用一个验收阶段/);
     assert.deepEqual(planningContext.remainingRequirementIds, ["workspace-acceptance-fixture"]);
+    assert.equal("previousAttemptFailure" in planningContext, false);
     assert.equal("submittedSceneKinds" in planningContext, false);
     assert.equal((await registerPlan(submission, requestId, mergedFixturePlan)).success, true);
   });
@@ -727,12 +727,12 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
     }
     assert.notEqual(planningContext, firstPlanningContext);
     assert.notEqual(requestId, firstRequestId);
-    assert.equal(planningContext.previousAttemptFailure, "韩立验收场景计划未逐项覆盖原验收条件。");
     assert.deepEqual(planningContext.criteria, [
       { criterionId: "criterion-1", text: goal.criteria[0] },
       { criterionId: "criterion-2", text: goal.criteria[1] },
     ]);
     assert.equal("submittedSceneKinds" in planningContext, false);
+    assert.equal("previousAttemptFailure" in planningContext, false);
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
@@ -757,8 +757,8 @@ test("无效阶段返回真实拒绝原因，第二回合从空权威模型重�
       return;
     }
     assert.notEqual(requestId, firstRequestId);
-    assert.equal(planningContext.previousAttemptFailure, "韩立未提交有效的验收场景阶段。");
     assert.deepEqual(planningContext.remainingCriterionIds, ["criterion-1", "criterion-2"]);
+    assert.equal("previousAttemptFailure" in planningContext, false);
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
@@ -774,8 +774,8 @@ test("协作状态夹具的两种允许阶段由同一需求规则校验和纠�
       assert.equal((await registerPlan(submission, requestId, omittedFixturePlan)).success, false);
       return;
     }
-    assert.equal(planningContext.previousAttemptFailure, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
     assert.deepEqual(planningContext.requirements, [{ requirementId: "collaboration-state-projection", acceptedKinds: ["collaboration-state-syncing", "collaboration-state-unavailable"], completed: false }]);
+    assert.equal("previousAttemptFailure" in planningContext, false);
     assert.equal((await registerPlan(submission, requestId, correctedPlan)).success, true);
   });
   assert.deepEqual(result, correctedPlan);
@@ -867,6 +867,7 @@ test("韩立场景工具通过本轮阶段连接装配，结束与应用退出�
   assert.doesNotMatch(scene, /planningInstruction/);
   assert.doesNotMatch(scene, /rejectionSummary/);
   assert.doesNotMatch(scene, /invalidFields/);
+  assert.doesNotMatch(scene, /previousAttemptFailure/);
   assert.doesNotMatch(scene, /retryContext/);
   assert.match(scene, /finally/);
   assert.match(scene, /service.dispose\(\)/);
