@@ -218,6 +218,12 @@ function sceneRequirementsFor(goal: HanliComputerAcceptanceInDto): AcceptanceSce
     acceptedKinds: ["persona-conversation-lifecycle"],
     missingMessage: "该条件要求观察人物会话的活动、确认或发送中状态，场景计划必须使用人物会话生命周期阶段。",
   });
+  const requiresProposalRevisionAudit = goal.criteria.some((criterion) => /supplement-required|后继.*提案|提案.*替代|替代.*提案|自动继续|旧提案/u.test(criterion));
+  if (requiresProposalRevisionAudit) requirements.push({
+    requirementId: "proposal-revision-audit",
+    acceptedKinds: ["current-window"],
+    missingMessage: "该条件要求核对真实专题的旧提案、后继替代或自动继续事实，场景计划必须使用当前真实窗口，不能使用通用巡检夹具。",
+  });
   if (goal.workspaceAcceptanceFixture) requirements.push({
     requirementId: "workspace-acceptance-fixture",
     acceptedKinds: ["workspace-explorer-fixture"],
