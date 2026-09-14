@@ -1400,6 +1400,49 @@ test("分发计划中的 core 规则在创建任务前被当前用户目录校�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("已通过的持久化计划在分发前重验当前用户规则目录", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-persisted-task-rule-catalog-"));
+  try {
+    const statePath = path.join(directory, "state.json");
+    const store = evolutionStore(statePath);
+    const stalePlan = {
+      version: 1,
+      summary: "旧计划在当时的规则目录中通过。",
+      units: [{ title: "校验专项规则目录", scope: "在分发前重新核验持久化计划的规则 ID", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: ["CODE_JS_RULES"], independentReason: "规则目录在任务快照前必须保持一致" }],
+      validation: { decision: "passed", reason: "旧目录校验通过", findings: [], validatedAt: "2026-09-14T00:00:00.000Z" },
+      plannedAt: "2026-09-14T00:00:00.000Z",
+    };
+    const validPlan = JSON.stringify({ summary: "重新规划后移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "在分发前重新核验持久化计划的规则 ID", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "规则目录在任务快照前必须保持一致" }] });
+    let attempts = 0;
+    let submitted = 0;
+    const facade = new PersonaEvolutionRuntime({
+      store,
+      conversation,
+      recordEvent: () => undefined,
+      isCurrentUserTaskRuleId: () => false,
+      collaboration: {
+        submitTask(request) {
+          submitted += 1;
+          assert.deepEqual(request.taskRuleIds, []);
+          return { tasks: [{ taskId: "persisted-task-rule-catalog", evolutionProposalId: request.evolutionProposalId }] };
+        },
+      },
+      async planDistribution() { attempts += 1; return validPlan; },
+    });
+    let state = facade.createTopic(topicRequest("持久化计划规则目录校验"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    store.saveDistributionPlan(proposalId, stalePlan);
+
+    state = await facade.dispatch(proposalId);
+    assert.equal(attempts, 1);
+    assert.equal(submitted, 1);
+    assert.deepEqual(state.proposals[0].distributionPlan.units[0].taskRuleIds, []);
+    assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("旧分发 audit 字段一次性迁移为程序 validation 且保留专题事实", async () => {
   const key = "nangong-distribution-validation-migration";
   const store = evolutionStore(key);
