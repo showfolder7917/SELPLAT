@@ -634,6 +634,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(page.locator(".developer-tab-page[hidden]"), "主页和已经打开的人物页应保留挂载状态").toHaveCount(2);
   const hanliConversation = page.locator(".hanli-person-chat");
   await expect(hanliConversation.getByText("和韩立一起说清想解决的事", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("你可以提出问题、目标，或想实现的功能。", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("直接描述你看到的情况，或附上截图；先说最在意的地方。", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("必要时韩立会交由南宫婉核实；是否实施仍遵循原有确认规则。", { exact: true })).toBeVisible();
   const hanliComposer = page.locator(".hanli-person-composer");
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("结合整理后的资料，告诉我现在最关键的目标。");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
@@ -670,6 +673,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
   await expect(nangongConversation.getByText("请告诉南宫婉你观察到什么", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("你可以说明需要调查的现象，以及不可改变的约束。", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("请直接提供已经确认的事实、观察结果或截图。", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("南宫婉核实后会形成方案；是否实施仍遵循原有确认规则。", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
   await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
   const preserved = await page.evaluate(async () => (await window.desktop!.getPersonaConversation("han-li")).messages.filter((message) => message.messageId.startsWith("internal:")));

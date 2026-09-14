@@ -62,7 +62,9 @@ export class HanliComputerAcceptance {
     let verdict: "passed" | "failed" | "blocked" = "blocked";
     const postCompletionReview = goal.reviewMode === "post-completion-review";
     const recoveryLifecycleScene = goal.preparedScene?.kind === "recovery-action-lifecycle";
-    const personaConversationLifecycleScene = goal.preparedScene?.kind === "persona-conversation-lifecycle" || goal.preparedScene?.kind === "persona-conversation-with-task-handoff";
+    const personaConversationLifecycleScene = goal.preparedScene?.kind === "persona-empty-conversation"
+      || goal.preparedScene?.kind === "persona-conversation-lifecycle"
+      || goal.preparedScene?.kind === "persona-conversation-with-task-handoff";
     // 工作区验收能力只能由运行时随当前已批准目标签发；场景计划和模型回合均不能自行扩大点击范围。
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
     const workspaceFixtureEvidenceEnabled = workspaceExplorerAcceptance
