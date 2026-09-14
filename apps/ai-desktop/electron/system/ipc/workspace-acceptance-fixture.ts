@@ -1,11 +1,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { BrowserWindow } from "electron";
 
 import type { WorkspaceDirectoryOutDto, WorkspaceStateOutDto } from "../../../contracts/services/support/platform/workspace/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 
 type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
+export type WorkspaceAcceptanceEnvironment = FixtureReservation & { dispose(): void };
 type FixtureRegistration = { displayName: string; workspaceId: string };
 type FixtureReadPath = "slow-a" | "slow-b" | "retry-once";
 type FixtureReadState = { requestCount: number; pending: boolean; outcome: "not-requested" | "started" | "succeeded" | "failed" };
@@ -57,6 +59,35 @@ export class WorkspaceAcceptanceFixture {
   }
 
   /**
+   * 一次准备验收所需的临时目录、真实工作区登记和页面可见状态，并返回唯一清理句柄。
+   *
+   * 真实传参示例：传入当前 AI Desktop 主窗口和 scenarios；真实返回示例：返回可见标签与 dispose；
+   * 异常或副作用示例：任一准备步骤失败会撤销已登记根和私有目录，韩立验收不会启动。
+   */
+  async prepare(mode: FixtureMode, targetWindow: BrowserWindow): Promise<WorkspaceAcceptanceEnvironment> {
+    if (targetWindow.isDestroyed()) throw new Error("验收主窗口已经关闭，不能准备临时工作区。");
+    const reservation = this.reserve(mode, targetWindow.webContents.id);
+    try {
+      this.setSceneActive(true);
+      await this.#addFixtureThroughVisibleWorkspacePage(targetWindow, reservation.displayName);
+      if (!this.#reserved?.workspaceId) throw new Error("临时工作区未完成登记，不能开始韩立验收。");
+      this.setSceneActive(false);
+      let disposed = false;
+      return {
+        ...reservation,
+        dispose: () => {
+          if (disposed) return;
+          disposed = true;
+          this.cleanup();
+        },
+      };
+    } catch (error) {
+      this.cleanup();
+      throw error;
+    }
+  }
+
+  /**
    * 为当前验收准备唯一目录与可预览文本，重复准备会先释放前一轮，避免跨专题复用选择。
    *
    * 真实传参示例：传入应用临时目录；真实返回示例：后续 takeDirectory 返回该目录一次。
@@ -82,6 +113,45 @@ export class WorkspaceAcceptanceFixture {
     }
     this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, failedPaths: new Set(), reads: new Map() };
     return { displayName };
+  }
+
+  /** 通过当前页面已有的“添加工作区”动作完成登记，并确认 React 页面已经显示本轮夹具标签。 */
+  async #addFixtureThroughVisibleWorkspacePage(targetWindow: BrowserWindow, displayName: string): Promise<void> {
+    const result = await targetWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10_000;
+      let clicked = false;
+      const fixtureLabel = ${JSON.stringify(displayName)};
+      const check = () => {
+        const pageRoot = document.getElementById("root");
+        const workspaceTree = document.getElementById("developer-workspace-tree");
+        if (!pageRoot?.childElementCount || !workspaceTree) {
+          if (Date.now() >= deadline) return resolve("page-not-ready");
+          return setTimeout(check, 50);
+        }
+        if (!clicked) {
+          const addButton = document.querySelector('.workspace-pane .section-action[aria-label="添加"], .workspace-pane .section-action[aria-label="追加"]');
+          if (!addButton) {
+            if (Date.now() >= deadline) return resolve("workspace-action-missing");
+            return setTimeout(check, 50);
+          }
+          clicked = true;
+          addButton.click();
+        }
+        const visible = [...workspaceTree.querySelectorAll(".workspace-root-header span")]
+          .some((element) => element.textContent?.trim() === fixtureLabel);
+        if (visible) return resolve("ready");
+        if (Date.now() >= deadline) return resolve("workspace-not-visible");
+        return setTimeout(check, 50);
+      };
+      check();
+    })`);
+    if (result !== "ready") {
+      throw new Error(result === "page-not-ready"
+        ? "验收页面未就绪，不能开始韩立验收。"
+        : result === "workspace-action-missing"
+          ? "验收页面缺少工作区添加入口，不能开始韩立验收。"
+          : "临时工作区未显示在验收页面，不能开始韩立验收。");
+    }
   }
 
   /** 只有正式夹具阶段能够消费临时目录，前置真实窗口阶段必须保留夹具的初始观察状态。 */

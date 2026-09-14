@@ -166,33 +166,34 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (workspaceStartupRecoveryEvidence) {
       audit.recordEvent("hanli.acceptance_workspace_startup_recovery.checked", { ...identity, ...workspaceStartupRecoveryEvidence });
     }
-    // 先回收带私有标记的遗留根并预备本轮标签，场景规划才能区分本轮新增与旧会话残留。
-    const fixtureReservation = workspaceExplorerAcceptance
-      ? workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow.webContents.id)
-      : null;
-    const acceptanceGoal: HanliComputerAcceptanceInDto = {
-      ...goal,
-      ...(workspaceStartupRecoveryEvidence ? { workspaceStartupRecoveryEvidence } : {}),
-      ...(workspaceExplorerAcceptance ? { workspaceAcceptanceFixture: {
-        kind: "workspace-explorer",
-        mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
-        displayName: fixtureReservation!.displayName,
-        instructions: workspaceExplorerScenarioAcceptance
-          ? ["先确认本轮标签尚未出现在工作区列表；点击标题右侧添加入口一次后立即截图，确认本轮标签出现。", "只展开本轮标签对应根目录；slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
-          : ["先确认本轮标签尚未出现在工作区列表；点击标题右侧添加入口一次后立即截图，确认本轮标签出现。", "临时目录会在验收结束后自动撤销。"],
-      } } : {}),
-    };
-    if (workspaceExplorerAcceptance) {
-      audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
-        ...identity,
-        fixtureLabel: fixtureReservation!.displayName,
-        mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
-        capabilities: goal.interactionCapabilities || [],
-      });
-    }
     let plan: Awaited<ReturnType<typeof planAcceptanceScene>> | null = null;
     let run: Awaited<ReturnType<typeof runHanliAcceptanceSceneSession>> | null = null;
+    let workspaceAcceptanceEnvironment: Awaited<ReturnType<typeof workspaceAcceptanceFixture.prepare>> | null = null;
     try {
+      // 环境准备完成前不进入场景规划；准备入口自身通过页面原有添加动作登记工作区并确认页面可见。
+      workspaceAcceptanceEnvironment = workspaceExplorerAcceptance
+        ? await workspaceAcceptanceFixture.prepare(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow)
+        : null;
+      const acceptanceGoal: HanliComputerAcceptanceInDto = {
+        ...goal,
+        ...(workspaceStartupRecoveryEvidence ? { workspaceStartupRecoveryEvidence } : {}),
+        ...(workspaceExplorerAcceptance ? { workspaceAcceptanceFixture: {
+          kind: "workspace-explorer",
+          mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
+          displayName: workspaceAcceptanceEnvironment!.displayName,
+          instructions: workspaceExplorerScenarioAcceptance
+            ? ["本轮临时工作区已通过真实页面添加并确认显示；只展开本轮标签对应根目录。slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
+            : ["本轮临时工作区已通过真实页面添加并确认显示。", "临时目录会在验收结束后自动撤销。"],
+        } } : {}),
+      };
+      if (workspaceExplorerAcceptance) {
+        audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
+          ...identity,
+          fixtureLabel: workspaceAcceptanceEnvironment!.displayName,
+          mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
+          capabilities: goal.interactionCapabilities || [],
+        });
+      }
       // 首次场景准备先留下韩立审计事实，任务卡不能再以令狐准备场景作为起始记录。
       audit.recordEvent("hanli.acceptance_scene.planning", identity);
       plan = await planAcceptanceScene(acceptanceGoal);
@@ -220,7 +221,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
       });
     } finally {
-      if (workspaceExplorerAcceptance) workspaceAcceptanceFixture.cleanup();
+      workspaceAcceptanceEnvironment?.dispose();
     }
     if (!run || !plan) throw new Error("韩立验收未产生运行记录。");
     audit.recordEvent("hanli.acceptance.real_app_checked", {

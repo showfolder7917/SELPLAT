@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { transform } from "esbuild";
@@ -38,6 +38,55 @@ test("验收工作区夹具只交付一次，并在验收结束撤销登记和�
     fixture.cleanup();
     assert.equal(roots.length, 0);
     assert.equal(existsSync(directory), false);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("统一准备入口确认页面可用与工作区可见后才交付清理句柄", async () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-environment-test-"));
+  const roots = [];
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    add: (directory) => {
+      const root = { id: "prepared-fixture", path: directory };
+      roots.push(root);
+      return { primaryId: root.id, roots: [...roots] };
+    },
+    remove: (id) => {
+      const index = roots.findIndex((root) => root.id === id);
+      if (index >= 0) roots.splice(index, 1);
+    },
+    listDirectory: () => ({ entries: [] }),
+  };
+  try {
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    const target = { isDestroyed: () => false, webContents: { id: 77, executeJavaScript: async () => {
+      const directory = fixture.takeDirectory(77);
+      const state = workspaces.add(directory);
+      fixture.registerWorkspace(77, directory, state);
+      return "ready";
+    } } };
+    const environment = await fixture.prepare("basic", target);
+    assert.equal(roots.length, 1, "只有页面确认显示后才向调用方交付环境");
+    assert.equal(environment.displayName, path.basename(roots[0].path));
+    environment.dispose();
+    assert.equal(roots.length, 0);
+    assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), false);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("统一准备入口在页面未就绪时撤销目录并阻止验收开始", async () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-environment-failure-test-"));
+  const roots = [];
+  const workspaces = { read: () => ({ roots: [...roots] }), remove: () => undefined, listDirectory: () => ({ entries: [] }) };
+  try {
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    const target = { isDestroyed: () => false, webContents: { id: 78, executeJavaScript: async () => "page-not-ready" } };
+    await assert.rejects(fixture.prepare("basic", target), /验收页面未就绪/);
+    assert.deepEqual(readdirSync(temporaryRoot), []);
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
