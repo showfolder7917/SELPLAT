@@ -4,9 +4,7 @@
  */
 
 // React 生命周期：有新节点或新文本时把会话滚动到末尾。
-import { useEffect } from "react";
-// React DOM 引用：定位人物会话末尾的空锚点。
-import { useRef } from "react";
+import { memo, useMemo } from "react";
 
 import type {
   // 协作成员：提供人物身份、姓名、状态和当前任务。
@@ -23,6 +21,7 @@ import {
   MarkdownMessage,
   // 统一会话外壳：让人物进度沿用正式会话的滚动和排版。
   SelUiConversation,
+  usePersonaConversationTailFollow,
 } from "../../conversation";
 import {
   // 折叠控件：技术详情默认收起，需要时再展开。
@@ -141,14 +140,14 @@ function memberConversationId(memberId: string): string {
 }
 
 /** 人物时间线中的一条真实交接或执行消息。 */
-function CollaborationMemberTimelineNode({
+const CollaborationMemberTimelineNode = memo(function CollaborationMemberTimelineNode({
   node,
-  liveTextByNodeId,
+  liveText,
 }: {
   /** 当前需要展示的人物时间线节点。 */
   node: TimelineGroup["nodes"][number];
   /** 按节点保存的实时正文，只覆盖仍在执行的当前节点。 */
-  liveTextByNodeId: Record<string, string>;
+  liveText: string;
 }) {
   // 接收人姓名按后端顺序合并，空列表表示当前动作没有交接目标。
   const recipientNames = node.recipients.map((person) => person.displayName).join("、");
@@ -156,7 +155,7 @@ function CollaborationMemberTimelineNode({
   const handoffLabel = recipientNames ? ` → ${recipientNames}` : "";
   // 当前节点优先显示实时正文，历史节点固定显示数据库正文或摘要。
   const visibleText = node.status === "current"
-    ? liveTextByNodeId[node.nodeId] || node.content || node.summary
+    ? liveText || node.content || node.summary
     : node.content || node.summary;
 
   return (
@@ -184,7 +183,7 @@ function CollaborationMemberTimelineNode({
       </div>
     </article>
   );
-}
+});
 
 /** 普通协作人物的真实任务进度页面。 */
 export function CollaborationMemberPage({ model }: CollaborationMemberPageProps) {
@@ -194,22 +193,18 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
   const { liveTextByNodeId, locale, linghuAutomation, stateReadStatus } = model.presentation;
   // 人物操作组当前只开放令狐状态写回，后续动作仍有明确归属位置。
   const { onLinghuState } = model.actions;
-  // 会话末尾锚点：实时正文变化时只滚动人物页面内部区域。
-  const conversationTail = useRef<HTMLDivElement>(null);
   // 可见专题只保留当前人物真实参与且仍属于当前展示边界的节点。
-  const visibleGroups = member ? buildVisibleGroups({ member, timeline, linghuAutomation }) : [];
+  const visibleGroups = useMemo(
+    () => member ? buildVisibleGroups({ member, timeline, linghuAutomation }) : [],
+    [member, timeline, linghuAutomation],
+  );
   // 最新节点用于判断自动滚动目标和当前实时正文。
   const latestNode = visibleGroups.flatMap((group) => group.nodes).at(-1);
   // 最新正文变化时也需要触发滚动，即使节点标识没有变化。
   const latestText = latestNode
     ? liveTextByNodeId[latestNode.nodeId] || latestNode.content
     : "";
-  useEffect(() => {
-    // 只有页面末尾锚点确实可见于布局时才执行内部滚动。
-    const tailIsVisible = conversationTail.current?.getClientRects().length;
-    // 滚动限制在最近位置，避免人物页更新时跳动整个 Developer 工作区。
-    if (tailIsVisible) conversationTail.current?.scrollIntoView({ block: "nearest" });
-  }, [latestNode?.nodeId, latestText]);
+  const timelineRef = usePersonaConversationTailFollow(`${latestNode?.nodeId || ""}:${latestText.length}`);
 
   if (!member) {
     const display = collaborationMemberDisplayModel({ member: null, locale, status: stateReadStatus });
@@ -247,7 +242,7 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
         composer={null}
         onSubmit={() => undefined}
         timeline={(
-          <section className="selconversation-timeline" aria-label={`${member.displayName}任务会话`}>
+          <section ref={timelineRef} className="selconversation-timeline" aria-label={`${member.displayName}任务会话`}>
             {visibleGroups.length === 0 && (
               <p role="status">当前空闲，收到任务后会在这里显示交接和执行进展。</p>
             )}
@@ -260,12 +255,11 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
                   <CollaborationMemberTimelineNode
                     key={node.nodeId}
                     node={node}
-                    liveTextByNodeId={liveTextByNodeId}
+                    liveText={node.status === "current" ? liveTextByNodeId[node.nodeId] || "" : ""}
                   />
                 ))}
               </section>
             ))}
-            <div ref={conversationTail} />
           </section>
         )}
       />

@@ -36,7 +36,6 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const controller = useTaskCollaborationGroup(model);
   const {
     groups,
-    nowMs,
     continuingTaskId,
     continueError,
     isGroupOpen,
@@ -115,8 +114,6 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
             presentation: {
               // 界面语言（locale）决定卡片显示中文还是日文标签。
               locale,
-              // 当前时间（nowMs）用于刷新仍在执行或等待中的动态耗时。
-              nowMs,
               // 卡片展开状态（open）来自页面控制器保存的用户选择。
               open: isGroupOpen(group),
               // 继续任务标识（continuingTaskId）用于锁定正在恢复的按钮。

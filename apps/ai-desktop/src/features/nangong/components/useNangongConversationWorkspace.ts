@@ -10,6 +10,8 @@ import {
   type ClipboardEvent,
   // 会话变化处理方法（useEffect）由 React 提供，在切换会话时清理旧草稿。
   useEffect,
+  // 记忆化投影方法（useMemo）避免输入草稿时重复整理整段历史消息。
+  useMemo,
   // 状态记录方法（useState）由 React 提供，保存输入文字、课题表单和等待状态。
   useState,
 } from "react";
@@ -286,73 +288,47 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     }
   }
 
-  // 已保存直接问答（directMessages）来自后端当前会话，并附加页面需要的状态和截图预览。
-  const directMessages = projectPersonaConversation(conversation.messages).direct.map((message, sequenceNumber) => ({
-    // 保留后端消息的全部业务字段。
-    ...message,
-    // 旧消息缺少安全序号时使用当前数组位置作为页面内顺序。
-    sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : sequenceNumber,
-    // 已保存消息没有显式状态时按完成展示。
-    status: message.deliveryStatus || "completed" as const,
-    // 根据稳定消息身份附加已经恢复的截图预览。
-    attachments: attachmentPreviews[message.messageId] || [],
-  }));
-  // 临时消息列表（pendingMessages）把当前发送中的客户消息转换成统一时间线结构。
-  const pendingMessages = outgoingMessage ? [{
-    // 临时消息编号（messageId）使用发送前创建的本条消息编号。
-    messageId: outgoingMessage.messageId,
-    // 页面顺序号（sequenceNumber）让临时消息排在当前已保存会话末尾。
-    sequenceNumber: outgoingMessage.sequenceNumber ?? conversation.messages.length,
-    // 发言方类型（speakerType）使用 user 表示消息来自当前客户。
-    speakerType: "user" as const,
-    // 客户消息不具有人物身份。
-    speakerPersonaId: null,
-    // 消息正文（content）保存客户实际发送的文字。
-    content: outgoingMessage.content,
-    // 临时客户消息不直接回复某条内部消息。
-    replyToMessageId: null,
-    // 消息传递状态（deliveryStatus）根据请求结果显示发送中或失败。
-    deliveryStatus: outgoingMessage.failed ? "failed" as const : "sending" as const,
-    // 页面消息状态（status）与统一实时消息结构保持一致。
-    status: outgoingMessage.failed ? "failed" as const : "sending" as const,
-    // 截图编号列表（attachmentIds）保留本轮截图与消息的对应关系。
-    attachmentIds: outgoingMessage.attachments.map((item) => item.id),
-    // 截图预览（attachments）直接使用发送瞬间冻结的图片。
-    attachments: outgoingMessage.attachments,
-    // 消息创建时间（createdAt）保留客户点击发送的真实时间。
-    createdAt: outgoingMessage.createdAt,
-    // 失败消息已经结束生命周期，发送中消息仍未结束。
-    completedAt: outgoingMessage.failed ? new Date().toISOString() : null,
-  }] : [];
-  // 直接问答时间线（timelineMessages）合并已保存问答和发送中的临时消息。
-  const timelineMessages = mergeRealtimeConversationTimeline(directMessages, pendingMessages);
-  // 非验收内部消息（nonAcceptanceMessages）排除专门用于验收交接的共享消息。
-  const nonAcceptanceMessages = sharedInternalMessages.filter((message) => !message.messageId.startsWith("internal:acceptance:"));
-  // 当前会话内部消息（conversationInternalMessages）是数据库已经保存的内部研讨。
-  const conversationInternalMessages = projectPersonaConversation(conversation.messages).internal;
-  // 内部消息对应项（internalEntries）按照消息编号准备去重输入。
-  const internalEntries = [...nonAcceptanceMessages, ...conversationInternalMessages].map((message) => [message.messageId, message] as const);
-  // 去重内部消息（uniqueInternalMessages）让同一内部事件只显示一次。
-  const uniqueInternalMessages = [...new Map(internalEntries).values()];
-  // 当前内部消息（currentInternal）去掉发生在本次会话建立之前的历史内容。
-  const currentInternal = uniqueInternalMessages.filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);
-  // 内部消息编号集合（internalIds）让页面标记哪些内容属于内部研讨。
-  const internalIds = new Set(currentInternal.map((message) => message.messageId));
-  // 可见内部消息（visibleInternalMessages）为内部研讨补充页面状态和截图预览。
-  const visibleInternalMessages = currentInternal.map((message) => ({
-    // 保留内部消息的来源、正文和关联信息。
-    ...message,
-    // 页面消息状态（status）使用内部消息已经保存的传递状态。
-    status: message.deliveryStatus,
-    // 截图预览（attachments）根据内部消息编号恢复图片证据。
-    attachments: attachmentPreviews[message.messageId] || [],
-  }));
-  // 待排序页面消息（unsortedVisibleMessages）汇合直接问答与内部研讨。
-  const unsortedVisibleMessages = [...timelineMessages, ...visibleInternalMessages];
-  // 页面消息列表（visibleMessages）依次按发生时间、会话序号和消息编号确定最终顺序。
-  const visibleMessages = unsortedVisibleMessages.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
-  // 时间线变化标识（timelineIdentity）汇总消息编号、状态和正文，用于判断是否需要跟随最新消息。
-  const timelineIdentity = visibleMessages.map((message) => `${message.messageId}:${message.status}:${message.content}`).join("|");
+  // 输入草稿不会改变历史事实；全部人物消息投影只在会话、内部消息或附件事实变化时重建。
+  const { internalIds, visibleMessages } = useMemo(() => {
+    const projected = projectPersonaConversation(conversation.messages);
+    const directMessages = projected.direct.map((message, sequenceNumber) => ({
+      ...message,
+      sequenceNumber: Number.isSafeInteger(message.sequenceNumber) ? message.sequenceNumber : sequenceNumber,
+      status: message.deliveryStatus || "completed" as const,
+      attachments: attachmentPreviews[message.messageId] || [],
+    }));
+    const pendingMessages = outgoingMessage ? [{
+      messageId: outgoingMessage.messageId,
+      sequenceNumber: outgoingMessage.sequenceNumber ?? conversation.messages.length,
+      speakerType: "user" as const,
+      speakerPersonaId: null,
+      content: outgoingMessage.content,
+      replyToMessageId: null,
+      deliveryStatus: outgoingMessage.failed ? "failed" as const : "sending" as const,
+      status: outgoingMessage.failed ? "failed" as const : "sending" as const,
+      attachmentIds: outgoingMessage.attachments.map((item) => item.id),
+      attachments: outgoingMessage.attachments,
+      createdAt: outgoingMessage.createdAt,
+      completedAt: outgoingMessage.failed ? new Date().toISOString() : null,
+    }] : [];
+    const timelineMessages = mergeRealtimeConversationTimeline(directMessages, pendingMessages);
+    const sharedMessages = sharedInternalMessages.filter((message) => !message.messageId.startsWith("internal:acceptance:"));
+    const internalEntries = [...sharedMessages, ...projected.internal].map((message) => [message.messageId, message] as const);
+    const currentInternal = [...new Map(internalEntries).values()]
+      .filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);
+    const nextInternalIds = new Set(currentInternal.map((message) => message.messageId));
+    const visibleInternalMessages = currentInternal.map((message) => ({
+      ...message,
+      status: message.deliveryStatus,
+      attachments: attachmentPreviews[message.messageId] || [],
+    }));
+    const nextVisibleMessages = [...timelineMessages, ...visibleInternalMessages]
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
+    return { internalIds: nextInternalIds, visibleMessages: nextVisibleMessages };
+  }, [attachmentPreviews, conversation.createdAt, conversation.messages, outgoingMessage, sharedInternalMessages]);
+  // 只读取最后一条消息的变化；历史正文不会在每次输入或状态变化时重新扫描。
+  const latestVisibleMessage = visibleMessages.at(-1);
+  const timelineIdentity = `${visibleMessages.length}:${latestVisibleMessage?.messageId || ""}:${latestVisibleMessage?.status || ""}:${latestVisibleMessage?.content.length || 0}`;
   // 会话区引用（timelineRef）绑定问答区域，在时间线变化后跟随最新消息。
   const timelineRef = usePersonaConversationTailFollow(timelineIdentity);
   // 是否允许发送（canSend）是发送按钮使用的统一判断结果。

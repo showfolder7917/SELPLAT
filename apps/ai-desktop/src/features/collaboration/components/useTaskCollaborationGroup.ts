@@ -1,10 +1,8 @@
 /**
  * 任务协作群页面自己的交互状态。
- * 主页面负责结构，本 Hook 负责展开状态、定位当前步骤、继续任务和动态计时。
+ * 主页面负责结构，本 Hook 负责展开状态、定位当前步骤和继续任务。
  */
 
-// React 生命周期：启动并清理页面耗时刷新定时器。
-import { useEffect } from "react";
 // React 状态容器：保存人工展开选择、继续任务反馈和当前时间。
 import { useState } from "react";
 
@@ -52,16 +50,8 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
   const [continuingTaskId, setContinuingTaskId] = useState<string | null>(null);
   // 继续任务失败原因：统一显示在对应专题卡列表下方。
   const [continueError, setContinueError] = useState("");
-  // 当前时间：每秒刷新正在进行或等待节点的动态耗时。
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
   const groups = snapshot?.groups || [];
   const currentGroupId = findCurrentGroupId(groups);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   /** 读取专题卡当前是否展开。 */
   const isGroupOpen = (group: CollaborationTimelineGroupOutDto): boolean => {
@@ -121,7 +111,6 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
   return {
     groups,
     currentGroupId,
-    nowMs,
     continuingTaskId,
     continueError,
     isGroupOpen,

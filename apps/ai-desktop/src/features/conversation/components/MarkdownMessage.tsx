@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
@@ -7,7 +8,7 @@ interface MarkdownMessageProps {
 }
 
 /** 把 Harness 的 Markdown 回答安全渲染为可读正文，原始 HTML 永远不进入桌面页面。 */
-export function MarkdownMessage({ text }: MarkdownMessageProps) {
+export const MarkdownMessage = memo(function MarkdownMessage({ text }: MarkdownMessageProps) {
   const openLink = (href: string | undefined) => {
     if (href) void getOptionalSystemDesktopApi()?.openExternalUrl(href);
   };
@@ -34,4 +35,4 @@ export function MarkdownMessage({ text }: MarkdownMessageProps) {
       }}
     >{text}</ReactMarkdown>
   </div>;
-}
+});

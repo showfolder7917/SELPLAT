@@ -19,8 +19,10 @@ test("可输入人物会话仅在用户停留底部时跟随新增消息", () =>
   assert.match(hook, /followsTailRef\.current = remaining <= BOTTOM_TOLERANCE_PX/);
   assert.match(hook, /if \(followsTailRef\.current\) timeline\.scrollTo/);
   assert.match(hanli, /useHanliConversationWorkspace\(props\)/);
-  assert.match(hanliController, /usePersonaConversationTailFollow\(timelineIdentity\)/);
-  assert.match(nangongController, /usePersonaConversationTailFollow\(timelineIdentity\)/);
+  assert.match(hanliController, /latestMessage = messages\.at\(-1\)[\s\S]*usePersonaConversationTailFollow\(timelineIdentity\)/);
+  assert.match(nangongController, /latestVisibleMessage = visibleMessages\.at\(-1\)[\s\S]*usePersonaConversationTailFollow\(timelineIdentity\)/);
+  assert.doesNotMatch(hanliController, /messages\.map\(\(message\) => `\$\{message\.messageId\}:\$\{message\.deliveryStatus\}:\$\{message\.content\}`/);
+  assert.doesNotMatch(nangongController, /visibleMessages\.map\(\(message\) => `\$\{message\.messageId\}:\$\{message\.status\}:\$\{message\.content\}`/);
 });
 
 test("人物会话使用页面专属高度约束，不修改共享 SELUI 会话选择器", () => {

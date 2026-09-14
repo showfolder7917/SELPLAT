@@ -622,7 +622,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
 
   await taskList.getByRole("button", { name: /宋玉/ }).click();
   await expect(page.getByRole("tablist").getByText("宋玉", { exact: true })).toBeVisible();
-  await expect(page.locator(".developer-tab-page"), "已打开的隐藏人物页不能继续占用渲染树").toHaveCount(1);
+  await expect(page.locator(".developer-tab-page:visible"), "工作区同时只能显示一个页签页面").toHaveCount(1);
   const memberPage = page.locator(".collaboration-member-page:visible");
   await expect(memberPage.getByRole("status")).toHaveText("当前空闲，收到任务后会在这里显示交接和执行进展。");
   const overflow = await memberPage.evaluate((element) => element.scrollWidth - element.clientWidth);
@@ -630,7 +630,8 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
 
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.getByRole("tablist").getByText("韩立", { exact: true })).toBeVisible();
-  await expect(page.locator(".developer-tab-page"), "切换人物后只保留当前会话页面").toHaveCount(1);
+  await expect(page.locator(".developer-tab-page:visible"), "切换人物后同时只能显示当前会话页面").toHaveCount(1);
+  await expect(page.locator(".developer-tab-page[hidden]"), "主页和已经打开的人物页应保留挂载状态").toHaveCount(2);
   const hanliConversation = page.locator(".hanli-person-chat");
   await expect(hanliConversation.getByText("和韩立讨论客户真正需要什么", { exact: true })).toBeVisible();
   const hanliComposer = page.locator(".hanli-person-composer");
@@ -638,10 +639,10 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(taskList.getByRole("button", { name: /韩立/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
-  await expect(page.locator(".developer-tab-page"), "后台回复时隐藏会话不能重新挂载").toHaveCount(1);
+  await expect(page.locator(".developer-tab-page:visible"), "后台回复时仍只显示当前页面").toHaveCount(1);
   await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /韩立/ }).click();
-  await expect(page.locator(".developer-tab-page"), "返回韩立时应恢复顶层会话状态并保持单页渲染").toHaveCount(1);
+  await expect(page.locator(".developer-tab-page:visible"), "返回韩立时应恢复原页面并保持单页可见").toHaveCount(1);
   await expect(hanliConversation.getByText("结合整理后的资料，告诉我现在最关键的目标。", { exact: true })).toBeVisible();
   await expect(hanliConversation.getByText("我 · 发送中", { exact: true })).toBeVisible();
   await expect(hanliComposer.getByRole("button", { name: "思考中" })).toBeDisabled();

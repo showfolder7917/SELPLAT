@@ -3,6 +3,7 @@
  * 卡片展示专题摘要、人物时间线节点、人工审批/继续入口和唯一下一流程。
  */
 
+import { memo, useEffect, useState } from "react";
 import type {
   // 时间线专题：渲染专题摘要、状态、节点和下一流程。
   CollaborationTimelineGroupOutDto,
@@ -57,8 +58,6 @@ import {
 type TaskGroupCardPresentation = {
   /** 当前界面语言，用于选择中文或日文标签。 */
   locale: LocaleValue;
-  /** 当前时间，用于刷新仍在进行或等待中的耗时。 */
-  nowMs: number;
   /** 当前专题卡是否展开。 */
   open: boolean;
   /** 正在执行“继续任务”的任务标识；没有恢复操作时为 null。 */
@@ -101,6 +100,30 @@ type TaskGroupCardProps = {
   model: TaskGroupCardModel;
 };
 
+/** 动态耗时只刷新自己的文字，不能带动专题卡和整条时间线重新渲染。 */
+function TimelineDuration({ durationMs, startedAt, running, locale, prefix }: {
+  durationMs: number;
+  startedAt: string;
+  running: boolean;
+  locale: LocaleValue;
+  prefix: string;
+}) {
+  const nowMs = useTimelineNow(running);
+  const visibleDuration = running ? Math.max(durationMs, nowMs - Date.parse(startedAt)) : durationMs;
+  return <small>{prefix} {formatTimelineDuration(visibleDuration, locale)}</small>;
+}
+
+/** 计时生命周期只有一个实现，使用它的组件只更新自己的短文本。 */
+function useTimelineNow(running: boolean): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+  return nowMs;
+}
+
 /** 专题卡折叠状态下显示标题、摘要、状态、并行人数和墙钟耗时。 */
 function TaskGroupHeader({
   group,
@@ -112,7 +135,7 @@ function TaskGroupHeader({
   oneShotRecoveryRequired: boolean;
 }) {
   // 界面语言（locale）决定专题状态和耗时使用中文还是日文。
-  const { locale, nowMs, open } = presentation;
+  const { locale, open } = presentation;
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
   const groupStopped = group.status === "blocked" || group.status === "completed" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
@@ -120,9 +143,6 @@ function TaskGroupHeader({
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。
   const primary = taskGroupPrimaryPresentation(group, locale, recoveryAction, oneShotRecoveryRequired);
   // 专题耗时（durationMs）在任务未结束时至少增长到当前墙钟时间。
-  const durationMs = groupStopped
-    ? group.durationMs
-    : Math.max(group.durationMs, nowMs - Date.parse(group.startedAt));
 
   return (
     // 专题头部根区域把左侧摘要和右侧状态事实保持在同一个折叠按钮中。
@@ -149,9 +169,13 @@ function TaskGroupHeader({
           <em>{locale === "ja" ? `並行 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `并行处理中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
         )}
         {/* 专题总耗时：已结束专题固定，未结束专题跟随当前时间增长。 */}
-        <small>
-          {locale === "ja" ? "テーマ総所要時間" : "专题总历时"} {formatTimelineDuration(durationMs, locale)}
-        </small>
+        <TimelineDuration
+          durationMs={group.durationMs}
+          startedAt={group.startedAt}
+          running={!groupStopped}
+          locale={locale}
+          prefix={locale === "ja" ? "テーマ総所要時間" : "专题总历时"}
+        />
       </span>
     </span>
   );
@@ -168,7 +192,7 @@ function TaskNodeHeader({
   presentation: TaskGroupCardPresentation;
 }) {
   // 界面语言和当前时间只从统一显示状态读取，不再由父组件分别透传。
-  const { locale, nowMs } = presentation;
+  const { locale } = presentation;
   // 节点摘要（summary）清理路径并压缩成适合折叠标题的一行文字。
   const summary = compactTimelineText(presentTimelineText(node.summary));
   // 技术详情仍保持折叠，但在节点标题上明确提示其可用，避免完成节点看起来只有摘要。
@@ -200,7 +224,7 @@ function TaskNodeHeader({
       {/* 节点状态区：把本节点自己的耗时和当前状态放在右侧。 */}
       <span className="task-node-meta">
         {/* 节点耗时：执行中或等待中时使用当前时间持续更新。 */}
-        <small>{nodeDurationLabel(node, locale, nowMs)}</small>
+        <NodeDuration node={node} locale={locale} />
         {/* 节点状态：把内部状态码转换为当前语言的可读标签。 */}
         <b>{nodeStatusLabel(node.status, locale)}</b>
       </span>
@@ -209,7 +233,7 @@ function TaskNodeHeader({
 }
 
 /** 渲染一个人物时间线节点及其业务操作。 */
-function TaskTimelineNode({
+const TaskTimelineNode = memo(function TaskTimelineNode({
   model,
   node,
   index,
@@ -224,7 +248,7 @@ function TaskTimelineNode({
   // 专题数据（group）用于审批窗口标题和节点所属专题判断。
   const { group } = model;
   // 显示状态统一提供语言、时间、继续状态和实时正文。
-  const { locale, nowMs, liveTextByNodeId } = model.presentation;
+  const { locale, liveTextByNodeId } = model.presentation;
   // 用户操作统一提供展开查询、展开保存和审批能力；恢复只由专题下一流程承载。
   const { isNodeOpen, onNodeOpenChange, onManualApproval } = model.actions;
   // 节点展开状态（nodeOpen）同时尊重后端自动展开提示和用户手动选择。
@@ -303,6 +327,31 @@ function TaskTimelineNode({
       </SelUiDisclosure>
     </div>
   );
+}, (previous, next) => {
+  const previousNode = previous.node;
+  const nextNode = next.node;
+  const previousOpen = previous.model.actions.isNodeOpen(previousNode.nodeId, previousNode.automaticOpen);
+  const nextOpen = next.model.actions.isNodeOpen(nextNode.nodeId, nextNode.automaticOpen);
+  const previousLiveText = previousNode.status === "current"
+    ? previous.model.presentation.liveTextByNodeId[previousNode.nodeId] || ""
+    : "";
+  const nextLiveText = nextNode.status === "current"
+    ? next.model.presentation.liveTextByNodeId[nextNode.nodeId] || ""
+    : "";
+  return previousNode === nextNode
+    && previous.index === next.index
+    && previousOpen === nextOpen
+    && previousLiveText === nextLiveText
+    && previous.model.group.title === next.model.group.title
+    && previous.model.presentation.locale === next.model.presentation.locale
+    && previous.model.actions.onManualApproval === next.model.actions.onManualApproval;
+});
+
+/** 节点动态耗时和专题动态耗时使用同一条局部刷新规则。 */
+function NodeDuration({ node, locale }: { node: CollaborationTimelineNodeOutDto; locale: LocaleValue }) {
+  const running = !node.completedAt && node.status !== "completed" && node.status !== "failed";
+  const nowMs = useTimelineNow(running);
+  return <>{nodeDurationLabel(node, locale, nowMs)}</>;
 }
 
 /** 一张专题任务卡及其完整人物处理历史。 */

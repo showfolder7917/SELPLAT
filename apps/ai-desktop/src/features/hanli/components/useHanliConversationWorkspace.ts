@@ -6,7 +6,7 @@
  */
 
 // 剪贴板事件类型（ClipboardEvent）描述输入框粘贴事件，只用于声明参数类型。
-import type { ClipboardEvent } from "react";
+import { useMemo, type ClipboardEvent } from "react";
 
 // 截图附件类型（ComposerAttachment）表示一张已经保存、可以发送和预览的图片。
 import type { ComposerAttachment } from "../../conversation";
@@ -177,13 +177,16 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   }
 
   // 直接问答消息（directMessages）只保留客户与韩立的交流，内部研讨继续只在南宫婉页面展示。
-  const directMessages = projectPersonaConversation(conversation.messages).direct
-    // 过滤其他人物消息，避免南宫婉或令狐的内部交接混入客户问答区。
-    .filter((message) => message.speakerType === "user" || message.speakerPersonaId === "han-li")
-    // 把后端 deliveryStatus 映射成实时消息组件使用的页面状态。
-    .map((message) => ({ ...message, status: message.deliveryStatus }));
+  const directMessages = useMemo(
+    () => projectPersonaConversation(conversation.messages).direct
+      // 过滤其他人物消息，避免南宫婉或令狐的内部交接混入客户问答区。
+      .filter((message) => message.speakerType === "user" || message.speakerPersonaId === "han-li")
+      // 把后端 deliveryStatus 映射成实时消息组件使用的页面状态。
+      .map((message) => ({ ...message, status: message.deliveryStatus })),
+    [conversation.messages],
+  );
   // 页面消息列表（messages）把已保存消息与发送中的临时消息合并，并按消息编号去重。
-  const messages = mergeRealtimeConversationTimeline(directMessages, pending ? [{
+  const messages = useMemo(() => mergeRealtimeConversationTimeline(directMessages, pending ? [{
     // 临时消息编号（messageId）沿用发送前生成的编号，后端返回后可以替换临时消息。
     messageId: pending.messageId,
     // 页面顺序号（sequenceNumber）暂放在当前历史末尾，正式顺序以后端结果为准。
@@ -207,9 +210,10 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     // 只有发送失败时当前生命周期才结束，发送中保持为空。
     completedAt: pending.failed ? new Date().toISOString() : null,
   // 没有临时消息时传入空数组，避免制造不存在的用户气泡。
-  }] : []);
-  // 时间线变化标识（timelineIdentity）把消息编号、状态和正文组合起来，用于判断是否需要跟随最新消息。
-  const timelineIdentity = messages.map((message) => `${message.messageId}:${message.deliveryStatus}:${message.content}`).join("|");
+  }] : []), [conversation.messages.length, directMessages, pending]);
+  // 只读取最后一条消息的变化；历史正文不会在每次输入时重新扫描。
+  const latestMessage = messages.at(-1);
+  const timelineIdentity = `${messages.length}:${latestMessage?.messageId || ""}:${latestMessage?.deliveryStatus || ""}:${latestMessage?.content.length || 0}`;
   // 会话区引用（timelineRef）绑定滚动区域，在时间线变化后跟随最新一轮问答。
   const timelineRef = usePersonaConversationTailFollow(timelineIdentity);
   // 是否允许发送（canSend）统一表达按钮是否具备条件，页面结构不再重复判断。

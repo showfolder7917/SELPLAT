@@ -12,7 +12,7 @@ type Tabs = {
   destroy(): void;
 };
 
-/** SELUI 负责页签激活、键盘与关闭；React 只挂载当前页面，业务状态由上层 Controller 保留。 */
+/** SELUI 负责页签激活、键盘与关闭；每个已打开页面只挂载一次，切换时保留阅读位置和局部交互状态。 */
 export function SelUiWorkspaceTabs({ request, revision, renderPage, onActivate }: {
   request: Page | null;
   revision: number;
@@ -24,7 +24,7 @@ export function SelUiWorkspaceTabs({ request, revision, renderPage, onActivate }
   const latest = useRef({ request, onActivate });
   latest.current = { request, onActivate };
   const [pages, setPages] = useState<Array<Page & { panel: HTMLElement }>>([]);
-  // 当前页签标识：隐藏页只保留 SELUI 页签和容器，不继续渲染长会话与任务时间线。
+  // 当前页签标识：隐藏页保留已经挂载的页面树，切换时不重新创建长会话与任务时间线。
   const [activePageId, setActivePageId] = useState<string | null>(null);
   useLayoutEffect(() => {
     const element = host.current!;
@@ -54,9 +54,9 @@ export function SelUiWorkspaceTabs({ request, revision, renderPage, onActivate }
     // 只有用户导航才重新打开关闭的页面，后台广播不能重新弹出页签。
   }, [revision, ready]);
   return <><div className="developer-tabs-host" ref={host} />{pages.map((page) => createPortal(
-    activePageId === page.id
-      ? <div className="developer-tab-page">{renderPage(page.id)}</div>
-      : null,
+    <div className="developer-tab-page" hidden={activePageId !== page.id}>
+      {renderPage(page.id)}
+    </div>,
     page.panel,
     page.id,
   ))}</>;

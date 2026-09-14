@@ -89,6 +89,12 @@ test("专题卡使用单一卡片模型归组显示状态和用户操作", () =>
   assert.match(taskGroupSource, /function TaskTimelineNode\([\s\S]*model: TaskGroupCardModel/);
 });
 
+test("动态耗时只刷新局部文字，不能驱动整页时间线重绘", () => {
+  assert.doesNotMatch(taskGroupSource, /const \[nowMs, setNowMs\][\s\S]*useTaskCollaborationGroup/);
+  assert.match(taskGroupCardSource, /function TimelineDuration[\s\S]*window\.setInterval/);
+  assert.match(taskGroupCardSource, /const TaskTimelineNode = memo/);
+});
+
 test("协作页面和控制器使用具名模型归组公开依赖", () => {
   // 任务群与人物页都只接收一个模型，工作区不再传递未使用的会话和截图控制器。
   assert.match(developerSource, /<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
