@@ -5,8 +5,8 @@ export { TestResourceCoordinatorFacade } from "./test-resource-coordinator.facad
 import { TaskWorktreeTestRunner } from "./internal/task-worktree-test.runner.js";
 import {
   FixedUnifiedTestRunner,
-  UnifiedTestCapacityBlockedError,
   UnifiedTestInfrastructureError,
+  isUnifiedTestCapacityBlockedError as isFixedUnifiedTestCapacityBlockedError,
   type FixedUnifiedTestRunnerOptions,
 } from "./internal/fixed-unified-test.runner.js";
 
@@ -35,7 +35,7 @@ export function isUnifiedTestInfrastructureError(error: unknown): boolean {
 
 // 预检容量阻断需要等待保留策略授权，不能误派回候选源码修复。
 export function isUnifiedTestCapacityBlockedError(error: unknown): boolean {
-  return error instanceof UnifiedTestCapacityBlockedError;
+  return isFixedUnifiedTestCapacityBlockedError(error);
 }
 
 // 其他流程通过公开入口复用相同失败摘要，避免再次截掉末尾原因。

@@ -18,6 +18,7 @@ import { ExecutorFacade } from "../../../../../build/ai-desktop/electron/electro
 import { LinghuAutomationStore } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
 import { parseCustomerActionGuidance } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-customer-action-guidance.js";
 import { TestResourceCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/test-resource-coordinator.facade.js";
+import { isUnifiedTestCapacityBlockedError } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/index.js";
 import { IntegrationReleaseCoordinatorFacade } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/integration-release.facade.js";
 import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
 import { describeGitFailure, resolveGitCommand } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/git-process.js";
@@ -60,6 +61,13 @@ test("原始逐字流只进入时间线流表，不重复写入全局事件中�
 });
 const collaborationSessionsSource = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
+
+test("候选跨模块回传容量阻断时保留等待身份", () => {
+  const capacity = { fileBytes: 1, directoryBytes: 2, headroomBytes: 3, requiredBytes: 6, availableBytes: 4 };
+  const relayed = { name: "UnifiedTestCapacityBlockedError", code: "unified-test-capacity-blocked", script: "package:mac:developer", capacity };
+  assert.equal(isUnifiedTestCapacityBlockedError(relayed), true);
+  assert.equal(isUnifiedTestCapacityBlockedError({ code: "ENOSPC", capacity }), false);
+});
 
 // 测试也经 Platform Port 创建人物 Store，避免用例重新引入文件路径耦合。
 function createTestLinghuStore(filePath) {

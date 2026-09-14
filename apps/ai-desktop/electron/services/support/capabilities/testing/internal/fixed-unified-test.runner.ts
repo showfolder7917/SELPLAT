@@ -16,6 +16,7 @@ import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.faca
 const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
 // 仅接受开发包预检写出的固定记录，避免把任意命令中的 ENOSPC 文本误判为等待授权。
 const DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER = "AI_DESKTOP_PACKAGE_CAPACITY_BLOCKED:";
+const UNIFIED_TEST_CAPACITY_BLOCKED_ERROR_CODE = "unified-test-capacity-blocked";
 
 type DeveloperPackageCapacity = {
   fileBytes: number;
@@ -48,6 +49,7 @@ export class UnifiedTestInfrastructureError extends Error {
 
 /** 表示容量预检已在构建前安全停止，必须由具有保留策略权限的人员处理空间后再验证。 */
 export class UnifiedTestCapacityBlockedError extends Error {
+  readonly code = UNIFIED_TEST_CAPACITY_BLOCKED_ERROR_CODE;
   readonly script: string;
   readonly capacity: DeveloperPackageCapacity;
 
@@ -58,6 +60,17 @@ export class UnifiedTestCapacityBlockedError extends Error {
     this.script = script;
     this.capacity = capacity;
   }
+}
+
+/** 候选工作树可能经不同模块实例回传异常；仅接受本错误码和完整容量结构，不能退回宽泛 ENOSPC 文本匹配。 */
+export function isUnifiedTestCapacityBlockedError(error: unknown): error is UnifiedTestCapacityBlockedError {
+  if (error instanceof UnifiedTestCapacityBlockedError) return true;
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as Partial<UnifiedTestCapacityBlockedError>;
+  return candidate.name === "UnifiedTestCapacityBlockedError"
+    && candidate.code === UNIFIED_TEST_CAPACITY_BLOCKED_ERROR_CODE
+    && typeof candidate.script === "string"
+    && isDeveloperPackageCapacity(candidate.capacity);
 }
 
 /** 测试漏点模块只通过固定 npm 脚本执行正式构建与统一回归，禁止把动态命令交给自动执行文案。 */
