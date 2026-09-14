@@ -38,7 +38,7 @@ import {
   groupActivityPresentation,
   // 专题状态：把稳定状态码转换成中日文。
   groupStatusLabel,
-  // 当前恢复动作：统一放到专题当前流程区，并在同一任务恢复后立即失效。
+  // 当前恢复动作：统一放到专题当前流程区，恢复请求中保留禁用入口。
   latestActiveRecoveryAction,
   // 节点耗时：正在执行或等待时随当前时间更新。
   nodeDurationLabel,
@@ -81,6 +81,28 @@ type TaskGroupCardActions = {
   /** 从最新等待节点继续原任务。 */
   onContinueTask: (taskId: string) => void;
 };
+
+/** 恢复失败先显示简短警告，完整错误证据仍由用户按需展开查看。 */
+function RecoveryError({ message, locale }: { message: string; locale: LocaleValue }) {
+  const detail = presentTimelineText(message);
+  const summary = compactTimelineText(detail);
+  const normalizedDetail = detail.replace(/\s+/gu, " ").trim();
+  return (
+    <div className="task-recovery-error" role="alert">
+      <p>{summary}</p>
+      {summary !== normalizedDetail && (
+        <SelUiDisclosure
+          idPrefix="task-recovery-error-evidence"
+          className="task-recovery-evidence"
+          open={false}
+          trigger={<span>{locale === "ja" ? "完全な理由と証拠を見る" : "查看完整原因与证据"}</span>}
+        >
+          <pre>{detail}</pre>
+        </SelUiDisclosure>
+      )}
+    </div>
+  );
+}
 
 /** 专题卡模型：父页面只传入这一份完整、按职责归组的数据。 */
 export type TaskGroupCardModel = {
@@ -366,10 +388,11 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { onOpenChange } = model.actions;
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
-  // 当前恢复动作（recoveryAction）只来自某个任务的最新等待事实，历史节点不能重新获得按钮。
+  // 当前恢复动作（recoveryAction）来自任务最新等待或恢复请求事实，历史节点不能重新获得按钮。
   const recoveryAction = latestActiveRecoveryAction(visibleNodes);
   // 恢复提交中（recoveryPending）仅禁用下一流程的唯一入口，避免重复请求。
-  const recoveryPending = recoveryAction?.taskId === model.presentation.continuingTaskId;
+  const recoveryPending = recoveryAction?.pending === true
+    || recoveryAction?.taskId === model.presentation.continuingTaskId;
   // 一次性运行恢复与按钮共用同一选择器，卡头不会再把阻塞状态说成自动处理中。
   const oneShotRecoveryRequired = evolution.state
     ? canResumeOneShotForGroup(presentedGroup, evolution.state)
@@ -402,7 +425,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             >
               <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
               {recoveryPending
-                ? locale === "ja" ? "続行中…" : "继续中…"
+                ? locale === "ja" ? "復旧中…" : "恢复中…"
                 : recoveryAction.customerAction ? "从卡点继续" : locale === "ja" ? "実行を続ける" : "继续执行"}
             </button>
           )}
@@ -419,8 +442,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
           />
         ))}
       </div>
-      {/* 继续任务错误：恢复请求失败时向用户显示页面控制器返回的原因。 */}
-      {continueError && <p className="task-recovery-error" role="alert">{continueError}</p>}
+      {/* 继续任务错误：恢复请求失败时显示短原因，并保留可展开的完整证据。 */}
+      {continueError && <RecoveryError message={continueError} locale={locale} />}
 
 
     </SelUiDisclosure>
