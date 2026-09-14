@@ -21,9 +21,13 @@ export function resolveAcceptanceInteractionCapabilities(proposal: EvolutionProp
     || /(?:空(?:目录|状态)|目录.*为空|为空.*目录)/u.test(approvedScope)
     || /(?:超长.*目录|长目录|目录.*(?:滚动|溢出)|工作区树.*滚动)/u.test(approvedScope)
   );
+  const hasWorkspaceStartupRecoveryScope = hasWorkspaceExplorerScope
+    && /(?:重启|重新启动|再次启动).*(?:回收|清理|移除|临时工作区)|(?:回收|清理|移除|临时工作区).*(?:重启|重新启动|再次启动)/u.test(approvedScope);
   const excludesAcceptanceTool = proposal.exclusions.some((item) => /(?:验收工具|原生目录|工作区).*(?:不扩展|禁止|排除)|(?:不扩展|禁止|排除).*(?:验收工具|原生目录|工作区)/u.test(item));
   if (!hasWorkspaceExplorerScope || excludesAcceptanceTool) return [];
-  return hasWorkspaceExplorerScenarioScope
-    ? ["workspace-explorer", "workspace-explorer-scenarios"]
-    : ["workspace-explorer"];
+  return [
+    "workspace-explorer",
+    ...(hasWorkspaceExplorerScenarioScope ? ["workspace-explorer-scenarios" as const] : []),
+    ...(hasWorkspaceStartupRecoveryScope ? ["workspace-startup-recovery" as const] : []),
+  ];
 }

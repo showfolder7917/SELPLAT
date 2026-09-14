@@ -18,6 +18,8 @@ export interface StartupContext {
   readonly projectPaths: ReturnType<typeof resolveApplicationDataPaths>;
   readonly preloadPath: string;
   readonly healthCheckFile: string | null;
+  /** 隔离子进程只执行工作区启动回收验证，不装配正式运行时或创建 Renderer。 */
+  readonly workspaceRecoveryCheck: { resultFile: string; temporaryRoot: string } | null;
   /** 当前进程实际装载的候选源码提交；发布重启验收必须与批次集成提交一致。 */
   readonly runtimeSourceSha: string | null;
   readonly workspaces: WorkspaceFacade;
@@ -55,10 +57,18 @@ export function createStartupContext(): StartupContext {
     ?.slice("--ai-desktop-health-check-file=".length)
     || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
     || null;
+  const workspaceRecoveryCheckFile = readArgument("--ai-desktop-workspace-recovery-check-file=");
+  const workspaceRecoveryTemporaryRoot = readArgument("--ai-desktop-workspace-recovery-temp-root=");
+  const workspaceRecoveryCheck = workspaceRecoveryCheckFile && workspaceRecoveryTemporaryRoot
+    ? { resultFile: path.resolve(workspaceRecoveryCheckFile), temporaryRoot: path.resolve(workspaceRecoveryTemporaryRoot) }
+    : null;
+  if ((workspaceRecoveryCheckFile || workspaceRecoveryTemporaryRoot) && !workspaceRecoveryCheck) {
+    throw new Error("隔离工作区重启检查参数不完整。");
+  }
   // 候选包健康检查必须与已运行的桌面应用并存，不能被正常启动的单实例门禁提前退出。
-  const ownsApplicationInstance = healthCheckFile ? true : app.requestSingleInstanceLock();
-  if (!healthCheckFile && !ownsApplicationInstance) app.quit();
-  else if (!healthCheckFile) app.on("second-instance", () => {
+  const ownsApplicationInstance = healthCheckFile || workspaceRecoveryCheck ? true : app.requestSingleInstanceLock();
+  if (!healthCheckFile && !workspaceRecoveryCheck && !ownsApplicationInstance) app.quit();
+  else if (!healthCheckFile && !workspaceRecoveryCheck) app.on("second-instance", () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (!window) return;
     if (window.isMinimized()) window.restore();
@@ -78,6 +88,7 @@ export function createStartupContext(): StartupContext {
     projectPaths,
     preloadPath: path.join(electronDirectory, "preload", "preload.cjs"),
     healthCheckFile,
+    workspaceRecoveryCheck,
     runtimeSourceSha,
     workspaces,
     eventCenter,
@@ -103,6 +114,8 @@ function auditAcceptanceIsolation(options: {
   const userDataRoot = path.resolve(app.getPath("userData"));
   const database = resolveConfiguredAiMemoryPaths(options.projectRoot);
   const auditPath = path.join(isolationRoot, "path-audit", "runtime-paths.json");
+  const workspaceRecoveryCheckFile = readArgument("--ai-desktop-workspace-recovery-check-file=");
+  const workspaceRecoveryTemporaryRoot = readArgument("--ai-desktop-workspace-recovery-temp-root=");
   const writablePaths = [
     options.projectRoot, database.databasePath, `${database.databasePath}-wal`, `${database.databasePath}-shm`,
     path.join(userDataRoot, "ai-memory-database-state.json"), path.join(userDataRoot, "workspace-profiles.json"),
@@ -111,6 +124,8 @@ function auditAcceptanceIsolation(options: {
     path.join(userDataRoot, "conversation-dispatch.json"), path.join(userDataRoot, "corpus-semantic-backfill-workspace"),
     path.join(userDataRoot, "corpus-semantic-backfill-session.json"), options.projectPaths.buildRoot, options.projectPaths.cacheRoot,
     options.projectPaths.archiveLogRoot, options.projectPaths.temporaryMaterialsRoot, auditPath,
+    ...(workspaceRecoveryCheckFile ? [workspaceRecoveryCheckFile] : []),
+    ...(workspaceRecoveryTemporaryRoot ? [workspaceRecoveryTemporaryRoot] : []),
   ].map((candidate) => path.resolve(candidate));
   const protectedRoots = [path.resolve(protectedProjectRoot), path.resolve(protectedUserDataRoot)];
   for (const candidate of writablePaths) {

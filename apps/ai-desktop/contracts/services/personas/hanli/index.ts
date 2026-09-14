@@ -17,7 +17,7 @@ export type { HanliConversationActionValue } from "./value/hanli-conversation.va
 export type { HanliConversationViewpointValue } from "./value/hanli-conversation.value.js";
 
 /** 发起韩立真实窗口验收时传入的目标、提案和逐项验收条件。 */
-export type { HanliComputerAcceptanceInDto, HanliAcceptanceInteractionCapability, WorkspaceAcceptanceFixtureContextOutDto } from "./dto/computer-acceptance.in.dto.js";
+export type { HanliComputerAcceptanceInDto, HanliAcceptanceInteractionCapability, WorkspaceAcceptanceFixtureContextOutDto, WorkspaceStartupRecoveryEvidenceOutDto } from "./dto/computer-acceptance.in.dto.js";
 /** 令狐准备当前窗口场景时使用的只读专题、提案和运行身份快照。 */
 export type { AcceptanceSceneRuntimeContextOutDto } from "./dto/computer-acceptance.in.dto.js";
 

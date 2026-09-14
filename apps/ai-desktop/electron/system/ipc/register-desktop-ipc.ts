@@ -19,6 +19,7 @@ import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-gr
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { WorkspaceAcceptanceFixture } from "./workspace-acceptance-fixture.js";
+import { runWorkspaceStartupRecoveryAcceptance } from "./workspace-startup-recovery-acceptance.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
 import { registerCodexIpc } from "./domains/register-codex-ipc.js";
 import { registerConversationIpc } from "./domains/register-conversation-ipc.js";
@@ -153,21 +154,34 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
     const workspaceExplorerScenarioAcceptance = goal.interactionCapabilities?.includes("workspace-explorer-scenarios") === true;
+    const workspaceStartupRecoveryRequired = goal.interactionCapabilities?.includes("workspace-startup-recovery") === true;
+    const workspaceStartupRecoveryEvidence = workspaceStartupRecoveryRequired
+      ? await runWorkspaceStartupRecoveryAcceptance({
+        executable: process.execPath,
+        formalProjectRoot: projectRoot,
+        formalUserDataRoot: app.getPath("userData"),
+        temporaryParent: app.getPath("temp"),
+      })
+      : undefined;
+    if (workspaceStartupRecoveryEvidence) {
+      audit.recordEvent("hanli.acceptance_workspace_startup_recovery.checked", { ...identity, ...workspaceStartupRecoveryEvidence });
+    }
     // 先回收带私有标记的遗留根并预备本轮标签，场景规划才能区分本轮新增与旧会话残留。
     const fixtureReservation = workspaceExplorerAcceptance
       ? workspaceAcceptanceFixture.reserve(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow.webContents.id)
       : null;
-    const acceptanceGoal: HanliComputerAcceptanceInDto = workspaceExplorerAcceptance ? {
+    const acceptanceGoal: HanliComputerAcceptanceInDto = {
       ...goal,
-      workspaceAcceptanceFixture: {
+      ...(workspaceStartupRecoveryEvidence ? { workspaceStartupRecoveryEvidence } : {}),
+      ...(workspaceExplorerAcceptance ? { workspaceAcceptanceFixture: {
         kind: "workspace-explorer",
         mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
         displayName: fixtureReservation!.displayName,
         instructions: workspaceExplorerScenarioAcceptance
           ? ["先确认本轮标签尚未出现在工作区列表；点击标题右侧添加入口一次后立即截图，确认本轮标签出现。", "只展开本轮标签对应根目录；slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
           : ["先确认本轮标签尚未出现在工作区列表；点击标题右侧添加入口一次后立即截图，确认本轮标签出现。", "临时目录会在验收结束后自动撤销。"],
-      },
-    } : goal;
+      } } : {}),
+    };
     if (workspaceExplorerAcceptance) {
       audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
         ...identity,

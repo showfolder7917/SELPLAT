@@ -52,3 +52,9 @@ test("任一已批准的受控工作区场景都签发场景夹具能力", () =>
 test("提案排除验收工具或原生目录时保持最小权限", () => {
   assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({ exclusions: ["禁止扩展验收工具的原生目录选择能力。"] })), []);
 });
+
+test("重启后回收临时工作区由批准范围签发独立能力", () => {
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
+    acceptanceCriteria: ["左侧工作区树可以读取文件，应用重启后自动清理验收临时工作区。"],
+  })), ["workspace-explorer", "workspace-startup-recovery"]);
+});

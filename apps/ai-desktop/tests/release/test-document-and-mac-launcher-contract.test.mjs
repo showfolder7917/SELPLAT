@@ -113,9 +113,9 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(appConfig, /--selplat-root=/);
   assert.match(appConfig, /resolveAppVariant\(\): AppVariantValue \{\s+return "developer";/);
   assert.match(electronMain, /releaseRestartArguments\(projectRoot, runtimeSourceSha, process\.argv\)/);
-  assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \? true : app\.requestSingleInstanceLock\(\);/);
-  assert.match(startupContext, /if \(!healthCheckFile && !ownsApplicationInstance\) app\.quit\(\);/);
-  assert.match(startupContext, /else if \(!healthCheckFile\) app\.on\("second-instance"/);
+  assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \|\| workspaceRecoveryCheck \? true : app\.requestSingleInstanceLock\(\);/);
+  assert.match(startupContext, /if \(!healthCheckFile && !workspaceRecoveryCheck && !ownsApplicationInstance\) app\.quit\(\);/);
+  assert.match(startupContext, /else if \(!healthCheckFile && !workspaceRecoveryCheck\) app\.on\("second-instance"/);
   assert.match(macVerifier, /com\.selplat\.aidesktop\.developer/);
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);

@@ -663,3 +663,14 @@ test("后续场景被明确告知复用前序证据而不重复已释放夹具",
   assert.match(prompt, /不得重复前序场景动作/);
   assert.match(prompt, /一次性夹具已在段落结束时释放/);
 });
+
+test("工作区重启验收由已打包隔离子进程提供最小证据", () => {
+  const desktopIpc = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
+  const prompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
+  assert.match(desktopIpc, /runWorkspaceStartupRecoveryAcceptance/);
+  assert.match(desktopIpc, /interactionCapabilities\?\.includes\("workspace-startup-recovery"\)/);
+  assert.match(desktopIpc, /hanli\.acceptance_workspace_startup_recovery\.checked/);
+  assert.match(prompt, /workspaceStartupRecoveryEvidence/);
+  assert.match(prompt, /当前已打包 AI Desktop/);
+  assert.match(prompt, /当前真实或隔离页面截图/);
+});

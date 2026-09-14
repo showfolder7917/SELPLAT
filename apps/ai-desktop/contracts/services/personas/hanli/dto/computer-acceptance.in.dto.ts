@@ -6,7 +6,10 @@ import type { AcceptanceSceneSegmentOutDto } from "./acceptance-scene.out.dto.js
  * 生产者：演化运行时；消费者：韩立窗口验收器。
  * 数据方向：已批准提案 -> 运行时 -> 验收器；禁止职责：模型和 Renderer 不能自行添加此范围。
  */
-export type HanliAcceptanceInteractionCapability = "workspace-explorer" | "workspace-explorer-scenarios";
+export type HanliAcceptanceInteractionCapability =
+  | "workspace-explorer"
+  | "workspace-explorer-scenarios"
+  | "workspace-startup-recovery";
 
 /**
  * 已签发工作区验收夹具的只读操作说明。
@@ -18,6 +21,20 @@ export interface WorkspaceAcceptanceFixtureContextOutDto {
   /** 本轮临时根的可见名称；用于在不泄露路径的前提下确认添加前后状态。 */
   displayName: string;
   instructions: string[];
+}
+
+/** 已打包应用在隔离工程中完成一次真实重启装配后返回的最小回收证据，不含任何绝对路径或用户数据。 */
+export interface WorkspaceStartupRecoveryEvidenceOutDto {
+  status: "passed" | "failed";
+  runId: string;
+  recordedAt: string;
+  staleDirectoryRemoved: boolean;
+  staleRegistrationRemoved: boolean;
+  unmarkedWorkspacePreserved: boolean;
+  primaryWorkspacePreserved: boolean;
+  beforeRootCount: number;
+  afterRootCount: number;
+  reason: string;
 }
 
 /**
@@ -59,6 +76,8 @@ export interface HanliComputerAcceptanceInDto {
   interactionCapabilities?: HanliAcceptanceInteractionCapability[];
   /** 当前运行已预备的临时验收数据说明；只用于选择并执行受控验收场景。 */
   workspaceAcceptanceFixture?: WorkspaceAcceptanceFixtureContextOutDto;
+  /** 当前已打包应用在隔离数据根中执行的真实重启回收结果；只用于对应重启条件的事实判断。 */
+  workspaceStartupRecoveryEvidence?: WorkspaceStartupRecoveryEvidenceOutDto;
   /** 仅当前窗口场景必须提供的运行时身份事实，用于阻止模型臆测记录缺失。 */
   sceneContext?: AcceptanceSceneRuntimeContextOutDto;
   /** 韩立当前证据阶段的已准备场景，不代表页面验收通过。 */

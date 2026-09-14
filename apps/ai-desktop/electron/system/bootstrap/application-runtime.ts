@@ -132,11 +132,12 @@ import { createPersonaApplicationContext } from "./personas.bootstrap.js";
 import { registerApplicationIpc } from "./ipc.bootstrap.js";
 import { AcceptanceEmptyTaskGroupSession } from "../ipc/acceptance-empty-task-group-session.js";
 import { TestDataResetService } from "../../services/support/application/test-data-reset.service.js";
+import { completeWorkspaceStartupRecoveryCheck } from "../ipc/workspace-startup-recovery-acceptance.js";
 
 const startup = createStartupContext();
 const { applicationName: startupApplicationName, variant: startupVariant,
   projectRoot: startupProjectRoot, projectPaths: startupProjectPaths, preloadPath, healthCheckFile,
-  workspaces: startupWorkspaces, eventCenter } = startup;
+  workspaceRecoveryCheck, workspaces: startupWorkspaces, eventCenter } = startup;
 
 // 这些对象在 app.whenReady() 内创建，却要在 before-quit 中释放，因此在外层保存引用。
 // 主聊天 Codex：处理用户在 Developer 主窗口发起的普通会话。
@@ -214,6 +215,13 @@ function prepareAiMemoryShutdown(): void {
 
 /** Electron ready 后创建完整应用运行时。 */
 export async function startApplication(): Promise<void> {
+  if (workspaceRecoveryCheck) {
+    const result = completeWorkspaceStartupRecoveryCheck(workspaceRecoveryCheck, startupWorkspaces);
+    mkdirSync(path.dirname(workspaceRecoveryCheck.resultFile), { recursive: true });
+    writeFileSync(workspaceRecoveryCheck.resultFile, `${JSON.stringify(result)}\n`, "utf8");
+    app.quit();
+    return;
+  }
   // 复用启动前已解析的稳定值，确保全部服务属于同一工程和产品变体。
   const variant = startupVariant;
   const projectRoot = startupProjectRoot;

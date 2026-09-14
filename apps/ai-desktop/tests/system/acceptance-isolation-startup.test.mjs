@@ -6,6 +6,7 @@ const startup = readFileSync("electron/system/bootstrap/startup-context.ts", "ut
 const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
 const launcher = readFileSync("scripts/start-isolated-acceptance.mjs", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
+const workspaceRecovery = readFileSync("electron/system/ipc/workspace-startup-recovery-acceptance.ts", "utf8");
 
 test("隔离验收在任何可写服务前审计并拒绝正式根", () => {
   assert.match(startup, /auditAcceptanceIsolation\(\{ applicationName, projectRoot: configuredProjectRoot, projectPaths \}\);/);
@@ -14,6 +15,7 @@ test("隔离验收在任何可写服务前审计并拒绝正式根", () => {
   assert.match(startup, /databasePath.*-wal.*-shm/s);
   assert.match(startup, /rule-workspace.*codex-home.*collaboration/s);
   assert.match(startup, /archiveLogRoot.*temporaryMaterialsRoot/s);
+  assert.match(startup, /workspaceRecoveryCheckFile.*workspaceRecoveryTemporaryRoot.*writablePaths/s);
 });
 
 test("验收启动器只启动已打包应用，并把三类根同时传入", () => {
@@ -33,4 +35,17 @@ test("隔离验收不初始化外部 Codex 用户目录与 watcher", () => {
   assert.match(runtime, /if \(externalCorpusEnabled\) \{\s*codexAppCorpusWatcher = createCodexConversationCorpusWatcher/s);
   assert.match(runtime, /const corpusSemanticBackfill = aiMemoryDatabase && externalCorpusEnabled/);
   assert.match(runtime, /roots: externalCorpusRoots/);
+});
+
+test("工作区重启检查使用独立工程用户目录和临时根，并在完整运行时前结束", () => {
+  const startApplication = runtime.slice(runtime.indexOf("export async function startApplication"));
+  assert.match(startup, /--ai-desktop-workspace-recovery-check-file=/);
+  assert.match(startup, /healthCheckFile \|\| workspaceRecoveryCheck \? true : app\.requestSingleInstanceLock/);
+  assert.match(runtime, /if \(workspaceRecoveryCheck\)/);
+  assert.ok(startApplication.indexOf("if (workspaceRecoveryCheck)") < startApplication.indexOf("createPersistenceContext"));
+  assert.match(workspaceRecovery, /--ai-desktop-acceptance-isolation-root=/);
+  assert.match(workspaceRecovery, /--ai-desktop-user-data-dir=/);
+  assert.match(workspaceRecovery, /new WorkspaceAcceptanceFixture\(workspaces, check\.temporaryRoot\)/);
+  assert.match(workspaceRecovery, /staleDirectoryRemoved.*staleRegistrationRemoved.*unmarkedWorkspacePreserved.*primaryWorkspacePreserved/s);
+  assert.doesNotMatch(workspaceRecovery, /writeFileSync\([^\n]*(formalProjectRoot|formalUserDataRoot)/);
 });

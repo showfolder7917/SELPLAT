@@ -10,8 +10,8 @@ type FixtureRegistration = { displayName: string; workspaceId: string };
 type FixtureReadPath = "slow-a" | "slow-b" | "retry-once";
 type FixtureReadState = { requestCount: number; pending: boolean; outcome: "not-requested" | "started" | "succeeded" | "failed" };
 type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; failedPaths: Set<string>; reads: Map<FixtureReadPath, FixtureReadState> };
-const FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
-const FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 };
+export const WORKSPACE_ACCEPTANCE_FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
+export const WORKSPACE_ACCEPTANCE_FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 } as const;
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
 const SCENARIO_DIRECTORY_DELAY_MS = 2_000;
 
@@ -68,7 +68,7 @@ export class WorkspaceAcceptanceFixture {
     const directory = realpathSync.native(mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-")));
     const displayName = path.basename(directory);
     // 标记只供主进程回收异常中断的夹具，避免按目录前缀误删用户工作区。
-    writeFileSync(path.join(directory, FIXTURE_MARKER_NAME), JSON.stringify(FIXTURE_MARKER), "utf8");
+    writeFileSync(path.join(directory, WORKSPACE_ACCEPTANCE_FIXTURE_MARKER_NAME), JSON.stringify(WORKSPACE_ACCEPTANCE_FIXTURE_MARKER), "utf8");
     writeFileSync(path.join(directory, "README.md"), "# 验收工作区\n\n用于验证左侧工作区的目录展开与只读文件预览。\n", "utf8");
     if (mode === "scenarios") {
       for (const name of ["empty", "slow-a", "slow-b", "retry-once", "工作区资源浏览-窄窗口超长目录名称验证-保持树和主查看区边界稳定"]) mkdirSync(path.join(directory, name));
@@ -208,8 +208,8 @@ export class WorkspaceAcceptanceFixture {
   /** 私有标记是遗留回收的唯一授权，不接受目录前缀或外部路径作为删除依据。 */
   #hasFixtureMarker(directory: string): boolean {
     try {
-      const marker = JSON.parse(readFileSync(path.join(directory, FIXTURE_MARKER_NAME), "utf8")) as { kind?: unknown; version?: unknown };
-      return marker.kind === FIXTURE_MARKER.kind && marker.version === FIXTURE_MARKER.version;
+      const marker = JSON.parse(readFileSync(path.join(directory, WORKSPACE_ACCEPTANCE_FIXTURE_MARKER_NAME), "utf8")) as { kind?: unknown; version?: unknown };
+      return marker.kind === WORKSPACE_ACCEPTANCE_FIXTURE_MARKER.kind && marker.version === WORKSPACE_ACCEPTANCE_FIXTURE_MARKER.version;
     } catch {
       return false;
     }
