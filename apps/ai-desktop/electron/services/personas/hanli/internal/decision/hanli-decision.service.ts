@@ -78,7 +78,14 @@ export class HanliDecisionService {
     const prompt = this.#dependencies.prompts.render("hanli.result-acceptance", {
       acceptanceContextJson: JSON.stringify({ topic, proposal, implementationEvidence }),
     });
-    const value = await this.#askForStructuredResult(prompt, state);
+    return this.#askForStructuredResult(prompt, state, (value) => this.#createResultAcceptanceReview(proposal, value));
+  }
+
+  /**
+   * 将模型计划转换为可执行的验收路由；调用方必须通过 #askForStructuredResult 重试语义错误。
+   * 这里同时校验页面条件和代码条件，避免 JSON 合法却无法进入正式窗口验收。
+   */
+  #createResultAcceptanceReview(proposal: EvolutionProposalOutDto, value: Record<string, unknown>): "page-experience" | HanliAcceptanceRunOutDto {
     if (value.mode === "page-experience") return "page-experience";
     if (value.mode !== "code-conformance" && value.mode !== "mixed") {
       throw new Error("韩立没有返回有效的结果验收类型和逐项结论。");
@@ -168,16 +175,19 @@ export class HanliDecisionService {
     throw new Error(`韩立连续 3 次未返回有效的结构化判断：${lastError}`);
   }
 
-  async #askForStructuredResult(prompt: string, state: EvolutionStateOutDto): Promise<Record<string, unknown>> {
+  /** 将 JSON 语法与调用方提供的语义校验放进同一轮重试，向模型返回可纠正的具体错误。 */
+  async #askForStructuredResult<T>(prompt: string, state: EvolutionStateOutDto, validate: (value: Record<string, unknown>) => T): Promise<T> {
     let request = prompt;
+    let lastError = "";
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const response = await this.#dependencies.askHanli(request, state);
-      try { return parseJsonObject(response); }
+      try { return validate(parseJsonObject(response)); }
       catch (error) {
-        request = `${prompt}\n\n上一次结果无法处理：${error instanceof Error ? error.message : String(error)}。请只返回符合约定的完整 JSON。`;
+        lastError = error instanceof Error ? error.message : String(error);
+        request = `${prompt}\n\n上一次结果无法处理：${lastError}。请按原始 criterion 编号修正页面与代码条件的完整分区，只返回符合约定的完整 JSON。`;
       }
     }
-    throw new Error("韩立连续 3 次未返回有效的结果验收判断。");
+    throw new Error(`韩立连续 3 次未返回有效的结果验收判断：${lastError}`);
   }
 
 }
