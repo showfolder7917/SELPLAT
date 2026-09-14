@@ -43,4 +43,21 @@ export class ProposalRevisionChain {
     }
     return undefined;
   }
+
+  /** 判断提案是否是所在修订链当前有效版本，调用方不再各自遍历替代关系。 */
+  isCurrent(proposalId: string): boolean {
+    return this.currentProposals().some((proposal) => proposal.proposalId === proposalId);
+  }
+
+  /** 返回全部修订链的当前有效版本；同一根链只保留最高版本。 */
+  currentProposals(): EvolutionProposalOutDto[] {
+    const proposalIds = new Set(this.#proposals.map((proposal) => proposal.proposalId));
+    const roots = this.#proposals.filter((proposal) => !proposal.supersedesProposalId || !proposalIds.has(proposal.supersedesProposalId));
+    const currentIds = new Set<string>();
+    for (const root of roots) {
+      const current = this.currentFrom(root.proposalId);
+      if (current) currentIds.add(current.proposalId);
+    }
+    return this.#proposals.filter((proposal) => currentIds.has(proposal.proposalId));
+  }
 }

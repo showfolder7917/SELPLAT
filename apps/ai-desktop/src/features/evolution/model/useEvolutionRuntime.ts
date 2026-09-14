@@ -36,7 +36,8 @@ export function useEvolutionRuntime() {
   };
 
   /** 状态锁属于共享运行模型，切换任务页签不会产生第二次恢复请求。 */
-  const resumeOneShot = async (runId: string) => {
+  const resumeOneShot = async (request: { topicId: string; proposalId: string; runId: string }) => {
+    const { runId } = request;
     if (resumeLock.current) return;
     resumeLock.current = true;
     setResumingRunId(runId);
@@ -44,7 +45,7 @@ export function useEvolutionRuntime() {
     try {
       const collaborationApi = getOptionalCollaborationDesktopApi();
       if (!collaborationApi) throw new Error("桌面连接不可用，未发起恢复。");
-      const next = await collaborationApi.resumeEvolutionOneShot(runId);
+      const next = await collaborationApi.resumeEvolutionOneShot(request);
       setState(next);
       const run = next.oneShotRun;
       const blocked = run?.status === "blocked";

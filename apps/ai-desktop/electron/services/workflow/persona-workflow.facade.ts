@@ -1,6 +1,6 @@
 import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CompletionReviewGateOutDto, HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../contracts/services/personas/hanli/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../contracts/services/workflow/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto } from "../../../contracts/services/workflow/index.js";
 
 /** Workflow 端口只包含跨人物轮转、分发、恢复和生命周期动作。 */
 export interface PersonaWorkflowApplicationPort {
@@ -10,7 +10,7 @@ export interface PersonaWorkflowApplicationPort {
   setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void, onCompletionReviewReady: (gate: CompletionReviewGateOutDto) => void) => Promise<HanliAcceptanceRunOutDto>): void;
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto;
   controlAutomation(action: PersonaWorkflowActionInDto): EvolutionStateOutDto;
-  resumeOneShotRun(expectedRunId?: string): Promise<EvolutionStateOutDto>;
+  requestSupplementalAcceptance(request: RequestSupplementalAcceptanceInDto): Promise<EvolutionStateOutDto>;
 }
 
 /** Workflow 唯一跨人物演化门面；它负责编排，不公开任何人物内部 Service。 */
@@ -30,8 +30,8 @@ export class PersonaWorkflowFacade {
   configureAutomation(request: ConfigurePersonaWorkflowInDto) { return this.#application.configureAutomation(request); }
   /** 执行启动、暂停、恢复或停止控制并保存恢复点。 */
   controlAutomation(action: PersonaWorkflowActionInDto) { return this.#application.controlAutomation(action); }
-  /** 从已保存卡点恢复同一轮，不创建第二条流程。 */
-  resumeOneShotRun(expectedRunId?: string) { return this.#application.resumeOneShotRun(expectedRunId); }
+  /** 校验专题、当前提案和原运行后，幂等接续原专题的补验。 */
+  requestSupplementalAcceptance(request: RequestSupplementalAcceptanceInDto) { return this.#application.requestSupplementalAcceptance(request); }
 }
 
 /** Workflow Runtime 暴露稳定身份和唯一门面，供人物能力注册表登记。 */

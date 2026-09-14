@@ -10,7 +10,7 @@ import type {
   ReviseNangongProposalInDto,
   UpdateNangongTopicInDto,
 } from "../../../../contracts/services/personas/nangong/index.js";
-import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
+import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto } from "../../../../contracts/services/workflow/index.js";
 import type { CollaborationWorkflowFacade as CollaborationCoordinator } from "../../../services/workflow/index.js";
 import type { LinghuAutomationFacade } from "../../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../../services/personas/nangong/index.js";
@@ -102,9 +102,11 @@ export function registerCollaborationIpc(
   handle("desktop:update-evolution-topic", (_event, topicId: string, request: UpdateNangongTopicInDto) => nangong.updateTopic(topicId, request));
   handle("desktop:configure-evolution-automation", (_event, request: ConfigurePersonaWorkflowInDto) => personaWorkflow.configureAutomation(request));
   handle("desktop:control-evolution-automation", (_event, action: PersonaWorkflowActionInDto) => personaWorkflow.controlAutomation(action));
-  handle("desktop:resume-nangong-one-shot-evolution", async (event, runId: string) => {
-    if (typeof runId !== "string" || !runId.trim()) throw new Error("恢复请求缺少运行标识，请刷新任务状态。");
-    const resumed = await personaWorkflow.resumeOneShotRun(runId);
+  handle("desktop:resume-nangong-one-shot-evolution", async (event, request: RequestSupplementalAcceptanceInDto) => {
+    if (!request || typeof request.topicId !== "string" || typeof request.proposalId !== "string" || typeof request.runId !== "string") {
+      throw new Error("补验请求缺少原专题、当前提案或原运行标识，请刷新任务状态。");
+    }
+    const resumed = await personaWorkflow.requestSupplementalAcceptance(request);
     // 用户点击恢复后立即唤醒统一卡点入口；不能再等待下一轮后台巡检才把真实阻塞交给令狐。
     await refreshWorkflowCheckpoints?.();
     return resumed;
