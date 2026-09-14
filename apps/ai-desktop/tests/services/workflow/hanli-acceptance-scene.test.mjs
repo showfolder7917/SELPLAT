@@ -641,12 +641,15 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
   const applicationRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   assert.match(desktopIpc, /hanli\.acceptance_scene\.planning/);
   assert.match(desktopIpc, /planAcceptanceScene\(acceptanceGoal\)/);
-  assert.match(desktopIpc, /workspaceAcceptanceFixture\.reserve/);
-  assert.match(desktopIpc, /displayName: fixtureReservation!\.displayName/);
-  assert.match(desktopIpc, /fixtureLabel: fixtureReservation!\.displayName/);
+  assert.match(desktopIpc, /workspaceAcceptanceFixture\.prepare/);
+  assert.match(desktopIpc, /displayName: workspaceAcceptanceEnvironment!\.displayName/);
+  assert.match(desktopIpc, /fixtureLabel: workspaceAcceptanceEnvironment!\.displayName/);
+  assert.match(desktopIpc, /hanli\.acceptance_workspace_fixture\.cleanup_failed/);
+  assert.match(desktopIpc, /hanli\.acceptance_workspace_fixture\.cleanup_recovered/);
+  assert.match(desktopIpc, /cleanup = workspaceAcceptanceEnvironment!\.dispose\(\)/);
   assert.ok(
-    desktopIpc.indexOf("workspaceAcceptanceFixture.reserve") < desktopIpc.indexOf("planAcceptanceScene(acceptanceGoal)"),
-    "已签发的受控工作区夹具必须在场景规划前准备好",
+    desktopIpc.indexOf("workspaceAcceptanceFixture.prepare") < desktopIpc.indexOf("planAcceptanceScene(acceptanceGoal)"),
+    "已确认页面可用的受控工作区必须在场景规划前准备好",
   );
   assert.match(desktopIpc, /goal: acceptanceGoal/);
   assert.match(sceneSession, /hanli\.acceptance_scene\.ready/);
