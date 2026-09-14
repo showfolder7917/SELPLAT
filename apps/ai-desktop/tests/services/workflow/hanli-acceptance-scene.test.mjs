@@ -88,6 +88,16 @@ test("工作区夹具场景只能使用已签发的场景说明并复用真实�
   assert.equal(prepared.window, f.options.target);
   prepared.dispose();
 });
+test("已经签发工作区夹具时拒绝只观察普通工作区", () => {
+  const ordinaryWindowOnly = {
+    ...plan,
+    segments: [{ ...segment, kind: "current-window", reason: "观察当前普通工作区", completionReviewRequired: false }],
+  };
+  assert.throws(
+    () => validateAcceptanceScenePlan(ordinaryWindowOnly, workspaceFixtureGoal),
+    /必须包含一个工作区夹具阶段/,
+  );
+});
 test("一次性工作区夹具不能被拆分到多个正式验收阶段", () => {
   const splitFixturePlan = {
     ...plan,

@@ -31,6 +31,10 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   if (segments.some((segment) => segment.kind === "workspace-explorer-fixture") && goal.workspaceAcceptanceFixture?.mode !== "scenarios") {
     throw new Error("工作区验收场景缺少已签发的受控夹具，不能把普通目录当作加载、失败或空目录证据。");
   }
+  if (goal.workspaceAcceptanceFixture?.mode === "scenarios"
+    && !segments.some((segment) => segment.kind === "workspace-explorer-fixture")) {
+    throw new Error("本轮已经签发工作区验收夹具，场景计划必须包含一个工作区夹具阶段；不能只观察普通工作区后报告临时根缺失。");
+  }
   if (segments.filter((segment) => segment.kind === "workspace-explorer-fixture").length > 1) {
     throw new Error("一次性工作区夹具只能使用一个验收阶段，相关条件必须合并取证。");
   }
