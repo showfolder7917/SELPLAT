@@ -76,6 +76,21 @@ test("跨任务人物占用场景只在登记窗口投影令狐的另一项任�
   assert.deepEqual(session.collaborationState(47, actual).tasks, []);
 });
 
+test("协作状态夹具分别保持首次同步和明确读取失败", async () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  const fixture = { kind: "collaboration-state-projection", instructions: ["只读。"] };
+  session.register(48, "collaboration-state-unavailable", undefined, undefined, fixture);
+  await assert.rejects(() => session.readCollaborationState(48, collaborationState), /模拟协作状态读取失败/);
+  session.register(49, "collaboration-state-syncing", undefined, undefined, fixture);
+  const result = await Promise.race([
+    session.readCollaborationState(49, collaborationState).then(() => "resolved"),
+    Promise.resolve("pending"),
+  ]);
+  assert.equal(result, "pending");
+  session.remove(48);
+  session.remove(49);
+});
+
 test("空状态条件只创建非持久化验收窗口，并在验收后关闭", () => {
   const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
   const collaborationIpcSource = readFileSync("electron/system/ipc/domains/register-collaboration-ipc.ts", "utf8");

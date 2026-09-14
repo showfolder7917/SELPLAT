@@ -46,6 +46,14 @@ const crossTaskMemberOccupancyGoal = {
     instructions: ["只观察令狐另一项任务的当前状态。"],
   },
 };
+const collaborationStateProjectionGoal = {
+  ...currentWindowGoal,
+  interactionCapabilities: ["collaboration-state-projection"],
+  collaborationStateProjectionFixture: {
+    kind: "collaboration-state-projection",
+    instructions: ["只观察状态读取结果。"],
+  },
+};
 const segment = { kind: "empty-task-group", reason: "两个条件需要零任务数据", completionReviewRequired: false, conditions: [
   { criterionId: "criterion-1", prerequisite: "没有专题任务" },
   { criterionId: "criterion-2", prerequisite: "说明和按钮在同一空页面" },
@@ -117,6 +125,13 @@ test("跨任务人物占用场景只能消费主进程已签发的窗口私有�
   assert.deepEqual(validateAcceptanceScenePlan(crossTaskPlan, crossTaskMemberOccupancyGoal), crossTaskPlan);
   assert.throws(() => validateAcceptanceScenePlan(crossTaskPlan, currentWindowGoal), /缺少主进程签发/);
   assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [{ ...segment, kind: "current-window", reason: "跳过已签发夹具", completionReviewRequired: false }] }, crossTaskMemberOccupancyGoal), /必须使用该夹具阶段/);
+});
+test("协作状态夹具只能覆盖同步中与状态暂未更新", () => {
+  const syncing = { ...plan, segments: [{ ...segment, kind: "collaboration-state-syncing", reason: "核对首次读取期间的同步状态", completionReviewRequired: false }] };
+  const unavailable = { ...plan, segments: [{ ...segment, kind: "collaboration-state-unavailable", reason: "核对读取失败后的明确状态", completionReviewRequired: false }] };
+  assert.deepEqual(validateAcceptanceScenePlan(syncing, collaborationStateProjectionGoal), syncing);
+  assert.deepEqual(validateAcceptanceScenePlan(unavailable, collaborationStateProjectionGoal), unavailable);
+  assert.throws(() => validateAcceptanceScenePlan(syncing, currentWindowGoal), /缺少主进程签发/);
 });
 test("工作区收尾与重启证据必须在夹具之后由专用生命周期场景复核", () => {
   const lifecycleGoal = { ...workspaceFixtureGoal, interactionCapabilities: ["workspace-explorer", "workspace-cleanup-recovery", "workspace-startup-recovery"] };
@@ -196,6 +211,12 @@ test("跨任务人物夹具只投影给专用场景", () => {
   const ordinaryGoal = createSegmentGoal(crossTaskMemberOccupancyGoal, { ...segment, kind: "empty-task-group" });
   assert.deepEqual(segmentGoal.crossTaskMemberOccupancyFixture, crossTaskMemberOccupancyGoal.crossTaskMemberOccupancyFixture);
   assert.equal("crossTaskMemberOccupancyFixture" in ordinaryGoal, false);
+});
+test("协作状态夹具只投影给状态场景", () => {
+  const projected = createSegmentGoal(collaborationStateProjectionGoal, { ...segment, kind: "collaboration-state-unavailable" });
+  const ordinary = createSegmentGoal(collaborationStateProjectionGoal, { ...segment, kind: "empty-task-group" });
+  assert.deepEqual(projected.collaborationStateProjectionFixture, collaborationStateProjectionGoal.collaborationStateProjectionFixture);
+  assert.equal("collaborationStateProjectionFixture" in ordinary, false);
 });
 
 test("场景会话只在正式夹具阶段激活一次性目录", async () => {

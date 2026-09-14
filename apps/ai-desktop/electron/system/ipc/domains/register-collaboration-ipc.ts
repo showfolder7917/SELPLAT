@@ -38,9 +38,9 @@ export function registerCollaborationIpc(
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   const isIsolatedAcceptance = (webContentsId: number) => acceptanceEmptyTaskGroupSession?.isActive(webContentsId) === true;
-  handle("desktop:get-collaboration-state", (event) => {
+  handle("desktop:get-collaboration-state", async (event) => {
     const state = collaboration.state();
-    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.collaborationState(event.sender.id, state) : state;
+    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.readCollaborationState(event.sender.id, state) : state;
   });
   // 任务协作群只读取 SQLite 不可变事件；数据库不可用时抛给 EventCenter，禁止退回 JSON 快照拼接旧实现。
   handle("desktop:get-collaboration-timeline", (event) => {
@@ -51,14 +51,14 @@ export function registerCollaborationIpc(
   handle("desktop:set-operating-mode", (event, mode: DesktopOperatingModeValue) => {
     if (!isIsolatedAcceptance(event.sender.id)) return collaboration.setMode(mode);
     const isolated = acceptanceEmptyTaskGroupSession!.setMode(event.sender.id, mode, collaboration.state());
-    event.sender.send("desktop:collaboration-state", isolated);
+    event.sender.send("desktop:collaboration-state", { state: isolated, reason: "mode.changed", taskIds: [] });
     return isolated;
   });
   handle("desktop:select-collaboration-member", (event, memberId: string) => {
     const state = collaboration.state();
     if (!isIsolatedAcceptance(event.sender.id)) return collaboration.selectMember(memberId);
     const isolated = acceptanceEmptyTaskGroupSession!.selectMember(event.sender.id, memberId, state);
-    event.sender.send("desktop:collaboration-state", isolated);
+    event.sender.send("desktop:collaboration-state", { state: isolated, reason: "member.selected", taskIds: [] });
     return isolated;
   });
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request));
