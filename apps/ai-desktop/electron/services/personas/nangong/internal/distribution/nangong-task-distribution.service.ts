@@ -30,6 +30,13 @@ function distributionPlanFormatKind(error: DistributionPlanFormatError): Distrib
   return error.candidateCount === 0 ? "missing-object" : "invalid-object";
 }
 
+/** 同一类别同时驱动审计与纠正提示，避免两处条件分支对同一失败给出不同结论。 */
+function distributionPlanFormatDetail(kind: DistributionPlanFormatKind, candidateCount: number): string {
+  if (kind === "unclosed-object") return "检测到未闭合 JSON 对象";
+  if (kind === "missing-object") return "未提取到完整 JSON 对象";
+  return `提取到 ${candidateCount} 个闭合对象但 JSON 语法无效`;
+}
+
 export interface NangongTaskDistributionServiceOptions {
   store: EvolutionStatePort;
   mutations: EvolutionMutationPort;
@@ -94,18 +101,15 @@ export class NangongTaskDistributionService {
           planned = parseDistributionPlan(response);
         } catch (error) {
           if (error instanceof DistributionPlanFormatError && attempt < 2) {
+            const formatKind = distributionPlanFormatKind(error);
             // 仅把安全格式诊断反馈给同一规划任务，禁止把模型原文或工作区内容写入审计。
             this.options.recordEvent("nangong.evolution.distribution_format_retry", {
               proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount,
               // 记录布尔分类供失败调查区分未闭合与语法错误，不携带任何模型输出。
-              hasUnclosedObject: error.hasUnclosedObject, formatKind: distributionPlanFormatKind(error), reason: error.message,
+              hasUnclosedObject: error.hasUnclosedObject, formatKind, reason: error.message,
             });
             // 仅把无内容的格式类别反馈给下一次规划，帮助模型纠正而不泄露原始响应。
-            const formatDetail = error.hasUnclosedObject
-              ? "检测到未闭合 JSON 对象"
-              : error.candidateCount === 0
-              ? "未提取到完整 JSON 对象"
-              : `提取到 ${error.candidateCount} 个闭合对象但 JSON 语法无效`;
+            const formatDetail = distributionPlanFormatDetail(formatKind, error.candidateCount);
             feedback = `上一轮${formatDetail}（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
             feedbackKind = "format";
             continue;
