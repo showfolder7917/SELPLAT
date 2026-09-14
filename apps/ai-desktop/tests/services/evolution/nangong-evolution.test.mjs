@@ -1157,6 +1157,32 @@ test("分发计划格式重试仅记录闭合候选数量而不记录无效对�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("分发计划外层对象未闭合但内部任务对象闭合时仍进入格式重试", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-json-unclosed-plan-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const events = []; let attempts = 0; let submitted = 0; let retryPrompt = "";
+    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const rawFailure = validPlan.slice(0, -1);
+    const facade = new PersonaEvolutionRuntime({
+      store, conversation, recordEvent: (type, details) => events.push({ type, details }),
+      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-unclosed-plan-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      async planDistribution(prompt) { attempts += 1; if (attempts === 2) retryPrompt = prompt; return attempts === 1 ? rawFailure : validPlan; },
+    });
+    let state = facade.createTopic(topicRequest("收起临时工作区"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    state = await facade.dispatch(proposalId);
+    assert.equal(attempts, 2);
+    assert.equal(submitted, 1);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.candidateCount), [1]);
+    assert.match(retryPrompt, /程序上一轮检测到格式错误：/);
+    assert.equal(JSON.stringify(events).includes(rawFailure), false);
+    assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("分发计划忽略说明中的相邻元数据对象并使用完整计划", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-json-adjacent-"));
   try {

@@ -8,6 +8,7 @@ import type { EvolutionMutationPort, EvolutionStatePort } from "../../../../evol
 import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
+type ParsedJsonObjects = { values: Record<string, unknown>[]; candidateCount: number; hasUnclosedObject: boolean };
 
 /** 仅表示模型输出格式不能恢复；计划字段不完整仍由既有严格校验拒绝。 */
 class DistributionPlanFormatError extends Error {
@@ -200,11 +201,13 @@ export class NangongTaskDistributionService {
 }
 
 function parseDistributionPlan(text: string): PlanResult {
-  const values = parseJsonObjects(text);
+  const { values, candidateCount, hasUnclosedObject } = parseJsonObjects(text);
   for (const value of values) {
     const plan = normalizeDistributionPlan(value);
     if (plan) return plan;
   }
+  // 外层计划未闭合时，内部任务对象可能单独配平；此时必须走格式重试而非误报拆分冲突。
+  if (hasUnclosedObject) throw new DistributionPlanFormatError(text.length, candidateCount);
   throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
 }
 
@@ -229,8 +232,8 @@ function normalizeDraftList(value: unknown): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].slice(0, 100) : [];
 }
 
-function parseJsonObjects(text: string): Record<string, unknown>[] {
-  const candidates = extractBalancedJsonObjects(text);
+function parseJsonObjects(text: string): ParsedJsonObjects {
+  const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
   const values = candidates.flatMap((candidate): Record<string, unknown>[] => {
     try {
       const value = JSON.parse(candidate);
@@ -238,21 +241,23 @@ function parseJsonObjects(text: string): Record<string, unknown>[] {
     } catch { return []; }
   });
   if (!values.length) throw new DistributionPlanFormatError(text.length, candidates.length);
-  return values;
+  return { values, candidateCount: candidates.length, hasUnclosedObject };
 }
 
 /** 提取独立、转义安全的对象候选，避免首尾贪婪匹配把相邻元数据拼成无效 JSON。 */
-function extractBalancedJsonObjects(text: string): string[] {
+function extractBalancedJsonObjects(text: string): { candidates: string[]; hasUnclosedObject: boolean } {
   const trimmed = text.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return { candidates: [], hasUnclosedObject: false };
   const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/iu)?.[1]?.trim();
   const source = fenced || trimmed;
   const candidates: string[] = [];
+  let hasUnclosedObject = false;
   for (let start = 0; start < source.length; start += 1) {
     if (source[start] !== "{") continue;
     let depth = 0;
     let quoted = false;
     let escaped = false;
+    let closed = false;
     for (let index = start; index < source.length; index += 1) {
       const character = source[index];
       if (quoted) {
@@ -267,12 +272,14 @@ function extractBalancedJsonObjects(text: string): string[] {
         depth -= 1;
         if (depth === 0) {
           candidates.push(source.slice(start, index + 1));
+          closed = true;
           break;
         }
       }
     }
+    if (!closed) hasUnclosedObject = true;
   }
-  return [...new Set(candidates)];
+  return { candidates: [...new Set(candidates)], hasUnclosedObject };
 }
 
 function distributionHardFindings(units: EvolutionDistributionUnitOutDto[]): string[] {
