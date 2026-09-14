@@ -12,6 +12,30 @@ if (!isolatedUserDataRoot) throw new Error("隔离桌面测试缺少独立用户
 // 每个 Electron 进程使用独立目录，禁止上一次测试的会话和 localStorage 污染本轮。
 app.setPath("userData", path.join(isolatedUserDataRoot, String(process.pid)));
 
+// 首窗出现不等于 Renderer 已挂载；保留启动期间的真实异常供 Playwright 报告。
+const launchDiagnostics = {
+  documentLoaded: false,
+  loadFailures: [],
+  rendererConsole: [],
+  renderProcessGone: null,
+};
+
+ipcMain.handle("interaction:get-launch-diagnostics", () => structuredClone(launchDiagnostics));
+
+function recordRendererConsole(event, level, message, line, sourceId) {
+  const details = event && typeof event === "object" && "message" in event
+    ? event
+    : { level, message, lineNumber: line, sourceId };
+  launchDiagnostics.rendererConsole.push({
+    level: details.level,
+    message: details.message,
+    lineNumber: details.lineNumber,
+    sourceId: details.sourceId,
+  });
+  // 只保留最近的异常，避免单个失败页面使测试诊断无限增长。
+  if (launchDiagnostics.rendererConsole.length > 50) launchDiagnostics.rendererConsole.shift();
+}
+
 app.whenReady().then(async () => {
   // 主进程负责路径解析，沙箱 preload 只接收已验证的字符串，保持和生产安全边界一致。
   process.env.AI_DESKTOP_INTERACTION_PROJECT_ROOT = path.resolve(__dirname, "../../../..");
@@ -30,6 +54,16 @@ app.whenReady().then(async () => {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+  window.webContents.on("did-finish-load", () => {
+    launchDiagnostics.documentLoaded = true;
+  });
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    launchDiagnostics.loadFailures.push({ errorCode, errorDescription, validatedURL, isMainFrame });
+  });
+  window.webContents.on("console-message", recordRendererConsole);
+  window.webContents.on("render-process-gone", (_event, details) => {
+    launchDiagnostics.renderProcessGone = { reason: details.reason, exitCode: details.exitCode };
   });
   const productionFile = process.env.AI_DESKTOP_INTERACTION_FILE;
   if (!productionFile) throw new Error("生产桌面交互测试缺少 AI_DESKTOP_INTERACTION_FILE。 ");

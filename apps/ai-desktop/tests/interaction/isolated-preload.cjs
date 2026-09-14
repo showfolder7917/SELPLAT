@@ -7,6 +7,8 @@ const workspace = {
   primaryId: "interaction-root",
   roots: [{ id: "interaction-root", name: "SELPLAT", path: projectRoot, permission: "workspace-write" }],
 };
+// 隔离 Renderer 仍按正式桥接建立工作区订阅；当前固定夹具不产生工作区变更事件。
+const workspaceStateListeners = new Set();
 let harnessStatus = {
   connected: true,
   account: { authenticated: true, authMode: "test", email: "interaction@test.invalid", planType: "test", requiresOpenaiAuth: false },
@@ -377,6 +379,8 @@ async function sendNangongTestConversation(request) {
 }
 
 contextBridge.exposeInMainWorld("desktop", {
+  // 启动诊断只供隔离交互测试读取，业务 Renderer 仍只依赖正式桌面接口。
+  getInteractionLaunchDiagnostics: async () => ipcRenderer.invoke("interaction:get-launch-diagnostics"),
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
   getAiMemoryDatabaseStatus: async () => ({ ...readInteractionAiMemoryDatabaseStatus() }),
   clearTestData: async () => { document.documentElement.dataset.interactionTestDataReset = "true"; return { cleared: true, clearedRecordCount: 42, clearedCandidateBranchCount: 0, clearedCandidateWorktreeCount: 0, candidateCleanupWarnings: [], restartScheduled: true }; },
@@ -393,11 +397,24 @@ contextBridge.exposeInMainWorld("desktop", {
     ] };
   },
   setInteractionModelCatalogFailure: async (message) => { codexModelCatalogFailure = message || null; },
-  getWorkspaces: async () => workspace,
+  getWorkspaces: async () => structuredClone(workspace),
+  onWorkspaceStateChanged: (listener) => {
+    workspaceStateListeners.add(listener);
+    return () => { workspaceStateListeners.delete(listener); };
+  },
   addWorkspace: async () => workspace,
   updateWorkspacePermission: async () => workspace,
   setPrimaryWorkspace: async () => workspace,
   removeWorkspace: async () => workspace,
+  // 目录和文件预览保持在隔离夹具内，避免交互测试 Renderer 越过主进程读取宿主工作区。
+  listWorkspaceDirectory: async (workspaceId, relativePath = "") => ({ workspaceId, relativePath, entries: [] }),
+  readWorkspaceFile: async (workspaceId, relativePath) => ({ workspaceId, relativePath, content: "" }),
+  // 隔离窗口没有审计主进程；保留有界本地记录，保证错误边界上报不会再次中断 Renderer。
+  reportRendererException: (report) => {
+    if (!globalThis.__interactionRendererExceptions) globalThis.__interactionRendererExceptions = [];
+    globalThis.__interactionRendererExceptions.push(structuredClone(report));
+    if (globalThis.__interactionRendererExceptions.length > 50) globalThis.__interactionRendererExceptions.shift();
+  },
   getCodexStatus: async () => harnessStatus,
   setInteractionAuthenticated: async (authenticated) => {
     harnessStatus = {
