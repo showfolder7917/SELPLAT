@@ -11,7 +11,11 @@ type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 
 /** 仅表示模型输出格式不能恢复；计划字段不完整仍由既有严格校验拒绝。 */
 class DistributionPlanFormatError extends Error {
-  constructor(readonly responseLength: number) {
+  constructor(
+    readonly responseLength: number,
+    /** 完整对象候选数；只用于安全诊断，绝不记录模型文本。 */
+    readonly candidateCount: number,
+  ) {
     super("AI 返回的结构化判断不是有效 JSON。");
   }
 }
@@ -78,7 +82,7 @@ export class NangongTaskDistributionService {
           if (error instanceof DistributionPlanFormatError && attempt < 2) {
             // 仅把安全格式诊断反馈给同一规划任务，禁止把模型原文或工作区内容写入审计。
             this.options.recordEvent("nangong.evolution.distribution_format_retry", {
-              proposalId, attempt, responseLength: error.responseLength, reason: error.message,
+              proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount, reason: error.message,
             });
             feedback = `上一轮返回不是有效 JSON（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
             continue;
@@ -223,7 +227,7 @@ function parseJsonObjects(text: string): Record<string, unknown>[] {
       return value && typeof value === "object" && !Array.isArray(value) ? [value as Record<string, unknown>] : [];
     } catch { return []; }
   });
-  if (!values.length) throw new DistributionPlanFormatError(text.length);
+  if (!values.length) throw new DistributionPlanFormatError(text.length, candidates.length);
   return values;
 }
 
