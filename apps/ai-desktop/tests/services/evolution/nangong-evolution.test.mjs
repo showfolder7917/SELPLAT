@@ -1124,7 +1124,7 @@ test("分发计划会纠正首轮无效 JSON，并从围栏中的单个有效对
     assert.equal(attempts, 2);
     assert.equal(submitted, 1);
     assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
-    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details), [{ proposalId, attempt: 1, responseLength: "计划如下：{\"summary\":\"未闭合".length, candidateCount: 0, reason: "AI 返回的结构化判断不是有效 JSON。" }]);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details), [{ proposalId, attempt: 1, responseLength: "计划如下：{\"summary\":\"未闭合".length, candidateCount: 0, hasUnclosedObject: true, reason: "AI 返回的结构化判断不是有效 JSON。" }]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1148,7 +1148,7 @@ test("分发计划格式重试仅记录闭合候选数量而不记录无效对�
     assert.equal(attempts, 2);
     assert.equal(submitted, 1);
     const retry = events.find((event) => event.type === "nangong.evolution.distribution_format_retry");
-    assert.deepEqual(retry.details, { proposalId, attempt: 1, responseLength: rawFailure.length, candidateCount: 1, reason: "AI 返回的结构化判断不是有效 JSON。" });
+    assert.deepEqual(retry.details, { proposalId, attempt: 1, responseLength: rawFailure.length, candidateCount: 1, hasUnclosedObject: false, reason: "AI 返回的结构化判断不是有效 JSON。" });
     assert.equal(JSON.stringify(events).includes(rawFailure), false);
     assert.match(retryPrompt, /程序上一轮检测到格式错误：/);
     assert.doesNotMatch(retryPrompt, /程序上一轮核对到的确定性冲突：/);
@@ -1177,6 +1177,7 @@ test("分发计划外层对象未闭合但内部任务对象闭合时仍进入�
     assert.equal(attempts, 2);
     assert.equal(submitted, 1);
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.candidateCount), [1]);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.hasUnclosedObject), [true]);
     assert.match(retryPrompt, /程序上一轮检测到格式错误：/);
     assert.match(retryPrompt, /检测到未闭合 JSON 对象/);
     assert.doesNotMatch(retryPrompt, /闭合对象但 JSON 语法无效/);

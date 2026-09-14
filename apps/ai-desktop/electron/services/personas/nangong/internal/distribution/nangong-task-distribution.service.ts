@@ -89,7 +89,9 @@ export class NangongTaskDistributionService {
           if (error instanceof DistributionPlanFormatError && attempt < 2) {
             // 仅把安全格式诊断反馈给同一规划任务，禁止把模型原文或工作区内容写入审计。
             this.options.recordEvent("nangong.evolution.distribution_format_retry", {
-              proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount, reason: error.message,
+              proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount,
+              // 记录布尔分类供失败调查区分未闭合与语法错误，不携带任何模型输出。
+              hasUnclosedObject: error.hasUnclosedObject, reason: error.message,
             });
             // 仅把无内容的格式类别反馈给下一次规划，帮助模型纠正而不泄露原始响应。
             const formatDetail = error.hasUnclosedObject
