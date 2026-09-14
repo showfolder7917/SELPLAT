@@ -210,6 +210,12 @@ function hasVerifiedCurrentWindowContext(goal: HanliComputerAcceptanceInDto): bo
 /** 从主进程已签发的目标派生唯一场景需求表；多个可选阶段仍只证明同一个受控夹具。 */
 function sceneRequirementsFor(goal: HanliComputerAcceptanceInDto): AcceptanceSceneRequirement[] {
   const requirements: AcceptanceSceneRequirement[] = [];
+  const requiresPersonaConversationLifecycle = goal.criteria.some((criterion) => /(?:活动|确认).*(?:区域|状态)|(?:会话|消息).*(?:发送|输入)|(?:发送|输入).*(?:会话|消息)|发送中/u.test(criterion));
+  if (requiresPersonaConversationLifecycle) requirements.push({
+    requirementId: "persona-conversation-lifecycle",
+    acceptedKinds: ["persona-conversation-lifecycle"],
+    missingMessage: "该条件要求观察人物会话的活动、确认或发送中状态，场景计划必须使用人物会话生命周期阶段。",
+  });
   if (goal.workspaceAcceptanceFixture) requirements.push({
     requirementId: "workspace-acceptance-fixture",
     acceptedKinds: ["workspace-explorer-fixture"],

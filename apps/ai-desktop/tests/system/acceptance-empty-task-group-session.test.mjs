@@ -109,7 +109,8 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   assert.match(sceneSource, /user-language-detail-timeline/);
   assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession/);
   assert.doesNotMatch(collaborationIpcSource, /rejectIsolatedMutation|rejectMutation/);
-  assert.match(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*collaborationState\(event\.sender\.id, collaboration\.state\(\)\)[\s\S]*collaboration-timeline-changed[\s\S]*return isolated/);
+  assert.match(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*collaboration-timeline-changed[\s\S]*failRecoveryLifecycle[\s\S]*collaboration-timeline-changed[\s\S]*throw new Error\(acceptanceRecoveryFailureMessage\)/);
+  assert.doesNotMatch(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*return isolated/);
   assert.doesNotMatch(collaborationIpcSource, /continueRecoveryLifecycle[\s\S]*return timeline/);
   assert.match(runtimeSource, /const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession\(\)/);
   assert.match(runtimeSource, /acceptanceEmptyTaskGroupSession\.isActive\(window\.webContents\.id\)/);
