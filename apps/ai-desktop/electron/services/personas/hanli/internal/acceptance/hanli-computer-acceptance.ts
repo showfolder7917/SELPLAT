@@ -37,7 +37,11 @@ export class HanliComputerAcceptance {
     if (!goal.criteria.length) {
       throw new Error("缺少用户验收条件。");
     }
-    const criterionIds = goal.criteria.map((_, index) => `criterion-${index + 1}`);
+    const criterionIds = goal.criterionIds || goal.criteria.map((_, index) => `criterion-${index + 1}`);
+    if (criterionIds.length !== goal.criteria.length || new Set(criterionIds).size !== criterionIds.length
+      || criterionIds.some((criterionId) => !/^criterion-[1-9]\d*$/.test(criterionId))) {
+      throw new Error("页面验收条件编号必须与当前条件一一对应，并保留原提案编号。");
+    }
     this.#active = true;
     const runId = `hanli-computer-${randomUUID()}`;
     const startedAt = new Date().toISOString();
@@ -254,6 +258,7 @@ export class HanliComputerAcceptance {
             for (const item of findings) {
               stepResults.push({
                 checkId: String(item.criterionId),
+                evidenceMode: "page-experience",
                 operationIndex: interactionSteps.length + stepResults.length,
                 operation: {
                   type: "judgement",
@@ -416,6 +421,7 @@ export class HanliComputerAcceptance {
           }
           interactionSteps.push({
             checkId: "interaction",
+            evidenceMode: "page-experience",
             operationIndex: interactionSteps.length,
             operation,
             status: "passed",
@@ -475,6 +481,7 @@ export class HanliComputerAcceptance {
         const criterionId = criterionIds[index];
         stepResults.push({
           checkId: criterionId,
+          evidenceMode: "page-experience",
           operationIndex: interactionSteps.length + stepResults.length,
           operation: {
             type: "judgement",

@@ -9,4 +9,6 @@ export interface HanliComputerAcceptanceInDto {
   proposalId: string;
   title: string;
   criteria: string[];
+  /** mixed 验收保留原提案编号，不能因筛选页面条件而重新编号。 */
+  criterionIds?: string[];
 }
