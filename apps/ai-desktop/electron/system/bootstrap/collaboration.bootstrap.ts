@@ -100,7 +100,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
         buildRoot: projectPaths.buildRoot,
       }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName, candidate));
       const candidateExecutable = await options.runUnifiedTests(rootPath);
-      return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId);
+      return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId, candidate.candidateSha);
     },
     acquireRelease: (request) => integrationReleases.acquire(request),
     releaseVersion: options.releaseVersion,

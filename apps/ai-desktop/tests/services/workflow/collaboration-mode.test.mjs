@@ -1263,7 +1263,7 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.match(linghuRuntimeSource, /createFixedUnifiedTestRunner[\s\S]*await unifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*options\.unifiedTest\.onVerified\(executable\)/);
   assert.match(main, /unifiedTest:[\s\S]*onVerified: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
   assert.match(collaborationBootstrap, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
-  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId\)/);
+  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId, candidate\.candidateSha\)/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
   assert.doesNotMatch(coordinatorSource, /createReleaseCandidate|promoteIntegrationCandidate|mergeIntoLocalBranch|releaseDocument\.state/);
   assert.match(integrationPipelineSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*promoteIntegrationCandidate[\s\S]*mergeIntoLocalBranch[\s\S]*releaseDocument\.state = "published"/);
@@ -1276,8 +1276,10 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
 });
 
 test("发布重启携带候选源码提交且只由同一运行版本完成健康验收", () => {
+  const verifiedPackageSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/verified-package.release.ts", import.meta.url), "utf8");
   assert.match(startupContextSource, /--ai-desktop-runtime-sha=/);
-  assert.match(startupContextSource, /\^\[0-9a-f\]\{40,64\}\$/);
+  assert.match(startupContextSource, /resolvePublishedRuntimeSourceSha\(process\.resourcesPath, runtimeSourceShaArgument\)/);
+  assert.match(verifiedPackageSource, /writePublishedRuntimeSourceManifest\(destinationRoot, runtimeSourceSha\)/);
   assert.match(applicationRuntimeSource, /publishRelease: \(executable, releaseBatchId, runtimeSourceSha\)/);
   assert.match(applicationRuntimeSource, /releaseRestartArguments\(projectRoot, runtimeSourceSha, process\.argv\)/);
   assert.match(applicationRuntimeSource, /resolveCleanRuntimeSourceSha\(projectRoot\)/);
@@ -1777,7 +1779,7 @@ test("已验证候选应用先提升到稳定批次目录再允许回收候选",
     writeFileSync(sourceFrameworkBinary, "verified framework");
     symlinkSync(sourceFrameworkBinary, path.join(sourceFrameworkRoot, "Versions", "Current"));
     symlinkSync(sourceFrameworkBinary, path.join(sourceFrameworkRoot, "Electron Framework"));
-    const stagedExecutable = stageVerifiedDeveloperExecutable(sourceExecutable, stableBuildRoot, "release-0.1.1-g14");
+    const stagedExecutable = stageVerifiedDeveloperExecutable(sourceExecutable, stableBuildRoot, "release-0.1.1-g14", "a".repeat(40));
     const stagedApp = path.resolve(path.dirname(stagedExecutable), "../..");
     const stagedFrameworkLink = path.join(stagedApp, "Contents", "Frameworks", "Electron Framework.framework", "Electron Framework");
     assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate");
@@ -1787,7 +1789,7 @@ test("已验证候选应用先提升到稳定批次目录再允许回收候选",
     assert.equal(existsSync(sourceExecutable), false);
     assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate", "候选回收后稳定发布程序必须继续存在");
     assert.equal(readFileSync(stagedFrameworkLink, "utf8"), "verified framework", "候选回收后稳定应用的框架链接必须仍可解析");
-    assert.throws(() => stageVerifiedDeveloperExecutable(stagedExecutable, stableBuildRoot, "release-0.1.1-g14"), /禁止覆盖/);
+    assert.throws(() => stageVerifiedDeveloperExecutable(stagedExecutable, stableBuildRoot, "release-0.1.1-g14", "a".repeat(40)), /禁止覆盖/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

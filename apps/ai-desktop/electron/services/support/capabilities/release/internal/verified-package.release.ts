@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readlinkSync, readdirSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
+import { writePublishedRuntimeSourceManifest } from "../../../../../system/bootstrap/published-runtime-source.manifest.js";
 
 /** 已存在的稳定应用属于发布基础设施占用，不得被归类为候选测试断言失败。 */
 export class StablePublishedApplicationCollisionError extends Error {
@@ -21,7 +22,7 @@ export function resolveVerifiedDeveloperExecutable(buildRoot: string): string {
 }
 
 /** 把候选工作区内已验证的应用提升到工程稳定构建域，候选回收后仍可发布和重启。 */
-export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stableBuildRoot: string, releaseBatchId: string): string {
+export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stableBuildRoot: string, releaseBatchId: string, runtimeSourceSha: string): string {
   const safeBatchId = releaseBatchId.toLowerCase().replaceAll(/[^a-z0-9._-]+/g, "-").replaceAll(/^-+|-+$/g, "");
   if (!safeBatchId) throw new Error("发布批次 ID 无法用于稳定发布目录。");
   // 启动程序位于 App/Contents/MacOS，两级向上才是应用包根；多退一层会复制整个架构目录并丢失目标启动程序。
@@ -37,6 +38,7 @@ export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stabl
   cpSync(sourceApp, destinationApp, { recursive: true, preserveTimestamps: true, verbatimSymlinks: true });
   rewriteBundleSymlinks(sourceApp, destinationApp);
   if (!existsSync(destinationExecutable)) throw new Error("稳定发布目录缺少启动程序。");
+  writePublishedRuntimeSourceManifest(destinationRoot, runtimeSourceSha);
   return destinationExecutable;
 }
 
