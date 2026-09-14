@@ -320,10 +320,8 @@ export class CollaborationStore {
       // 首次启动或损坏状态都从稳定默认人物集合恢复，后续写入仍采用原子替换。
     }
     const state = loaded || createInitialState();
-    // 每次启动进入协同模式；仅重置展示模式，不改变任务、人物或恢复点。
-    state.mode = "collaboration";
-    mergeDefaultMembers(state);
-    recoverInterruptedState(state);
+    // 用唯一入口准备协同运行环境，避免模式、稳定人物和中断恢复分别初始化后产生半完成状态。
+    prepareCollaborationRuntimeState(state);
     this.#write(state);
     return state;
   }
@@ -342,6 +340,16 @@ export class CollaborationStore {
     writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
     renameSync(temporary, this.#filePath);
   }
+}
+
+/** 一次完成协同运行基础环境准备；保留业务历史，同时清除上一进程遗留的运行占用。 */
+function prepareCollaborationRuntimeState(state: CollaborationStateOutDto): void {
+  // 每次启动进入协同模式；仅重置展示模式，不改变任务、人物或恢复点。
+  state.mode = "collaboration";
+  // 先补齐稳定人物与迁移字段，后续恢复判断只读取完整权威状态。
+  mergeDefaultMembers(state);
+  // 最后统一收口上一进程的任务和人物租约，让待恢复工作能够重新调度。
+  recoverInterruptedState(state);
 }
 
 function createInitialState(): CollaborationStateOutDto {
@@ -451,7 +459,19 @@ function recoverInterruptedState(state: CollaborationStateOutDto): void {
     }
   }
   for (const member of state.members) {
-    if (member.protected) continue;
+    // 韩立的常驻客户会话没有执行租约；重启后恢复固定会话状态即可。
+    if (member.kind === "conversation-owner") {
+      member.state = "conversation";
+      member.role = "conversation";
+      member.phase = null;
+      member.currentTaskId = null;
+      member.blockingReason = null;
+      member.lastHeartbeatAt = null;
+      member.lastProtocolProgressAt = null;
+      member.updatedAt = new Date().toISOString();
+      continue;
+    }
+    // 受保护只限制删除和普通分配，不代表跨进程执行租约仍然存活；令狐也必须释放旧连接占用。
     if (member.currentTaskId && interruptedTaskIds.has(member.currentTaskId)) {
       member.state = "recovering";
       member.phase = null;

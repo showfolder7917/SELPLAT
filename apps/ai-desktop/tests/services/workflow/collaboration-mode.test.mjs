@@ -2024,6 +2024,63 @@ test("进程中断后任务显式进入恢复态，继续时重新排队且不�
   }
 });
 
+test("应用重启释放令狐旧会话占用并从统一恢复入口接续修复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-recovery-restart-"));
+  const statePath = path.join(directory, "state.json");
+  let coordinator;
+  try {
+    const first = new CollaborationStore(statePath);
+    const submitted = first.submitTask({
+      title: "继续令狐恢复任务",
+      problemStatement: "令狐修复会话随应用重建中断。",
+      confirmedIntent: "保留原任务和失败证据，由新进程从同一恢复点继续。",
+      workspaceState,
+      locale: "zh-CN",
+      preferredExecutorMemberId: "linghu-ancestor",
+    });
+    first.updateTask(submitted.taskId, "fixture.linghu_recovering", (task, state) => {
+      const linghu = state.members.find((member) => member.memberId === "linghu-ancestor");
+      task.state = "recovering";
+      task.phase = "blocked";
+      task.executorMemberId = linghu.memberId;
+      task.preferredExecutorMemberId = linghu.memberId;
+      task.currentHandler = { memberId: linghu.memberId, displayName: linghu.displayName };
+      task.repairKind = "execution";
+      task.repairFailureReason = "执行会话没有生成文件修改";
+      task.recoveryTargetState = "executing";
+      task.blockingReason = "等待下一次安全恢复";
+      linghu.state = "recovering";
+      linghu.role = "executor";
+      linghu.phase = "blocked";
+      linghu.currentTaskId = task.taskId;
+      linghu.blockingReason = task.blockingReason;
+    });
+
+    const restored = new CollaborationStore(statePath);
+    const restoredLinghu = restored.state().members.find((member) => member.memberId === "linghu-ancestor");
+    assert.equal(restored.task(submitted.taskId).state, "recovering");
+    assert.equal(restoredLinghu.state, "idle");
+    assert.equal(restoredLinghu.currentTaskId, null);
+
+    coordinator = createExecutionResultCoordinator(directory, restored, {
+      status: "incomplete",
+      text: "保留恢复点",
+      pendingActions: ["仍需继续修复"],
+      changedFiles: [],
+      authorizedFiles: [],
+      successfulCommands: [],
+    });
+    coordinator.resumePendingWork();
+    for (let attempt = 0; attempt < 100 && !restored.task(submitted.taskId).flowEvents.some((event) => event.type === "execution.repair_started"); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(restored.task(submitted.taskId).flowEvents.some((event) => event.type === "execution.repair_started"), true);
+  } finally {
+    await coordinator?.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("应用重启保留客户等待状态并释放人物，不把卡点改成恢复中", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "blocked-restart-preserved-"));
   try {

@@ -383,6 +383,11 @@ export class CollaborationCoordinator {
   }
 
   resumePendingWork(): void {
+    // 应用重建后的统一恢复入口先接续全部失败类型，再恢复普通执行和集成队列。
+    const state = this.state();
+    this.#scheduleUnifiedTestRepairs(state);
+    this.#scheduleMergeConflictCorrections(state);
+    this.#scheduleExecutionRepairs(state);
     this.#schedule();
   }
 
