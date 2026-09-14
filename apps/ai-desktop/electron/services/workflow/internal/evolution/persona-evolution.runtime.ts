@@ -17,6 +17,7 @@ import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggr
 import { projectCurrentTopicStage } from "../../domain/current-topic-stage.projection.js";
 // 单任务聚合统一解释人物是否仍真实占用任务。
 import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
+import { ProposalRevisionChain } from "../../domain/proposal-revision-chain.js";
 import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
 import { AcceptanceFailureScopePolicy } from "../../domain/acceptance-failure-scope.policy.js";
 import { resolveAcceptanceInteractionCapabilities } from "../../domain/acceptance-interaction-capability.policy.js";
@@ -733,9 +734,13 @@ export class PersonaEvolutionRuntime {
         if (run?.status !== "blocked" || run.proposalId !== proposal.proposalId) continue;
         const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view();
         if (!execution.completed || execution.missingTaskIds.length > 0) continue;
-        const records = state.archiveRecords.filter((record) => record.proposalId === proposal.proposalId);
-        const latestBlocked = [...records].reverse().find((record) => record.eventType === "one-shot.blocked");
-        const latestPendingAcceptance = [...records].reverse().find((record) => record.eventType === "proposal.progress_reconciled"
+        // oneShotRun 会在返修时指向新提案，但真实阻塞事实仍属于失败的旧版本。
+        // 沿唯一修订链比较事实顺序，既能恢复已完成返修，也不会重试当前版本刚发生的验收失败。
+        const lineageIds = new Set(new ProposalRevisionChain(state.proposals).lineageFrom(proposal.proposalId).map((item) => item.proposalId));
+        const lineageRecords = state.archiveRecords.filter((record) => record.proposalId && lineageIds.has(record.proposalId));
+        const latestBlocked = [...lineageRecords].reverse().find((record) => record.eventType === "one-shot.blocked");
+        const latestPendingAcceptance = [...lineageRecords].reverse().find((record) => record.proposalId === proposal.proposalId
+          && record.eventType === "proposal.progress_reconciled"
           && (record.payload.proposal as { status?: unknown } | undefined)?.status === "pending-acceptance");
         if (latestBlocked && latestPendingAcceptance && latestBlocked.sequenceNumber < latestPendingAcceptance.sequenceNumber) {
           state = this.#store.resumeOneShotRun();

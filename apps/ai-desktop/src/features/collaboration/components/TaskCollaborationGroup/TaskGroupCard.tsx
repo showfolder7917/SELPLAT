@@ -8,8 +8,6 @@ import type {
   CollaborationTimelineGroupOutDto,
   // 时间线节点：渲染人物动作、收件人、正文、详情和恢复操作。
   CollaborationTimelineNodeOutDto,
-  // 一次性验收运行：专题卡只读取其当前验收阶段，不写入协作任务占用。
-  EvolutionOneShotRunOutDto,
   // 界面语言：选择中文或日文标签。
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
@@ -109,21 +107,18 @@ function TaskGroupHeader({
   presentation,
   recoveryAction,
   oneShotRecoveryRequired,
-  oneShotRun,
 }: Pick<TaskGroupCardModel, "group" | "presentation"> & {
   recoveryAction: ReturnType<typeof latestActiveRecoveryAction>;
   oneShotRecoveryRequired: boolean;
-  /** 同一专题的一次性运行，用于投影韩立正在验收这一当前事实。 */
-  oneShotRun: EvolutionOneShotRunOutDto | null | undefined;
 }) {
   // 界面语言（locale）决定专题状态和耗时使用中文还是日文。
   const { locale, nowMs, open } = presentation;
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
   const groupStopped = group.status === "blocked" || group.status === "completed" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
-  const activity = groupActivityPresentation(group, locale, oneShotRun);
+  const activity = groupActivityPresentation(group, locale);
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。
-  const primary = taskGroupPrimaryPresentation(group, locale, recoveryAction, oneShotRecoveryRequired, oneShotRun);
+  const primary = taskGroupPrimaryPresentation(group, locale, recoveryAction, oneShotRecoveryRequired);
   // 专题耗时（durationMs）在任务未结束时至少增长到当前墙钟时间。
   const durationMs = groupStopped
     ? group.durationMs
@@ -338,7 +333,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       className={`task-collaboration-group ${presentedGroup.status}`}
       open={open}
       onOpenChange={onOpenChange}
-      trigger={<TaskGroupHeader group={presentedGroup} presentation={model.presentation} recoveryAction={recoveryAction} oneShotRecoveryRequired={oneShotRecoveryRequired} oneShotRun={evolution.state?.oneShotRun} />}
+      trigger={<TaskGroupHeader group={presentedGroup} presentation={model.presentation} recoveryAction={recoveryAction} oneShotRecoveryRequired={oneShotRecoveryRequired} />}
     >
       {/* 专题恢复入口：只在原始演化运行确实暂停或阻塞时提供恢复操作。 */}
       <TaskGroupRecovery group={presentedGroup} evolution={evolution} locale={locale} />

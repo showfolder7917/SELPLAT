@@ -20,7 +20,7 @@ const selectorResult = await build({
 });
 const selectorCompiled = { exports: {} };
 new Function("require", "module", "exports", selectorResult.outputFiles[0].text)(createRequire(import.meta.url), selectorCompiled, selectorCompiled.exports);
-const { currentTaskGroupPresentation, groupActivityPresentation, latestActiveRecoveryAction, taskGroupPrimaryPresentation } = selectorCompiled.exports;
+const { currentTaskGroupPresentation, latestActiveRecoveryAction, taskGroupPrimaryPresentation } = selectorCompiled.exports;
 
 function primaryPresentation({ status = "running", recoveryAction = null, oneShotRecoveryRequired = false } = {}) {
   return taskGroupPrimaryPresentation({
@@ -144,70 +144,4 @@ test("审批阶段发生运行卡点时显示真实阻塞状态和恢复入口",
     proposals: [{ proposalId: "proposal-a", status: "pending-approval" }],
     automationRuntime: { status: "running" },
   }), true);
-});
-
-test("同一专题的韩立验收运行立即投影到专题卡，不伪造协作任务", () => {
-  const group = {
-    topicId: "topic-a",
-    proposalId: "proposal-a",
-    status: "running",
-    summary: "等待韩立验收。",
-    nextStep: "等待下一步。",
-    nodes: [],
-  };
-  const acceptingRun = {
-    topicId: "topic-a",
-    proposalId: "proposal-a",
-    status: "running",
-    phase: "accepting",
-    action: "正在准备真实界面验收场景",
-  };
-  const presented = currentTaskGroupPresentation(group, acceptingRun);
-  assert.equal(presented.status, "verifying");
-  assert.equal(presented.summary, "正在准备真实界面验收场景");
-  assert.equal(presented.nextStep, "韩立正在验收，完成当前检查后继续收口结果。");
-  assert.equal(groupActivityPresentation(presented, "zh", acceptingRun).statusLabel, "韩立验收中");
-  assert.equal(presented.nodes.length, 0);
-});
-
-test("完成态复核进入验收阶段时仍保留已完成专题投影", () => {
-  const group = {
-    topicId: "topic-a",
-    proposalId: "proposal-a",
-    status: "blocked",
-    summary: "完成态页面复核仍需继续。",
-    nextStep: "查看停留原因并从卡点继续。",
-    nodes: [],
-  };
-  const presented = currentTaskGroupPresentation(group, {
-    topicId: "topic-a",
-    proposalId: "proposal-a",
-    status: "running",
-    phase: "accepting",
-    action: "正在只读复核完成态页面",
-    resumeMode: "post-completion-review",
-  });
-  assert.equal(presented.status, "completed");
-  assert.equal(presented.summary, "本专题已完成");
-  assert.equal(presented.nextStep, "本专题已完成");
-});
-
-test("原运行停住时专题卡用同一阻塞事实替换过期摘要", () => {
-  const group = {
-    topicId: "topic-a",
-    proposalId: "proposal-a",
-    status: "verifying",
-    summary: "发布前旧阻塞。",
-    nextStep: "旧下一步。",
-    nodes: [],
-  };
-  const presented = currentTaskGroupPresentation(group, {
-    topicId: "topic-a",
-    proposalId: "proposal-a",
-    status: "blocked",
-    blockingReason: "任务集成结果尚未可用。",
-  });
-  assert.equal(presented.status, "blocked");
-  assert.equal(presented.summary, "任务集成结果尚未可用。");
-  assert.equal(presented.nextStep, "查看停留原因并从卡点继续。");
 });

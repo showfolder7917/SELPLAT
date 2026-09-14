@@ -1824,7 +1824,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("客户卡点解除且任务完成集成后自动恢复韩立验收", async () => {
+test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-recovered-acceptance-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -1835,13 +1835,22 @@ test("客户卡点解除且任务完成集成后自动恢复韩立验收", async
     const topicId = state.activeTopicId;
     state = store.createProposal(topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
-    const taskId = "recovered-integrated-task";
+    const failedTaskId = "failed-acceptance-task";
     store.updateOneShotRun("testing", "linghu-ancestor", "令狐老祖", "等待本地修改归属恢复", topicId, proposalId);
-    store.markDispatched(proposalId, taskId);
-    store.markProgress(proposalId, "blocked", "本地修改归属尚未确认");
-    store.blockOneShotRun("本地修改归属尚未确认");
-    // 模拟旧版本在任务完成后只推进提案、却没有同步恢复一次性演化运行；重启时必须继续韩立验收。
-    store.markProgress(proposalId, "pending-acceptance", "任务已经完成集成，等待韩立验收");
+    store.markDispatched(proposalId, failedTaskId);
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    store.decideResult(proposalId, "supplement-required", "真实验收失败，需要返修", "automatic-han-li");
+    store.blockOneShotRun("韩立真实应用验收失败");
+    state = store.revise(proposalId, {
+      submitterMemberId: "nangong-wan", content: "根据验收失败完成结构化返修", evidence: ["原失败证据"],
+      impactScope: ["AI Desktop"], risks: ["无"], rollbackPlan: "撤销本次返修", acceptanceCriteria: ["返修后重新验收"],
+    }, "南宫婉");
+    const correctionProposalId = state.proposals.at(-1).proposalId;
+    const taskId = "recovered-integrated-task";
+    store.decide(correctionProposalId, "approved", "返修范围明确", "automatic-han-li", []);
+    store.markDispatched(correctionProposalId, taskId);
+    // 返修完成事实属于新版本；此前真实阻塞仍属于旧版本，重启时必须沿完整修订链继续验收。
+    store.markProgress(correctionProposalId, "pending-acceptance", "任务已经完成集成，等待韩立验收");
 
     const collaboration = {
       state() {
@@ -1849,8 +1858,8 @@ test("客户卡点解除且任务完成集成后自动恢复韩立验收", async
           members: [],
           tasks: [{
             taskId,
-            evolutionProposalId: proposalId,
-            evolutionRoundId: proposalId,
+            evolutionProposalId: correctionProposalId,
+            evolutionRoundId: correctionProposalId,
             state: "integrated",
             snapshot: { title: "恢复后进入韩立验收" },
             createdAt: "2026-09-11T00:00:00.000Z",
@@ -1863,7 +1872,7 @@ test("客户卡点解除且任务完成集成后自动恢复韩立验收", async
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, recordEvent: () => undefined });
     facade.setComputerAcceptanceSession(async () => {
       acceptanceRuns += 1;
-      return computerRun("recovered-acceptance-run", topicId, proposalId, "passed", "recovered-shot");
+      return computerRun("recovered-acceptance-run", topicId, correctionProposalId, "passed", "recovered-shot");
     });
 
     facade.start();
@@ -1872,7 +1881,7 @@ test("客户卡点解除且任务完成集成后自动恢复韩立验收", async
 
     state = facade.state();
     assert.equal(acceptanceRuns, 1);
-    assert.equal(state.proposals[0].status, "completed");
+    assert.equal(state.proposals.at(-1).status, "completed");
     assert.equal(state.oneShotRun.status, "completed");
     assert.equal(state.oneShotRun.phase, "completed");
 
