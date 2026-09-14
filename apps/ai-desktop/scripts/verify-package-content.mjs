@@ -4,6 +4,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
+import { assertPackagedDistributionParser, packagedDistributionServicePath } from "./package-distribution-parser-gate.mjs";
 import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 
 const require = createRequire(import.meta.url);
@@ -45,6 +46,10 @@ for (const line of readFileSync(migrationManifest, "utf8")
 
 const listing = execFileSync(process.execPath, [require.resolve("@electron/asar/bin/asar.js"), "list", asarPath], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 const entries = listing.split("\n").filter(Boolean);
+const { extractFile } = require("@electron/asar");
+const packagedDistributionService = extractFile(asarPath, packagedDistributionServicePath);
+if (!packagedDistributionService) throw new Error(`Packaged Nangong distribution service is missing: ${packagedDistributionServicePath}`);
+assertPackagedDistributionParser(packagedDistributionService.toString("utf8"));
 const required = [
   "/node_modules/@selplat/node-common-core/package.json",
   "/node_modules/@selplat/node-common-core/dist/index.js",
