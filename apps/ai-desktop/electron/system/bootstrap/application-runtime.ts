@@ -1015,7 +1015,7 @@ export async function startApplication(): Promise<void> {
               ? planningContext.rejectionMessage
                 ? `上一回合已经调用场景提交工具，但参数未通过校验：${planningContext.rejectionMessage}\n`
                 : "上一回合没有调用场景提交工具。\n"
-              : ""}本轮结构化场景计划契约：${JSON.stringify({ criteria: planningContext.criteria, requiredSceneKinds: planningContext.requiredSceneKinds })}\n每个 criterionId 必须在全部 segments 中恰好出现一次；请按当前目标重新生成后调用 hanli_submit_acceptance_scene。不要读取、沿用或补写被拒绝的计划，也不要只回复说明文字。\n\n${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
+              : ""}本轮结构化场景计划契约：${JSON.stringify({ criteria: planningContext.criteria, requiredSceneKinds: planningContext.requiredSceneKinds })}\n逐个或分组调用 hanli_register_acceptance_scene_segment，并根据每次返回的 remainingCriterionIds 继续登记；只有剩余集合为空时才调用 hanli_finalize_acceptance_scene。不要读取、沿用或补写被拒绝的计划，也不要只回复说明文字。\n\n${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
             settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
           )),
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("韩立场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),
