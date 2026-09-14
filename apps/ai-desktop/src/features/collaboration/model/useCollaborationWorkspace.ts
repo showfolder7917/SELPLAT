@@ -49,6 +49,7 @@ import type {
   // 协作实时输出：把消息正文和所属回合绑定，防止不同回合互相串流。
   CollaborationLiveOutput,
 } from "./collaboration-live-output";
+import { reconcileCollaborationTimeline } from "./reconcileCollaborationTimeline";
 
 /** 右侧协作区只有“人物会话”和“任务协作群”两个一级页面。 */
 export type CollaborationPanel = "member" | "task-group";
@@ -274,7 +275,7 @@ export function useCollaborationWorkspace() {
     const removeTimelineListener = connectAuthoritativeRefresh({
       read: () => desktop.getCollaborationTimeline(),
       subscribe: (refresh) => desktop.onCollaborationTimelineChanged(refresh),
-      apply: setTimeline,
+      apply: (snapshot) => setTimeline((current) => reconcileCollaborationTimeline(current, snapshot)),
       unavailable: (reason) => setError(readableDesktopError(reason, "无法读取任务协作时间线。")),
     });
     const removeLinghuListener = connectAuthoritativeSnapshot({
@@ -397,7 +398,7 @@ export function useCollaborationWorkspace() {
   /** 主动读取一次最新时间线，人工审批完成后使用。 */
   const refreshTimeline = async () => {
     const nextTimeline = await getOptionalCollaborationDesktopApi()?.getCollaborationTimeline();
-    if (nextTimeline) setTimeline(nextTimeline);
+    if (nextTimeline) setTimeline((current) => reconcileCollaborationTimeline(current, nextTimeline));
     return nextTimeline;
   };
 
