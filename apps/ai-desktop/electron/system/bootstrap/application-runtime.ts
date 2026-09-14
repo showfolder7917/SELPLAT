@@ -992,7 +992,18 @@ export async function startApplication(): Promise<void> {
   let hanliSceneQueue: Promise<unknown> = Promise.resolve();
   const planAcceptanceScene = (goal: import("../../../contracts/services/personas/hanli/index.js").HanliComputerAcceptanceInDto) => {
     const analysis = hanliSceneQueue.then(async () => {
-      const submission = createAcceptanceSceneSubmission();
+      const submission = createAcceptanceSceneSubmission({
+        // 失败事实只保存场景和条件身份，避免把模型回复或页面内容写入长期审计。
+        onRejectedPlan: (rejection) => eventCenter.recordEvent("hanli.acceptance_scene.plan_rejected", {
+          proposalId: goal.proposalId,
+          topicId: goal.topicId,
+          actor: { memberId: "han-li", displayName: "韩立" },
+          message: rejection.message,
+          requiredSceneKinds: rejection.requiredSceneKinds,
+          submittedSceneKinds: rejection.submittedSceneKinds,
+          submittedCriterionIds: rejection.submittedCriterionIds,
+        }),
+      });
       const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
         codexHome, serviceName: "selplat_hanli_acceptance_scene", threadSource: "ai-desktop-hanli-acceptance-scene",
         migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
@@ -1005,7 +1016,7 @@ export async function startApplication(): Promise<void> {
           submission.run(goal, (requestId, attempt, previousRejection) => service.send(
             `${attempt === 2
               ? previousRejection
-                ? `上一回合已经调用场景提交工具，但参数未通过校验：${previousRejection}\n请按这条校验结果修正计划后重新调用 hanli_submit_acceptance_scene；不要沿用被拒绝的参数，也不要只回复说明文字。\n\n`
+                ? `上一回合已经调用场景提交工具，但参数未通过校验：${previousRejection.message}\n本轮目标要求的夹具场景与被拒计划摘要：${JSON.stringify({ requiredSceneKinds: previousRejection.requiredSceneKinds, submittedSceneKinds: previousRejection.submittedSceneKinds, submittedCriterionIds: previousRejection.submittedCriterionIds })}\n请把缺少的必需场景绑定到能证明该夹具的原条件后重新调用 hanli_submit_acceptance_scene；不要沿用被拒绝的参数，也不要只回复说明文字。\n\n`
                 : "上一回合没有调用场景提交工具。请保留原判断并立即通过 hanli_submit_acceptance_scene 提交；不要只回复说明文字。\n\n"
               : ""}${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
             settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,

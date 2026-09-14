@@ -4,6 +4,18 @@ import type { AcceptanceSceneKind, AcceptanceScenePlanOutDto, AcceptanceSceneSeg
 
 const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "workspace-lifecycle-review", "empty-task-group", "completed-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "cross-task-member-occupancy", "member-idle", "collaboration-state-syncing", "collaboration-state-unavailable", "blocked"];
 
+interface AcceptanceScenePlanRejection {
+  message: string;
+  requiredSceneKinds: AcceptanceSceneKind[];
+  submittedSceneKinds: string[];
+  submittedCriterionIds: string[];
+}
+
+interface AcceptanceSceneRequirement {
+  acceptedKinds: AcceptanceSceneKind[];
+  missingMessage: string;
+}
+
 /** 验证韩立的结构化准备计划，任何缺项都退回环境排障，不默认为当前窗口。 */
 export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanOutDto {
   const value = input as AcceptanceScenePlanOutDto;
@@ -13,6 +25,8 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   }
   const expectedIds = goal.criteria.map((_, index) => `criterion-${index + 1}`);
   const segments = value.segments as AcceptanceSceneSegmentOutDto[];
+  // 校验、纠正回合和失败审计都消费同一份签发需求，避免新增夹具后只更新其中一条路径。
+  const sceneRequirements = sceneRequirementsFor(goal);
   const ids = segments.flatMap((segment) => Array.isArray(segment?.conditions)
     ? segment.conditions.map((condition) => condition?.criterionId)
     : []);
@@ -31,27 +45,17 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   if (segments.some((segment) => segment.kind === "workspace-explorer-fixture") && !goal.workspaceAcceptanceFixture) {
     throw new Error("工作区验收场景缺少已签发的受控夹具，不能把普通目录当作加载、失败或空目录证据。");
   }
-  if (goal.workspaceAcceptanceFixture
-    && !segments.some((segment) => segment.kind === "workspace-explorer-fixture")) {
-    throw new Error("本轮已经签发工作区验收夹具，场景计划必须包含一个工作区夹具阶段；不能只观察普通工作区后报告临时根缺失。");
-  }
   if (segments.filter((segment) => segment.kind === "workspace-explorer-fixture").length > 1) {
     throw new Error("一次性工作区夹具只能使用一个验收阶段，相关条件必须合并取证。");
   }
   if (segments.some((segment) => segment.kind === "cross-task-member-occupancy") && !goal.crossTaskMemberOccupancyFixture) {
     throw new Error("跨任务人物占用场景缺少主进程签发的受控夹具。");
   }
-  if (goal.crossTaskMemberOccupancyFixture && !segments.some((segment) => segment.kind === "cross-task-member-occupancy")) {
-    throw new Error("本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。");
-  }
   if (segments.filter((segment) => segment.kind === "cross-task-member-occupancy").length > 1) {
     throw new Error("跨任务人物占用夹具只能使用一个验收阶段。");
   }
   if (segments.some((segment) => segment.kind === "member-idle") && !goal.memberIdleFixture) {
     throw new Error("人物空闲场景缺少主进程签发的受控夹具。");
-  }
-  if (goal.memberIdleFixture && !segments.some((segment) => segment.kind === "member-idle")) {
-    throw new Error("本轮已经签发人物空闲夹具，场景计划必须使用该夹具阶段。");
   }
   if (segments.filter((segment) => segment.kind === "member-idle").length > 1) {
     throw new Error("人物空闲夹具只能使用一个验收阶段。");
@@ -60,9 +64,7 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   if (usesStateProjection && !goal.collaborationStateProjectionFixture) {
     throw new Error("协作状态验收场景缺少主进程签发的受控夹具。");
   }
-  if (goal.collaborationStateProjectionFixture && !usesStateProjection) {
-    throw new Error("本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
-  }
+  assertRequiredSceneRequirements(segments, sceneRequirements);
   if (segments.filter((segment) => segment.kind === "collaboration-state-syncing").length > 1
     || segments.filter((segment) => segment.kind === "collaboration-state-unavailable").length > 1) {
     throw new Error("每种协作状态夹具只能使用一个验收阶段。");
@@ -108,13 +110,58 @@ function hasVerifiedCurrentWindowContext(goal: HanliComputerAcceptanceInDto): bo
     && context.oneShotRun?.proposalId === goal.proposalId;
 }
 
+/** 从主进程已签发的目标派生唯一场景需求表；多个可选阶段仍只证明同一个受控夹具。 */
+function sceneRequirementsFor(goal: HanliComputerAcceptanceInDto): AcceptanceSceneRequirement[] {
+  const requirements: AcceptanceSceneRequirement[] = [];
+  if (goal.workspaceAcceptanceFixture) requirements.push({
+    acceptedKinds: ["workspace-explorer-fixture"],
+    missingMessage: "本轮已经签发工作区验收夹具，场景计划必须包含一个工作区夹具阶段；不能只观察普通工作区后报告临时根缺失。",
+  });
+  if (goal.crossTaskMemberOccupancyFixture) requirements.push({
+    acceptedKinds: ["cross-task-member-occupancy"],
+    missingMessage: "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。",
+  });
+  if (goal.memberIdleFixture) requirements.push({
+    acceptedKinds: ["member-idle"],
+    missingMessage: "本轮已经签发人物空闲夹具，场景计划必须使用该夹具阶段。",
+  });
+  if (goal.collaborationStateProjectionFixture) requirements.push({
+    acceptedKinds: ["collaboration-state-syncing", "collaboration-state-unavailable"],
+    missingMessage: "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ",
+  });
+  return requirements;
+}
+
+/** 每份已签发夹具在候选计划中必须由一个允许的阶段消费，不能由普通窗口替代。 */
+function assertRequiredSceneRequirements(segments: AcceptanceSceneSegmentOutDto[], requirements: AcceptanceSceneRequirement[]): void {
+  for (const requirement of requirements) {
+    if (!segments.some((segment) => requirement.acceptedKinds.includes(segment.kind))) throw new Error(requirement.missingMessage);
+  }
+}
+
+/** 只记录候选计划的结构摘要，供同一请求的纠正回合定位遗漏，不保留模型说明或页面数据。 */
+function summarizeRejectedPlan(error: unknown, input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanRejection {
+  const candidate = input as { segments?: unknown };
+  const segments = Array.isArray(candidate?.segments) ? candidate.segments as Array<{ kind?: unknown; conditions?: unknown }> : [];
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    requiredSceneKinds: sceneRequirementsFor(goal).flatMap((requirement) => requirement.acceptedKinds),
+    submittedSceneKinds: segments.flatMap((segment) => typeof segment?.kind === "string" ? [segment.kind] : []),
+    submittedCriterionIds: segments.flatMap((segment) => Array.isArray(segment?.conditions)
+      ? segment.conditions.flatMap((condition) => typeof (condition as { criterionId?: unknown })?.criterionId === "string"
+        ? [(condition as { criterionId: string }).criterionId]
+        : [])
+      : []),
+  };
+}
+
 /** 固定韩立验收会话通过工具提交场景；说明文字不进入机器协议，回合外与旧请求都不能写入。 */
-export function createAcceptanceSceneSubmission() {
+export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejection: AcceptanceScenePlanRejection): void } = {}) {
   let active: {
     requestId: string;
     goal: HanliComputerAcceptanceInDto;
     plan: AcceptanceScenePlanOutDto | null;
-    lastRejection: string | null;
+    lastRejection: AcceptanceScenePlanRejection | null;
   } | null = null;
   const tools: CodexDynamicToolsPort = {
     definitions: [{ type: "function", name: "hanli_submit_acceptance_scene",
@@ -135,10 +182,13 @@ export function createAcceptanceSceneSubmission() {
         active.lastRejection = null;
         return { success: true, contentItems: [{ type: "inputText", text: "场景计划已登记；实际就绪由准备器验证，页面结果由韩立验收。" }] };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const rejection = summarizeRejectedPlan(error, input, active?.goal || ({} as HanliComputerAcceptanceInDto));
+        const message = rejection.message;
         if (active && name === "hanli_submit_acceptance_scene" && input && typeof input === "object"
           && "requestId" in input && input.requestId === active.requestId && !active.plan) {
-          active.lastRejection = message;
+          active.lastRejection = rejection;
+          // 只为当前请求记录结构化拒绝摘要，后续恢复可判断模型是否重复遗漏已签发夹具。
+          options.onRejectedPlan?.(rejection);
         }
         return { success: false, contentItems: [{ type: "inputText", text: message }] };
       }
@@ -146,16 +196,16 @@ export function createAcceptanceSceneSubmission() {
   };
   return {
     tools,
-    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, previousRejection: string | null) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
+    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, previousRejection: AcceptanceScenePlanRejection | null) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
       if (active) throw new Error("韩立已有场景准备请求，不能并发覆盖。");
-      const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null, lastRejection: null as string | null };
+      const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null, lastRejection: null as AcceptanceScenePlanRejection | null };
       active = request;
       try {
         // 模型只输出说明文字属于可纠正的格式遗漏；原请求保持活动并限重试一次，避免把同一验收重新走完整修复发布链。
         await model(request.requestId, 1, null);
         if (!request.plan) await model(request.requestId, 2, request.lastRejection);
         if (!request.plan) {
-          if (request.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${request.lastRejection}`);
+          if (request.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${request.lastRejection.message}`);
           throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
         }
         return request.plan;
