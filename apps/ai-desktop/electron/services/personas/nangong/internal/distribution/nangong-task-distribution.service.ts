@@ -74,6 +74,19 @@ export class NangongTaskDistributionService {
     if (proposal.status !== "approved") throw new Error("只有审批通过后才能分发任务。");
     if (!topic.workspaceState?.roots.length) throw new Error("当前专题缺少可用的实施工作区，无法分发。");
 
+    if (proposal.distributionPlan?.validation.decision === "passed") {
+      // 已审批计划可能来自规则目录变更前；分发前以当前目录重验，避免未登记规则流入任务快照。
+      const hardFindings = distributionHardFindings(proposal.distributionPlan.units, this.options.isCurrentUserTaskRuleId);
+      const validation = validateDistributionPlan(proposal.distributionPlan, hardFindings);
+      if (validation.decision !== "passed") {
+        state = this.options.store.saveDistributionPlan(proposalId, { ...proposal.distributionPlan, validation });
+        proposal = requireProposal(state, proposalId);
+        this.options.recordEvent("nangong.distribution_validation.completed", {
+          proposalId, attempt: 0, decision: validation.decision, reason: validation.reason, findings: validation.findings,
+        });
+      }
+    }
+
     if (!proposal.distributionPlan || proposal.distributionPlan.validation.decision !== "passed") {
       let feedback = proposal.distributionPlan?.validation.findings.join("；") || "";
       let feedbackKind: "conflict" | "format" = "conflict";
