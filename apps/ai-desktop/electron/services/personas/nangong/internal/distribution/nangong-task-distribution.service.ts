@@ -103,6 +103,13 @@ export class NangongTaskDistributionService {
             feedbackKind = "format";
             continue;
           }
+          if (error instanceof DistributionPlanFormatError) {
+            // 第二次格式失败也保留安全分类，便于定位旧运行包的通用 JSON 报错而不写入模型原文。
+            this.options.recordEvent("nangong.evolution.distribution_format_failed", {
+              proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount,
+              hasUnclosedObject: error.hasUnclosedObject, reason: error.message,
+            });
+          }
           const detail = error instanceof Error ? error.message : String(error);
           this.#publishPlanning(proposal, topic, attempt, "failed", "生成执行计划失败", detail, planningStartedAt);
           throw error;
