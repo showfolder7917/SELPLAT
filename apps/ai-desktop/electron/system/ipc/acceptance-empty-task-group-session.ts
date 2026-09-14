@@ -12,6 +12,7 @@ const scenarioProposalId = "acceptance-failure-recovery-proposal";
 const crossTaskId = "acceptance-linghu-other-active-task";
 const hanli = { memberId: "han-li", displayName: "韩立" };
 const linghu = { memberId: "linghu-laozu", displayName: "令狐老祖" };
+export const acceptanceRecoveryFailureMessage = "受控验收恢复失败：隔离场景已完成“恢复中”状态观察，现按既定验收条件模拟恢复无法继续。\n原因：此失败只存在于窗口私有时间线，不会写入正式任务、提案或人物会话。\n建议：查看完整错误证据后结束本场景，并使用正式验收流程继续。";
 
 /**
  * 为独立验收窗口保存最小、非持久化运行态。
@@ -23,6 +24,7 @@ export class AcceptanceEmptyTaskGroupSession {
   #selectedMembers = new Map<number, string>();
   #operatingModes = new Map<number, DesktopOperatingModeValue>();
   #recoveryLifecycleStarted = new Set<number>();
+  #recoveryLifecycleFailed = new Set<number>();
   #personaConversations = new Map<number, Map<string, PersonaConversationOutDto>>();
   #taskHandoffs = new Map<number, CollaborationTimelineSnapshotOutDto>();
   #crossTaskMemberOccupancyFixtures = new Set<number>();
@@ -36,6 +38,7 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#selectedMembers.set(webContentsId, sceneKind === "cross-task-member-occupancy" || sceneKind === "member-idle" ? "linghu-ancestor" : "han-li");
     this.#operatingModes.set(webContentsId, "collaboration");
     this.#recoveryLifecycleStarted.delete(webContentsId);
+    this.#recoveryLifecycleFailed.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
     // 人物会话验收沿真实页面入口发送固定验收文案；消息只保存在当前窗口内存。
@@ -65,6 +68,7 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#selectedMembers.delete(webContentsId);
     this.#operatingModes.delete(webContentsId);
     this.#recoveryLifecycleStarted.delete(webContentsId);
+    this.#recoveryLifecycleFailed.delete(webContentsId);
     this.#personaConversations.delete(webContentsId);
     this.#taskHandoffs.delete(webContentsId);
     this.#crossTaskMemberOccupancyFixtures.delete(webContentsId);
@@ -187,7 +191,10 @@ export class AcceptanceEmptyTaskGroupSession {
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "completed-recovery-timeline") return completedRecoveryTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "inspection-lifecycle-timeline") return inspectionLifecycleTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "user-language-detail-timeline") return userLanguageDetailTimeline();
-    if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "recovery-action-lifecycle") return recoveryActionLifecycleTimeline(this.#recoveryLifecycleStarted.has(webContentsId));
+    if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "recovery-action-lifecycle") {
+      const recoveryState = this.#recoveryLifecycleFailed.has(webContentsId) ? "failed" : this.#recoveryLifecycleStarted.has(webContentsId) ? "started" : "waiting";
+      return recoveryActionLifecycleTimeline(recoveryState);
+    }
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "cross-task-member-occupancy") return crossTaskMemberOccupancyTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "member-idle") return completedRecoveryTimeline();
     return { version: 1, groups: [], updatedAt: new Date().toISOString() };
@@ -198,10 +205,19 @@ export class AcceptanceEmptyTaskGroupSession {
     if (this.#scenarios.get(webContentsId) !== "recovery-action-lifecycle" || taskId !== scenarioTaskId) {
       throw new Error("当前独立验收场景不允许继续此任务。");
     }
-    if (this.#recoveryLifecycleStarted.has(webContentsId)) {
+    if (this.#recoveryLifecycleStarted.has(webContentsId) || this.#recoveryLifecycleFailed.has(webContentsId)) {
       throw new Error("独立恢复验收已经开始，不能重复继续。");
     }
     this.#recoveryLifecycleStarted.add(webContentsId);
+    return this.timeline(webContentsId);
+  }
+
+  /** 受控失败只推进当前窗口私有时间线，让既有 Renderer 错误链路可被真实观察。 */
+  failRecoveryLifecycle(webContentsId: number, taskId: string): CollaborationTimelineSnapshotOutDto {
+    if (this.#scenarios.get(webContentsId) !== "recovery-action-lifecycle" || taskId !== scenarioTaskId || !this.#recoveryLifecycleStarted.has(webContentsId) || this.#recoveryLifecycleFailed.has(webContentsId)) {
+      throw new Error("当前独立验收场景没有可结束的恢复请求。");
+    }
+    this.#recoveryLifecycleFailed.add(webContentsId);
     return this.timeline(webContentsId);
   }
 
@@ -497,20 +513,23 @@ function userLanguageDetailTimeline(): CollaborationTimelineSnapshotOutDto {
   };
 }
 
-/** 恢复入口验收场景只在窗口内模拟一次等待到恢复中的投影转换。 */
-function recoveryActionLifecycleTimeline(recoveryStarted: boolean): CollaborationTimelineSnapshotOutDto {
+/** 恢复入口验收场景在窗口内依次模拟等待、恢复中和受控失败，不写入正式状态。 */
+function recoveryActionLifecycleTimeline(recoveryState: "waiting" | "started" | "failed"): CollaborationTimelineSnapshotOutDto {
   const now = new Date().toISOString();
+  const recoveryStarted = recoveryState !== "waiting";
+  const recoveryFailed = recoveryState === "failed";
   const waitingStatus = recoveryStarted ? "completed" as const : "waiting" as const;
   return {
     version: 1, updatedAt: now, groups: [{
       groupId: scenarioTopicId, topicId: scenarioTopicId, proposalId: scenarioProposalId, title: "恢复入口唯一性验收场景",
-      status: recoveryStarted ? "running" : "blocked", summary: recoveryStarted ? "恢复请求已进入自动处理中" : "等待用户确认恢复条件",
-      executingCount: recoveryStarted ? 1 : 0, verifyingCount: 0, waitingCount: recoveryStarted ? 0 : 1, completedCount: recoveryStarted ? 2 : 1,
-      startedAt: now, updatedAt: now, durationMs: 0, nextStep: recoveryStarted ? "令狐老祖 · 正在恢复原任务" : "韩立 · 确认恢复条件", failureNextStep: "确认恢复条件后继续执行", nextOwner: recoveryStarted ? linghu : hanli,
+      status: recoveryFailed ? "blocked" : recoveryStarted ? "running" : "blocked", summary: recoveryFailed ? "恢复未完成，已保留失败原因" : recoveryStarted ? "恢复请求已进入自动处理中" : "等待用户确认恢复条件",
+      executingCount: recoveryState === "started" ? 1 : 0, verifyingCount: 0, waitingCount: recoveryState === "waiting" ? 1 : 0, completedCount: recoveryFailed ? 3 : recoveryStarted ? 2 : 1,
+      startedAt: now, updatedAt: now, durationMs: 0, nextStep: recoveryFailed ? "韩立 · 查看失败原因后结束本场景" : recoveryStarted ? "令狐老祖 · 正在恢复原任务" : "韩立 · 确认恢复条件", failureNextStep: recoveryFailed ? "查看完整错误证据后重新确认恢复条件" : "确认恢复条件后继续执行", nextOwner: recoveryFailed ? hanli : recoveryStarted ? linghu : hanli,
       nodes: [
         { nodeId: "acceptance:recovery-history", taskId: scenarioTaskId, eventType: "task.interrupted", kind: "repair" as const, actor: linghu, recipients: [], status: "completed" as const, action: "历史恢复记录", summary: "此前恢复已结束", content: "历史节点只用于核对没有重复入口。", contentRole: "repair-output" as const, detailRole: "result-evidence" as const, detail: "历史恢复已经完成。", startedAt: now, completedAt: now, durationMs: 0, automaticOpen: false, manualApprovalProposalId: null },
         { nodeId: "acceptance:recovery-current", taskId: scenarioTaskId, eventType: "customer.action_required", kind: "repair" as const, actor: linghu, recipients: [], status: waitingStatus, action: "等待用户确认恢复条件", summary: recoveryStarted ? "恢复请求已提交" : "需要用户确认后继续", content: "本场景只验证恢复入口与状态收口，不修改正式任务。", contentRole: "repair-output" as const, detailRole: "recovery-conditions" as const, detail: "恢复条件：确认后继续。", startedAt: now, completedAt: recoveryStarted ? now : null, durationMs: 0, automaticOpen: !recoveryStarted, manualApprovalProposalId: null },
-        ...(recoveryStarted ? [{ nodeId: "acceptance:recovery-started", taskId: scenarioTaskId, eventType: "task.recovery_requested", kind: "repair" as const, actor: linghu, recipients: [], status: "current" as const, action: "正在恢复原任务", summary: "正在自动处理中，暂不需要你操作。", content: "恢复已开始。", contentRole: "repair-output" as const, detailRole: "result-evidence" as const, detail: "恢复请求已经开始执行。", startedAt: now, completedAt: null, durationMs: 0, automaticOpen: true, manualApprovalProposalId: null }] : []),
+        ...(recoveryStarted ? [{ nodeId: "acceptance:recovery-started", taskId: scenarioTaskId, eventType: "task.recovery_requested", kind: "repair" as const, actor: linghu, recipients: [], status: recoveryFailed ? "completed" as const : "current" as const, action: "正在恢复原任务", summary: recoveryFailed ? "恢复请求未能继续" : "正在自动处理中，暂不需要你操作。", content: recoveryFailed ? "恢复请求已结束，失败原因已保留。" : "恢复已开始。", contentRole: "repair-output" as const, detailRole: "result-evidence" as const, detail: recoveryFailed ? acceptanceRecoveryFailureMessage : "恢复请求已经开始执行。", startedAt: now, completedAt: recoveryFailed ? now : null, durationMs: 0, automaticOpen: true, manualApprovalProposalId: null }] : []),
+        ...(recoveryFailed ? [{ nodeId: "acceptance:recovery-failed", taskId: scenarioTaskId, eventType: "task.recovery_failed", kind: "repair" as const, actor: linghu, recipients: [], status: "failed" as const, action: "恢复未完成", summary: "恢复失败：受控验收场景无法继续。", content: "恢复失败，请查看完整错误证据。", contentRole: "repair-output" as const, detailRole: "result-evidence" as const, detail: acceptanceRecoveryFailureMessage, startedAt: now, completedAt: now, durationMs: 0, automaticOpen: true, manualApprovalProposalId: null }] : []),
       ],
     }],
   };
