@@ -54,8 +54,16 @@ export function parseCustomerActionGuidance(
   const reasonCustomerMustAct = requiredText(input.reasonCustomerMustAct, "reasonCustomerMustAct", 1_000);
   const steps = requiredTextList(input.steps, "steps", 12, 500);
   const completionCriteria = requiredTextList(input.completionCriteria, "completionCriteria", 8, 500);
-  const allText = [title, problem, reasonCustomerMustAct, ...steps, ...completionCriteria].join("\n");
-  if (forbiddenInstruction.test(allText)) throw new Error("令狐生成的客户操作指导包含危险或越权操作，已拒绝展示。");
+  // 不为否定词添加放行分支；每个字段仍完整检查，把具体命中位置交回生成者纠正表达。
+  const fields: Array<[string, string]> = [
+    ["title", title], ["problem", problem], ["reasonCustomerMustAct", reasonCustomerMustAct],
+    ...steps.map((value, index): [string, string] => [`steps[${index}]`, value]),
+    ...completionCriteria.map((value, index): [string, string] => [`completionCriteria[${index}]`, value]),
+  ];
+  for (const [field, value] of fields) {
+    const match = forbiddenInstruction.exec(value);
+    if (match) throw new Error(`令狐生成的客户操作指导包含危险或越权操作，已拒绝展示。字段 ${field} 命中 ${JSON.stringify(match[0])}；请保留权限边界，用明确的允许范围和可观察结果重新表述，不复述被拒绝的操作。`);
+  }
   return {
     guidanceId: `customer-action:${sourceFingerprint}`,
     sourceFingerprint,

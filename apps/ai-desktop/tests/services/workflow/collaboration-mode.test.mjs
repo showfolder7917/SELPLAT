@@ -925,6 +925,104 @@ test("令狐为未登记本地修改直接生成客户处理步骤，不启动�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+// 从同一份隔离任务事实验证生成、持久化、继续门禁；模型输出是唯一替身。
+function guidanceRecoveryFixture(directory, analyze, events) {
+  const taskStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+  taskStore.setMode("collaboration");
+  const task = taskStore.submitTask({ title: "恢复容量等待", problemStatement: "候选卷不足", confirmedIntent: "保留原提交恢复", workspaceState, locale: "zh-CN" });
+  taskStore.updateTask(task.taskId, "fixture.blocked", (current) => {
+    current.state = "blocked";
+    current.repairRequiresUserConfirmation = true;
+    current.blockingReason = "容量不足";
+    current.integrationFailure = { kind: "infrastructure", detail: "还差108MB", conflictFiles: [], baseSha: "base", resultSha: "result", generation: 178, occurredAt: new Date().toISOString() };
+  });
+  const storePath = path.join(directory, "linghu.json");
+  const createFacade = () => new LinghuAutomationFacade({
+    store: createTestLinghuStore(storePath),
+    collaboration: {
+      state: () => taskStore.state(),
+      recordCustomerActionGuidance: (id, guidance) => taskStore.updateTask(id, "customer.action_required", (current) => { current.customerActionGuidance = guidance; }),
+    },
+    readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
+    recordEvent: (type, details) => events.push({ type, details }),
+    readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined,
+    analyzeCustomerActionGuidance: analyze,
+  });
+  return { taskStore, taskId: task.taskId, createFacade };
+}
+
+const validRecoveryGuidance = {
+  title: "确认可用空间", problem: "容量不足", reasonCustomerMustAct: "需要确认保留范围",
+  steps: ["按已授权范围处理失效产物。"],
+  completionCriteria: ["可用空间达到容量预检标准，所有权限和版本检查保持有效。"],
+};
+
+test("客户指导把现场否定句的具体拒绝原因交回令狐，修正后才保存恢复入口", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "guidance-feedback-"));
+  try {
+    const requests = [];
+    const events = [];
+    const fixture = guidanceRecoveryFixture(directory, async (facts) => {
+      requests.push(facts);
+      if (requests.length === 1) return JSON.stringify({ ...validRecoveryGuidance,
+        completionCriteria: ["空间处理符合已确认的保留策略，且未自动删除内容、降低预检值、绕过权限或版本门禁。"] });
+      assert.match(facts.generationFeedback.validationError, /completionCriteria\[0\]/);
+      assert.match(facts.generationFeedback.validationError, /绕过权限/);
+      return JSON.stringify(validRecoveryGuidance);
+    }, events);
+    const facade = fixture.createFacade();
+    await facade.handleTaskCheckpoint(fixture.taskId);
+    assert.equal(fixture.taskStore.task(fixture.taskId).customerActionGuidance, null);
+    assert.throws(() => fixture.taskStore.continueTask(fixture.taskId), /客户前置条件/);
+    // 新进程读取同一失败证据，不能退回无反馈的首次生成。
+    const resumed = fixture.createFacade();
+    await resumed.handleTaskCheckpoint(fixture.taskId);
+    await resumed.handleTaskCheckpoint(fixture.taskId);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[1].generationFeedback.attempt, 2);
+    assert.deepEqual(fixture.taskStore.task(fixture.taskId).customerActionGuidance.completionCriteria, validRecoveryGuidance.completionCriteria);
+    assert.equal(events.filter((event) => event.type === "linghu.automation.customer_action_guidance_created").length, 1);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("客户指导同一失败重启后不无限生成，新卡点证据允许继续", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "guidance-budget-"));
+  try {
+    let requests = 0;
+    const events = [];
+    const fixture = guidanceRecoveryFixture(directory, async () => {
+      requests += 1;
+      return JSON.stringify({ ...validRecoveryGuidance, steps: ["执行 git reset --hard"] });
+    }, events);
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await fixture.createFacade().handleTaskCheckpoint(fixture.taskId);
+    }
+    assert.equal(requests, 3);
+    assert.equal(events.filter((event) => event.type === "technical.exception").length, 1);
+    assert.equal(fixture.taskStore.task(fixture.taskId).customerActionGuidance, null);
+    assert.throws(() => fixture.taskStore.continueTask(fixture.taskId), /客户前置条件/);
+    fixture.taskStore.updateTask(fixture.taskId, "fixture.new_evidence", (task) => {
+      task.integrationFailure.detail = "容量已变化，新的失败原因";
+    });
+    await fixture.createFacade().handleTaskCheckpoint(fixture.taskId);
+    assert.equal(requests, 4);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("指导分析期间故障已变化时，旧指导不能附加到新的等待节点", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "guidance-stale-"));
+  try {
+    const fixture = guidanceRecoveryFixture(directory, async () => {
+      fixture.taskStore.updateTask(fixture.taskId, "fixture.replaced_failure", (task) => {
+        task.integrationFailure.detail = "新的归属事实";
+      });
+      return JSON.stringify(validRecoveryGuidance);
+    }, []);
+    await fixture.createFacade().handleTaskCheckpoint(fixture.taskId);
+    assert.equal(fixture.taskStore.task(fixture.taskId).customerActionGuidance, null);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("客户操作指导缺少步骤或包含破坏性操作时拒绝生成继续入口", () => {
   const linghu = { memberId: "linghu-ancestor", displayName: "令狐老祖" };
   assert.throws(() => parseCustomerActionGuidance(JSON.stringify({

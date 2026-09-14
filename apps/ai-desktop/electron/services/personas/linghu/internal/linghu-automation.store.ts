@@ -168,6 +168,7 @@ function createInitialState(): LinghuAutomationStateOutDto {
     recoveryAttemptCount: 0,
     currentFaultFingerprint: null,
     recoveryAttemptsByFingerprint: {},
+    guidanceFailuresByFingerprint: {},
     detectionCursor: null,
     flowSnapshots: [],
     testResourceState: null,

@@ -116,6 +116,8 @@ export interface LinghuAutomationStateOutDto {
   currentFaultFingerprint: string | null;
   // 每个故障指纹独立计数，避免一条流程的恢复次数阻塞其他人物。
   recoveryAttemptsByFingerprint: Record<string, number>;
+  /** 同一卡点指导生成的失败证据；重启保留，只有事实变化才开启新的纠正预算。 */
+  guidanceFailuresByFingerprint: Record<string, { attempts: number; detail: string }>;
   // 检测游标记录最近一次处理事实的时间，支持重启恢复。
   detectionCursor: string | null;
   // 每轮检测保存所有未终结任务的只读快照。

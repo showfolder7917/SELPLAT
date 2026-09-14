@@ -434,9 +434,24 @@ export class LinghuAutomationFacade {
     report: string,
   ): Promise<void> {
     if (task.customerActionGuidance?.sourceFingerprint === fingerprint) return;
+    const previousFailure = this.#store.state().guidanceFailuresByFingerprint[fingerprint];
+    // 同一份事实最多三次，每次必须携带上次失败证据；巡检和重启不能重置预算。
+    if (previousFailure && previousFailure.attempts >= 3) return;
     try {
-      const text = await this.#analyzeCustomerActionGuidance(customerActionFacts(task, snapshot, fingerprint));
+      const facts = customerActionFacts(task, snapshot, fingerprint);
+      const text = await this.#analyzeCustomerActionGuidance({
+        ...facts,
+        generationFeedback: previousFailure
+          ? { attempt: previousFailure.attempts + 1, validationError: previousFailure.detail }
+          : null,
+      });
       const guidance = parseCustomerActionGuidance(text, fingerprint, { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" }, customerActionLocation(task));
+      // 分析期间原任务可能已经推进；只允许同一故障的结果登记到原等待节点。
+      const currentTask = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === task.taskId);
+      const currentSnapshot = automaticFlowSnapshots(this.#collaboration.state(), this.state().activeTaskId, new Date().toISOString())
+        .find((candidate) => candidate.sourceTaskId === task.taskId);
+      if (!currentTask || !["blocked", "recovering"].includes(currentTask.state)
+        || faultFingerprint(currentTask, currentSnapshot) !== fingerprint) return;
       this.#collaboration.recordCustomerActionGuidance(task.taskId, guidance);
       this.#store.updateRuntime("automation.customer_action_guidance_created", (state) => {
         state.currentFaultFingerprint = fingerprint;
@@ -445,11 +460,25 @@ export class LinghuAutomationFacade {
       this.#recordEvent("linghu.automation.customer_action_guidance_created", { report, guidance }, task.taskId);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
+      const attempts = (previousFailure?.attempts || 0) + 1;
+      const exhausted = attempts >= 3;
       this.#store.updateRuntime("automation.customer_action_guidance_failed", (state) => {
+        state.guidanceFailuresByFingerprint[fingerprint] = { attempts, detail };
         state.currentFaultFingerprint = fingerprint;
-        state.blockingReason = `${report}。令狐暂未形成安全、完整的客户操作步骤，将继续分析，不显示不可执行的继续入口。`;
+        state.blockingReason = exhausted
+          ? `${report}。客户操作说明连续校验失败，已保留具体原因并上报技术故障；原任务和安全检查保持有效。`
+          : `${report}。客户操作说明尚未通过校验，下一次将依据具体错误修正说明。`;
       });
-      this.#recordEvent("linghu.automation.customer_action_guidance_failed", { report, detail, fingerprint }, task.taskId);
+      this.#recordEvent("linghu.automation.customer_action_guidance_failed", { report, detail, fingerprint, attempts }, task.taskId);
+      if (exhausted) {
+        // 技术故障独立上报，不能将无效指导当成客户未操作，也不能反复生成同一文本。
+        this.#recordEvent("technical.exception", {
+          operation: "linghu_customer_action_guidance_validation",
+          sourceType: "task", sourceId: task.taskId,
+          message: detail, fingerprint: `guidance-validation:${fingerprint}`,
+          severity: "error", flowImpact: "none",
+        }, task.taskId);
+      }
     }
   }
 
