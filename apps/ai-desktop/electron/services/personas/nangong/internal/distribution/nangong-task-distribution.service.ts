@@ -13,7 +13,7 @@ type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 class DistributionPlanFormatError extends Error {
   constructor(
     readonly responseLength: number,
-    /** 完整对象候选数；只用于安全诊断，绝不记录模型文本。 */
+    /** 括号配平的闭合对象候选数；只用于安全诊断，绝不记录模型文本。 */
     readonly candidateCount: number,
   ) {
     super("AI 返回的结构化判断不是有效 JSON。");
@@ -87,7 +87,7 @@ export class NangongTaskDistributionService {
             // 仅把无内容的格式类别反馈给下一次规划，帮助模型纠正而不泄露原始响应。
             const formatDetail = error.candidateCount === 0
               ? "未提取到完整 JSON 对象"
-              : `提取到 ${error.candidateCount} 个完整对象但 JSON 语法无效`;
+              : `提取到 ${error.candidateCount} 个闭合对象但 JSON 语法无效`;
             feedback = `上一轮${formatDetail}（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
             continue;
           }
