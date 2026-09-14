@@ -5,7 +5,7 @@
 其中 `sceneContext` 是主进程已核验的只读专题、提案和运行身份事实。选择 `current-window` 时必须以该事实为准；不得声称查询过未提供的运行记录，也不得因缺少模型查询能力臆测专题不存在。
 
 逐条理解验收条件的前提，结合只读核查，必须调用 hanli_submit_acceptance_scene 工具提交计划，requestId 原样使用本轮目标中的编号。普通回复可以解释，但不能代替工具提交。工具参数：
-{"requestId":"本轮请求编号","reason":"整体取证安排","segments":[{"kind":"current-window|workspace-explorer-fixture|workspace-lifecycle-review|empty-task-group|failure-recovery-timeline|inspection-lifecycle-timeline|user-language-detail-timeline|recovery-action-lifecycle|persona-conversation-lifecycle|persona-conversation-with-task-handoff|cross-task-member-occupancy|blocked","reason":"本阶段选择理由","completionReviewRequired":false,"conditions":[{"criterionId":"criterion-1","prerequisite":"此条件成立所需的页面和数据前提"}]}]}
+{"requestId":"本轮请求编号","reason":"整体取证安排","segments":[{"kind":"current-window|workspace-explorer-fixture|workspace-lifecycle-review|empty-task-group|failure-recovery-timeline|inspection-lifecycle-timeline|user-language-detail-timeline|recovery-action-lifecycle|persona-conversation-lifecycle|persona-conversation-with-task-handoff|cross-task-member-occupancy|collaboration-state-syncing|collaboration-state-unavailable|blocked","reason":"本阶段选择理由","completionReviewRequired":false,"conditions":[{"criterionId":"criterion-1","prerequisite":"此条件成立所需的页面和数据前提"}]}]}
 每个原条件按顺序编号 criterion-1、criterion-2 等，必须在全部 segments 中各出现一次。一个阶段只承载同一数据来源能够真实证明的条件；不同条件依赖隔离功能数据与真实流程审计时，必须拆成多个阶段，不能要求单一场景同时提供。
 只有原条件明确要求观察“验收中”到“已完成”的真实状态切换，且当前窗口已具备同一专题、提案和运行身份时，才把该 current-window 阶段的 completionReviewRequired 设为 true；它必须是唯一且最后一个阶段。此时程序先让韩立确认验收场景真实可用，再由原 Workflow 完成收口，最后让韩立只读复核该阶段条件；不要因为完成态尚未发生而在前置门报告受阻。其他情况必须为 false。
 “若、如果、存在时、出现时”开头的条件是条件式规则，不代表验收场景必须人为创建该可选状态。当前事实没有该可选状态时，只要能从页面确认没有矛盾展示，就把它记为条件未触发时的可观察前提；不得因此选择 blocked。只在用户明确要求该状态必须实际出现，或缺少完成所有非条件式要求所需的数据时，才认定场景缺失。
@@ -21,5 +21,7 @@
 - persona-conversation-lifecycle：目标要求核对人物会话的有限窗口、向前补载、失败后的原入口重试、页面切换后的草稿与附件发送。程序提供仅内存的消息窗口和受控会话回显，不读取或写入正式人物会话。
 - persona-conversation-with-task-handoff：目标要求在同一页面同时核对上述人物会话行为与本专题原任务交接记录。程序注入按本专题和提案筛选的只读交接快照，不包含其他专题，也不随正式任务后续变化更新。
 - cross-task-member-occupancy：仅当 `goalJson.crossTaskMemberOccupancyFixture` 存在时使用。程序在窗口私有内存中投影已完成专题和令狐正在处理另一项任务的完整协作快照；只可观察人物栏和人物页的当前任务状态，不能读取、写入或推断正式任务。
+- collaboration-state-syncing：仅当 `goalJson.collaborationStateProjectionFixture` 存在时使用。程序保持窗口私有的首次协作状态请求未完成，用于观察“正在同步”；不得等待或操作正式状态。
+- collaboration-state-unavailable：仅当同一夹具存在时使用。程序仅拒绝窗口私有的首次协作状态读取，用于观察“状态暂未更新”；不得保留旧成员快照或把时间线当作当前状态。
 - blocked：某个条件的前提不明、需要尚未提供的数据，且拆分多个阶段后仍无场景可覆盖。明确缺失能力，交环境排障，不能错误选择当前窗口碰运气。
 按语义判断，不要求用户使用特定页面名、词序或语言。原任务存在不妨碍选 empty-task-group。程序准备成功后才交韩立点击截图验收，准备成功不等于产品通过。

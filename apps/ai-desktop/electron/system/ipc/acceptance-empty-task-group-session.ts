@@ -2,9 +2,9 @@ import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, Perso
 import type { ScreenshotCompletedEventOutDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CollaborationStateOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue } from "../../../contracts/services/workflow/index.js";
-import type { CrossTaskMemberOccupancyFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { CollaborationStateProjectionFixtureContextOutDto, CrossTaskMemberOccupancyFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
 
-type IsolatedAcceptanceScenario = "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy";
+type IsolatedAcceptanceScenario = "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy" | "collaboration-state-syncing" | "collaboration-state-unavailable";
 
 const scenarioTaskId = "acceptance-failure-recovery-task";
 const scenarioTopicId = "acceptance-failure-recovery-topic";
@@ -26,10 +26,11 @@ export class AcceptanceEmptyTaskGroupSession {
   #personaConversations = new Map<number, Map<string, PersonaConversationOutDto>>();
   #taskHandoffs = new Map<number, CollaborationTimelineSnapshotOutDto>();
   #crossTaskMemberOccupancyFixtures = new Set<number>();
+  #collaborationStateProjectionFixtures = new Set<number>();
   #failedEarlierReads = new Set<string>();
   #personaScreenshotSequences = new Map<number, number>();
 
-  register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto, crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto): void {
+  register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto, crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto, collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto): void {
     this.#scenarios.set(webContentsId, sceneKind);
     this.#selectedMembers.set(webContentsId, sceneKind === "cross-task-member-occupancy" ? "linghu-ancestor" : "han-li");
     this.#operatingModes.set(webContentsId, "collaboration");
@@ -45,6 +46,10 @@ export class AcceptanceEmptyTaskGroupSession {
     if (sceneKind === "cross-task-member-occupancy" && crossTaskMemberOccupancyFixture?.kind === "cross-task-member-occupancy") {
       this.#crossTaskMemberOccupancyFixtures.add(webContentsId);
     }
+    if ((sceneKind === "collaboration-state-syncing" || sceneKind === "collaboration-state-unavailable")
+      && collaborationStateProjectionFixture?.kind === "collaboration-state-projection") {
+      this.#collaborationStateProjectionFixtures.add(webContentsId);
+    }
   }
 
   remove(webContentsId: number): void {
@@ -55,6 +60,7 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#personaConversations.delete(webContentsId);
     this.#taskHandoffs.delete(webContentsId);
     this.#crossTaskMemberOccupancyFixtures.delete(webContentsId);
+    this.#collaborationStateProjectionFixtures.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
   }
@@ -117,6 +123,22 @@ export class AcceptanceEmptyTaskGroupSession {
       integrationBatches: [],
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  /** 只在签发窗口模拟协作状态的读取生命周期；正式 Store 的读取永远不经过此分支。 */
+  async readCollaborationState(webContentsId: number, actual: CollaborationStateOutDto): Promise<CollaborationStateOutDto> {
+    const scene = this.#scenarios.get(webContentsId);
+    if (scene !== "collaboration-state-syncing" && scene !== "collaboration-state-unavailable") {
+      return this.collaborationState(webContentsId, actual);
+    }
+    if (!this.#collaborationStateProjectionFixtures.has(webContentsId)) {
+      throw new Error("协作状态验收场景缺少已签发夹具。");
+    }
+    if (scene === "collaboration-state-syncing") {
+      // 保持初始请求未完成，让 Renderer 只能展示自身的同步中状态。
+      return new Promise<CollaborationStateOutDto>(() => undefined);
+    }
+    throw new Error("验收场景模拟协作状态读取失败。");
   }
 
   /** 模式只属于该验收窗口的导航状态，不写入正式协作 Store。 */
