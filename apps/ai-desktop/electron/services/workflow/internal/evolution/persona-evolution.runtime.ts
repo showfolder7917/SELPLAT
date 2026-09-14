@@ -541,24 +541,56 @@ export class PersonaEvolutionRuntime {
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
           const review = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
           let runResult: HanliAcceptanceRunOutDto;
-          if (review === "page-experience") {
+          if (review === "page-experience" || review.mode === "mixed") {
             if (!this.#computerAcceptanceSession) throw new Error("韩立页面验收会话尚未接入。");
+            const pageCriterionIds = review === "page-experience"
+              ? proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`)
+              : review.pageCriterionIds || [];
+            const pageCriteria = pageCriterionIds.map((criterionId) => {
+              const index = Number(criterionId.slice("criterion-".length)) - 1;
+              const criterion = proposal.acceptanceCriteria[index];
+              if (!criterion) throw new Error(`混合验收页面条件不存在：${criterionId}`);
+              return criterion;
+            });
             const goal: HanliComputerAcceptanceInDto = {
               topicId: topic.topicId,
               proposalId: proposal.proposalId,
               title: proposal.title,
-              criteria: proposal.acceptanceCriteria,
+              criteria: pageCriteria,
+              criterionIds: pageCriterionIds,
             };
-            runResult = await this.#computerAcceptanceSession(goal, () => {
+            const pageRun = await this.#computerAcceptanceSession(goal, () => {
               publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");
               this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在当前正式应用中验收页面", topic.topicId, proposal.proposalId);
             });
+            if (review === "page-experience") {
+              runResult = pageRun;
+            } else {
+              const expectedIds = new Set(pageCriterionIds);
+              if (pageRun.stepResults.length !== pageCriterionIds.length
+                || pageRun.stepResults.some((step) => !expectedIds.has(step.checkId))) {
+                throw new Error("混合验收页面结果没有与已登记的原始条件逐项对应。");
+              }
+              const stepResults = [...review.stepResults, ...pageRun.stepResults]
+                .sort((left, right) => Number(left.checkId.slice("criterion-".length)) - Number(right.checkId.slice("criterion-".length)))
+                .map((step, operationIndex) => ({ ...step, operationIndex }));
+              const status = stepResults.some((step) => step.status === "failed" || step.layoutStatus === "failed") ? "failed"
+                : stepResults.some((step) => step.status === "blocked" || step.layoutStatus === "blocked") ? "blocked" : "passed";
+              runResult = {
+                ...pageRun,
+                mode: "mixed",
+                criteria: [...proposal.acceptanceCriteria],
+                pageCriterionIds,
+                status,
+                stepResults,
+              };
+            }
           } else {
             publishAcceptance("started", "该任务不涉及页面，韩立正在只读审查代码是否符合客户原要求。");
             runResult = review;
           }
           if (runResult.status === "passed") {
-            publishAcceptance("passed", `韩立${runResult.mode === "page-experience" ? "页面验收" : "代码符合性审查"}通过。运行记录：${runResult.runId}\n逐项结果：\n${runResult.stepResults.map((step) => `${step.checkId} ${step.status}：${step.actual}`).join("\n")}`);
+            publishAcceptance("passed", `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}通过。运行记录：${runResult.runId}\n逐项结果：\n${runResult.stepResults.map((step) => `${step.checkId} ${step.status}：${step.actual}`).join("\n")}`);
           }
           if (runResult.status === "blocked") {
             const reason = runResult.stepResults
@@ -579,7 +611,7 @@ export class PersonaEvolutionRuntime {
             const blockedSummary = acceptanceBlockedSteps.length
               ? `\n本轮仍未验证的条件：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：${step.actual}`).join("\n")}`
               : "";
-            const failureMessage = `韩立${runResult.mode === "page-experience" ? "页面验收" : "代码符合性审查"}未通过。\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
+            const failureMessage = `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}未通过。\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
             publishAcceptance("failed", failureMessage);
             if (scopeReview.decision !== "within-original-acceptance") {
               return this.#blockOneShotFailure("business", "review_acceptance_failure_scope", new Error(scopeReview.reason), failureMessage, {

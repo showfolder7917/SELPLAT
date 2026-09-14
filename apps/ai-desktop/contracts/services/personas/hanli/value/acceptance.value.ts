@@ -10,5 +10,22 @@ export type HanliAcceptanceOperationValue =
   | { type: "hover"; x: number; y: number; reason: string }
   | { type: "judgement"; criterionId: string };
 
-/** 韩立结果验收的两种互斥方式；任何方式都不创建隔离验收环境。 */
-export type HanliAcceptanceModeValue = "page-experience" | "code-conformance";
+/** 每条条件的证据来源；页面证据与只读代码证据不能相互替代。 */
+export type HanliAcceptanceEvidenceModeValue = "page-experience" | "code-conformance";
+
+/**
+ * 韩立结果验收的运行方式。mixed 只汇总逐条件的两类证据，任何方式都不创建隔离验收环境。
+ */
+export type HanliAcceptanceModeValue = HanliAcceptanceEvidenceModeValue | "mixed";
+
+/**
+ * 判定某条记录是否必须满足正式窗口截图与布局门禁。
+ * 旧页面归档没有逐条来源字段，继续按页面运行方式读取；mixed 必须显式声明来源。
+ */
+export function requiresPageAcceptanceEvidence(
+  mode: HanliAcceptanceModeValue,
+  evidenceMode: HanliAcceptanceEvidenceModeValue | undefined,
+): boolean {
+  return evidenceMode === "page-experience"
+    || (mode === "page-experience" && evidenceMode === undefined);
+}
