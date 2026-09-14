@@ -6,9 +6,11 @@ const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer
 
 interface AcceptanceScenePlanRejection {
   message: string;
+}
+
+interface AcceptanceSceneRetryContext {
+  rejectionMessage: string;
   requiredSceneKinds: AcceptanceSceneKind[];
-  submittedSceneKinds: string[];
-  submittedCriterionIds: string[];
 }
 
 interface AcceptanceSceneRequirement {
@@ -139,19 +141,11 @@ function assertRequiredSceneRequirements(segments: AcceptanceSceneSegmentOutDto[
   }
 }
 
-/** 只记录候选计划的结构摘要，供同一请求的纠正回合定位遗漏，不保留模型说明或页面数据。 */
-function summarizeRejectedPlan(error: unknown, input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanRejection {
-  const candidate = input as { segments?: unknown };
-  const segments = Array.isArray(candidate?.segments) ? candidate.segments as Array<{ kind?: unknown; conditions?: unknown }> : [];
+/** 重试时从当前权威目标重新派生必需场景，拒绝结果不携带或读取上一份候选计划。 */
+function createRetryContext(goal: HanliComputerAcceptanceInDto, rejectionMessage: string): AcceptanceSceneRetryContext {
   return {
-    message: error instanceof Error ? error.message : String(error),
+    rejectionMessage,
     requiredSceneKinds: sceneRequirementsFor(goal).flatMap((requirement) => requirement.acceptedKinds),
-    submittedSceneKinds: segments.flatMap((segment) => typeof segment?.kind === "string" ? [segment.kind] : []),
-    submittedCriterionIds: segments.flatMap((segment) => Array.isArray(segment?.conditions)
-      ? segment.conditions.flatMap((condition) => typeof (condition as { criterionId?: unknown })?.criterionId === "string"
-        ? [(condition as { criterionId: string }).criterionId]
-        : [])
-      : []),
   };
 }
 
@@ -161,7 +155,7 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
     requestId: string;
     goal: HanliComputerAcceptanceInDto;
     plan: AcceptanceScenePlanOutDto | null;
-    lastRejection: AcceptanceScenePlanRejection | null;
+    lastRejection: string | null;
   } | null = null;
   const tools: CodexDynamicToolsPort = {
     definitions: [{ type: "function", name: "hanli_submit_acceptance_scene",
@@ -182,12 +176,12 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
         active.lastRejection = null;
         return { success: true, contentItems: [{ type: "inputText", text: "场景计划已登记；实际就绪由准备器验证，页面结果由韩立验收。" }] };
       } catch (error) {
-        const rejection = summarizeRejectedPlan(error, input, active?.goal || ({} as HanliComputerAcceptanceInDto));
+        const rejection: AcceptanceScenePlanRejection = { message: error instanceof Error ? error.message : String(error) };
         const message = rejection.message;
         if (active && name === "hanli_submit_acceptance_scene" && input && typeof input === "object"
           && "requestId" in input && input.requestId === active.requestId && !active.plan) {
-          active.lastRejection = rejection;
-          // 只为当前请求记录结构化拒绝摘要，后续恢复可判断模型是否重复遗漏已签发夹具。
+          active.lastRejection = rejection.message;
+          // 审计只保留校验结果；第二回合会从当前目标重新派生需求，不复用候选计划。
           options.onRejectedPlan?.(rejection);
         }
         return { success: false, contentItems: [{ type: "inputText", text: message }] };
@@ -196,16 +190,16 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
   };
   return {
     tools,
-    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, previousRejection: AcceptanceScenePlanRejection | null) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
+    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, retryContext: AcceptanceSceneRetryContext | null) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
       if (active) throw new Error("韩立已有场景准备请求，不能并发覆盖。");
-      const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null, lastRejection: null as AcceptanceScenePlanRejection | null };
+      const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null, lastRejection: null as string | null };
       active = request;
       try {
         // 模型只输出说明文字属于可纠正的格式遗漏；原请求保持活动并限重试一次，避免把同一验收重新走完整修复发布链。
         await model(request.requestId, 1, null);
-        if (!request.plan) await model(request.requestId, 2, request.lastRejection);
+        if (!request.plan) await model(request.requestId, 2, request.lastRejection ? createRetryContext(goal, request.lastRejection) : null);
         if (!request.plan) {
-          if (request.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${request.lastRejection.message}`);
+          if (request.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${request.lastRejection}`);
           throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
         }
         return request.plan;
