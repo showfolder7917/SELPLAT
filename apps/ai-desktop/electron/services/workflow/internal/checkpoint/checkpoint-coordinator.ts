@@ -1,7 +1,9 @@
 import type { CollaborationStateOutDto, WorkflowExceptionRecordOutDto, SubmitCollaborationTaskInDto } from "../../../../../contracts/services/workflow/index.js";
 import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { WorkflowCheckpointAggregate, type WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
+import { isAcceptanceFailureOperation } from "../evolution/one-shot-failure-identity.js";
 import type { CheckpointHandoffService } from "./checkpoint-handoff.service.js";
+import { selectCurrentAcceptanceFailure } from "./checkpoint-failure-selection.js";
 
 export interface CheckpointCoordinatorOptions {
   /** 读取当前 Evolution 专题、提案和一次性运行快照。 */
@@ -92,7 +94,7 @@ export class CheckpointCoordinator {
     }
     let sourceMemberId = task?.executorMemberId || "nangong-wan";
     // 验收阶段卡点必须归回韩立而不是当前执行人。
-    if (event.payload.phase === "accepting" || isAcceptanceOperation(event.payload.operation)) {
+    if (event.payload.phase === "accepting" || isAcceptanceFailureOperation(event.payload.operation)) {
       // 保存韩立稳定人物标识。
       sourceMemberId = "han-li";
     }
@@ -160,7 +162,7 @@ export class CheckpointCoordinator {
     // 直接关联 taskId 的异常属于任务自身；只有真实应用验收或没有任务直连的验收阶段才归韩立复验。
     const directlyTargetsTask = Boolean(task && (event.correlationId === task.taskId || event.payload.taskId === task.taskId));
     // 韩立验收发生在开发任务集成之后；此时 integrated 只能说明代码已交付，不能说明真实界面复验通过。
-    const isAcceptanceCheckpoint = isAcceptanceOperation(event.payload.operation) || (state.sourcePhase === "accepting" && !directlyTargetsTask);
+    const isAcceptanceCheckpoint = isAcceptanceFailureOperation(event.payload.operation) || (state.sourcePhase === "accepting" && !directlyTargetsTask);
     // 一次性原流程明确 completed，才是验收卡点已经通过复验的权威事实。
     const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.proposalId === state.proposalId && run.status === "completed");
     // 非验收任务仍沿用原规则：任务完成集成即可确认对应执行卡点已经解除。
@@ -222,10 +224,7 @@ export class CheckpointCoordinator {
     }
     // 主卡点保存恢复关系；本轮故障事实必须取同一提案最新的真实验收结果。
     const failureEvent = isAcceptanceCheckpoint
-      ? relatedEvents.filter((item) => item.flowImpact === "blocked"
-        && item.payload.proposalId === state.proposalId
-        && isAcceptanceOperation(item.payload.operation))
-        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0] || event
+      ? selectCurrentAcceptanceFailure(event, relatedEvents, proposal.proposalId)
       : event;
     // 最新复验需要范围确认时，旧技术卡点不能绕过本轮业务确认门。
     if (failureEvent.category === "business-exception") {
@@ -406,18 +405,6 @@ function compareCheckpointPriority(left: WorkflowExceptionRecordOutDto, right: W
   }
   // 同一时间使用稳定事件标识消除排序不确定性。
   return left.eventId.localeCompare(right.eventId);
-}
-
-/** 判断异常是否来自韩立真实界面验收或验收失败范围处理。 */
-function isAcceptanceOperation(value: unknown): boolean {
-  // 只有字符串操作名可以参与稳定判断。
-  if (typeof value !== "string") return false;
-  // 工具受阻、范围内产品失败和范围不明确都必须回到同一韩立验收点。
-  return [
-    "run_real_application_acceptance",
-    "repair_failed_real_application_acceptance",
-    "review_acceptance_failure_scope",
-  ].includes(value);
 }
 
 /** 序列化修复任务事实时移除嵌套卡点快照，避免任务意图无限递归膨胀。 */

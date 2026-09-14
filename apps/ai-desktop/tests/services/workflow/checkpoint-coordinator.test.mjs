@@ -16,8 +16,38 @@ async function loadWorkflowSource(entryPoint) {
 }
 
 const { CheckpointCoordinator } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts");
+const { createOneShotFailureFingerprint } = await loadWorkflowSource("electron/services/workflow/internal/evolution/one-shot-failure-identity.ts");
+const { selectCurrentAcceptanceFailure } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-failure-selection.ts");
 const { CheckpointHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.ts");
 const { AcceptanceHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts");
+
+test("真实验收每轮使用独立故障身份，普通轮询仍保持稳定去重", () => {
+  const base = { runId: "run-1", proposalId: "proposal-1" };
+  const first = createOneShotFailureFingerprint({ ...base, operation: "run_real_application_acceptance", occurrenceId: "attempt-1" });
+  const second = createOneShotFailureFingerprint({ ...base, operation: "run_real_application_acceptance", occurrenceId: "attempt-2" });
+  assert.notEqual(first, second);
+  assert.throws(() => createOneShotFailureFingerprint({ ...base, operation: "run_real_application_acceptance" }), /缺少本轮发生身份/);
+  assert.equal(
+    createOneShotFailureFingerprint({ ...base, operation: "plan_and_dispatch_one_shot" }),
+    createOneShotFailureFingerprint({ ...base, operation: "plan_and_dispatch_one_shot" }),
+  );
+});
+
+test("旧主卡点只保存恢复关系，修复事实选择本轮最新验收失败", () => {
+  const oldPrimary = {
+    eventId: "old-json", occurredAt: "2026-09-14T01:00:00Z", flowImpact: "blocked", message: "旧 JSON 解析失败",
+    payload: { proposalId: "proposal-1", operation: "plan_and_dispatch_one_shot" },
+  };
+  const currentAcceptance = {
+    eventId: "current-acceptance", occurredAt: "2026-09-14T02:00:00Z", flowImpact: "blocked", message: "本轮验收条件编号不一致",
+    payload: { proposalId: "proposal-1", operation: "run_real_application_acceptance" },
+  };
+  const unrelated = {
+    eventId: "other-proposal", occurredAt: "2026-09-14T03:00:00Z", flowImpact: "blocked", message: "其他提案验收失败",
+    payload: { proposalId: "proposal-2", operation: "run_real_application_acceptance" },
+  };
+  assert.equal(selectCurrentAcceptanceFailure(oldPrimary, [oldPrimary, currentAcceptance, unrelated], "proposal-1"), currentAcceptance);
+});
 
 // 端口夹具只模拟已发生的任务状态，不调用真实服务、不修改生产运行。
 function fixture() {

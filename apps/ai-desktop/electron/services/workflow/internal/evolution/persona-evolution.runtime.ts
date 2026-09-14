@@ -30,6 +30,7 @@ import {
   type EvolutionStatePort,
 } from "../../../evolution/index.js";
 import { findCompletionReviewCheckpoint } from "../../../evolution/domain/completion-review-checkpoint.js";
+import { createOneShotFailureFingerprint } from "./one-shot-failure-identity.js";
 
 export interface PersonaEvolutionRuntimeOptions {
   /** Evolution 专题、研讨和提案的唯一状态端口。 */
@@ -570,7 +571,7 @@ export class PersonaEvolutionRuntime {
         const attemptId = randomUUID();
         const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
         publishAcceptance("received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
-        if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。");
+        if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。", {}, attemptId);
         try {
           const sceneState = this.#store.state();
           const sceneContext = {
@@ -617,7 +618,7 @@ export class PersonaEvolutionRuntime {
               evidenceAttachmentIds: runResult.evidenceAttachmentIds,
               acceptanceRunId: runResult.runId,
               acceptanceFailureKind: "acceptance-capability-blocked",
-            });
+            }, runResult.runId);
           }
           // 受阻的门禁记录没有覆盖原始条件，不能送入正式验收记录校验；其余最终记录必须先通过该校验。
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
@@ -639,7 +640,7 @@ export class PersonaEvolutionRuntime {
                 evidenceAttachmentIds: runResult.evidenceAttachmentIds,
                 acceptanceFailureScope: scopeReview,
                 acceptanceBlockedSteps,
-              });
+              }, runResult.runId);
             }
             // 范围内失败进入统一卡点入口，由令狐建立新的修复任务并在完成后回到韩立复验。
             return this.#blockOneShotFailure("technical", "repair_failed_real_application_acceptance", new Error(scopeReview.summary), failureMessage, {
@@ -648,12 +649,12 @@ export class PersonaEvolutionRuntime {
               acceptanceFailureScope: scopeReview,
               acceptanceBlockedSteps,
               acceptanceFailureKind: "product-defect",
-            });
+            }, runResult.runId);
           }
         } catch (error) {
           const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
           publishAcceptance("failed", reason);
-          return this.#blockOneShotFailure("technical", "run_real_application_acceptance", error, reason);
+          return this.#blockOneShotFailure("technical", "run_real_application_acceptance", error, reason, {}, attemptId);
         }
         continue;
       }
@@ -675,7 +676,7 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 被转换为可恢复暂停态的失败也必须进入统一异常中心，不能因 catch 而丢失。 */
-  #blockOneShotFailure(kind: "technical" | "business", operation: string, error: unknown, reason: string, details: Record<string, unknown> = {}): EvolutionStateOutDto {
+  #blockOneShotFailure(kind: "technical" | "business", operation: string, error: unknown, reason: string, details: Record<string, unknown> = {}, occurrenceId: string | null = null): EvolutionStateOutDto {
     const state = this.state();
     const run = state.oneShotRun;
     const topicId = run?.topicId || state.activeTopicId;
@@ -686,7 +687,7 @@ export class PersonaEvolutionRuntime {
       operation,
       error,
       correlationId: topicId || run?.runId || null,
-      fingerprint: `nangong-one-shot:${run?.runId || "unknown"}:${operation}:${run?.proposalId || "none"}`,
+      fingerprint: createOneShotFailureFingerprint({ runId: run?.runId || null, proposalId: run?.proposalId || null, operation, occurrenceId }),
       flowImpact: "blocked",
       details: { runId: run?.runId || null, topicId: topicId || null, proposalId: run?.proposalId || null, phase: run?.phase || null, recoveryPoint: run?.action || null, ...details },
     });

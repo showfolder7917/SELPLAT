@@ -2,7 +2,8 @@ import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
 import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
-import { assertSegmentAcceptanceRun, createSegmentGoal, mergeAcceptanceRuns } from "./hanli-acceptance-scene-results.js";
+import { createCompletionGateGoal, createSegmentGoal } from "./hanli-acceptance-scene-goals.js";
+import { assertSegmentAcceptanceRun, mergeAcceptanceRuns } from "./hanli-acceptance-scene-results.js";
 import { prepareAcceptanceSceneWindow } from "./acceptance-scene-window.js";
 
 interface AcceptanceSceneSessionOptions {
@@ -70,11 +71,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         continue;
       }
 
-      const gateRun = await options.execute({
-        ...currentGoal,
-        criteria: ["确认当前真实窗口已进入目标专题的韩立验收阶段，任务卡可读、尚未误示为已完成，且页面没有阻止完成收口的错误。"],
-        reviewMode: "pre-completion-gate",
-      }, prepared.window);
+      const gateRun = await options.execute(createCompletionGateGoal(currentGoal), prepared.window);
       const gate = {
         ...gateRun,
         stepResults: gateRun.stepResults.map((step) => ({ ...step, checkId: "pre-completion-gate" })),

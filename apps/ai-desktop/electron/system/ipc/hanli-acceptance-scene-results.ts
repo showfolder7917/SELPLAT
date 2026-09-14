@@ -1,22 +1,5 @@
 import type { AcceptanceSceneSegmentOutDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
 
-/** 按原条件编号取得阶段条件，模型不能用数组位置把一个场景的事实套到另一个条件。 */
-export function createSegmentGoal(goal: HanliComputerAcceptanceInDto, segment: AcceptanceSceneSegmentOutDto): HanliComputerAcceptanceInDto {
-  const criteria = segment.conditions.map(({ criterionId }) => {
-    const index = Number(criterionId.replace("criterion-", "")) - 1;
-    return goal.criteria[index];
-  });
-  const { workspaceAcceptanceFixture, ...segmentBase } = goal;
-  // 一次性夹具只能交给正式夹具段，避免前置当前窗口段提前登记并消耗本轮场景状态。
-  return {
-    ...segmentBase,
-    ...(segment.kind === "workspace-explorer-fixture" && workspaceAcceptanceFixture ? { workspaceAcceptanceFixture } : {}),
-    criteria,
-    criterionIds: segment.conditions.map(({ criterionId }) => criterionId),
-    preparedScene: segment,
-  };
-}
-
 /** 场景结果必须直接携带原提案编号；禁止在汇总时按位置猜测并重编号。 */
 export function assertSegmentAcceptanceRun(run: HanliAcceptanceRunOutDto, segment: AcceptanceSceneSegmentOutDto): HanliAcceptanceRunOutDto {
   const expectedIds = segment.conditions.map(({ criterionId }) => criterionId);

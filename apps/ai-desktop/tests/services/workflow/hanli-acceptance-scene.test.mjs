@@ -13,7 +13,8 @@ async function bundledSourceModule(file) {
 }
 const { validateAcceptanceScenePlan, createAcceptanceSceneSubmission } = await sourceModule("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-scene.ts");
 const { inspectAcceptanceRunEvidence } = await sourceModule("electron/services/personas/hanli/domain/acceptance-run-evidence.policy.ts");
-const { assertSegmentAcceptanceRun, createSegmentGoal, mergeAcceptanceRuns } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
+const { createCompletionGateGoal, createSegmentGoal } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-goals.ts");
+const { assertSegmentAcceptanceRun, mergeAcceptanceRuns } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
 const { AcceptanceEmptyTaskGroupSession } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
 const { runHanliAcceptanceSceneSession } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-session.ts");
@@ -140,6 +141,14 @@ test("分段目标直接携带原条件编号并拒绝按局部位置重编号",
   assert.deepEqual(merged.criteria, goal.criteria);
   assert.deepEqual(merged.evidenceAttachmentIds, ["shot-1", "shot-2"]);
   assert.deepEqual(merged.stepResults.map((item) => item.operationIndex), [0, 1]);
+});
+
+test("完成前内部检查不继承多项客户条件编号", () => {
+  const segmentGoal = createSegmentGoal(currentWindowGoal, { ...segment, kind: "current-window", completionReviewRequired: true });
+  const gateGoal = createCompletionGateGoal(segmentGoal);
+  assert.equal(gateGoal.criteria.length, 1);
+  assert.deepEqual(gateGoal.criterionIds, ["criterion-1"]);
+  assert.equal(gateGoal.reviewMode, "pre-completion-gate");
 });
 
 test("一次性工作区夹具只投影给正式夹具场景", () => {
@@ -353,12 +362,17 @@ test("完成前门禁受阻时只返回能力阻塞，不提交局部记录作�
   const result = await runHanliAcceptanceSceneSession({
     goal: currentWindowGoal, plan: completionPlan, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
     sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) }, createWindow: () => assert.fail("当前窗口不应创建子窗口"),
-    execute: async (currentGoal) => ({
-      version: 2, runId: "blocked-gate", topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "failed", windowTitle: "AI Desktop",
-      initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
-      stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "failed", actual: "门禁窗口无法继续复核", layoutStatus: "failed", layoutActual: "门禁窗口布局无法继续确认", layoutScreenshotAttachmentId: "gate-shot", screenshotAttachmentId: "gate-shot", occurredAt: "2026-09-13T00:00:00.000Z" }],
-      evidenceAttachmentIds: ["gate-shot"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
-    }),
+    execute: async (currentGoal) => {
+      // 生产故障发生在同一完成态场景承载多项客户条件时；内部门禁必须先形成自洽的一项目标。
+      assert.equal(currentGoal.criteria.length, 1);
+      assert.deepEqual(currentGoal.criterionIds, ["criterion-1"]);
+      return {
+        version: 2, runId: "blocked-gate", topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "failed", windowTitle: "AI Desktop",
+        initialBounds: { x: 0, y: 0, width: 100, height: 100 }, finalBounds: { x: 0, y: 0, width: 100, height: 100 },
+        stepResults: [{ checkId: "criterion-1", operationIndex: 0, operation: { type: "judgement", criterionId: "criterion-1" }, status: "failed", actual: "门禁窗口无法继续复核", layoutStatus: "failed", layoutActual: "门禁窗口布局无法继续确认", layoutScreenshotAttachmentId: "gate-shot", screenshotAttachmentId: "gate-shot", occurredAt: "2026-09-13T00:00:00.000Z" }],
+        evidenceAttachmentIds: ["gate-shot"], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
+      };
+    },
     onSceneReady() {}, onCompletionReviewReady: () => assert.fail("受阻门禁不能进入完成态复核"), record() {},
   });
   assert.equal(result.status, "blocked");
