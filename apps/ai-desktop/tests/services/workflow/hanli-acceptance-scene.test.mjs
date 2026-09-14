@@ -60,6 +60,14 @@ const segment = { kind: "empty-task-group", reason: "两个条件需要零任务
 ] };
 const plan = { reason: "使用隔离空任务场景", segments: [segment] };
 
+async function registerPlan(submission, requestId, candidate) {
+  for (const item of candidate.segments) {
+    const registered = await submission.tools.call("hanli_register_acceptance_scene_segment", { ...item, requestId });
+    if (!registered.success) return registered;
+  }
+  return submission.tools.call("hanli_finalize_acceptance_scene", { requestId, reason: candidate.reason });
+}
+
 test("跨任务人物占用夹具从韩立契约桶导出", () => {
   assert.match(hanliContractBarrel, /CrossTaskMemberOccupancyFixtureContextOutDto/);
 });
@@ -621,16 +629,19 @@ test("渲染器无响应时准备超时仍关闭临时窗口", async (t) => {
 
 test("说明文字不污染场景结果，只接受本轮工具提交并在结束后关闭", async () => {
   const submission = createAcceptanceSceneSubmission();
+  assert.equal(submission.tools.definitions.some((definition) => definition.name === "hanli_submit_acceptance_scene"), false);
+  assert.equal(submission.tools.definitions.some((definition) => definition.name === "hanli_register_acceptance_scene_segment"), true);
+  assert.equal(submission.tools.definitions.some((definition) => definition.name === "hanli_finalize_acceptance_scene"), true);
   let lastId;
   const result = await submission.run(goal, async (requestId) => {
     lastId = requestId;
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId: "old" })).success, false);
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, false);
+    assert.equal((await registerPlan(submission, "old", plan)).success, false);
+    assert.equal((await registerPlan(submission, requestId, plan)).success, true);
+    assert.equal((await registerPlan(submission, requestId, plan)).success, false);
     return "我会先核对工程协议。这里有普通说明文字。";
   });
   assert.deepEqual(result, plan);
-  assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId: lastId })).success, false);
+  assert.equal((await registerPlan(submission, lastId, plan)).success, false);
 });
 test("缺少工具提交和模型异常均释放请求，不解析文字JSON或沿用上轮结果", async () => {
   const submission = createAcceptanceSceneSubmission();
@@ -642,7 +653,7 @@ test("缺少工具提交和模型异常均释放请求，不解析文字JSON或�
   assert.equal(missingSubmissionAttempts, 2);
   await assert.rejects(submission.run(goal, async () => { throw new Error("disconnect"); }), /disconnect/);
   await submission.run(goal, async (requestId) => {
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
+    assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
 });
 
@@ -651,7 +662,7 @@ test("韩立首次只回复说明文字时在原请求内纠正一次并接受�
   const attempts = [];
   const result = await submission.run(goal, async (requestId, attempt) => {
     attempts.push(attempt);
-    if (attempt === 2) assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
+    if (attempt === 2) assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(attempts, [1, 2]);
   assert.deepEqual(result, plan);
@@ -682,13 +693,13 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
         { criterionId: "criterion-2", text: goal.criteria[1] },
       ]);
       assert.deepEqual(planningContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
-      assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...splitFixturePlan, requestId })).success, false);
+      assert.equal((await registerPlan(submission, requestId, splitFixturePlan)).success, false);
       return;
     }
     assert.match(planningContext.rejectionMessage, /一次性工作区夹具只能使用一个验收阶段/);
     assert.deepEqual(planningContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
     assert.equal("submittedSceneKinds" in planningContext, false);
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...mergedFixturePlan, requestId })).success, true);
+    assert.equal((await registerPlan(submission, requestId, mergedFixturePlan)).success, true);
   });
   assert.deepEqual(result, mergedFixturePlan);
 });
@@ -698,29 +709,33 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
   const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
   const omittedCriterionPlan = { ...plan, segments: [{ ...segment, conditions: [segment.conditions[0]] }] };
   let firstPlanningContext;
+  let firstRequestId;
   const result = await submission.run(goal, async (requestId, attempt, planningContext) => {
     if (attempt === 1) {
+      firstRequestId = requestId;
       firstPlanningContext = planningContext;
       assert.deepEqual(planningContext.criteria, [
         { criterionId: "criterion-1", text: goal.criteria[0] },
         { criterionId: "criterion-2", text: goal.criteria[1] },
       ]);
-      assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedCriterionPlan, requestId })).success, false);
+      const registered = await submission.tools.call("hanli_register_acceptance_scene_segment", { ...omittedCriterionPlan.segments[0], requestId });
+      assert.equal(registered.success, true);
+      assert.match(registered.contentItems[0].text, /criterion-2/);
+      assert.equal((await submission.tools.call("hanli_finalize_acceptance_scene", { requestId, reason: omittedCriterionPlan.reason })).success, false);
       return;
     }
     assert.notEqual(planningContext, firstPlanningContext);
+    assert.notEqual(requestId, firstRequestId);
     assert.equal(planningContext.rejectionMessage, "韩立验收场景计划未逐项覆盖原验收条件。");
     assert.deepEqual(planningContext.criteria, [
       { criterionId: "criterion-1", text: goal.criteria[0] },
       { criterionId: "criterion-2", text: goal.criteria[1] },
     ]);
     assert.equal("submittedSceneKinds" in planningContext, false);
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
+    assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
-  assert.deepEqual(rejections, [{
-    message: "韩立验收场景计划未逐项覆盖原验收条件。",
-  }]);
+  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件。", missingCriterionIds: ["criterion-2"], duplicateCriterionIds: undefined, unknownCriterionIds: undefined }]);
 });
 
 test("协作状态夹具的两种允许阶段由同一需求规则校验和纠正", async () => {
@@ -729,12 +744,12 @@ test("协作状态夹具的两种允许阶段由同一需求规则校验和纠�
   const correctedPlan = { ...plan, segments: [{ ...segment, kind: "collaboration-state-unavailable", reason: "核对读取失败后的明确状态" }] };
   const result = await submission.run(collaborationStateProjectionGoal, async (requestId, attempt, planningContext) => {
     if (attempt === 1) {
-      assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedFixturePlan, requestId })).success, false);
+      assert.equal((await registerPlan(submission, requestId, omittedFixturePlan)).success, false);
       return;
     }
     assert.equal(planningContext.rejectionMessage, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
     assert.deepEqual(planningContext.requiredSceneKinds, ["collaboration-state-syncing", "collaboration-state-unavailable"]);
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...correctedPlan, requestId })).success, true);
+    assert.equal((await registerPlan(submission, requestId, correctedPlan)).success, true);
   });
   assert.deepEqual(result, correctedPlan);
 });
@@ -743,13 +758,12 @@ test("两次工具参数均被拒绝时报告最后一次真实校验原因", as
   const submission = createAcceptanceSceneSubmission();
   await assert.rejects(
     submission.run(workspaceFixtureGoal, async (requestId) => {
-      await submission.tools.call("hanli_submit_acceptance_scene", {
+      await registerPlan(submission, requestId, {
         ...plan,
         segments: [
           { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
           { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[1]] },
         ],
-        requestId,
       });
     }),
     /两次提交的场景计划均未通过校验：一次性工作区夹具只能使用一个验收阶段/,
