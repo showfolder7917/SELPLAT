@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
 import { resolveApplicationName, resolveAppVariant, resolveProjectRoot } from "../config/app-config.js";
@@ -35,7 +35,10 @@ export function createStartupContext(): StartupContext {
 
   const configuredProjectRoot = resolveProjectRoot();
   const projectPaths = resolveApplicationDataPaths({ selplatRoot: configuredProjectRoot, applicationName });
-  const workspaces = new WorkspaceFacade(path.join(app.getPath("userData"), "workspace-profiles.json"), configuredProjectRoot);
+  const workspaces = new WorkspaceFacade(path.join(app.getPath("userData"), "workspace-profiles.json"), configuredProjectRoot, async (filePath) => {
+    const error = await shell.openPath(filePath);
+    if (error) throw new Error("system-open-failed");
+  });
   const workspaceState = workspaces.read();
   const selectedWorkspace = workspaceState.roots.find((root) => root.id === workspaceState.primaryId);
   if (!selectedWorkspace || !path.isAbsolute(selectedWorkspace.path)

@@ -36,7 +36,26 @@ export interface WorkspaceDirectoryOutDto {
 
 /** 应用内只读文本预览；内容已由主进程完成大小、编码和根边界校验。 */
 export interface WorkspaceFilePreviewOutDto {
+  kind: "preview";
   workspaceId: string;
   relativePath: string;
   content: string;
+}
+
+/** 已交给操作系统默认应用的工作区文件；Renderer 不会得到真实磁盘路径。 */
+export interface WorkspaceSystemFileOpenedOutDto {
+  kind: "system-opened";
+  workspaceId: string;
+  relativePath: string;
+}
+
+/** 工作区唯一文件打开入口的结果：文本在应用内预览，演示文稿交给系统打开。 */
+export type WorkspaceFileOpenOutDto = WorkspaceFilePreviewOutDto | WorkspaceSystemFileOpenedOutDto;
+
+/** 系统默认应用无法打开文件时的受控结果；信息已经剔除真实路径和系统错误细节。 */
+export interface WorkspaceSystemFileOpenFailedOutDto {
+  kind: "system-open-failed";
+  workspaceId: string;
+  relativePath: string;
+  message: string;
 }
