@@ -1415,10 +1415,11 @@ test("已通过的持久化计划在分发前重验当前用户规则目录", as
     const validPlan = JSON.stringify({ summary: "重新规划后移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "在分发前重新核验持久化计划的规则 ID", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "规则目录在任务快照前必须保持一致" }] });
     let attempts = 0;
     let submitted = 0;
+    const events = [];
     const facade = new PersonaEvolutionRuntime({
       store,
       conversation,
-      recordEvent: () => undefined,
+      recordEvent(type, details) { events.push({ type, details }); },
       isCurrentUserTaskRuleId: () => false,
       collaboration: {
         submitTask(request) {
@@ -1440,6 +1441,13 @@ test("已通过的持久化计划在分发前重验当前用户规则目录", as
     assert.equal(submitted, 1);
     assert.deepEqual(state.proposals[0].distributionPlan.units[0].taskRuleIds, []);
     assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
+    assert.deepEqual(events.find((event) => event.type === "nangong.distribution_validation.completed"), {
+      type: "nangong.distribution_validation.completed",
+      details: {
+        proposalId, attempt: 0, decision: "revise", reason: "程序发现任务之间存在确定性冲突。",
+        findings: ["任务“校验专项规则目录”声明了当前用户未登记的专项规则：CODE_JS_RULES"],
+      },
+    });
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
