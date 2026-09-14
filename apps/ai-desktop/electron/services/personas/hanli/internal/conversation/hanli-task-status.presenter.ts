@@ -4,7 +4,7 @@ import type { EvolutionStateOutDto } from "../../../../../../contracts/services/
 const VISIBLE_EVENTS = new Set<CollaborationFlowEventOutDto["type"]>([
   "task.scope_revised", "executor.assigned", "executor.reassigned", "technical_analysis.ready",
   "execution.started", "task.blocked", "execution.repair_started", "execution.repair_investigated",
-  "execution.repair_completed", "execution.repair_waiting", "integration.merge_conflict",
+  "execution.repair_completed", "execution.repair_waiting", "integration.local_change_ownership_wait_restored", "integration.merge_conflict",
   "integration.infrastructure_failed", "unified_test.started", "unified_test.failed",
   "unified_test.repair_started", "unified_test.repair_investigated", "unified_test.repair_completed",
   "unified_test.repair_failed", "unified_test.passed", "release.restart_healthy", "task.cancelled",
@@ -79,6 +79,7 @@ function currentStatus(event: CollaborationFlowEventOutDto): string {
     case "execution.repair_started": case "unified_test.repair_started": return "令狐正在调查本轮失败。";
     case "execution.repair_investigated": case "unified_test.repair_investigated": return "令狐已经查到原因，正在修复。";
     case "execution.repair_completed": case "unified_test.repair_completed": return "令狐已完成修复，正在重新验证。";
+    case "integration.local_change_ownership_wait_restored": return "已保留未登记本地修改证据，等待你确认文件归属。";
     case "task.cancelled": return "任务已经停止。";
     default: return event.summary;
   }
