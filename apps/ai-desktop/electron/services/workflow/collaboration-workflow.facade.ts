@@ -255,6 +255,8 @@ export class CollaborationCoordinator {
     const integrationFailure = failedTask.integrationFailure;
     const repairableFailure = integrationFailure?.kind === "verification"
       || integrationFailure?.kind === "infrastructure";
+    // 容量与归属等客户前置条件只能等待确认，任何直接调用也不得绕过自动恢复的等待边界。
+    if (failedTask.repairRequiresUserConfirmation) return false;
     if (!repairableFailure || !["test-failed", "blocked"].includes(failedTask.state)) return false;
     const originalFailureKind = integrationFailure.kind;
     const repairStartedEvent = "unified_test.repair_started";

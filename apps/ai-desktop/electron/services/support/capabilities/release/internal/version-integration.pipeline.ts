@@ -312,10 +312,12 @@ export class VersionIntegrationPipeline {
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
       const mergeConflict = error instanceof MergeConflictError;
       const candidateBranchConflict = error instanceof CandidateBranchConflictError;
-      const infrastructureFailure = LinghuAutomationFacade.isUnifiedTestInfrastructureError(error) || error instanceof StablePublishedApplicationCollisionError;
+      const capacityBlocked = LinghuAutomationFacade.isUnifiedTestCapacityBlockedError(error);
+      const capacityFailure = capacityBlocked ? error as { capacity: { fileBytes: number; directoryBytes: number; headroomBytes: number; requiredBytes: number; availableBytes: number } } : null;
+      const infrastructureFailure = capacityBlocked || LinghuAutomationFacade.isUnifiedTestInfrastructureError(error) || error instanceof StablePublishedApplicationCollisionError;
       const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
       const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
-      const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error));
+      const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error), capacityFailure);
       // 本地修改归属异常同样必须保留具体文件，不能在进入令狐调查前把证据清空。
       const conflictFiles = ownershipBlocked ? error.conflictFiles : mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
@@ -334,18 +336,21 @@ export class VersionIntegrationPipeline {
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           task.state = ownershipBlocked || mergeConflict || candidateBranchConflict || infrastructureFailure ? "blocked" : "test-failed";
           task.phase = null;
+          // 容量不足需要保留策略授权；此标记使自动恢复生成操作指导而不会再次签发源码修复。
+          task.repairRequiresUserConfirmation = capacityBlocked;
           task.blockingReason = failurePresentation.summary;
           task.recoveryTargetState = "ready-for-integration";
           task.integrationFailure = {
             kind: failureKind, phase: failurePhase, summary: failurePresentation.summary,
             impact: failurePresentation.impact, recoveryAction: failurePresentation.recoveryAction,
+            capacity: capacityFailure?.capacity || null,
             detail: errorMessage(error), workspaceRoot: ownershipBlocked ? error.workspaceRoot : null, conflictFiles,
             baseSha: mergeConflict ? error.baseSha : task.versionWorkspace?.baseSha || null,
             resultSha: mergeConflict ? error.resultSha : task.versionWorkspace?.resultSha || null,
             generation, occurredAt: new Date().toISOString(),
           };
           task.currentHandler = participantSnapshot(currentActor);
-          if (failurePhase === "verification") task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          if (failurePhase === "verification" || capacityBlocked) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
           appendFlow(
             task,
             ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict ? "integration.candidate_preparation_failed" : infrastructureFailure ? "integration.infrastructure_failed" : "unified_test.failed",
@@ -393,7 +398,12 @@ export class VersionIntegrationPipeline {
   }
 }
 
-function integrationFailurePresentation(kind: CollaborationIntegrationFailureKindValue, generation: number, detail: string): {
+function integrationFailurePresentation(
+  kind: CollaborationIntegrationFailureKindValue,
+  generation: number,
+  detail: string,
+  capacityBlocked: { capacity: { requiredBytes: number; availableBytes: number } } | null = null,
+): {
   summary: string;
   impact: string;
   recoveryAction: string;
@@ -413,6 +423,14 @@ function integrationFailurePresentation(kind: CollaborationIntegrationFailureKin
     impact: "候选版本未完成组装，统一测试尚未开始。",
     recoveryAction: "依据冲突文件和固定提交证据修正任务分支，然后重新生成候选版本。",
   };
+  if (capacityBlocked) {
+    const shortfallBytes = capacityBlocked.capacity.requiredBytes - capacityBlocked.capacity.availableBytes;
+    return {
+      summary: "开发包容量不足，等待保留策略授权",
+      impact: `容量预检在构建前停止；候选源码和打包输入均未继续写入。当前还缺少 ${shortfallBytes} 字节可用空间。`,
+      recoveryAction: "请由具有发布物、缓存和工作树保留策略权限的人员处理已确认可释放的空间后，复用当前结果提交重新执行统一测试；禁止自动删除、降低预检值或派回源码修复。",
+    };
+  }
   if (kind === "infrastructure") return {
     summary: "统一测试基础设施故障，候选源码无需重复修复",
     impact: "统一测试脚本已经执行，但宿主控制器无法从用户所选工作区读取或提升发布产物；当前候选版本不能发布。",

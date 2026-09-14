@@ -42,6 +42,8 @@ export interface NangongTaskDistributionServiceOptions {
   mutations: EvolutionMutationPort;
   collaboration: CollaborationWorkflowFacade;
   plan(prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEventOutDto) => void): Promise<string>;
+  /** 规则目录由组合根提供；分发计划不得自行猜测 core 或其他用户规则。 */
+  isCurrentUserTaskRuleId(logicalId: string): boolean;
   prompts: PromptLibraryPort;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   timeline?: (event: CollaborationTimelineBusinessEventOutDto) => void;
@@ -126,7 +128,7 @@ export class NangongTaskDistributionService {
           throw error;
         }
         this.#publishPlanning(proposal, topic, attempt, "completed", "执行计划生成完成", planned.summary, planningStartedAt);
-        const hardFindings = distributionHardFindings(planned.units);
+        const hardFindings = distributionHardFindings(planned.units, this.options.isCurrentUserTaskRuleId);
         const validation = validateDistributionPlan(planned, hardFindings);
         const plan: EvolutionDistributionPlanOutDto = { version: 1, summary: planned.summary, units: planned.units, validation, plannedAt: new Date().toISOString() };
         state = this.options.store.saveDistributionPlan(proposalId, plan);
@@ -306,8 +308,12 @@ function extractBalancedJsonObjects(text: string): { candidates: string[]; hasUn
   return { candidates: [...new Set(candidates)], hasUnclosedObject };
 }
 
-function distributionHardFindings(units: EvolutionDistributionUnitOutDto[]): string[] {
+function distributionHardFindings(units: EvolutionDistributionUnitOutDto[], isCurrentUserTaskRuleId: (logicalId: string) => boolean): string[] {
   const findings: string[] = [];
+  for (const unit of units) {
+    const unknownRuleIds = [...new Set(unit.taskRuleIds || [])].filter((logicalId) => !isCurrentUserTaskRuleId(logicalId));
+    if (unknownRuleIds.length) findings.push(`任务“${unit.title}”声明了当前用户未登记的专项规则：${unknownRuleIds.join("、")}`);
+  }
   for (let index = 0; index < units.length; index += 1) for (let other = index + 1; other < units.length; other += 1) {
     const overlap = units[index].expectedFiles.filter((file) => units[other].expectedFiles.includes(file));
     if (overlap.length) findings.push(`文件同时属于任务“${units[index].title}”与“${units[other].title}”：${overlap.join("、")}`);
