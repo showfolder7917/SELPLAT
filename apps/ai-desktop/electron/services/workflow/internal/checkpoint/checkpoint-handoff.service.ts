@@ -3,6 +3,7 @@ import type { CollaborationMemoryPort } from "../../../../../contracts/services/
 import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
 // 卡点交接只接收领域聚合输出的稳定快照，不维护第二套内部状态接口。
 import type { WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
+import { checkpointResolutionIdentity, type CheckpointResolvedRoundEvent } from "./checkpoint-resolution-identity.js";
 
 export interface CheckpointHandoffOptions {
   memory: CollaborationMemoryPort | null;
@@ -16,9 +17,39 @@ export interface CheckpointHandoffOptions {
 export class CheckpointHandoffService {
   constructor(private readonly options: CheckpointHandoffOptions) {}
 
-  publish(event: WorkflowExceptionRecordOutDto, checkpoint: WorkflowCheckpointState, phase: string, content: string): void {
+  publish(
+    event: WorkflowExceptionRecordOutDto,
+    checkpoint: WorkflowCheckpointState,
+    phase: string,
+    content: string,
+    resolvedRoundEvents: readonly CheckpointResolvedRoundEvent[] = [],
+  ): void {
+    if (phase === "resolved") {
+      this.#publishResolvedRound(event, checkpoint, content, resolvedRoundEvents);
+      return;
+    }
+    this.#publish(event, checkpoint, phase, content);
+  }
+
+  /** 同一原任务和恢复轮次只发布一个解除完成事实，其他异常仅贡献审计详情。 */
+  #publishResolvedRound(
+    event: WorkflowExceptionRecordOutDto,
+    checkpoint: WorkflowCheckpointState,
+    content: string,
+    resolvedRoundEvents: readonly CheckpointResolvedRoundEvent[],
+  ): void {
+    this.#publish(event, checkpoint, "resolved", content, checkpointResolutionIdentity(event, checkpoint), resolvedRoundEvents);
+  }
+
+  #publish(
+    event: WorkflowExceptionRecordOutDto,
+    checkpoint: WorkflowCheckpointState,
+    phase: string,
+    content: string,
+    id = `checkpoint:${event.eventId}:${checkpoint.round}:${phase}`,
+    resolvedRoundEvents: readonly CheckpointResolvedRoundEvent[] = [],
+  ): void {
     const now = new Date().toISOString();
-    const id = `checkpoint:${event.eventId}:${checkpoint.round}:${phase}`;
     const source = checkpoint.sourceMemberId;
     const actorId = phase === "reported" ? source : phase === "resolved" ? source : "linghu-ancestor";
     // 卡点只在原处理人与令狐之间闭环；南宫婉不是固定中转站。
@@ -44,6 +75,8 @@ export class CheckpointHandoffService {
       checkpoint.repairResult ? `修复结果：${checkpoint.repairResult}` : "",
       checkpoint.testResult ? `测试结果：${checkpoint.testResult}` : "",
       `当前进展：${content}`,
+      // 同轮异常仍逐条关闭；唯一完成节点的详情保留全部原始标识与问题，供审计和复查使用。
+      ...resolutionHistory(resolvedRoundEvents),
       "",
       `原始事件：${event.eventId}`,
       `原专题：${checkpoint.topicId || "未关联"}`,
@@ -65,4 +98,22 @@ export class CheckpointHandoffService {
       this.options.changed(conversation);
     }
   }
+}
+
+/** 把同轮已解除异常压缩到规范完成事实的详情，避免以页面文案猜测是否重复。 */
+function resolutionHistory(events: readonly CheckpointResolvedRoundEvent[]): string[] {
+  // 只有解除阶段传入同轮事实；其他阶段继续保留原有的单异常详情。
+  if (!events.length) return [];
+  // 事件标识和原始问题都是审计字段，排序由 Coordinator 固定，重放时详情保持稳定。
+  return [
+    "同轮已解除异常：",
+    ...events.flatMap(({ event, checkpoint }) => [
+      `- ${event.eventId}：${event.message}`,
+      `  发生位置：${checkpoint.sourcePhase || "未知节点"}`,
+      checkpoint.investigation ? `  调查结论：${checkpoint.investigation}` : "",
+      checkpoint.repairResult ? `  修复结果：${checkpoint.repairResult}` : "",
+      checkpoint.testResult ? `  测试结果：${checkpoint.testResult}` : "",
+      checkpoint.latestProgress ? `  最后进展：${checkpoint.latestProgress}` : "",
+    ].filter(Boolean)),
+  ];
 }
