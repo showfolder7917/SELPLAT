@@ -29,7 +29,7 @@ test("人物会话使用页面专属高度约束，不修改共享 SELUI 会话�
   assert.match(hanli, /className="hanli-conversation-workspace"/);
   assert.match(styles, /\.hanli-conversation-workspace \{ position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; \}/);
   assert.match(styles, /\.hanli-conversation-workspace > \.selconversation-root \{ position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; \}/);
-  assert.match(styles, /\.hanli-person-chat, \.nangong-person-chat \{ flex: 1 1 0; min-height: 0; \}/);
+  assert.match(styles, /\.hanli-person-chat, \.nangong-person-chat \{ flex: 1 1 0; min-height: 0; margin-bottom: var\(--selconversation-composer-reserve, 160px\); padding-bottom: 24px; \}/);
   assert.match(sharedStyles, /\.selconversation-root \{ position: relative; min-width: 0; min-height: 0; display: contents; \}/);
   assert.match(sharedStyles, /\.selconversation-timeline \{ min-height: 0; overflow-x: hidden; overflow-y: auto;/);
 });
@@ -41,6 +41,12 @@ test("输入框和消息高度变化后动态留白并仅在尾部继续跟随",
   assert.match(shell, /selConversation:geometry/);
   assert.match(hook, /addEventListener\("selConversation:geometry", followGeometryChange\)/);
   assert.match(hook, /if \(!followsTailRef\.current\) return/);
+});
+
+test("人物时间线把固定输入区的真实高度让出可视滚动范围", () => {
+  assert.match(styles, /固定输入区不参与 flex 流；人物时间线必须让出其真实高度/);
+  assert.match(styles, /margin-bottom: var\(--selconversation-composer-reserve, 160px\)/);
+  assert.match(styles, /padding-bottom: 24px/);
 });
 
 test("韩立核实消息生命周期保留在会话内，不覆盖协作人物当前状态", () => {

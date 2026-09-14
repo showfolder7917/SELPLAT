@@ -654,6 +654,20 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("1");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(hanliComposer.getByRole("button", { name: "发送给韩立" })).toBeVisible();
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  const hanliTimelineGeometry = await hanliConversation.evaluate((timeline) => {
+    const composer = document.querySelector<HTMLElement>(".hanli-person-composer");
+    const lastMessage = timeline.querySelector<HTMLElement>(".selconversation-message:last-of-type");
+    if (!composer || !lastMessage) throw new Error("韩立会话缺少输入区或消息卡。");
+    timeline.scrollTo({ top: timeline.scrollHeight });
+    const timelineBounds = timeline.getBoundingClientRect();
+    const composerBounds = composer.getBoundingClientRect();
+    const lastMessageBounds = lastMessage.getBoundingClientRect();
+    return { timelineBottom: timelineBounds.bottom, composerTop: composerBounds.top, lastMessageBottom: lastMessageBounds.bottom };
+  });
+  expect(hanliTimelineGeometry.timelineBottom, "韩立消息时间线的可视范围必须止于固定输入区上方").toBeLessThanOrEqual(hanliTimelineGeometry.composerTop);
+  expect(hanliTimelineGeometry.lastMessageBottom, "滚动到末尾后最后一条韩立消息必须完整位于时间线可视范围内").toBeLessThanOrEqual(hanliTimelineGeometry.timelineBottom);
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
   await expect(hanliConversation.getByText("韩立 · 内部研讨", { exact: true })).toHaveCount(0);
   await expect(hanliConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toHaveCount(0);
   await expect(hanliConversation.getByText("当前需求最关键的验收边界是什么？", { exact: true })).toHaveCount(0);
