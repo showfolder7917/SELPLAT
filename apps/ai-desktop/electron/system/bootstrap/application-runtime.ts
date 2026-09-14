@@ -705,9 +705,69 @@ export async function startApplication(): Promise<void> {
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request) => startHanliInternalDeliberation(request),
-    reviseActiveRepairScope: (request) => {
-      if (!collaboration) throw new Error("协作流程尚未就绪，不能更新当前修复范围。");
-      return collaboration.reviseActiveRepairScope(request);
+    reviseActiveRepairScope: async (request) => {
+      if (!collaboration || !personaEvolution) throw new Error("协作流程尚未就绪，不能更新当前修复范围。");
+      const collaborationState = collaboration.state();
+      const activeTask = [...collaborationState.tasks].reverse().find((candidate) =>
+        candidate.automationSource === "linghu-safeguard"
+        && candidate.evolutionProposalId === request.proposalId
+        && candidate.state !== "cancelled");
+      if (!activeTask) {
+        return { updated: false, taskId: null, taskRevision: null, message: "当前没有可更新的令狐修复任务。" };
+      }
+
+      // 客户修订必须先进入 Evolution 的不可变提案版本链。协作任务只绑定
+      // 当前版本，避免聊天纠正和正式验收各自维护一套范围事实。
+      let evolution = evolutionStateStore.state();
+      let proposal = evolution.proposals.find((candidate) => candidate.proposalId === request.proposalId);
+      if (!proposal) throw new Error("当前修复任务关联的演化提案不存在。");
+      if (proposal.status === "pending-acceptance") {
+        evolution = hanliRuntime.facade.decideResult(proposal.proposalId, {
+          mutation: {
+            expectedStateVersion: evolution.updatedAt,
+            idempotencyKey: `customer-scope-result:${request.runId}:${proposal.proposalId}:${createHash("sha256").update(request.instruction).digest("hex")}`,
+          },
+          decision: "supplement-required",
+          advice: request.instruction,
+        });
+        proposal = evolution.proposals.find((candidate) => candidate.proposalId === request.proposalId)!;
+      }
+      if (proposal.status !== "supplement-required") {
+        throw new Error(`当前提案状态 ${proposal.status} 不能安全修订验收范围。`);
+      }
+
+      const revisionHash = createHash("sha256").update(request.instruction).digest("hex");
+      evolution = personaEvolution.nangongRuntime.facade.reviseProposal(proposal.proposalId, {
+        mutation: {
+          expectedStateVersion: evolution.updatedAt,
+          idempotencyKey: `customer-scope-revise:${request.runId}:${proposal.proposalId}:${revisionHash}`,
+        },
+        submitterMemberId: proposal.submitterMemberId,
+        content: request.confirmedIntent,
+        evidence: [...new Set([...proposal.evidence, `客户明确修订范围：${request.instruction}`])],
+        impactScope: [...new Set([...proposal.impactScope, "当前验收范围与后续返修读取"])],
+        exclusions: [...proposal.exclusions],
+        risks: [...new Set([...proposal.risks, "旧验收条件不得重新进入后续返修"])],
+        rollbackPlan: proposal.rollbackPlan,
+        acceptanceCriteria: request.acceptanceCriteria,
+      });
+      const currentProposal = evolution.proposals.find((candidate) => candidate.supersedesProposalId === proposal.proposalId);
+      if (!currentProposal) throw new Error("客户范围修订未生成新的权威提案版本。");
+      evolution = hanliRuntime.facade.decideProposal(currentProposal.proposalId, {
+        mutation: {
+          expectedStateVersion: evolution.updatedAt,
+          idempotencyKey: `customer-scope-approve:${request.runId}:${currentProposal.proposalId}`,
+        },
+        decision: "approved",
+        advice: "客户已明确修订当前范围；自动托管按该范围继续原任务。",
+      });
+      const revisedTask = await collaboration.reviseActiveRepairScope({
+        ...request,
+        currentProposalId: currentProposal.proposalId,
+      });
+      if (!revisedTask.updated || !revisedTask.taskId) throw new Error("权威范围已经修订，但原修复任务未能原位接续。");
+      evolutionStateStore.markDispatched(currentProposal.proposalId, revisedTask.taskId);
+      return revisedTask;
     },
     resumeInternalDeliberation: async (deliberationId) => {
       if (!personaEvolution) throw new Error("人物内部研讨运行时尚未就绪。");

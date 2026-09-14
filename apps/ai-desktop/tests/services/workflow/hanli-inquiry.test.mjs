@@ -438,7 +438,7 @@ test("托管中的客户纠正会更新原令狐任务并明确反馈当前状�
       deliberations: [],
       automationSettings: { automaticCustodyEnabled: true },
       automationRuntime: { status: "running" },
-      oneShotRun: { runId: "run-4", proposalId: "proposal-4", status: "blocked" },
+      oneShotRun: { runId: "run-4", proposalId: "proposal-4", status: "running" },
     }) },
     prompts: { render: () => "设计要求" },
     conversation: {
@@ -454,7 +454,13 @@ test("托管中的客户纠正会更新原令狐任务并明确反馈当前状�
     recordEvent: () => {},
   });
   const result = await service.send({ ...request, clientMessageId: "scope-fix", message: "测试台保持通用，不承担韩立验收" });
-  assert.deepEqual(revisions, [{ runId: "run-4", proposalId: "proposal-4", instruction: "测试台保持通用，不承担韩立验收" }]);
+  assert.deepEqual(revisions, [{
+    runId: "run-4",
+    proposalId: "proposal-4",
+    instruction: "测试台保持通用，不承担韩立验收",
+    confirmedIntent: understanding.understoodGoal,
+    acceptanceCriteria: [understanding.expectedAnswer],
+  }]);
   assert.match(result.messages.at(-1).content, /当前在做：已更新原任务范围/);
   assert.match(result.messages.at(-1).content, /失败原因：上一执行代次仍使用修正前的范围/);
   assert.match(result.messages.at(-1).content, /接下来：令狐会在原任务中重新分析/);

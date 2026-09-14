@@ -319,12 +319,6 @@ export class HanliConversationService {
     // 理解充分时由韩立真实调用南宫婉完成一次只读调查。
     if (parsed.inquiry?.status === "ready") {
       if (this.#options.store.state().automationSettings.automaticCustodyEnabled === true) {
-        const active = this.#activeDeliberationId(this.#options.store.state());
-        if (active) {
-          return this.#recordControlReply(request, conversation,
-            "当前需求已有研讨流程在推进；南宫婉继续调查和指派，流程故障由令狐处理。",
-            parsed.topic);
-        }
         // 韩立先保存完整设计方向，再交给既有流程；禁止在人物会话里另建托管排障链。
         const viewpoint: HanliConversationViewpointValue = {
           sourceMessageId: `hanli-design:${request.clientMessageId || randomUUID()}`,
@@ -339,7 +333,12 @@ export class HanliConversationService {
           ].join("\n\n"),
           createdAt,
         };
-        return this.#startDeliberation(request, conversation, viewpoint, parsed.topic);
+        // 已有运行中的客户纠正也必须进入同一个受控入口；入口负责修订当前
+        // 提案和原修复任务，不能用“流程正在推进”的回执吞掉新范围。
+        return this.#startDeliberation(request, conversation, viewpoint, parsed.topic, {
+          confirmedIntent: parsed.inquiry.understoodGoal,
+          acceptanceCriteria: [parsed.inquiry.expectedAnswer],
+        });
       }
       // 非托管只读问答保留调查与解释，不自动产生工程写入。
       const investigatedConversation = await this.#inquiry.run(
@@ -517,6 +516,7 @@ export class HanliConversationService {
     conversation: PersonaConversationOutDto,
     viewpoint: HanliConversationViewpointValue,
     automaticDecision?: ConversationRoundTopicDecisionInDto,
+    scopeDefinition?: { confirmedIntent: string; acceptanceCriteria: string[] },
   ): Promise<PersonaConversationOutDto> {
     // startInternalDeliberation 是唯一允许创建一次性研讨流程的 Workflow 端口。
     const start = this.#options.startInternalDeliberation;
@@ -552,6 +552,8 @@ export class HanliConversationService {
         runId: activeRun.runId,
         proposalId: activeRun.proposalId,
         instruction: request.message,
+        confirmedIntent: scopeDefinition?.confirmedIntent || viewpoint.content,
+        acceptanceCriteria: scopeDefinition?.acceptanceCriteria || [viewpoint.content],
       })
       : null;
     const started = reusedRun ? { continuous: true } : await start(request);

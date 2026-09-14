@@ -94,6 +94,9 @@ export class CollaborationCoordinator {
     runId: string;
     proposalId: string;
     instruction: string;
+    confirmedIntent: string;
+    acceptanceCriteria: string[];
+    currentProposalId?: string;
   }): Promise<ActiveRepairScopeRevisionResult> {
     const instruction = request.instruction.trim().slice(0, 8_000);
     if (!instruction) return { updated: false, taskId: null, taskRevision: null, message: "没有可写入的范围修订。" };
@@ -113,7 +116,8 @@ export class CollaborationCoordinator {
     this.#store.updateTask(task.taskId, "task.scope_revised", (current, state) => {
       current.taskRevision += 1;
       current.workerGeneration += 1;
-      current.snapshot.confirmedIntent = `${current.snapshot.confirmedIntent}\n\n${revisionConstraintPrefix}${instruction}`.slice(0, 20_000);
+      current.snapshot.confirmedIntent = request.confirmedIntent.trim().slice(0, 20_000);
+      current.snapshot.acceptanceCriteria = [...request.acceptanceCriteria];
       current.snapshot.constraints = [
         ...current.snapshot.constraints.filter((item) => !item.startsWith(revisionConstraintPrefix)),
         `${revisionConstraintPrefix}${instruction}`,
@@ -141,6 +145,10 @@ export class CollaborationCoordinator {
       current.repairRequiresUserConfirmation = false;
       current.customerActionGuidance = null;
       current.integrationFailure = null;
+      if (request.currentProposalId) {
+        current.evolutionProposalId = request.currentProposalId;
+        current.evolutionRoundId = request.currentProposalId;
+      }
       // 已完成任务的工作树可能已经退休；同一 taskId 用新修订重新签发，不复用已删除目录。
       if (current.versionWorkspace?.retiredAt) current.versionWorkspace = null;
       else if (current.versionWorkspace) current.versionWorkspace.resultSha = null;

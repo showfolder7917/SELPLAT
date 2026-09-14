@@ -282,6 +282,9 @@ test("客户范围修订保留原令狐任务并使旧执行代次失效", async
       runId: "run-4",
       proposalId: "proposal-4",
       instruction: "测试台保持通用工具，令狐改为读取内部证据并由韩立查看真实页面验收。",
+      confirmedIntent: "测试台保持通用工具，验收回到真实页面。",
+      acceptanceCriteria: ["韩立在真实页面核对结果"],
+      currentProposalId: "proposal-5",
     });
     const task = store.task(seeded.taskId);
     assert.equal(revised.updated, true);
@@ -291,6 +294,9 @@ test("客户范围修订保留原令狐任务并使旧执行代次失效", async
     assert.equal(task.assignmentId, null);
     assert.match(task.snapshot.confirmedIntent, /测试台保持通用工具/);
     assert.match(task.snapshot.constraints.at(-1), /^客户最新范围修订：/);
+    assert.deepEqual(task.snapshot.acceptanceCriteria, ["韩立在真实页面核对结果"]);
+    assert.equal(task.evolutionProposalId, "proposal-5");
+    assert.equal(task.evolutionRoundId, "proposal-5");
     assert.equal(task.flowEvents.at(-1).type, "task.scope_revised");
     assert.equal(store.state().tasks.length, 1);
   } finally {
@@ -352,6 +358,8 @@ test("客户范围修订后迟到的旧执行结果只被丢弃，不触发令�
       runId: "run-late",
       proposalId: "proposal-late",
       instruction: "停止旧范围，改查内部证据链。",
+      confirmedIntent: "按新范围读取内部证据链。",
+      acceptanceCriteria: ["新范围证据链完成验证"],
     });
     await coordinator.dispose();
     finishOldExecution({ status: "code-verified", text: "旧结果", pendingActions: [], authorizedFiles: [] });
@@ -414,6 +422,8 @@ test("客户范围修订后迟到的旧执行人初始化失败不会阻塞新�
       runId: "run-late-startup",
       proposalId: "proposal-late-startup",
       instruction: "停止旧令狐执行，交由南宫婉调查后分配普通执行人。",
+      confirmedIntent: "按新范围重新分配执行。",
+      acceptanceCriteria: ["新范围由当前执行链完成"],
     });
     rejectOldStartup(new Error("旧执行人初始化失败"));
     await new Promise((resolve) => setImmediate(resolve));
@@ -497,6 +507,8 @@ test("客户范围修订会取消已经排队但尚未开始的旧令狐恢复",
       runId: "run-pending-repair",
       proposalId: "proposal-pending-repair",
       instruction: "停止旧恢复，按新范围继续。",
+      confirmedIntent: "按新范围继续原任务。",
+      acceptanceCriteria: ["原任务按新范围完成"],
     });
     await new Promise((resolve) => setImmediate(resolve));
     releaseClose();

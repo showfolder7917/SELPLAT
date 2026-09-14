@@ -74,7 +74,13 @@ export interface HanliApplicationServiceOptions {
   resumeInternalDeliberation?: (deliberationId: string) => Promise<void>;
   startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
   /** 自动托管已有修复任务时，把客户最新纠正写回原任务并废止旧执行代次。 */
-  reviseActiveRepairScope?: (request: { runId: string; proposalId: string; instruction: string }) => Promise<{
+  reviseActiveRepairScope?: (request: {
+    runId: string;
+    proposalId: string;
+    instruction: string;
+    confirmedIntent: string;
+    acceptanceCriteria: string[];
+  }) => Promise<{
     updated: boolean;
     taskId: string | null;
     taskRevision: number | null;
