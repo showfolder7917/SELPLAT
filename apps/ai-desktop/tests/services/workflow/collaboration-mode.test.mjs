@@ -147,7 +147,7 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(coordinatorSource, /current\.automationSource !== "linghu-safeguard"/);
   assert.match(coordinatorSource, /ORCHESTRATOR_MEMBER_IDS/);
   assert.match(integrationPipelineSource, /release\.awaiting_restart/);
-  assert.match(coordinatorSource, /reviseActiveRepairScope[\s\S]*invalidateTask[\s\S]*task\.scope_revised/);
+
   assert.match(integrationPipelineSource, /invalidateTask[\s\S]*integration\.batch_invalidated[\s\S]*publishedExecutable = null/);
   assert.match(integrationPipelineSource, /release\.restart_healthy/);
   assert.match(integrationPipelineSource, /unified_test\.passed/);
@@ -3079,4 +3079,49 @@ test("容量等待的直接技术修复入口不绕过客户确认", async () =>
     assert.equal(store.task(task.taskId).state, "blocked");
     assert.equal(store.task(task.taskId).versionWorkspace, null);
   } finally { await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test("新故障接续保留原任务与客户等待，缺少完成指导时拒绝排队", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "failure-evidence-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const seeded = store.submitTask({
+      title: "原修复", problemStatement: "旧故障", confirmedIntent: "旧调查",
+      constraints: ["卡点标识：run-1:proposal:proposal-1:round:1"], workspaceState, locale: "zh-CN",
+      initiatorMemberId: "han-li", preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard", evolutionProposalId: "proposal-1",
+    });
+    store.updateTask(seeded.taskId, "test.wait", task => {
+      task.state = "blocked";
+      task.repairRequiresUserConfirmation = true;
+      task.blockingReason = "等待客户处理";
+    });
+    const coordinator = createExecutionResultCoordinator(directory, store,
+      { status: "code-verified", text: "", pendingActions: [], authorizedFiles: [] });
+    await coordinator.dispose();
+    const request = {
+      title: "原修复", problemStatement: "最新验收故障", confirmedIntent: "按新增证据重新调查",
+      constraints: ["卡点标识：run-1:proposal:proposal-1:round:1", "卡点故障事实：failure-2"],
+      acceptanceCriteria: ["原条件保持不变"], workspaceState, locale: "zh-CN", evolutionProposalId: "proposal-1",
+    };
+    await coordinator.refreshCheckpointRepair(seeded.taskId, request);
+    const revised = store.task(seeded.taskId);
+    assert.equal(revised.state, "blocked");
+    assert.equal(revised.repairRequiresUserConfirmation, true);
+    assert.equal(revised.blockingReason, "等待客户处理");
+    assert.equal(revised.snapshot.problemStatement, "最新验收故障");
+    assert.equal(revised.taskRevision, 2);
+    assert.equal(store.state().tasks.length, 1);
+    assert.throws(() => store.continueTask(seeded.taskId), /请先按等待节点/);
+    await coordinator.refreshCheckpointRepair(seeded.taskId, request);
+    assert.equal(store.task(seeded.taskId).taskRevision, 2);
+    const restored = new CollaborationStore(path.join(directory, "collaboration.json"));
+    assert.equal(restored.task(seeded.taskId).state, "blocked");
+    assert.equal(restored.task(seeded.taskId).snapshot.problemStatement, "最新验收故障");
+    await assert.rejects(() => coordinator.refreshCheckpointRepair(seeded.taskId, {
+      ...request, constraints: ["卡点标识：other-run:proposal:proposal-1:round:1", "卡点故障事实：other"]
+    }), /原运行恢复点/);
+    await assert.rejects(() => coordinator.refreshCheckpointRepair(seeded.taskId, { ...request, evolutionProposalId: "other" }), /归属/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

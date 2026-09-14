@@ -64,6 +64,7 @@ function fixture() {
     resolve: (id) => effects.resolved.push(id),
     resume: async (id) => { effects.resumed.push(id); return evolution; },
     handleTask: async (...args) => { effects.handled.push(args); },
+    refreshRepair: async (id, request) => { effects.refreshed ||= []; effects.refreshed.push({ id, request }); collaboration.tasks.find(task => task.taskId === id).snapshot = request; },
     submitRepair: (request) => { effects.submitted.push(request); collaboration.tasks.push({ taskId: `repair-${effects.submitted.length}`, state: "executing", snapshot: request }); return collaboration; },
     handoff: { publish: (_event, state, phase) => effects.phases.push(`${state.round}:${phase}`) },
   };
@@ -536,4 +537,47 @@ test("混合验收失败同时传递能力阻塞且保留原授权排除项", as
   assert.ok(repair.constraints.some(text => /同时逐项调查 acceptanceBlockedSteps/.test(text)));
   assert.ok(repair.constraints.includes("原确认范围排除项：不得写入正式记录"));
   assert.ok(repair.acceptanceCriteria.some(text => /原已确认范围/.test(text)));
+});
+
+
+test("旧技术主卡点把最新验收证据写回原任务，重启与重复轮询不重复修订", async () => {
+  const f = fixture();
+  f.event.payload.operation = "plan_and_dispatch_one_shot";
+  f.event.payload.phase = "distributing";
+  f.event.message = "旧规则登记失败";
+  await f.run();
+  const task = f.collaboration.tasks[0];
+  task.state = "blocked";
+  task.blockingReason = "旧容量等待";
+  const latest = {
+    ...structuredClone(f.event), eventId: "latest-failure", occurredAt: "2026-09-06T00:00:00Z",
+    message: "恢复中与失败状态未验证",
+    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting",
+      operation: "run_real_application_acceptance", acceptanceFailureKind: "acceptance-capability-blocked" },
+  };
+  f.events.push(latest);
+  await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.effects.refreshed.length, 1);
+  assert.equal(f.effects.refreshed[0].id, task.taskId);
+  assert.match(task.snapshot.problemStatement, /恢复中与失败状态未验证/);
+  assert.equal(task.snapshot.initiatorMemberId, "han-li");
+  await f.run(); await f.run();
+  assert.equal(f.effects.refreshed.length, 1);
+  assert.equal(f.collaboration.tasks.length, 1);
+});
+
+test("最新验收需要范围确认时旧技术主卡点不得更新或重启修复", async () => {
+  const f = fixture();
+  f.event.payload.operation = "plan_and_dispatch_one_shot";
+  f.event.payload.phase = "distributing";
+  await f.run();
+  f.events.push({
+    ...structuredClone(f.event), eventId: "scope-block", category: "business-exception",
+    occurredAt: "2026-09-06T00:00:00Z",
+    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "run_real_application_acceptance" },
+  });
+  await f.run();
+  assert.equal(f.effects.refreshed, undefined);
+  assert.deepEqual(f.effects.resumed, []);
 });

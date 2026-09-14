@@ -428,6 +428,18 @@ export function projectCollaborationFlowEvent(
     return projection(waiting ? "blocked" : "running", facts);
   }
 
+  // 收到新故障只是调查依据已更新，不能把仍有效的客户等待显示成任务正在执行。
+  if (event.type === "task.failure_evidence_updated") {
+    return projection(task.state === "blocked" ? "blocked" : "running", [fact({
+      nodeId: `failure-evidence:${task.taskId}:${event.eventId}`, kind: "repair",
+      actor, recipients: [task.executionRecords.at(-1)?.executor || EXECUTION_POOL],
+      status: "completed", action: "最新故障已交回原修复任务",
+      summary: event.summary, content: event.summary, detail: event.details?.instruction || "",
+      startedAt: event.occurredAt, completedAt: event.occurredAt,
+      automaticOpen: false, manualApprovalProposalId: null,
+    })]);
+  }
+
   // 历史数据库可能包含新版本尚未登记的事件。必须保留事实，避免页面再次出现“停住但没有原因”。
   const fallbackStatus = event.status === "completed" ? "completed" : event.status === "waiting" ? "waiting" : event.status === "failed" || event.status === "cancelled" ? "failed" : "current";
   const fallbackKind = event.stage === "analysis" ? "analysis" : event.stage === "integration" ? "verification" : event.stage === "recovery" ? "repair" : event.stage === "execution" ? "execution" : "result";

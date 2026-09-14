@@ -108,13 +108,48 @@ export class CollaborationCoordinator {
       && candidate.state !== "cancelled");
     if (!task) return { updated: false, taskId: null, taskRevision: null, message: "当前没有可更新的令狐修复任务。" };
 
+    return this.#reviseRepairTask(task, request);
+  }
+
+  /** 将主进程核实的新故障写回确切修复任务；不改变原任务授权或客户等待。 */
+  async refreshCheckpointRepair(taskId: string, request: SubmitCollaborationTaskInDto): Promise<ActiveRepairScopeRevisionResult> {
+    const task = this.state().tasks.find((candidate) => candidate.taskId === taskId);
+    if (!task || task.state === "cancelled" || task.automationSource !== "linghu-safeguard"
+      || task.evolutionProposalId !== request.evolutionProposalId) {
+      throw new Error("无法确认原修复任务与新故障归属，禁止修改任务。");
+    }
+    const recoveryMarker = request.constraints?.find((value) => value.startsWith("卡点标识："));
+    if (!recoveryMarker || !task.snapshot.constraints.includes(recoveryMarker)) {
+      throw new Error("新故障不属于该任务保存的原运行恢复点，禁止更新。");
+    }
+    const evidenceMarker = request.constraints?.find((value) => value.startsWith("卡点故障事实："));
+    if (!evidenceMarker) throw new Error("新故障缺少持久事件身份，禁止重复调查。");
+    if (task.snapshot.constraints.includes(evidenceMarker)) {
+      return { updated: false, taskId, taskRevision: task.taskRevision, message: "当前故障已经登记，继续原调查。" };
+    }
+    return this.#reviseRepairTask(task, {
+      instruction: evidenceMarker + "\n原故障：" + task.snapshot.problemStatement + "\n新故障：" + request.problemStatement,
+      confirmedIntent: request.confirmedIntent, acceptanceCriteria: request.acceptanceCriteria || [],
+    }, request);
+  }
+
+  /** 范围修订和新增故障共用失效旧结果、退出旧执行及恢复排队的生命周期。 */
+  async #reviseRepairTask(task: CollaborationTaskOutDto, request: {
+    instruction: string; confirmedIntent: string;
+    acceptanceCriteria: string[]; currentProposalId?: string;
+  }, failure?: SubmitCollaborationTaskInDto): Promise<ActiveRepairScopeRevisionResult> {
+    const instruction = request.instruction.trim().slice(0, 8_000);
+    // 新事实不是客户完成前置条件的证明；等待及其证据必须跨任务修订保存。
+    const preserveCustomerWait = task.repairRequiresUserConfirmation === true
+      || task.integrationFailure?.kind === "local-change-ownership";
+    const eventType = failure ? "task.failure_evidence_updated" : "task.scope_revised";
     const previousExecutorMemberId = task.executorMemberId;
     const previousAssignmentId = task.assignmentId;
     const previousRevision = task.taskRevision;
     const now = new Date().toISOString();
     const revisionConstraintPrefix = "客户最新范围修订：";
     this.#integrationPipeline.invalidateTask(task.taskId);
-    this.#store.updateTask(task.taskId, "task.scope_revised", (current, state) => {
+    this.#store.updateTask(task.taskId, eventType, (current, state) => {
       current.taskRevision += 1;
       current.workerGeneration += 1;
       current.snapshot.confirmedIntent = request.confirmedIntent.trim().slice(0, 20_000);
@@ -123,17 +158,21 @@ export class CollaborationCoordinator {
         ...current.snapshot.constraints.filter((item) => !item.startsWith(revisionConstraintPrefix)),
         `${revisionConstraintPrefix}${instruction}`,
       ];
+      if (failure) {
+        current.snapshot.problemStatement = failure.problemStatement;
+        current.snapshot.constraints = [...(failure.constraints || [])];
+      }
       current.snapshot.contentHash = sha256(current.snapshot.confirmedIntent);
       for (const record of current.executionRecords.filter((item) => item.completedAt === null)) {
         record.status = "transferred";
         record.completedAt = now;
-        record.blockingReason = "客户修正了当前任务范围，旧执行代次已经失效";
+        record.blockingReason = "任务依据已更新，旧执行代次已经失效";
       }
       current.assignmentId = null;
-      current.state = "queued-executor";
+      current.state = preserveCustomerWait ? "blocked" : "queued-executor";
       current.phase = null;
       current.recoveryTargetState = null;
-      current.blockingReason = "已收到客户修正，正在按新范围重新分析同一任务";
+      current.blockingReason = preserveCustomerWait ? task.blockingReason : "已收到新证据，正在重新调查同一任务";
       current.integrationGeneration = null;
       current.unifiedTest = null;
       current.codeVerifiedAt = null;
@@ -143,9 +182,11 @@ export class CollaborationCoordinator {
       current.repairDiagnosis = null;
       current.repairResult = null;
       current.repairFailureReason = null;
-      current.repairRequiresUserConfirmation = false;
-      current.customerActionGuidance = null;
-      current.integrationFailure = null;
+      if (!preserveCustomerWait) {
+        current.repairRequiresUserConfirmation = false;
+        current.customerActionGuidance = null;
+        current.integrationFailure = null;
+      }
       if (request.currentProposalId) {
         current.evolutionProposalId = request.currentProposalId;
         current.evolutionRoundId = request.currentProposalId;
@@ -165,8 +206,8 @@ export class CollaborationCoordinator {
         member.updatedAt = now;
       }
       current.flowEvents.push({
-        eventId: randomUUID(), type: "task.scope_revised", stage: "recovery", status: "started",
-        actor: current.initiator, summary: `客户修正已写入原任务，旧执行已停止；正在按新范围重新分析（第 ${current.taskRevision} 版）`,
+        eventId: randomUUID(), type: eventType, stage: "recovery", status: "completed",
+        actor: current.initiator, summary: `新证据已写入原任务，旧执行结果已失效（第 ${current.taskRevision} 版）；${preserveCustomerWait ? "仍需完成原等待事项" : "正在重新调查"}`,
         occurredAt: now, error: false,
         details: { previousRevision, taskRevision: current.taskRevision, assignmentId: previousAssignmentId || undefined, instruction },
       });
@@ -181,7 +222,7 @@ export class CollaborationCoordinator {
       updated: true,
       taskId: task.taskId,
       taskRevision: previousRevision + 1,
-      message: "已更新原任务范围并停止旧执行，正在按新范围重新分析。",
+      message: preserveCustomerWait ? "新证据已登记，原客户等待继续有效。" : "任务依据已更新，正在重新调查原任务。",
     };
   }
 
