@@ -2102,6 +2102,46 @@ test("应用重启释放令狐旧会话占用并从统一恢复入口接续修�
   }
 });
 
+test("应用重启保留活动任务恢复点并释放全部跨进程人物租约", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "active-task-restart-"));
+  try {
+    const statePath = path.join(directory, "state.json");
+    const store = new CollaborationStore(statePath);
+    const submitted = store.submitTask({
+      title: "重启后继续活动任务",
+      problemStatement: "应用重建中断当前执行连接。",
+      confirmedIntent: "保留任务恢复点，由新进程重新建立执行租约。",
+      workspaceState,
+      locale: "zh-CN",
+      preferredExecutorMemberId: "linghu-ancestor",
+    });
+    store.updateTask(submitted.taskId, "fixture.active_linghu_task", (task, state) => {
+      const linghu = state.members.find((member) => member.memberId === "linghu-ancestor");
+      task.state = "executing";
+      task.phase = "executing";
+      task.executorMemberId = linghu.memberId;
+      task.currentHandler = { memberId: linghu.memberId, displayName: linghu.displayName };
+      linghu.state = "working";
+      linghu.role = "executor";
+      linghu.phase = "executing";
+      linghu.currentTaskId = task.taskId;
+      linghu.blockingReason = null;
+    });
+
+    const restored = new CollaborationStore(statePath).state();
+    const task = restored.tasks.find((candidate) => candidate.taskId === submitted.taskId);
+    const linghu = restored.members.find((candidate) => candidate.memberId === "linghu-ancestor");
+    assert.equal(task.state, "recovering");
+    assert.equal(task.recoveryTargetState, "executing");
+    assert.equal(task.flowEvents.filter((event) => event.type === "task.interrupted").length, 1);
+    assert.equal(linghu.state, "idle");
+    assert.equal(linghu.role, null);
+    assert.equal(linghu.currentTaskId, null);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("应用重启保留客户等待状态并释放人物，不把卡点改成恢复中", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "blocked-restart-preserved-"));
   try {

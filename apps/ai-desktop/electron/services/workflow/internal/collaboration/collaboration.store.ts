@@ -434,7 +434,6 @@ function mergeDefaultMembers(state: CollaborationStateOutDto): void {
 }
 
 function recoverInterruptedState(state: CollaborationStateOutDto): void {
-  const interruptedTaskIds = new Set<string>();
   for (const task of state.tasks) {
     // 已在恢复态的任务保持原恢复点；重复启动不能再次追加相同的中断事实。
     if (TERMINAL_TASK_STATES.has(task.state) || task.state === "queued-executor" || task.state === "returned-to-nangong" || task.state === "ready-for-integration" || task.state === "awaiting-restart" || task.state === "recovering" || task.state === "blocked" || task.state === "test-failed") continue;
@@ -448,7 +447,6 @@ function recoverInterruptedState(state: CollaborationStateOutDto): void {
       record.status = "blocked";
       record.blockingReason = task.blockingReason;
     }
-    interruptedTaskIds.add(task.taskId);
   }
   for (const batch of state.integrationBatches) {
     // 已验证批次正在等待新进程确认，不是异常中断；保留发布检查点。
@@ -471,14 +469,8 @@ function recoverInterruptedState(state: CollaborationStateOutDto): void {
       member.updatedAt = new Date().toISOString();
       continue;
     }
-    // 受保护只限制删除和普通分配，不代表跨进程执行租约仍然存活；令狐也必须释放旧连接占用。
-    if (member.currentTaskId && interruptedTaskIds.has(member.currentTaskId)) {
-      member.state = "recovering";
-      member.phase = null;
-      member.blockingReason = "原 Codex 已关闭，等待恢复任务";
-      member.lastHeartbeatAt = null;
-      member.lastProtocolProgressAt = null;
-    } else if (member.state !== "draining") {
+    // 人物占用是当前进程的执行租约，不能跨重启继承；任务恢复点独立保存在任务上，由新进程重新分配。
+    if (member.state !== "draining") {
       member.state = "idle";
       member.role = null;
       member.phase = null;
