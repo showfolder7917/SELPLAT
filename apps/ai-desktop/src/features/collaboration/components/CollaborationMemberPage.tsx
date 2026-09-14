@@ -13,8 +13,6 @@ import type {
   CollaborationMemberOutDto,
   // 协作时间线：筛选该人物参与的真实节点。
   CollaborationTimelineSnapshotOutDto,
-  // 演化状态：细化南宫婉当前研讨状态。
-  EvolutionStateOutDto,
   // 令狐自动化状态：令狐人物页显示自动保障面板和可见会话边界。
   LinghuAutomationStateOutDto,
   // 界面语言：人物状态文案选择中文或日文。
@@ -35,9 +33,10 @@ import {
   LinghuAutomationPanel,
 } from "../../linghu";
 import {
-  // 人物状态文案：综合权威状态、时间线和研讨进度。
-  collaborationMemberStateLabel,
+  // 人物页与左侧人物栏共用主进程协作状态的显示模型。
+  collaborationMemberDisplayModel,
 } from "../model/collaboration-formatters";
+import type { CollaborationStateReadStatus } from "../model/useCollaborationWorkspace";
 
 /** 人物页面显示状态：只描述页面当前需要展示的数据。 */
 type CollaborationMemberPagePresentation = {
@@ -47,8 +46,8 @@ type CollaborationMemberPagePresentation = {
   locale: LocaleValue;
   /** 令狐自动保障状态；其他人物不会展示对应面板。 */
   linghuAutomation: LinghuAutomationStateOutDto | null;
-  /** 南宫婉与韩立共同使用的专题研讨状态。 */
-  nangongEvolution: EvolutionStateOutDto | null;
+  /** 协作状态存储的读取结果决定空页面应显示同步或失败状态。 */
+  stateReadStatus: CollaborationStateReadStatus;
 };
 
 /** 人物页面模型：把人物、时间线、显示状态和操作归成一个入口。 */
@@ -192,7 +191,7 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
   // 人物和时间线是页面展示真实协作记录的权威业务数据。
   const { member, timeline } = model;
   // 显示状态集中提供语言、实时正文以及人物专项运行状态。
-  const { liveTextByNodeId, locale, linghuAutomation, nangongEvolution } = model.presentation;
+  const { liveTextByNodeId, locale, linghuAutomation, stateReadStatus } = model.presentation;
   // 人物操作组当前只开放令狐状态写回，后续动作仍有明确归属位置。
   const { onLinghuState } = model.actions;
   // 会话末尾锚点：实时正文变化时只滚动人物页面内部区域。
@@ -213,15 +212,11 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
   }, [latestNode?.nodeId, latestText]);
 
   if (!member) {
-    return <section className="collaboration-member-page">请选择人物。</section>;
+    const display = collaborationMemberDisplayModel({ member: null, locale, status: stateReadStatus });
+    return <section className="collaboration-member-page">{display.label}</section>;
   }
 
-  const memberStateLabel = collaborationMemberStateLabel({
-    member,
-    locale,
-    timeline,
-    evolution: nangongEvolution,
-  });
+  const memberDisplay = collaborationMemberDisplayModel({ member, locale, status: stateReadStatus });
   const visibleLinghuAutomation = member.memberId === "linghu-ancestor"
     ? linghuAutomation
     : null;
@@ -231,10 +226,10 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
       {/* 人物标题：展示权威占用状态；令狐额外拥有自动保障控制面板。 */}
       <header>
         <div>
-          <span className={`member-presence ${member.state}`} />
+          <span className={`member-presence ${memberDisplay.presence}`} />
           <div>
             <h1>{member.displayName}</h1>
-            <p>{memberStateLabel}</p>
+            <p>{memberDisplay.label}</p>
           </div>
         </div>
         {visibleLinghuAutomation && (

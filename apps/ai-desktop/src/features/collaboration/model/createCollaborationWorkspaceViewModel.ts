@@ -12,7 +12,7 @@ type CreateCollaborationWorkspaceViewModelOptions = {
   locale: LocaleValue;
   /** 协作控制器提供权威时间线、成员和当前页面。 */
   controller: CollaborationController;
-  /** 演化控制器提供专题状态和恢复操作。 */
+  /** 演化状态只供任务协作卡展示专题结论，不参与人物当前状态。 */
   evolution: EvolutionController;
   /** 人工审批动作由 Section 持有，因为它需要打开真实对话框。 */
   onManualApproval: TaskCollaborationGroupModel["actions"]["onManualApproval"];
@@ -69,7 +69,7 @@ export function createCollaborationWorkspaceViewModel({
         liveTextByNodeId,
         locale,
         linghuAutomation: controller.data.linghuAutomation,
-        nangongEvolution: evolution.state,
+        stateReadStatus: controller.data.stateReadStatus,
       },
       actions: {
         onLinghuState: controller.actions.setLinghuAutomation,

@@ -12,38 +12,18 @@ import type {
   CollaborationStateOutDto,
   // 协作任务：格式化计划、执行记录和真实执行人。
   CollaborationTaskOutDto,
-  // 协作时间线：用当前节点细化仍在工作的人物状态文案。
-  CollaborationTimelineSnapshotOutDto,
-  // 人物演化状态：展示韩立和南宫婉当前研讨进度。
-  EvolutionStateOutDto,
   // 界面语言：在中文和日文文案之间选择。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 
-/** 人物会话页面提供的临时活动，不会写回后端调度状态。 */
-export type PersonaConversationActivity =
-  | "active"
-  | "responding"
-  | "investigating"
-  | "waiting-investigation"
-  | "assessing"
-  | "explaining"
-  | "waiting-recovery"
-  | "creating"
-  | "waiting-approval";
-
-/** 人物状态文案输入：用字段名说明每份状态在优先级判断中的角色。 */
-export type CollaborationMemberStateLabelInput = {
-  /** 当前需要显示状态的协作成员。 */
-  member: CollaborationMemberOutDto;
+/** 人物状态显示输入：只接受协作状态存储已发布的成员快照。 */
+export type CollaborationMemberDisplayModelInput = {
+  /** 当前需要显示状态的协作成员；首次同步或读取失败时允许为空。 */
+  member: CollaborationMemberOutDto | null;
   /** 当前界面语言。 */
   locale: LocaleValue;
-  /** 权威任务时间线；尚未加载时允许为空。 */
-  timeline?: CollaborationTimelineSnapshotOutDto | null;
-  /** 韩立与南宫婉共享的研讨状态；其他人物不会消费。 */
-  evolution?: EvolutionStateOutDto | null;
-  /** 人物会话临时活动；只影响显示，不改变后端调度状态。 */
-  conversationActivity?: PersonaConversationActivity | null;
+  /** 协作状态存储的读取结果；页面不能把旧时间线当成当前成员状态。 */
+  status?: "syncing" | "ready" | "unavailable";
 };
 
 type MemberState = CollaborationMemberOutDto["state"];
@@ -113,101 +93,6 @@ const JAPANESE_TASK_STATE_LABELS: Record<TaskState, string> = {
   cancelled: "キャンセル",
 };
 
-/** 只有空闲或会话中的人物，才允许前端会话活动临时接管显示状态。 */
-function conversationMayControlDisplay(member: CollaborationMemberOutDto): boolean {
-  return member.state === "idle" || member.state === "conversation";
-}
-
-/** 把当前人物会话活动转换成客户可读文案。 */
-function conversationActivityLabel(
-  activity: PersonaConversationActivity | null | undefined,
-  locale: LocaleValue,
-): string | null {
-  if (!activity) return null;
-
-  const chinese: Record<PersonaConversationActivity, string> = {
-    active: "会话中",
-    responding: "正在回复",
-    investigating: "正在核实",
-    "waiting-investigation": "等待核实",
-    assessing: "判断证据",
-    explaining: "整理结论",
-    "waiting-recovery": "等待恢复",
-    creating: "正在建立新会话",
-    "waiting-approval": "等待授权",
-  };
-  const japanese: Record<PersonaConversationActivity, string> = {
-    active: "会話中",
-    responding: "返信中",
-    investigating: "確認中",
-    "waiting-investigation": "調査待ち",
-    assessing: "根拠を確認中",
-    explaining: "結論を整理中",
-    "waiting-recovery": "復旧待ち",
-    creating: "新しい会話を作成中",
-    "waiting-approval": "許可待ち",
-  };
-
-  return locale === "ja" ? japanese[activity] : chinese[activity];
-}
-
-/**
- * 把韩立、南宫婉的研讨轮次转换成侧栏文案。
- * 返回 null 表示当前没有可展示的研讨活动。
- */
-function deliberationLabel(
-  member: CollaborationMemberOutDto,
-  evolution: EvolutionStateOutDto | null | undefined,
-): string | null {
-  if (member.memberId !== "han-li" && member.memberId !== "nangong-wan") return null;
-
-  const deliberation = evolution?.deliberations
-    .slice()
-    .reverse()
-    .find((item) => item.status === "questioning" || item.status === "ready-to-establish");
-  if (!deliberation) return null;
-
-  if (evolution?.automationRuntime.status === "paused") return "研讨已暂停";
-  if (evolution?.automationRuntime.status === "blocked") return "研讨已阻塞";
-  if (evolution?.automationRuntime.status === "stopped") return "研讨已停止";
-
-  const latestRound = deliberation.rounds.at(-1);
-  if (!latestRound) return null;
-
-  const isNangong = member.memberId === "nangong-wan";
-  if (deliberation.status === "ready-to-establish") {
-    if (isNangong) return latestRound.confirmation ? "等待韩立确认" : "说明修复方案中";
-    return latestRound.confirmation ? "确认修复内容中" : "等待修复说明";
-  }
-
-  if (isNangong) return latestRound.answer ? "等待韩立追问" : "研讨回答中";
-  return latestRound.answer ? "研讨判断中" : "等待南宫婉回答";
-}
-
-/** 从权威时间线中寻找该人物最新的当前节点。 */
-function latestCurrentTimelineAction(
-  member: CollaborationMemberOutDto,
-  timeline: CollaborationTimelineSnapshotOutDto | null | undefined,
-): string | null {
-  const workingStates: MemberState[] = ["assigned", "working", "recovering", "retiring", "draining"];
-  if (!workingStates.includes(member.state)) return null;
-
-  const currentNodes = timeline?.groups
-    .flatMap((group) => group.nodes)
-    .filter((node) => node.actor.memberId === member.memberId && node.status === "current") || [];
-
-  currentNodes.sort((left, right) => {
-    const rightTime = right.completedAt || right.startedAt;
-    const leftTime = left.completedAt || left.startedAt;
-    return rightTime.localeCompare(leftTime);
-  });
-
-  const latestNode = currentNodes[0];
-  if (!latestNode) return null;
-  if (member.updatedAt && latestNode.startedAt < member.updatedAt) return null;
-  return latestNode.action;
-}
-
 /** 工作中人物存在细分阶段时，优先展示比“正在执行”更具体的中文文案。 */
 function memberPhaseLabel(member: CollaborationMemberOutDto): string | null {
   if (member.state !== "working" || !member.phase) return null;
@@ -225,52 +110,26 @@ function memberPhaseLabel(member: CollaborationMemberOutDto): string | null {
   return labels[member.phase];
 }
 
-/** 人物会话活动只修正页面呈现，不改写协作调度使用的权威成员状态。 */
-export function collaborationMemberPresenceState(
-  member: CollaborationMemberOutDto,
-  conversationActivity?: PersonaConversationActivity | null,
-): MemberState {
-  if (conversationActivity && conversationMayControlDisplay(member)) return "conversation";
-  return member.state;
-}
-
-/** 按明确优先级选择人物侧栏状态：会话、研讨、时间线、工作阶段、普通状态。 */
-export function collaborationMemberStateLabel(
-  input: CollaborationMemberStateLabelInput,
-): string {
-  // 具名输入避免调用方依靠位置猜测时间线、演化状态和会话活动的顺序。
-  const { member, locale, timeline, evolution, conversationActivity } = input;
-  if (conversationMayControlDisplay(member) && conversationActivity !== "active") {
-    const activityLabel = conversationActivityLabel(conversationActivity, locale);
-    if (activityLabel) return activityLabel;
+/** 左侧人物栏与人物页共用的当前状态模型，只读取成员状态、任务编号和阶段。 */
+export function collaborationMemberDisplayModel(
+  input: CollaborationMemberDisplayModelInput,
+): { presence: MemberState; label: string } {
+  const { member, locale, status = "ready" } = input;
+  // 成员快照尚未取得或读取失败时，不从历史节点推测人物仍在处理什么。
+  if (!member) {
+    const label = status === "unavailable"
+      ? locale === "ja" ? "状態は未更新です" : "状态暂未更新"
+      : locale === "ja" ? "同期中" : "正在同步";
+    return { presence: "offline", label };
   }
-
-  // 生成计划由南宫婉调度服务执行，不占执行租约；侧栏须读取任务卡同一条当前事实。
-  const planningNode = member.memberId === "nangong-wan"
-    ? timeline?.groups.filter((group) => group.status === "running")
-      .flatMap((group) => group.nodes)
-      .filter((node) => node.actor.memberId === member.memberId && node.status === "current"
-        && !node.completedAt && node.nodeId.startsWith("distribution-planning:"))
-      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0]
-    : undefined;
-  if (planningNode) return locale === "ja" ? "実行計画を作成中" : planningNode.action;
-
-  const currentDeliberationLabel = deliberationLabel(member, evolution);
-  if (currentDeliberationLabel) return currentDeliberationLabel;
-
-  if (conversationMayControlDisplay(member) && conversationActivity === "active") {
-    return conversationActivityLabel(conversationActivity, locale)!;
-  }
-
-  const currentTimelineAction = latestCurrentTimelineAction(member, timeline);
-  if (currentTimelineAction) return currentTimelineAction;
-
-  const currentPhaseLabel = memberPhaseLabel(member);
-  if (currentPhaseLabel) return currentPhaseLabel;
-
-  return locale === "ja"
-    ? JAPANESE_MEMBER_STATE_LABELS[member.state]
-    : CHINESE_MEMBER_STATE_LABELS[member.state];
+  // 没有当前任务时，历史时间线、研讨或会话活动均不能把成员重新投影为忙碌。
+  const presence = member.currentTaskId ? member.state : "idle";
+  // 阶段只属于当前在途任务；空闲成员不能继续显示上一轮的阶段。
+  const phaseLabel = member.currentTaskId ? memberPhaseLabel(member) : null;
+  const label = phaseLabel || (locale === "ja"
+    ? JAPANESE_MEMBER_STATE_LABELS[presence]
+    : CHINESE_MEMBER_STATE_LABELS[presence]);
+  return { presence, label };
 }
 
 /** 把协作任务状态码转换成当前界面语言的客户文案。 */

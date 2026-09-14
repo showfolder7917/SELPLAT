@@ -4,6 +4,7 @@ import { WorkflowCheckpointAggregate, type WorkflowCheckpointState } from "../..
 import { isAcceptanceFailureOperation } from "../evolution/one-shot-failure-identity.js";
 import type { CheckpointHandoffService } from "./checkpoint-handoff.service.js";
 import { selectCurrentAcceptanceFailure } from "./checkpoint-failure-selection.js";
+import { checkpointResolutionIdentity, type CheckpointResolvedRoundEvent } from "./checkpoint-resolution-identity.js";
 
 export interface CheckpointCoordinatorOptions {
   /** 读取当前 Evolution 专题、提案和一次性运行快照。 */
@@ -120,7 +121,13 @@ export class CheckpointCoordinator {
     return aggregate.snapshot();
   }
 
-  #phase(event: WorkflowExceptionRecordOutDto, state: WorkflowCheckpointState, phase: WorkflowCheckpointState["phase"], content: string): void {
+  #phase(
+    event: WorkflowExceptionRecordOutDto,
+    state: WorkflowCheckpointState,
+    phase: WorkflowCheckpointState["phase"],
+    content: string,
+    resolvedRoundEvents: readonly CheckpointResolvedRoundEvent[] = [],
+  ): void {
     // 先保存原阶段，领域状态更新后仍能判断是否需要追加新的时间线事实。
     const previousPhase = state.phase;
     // 使用聚合保证阶段与最新进展在同一次业务操作中变化。
@@ -138,11 +145,35 @@ export class CheckpointCoordinator {
       return;
     }
     // 新阶段先发布真实人物交接事实。
-    this.options.handoff.publish(event, state, phase, content);
+    this.options.handoff.publish(event, state, phase, content, resolvedRoundEvents);
     // 聚合已经同步更新 phase，此处只保存完整快照。
     this.options.save(event.eventId, state);
     // 同步当前内存异常对象，保证本批次后续读取同一快照。
     event.payload.checkpoint = structuredClone(state);
+  }
+
+  /** 收集同一原任务、同一恢复轮次已解除的异常，供唯一完成事实保留完整审计详情。 */
+  #resolvedRoundEvents(event: WorkflowExceptionRecordOutDto, state: WorkflowCheckpointState): CheckpointResolvedRoundEvent[] {
+    // 当前事实的稳定身份是同轮异常是否应共用完成节点的唯一判断依据。
+    const identity = checkpointResolutionIdentity(event, state);
+    // pending 保留每条异常的关闭审计；这里只汇集详情，不改变其解除归属。
+    const related: CheckpointResolvedRoundEvent[] = [];
+    for (const candidate of this.options.pending()) {
+      // 非阻塞事件没有解除语义，不能混入同轮完成详情。
+      if (candidate.flowImpact !== "blocked") continue;
+      try {
+        // 每条候选独立恢复；损坏的其他异常不能阻断当前已验证的解除事实。
+        const candidateCheckpoint = this.#state(candidate);
+        if (checkpointResolutionIdentity(candidate, candidateCheckpoint) === identity) {
+          related.push({ event: candidate, checkpoint: candidateCheckpoint });
+        }
+      } catch {
+        // 损坏事实仍由自身处理分支保留等待，不以详情汇集改变当前卡点结果。
+      }
+    }
+    // 详情顺序只依赖持久发生时间和事件标识，重放保持相同正文。
+    return related.sort((left, right) => left.event.occurredAt.localeCompare(right.event.occurredAt)
+      || left.event.eventId.localeCompare(right.event.eventId));
   }
 
   async #advance(event: WorkflowExceptionRecordOutDto): Promise<void> {
@@ -168,7 +199,7 @@ export class CheckpointCoordinator {
     // 非验收任务仍沿用原规则：任务完成集成即可确认对应执行卡点已经解除。
     const originalTaskCompleted = !isAcceptanceCheckpoint && task?.state === "integrated";
     if (originalTaskCompleted || originalRunCompleted) {
-      this.#phase(event, state, "resolved", "原任务已完成验证，确认此卡点解除；历史轮次保留。");
+      this.#phase(event, state, "resolved", "原任务已完成验证，确认此卡点解除；历史轮次保留。", this.#resolvedRoundEvents(event, state));
       this.options.resolve(event.eventId, "原任务完成事实已确认");
       return;
     }

@@ -12,7 +12,7 @@ const styles = read("../../../src/applications/styles/desktop-applications.css")
 const sharedStyles = read("../../../../../shared/frontend/sel-ui/src/components/conversation/selConversation.css");
 const shell = read("../../../src/features/conversation/components/SelUiConversation.tsx");
 const personaConversation = read("../../../src/features/conversation/model/usePersonaConversation.ts");
-const developerPersonaActivities = read("../../../src/applications/developer/model/getDeveloperPersonaActivities.ts");
+const taskNavigation = read("../../../src/applications/developer/explorer/CollaborationTaskNavigation.tsx");
 
 test("可输入人物会话仅在用户停留底部时跟随新增消息", () => {
   assert.match(hook, /scrollHeight - timeline\.scrollTop - timeline\.clientHeight/);
@@ -41,11 +41,10 @@ test("输入框和消息高度变化后动态留白并仅在尾部继续跟随",
   assert.match(hook, /if \(!followsTailRef\.current\) return/);
 });
 
-test("韩立核实消息生命周期驱动南宫婉真实核实状态", () => {
+test("韩立核实消息生命周期保留在会话内，不覆盖协作人物当前状态", () => {
   assert.match(personaConversation, /delegatedResponderPersonaId/);
   assert.match(personaConversation, /inquiryActivity\?\.status === "running"/);
   assert.match(personaConversation, /inquiryActivity\.phase === "investigating"/);
   assert.doesNotMatch(personaConversation, /inquiry:\(\.\+\):progress/);
-  assert.match(developerPersonaActivities, /else if \(hanli\.delegatedResponderPersonaId === "nangong-wan"\)/);
-  assert.match(developerPersonaActivities, /nangongActivity = "investigating"/);
+  assert.doesNotMatch(taskNavigation, /conversationActivity|personaConversationActivities/);
 });
