@@ -10,6 +10,7 @@ import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths } from "../confi
 import { createBusinessAuditArchive, EventCenterFacade } from "../../services/support/capabilities/event-center/index.js";
 import { WorkspaceFacade } from "../../services/support/platform/workspace/index.js";
 import { isDescendantOrSame, resolveBoundaryPath } from "./path-boundary.js";
+import { resolvePublishedRuntimeSourceSha } from "./published-runtime-source.manifest.js";
 
 /** 启动前解析出的稳定环境；后续 Bootstrap 禁止再次读取启动参数推断另一套路径。 */
 export interface StartupContext {
@@ -79,9 +80,7 @@ export function createStartupContext(): StartupContext {
   const runtimeSourceShaArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-runtime-sha="))
     ?.slice("--ai-desktop-runtime-sha=".length)
     || null;
-  const runtimeSourceSha = runtimeSourceShaArgument && /^[0-9a-f]{40,64}$/.test(runtimeSourceShaArgument)
-    ? runtimeSourceShaArgument
-    : null;
+  const runtimeSourceSha = resolvePublishedRuntimeSourceSha(process.resourcesPath, runtimeSourceShaArgument);
 
   return {
     applicationName,
