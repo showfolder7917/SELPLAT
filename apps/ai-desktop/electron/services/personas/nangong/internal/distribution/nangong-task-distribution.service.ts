@@ -16,6 +16,8 @@ class DistributionPlanFormatError extends Error {
     readonly responseLength: number,
     /** 括号配平的闭合对象候选数；只用于安全诊断，绝不记录模型文本。 */
     readonly candidateCount: number,
+    /** 外层对象未闭合时，重试反馈必须指明格式类别，不能误称为闭合对象语法错误。 */
+    readonly hasUnclosedObject: boolean,
   ) {
     super("AI 返回的结构化判断不是有效 JSON。");
   }
@@ -90,7 +92,9 @@ export class NangongTaskDistributionService {
               proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount, reason: error.message,
             });
             // 仅把无内容的格式类别反馈给下一次规划，帮助模型纠正而不泄露原始响应。
-            const formatDetail = error.candidateCount === 0
+            const formatDetail = error.hasUnclosedObject
+              ? "检测到未闭合 JSON 对象"
+              : error.candidateCount === 0
               ? "未提取到完整 JSON 对象"
               : `提取到 ${error.candidateCount} 个闭合对象但 JSON 语法无效`;
             feedback = `上一轮${formatDetail}（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
@@ -207,7 +211,7 @@ function parseDistributionPlan(text: string): PlanResult {
     if (plan) return plan;
   }
   // 外层计划未闭合时，内部任务对象可能单独配平；此时必须走格式重试而非误报拆分冲突。
-  if (hasUnclosedObject) throw new DistributionPlanFormatError(text.length, candidateCount);
+  if (hasUnclosedObject) throw new DistributionPlanFormatError(text.length, candidateCount, true);
   throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
 }
 
@@ -240,7 +244,7 @@ function parseJsonObjects(text: string): ParsedJsonObjects {
       return value && typeof value === "object" && !Array.isArray(value) ? [value as Record<string, unknown>] : [];
     } catch { return []; }
   });
-  if (!values.length) throw new DistributionPlanFormatError(text.length, candidates.length);
+  if (!values.length) throw new DistributionPlanFormatError(text.length, candidates.length, hasUnclosedObject);
   return { values, candidateCount: candidates.length, hasUnclosedObject };
 }
 
