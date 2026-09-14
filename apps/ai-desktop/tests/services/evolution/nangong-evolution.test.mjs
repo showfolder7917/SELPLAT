@@ -1124,7 +1124,7 @@ test("分发计划会纠正首轮无效 JSON，并从围栏中的单个有效对
     assert.equal(attempts, 2);
     assert.equal(submitted, 1);
     assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
-    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details), [{ proposalId, attempt: 1, responseLength: "计划如下：{\"summary\":\"未闭合".length, candidateCount: 0, hasUnclosedObject: true, reason: "AI 返回的结构化判断不是有效 JSON。" }]);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details), [{ proposalId, attempt: 1, responseLength: "计划如下：{\"summary\":\"未闭合".length, candidateCount: 0, hasUnclosedObject: true, formatKind: "unclosed-object", reason: "AI 返回的结构化判断不是有效 JSON。" }]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1148,7 +1148,7 @@ test("分发计划格式重试仅记录闭合候选数量而不记录无效对�
     assert.equal(attempts, 2);
     assert.equal(submitted, 1);
     const retry = events.find((event) => event.type === "nangong.evolution.distribution_format_retry");
-    assert.deepEqual(retry.details, { proposalId, attempt: 1, responseLength: rawFailure.length, candidateCount: 1, hasUnclosedObject: false, reason: "AI 返回的结构化判断不是有效 JSON。" });
+    assert.deepEqual(retry.details, { proposalId, attempt: 1, responseLength: rawFailure.length, candidateCount: 1, hasUnclosedObject: false, formatKind: "invalid-object", reason: "AI 返回的结构化判断不是有效 JSON。" });
     assert.equal(JSON.stringify(events).includes(rawFailure), false);
     assert.match(retryPrompt, /程序上一轮检测到格式错误：/);
     assert.doesNotMatch(retryPrompt, /程序上一轮核对到的确定性冲突：/);
@@ -1272,7 +1272,7 @@ test("分发计划连续两次无效 JSON 时阻断且不记录模型原文", as
     assert.equal(submitted, 0);
     assert.equal(JSON.stringify(events).includes(rawFailure), false);
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.responseLength), [rawFailure.length]);
-    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_failed").map((event) => event.details), [{ proposalId, attempt: 2, responseLength: rawFailure.length, candidateCount: 0, hasUnclosedObject: true, reason: "AI 返回的结构化判断不是有效 JSON。" }]);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_failed").map((event) => event.details), [{ proposalId, attempt: 2, responseLength: rawFailure.length, candidateCount: 0, hasUnclosedObject: true, formatKind: "unclosed-object", reason: "AI 返回的结构化判断不是有效 JSON。" }]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

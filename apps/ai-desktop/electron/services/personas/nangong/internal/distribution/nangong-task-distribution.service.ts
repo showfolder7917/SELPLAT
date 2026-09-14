@@ -9,6 +9,7 @@ import type { PromptLibraryPort } from "../../../../support/capabilities/prompts
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 type ParsedJsonObjects = { values: Record<string, unknown>[]; candidateCount: number; hasUnclosedObject: boolean };
+type DistributionPlanFormatKind = "unclosed-object" | "missing-object" | "invalid-object";
 
 /** 仅表示模型输出格式不能恢复；计划字段不完整仍由既有严格校验拒绝。 */
 class DistributionPlanFormatError extends Error {
@@ -21,6 +22,12 @@ class DistributionPlanFormatError extends Error {
   ) {
     super("AI 返回的结构化判断不是有效 JSON。");
   }
+}
+
+/** 将无内容的解析事实归为稳定类别，供审计和失败恢复读取。 */
+function distributionPlanFormatKind(error: DistributionPlanFormatError): DistributionPlanFormatKind {
+  if (error.hasUnclosedObject) return "unclosed-object";
+  return error.candidateCount === 0 ? "missing-object" : "invalid-object";
 }
 
 export interface NangongTaskDistributionServiceOptions {
@@ -91,7 +98,7 @@ export class NangongTaskDistributionService {
             this.options.recordEvent("nangong.evolution.distribution_format_retry", {
               proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount,
               // 记录布尔分类供失败调查区分未闭合与语法错误，不携带任何模型输出。
-              hasUnclosedObject: error.hasUnclosedObject, reason: error.message,
+              hasUnclosedObject: error.hasUnclosedObject, formatKind: distributionPlanFormatKind(error), reason: error.message,
             });
             // 仅把无内容的格式类别反馈给下一次规划，帮助模型纠正而不泄露原始响应。
             const formatDetail = error.hasUnclosedObject
@@ -107,7 +114,7 @@ export class NangongTaskDistributionService {
             // 第二次格式失败也保留安全分类，便于定位旧运行包的通用 JSON 报错而不写入模型原文。
             this.options.recordEvent("nangong.evolution.distribution_format_failed", {
               proposalId, attempt, responseLength: error.responseLength, candidateCount: error.candidateCount,
-              hasUnclosedObject: error.hasUnclosedObject, reason: error.message,
+              hasUnclosedObject: error.hasUnclosedObject, formatKind: distributionPlanFormatKind(error), reason: error.message,
             });
           }
           const detail = error instanceof Error ? error.message : String(error);
