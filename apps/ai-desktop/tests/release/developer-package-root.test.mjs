@@ -30,6 +30,7 @@ test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {
   for (const scriptName of ["dist:win:developer", "dist:mac:developer", "package:mac:developer"]) {
     assert.match(packageManifest.scripts[scriptName], /scripts\/package-developer\.mjs/);
   }
+  assert.match(packageManifest.scripts["package:mac:developer"], /assert-developer-package-space\.mjs/);
   assert.match(unifiedRunnerSource, /SELPLAT_ROOT: this\.#sourceProjectRoot/);
   assert.match(packageManifest.scripts["verify:developer-package-root"], /verify-developer-package-root\.mjs/);
   assert.match(packagedVerifierSource, /mtimeMs/, "多平台产物并存时必须验证最新生成的真实包");
@@ -116,7 +117,9 @@ test("开发包将缓存依赖解引用到候选工作树内的临时输入", as
 test("开发包运行器只在打包期间使用和清理实体化输入", () => {
   assert.match(packageInputSource, /dereference: true/);
   assert.match(packageInputSource, /materializeDependencyTree/);
+  assert.match(packageInputSource, /assertDeveloperPackageInputCapacity/);
   assert.match(packageInputSource, /assertPackageInputLinksStayInside/);
+  assert.match(packageRunnerSource, /assertDeveloperPackageInputCapacity/);
   assert.match(packageRunnerSource, /AI_DESKTOP_PACKAGE_INPUT_ROOT/);
   assert.match(packageRunnerSource, /finally[\s\S]*cleanupDeveloperPackageInput/);
 });
