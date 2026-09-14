@@ -52,6 +52,8 @@ import type {
 
 /** 右侧协作区只有“人物会话”和“任务协作群”两个一级页面。 */
 export type CollaborationPanel = "member" | "task-group";
+/** 协作状态存储的当前读取结果，和时间线读取结果分开保存。 */
+export type CollaborationStateReadStatus = "syncing" | "ready" | "unavailable";
 
 /** 已结束任务不再占用人物，也不进入人物当前任务列表。 */
 const TERMINAL_TASK_STATES = new Set<CollaborationTaskOutDto["state"]>([
@@ -173,6 +175,8 @@ function mergeLiveOutput(
 export function useCollaborationWorkspace() {
   // 协作总状态：控制当前模式、成员列表、任务列表和已选人物。
   const [state, setState] = useState<CollaborationStateOutDto | null>(null);
+  // 状态未返回或读取失败时，人物区域不能用旧时间线冒充当前成员状态。
+  const [stateReadStatus, setStateReadStatus] = useState<CollaborationStateReadStatus>("syncing");
   // 权威时间线：任务群和人物页都从这份 SQLite 投影读取历史。
   const [timeline, setTimeline] = useState<CollaborationTimelineSnapshotOutDto | null>(null);
   // 令狐自动化：令狐人物页显示并更新自动保障运行状态。
@@ -190,7 +194,11 @@ export function useCollaborationWorkspace() {
 
   useEffect(() => {
     const desktop = getOptionalCollaborationDesktopApi();
-    if (!desktop) return;
+    if (!desktop) {
+      setStateReadStatus("unavailable");
+      setError("无法连接协作状态服务。");
+      return;
+    }
 
     /** 重新读取已提交的权威时间线，读取失败时保留当前页面并显示原因。 */
     const refreshTimelineFromDesktop = () => {
@@ -202,9 +210,15 @@ export function useCollaborationWorkspace() {
     };
 
     // 首次进入页面时读取三份独立状态，后续变化由各自事件通道更新。
-    void desktop.getCollaborationState().then((nextState) => {
-      setState(nextState);
-    });
+    void desktop.getCollaborationState()
+      .then((nextState) => {
+        setState(nextState);
+        setStateReadStatus("ready");
+      })
+      .catch((reason) => {
+        setStateReadStatus("unavailable");
+        setError(readableDesktopError(reason, "无法读取协作状态。"));
+      });
     refreshTimelineFromDesktop();
     void desktop.getLinghuAutomationState().then((nextState) => {
       setLinghuAutomation(nextState);
@@ -213,6 +227,7 @@ export function useCollaborationWorkspace() {
     // 成员或任务变化时，主进程会推送完整协作状态。
     const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEventOutDto) => {
       setState(event.state);
+      setStateReadStatus("ready");
     });
 
     // 时间线只在事务提交事件到达后重新读取，避免 Renderer 自己拼接审计历史。
@@ -346,6 +361,8 @@ export function useCollaborationWorkspace() {
     data: {
       // 协作总状态：保存模式、成员、任务和当前后端选择。
       state,
+      // 状态读取结果：人物显示模型据此展示同步或未更新，而不沿用历史任务状态。
+      stateReadStatus,
       // 权威时间线：保存已经落库的专题和人物节点。
       timeline,
       // 令狐自动化：保存自动保障和会话显示边界。

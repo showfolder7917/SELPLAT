@@ -16,14 +16,10 @@ import type { ReactNode } from "react";
 import type {
   // 最近任务摘要供单会话导航显示最后一次普通任务。
   AuditTaskSummaryOutDto,
-  // 人物演化状态供协同人物导航显示当前研讨状态。
-  EvolutionStateOutDto,
   // 界面语言决定左侧导航使用中文还是日文。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 import type {
-  // 人物会话活动用于临时覆盖人物的空闲显示状态。
-  PersonaConversationActivity,
   // 协作控制器提供模式、人物和任务群页面操作。
   useCollaborationWorkspace,
 } from "../../../features/collaboration";
@@ -36,14 +32,10 @@ type CollaborationController = ReturnType<typeof useCollaborationWorkspace>;
 type TaskExplorerFeatureProps = {
   /** 左侧任务区域是否展开。 */
   expanded: boolean;
-  /** 韩立和南宫婉当前共同研讨状态。 */
-  evolution: EvolutionStateOutDto | null;
   /** 当前界面语言。 */
   locale: LocaleValue;
   /** 单会话模式最近一次审计任务。 */
   auditTask: AuditTaskSummaryOutDto | null;
-  /** 每个人物独立会话页面当前正在进行的活动。 */
-  personaConversationActivities: Record<string, PersonaConversationActivity | null>;
   /** 协作状态和跨进程业务操作的唯一控制器。 */
   controller: CollaborationController;
   /** 展开或收起左侧任务区域。 */
@@ -53,10 +45,8 @@ type TaskExplorerFeatureProps = {
 /** 左侧任务导航组合模式开关、单会话摘要和协同入口，不渲染右侧业务页面。 */
 export function TaskExplorerFeature({
   expanded,
-  evolution,
   locale,
   auditTask,
-  personaConversationActivities,
   controller,
   onToggle,
 }: TaskExplorerFeatureProps) {
@@ -84,9 +74,7 @@ export function TaskExplorerFeature({
     navigationContent = (
       <CollaborationTaskNavigation
         controller={controller}
-        evolution={evolution}
         locale={locale}
-        personaConversationActivities={personaConversationActivities}
       />
     );
   } else {

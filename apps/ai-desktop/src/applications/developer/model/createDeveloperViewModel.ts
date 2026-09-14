@@ -71,11 +71,9 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
     },
     // Explorer 只获得任务导航和协作 Feature 所需的数据。
     explorer: {
-      evolution: controller.evolution.state,
       expanded: controller.tasks.expanded,
       locale: controller.settings.locale,
       auditTask: controller.diagnostics.auditInfo?.latestTask || null,
-      personaConversationActivities: controller.personaConversationActivities,
       collaboration: controller.collaboration,
       onToggle: controller.tasks.toggle,
       workspaceExpanded: controller.workspaceExplorer.expanded,
