@@ -9,6 +9,7 @@ import { resolveApplicationName, resolveAppVariant, resolveProjectRoot } from ".
 import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths } from "../config/ai-memory-path-resolver.js";
 import { createBusinessAuditArchive, EventCenterFacade } from "../../services/support/capabilities/event-center/index.js";
 import { WorkspaceFacade } from "../../services/support/platform/workspace/index.js";
+import { isDescendantOrSame, resolveBoundaryPath } from "./path-boundary.js";
 
 /** 启动前解析出的稳定环境；后续 Bootstrap 禁止再次读取启动参数推断另一套路径。 */
 export interface StartupContext {
@@ -47,7 +48,8 @@ export function createStartupContext(): StartupContext {
   }
 
   const projectRoot = path.resolve(selectedWorkspace.path);
-  if (readArgument("--ai-desktop-acceptance-isolation-root=") && projectRoot !== configuredProjectRoot) {
+  if (readArgument("--ai-desktop-acceptance-isolation-root=")
+    && resolveBoundaryPath(projectRoot) !== resolveBoundaryPath(configuredProjectRoot)) {
     throw new Error("隔离验收工作区不得在启动后切换项目根。");
   }
   const eventCenter = new EventCenterFacade(createBusinessAuditArchive(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot));
@@ -108,7 +110,7 @@ function auditAcceptanceIsolation(options: {
   const isolationRootArgument = readArgument("--ai-desktop-acceptance-isolation-root=");
   if (!isolationRootArgument) return;
   if (!app.isPackaged) throw new Error("隔离验收只允许启动已打包的 AI Desktop。");
-  const isolationRoot = path.resolve(isolationRootArgument);
+  const isolationRoot = resolveBoundaryPath(isolationRootArgument);
   const protectedProjectRoot = requireArgument("--ai-desktop-acceptance-protected-project-root=");
   const protectedUserDataRoot = requireArgument("--ai-desktop-acceptance-protected-user-data-root=");
   const userDataRoot = path.resolve(app.getPath("userData"));
@@ -126,8 +128,8 @@ function auditAcceptanceIsolation(options: {
     options.projectPaths.archiveLogRoot, options.projectPaths.temporaryMaterialsRoot, auditPath,
     ...(workspaceRecoveryCheckFile ? [workspaceRecoveryCheckFile] : []),
     ...(workspaceRecoveryTemporaryRoot ? [workspaceRecoveryTemporaryRoot] : []),
-  ].map((candidate) => path.resolve(candidate));
-  const protectedRoots = [path.resolve(protectedProjectRoot), path.resolve(protectedUserDataRoot)];
+  ].map(resolveBoundaryPath);
+  const protectedRoots = [protectedProjectRoot, protectedUserDataRoot].map(resolveBoundaryPath);
   for (const candidate of writablePaths) {
     if (!isDescendantOrSame(isolationRoot, candidate) || protectedRoots.some((root) => isDescendantOrSame(root, candidate))) {
       throw new Error(`隔离验收路径越界，拒绝启动：${candidate}`);
@@ -149,9 +151,4 @@ function requireArgument(prefix: string): string {
   const value = readArgument(prefix);
   if (!value) throw new Error(`隔离验收缺少启动参数：${prefix}`);
   return value;
-}
-
-function isDescendantOrSame(root: string, candidate: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }

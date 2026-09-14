@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { isDescendantOrSame, resolveBoundaryPath } from "../../../../build/ai-desktop/electron/electron/system/bootstrap/path-boundary.js";
+
 const startup = readFileSync("electron/system/bootstrap/startup-context.ts", "utf8");
 const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
 const launcher = readFileSync("scripts/start-isolated-acceptance.mjs", "utf8");
@@ -16,6 +18,14 @@ test("隔离验收在任何可写服务前审计并拒绝正式根", () => {
   assert.match(startup, /rule-workspace.*codex-home.*collaboration/s);
   assert.match(startup, /archiveLogRoot.*temporaryMaterialsRoot/s);
   assert.match(startup, /workspaceRecoveryCheckFile.*workspaceRecoveryTemporaryRoot.*writablePaths/s);
+});
+
+test("路径边界把 macOS 临时目录别名和未创建文件统一为真实路径", () => {
+  const aliasRoot = process.platform === "darwin" ? "/tmp" : resolveBoundaryPath("/tmp");
+  const realRoot = resolveBoundaryPath(aliasRoot);
+  assert.equal(isDescendantOrSame(aliasRoot, `${realRoot}/ai-desktop-isolation/result/not-created.json`), true);
+  assert.equal(isDescendantOrSame(aliasRoot, `${realRoot}-outside/result.json`), false);
+  assert.match(startup, /resolveBoundaryPath\(projectRoot\) !== resolveBoundaryPath\(configuredProjectRoot\)/);
 });
 
 test("验收启动器只启动已打包应用，并把三类根同时传入", () => {
@@ -48,6 +58,7 @@ test("工作区重启检查使用独立工程用户目录和临时根，并在�
   assert.match(workspaceRecovery, /--ai-desktop-user-data-dir=/);
   assert.match(workspaceRecovery, /ai-memory-paths\.json[\s\S]*schemaVersion: 2[\s\S]*events\.sqlite3/);
   assert.match(workspaceRecovery, /new WorkspaceAcceptanceFixture\(workspaces, check\.temporaryRoot\)/);
+  assert.match(workspaceRecovery, /stdio: \["ignore", "pipe", "pipe"\]/);
   assert.match(workspaceRecovery, /staleDirectoryRemoved.*staleRegistrationRemoved.*unmarkedWorkspacePreserved.*primaryWorkspacePreserved/s);
   assert.doesNotMatch(workspaceRecovery, /writeFileSync\([^\n]*(formalProjectRoot|formalUserDataRoot)/);
 });

@@ -88,16 +88,20 @@ export function completeWorkspaceStartupRecoveryCheck(check: WorkspaceStartupRec
 
 function runProbeProcess(executable: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { shell: false, stdio: "ignore" });
+    const child = spawn(executable, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    let diagnostic = "";
+    const collect = (chunk: Buffer): void => { diagnostic = `${diagnostic}${chunk.toString("utf8")}`.slice(-8_000); };
+    child.stdout.on("data", collect);
+    child.stderr.on("data", collect);
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error("隔离重启回收检查超时。"));
+      reject(new Error(`隔离重启回收检查超时。${diagnostic ? `\n${diagnostic}` : ""}`));
     }, 20_000);
     child.once("error", (error) => { clearTimeout(timeout); reject(error); });
     child.once("exit", (code) => {
       clearTimeout(timeout);
       if (code === 0) resolve();
-      else reject(new Error(`隔离重启回收检查进程退出码 ${code ?? "unknown"}。`));
+      else reject(new Error(`隔离重启回收检查进程退出码 ${code ?? "unknown"}。${diagnostic ? `\n${diagnostic}` : ""}`));
     });
   });
 }
