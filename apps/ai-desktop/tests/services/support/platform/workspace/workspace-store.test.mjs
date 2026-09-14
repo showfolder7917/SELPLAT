@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { WorkspaceStore } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/workspace/internal/workspace.store.js";
+import { WorkspaceFacade } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/workspace/workspace.facade.js";
 import { createSandboxPolicy } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/codex/codex.facade.js";
 import { controlledTestRoot } from "#test-paths";
 
@@ -87,6 +88,74 @@ test("legacy read-only workspace profiles migrate once to the writable default",
 
     store.updatePermission(migrated.roots[0].id, "read-only");
     assert.equal(new WorkspaceStore(configPath, projectPath).read().roots[0].permission, "read-only");
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("统一文件入口只预览文本并受控打开 PPT/PPTX", async () => {
+  const managedTempRoot = controlledTestRoot;
+  mkdirSync(managedTempRoot, { recursive: true });
+  const fixture = mkdtempSync(path.join(managedTempRoot, "workspace-file-open-test-"));
+  try {
+    const projectPath = path.join(fixture, "project");
+    mkdirSync(projectPath);
+    writeFileSync(path.join(projectPath, "readme.md"), "已确认的文本内容", "utf8");
+    writeFileSync(path.join(projectPath, "roadmap.PPTX"), "presentation", "utf8");
+    const openedFiles = [];
+    const facade = new WorkspaceFacade(path.join(fixture, "workspace-profiles.json"), projectPath, async (filePath) => {
+      openedFiles.push(filePath);
+    });
+    const workspaceId = facade.read().primaryId;
+
+    assert.deepEqual(await facade.openFile(workspaceId, "readme.md"), {
+      kind: "preview", workspaceId, relativePath: "readme.md", content: "已确认的文本内容",
+    });
+    assert.deepEqual(await facade.openFile(workspaceId, "roadmap.PPTX"), {
+      kind: "system-opened", workspaceId, relativePath: "roadmap.PPTX",
+    });
+    assert.deepEqual(openedFiles, [path.join(projectPath, "roadmap.PPTX")]);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("系统默认应用失败只返回受控提示，不返回系统路径或错误", async () => {
+  const managedTempRoot = controlledTestRoot;
+  mkdirSync(managedTempRoot, { recursive: true });
+  const fixture = mkdtempSync(path.join(managedTempRoot, "workspace-file-open-failure-test-"));
+  try {
+    const projectPath = path.join(fixture, "project");
+    mkdirSync(projectPath);
+    writeFileSync(path.join(projectPath, "roadmap.ppt"), "presentation", "utf8");
+    const facade = new WorkspaceFacade(path.join(fixture, "workspace-profiles.json"), projectPath, async () => {
+      throw new Error("/private/path/system-detail");
+    });
+    const workspaceId = facade.read().primaryId;
+    assert.deepEqual(await facade.openFile(workspaceId, "roadmap.ppt"), {
+      kind: "system-open-failed", workspaceId, relativePath: "roadmap.ppt", message: "无法使用系统默认应用打开该演示文稿。",
+    });
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("统一文件入口在调用系统能力前拒绝越界路径和目录", async () => {
+  const managedTempRoot = controlledTestRoot;
+  mkdirSync(managedTempRoot, { recursive: true });
+  const fixture = mkdtempSync(path.join(managedTempRoot, "workspace-file-open-boundary-test-"));
+  try {
+    const projectPath = path.join(fixture, "project");
+    mkdirSync(projectPath);
+    mkdirSync(path.join(projectPath, "folder"));
+    let openCount = 0;
+    const facade = new WorkspaceFacade(path.join(fixture, "workspace-profiles.json"), projectPath, async () => {
+      openCount += 1;
+    });
+    const workspaceId = facade.read().primaryId;
+    await assert.rejects(facade.openFile(workspaceId, "../outside.pptx"), /不允许的层级/);
+    await assert.rejects(facade.openFile(workspaceId, "folder"), /不是普通文件/);
+    assert.equal(openCount, 0);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

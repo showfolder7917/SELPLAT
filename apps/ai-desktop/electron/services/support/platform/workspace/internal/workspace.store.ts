@@ -110,7 +110,12 @@ export class WorkspaceStore {
     } catch {
       throw new Error("该文件不是 UTF-8 文本，无法在应用内预览。");
     }
-    return { workspaceId: id, relativePath, content };
+    return { kind: "preview", workspaceId: id, relativePath, content };
+  }
+
+  /** 仅供工作区门面在执行受控系统动作前取得已校验的真实普通文件。 */
+  resolveFile(id: string, relativePath: string): string {
+    return this.#resolveInsideWorkspace(id, relativePath, "file");
   }
 
   #requireRoot(state: WorkspaceStateOutDto, id: string): WorkspaceRootOutDto {
