@@ -675,43 +675,38 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
       conditions: plan.segments.flatMap((item) => item.conditions),
     }],
   };
-  const result = await submission.run(workspaceFixtureGoal, async (requestId, attempt, previousRejection) => {
+  const result = await submission.run(workspaceFixtureGoal, async (requestId, attempt, retryContext) => {
     if (attempt === 1) {
-      assert.equal(previousRejection, null);
+      assert.equal(retryContext, null);
       assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...splitFixturePlan, requestId })).success, false);
       return;
     }
-    assert.match(previousRejection.message, /一次性工作区夹具只能使用一个验收阶段/);
-    assert.deepEqual(previousRejection.requiredSceneKinds, ["workspace-explorer-fixture"]);
-    assert.deepEqual(previousRejection.submittedSceneKinds, ["workspace-explorer-fixture", "workspace-explorer-fixture"]);
-    assert.deepEqual(previousRejection.submittedCriterionIds, ["criterion-1", "criterion-2"]);
+    assert.match(retryContext.rejectionMessage, /一次性工作区夹具只能使用一个验收阶段/);
+    assert.deepEqual(retryContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
+    assert.equal("submittedSceneKinds" in retryContext, false);
     assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...mergedFixturePlan, requestId })).success, true);
   });
   assert.deepEqual(result, mergedFixturePlan);
 });
 
-test("跨任务夹具遗漏时第二回合收到必需场景与候选摘要并能提交修正计划", async () => {
+test("跨任务夹具遗漏时第二回合按当前目标重新生成计划且审计只保存结果", async () => {
   const rejections = [];
   const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
   const omittedFixturePlan = { ...plan, segments: [{ ...segment, kind: "current-window", reason: "错误地只观察当前窗口" }] };
   const correctedPlan = { ...plan, segments: [{ ...segment, kind: "cross-task-member-occupancy", reason: "核对令狐另一项任务的当前占用" }] };
-  const result = await submission.run(crossTaskMemberOccupancyGoal, async (requestId, attempt, previousRejection) => {
+  const result = await submission.run(crossTaskMemberOccupancyGoal, async (requestId, attempt, retryContext) => {
     if (attempt === 1) {
       assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedFixturePlan, requestId })).success, false);
       return;
     }
-    assert.equal(previousRejection.message, "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。");
-    assert.deepEqual(previousRejection.requiredSceneKinds, ["cross-task-member-occupancy"]);
-    assert.deepEqual(previousRejection.submittedSceneKinds, ["current-window"]);
-    assert.deepEqual(previousRejection.submittedCriterionIds, ["criterion-1", "criterion-2"]);
+    assert.equal(retryContext.rejectionMessage, "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。");
+    assert.deepEqual(retryContext.requiredSceneKinds, ["cross-task-member-occupancy"]);
+    assert.equal("submittedSceneKinds" in retryContext, false);
     assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...correctedPlan, requestId })).success, true);
   });
   assert.deepEqual(result, correctedPlan);
   assert.deepEqual(rejections, [{
     message: "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。",
-    requiredSceneKinds: ["cross-task-member-occupancy"],
-    submittedSceneKinds: ["current-window"],
-    submittedCriterionIds: ["criterion-1", "criterion-2"],
   }]);
 });
 
@@ -719,14 +714,13 @@ test("协作状态夹具的两种允许阶段由同一需求规则校验和纠�
   const submission = createAcceptanceSceneSubmission();
   const omittedFixturePlan = { ...plan, segments: [{ ...segment, kind: "current-window", reason: "错误地跳过状态夹具" }] };
   const correctedPlan = { ...plan, segments: [{ ...segment, kind: "collaboration-state-unavailable", reason: "核对读取失败后的明确状态" }] };
-  const result = await submission.run(collaborationStateProjectionGoal, async (requestId, attempt, previousRejection) => {
+  const result = await submission.run(collaborationStateProjectionGoal, async (requestId, attempt, retryContext) => {
     if (attempt === 1) {
       assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedFixturePlan, requestId })).success, false);
       return;
     }
-    assert.equal(previousRejection.message, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
-    assert.deepEqual(previousRejection.requiredSceneKinds, ["collaboration-state-syncing", "collaboration-state-unavailable"]);
-    assert.deepEqual(previousRejection.submittedSceneKinds, ["current-window"]);
+    assert.equal(retryContext.rejectionMessage, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
+    assert.deepEqual(retryContext.requiredSceneKinds, ["collaboration-state-syncing", "collaboration-state-unavailable"]);
     assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...correctedPlan, requestId })).success, true);
   });
   assert.deepEqual(result, correctedPlan);
