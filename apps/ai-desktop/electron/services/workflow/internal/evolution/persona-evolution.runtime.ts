@@ -53,6 +53,8 @@ export interface PersonaEvolutionRuntimeOptions {
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
   /** 把已批准提案拆成结构化任务计划的可选模型端口。 */
   planDistribution?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"], emit: (event: CodexStreamEventOutDto) => void) => Promise<string>;
+  /** 判断专项规则是否登记在当前稳定用户的有效规则目录中。 */
+  isCurrentUserTaskRuleId: (logicalId: string) => boolean;
   /** 记录普通演化业务事件的统一入口。 */
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   /** 记录阻塞或技术异常的统一事件中心入口。 */
@@ -179,6 +181,7 @@ export class PersonaEvolutionRuntime {
       timeline: options.recordTimelineEvent,
       timelineStream: options.recordTimelineStream,
       plan: this.#planDistribution,
+      isCurrentUserTaskRuleId: options.isCurrentUserTaskRuleId,
       prompts: options.prompts,
     });
     this.nangongRuntime = createNangongRuntime({

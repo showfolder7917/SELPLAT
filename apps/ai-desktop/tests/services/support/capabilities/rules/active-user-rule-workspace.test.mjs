@@ -2,9 +2,24 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { build } from "esbuild";
 
 import { controlledTestRoot } from "#test-paths";
-import { ActiveUserRuleFacade, RulePackageArchiveFacade, RulePackageUploadCoordinator, RuleWorkspaceFacade } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/rules/index.js";
+
+// 在内存中转换当前工作树源码，避免测试依赖禁止生成的 Electron 构建产物。
+async function loadRulesSource() {
+  const result = await build({
+    entryPoints: ["electron/services/support/capabilities/rules/index.ts"],
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "es2022",
+    write: false,
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+
+const { ActiveUserRuleFacade, RulePackageArchiveFacade, RulePackageUploadCoordinator, RuleWorkspaceFacade } = await loadRulesSource();
 
 const roleIds = {
   hanli: "AI_DESKTOP_HANLI_USER_QUESTIONING_RULES",
@@ -29,7 +44,7 @@ function fixture(root, user = "XUNAN") {
   writeFileSync(path.join(userRoot, "shared.md"), "# shared\nall-person-clear-communication\n", "utf8");
   for (const [role] of Object.entries(roleIds)) writeFileSync(path.join(userRoot, `${role}.md`), `# ${role}\nversion-one\n`, "utf8");
   const core = path.join(rules, "local", "core"); mkdirSync(core, { recursive: true });
-  writeFileSync(path.join(core, "RULE_INDEX.md"), "FORBIDDEN_CORE = local/core/core.md\n", "utf8");
+  writeFileSync(path.join(core, "RULE_INDEX.md"), "FORBIDDEN_CORE = local/core/core.md\nCODE_JS_RULES = local/core/core.md\n", "utf8");
   writeFileSync(path.join(core, "core.md"), "must-not-load\n", "utf8");
   return { engine, rules, userRoot };
 }
@@ -39,6 +54,8 @@ test("活动用户加载器只递归当前用户，并冻结任务规则正文",
   const { engine, rules, userRoot } = fixture(root);
   const service = new ActiveUserRuleFacade({ mode: "source", workspaceRoot: engine, agentsPath: path.join(engine, "AGENTS.md"), ruleRoot: rules });
   assert.equal(service.resolve("FORBIDDEN_CORE").rule, null);
+  assert.equal(service.resolve("CODE_JS_RULES").rule, null);
+  assert.throws(() => service.createTaskRuleSnapshot("executor", ["CODE_JS_RULES"]), /当前用户规则未登记：CODE_JS_RULES/);
   const frozen = service.createTaskRuleSnapshot("executor");
   assert.deepEqual(frozen.mandatoryRoleRuleIds, [sharedRuleId, roleIds.executor]);
   assert.match(service.renderTaskRuleSnapshot(frozen), /all-person-clear-communication/);

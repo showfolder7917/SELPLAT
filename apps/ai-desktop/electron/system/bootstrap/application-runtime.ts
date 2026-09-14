@@ -842,6 +842,7 @@ export async function startApplication(): Promise<void> {
     },
     investigateRevision: async (prompt, workspaceState, locale) => (await nangongDeliberationCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], () => undefined, null)).text,
     planDistribution: async (prompt, workspaceState, locale, emit) => (await nangongDistributionCodex!.send(prompt, locale, "read-only", mergeWorkspaceState(workspaces.read(), workspaceState), [], emit, null)).text,
+    isCurrentUserTaskRuleId: (logicalId) => rules.resolve(logicalId).rule !== null,
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     askHanliDeliberation: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
     askNangongDeliberation: async (prompt, state) => (await nangongDeliberationCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
