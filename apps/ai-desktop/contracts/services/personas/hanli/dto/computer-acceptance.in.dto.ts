@@ -9,6 +9,7 @@ import type { AcceptanceSceneSegmentOutDto } from "./acceptance-scene.out.dto.js
 export type HanliAcceptanceInteractionCapability =
   | "workspace-explorer"
   | "workspace-explorer-scenarios"
+  | "workspace-cleanup-recovery"
   | "workspace-startup-recovery";
 
 /**
@@ -35,6 +36,18 @@ export interface WorkspaceStartupRecoveryEvidenceOutDto {
   beforeRootCount: number;
   afterRootCount: number;
   reason: string;
+}
+
+/** 当前真实窗口中完成临时工作区收尾及一次受控失败恢复后形成的最小证据。 */
+export interface WorkspaceCleanupRecoveryEvidenceOutDto {
+  status: "passed";
+  failureSimulated: boolean;
+  firstFailurePhase: "workspace" | "directory" | null;
+  firstFailureReason: string | null;
+  recovered: boolean;
+  workspaceRegistrationRemoved: boolean;
+  directoryRemoved: boolean;
+  windowProjectionReleased: boolean;
 }
 
 /**
@@ -78,6 +91,8 @@ export interface HanliComputerAcceptanceInDto {
   workspaceAcceptanceFixture?: WorkspaceAcceptanceFixtureContextOutDto;
   /** 当前已打包应用在隔离数据根中执行的真实重启回收结果；只用于对应重启条件的事实判断。 */
   workspaceStartupRecoveryEvidence?: WorkspaceStartupRecoveryEvidenceOutDto;
+  /** 当前夹具由同一生命周期控制器完成失败记录、重试、清理和页面同步后的只读结果。 */
+  workspaceCleanupRecoveryEvidence?: WorkspaceCleanupRecoveryEvidenceOutDto;
   /** 仅当前窗口场景必须提供的运行时身份事实，用于阻止模型臆测记录缺失。 */
   sceneContext?: AcceptanceSceneRuntimeContextOutDto;
   /** 韩立当前证据阶段的已准备场景，不代表页面验收通过。 */

@@ -83,6 +83,39 @@ test("统一准备入口确认页面可用与工作区可见后才交付清理�
   }
 });
 
+test("统一准备入口可在真实页面生命周期内模拟一次收尾失败并由同一句柄恢复", async () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-simulated-cleanup-test-"));
+  const roots = [];
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    add: (directory) => { const root = { id: "simulated-fixture", path: directory }; roots.push(root); return { primaryId: root.id, roots: [...roots] }; },
+    remove: (id) => { const index = roots.findIndex((root) => root.id === id); if (index >= 0) roots.splice(index, 1); },
+    listDirectory: () => ({ entries: [] }),
+  };
+  try {
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    let pageCallCount = 0;
+    const target = { isDestroyed: () => false, webContents: { id: 81, send: () => undefined, executeJavaScript: async () => {
+      pageCallCount += 1;
+      if (pageCallCount > 1) return "released";
+      const directory = fixture.takeDirectory(81);
+      const state = workspaces.add(directory);
+      fixture.registerWorkspace(81, directory, state);
+      return "ready";
+    } } };
+    const environment = await fixture.prepare("basic", target, true);
+    const first = await environment.dispose();
+    assert.deepEqual(first, { status: "failed", phase: "directory", reason: "受控验收模拟临时目录被占用。", workspaceId: "simulated-fixture" });
+    assert.equal(roots.length, 1, "模拟失败不应提前改变工作区状态");
+    const second = await environment.dispose();
+    assert.deepEqual(second, { status: "completed", recovered: true, workspaceId: "simulated-fixture" });
+    assert.equal(roots.length, 0);
+    assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), false);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test("统一准备入口在页面未就绪时撤销目录并阻止验收开始", async () => {
   const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-environment-failure-test-"));
   const roots = [];

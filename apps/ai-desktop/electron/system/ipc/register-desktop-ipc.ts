@@ -42,7 +42,7 @@ import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFac
 import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 import { ActiveUserRuleFacade as RuleService } from "../../services/support/capabilities/rules/index.js";
 import type { PromptLibraryPort } from "../../services/support/capabilities/prompts/index.js";
-import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliComputerAcceptanceInDto, WorkspaceCleanupRecoveryEvidenceOutDto } from "../../../contracts/services/personas/hanli/index.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto;
@@ -154,6 +154,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
     const workspaceExplorerScenarioAcceptance = goal.interactionCapabilities?.includes("workspace-explorer-scenarios") === true;
+    const workspaceCleanupRecoveryRequired = goal.interactionCapabilities?.includes("workspace-cleanup-recovery") === true;
     const workspaceStartupRecoveryRequired = goal.interactionCapabilities?.includes("workspace-startup-recovery") === true;
     const workspaceStartupRecoveryEvidence = workspaceStartupRecoveryRequired
       ? await runWorkspaceStartupRecoveryAcceptance({
@@ -170,9 +171,11 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     let run: Awaited<ReturnType<typeof runHanliAcceptanceSceneSession>> | null = null;
     let workspaceAcceptanceEnvironment: Awaited<ReturnType<typeof workspaceAcceptanceFixture.prepare>> | null = null;
     let workspaceAcceptanceEnvironmentFinalized = false;
-    const finalizeWorkspaceAcceptanceEnvironment = async (): Promise<void> => {
-      if (!workspaceAcceptanceEnvironment || workspaceAcceptanceEnvironmentFinalized) return;
+    let workspaceCleanupRecoveryEvidence: WorkspaceCleanupRecoveryEvidenceOutDto | undefined;
+    const finalizeWorkspaceAcceptanceEnvironment = async (): Promise<WorkspaceCleanupRecoveryEvidenceOutDto | undefined> => {
+      if (!workspaceAcceptanceEnvironment || workspaceAcceptanceEnvironmentFinalized) return workspaceCleanupRecoveryEvidence;
       let cleanup = await workspaceAcceptanceEnvironment.dispose();
+      const firstFailure = cleanup.status === "failed" ? cleanup : null;
       if (cleanup.status === "failed") {
         audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_failed", {
           ...identity, fixtureLabel: workspaceAcceptanceEnvironment.displayName, workspaceId: cleanup.workspaceId,
@@ -187,11 +190,22 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         });
       }
       workspaceAcceptanceEnvironmentFinalized = true;
+      workspaceCleanupRecoveryEvidence = {
+        status: "passed",
+        failureSimulated: workspaceCleanupRecoveryRequired && firstFailure?.reason === "受控验收模拟临时目录被占用。",
+        firstFailurePhase: firstFailure?.phase || null,
+        firstFailureReason: firstFailure?.reason || null,
+        recovered: cleanup.recovered,
+        workspaceRegistrationRemoved: true,
+        directoryRemoved: true,
+        windowProjectionReleased: true,
+      };
+      return workspaceCleanupRecoveryEvidence;
     };
     try {
       // 环境准备完成前不进入场景规划；准备入口自身通过页面原有添加动作登记工作区并确认页面可见。
       workspaceAcceptanceEnvironment = workspaceExplorerAcceptance
-        ? await workspaceAcceptanceFixture.prepare(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow)
+        ? await workspaceAcceptanceFixture.prepare(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow, workspaceCleanupRecoveryRequired)
         : null;
       const acceptanceGoal: HanliComputerAcceptanceInDto = {
         ...goal,

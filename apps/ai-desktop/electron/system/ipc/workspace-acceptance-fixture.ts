@@ -68,7 +68,7 @@ export class WorkspaceAcceptanceFixture {
    * 真实传参示例：传入当前 AI Desktop 主窗口和 scenarios；真实返回示例：返回可见标签与 dispose；
    * 异常或副作用示例：任一准备步骤失败会撤销已登记根和私有目录，韩立验收不会启动。
    */
-  async prepare(mode: FixtureMode, targetWindow: BrowserWindow): Promise<WorkspaceAcceptanceEnvironment> {
+  async prepare(mode: FixtureMode, targetWindow: BrowserWindow, simulateFirstCleanupFailure = false): Promise<WorkspaceAcceptanceEnvironment> {
     if (targetWindow.isDestroyed()) throw new Error("验收主窗口已经关闭，不能准备临时工作区。");
     const reservation = this.reserve(mode, targetWindow.webContents.id);
     try {
@@ -77,10 +77,16 @@ export class WorkspaceAcceptanceFixture {
       if (!this.#reserved?.workspaceId) throw new Error("临时工作区未完成登记，不能开始韩立验收。");
       this.setSceneActive(false);
       let disposeFailed = false;
+      let simulatedFailurePending = simulateFirstCleanupFailure;
       return {
         ...reservation,
         // 完成状态只存在于夹具的唯一保留状态中；失败后同一句柄可再次尝试清理。
         dispose: async () => {
+          if (simulatedFailurePending) {
+            simulatedFailurePending = false;
+            disposeFailed = true;
+            return { status: "failed", phase: "directory", reason: "受控验收模拟临时目录被占用。", workspaceId: this.#reserved?.workspaceId || null };
+          }
           const result = await this.#disposePreparedEnvironment(targetWindow, reservation.displayName);
           if (result.status === "failed") {
             disposeFailed = true;

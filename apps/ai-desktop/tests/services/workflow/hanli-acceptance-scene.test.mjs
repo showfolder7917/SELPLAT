@@ -99,6 +99,14 @@ test("已经签发工作区夹具时拒绝只观察普通工作区", () => {
     /必须包含一个工作区夹具阶段/,
   );
 });
+test("工作区收尾与重启证据必须在夹具之后由专用生命周期场景复核", () => {
+  const lifecycleGoal = { ...workspaceFixtureGoal, interactionCapabilities: ["workspace-explorer", "workspace-cleanup-recovery", "workspace-startup-recovery"] };
+  const fixtureSegment = { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] };
+  const lifecycleSegment = { ...segment, kind: "workspace-lifecycle-review", conditions: [segment.conditions[1]] };
+  assert.deepEqual(validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, lifecycleSegment] }, lifecycleGoal), { ...plan, segments: [fixtureSegment, lifecycleSegment] });
+  assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [lifecycleSegment, fixtureSegment] }, lifecycleGoal), /紧接夹具阶段/);
+  assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, { ...lifecycleSegment, kind: "failure-recovery-timeline" }] }, lifecycleGoal), /生命周期复核/);
+});
 test("一次性工作区夹具不能被拆分到多个正式验收阶段", () => {
   const splitFixturePlan = {
     ...plan,
@@ -315,6 +323,35 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
   assert.deepEqual(result.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
   assert.equal(result.status, "passed");
   assert.equal(active.size, 0);
+});
+
+test("工作区生命周期复核先统一收尾，再把恢复证据和前序截图交给当前窗口", async () => {
+  const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+  const execution = [], lifecycle = [];
+  const cleanupEvidence = { status: "passed", failureSimulated: true, firstFailurePhase: "directory", firstFailureReason: "受控失败", recovered: true, workspaceRegistrationRemoved: true, directoryRemoved: true, windowProjectionReleased: true };
+  const lifecyclePlan = { ...plan, segments: [
+    { ...segment, kind: "workspace-explorer-fixture", conditions: [segment.conditions[0]] },
+    { ...segment, kind: "workspace-lifecycle-review", conditions: [segment.conditions[1]] },
+  ] };
+  const result = await runHanliAcceptanceSceneSession({
+    goal: { ...workspaceFixtureGoal, interactionCapabilities: ["workspace-explorer", "workspace-cleanup-recovery"] }, plan: lifecyclePlan,
+    targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
+    sessions: { register() {}, remove() {}, isActive: () => false }, createWindow: () => assert.fail("两个工作区阶段都复用真实窗口"),
+    finalizeWorkspaceFixture: async () => { lifecycle.push("finalized"); return cleanupEvidence; },
+    execute: async (currentGoal) => {
+      execution.push(currentGoal);
+      const index = execution.length;
+      const criterionId = currentGoal.criterionIds[0];
+      return { version: 2, runId: `workspace-${index}`, topicId: "t", proposalId: "p", criteria: currentGoal.criteria, status: "passed", windowTitle: "AI Desktop",
+        initialBounds: target.getBounds(), finalBounds: target.getBounds(), stepResults: [{ checkId: criterionId, operationIndex: 0, operation: { type: "judgement", criterionId }, status: "passed", actual: "功能通过", layoutStatus: "passed", layoutActual: "布局通过", screenshotAttachmentId: `shot-${index}`, layoutScreenshotAttachmentId: `shot-${index}`, occurredAt: "2026-09-14T00:00:00.000Z" }], evidenceAttachmentIds: [`shot-${index}`], startedAt: "2026-09-14T00:00:00.000Z", completedAt: "2026-09-14T00:00:01.000Z" };
+    },
+    onSceneReady() {}, onCompletionReviewReady: () => assert.fail("生命周期复核不改变业务完成态"), record() {},
+  });
+  assert.deepEqual(lifecycle, ["finalized"]);
+  assert.equal(execution[0].workspaceCleanupRecoveryEvidence, undefined);
+  assert.deepEqual(execution[1].workspaceCleanupRecoveryEvidence, cleanupEvidence);
+  assert.match(execution[1].priorPhaseEvidence.summary, /criterion-1/);
+  assert.equal(result.status, "passed");
 });
 
 test("前序条件失败后仍采集完成态段的原条件证据，但不触发完成态切换", async () => {
@@ -673,6 +710,7 @@ test("场景说明区分条件式规则与必须构造的验收状态", () => {
   assert.match(prompt, /不代表验收场景必须人为创建/);
   assert.match(prompt, /不得因此选择 blocked/);
   assert.match(prompt, /failure-recovery-timeline/);
+  assert.match(prompt, /workspace-lifecycle-review/);
   assert.match(prompt, /inspection-lifecycle-timeline/);
   assert.match(prompt, /user-language-detail-timeline/);
   assert.match(prompt, /recovery-action-lifecycle/);
@@ -685,6 +723,8 @@ test("后续场景被明确告知复用前序证据而不重复已释放夹具",
   assert.match(prompt, /存在 `priorPhaseEvidence`/);
   assert.match(prompt, /不得重复前序场景动作/);
   assert.match(prompt, /一次性夹具已在段落结束时释放/);
+  assert.match(prompt, /workspaceCleanupRecoveryEvidence/);
+  assert.match(prompt, /候选代码差异记录代替工作区恢复证据/);
 });
 
 test("工作区重启验收由已打包隔离子进程提供最小证据", () => {

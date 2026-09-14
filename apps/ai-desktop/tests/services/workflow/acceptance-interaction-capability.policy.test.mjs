@@ -58,3 +58,9 @@ test("重启后回收临时工作区由批准范围签发独立能力", () => {
     acceptanceCriteria: ["左侧工作区树可以读取文件，应用重启后自动清理验收临时工作区。"],
   })), ["workspace-explorer", "workspace-startup-recovery"]);
 });
+
+test("临时工作区收尾失败恢复由批准范围签发独立能力", () => {
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
+    acceptanceCriteria: ["左侧工作区树可以读取文件，模拟收尾失败后自动恢复并移除临时工作区。"],
+  })), ["workspace-explorer", "workspace-cleanup-recovery"]);
+});

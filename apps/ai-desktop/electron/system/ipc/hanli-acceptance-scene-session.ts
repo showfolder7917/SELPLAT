@@ -1,5 +1,5 @@
 import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
-import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliAcceptanceRunOutDto, HanliComputerAcceptanceInDto, WorkspaceCleanupRecoveryEvidenceOutDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
 import { createCompletionGateGoal, createSegmentGoal } from "./hanli-acceptance-scene-goals.js";
@@ -18,7 +18,7 @@ interface AcceptanceSceneSessionOptions {
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
   execute(goal: HanliComputerAcceptanceInDto, window: BrowserWindow): Promise<HanliAcceptanceRunOutDto>;
   setWorkspaceFixtureSceneActive?(active: boolean): void;
-  finalizeWorkspaceFixture?(): Promise<void>;
+  finalizeWorkspaceFixture?(): Promise<WorkspaceCleanupRecoveryEvidenceOutDto | undefined>;
   onSceneReady(): void;
   onCompletionReviewReady(gate: CompletionReviewGateOutDto): void;
   record(eventType: string, details: Record<string, unknown>): void;
@@ -51,11 +51,15 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         sceneReadyPublished = true;
         options.onSceneReady();
       }
+      const cleanupEvidence = segment.kind === "workspace-lifecycle-review"
+        ? await options.finalizeWorkspaceFixture?.()
+        : undefined;
       const priorPhaseEvidence = runs.length ? summarizePriorRuns(runs) : undefined;
       // 后续证据段必须知道前序场景已经实际完成；否则临时夹具释放后，模型会误把“看不到旧夹具”当成当前页面故障。
       const currentGoal = {
         ...createSegmentGoal(options.goal, segment),
         ...(priorPhaseEvidence ? { priorPhaseEvidence } : {}),
+        ...(cleanupEvidence ? { workspaceCleanupRecoveryEvidence: cleanupEvidence } : {}),
       };
       const canEnterCompletionReview = runs.every((run) => run.status === "passed");
       if (!segment.completionReviewRequired || options.goal.reviewMode === "post-completion-review" || !canEnterCompletionReview) {

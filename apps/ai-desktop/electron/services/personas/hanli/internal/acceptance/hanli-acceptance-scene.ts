@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/index.js";
 import type { AcceptanceSceneKind, AcceptanceScenePlanOutDto, AcceptanceSceneSegmentOutDto, HanliComputerAcceptanceInDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
-const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "empty-task-group", "failure-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "blocked"];
+const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "workspace-lifecycle-review", "empty-task-group", "failure-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "blocked"];
 
 /** 验证韩立的结构化准备计划，任何缺项都退回环境排障，不默认为当前窗口。 */
 export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanOutDto {
@@ -25,18 +25,30 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
       || segment.conditions.some((condition) => typeof condition?.prerequisite !== "string" || !condition.prerequisite.trim()))) {
     throw new Error("韩立验收场景计划未逐项覆盖原验收条件。");
   }
-  if (segments.some((segment) => segment.kind === "current-window" || segment.kind === "workspace-explorer-fixture") && !hasVerifiedCurrentWindowContext(goal)) {
+  if (segments.some((segment) => segment.kind === "current-window" || segment.kind === "workspace-explorer-fixture" || segment.kind === "workspace-lifecycle-review") && !hasVerifiedCurrentWindowContext(goal)) {
     throw new Error("当前窗口场景缺少与验收目标一致的只读专题、提案或运行记录，不能把模型推测当作页面事实。");
   }
-  if (segments.some((segment) => segment.kind === "workspace-explorer-fixture") && goal.workspaceAcceptanceFixture?.mode !== "scenarios") {
+  if (segments.some((segment) => segment.kind === "workspace-explorer-fixture") && !goal.workspaceAcceptanceFixture) {
     throw new Error("工作区验收场景缺少已签发的受控夹具，不能把普通目录当作加载、失败或空目录证据。");
   }
-  if (goal.workspaceAcceptanceFixture?.mode === "scenarios"
+  if (goal.workspaceAcceptanceFixture
     && !segments.some((segment) => segment.kind === "workspace-explorer-fixture")) {
     throw new Error("本轮已经签发工作区验收夹具，场景计划必须包含一个工作区夹具阶段；不能只观察普通工作区后报告临时根缺失。");
   }
   if (segments.filter((segment) => segment.kind === "workspace-explorer-fixture").length > 1) {
     throw new Error("一次性工作区夹具只能使用一个验收阶段，相关条件必须合并取证。");
+  }
+  const lifecycleReviewIndex = segments.findIndex((segment) => segment.kind === "workspace-lifecycle-review");
+  const fixtureIndex = segments.findIndex((segment) => segment.kind === "workspace-explorer-fixture");
+  const lifecycleReviewRequired = goal.interactionCapabilities?.some((capability) => capability === "workspace-cleanup-recovery" || capability === "workspace-startup-recovery") === true;
+  if (lifecycleReviewIndex >= 0 && !lifecycleReviewRequired) {
+    throw new Error("工作区生命周期复核缺少已批准的收尾或重启回收范围。");
+  }
+  if (lifecycleReviewRequired && (fixtureIndex < 0 || lifecycleReviewIndex !== fixtureIndex + 1)) {
+    throw new Error("工作区收尾或重启回收条件必须紧接夹具阶段使用工作区生命周期复核场景。");
+  }
+  if (segments.filter((segment) => segment.kind === "workspace-lifecycle-review").length > 1) {
+    throw new Error("工作区生命周期复核只能使用一个验收阶段。");
   }
   if (segments.some((segment) => segment.completionReviewRequired && segment.kind !== "current-window")) {
     throw new Error("跨完成态复核只能使用当前真实窗口，隔离或受阻场景不能触发业务完成动作。");
