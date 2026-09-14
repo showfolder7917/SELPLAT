@@ -6,6 +6,7 @@ import test from "node:test";
 import { createCodexChildEnvironment } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/codex/codex.facade.js";
 import { toCodexStreamEvent } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/codex/internal/codex-stream-event.mapper.js";
 import { CodexSessionStore } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/codex/internal/codex-session.repository.js";
+import { isMissingCodexThreadError } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/codex/internal/codex-thread-lifecycle.policy.js";
 
 const turnId = "turn-stream-test";
 
@@ -47,6 +48,12 @@ test("活动线程存储识别旧默认域记录并只写 AI Desktop 域版本",
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
+});
+
+test("只有官方确认线程不存在时才允许放弃失效恢复凭据", () => {
+  assert.equal(isMissingCodexThreadError(new Error("no rollout found for thread id stale-thread")), true);
+  assert.equal(isMissingCodexThreadError("No Rollout Found For Thread Id stale-thread"), true);
+  assert.equal(isMissingCodexThreadError(new Error("connection reset while resuming thread")), false);
 });
 
 test("官方文字、计划和文件差异通知转换为稳定的渲染事件", () => {

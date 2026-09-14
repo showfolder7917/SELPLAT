@@ -15,6 +15,7 @@ const codexService = readFileSync(new URL("../../../electron/services/support/pl
 const codexStreamMapper = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-stream-event.mapper.ts", import.meta.url), "utf8");
 const codexRuntime = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-runtime.resolver.ts", import.meta.url), "utf8");
 const codexSessionStore = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-session.repository.ts", import.meta.url), "utf8");
+const codexThreadLifecycle = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-thread-lifecycle.policy.ts", import.meta.url), "utf8");
 const taskWorktreeTestRunner = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
 const collaborationSessions = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const electronMain = [
@@ -199,7 +200,10 @@ test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除
   assert.match(codexService, /ephemeral: false/);
   assert.match(codexService, /developerInstructions/);
   assert.match(codexService, /官方硬删除未确认成功时保留本地恢复凭据/);
-  assert.match(codexService, /恢复失败可能只是临时连接故障/);
+  assert.match(codexService, /连接故障等未知失败仍保留凭据/);
+  assert.match(codexService, /missing_on_resume/);
+  assert.match(codexService, /missing_on_delete/);
+  assert.match(codexThreadLifecycle, /no rollout found for thread id/i);
   assert.match(codexSessionStore, /active thread|当前活动线程/);
   assert.match(developerApp, /getActiveCodexSession/);
   assert.match(chatMessageModel, /ACTIVE_CHAT_STORAGE_KEY/);

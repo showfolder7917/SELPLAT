@@ -19,6 +19,7 @@ import type { WorkspaceStateOutDto } from "../../../../../contracts/services/sup
 import type { CodexSessionPersistence } from "./internal/codex-session.repository.js";
 import { resolveCodexRuntime, type CodexRuntime } from "./internal/codex-runtime.resolver.js";
 import { toCodexStreamEvent } from "./internal/codex-stream-event.mapper.js";
+import { isMissingCodexThreadError } from "./internal/codex-thread-lifecycle.policy.js";
 import type { CodexDynamicToolsPort } from "./internal/dynamic-tools.port.js";
 import { CommandGovernanceFacade as TrustedCommandStore } from "../security/index.js";
 
@@ -140,6 +141,11 @@ export class CodexService {
         await this.#request("thread/delete", { threadId });
         this.#onThreadLifecycle({ action: "deleted", threadId, reason: "user_new_chat" });
       } catch (error) {
+        if (isMissingCodexThreadError(error)) {
+          this.#onThreadLifecycle({ action: "missing_on_delete", threadId, reason: "user_new_chat" });
+          this.#forgetThread();
+          return;
+        }
         this.#onThreadLifecycle({ action: "delete_failed", threadId, reason: errorMessage(error) });
         // 官方硬删除未确认成功时保留本地恢复凭据，避免界面清空但任务仍留在官方存储。
         throw new Error(`无法丢弃当前 Codex 任务：${errorMessage(error)}`);
@@ -381,7 +387,7 @@ export class CodexService {
     const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
     if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return this.#threadId;
 
-    const stored = this.#readStoredSession();
+    let stored = this.#readStoredSession();
     const preservePersonaThread = this.#options.preserveThreadAcrossWorkspaceChanges === true;
     const resumableThreadId = this.#threadId && (preservePersonaThread || this.#threadWorkspaceSignature === workspaceSignature)
       ? this.#threadId
@@ -394,9 +400,16 @@ export class CodexService {
         this.#onThreadLifecycle({ action: "resumed", threadId });
         return threadId;
       } catch (error) {
-        // 恢复失败可能只是临时连接故障；保留凭据并让用户重试，禁止静默删除仍可恢复的任务。
-        this.#onThreadLifecycle({ action: "resume_failed", threadId: resumableThreadId, reason: errorMessage(error) });
-        throw new Error(`无法恢复当前 Codex 任务：${errorMessage(error)}`);
+        if (isMissingCodexThreadError(error)) {
+          // 官方明确确认线程不存在时，旧凭据已经无法恢复；只清除该人物的线程指针，业务会话仍保留在 AI Memory。
+          this.#onThreadLifecycle({ action: "missing_on_resume", threadId: resumableThreadId, reason: errorMessage(error) });
+          this.#forgetThread();
+          stored = null;
+        } else {
+          // 连接故障等未知失败仍保留凭据并让用户重试，避免误丢仍可恢复的任务。
+          this.#onThreadLifecycle({ action: "resume_failed", threadId: resumableThreadId, reason: errorMessage(error) });
+          throw new Error(`无法恢复当前 Codex 任务：${errorMessage(error)}`);
+        }
       }
     }
 
@@ -505,6 +518,11 @@ export class CodexService {
       this.#onThreadLifecycle({ action: "deleted", threadId: stored.threadId, reason });
       this.#forgetThread();
     } catch (error) {
+      if (isMissingCodexThreadError(error)) {
+        this.#onThreadLifecycle({ action: "missing_on_delete", threadId: stored.threadId, reason });
+        this.#forgetThread();
+        return;
+      }
       this.#onThreadLifecycle({ action: "delete_failed", threadId: stored.threadId, reason: errorMessage(error) });
       // 删除未确认时必须保留旧恢复凭据，禁止在专属数据域中覆盖后失去精确清理目标。
       throw new Error(`无法迁移旧 Codex 任务：${errorMessage(error)}`);
