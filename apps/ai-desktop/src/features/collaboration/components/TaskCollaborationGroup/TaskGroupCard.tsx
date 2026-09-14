@@ -396,6 +396,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             <button
               type="button"
               className="task-recovery-continue"
+              data-task-recovery-id={recoveryAction.taskId}
               disabled={recoveryPending}
               onClick={() => model.actions.onContinueTask(recoveryAction.taskId)}
             >

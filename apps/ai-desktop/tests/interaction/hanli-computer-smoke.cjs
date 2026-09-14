@@ -20,8 +20,8 @@ app.whenReady().then(async () => {
       const after = await tools.call("hanli_computer", { action: "click", x: 80, y: 60, observationId, reason: "验证真实鼠标输入" });
       assert.equal(await window.webContents.executeJavaScript('document.querySelector("h1").textContent'), "实际点击成功");
       const latest = JSON.parse(after.contentItems[0].text).observationId;
-      await tools.call("hanli_computer", { action: "finish", observationId: latest, reason: "测试端口归档实际点击证据", findings: [{ criterionId: "criterion-1", status: "passed", actual: "原生输入触发页面按钮", evidenceId: latest }] });
-    }, () => {});
+      await tools.call("hanli_computer", { action: "finish", observationId: latest, reason: "测试端口归档实际点击证据", findings: [{ criterionId: "criterion-1", status: "passed", actual: "原生输入触发页面按钮", evidenceId: latest, layoutStatus: "passed", layoutActual: "隔离窗口内按钮完整可见且无遮挡", layoutEvidenceId: latest }] });
+    }, () => {}, { allows: () => false });
     assert.equal(result.status, "passed");
     console.log(JSON.stringify({ status: "passed", artifactRoot, screenshots: n, onlineModelTested: false }));
     app.exit(0);

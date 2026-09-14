@@ -9,6 +9,12 @@ export interface WorkspaceAcceptanceEvidencePort {
   readDirectory(relativePath: "slow-a" | "slow-b" | "retry-once"): { relativePath: string; requestCount: number; pending: boolean; outcome: string } | null;
 }
 
+// 授权由主进程登记的窗口会话实时判断，模型提交的场景名称不构成权限。
+export type AcceptancePrivateAction = "recovery" | "persona-message" | "persona-screenshot" | "persona-navigation";
+export interface AcceptanceWindowInteractionPort {
+  allows(action: AcceptancePrivateAction): boolean;
+}
+
 /** 仅提供当前应用窗口的单步输入和真实截图，下一动作由模型看到结果后选择。 */
 export class HanliComputerAcceptance {
   /** 当前是否已有一轮窗口验收在执行；同一窗口不允许并发控制。 */
@@ -28,6 +34,7 @@ export class HanliComputerAcceptance {
       session: { beginFinalization: () => boolean },
     ) => Promise<void>,
     progress: (message: string) => void,
+    interactions: AcceptanceWindowInteractionPort,
     workspaceEvidence?: WorkspaceAcceptanceEvidencePort,
   ): Promise<HanliAcceptanceRunOutDto> {
     if (this.#active) {
@@ -61,10 +68,6 @@ export class HanliComputerAcceptance {
     const sentComposerLabels = new Set<string>();
     let verdict: "passed" | "failed" | "blocked" = "blocked";
     const postCompletionReview = goal.reviewMode === "post-completion-review";
-    const recoveryLifecycleScene = goal.preparedScene?.kind === "recovery-action-lifecycle";
-    const personaConversationLifecycleScene = goal.preparedScene?.kind === "persona-empty-conversation"
-      || goal.preparedScene?.kind === "persona-conversation-lifecycle"
-      || goal.preparedScene?.kind === "persona-conversation-with-task-handoff";
     // 工作区验收能力只能由运行时随当前已批准目标签发；场景计划和模型回合均不能自行扩大点击范围。
     const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
     const workspaceFixtureEvidenceEnabled = workspaceExplorerAcceptance
@@ -336,6 +339,7 @@ export class HanliComputerAcceptance {
           let workspaceDirectoryReadEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
           if (args.action === "send-test-message") {
+            if (!interactions.allows("persona-message")) throw new Error("测试消息只能发送到主进程登记的独立验收会话；请准备隔离场景后继续。");
             // 固定文案、当前人物输入框和人物维度单次上限共同限制真实发送的业务副作用。
             const script = createAcceptancePersonaScript(sendAcceptanceMessage, [...sentComposerLabels]);
             const result = await window.webContents.executeJavaScript(script) as {
@@ -347,6 +351,7 @@ export class HanliComputerAcceptance {
             }
             sentComposerLabels.add(result.composerLabel);
           } else if (args.action === "send-test-screenshot") {
+            if (!interactions.allows("persona-screenshot")) throw new Error("测试截图只能发送到主进程登记的独立验收会话；请准备隔离场景后继续。");
             // 只通过当前可见人物会话的固定截图按钮生成附件，禁止工具输入任意路径或附件身份。
             const script = createAcceptancePersonaScript(sendAcceptanceScreenshot, [...sentComposerLabels]);
             const result = await window.webContents.executeJavaScript(script) as {
@@ -468,7 +473,7 @@ export class HanliComputerAcceptance {
             assertPointInsideWindow(point.x, point.y, width, height, "换算后的坐标必须位于当前应用窗口内。");
             if (args.action === "click") {
               // 只用DOM做安全拦截，绝不通过DOM替模型定位或断言成功。
-              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${recoveryLifecycleScene},${personaConversationLifecycleScene},${workspaceExplorerAcceptance}))`) as "allowed" | "missed" | "restricted";
+              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${interactions.allows("recovery")},${interactions.allows("persona-navigation")},${workspaceExplorerAcceptance}))`) as "allowed" | "missed" | "restricted";
               if (closed) {
                 throw new Error("验收已终止，未执行点击。");
               }
@@ -971,7 +976,10 @@ function safeNavigationClick(x: number, y: number, allowRecoveryLifecycle = fals
   }
   // 折叠标题可能含历史“审批通过”等文字，按真实只读控件身份判断，不按内容误拦截。
   if (node.matches("button[data-sel-disclosure-trigger]") && node.closest("[data-sel-disclosure]")) return true;
-  if (allowRecoveryLifecycle && node.matches("button.task-node-recovery-action") && node.closest('[data-task-timeline-node-id="acceptance:recovery-current"]')) return true;
+  // 只操作当前隔离任务在专题顶部的真实恢复入口；历史节点与正式任务均不能匹配。
+  if (allowRecoveryLifecycle && node.matches("button.task-recovery-continue")
+    && node.getAttribute("data-task-recovery-id") === "acceptance-failure-recovery-task"
+    && node.closest(".task-collaboration-group .task-timeline-next")) return true;
   // 人物会话场景只放行分页和其既有失败重试入口，不能扩展到发送或会话管理动作。
   if (allowPersonaConversationLifecycle && node.matches("button") && node.closest(".hanli-person-chat, .nangong-person-chat")) {
     const label = (node.getAttribute("aria-label") || node.textContent || "").trim();

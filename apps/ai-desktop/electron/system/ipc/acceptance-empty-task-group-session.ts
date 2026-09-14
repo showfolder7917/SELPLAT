@@ -78,6 +78,20 @@ export class AcceptanceEmptyTaskGroupSession {
     return this.#scenarios.has(webContentsId);
   }
 
+  /** Computer Use 与 IPC 共用当前窗口登记；关闭场景后授权立即失效。 */
+  allowsComputerAction(webContentsId: number, action: "recovery" | "persona-message" | "persona-screenshot" | "persona-navigation"): boolean {
+    if (!this.isActive(webContentsId)) return false;
+    if (action === "persona-navigation") return this.isPersonaConversationLifecycle(webContentsId);
+    const channel = action === "recovery" ? "desktop:continue-collaboration-task"
+      : action === "persona-message" ? "desktop:send-persona-conversation-message" : "desktop:capture-screen";
+    try {
+      this.assertIpcAllowed(webContentsId, channel);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 主进程按可信窗口身份与场景集中授权；未登记的正式窗口不受验收策略影响。 */
   assertIpcAllowed(webContentsId: number, channel: string): void {
     const scene = this.#scenarios.get(webContentsId);

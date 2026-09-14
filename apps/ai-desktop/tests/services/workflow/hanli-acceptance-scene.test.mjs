@@ -972,3 +972,17 @@ test("工作区重启验收由已打包隔离子进程提供最小证据", () =>
   assert.match(prompt, /当前已打包 AI Desktop/);
   assert.match(prompt, /当前真实或隔离页面截图/);
 });
+
+test("验收输入权限复用主进程会话登记与IPC边界，释放后立即失效", () => {
+  const sessions = new AcceptanceEmptyTaskGroupSession();
+  const actions = ["recovery", "persona-message", "persona-screenshot", "persona-navigation"];
+  for (const action of actions) assert.equal(sessions.allowsComputerAction(700, action), false);
+  sessions.register(701, "recovery-action-lifecycle");
+  assert.equal(sessions.allowsComputerAction(701, "recovery"), true);
+  assert.equal(sessions.allowsComputerAction(701, "persona-message"), false);
+  sessions.register(702, "persona-conversation-lifecycle");
+  assert.equal(sessions.allowsComputerAction(702, "recovery"), false);
+  for (const action of actions.slice(1)) assert.equal(sessions.allowsComputerAction(702, action), true);
+  sessions.remove(701); sessions.remove(702);
+  for (const id of [701, 702]) for (const action of actions) assert.equal(sessions.allowsComputerAction(id, action), false);
+});

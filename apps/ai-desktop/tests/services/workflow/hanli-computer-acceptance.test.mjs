@@ -51,7 +51,7 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, boundsCalls, executedScripts, controller, run: (model, currentGoal = goal, workspaceEvidence) => controller.run(currentGoal, window, model, (text) => progress.push(text), workspaceEvidence), progress };
+  return { inputs, boundsCalls, executedScripts, controller, run: (model, currentGoal = goal, workspaceEvidence, interactions = { allows: () => true }) => controller.run(currentGoal, window, model, (text) => progress.push(text), interactions, workspaceEvidence), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
@@ -734,22 +734,22 @@ test("只读折叠标题含审批通过仍可查看，实际提交按钮仍拒�
   finally { globalThis.document = previous; }
 });
 
-test("恢复按钮只在恢复生命周期场景的当前等待节点允许点击", () => {
+test("恢复按钮只在登记的恢复生命周期场景和精确任务入口允许点击", () => {
   const previous = globalThis.document;
-  const check = (nodeId, allowed) => {
+  const check = (taskId, allowed) => {
     const node = {
-      getAttribute: () => null,
+      getAttribute: (name) => name === "data-task-recovery-id" ? taskId : null,
       classList: { contains: () => false },
-      matches: (selector) => selector === "button.task-node-recovery-action",
-      closest: (selector) => selector === `[data-task-timeline-node-id="${nodeId}"]` ? {} : null,
+      matches: (selector) => selector === "button.task-recovery-continue",
+      closest: (selector) => selector === ".task-collaboration-group .task-timeline-next" ? {} : null,
     };
     globalThis.document = { elementFromPoint: () => ({ closest: () => node }) };
     return acceptanceModule.safeNavigationClick(12, 30, allowed);
   };
   try {
-    assert.equal(check("acceptance:recovery-current", false), false);
-    assert.equal(check("acceptance:recovery-history", true), false);
-    assert.equal(check("acceptance:recovery-current", true), true);
+    assert.equal(check("acceptance-failure-recovery-task", false), false);
+    assert.equal(check("formal-user-task", true), false);
+    assert.equal(check("acceptance-failure-recovery-task", true), true);
   } finally { globalThis.document = previous; }
 });
 
@@ -798,4 +798,16 @@ test("命中分类只看控件身份，空白或说明不调用权限判断，�
     assert.equal(acceptanceModule.readNavigationClickStatus(938, 293, () => false), "restricted");
     assert.equal(acceptanceModule.readNavigationClickStatus(938, 293, () => true), "allowed");
   } finally { globalThis.document = previous; }
+});
+
+test("模型声称隔离场景不能获得正式窗口发送权限，拒绝后仍可观察", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const snapshot = id(await observe(tools));
+    for (const action of ["send-test-message", "send-test-screenshot"]) {
+      await assert.rejects(tools.call("hanli_computer", { action, reason: "验证隔离边界", observationId: snapshot }), /主进程登记的独立验收会话/);
+    }
+    assert.equal(f.executedScripts.some((script) => /sendAcceptanceMessage|sendAcceptanceScreenshot/.test(script)), false);
+    await observe(tools);
+  }, { ...goal, preparedScene: { kind: "persona-conversation-lifecycle" } }, undefined, { allows: () => false });
 });

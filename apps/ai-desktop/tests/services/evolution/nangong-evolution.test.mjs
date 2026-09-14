@@ -1850,6 +1850,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     assert.match(state.oneShotRun.blockingReason, /版本集成阶段/);
     assert.match(state.oneShotRun.blockingReason, /main\.ts 未登记/);
 
+    const { topicId, proposalId } = state.oneShotRun;
     await assert.rejects(() => facade.requestSupplementalAcceptance({ topicId, proposalId, runId: "stale-run" }), /补验未能关联原专题/);
     assert.equal(recoveryRequests, 0);
     const explicitlyResumed = await facade.requestSupplementalAcceptance({ topicId, proposalId, runId: state.oneShotRun.runId });
