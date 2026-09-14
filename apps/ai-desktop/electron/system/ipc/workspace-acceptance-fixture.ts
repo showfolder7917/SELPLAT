@@ -1,15 +1,19 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { BrowserWindow } from "electron";
 
 import type { WorkspaceDirectoryOutDto, WorkspaceStateOutDto } from "../../../contracts/services/support/platform/workspace/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 
 type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
+type CleanupPhase = "workspace" | "directory";
+export type WorkspaceAcceptanceCleanupResult = { status: "completed"; recovered: boolean; workspaceId: string | null } | { status: "failed"; phase: CleanupPhase; reason: string; workspaceId: string | null };
+export type WorkspaceAcceptanceEnvironment = FixtureReservation & { dispose(): WorkspaceAcceptanceCleanupResult };
 type FixtureRegistration = { displayName: string; workspaceId: string };
 type FixtureReadPath = "slow-a" | "slow-b" | "retry-once";
 type FixtureReadState = { requestCount: number; pending: boolean; outcome: "not-requested" | "started" | "succeeded" | "failed" };
-type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; failedPaths: Set<string>; reads: Map<FixtureReadPath, FixtureReadState> };
+type ReservedFixture = { directory: string; displayName: string; consumed: boolean; mode: FixtureMode; trustedWebContentsId: number; sceneActive: boolean; workspaceId: string | null; cleanupFailed: boolean; failedPaths: Set<string>; reads: Map<FixtureReadPath, FixtureReadState> };
 export const WORKSPACE_ACCEPTANCE_FIXTURE_MARKER_NAME = ".hanli-workspace-acceptance-fixture.json";
 export const WORKSPACE_ACCEPTANCE_FIXTURE_MARKER = { kind: "hanli-workspace-acceptance-fixture", version: 1 } as const;
 // 受控点击会在输入后很快截取画面；该窗口只用于验收夹具，确保首张截图仍能观察到目录读取中。
@@ -47,13 +51,40 @@ export interface WorkspaceAcceptanceDirectoryReadEvidence {
 export class WorkspaceAcceptanceFixture {
   readonly #workspaces: WorkspaceStore;
   readonly #temporaryRoot: string;
+  readonly #removeDirectory: (directory: string) => void;
   #reserved: ReservedFixture | null = null;
 
-  constructor(workspaces: WorkspaceStore, temporaryRoot: string) {
+  constructor(workspaces: WorkspaceStore, temporaryRoot: string, removeDirectory: (directory: string) => void = (directory) => rmSync(directory, { recursive: true, force: true })) {
     this.#workspaces = workspaces;
     this.#temporaryRoot = temporaryRoot;
+    this.#removeDirectory = removeDirectory;
     // 该服务在主进程启动阶段、Renderer 首次读取工作区之前创建；此处回收上次异常退出留下的私有夹具。
     this.#cleanupStaleFixtures();
+  }
+
+  /**
+   * 一次准备验收所需的临时目录、真实工作区登记和页面可见状态，并返回唯一清理句柄。
+   *
+   * 真实传参示例：传入当前 AI Desktop 主窗口和 scenarios；真实返回示例：返回可见标签与 dispose；
+   * 异常或副作用示例：任一准备步骤失败会撤销已登记根和私有目录，韩立验收不会启动。
+   */
+  async prepare(mode: FixtureMode, targetWindow: BrowserWindow): Promise<WorkspaceAcceptanceEnvironment> {
+    if (targetWindow.isDestroyed()) throw new Error("验收主窗口已经关闭，不能准备临时工作区。");
+    const reservation = this.reserve(mode, targetWindow.webContents.id);
+    try {
+      this.setSceneActive(true);
+      await this.#addFixtureThroughVisibleWorkspacePage(targetWindow, reservation.displayName);
+      if (!this.#reserved?.workspaceId) throw new Error("临时工作区未完成登记，不能开始韩立验收。");
+      this.setSceneActive(false);
+      return {
+        ...reservation,
+        // 完成状态只存在于夹具的唯一保留状态中；失败后同一句柄可再次尝试清理。
+        dispose: () => this.cleanup(),
+      };
+    } catch (error) {
+      this.cleanup();
+      throw error;
+    }
   }
 
   /**
@@ -64,7 +95,8 @@ export class WorkspaceAcceptanceFixture {
    */
   reserve(mode: FixtureMode = "basic", trustedWebContentsId: number): FixtureReservation {
     if (!Number.isSafeInteger(trustedWebContentsId) || trustedWebContentsId <= 0) throw new Error("验收窗口身份无效，不能签发工作区夹具。");
-    this.cleanup();
+    const priorCleanup = this.cleanup();
+    if (priorCleanup.status === "failed") throw new Error(`上一轮验收夹具清理失败：${priorCleanup.reason}`);
     const directory = realpathSync.native(mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-")));
     const displayName = path.basename(directory);
     // 标记只供主进程回收异常中断的夹具，避免按目录前缀误删用户工作区。
@@ -80,8 +112,47 @@ export class WorkspaceAcceptanceFixture {
       writeFileSync(path.join(directory, "slow-b", "README.md"), "# 延迟目录 B\n", "utf8");
       writeFileSync(path.join(directory, "retry-once", "README.md"), "# 重试目录\n", "utf8");
     }
-    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, failedPaths: new Set(), reads: new Map() };
+    this.#reserved = { directory, displayName, consumed: false, mode, trustedWebContentsId, sceneActive: false, workspaceId: null, cleanupFailed: false, failedPaths: new Set(), reads: new Map() };
     return { displayName };
+  }
+
+  /** 通过当前页面已有的“添加工作区”动作完成登记，并确认 React 页面已经显示本轮夹具标签。 */
+  async #addFixtureThroughVisibleWorkspacePage(targetWindow: BrowserWindow, displayName: string): Promise<void> {
+    const result = await targetWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10_000;
+      let clicked = false;
+      const fixtureLabel = ${JSON.stringify(displayName)};
+      const check = () => {
+        const pageRoot = document.getElementById("root");
+        const workspaceTree = document.getElementById("developer-workspace-tree");
+        if (!pageRoot?.childElementCount || !workspaceTree) {
+          if (Date.now() >= deadline) return resolve("page-not-ready");
+          return setTimeout(check, 50);
+        }
+        if (!clicked) {
+          const addButton = document.querySelector('.workspace-pane .section-action[aria-label="添加"], .workspace-pane .section-action[aria-label="追加"]');
+          if (!addButton) {
+            if (Date.now() >= deadline) return resolve("workspace-action-missing");
+            return setTimeout(check, 50);
+          }
+          clicked = true;
+          addButton.click();
+        }
+        const visible = [...workspaceTree.querySelectorAll(".workspace-root-header span")]
+          .some((element) => element.textContent?.trim() === fixtureLabel);
+        if (visible) return resolve("ready");
+        if (Date.now() >= deadline) return resolve("workspace-not-visible");
+        return setTimeout(check, 50);
+      };
+      check();
+    })`);
+    if (result !== "ready") {
+      throw new Error(result === "page-not-ready"
+        ? "验收页面未就绪，不能开始韩立验收。"
+        : result === "workspace-action-missing"
+          ? "验收页面缺少工作区添加入口，不能开始韩立验收。"
+          : "临时工作区未显示在验收页面，不能开始韩立验收。");
+    }
   }
 
   /** 只有正式夹具阶段能够消费临时目录，前置真实窗口阶段必须保留夹具的初始观察状态。 */
@@ -169,14 +240,40 @@ export class WorkspaceAcceptanceFixture {
     );
   }
 
-  /** 验收结束后撤销临时登记并删除目录，不把验收夹具留在用户工作区列表。 */
-  cleanup(): void {
+  /**
+   * 验收结束后撤销临时登记并删除目录；只有两个目标都确认移除后才结束当前句柄。
+   *
+   * 真实返回示例：首次目录删除失败返回 failed，重试成功返回 completed 且 recovered=true。
+   * 异常或副作用示例：失败保留夹具状态，调用方可在同一次运行内再次调用本方法。
+   */
+  cleanup(): WorkspaceAcceptanceCleanupResult {
     const fixture = this.#reserved;
-    if (!fixture) return;
-    const root = this.#workspaces.read().roots.find((candidate) => resolvesToSameDirectory(candidate.path, fixture.directory));
-    if (root) this.#workspaces.remove(root.id);
-    rmSync(fixture.directory, { recursive: true, force: true });
+    if (!fixture) return { status: "completed", recovered: false, workspaceId: null };
+    let root: WorkspaceStateOutDto["roots"][number] | undefined;
+    try {
+      root = this.#workspaces.read().roots.find((candidate) => resolvesToSameDirectory(candidate.path, fixture.directory));
+    } catch (error) {
+      fixture.cleanupFailed = true;
+      return { status: "failed", phase: "workspace", reason: error instanceof Error ? error.message : String(error), workspaceId: fixture.workspaceId };
+    }
+    if (root) {
+      try {
+        this.#workspaces.remove(root.id);
+      } catch (error) {
+        fixture.cleanupFailed = true;
+        return { status: "failed", phase: "workspace", reason: error instanceof Error ? error.message : String(error), workspaceId: fixture.workspaceId };
+      }
+    }
+    try {
+      this.#removeDirectory(fixture.directory);
+    } catch (error) {
+      fixture.cleanupFailed = true;
+      return { status: "failed", phase: "directory", reason: error instanceof Error ? error.message : String(error), workspaceId: fixture.workspaceId };
+    }
+    const recovered = fixture.cleanupFailed;
+    const workspaceId = fixture.workspaceId;
     this.#reserved = null;
+    return { status: "completed", recovered, workspaceId };
   }
 
   /**
