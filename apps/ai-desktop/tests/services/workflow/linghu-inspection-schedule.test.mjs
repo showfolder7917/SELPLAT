@@ -66,7 +66,7 @@ test("令狐巡检会把韩立调查回包错误作为普通运行异常派发�
     collaboration: {
       state: () => collaborationState,
       setMode() {},
-      submitTask(request) { submitted.push(request); collaborationState.tasks.push({ taskId: "repair-1" }); return collaborationState; },
+      submitTask(request) { submitted.push(request); collaborationState.tasks.push({ taskId: "repair-1" }); return { taskId: "repair-1", state: collaborationState }; },
     },
     locale: () => "zh-CN", readWorkspaceState: () => ({ roots: [] }), recordEvent() {},
     readTestResourceState: () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null }), runUnifiedTestAndRestart: async () => {},

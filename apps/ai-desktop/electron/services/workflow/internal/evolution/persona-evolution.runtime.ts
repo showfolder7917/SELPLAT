@@ -710,6 +710,12 @@ export class PersonaEvolutionRuntime {
           state = await this.nangongRuntime.facade.investigateAndReviseReturnedProposal(proposal.proposalId);
         }
       }
+      // 在阶段推进前统一核对创建时的审批关联，恢复后也不能把历史保障任务当成本轮交付。
+      const taskFacts = this.#collaboration.state().tasks;
+      for (const proposal of state.proposals.filter((item) => ["executing", "verifying", "blocked", "pending-acceptance"].includes(item.status))) {
+        const taskIds = ProposalExecutionAggregate.approvedTaskIds(proposal, taskFacts);
+        if (taskIds) state = this.#store.reconcileDispatchedTasks(proposal.proposalId, proposal.approvals.at(-1)!.approvalId, taskIds);
+      }
       for (const proposal of state.proposals.filter((item) => item.distributedTaskIds.length && ["executing", "verifying", "blocked"].includes(item.status))) {
         // 每轮只读取一次协作快照，避免同一状态核对跨越两次异步变化。
         let collaborationState = this.#collaboration.state();

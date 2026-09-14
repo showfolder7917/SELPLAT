@@ -61,7 +61,7 @@ export function registerCollaborationIpc(
     event.sender.send("desktop:collaboration-state", { state: isolated, reason: "member.selected", taskIds: [] });
     return isolated;
   });
-  handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request));
+  handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request).state);
   handle("desktop:continue-collaboration-task", (event, taskId: string) => {
     if (isIsolatedAcceptance(event.sender.id)) {
       const timeline = acceptanceEmptyTaskGroupSession!.continueRecoveryLifecycle(event.sender.id, taskId);

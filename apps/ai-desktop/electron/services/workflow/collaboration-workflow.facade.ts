@@ -12,6 +12,7 @@ import type {
   CollaborationWorkerPhaseValue,
   DesktopOperatingModeValue,
   SubmitCollaborationTaskInDto,
+  SubmitCollaborationTaskOutDto,
 } from "../../../contracts/services/workflow/index.js";
 import type { CodexStreamEventOutDto } from "../../../contracts/services/support/platform/codex/index.js";
 import type { ExecutorSessionPort } from "../../../contracts/services/personas/executor/index.js";
@@ -184,7 +185,7 @@ export class CollaborationCoordinator {
     };
   }
 
-  submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
+  submitTask(request: SubmitCollaborationTaskInDto): SubmitCollaborationTaskOutDto {
     const enabledWorkers = this.state().members.filter((member) => member.kind === "worker" && member.enabled).length;
     if (enabledWorkers < 1) throw new Error("协同执行至少需要一名已启用的执行人物。");
     const task = this.#store.submitTask({
@@ -193,7 +194,7 @@ export class CollaborationCoordinator {
     });
     this.#waitSpans.set(task.taskId, this.#durations.startWait(task.taskId, "executor-queue", "system-wait", "no-idle-executor", "executor-capacity", null));
     this.#schedule();
-    return this.state();
+    return { taskId: task.taskId, state: this.state() };
   }
 
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto {

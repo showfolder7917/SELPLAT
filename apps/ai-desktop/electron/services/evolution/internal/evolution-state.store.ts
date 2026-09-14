@@ -779,6 +779,23 @@ export class EvolutionStateStore {
     });
   }
 
+  /** 按本次审批签发的任务事实核对分发关联，旧关联仍保存在审计快照中。 */
+  reconcileDispatchedTasks(proposalId: string, approvalId: string, taskIds: string[]): EvolutionStateOutDto {
+    const proposal = requireProposal(this.#state, proposalId);
+    if (proposal.approvals.at(-1)?.approvalId !== approvalId) throw new Error("任务关联核对期间审批已变化。");
+    if (JSON.stringify(proposal.distributedTaskIds) === JSON.stringify(taskIds)) return this.state();
+    return this.#commit("proposal.distribution_reconciled", proposal.topicId, proposalId, (state) => {
+      const mutable = requireProposal(state, proposalId);
+      mutable.distributedTaskIds = [...taskIds];
+      mutable.status = "executing";
+      mutable.updatedAt = new Date().toISOString();
+      const topic = requireTopic(state, mutable.topicId);
+      topic.status = "executing";
+      topic.recoveryPoint = "distribution-reconciled";
+      topic.updatedAt = mutable.updatedAt;
+    });
+  }
+
   saveDistributionPlan(proposalId: string, plan: EvolutionDistributionPlanOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     return this.#commit("proposal.distribution_planned", proposal.topicId, proposalId, (state) => {

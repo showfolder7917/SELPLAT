@@ -5,6 +5,9 @@
  * 每项导出分别说明它描述的业务对象，方便新手从使用处反查真实定义。
  */
 
+// 创建命令返回准确任务身份及同次操作的状态快照。
+export type { SubmitCollaborationTaskOutDto } from "./dto/submit-collaboration-task.out.dto.js";
+
 // ApprovalGovernanceRecordOutDto 是审批完成后提供给治理视图的审计记录。
 export type { ApprovalGovernanceRecordOutDto } from "./dto/approval-governance-record.out.dto.js";
 // WorkflowEventInDto 是调用方写入 Workflow 事件中心的原始事件事实。

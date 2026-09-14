@@ -60,6 +60,20 @@ export class ProposalExecutionAggregate {
       .map((task) => new CollaborationTaskAggregate({ task }));
   }
 
+  /** 从创建时保存的审批身份取得原执行任务；保障修复不能冒充审批分发结果。 */
+  static approvedTaskIds(proposal: EvolutionProposalOutDto, tasks: CollaborationTaskOutDto[]): string[] | null {
+    const approval = proposal.approvals.at(-1);
+    if (approval?.decision !== "approved" || !proposal.distributionPlan) return null;
+    const approvedTasks = tasks.filter((task) =>
+      task.sourceEvolutionApprovalId === approval.approvalId
+      && task.evolutionProposalId === proposal.proposalId
+      && task.evolutionRoundId === proposal.proposalId
+      && !task.replacementForTaskId);
+    // 只有完整且唯一的分发批次可以修正关联；缺失或多余任务不能猜测归属。
+    if (approvedTasks.length !== proposal.distributionPlan.units.length || !approvedTasks.length) return null;
+    return approvedTasks.map((task) => task.taskId);
+  }
+
   /** 返回完整执行视图，Runtime 只消费结论而不重复组合零散布尔值。 */
   view(): ProposalExecutionView {
     // 原任务标识必须使用提案持久事实，不根据当前任务列表反向补造。
@@ -145,21 +159,6 @@ export class ProposalExecutionAggregate {
       const replacement = this.#latestReplacementFor(currentTaskId);
       // 没有替代任务时，当前任务就是有效任务。
       if (!replacement) {
-        // 原任务也不存在时继续尝试受控旧数据兼容。
-        if (!current) {
-          // 旧修复任务没有 replacementForTaskId 时只能在唯一未决原任务场景接管。
-          return this.#legacyProposalRepair(originalTaskId);
-        }
-        // 升级前的失败原任务可能已经由同提案令狐修复任务完成，但尚无显式替代字段。
-        if (current.blocksProposal()) {
-          // 只在唯一原任务且修复已经集成时接受兼容替代。
-          const legacyRepair = this.#legacyProposalRepair(originalTaskId);
-          // 找到可信旧修复事实时返回修复任务。
-          if (legacyRepair) {
-            // 旧失败任务不再覆盖已经完成的修复事实。
-            return legacyRepair;
-          }
-        }
         // 返回已经解析到的当前任务。
         return current;
       }
@@ -201,41 +200,6 @@ export class ProposalExecutionAggregate {
     return replacements.at(-1) || null;
   }
 
-  /** 为升级前没有显式替代字段的单任务提案恢复一次已集成修复事实。 */
-  #legacyProposalRepair(originalTaskId: string): CollaborationTaskAggregate | null {
-    // 只有单任务提案能唯一确定旧修复任务替代对象，多任务场景禁止猜测。
-    if (this.#proposal.distributedTaskIds.length !== 1) {
-      // 多任务提案保持缺失并进入阻塞。
-      return null;
-    }
-    // 当前检查的标识必须就是唯一原任务。
-    if (this.#proposal.distributedTaskIds[0] !== originalTaskId) {
-      // 不相关标识不能使用兼容逻辑。
-      return null;
-    }
-    // 只接受同提案、令狐自动来源且已经集成的旧修复任务。
-    const candidates = this.#tasks.filter((task) => {
-      // 读取一次任务副本，保持判断清晰。
-      const snapshot = task.snapshot();
-      // 普通执行任务不能冒充旧修复结果。
-      if (snapshot.automationSource !== "linghu-safeguard") {
-        // 继续寻找真正的令狐修复任务。
-        return false;
-      }
-      // 未集成修复不能解除原任务缺失。
-      return task.isIntegrated();
-    });
-    // 没有满足条件的旧修复事实时维持阻塞。
-    if (candidates.length === 0) {
-      // 返回空值让视图保留 missingTaskIds。
-      return null;
-    }
-    // 选择最后集成形成的修复任务。
-    candidates.sort((left, right) => left.snapshot().createdAt.localeCompare(right.snapshot().createdAt));
-    // 返回受控兼容结果。
-    return candidates.at(-1) || null;
-  }
-
   /** 追溯当前有效任务所属的原始分发任务标识。 */
   #rootTaskId(task: CollaborationTaskAggregate): string {
     // 从当前任务开始向前读取 replacementForTaskId。
@@ -253,11 +217,6 @@ export class ProposalExecutionAggregate {
       }
       // 查找当前任务对象以读取它替代的上游任务。
       const current = this.#findTask(currentTaskId);
-      // 旧兼容修复没有替代字段时，只能归到唯一原任务。
-      if (!current?.replacementForTaskId() && this.#proposal.distributedTaskIds.length === 1) {
-        // 返回唯一原任务标识。
-        return this.#proposal.distributedTaskIds[0];
-      }
       // 无法继续追溯时返回当前标识，随后会被 missingTaskIds 识别。
       if (!current?.replacementForTaskId()) {
         // 保留未知根标识而不伪造关系。

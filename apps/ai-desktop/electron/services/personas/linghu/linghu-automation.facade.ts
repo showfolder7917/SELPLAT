@@ -2,7 +2,7 @@
 import type { LocaleValue } from "../../../../contracts/foundation/index.js";
 import type { WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
 // Coordinator 状态是检测、恢复和派发的权威来源。
-import type { CollaborationCustomerActionGuidanceOutDto, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationCustomerActionGuidanceOutDto, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, DesktopOperatingModeValue, SubmitCollaborationTaskInDto, SubmitCollaborationTaskOutDto, WorkflowExceptionRecordOutDto } from "../../../../contracts/services/workflow/index.js";
 // 令狐快照、模块和完整状态使用跨进程纯协议，页面与主进程共享同一数据形状。
 import type {
   LinghuAutomaticFlowSnapshotOutDto,
@@ -28,7 +28,7 @@ export interface LinghuCollaborationPort {
   // 自动保障开启时确保系统进入协作模式。
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto;
   // 派发当前令狐模块任务。
-  submitTask(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto;
+  submitTask(request: SubmitCollaborationTaskInDto): SubmitCollaborationTaskOutDto;
   // 已有执行人可以继续处理原任务。
   continueTask(taskId: string, recoveryActor?: Pick<CollaborationMemberOutDto, "memberId" | "displayName">): CollaborationStateOutDto;
   // 停滞任务通过正式协调入口进入恢复。
@@ -173,7 +173,7 @@ export class LinghuAutomationFacade {
   /** 只接受有原卡点事实和限定工作区的修复任务，实际调查执行沿既有令狐执行会话完成。 */
   submitCheckpointRepair(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto {
     if (this.#stopped) throw new Error("令狐运行时已停止");
-    return this.#collaboration.submitTask({ ...request, preferredExecutorMemberId: LINGHU_MEMBER_ID, automationSource: "linghu-safeguard" });
+    return this.#collaboration.submitTask({ ...request, preferredExecutorMemberId: LINGHU_MEMBER_ID, automationSource: "linghu-safeguard" }).state;
   }
 
   /** 执行一轮检测、恢复或有明确故障依据的模块派发。 */
@@ -544,8 +544,8 @@ export class LinghuAutomationFacade {
       preferredExecutorMemberId: LINGHU_MEMBER_ID,
       automationSource: "linghu-safeguard",
     });
-    // Coordinator 返回新状态，最后一条必须是刚创建的保障任务。
-    const task = next.tasks.at(-1);
+    // 回执身份由创建者提供，历史任务的排序不会改变本次归属。
+    const task = next.state.tasks.find((item) => item.taskId === next.taskId);
     if (!task) throw new Error("自动保障任务创建后没有返回任务记录。");
     const claimedIssueIds = ordinaryIssueContext.length ? this.#claimUnhandledExceptions(ordinaryIssues.map((event) => event.eventId)) : [];
     this.#store.updateRuntime("automation.module_dispatched", (current) => {

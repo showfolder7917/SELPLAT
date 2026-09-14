@@ -183,7 +183,7 @@ export class NangongTaskDistributionService {
         sourceEvolutionApprovalId: latestApproval?.approvalId,
         taskRuleIds: unit.taskRuleIds || [],
       });
-      const createdTask = next.tasks.find((task) => task.evolutionProposalId === proposal.proposalId && !distributedTaskIds.includes(task.taskId));
+      const createdTask = next.state.tasks.find((task) => task.taskId === next.taskId);
       if (!createdTask) throw new Error("协同任务已经创建，但未能建立提案关联。");
       distributedTaskIds.push(createdTask.taskId);
       observedTasks.push(createdTask);

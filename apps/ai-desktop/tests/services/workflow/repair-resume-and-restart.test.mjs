@@ -36,7 +36,7 @@ for (const complete of [true, false, "invalid"]) test(`修复后按完成证据�
       integrationPipeline: { finishWaitingTask() {}, trackWaitingTask() {}, schedule() {}, dispose() {} },
       emitState() {}, emitStream() {},
     });
-    const taskId = coordinator.submitTask(request).tasks.at(-1).taskId;
+    const taskId = coordinator.submitTask(request).taskId;
     for (let i = 0; i < 200 && !["ready-for-integration", "recovering"].includes(store.task(taskId).state); i++) await new Promise(resolve => setTimeout(resolve, 10));
     const task = store.task(taskId);
     assert.equal(analysisCount, 1, "修复后不得重新技术分析整项需求");

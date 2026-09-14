@@ -241,24 +241,34 @@ test("提案执行聚合在原记录缺失时接受显式替代任务", () => {
   assert.equal(view.nextStatus, "pending-acceptance");
 });
 
-test("升级前单任务提案使用已集成令狐任务结束旧阻塞", () => {
-  // 创建升级前仍然保留的阻塞原任务。
-  const original = task("task-original", "blocked", { evolutionProposalId: "proposal-1" });
-  // 创建升级前没有 replacementForTaskId 字段的已集成令狐任务。
-  const legacyRepair = task("task-legacy-repair", "integrated", {
-    // 旧任务仍然通过提案标识保持可追溯关系。
+test("同提案历史保障结果不能替代没有显式替代关系的当前任务", () => {
+  const unrelated = task("old-safeguard", "integrated", {
     evolutionProposalId: "proposal-1",
-    // 明确该任务来自令狐卡点恢复。
     automationSource: "linghu-safeguard",
-    // 旧修复任务晚于原任务形成。
-    createdAt: "2026-09-06T00:02:00.000Z",
   });
-  // 使用旧数据恢复提案执行聚合。
-  const view = new ProposalExecutionAggregate({ proposal: proposal(["task-original"]), collaborationTasks: [original, legacyRepair] }).view();
-  // 唯一原任务场景允许可信旧修复任务接管。
-  assert.deepEqual(view.effectiveTasks.map((item) => item.taskId), ["task-legacy-repair"]);
-  // 已集成旧修复任务不能再次被判断为提案阻塞。
-  assert.equal(view.nextStatus, "pending-acceptance");
+  for (const originals of [[task("current", "blocked")], []]) {
+    const view = new ProposalExecutionAggregate({
+      proposal: proposal(["current"]),
+      collaborationTasks: [...originals, unrelated],
+    }).view();
+    assert.equal(view.completed, false);
+    assert.equal(view.nextStatus, "blocked");
+  }
+});
+
+test("审批身份只接受完整当前分发批次且排除显式替代任务", () => {
+  const current = { ...proposal([]), approvals: [{ approvalId: "approval-current", decision: "approved" }],
+    distributionPlan: { units: [{}, {}] } };
+  const owned = (id) => task(id, "executing", { sourceEvolutionApprovalId: "approval-current",
+    evolutionProposalId: "proposal-1", evolutionRoundId: "proposal-1" });
+  const first = owned("first");
+  const second = owned("second");
+  assert.equal(ProposalExecutionAggregate.approvedTaskIds(current, [first]), null);
+  assert.deepEqual(ProposalExecutionAggregate.approvedTaskIds(current, [first, second,
+    { ...owned("replacement"), replacementForTaskId: "first" },
+    { ...owned("older"), sourceEvolutionApprovalId: "approval-older" },
+    { ...owned("other"), evolutionProposalId: "proposal-other" }]), ["first", "second"]);
+  assert.equal(ProposalExecutionAggregate.approvedTaskIds(current, [first, second, owned("ambiguous")]), null);
 });
 
 test("单任务聚合只允许真实阻塞状态恢复并核对人物占用", () => {

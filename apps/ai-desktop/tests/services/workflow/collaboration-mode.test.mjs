@@ -348,7 +348,7 @@ test("客户范围修订后迟到的旧执行结果只被丢弃，不触发令�
       emitState: () => undefined,
       emitStream: () => undefined,
     });
-    const submitted = coordinator.submitTask({
+    const { state: submitted } = coordinator.submitTask({
       title: "修复验收卡点",
       problemStatement: "测试台被错误加入韩立验收。",
       confirmedIntent: "先按旧范围修复。",
@@ -411,7 +411,7 @@ test("客户范围修订后迟到的旧执行人初始化失败不会阻塞新�
       emitState: () => undefined,
       emitStream: () => undefined,
     });
-    const submitted = coordinator.submitTask({
+    const { state: submitted } = coordinator.submitTask({
       title: "修复长会话性能",
       problemStatement: "长会话切换变慢。",
       confirmedIntent: "保留历史并按需渲染。",
@@ -497,7 +497,7 @@ test("客户范围修订会取消已经排队但尚未开始的旧令狐恢复",
       emitState: () => undefined,
       emitStream: () => undefined,
     });
-    const submitted = coordinator.submitTask({
+    const { state: submitted } = coordinator.submitTask({
       title: "修复验收卡点",
       problemStatement: "旧执行失败后准备交给令狐。",
       confirmedIntent: "按旧范围修复。",
@@ -1106,7 +1106,7 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
       emitState: () => undefined,
       emitStream: () => undefined,
     });
-    const state = coordinator.submitTask({ title: "权限恢复", problemStatement: "固定命令需要授权", confirmedIntent: "授权后继续原任务", workspaceState, locale: "zh-CN", preferredExecutorMemberId: "yuan-yao", taskRuleIds: ["WORKSPACE_RULE"] });
+    const { state: state } = coordinator.submitTask({ title: "权限恢复", problemStatement: "固定命令需要授权", confirmedIntent: "授权后继续原任务", workspaceState, locale: "zh-CN", preferredExecutorMemberId: "yuan-yao", taskRuleIds: ["WORKSPACE_RULE"] });
     const taskId = state.tasks.at(-1).taskId;
     assert.equal(store.task(taskId).snapshot.ruleContext.ruleRevision, "revision-one");
     assert.deepEqual(store.task(taskId).snapshot.ruleContext.matchedTaskRuleIds, ["WORKSPACE_RULE"]);
@@ -1140,7 +1140,7 @@ test("文件范围冲突立即等待用户确认且令狐不会排队等待自�
       failureKind: "scope-confirmation",
     };
     const coordinator = createExecutionResultCoordinator(directory, store, result);
-    const submitted = coordinator.submitTask({
+    const { state: submitted } = coordinator.submitTask({
       title: "修复验收工具范围",
       problemStatement: "验收工具缺少拖拽契约",
       confirmedIntent: "保留现有修改并重新确认真实文件范围",
@@ -1173,7 +1173,7 @@ test("令狐自己的普通执行失败保留恢复点而不生成自等待任�
       successfulCommands: [],
     };
     const coordinator = createExecutionResultCoordinator(directory, store, result);
-    const submitted = coordinator.submitTask({
+    const { state: submitted } = coordinator.submitTask({
       title: "令狐继续修复",
       problemStatement: "固定测试仍然失败",
       confirmedIntent: "沿同一恢复点继续修复但禁止自等待",

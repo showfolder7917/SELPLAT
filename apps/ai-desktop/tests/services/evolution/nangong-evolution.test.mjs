@@ -1119,7 +1119,7 @@ test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json")); let submitted; let planningWorkspace;
-    const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] }; } };
+    const collaboration = { submitTask(request) { submitted = request; return { taskId: "collab-1", state: { tasks: [{ taskId: "collab-1", evolutionProposalId: request.evolutionProposalId }] } }; } };
     const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
       async planDistribution(_prompt, receivedWorkspace) { planningWorkspace = receivedWorkspace; return distributionServices.planDistribution(); },
@@ -1144,7 +1144,7 @@ test("分发计划会纠正首轮无效 JSON，并从围栏中的单个有效对
     const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
-      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-retry-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-retry-task", state: { tasks: [{ taskId: "json-retry-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
       async planDistribution() { attempts += 1; return attempts === 1 ? "计划如下：暂未形成可解析的计划。" : `\`\`\`json\n${validPlan}\n\`\`\``; },
     });
     let state = facade.createTopic(topicRequest("收起临时工作区"));
@@ -1169,7 +1169,7 @@ test("分发计划格式重试仅记录闭合候选数量而不记录无效对�
     const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
-      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-invalid-object-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-invalid-object-task", state: { tasks: [{ taskId: "json-invalid-object-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
       async planDistribution(prompt) { attempts += 1; if (attempts === 2) retryPrompt = prompt; return attempts === 1 ? rawFailure : validPlan; },
     });
     let state = facade.createTopic(topicRequest("收起临时工作区"));
@@ -1198,7 +1198,7 @@ test("分发计划外层对象未闭合但内部任务对象闭合时仍进入�
     const rawFailure = validPlan.slice(0, -1);
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
-      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-unclosed-plan-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-unclosed-plan-task", state: { tasks: [{ taskId: "json-unclosed-plan-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
       async planDistribution(prompt) { attempts += 1; if (attempts === 2) retryPrompt = prompt; return attempts === 1 ? rawFailure : validPlan; },
     });
     let state = facade.createTopic(topicRequest("收起临时工作区"));
@@ -1226,7 +1226,7 @@ test("分发计划忽略说明中的相邻元数据对象并使用完整计划",
     const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
-      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-adjacent-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-adjacent-task", state: { tasks: [{ taskId: "json-adjacent-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
       async planDistribution() { attempts += 1; return `计划说明：{\"trace\":\"metadata\"}\n${validPlan}\n请按该计划执行。`; },
     });
     let state = facade.createTopic(topicRequest("收起临时工作区"));
@@ -1250,7 +1250,7 @@ test("分发计划字段含转义字符和花括号时仍提取完整对象", as
     const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope, acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: () => undefined,
-      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-escaped-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-escaped-task", state: { tasks: [{ taskId: "json-escaped-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
       async planDistribution() { return validPlan; },
     });
     let state = facade.createTopic(topicRequest("收起临时工作区"));
@@ -1271,7 +1271,7 @@ test("分发计划在说明文字包裹 JSON 围栏时仍使用完整计划", as
     const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: () => undefined,
-      collaboration: { submitTask(request) { submitted += 1; return { tasks: [{ taskId: "json-fenced-prose-task", evolutionProposalId: request.evolutionProposalId }] }; } },
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-fenced-prose-task", state: { tasks: [{ taskId: "json-fenced-prose-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
       async planDistribution() { return `计划如下：\n\`\`\`JSON\n${validPlan}\n\`\`\`\n以上为全部计划。`; },
     });
     let state = facade.createTopic(topicRequest("收起临时工作区"));
@@ -1377,7 +1377,7 @@ test("分发计划中的 core 规则在创建任务前被当前用户目录校�
       collaboration: {
         submitTask(request) {
           submittedAtAttempt = attempts;
-          return { tasks: [{ taskId: "task-rule-catalog", evolutionProposalId: request.evolutionProposalId }] };
+          return { taskId: "task-rule-catalog", state: { tasks: [{ taskId: "task-rule-catalog", evolutionProposalId: request.evolutionProposalId }] } };
         },
       },
       async planDistribution(prompt) {
@@ -1424,7 +1424,7 @@ test("已通过的持久化计划在分发前重验当前用户规则目录", as
         submitTask(request) {
           submitted += 1;
           assert.deepEqual(request.taskRuleIds, []);
-          return { tasks: [{ taskId: "persisted-task-rule-catalog", evolutionProposalId: request.evolutionProposalId }] };
+          return { taskId: "persisted-task-rule-catalog", state: { tasks: [{ taskId: "persisted-task-rule-catalog", evolutionProposalId: request.evolutionProposalId }] } };
         },
       },
       async planDistribution() { attempts += 1; return validPlan; },
@@ -1446,7 +1446,7 @@ test("已通过的持久化计划在分发前重验当前用户规则目录", as
 test("旧分发 audit 字段一次性迁移为程序 validation 且保留专题事实", async () => {
   const key = "nangong-distribution-validation-migration";
   const store = evolutionStore(key);
-  const collaboration = { submitTask(request) { return { tasks: [{ taskId: "migration-task", evolutionProposalId: request.evolutionProposalId }] }; } };
+  const collaboration = { submitTask(request) { return { taskId: "migration-task", state: { tasks: [{ taskId: "migration-task", evolutionProposalId: request.evolutionProposalId }] } }; } };
   const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
   let state = facade.createTopic(topicRequest("分发校验迁移"));
   state = facade.createProposal(state.topics[0].topicId, proposalRequest());
@@ -1475,7 +1475,7 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
       submitTask(request) {
         proposalId = request.evolutionProposalId;
         taskIds.push(`round-task-${taskIds.length + 1}`);
-        return this.state();
+        return { taskId: taskIds.at(-1), state: this.state() };
       },
       state() {
         return { tasks: taskIds.map((taskId) => ({ taskId, evolutionProposalId: proposalId, evolutionRoundId: proposalId, state: taskStates.get(taskId) })) };
@@ -1516,7 +1516,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     const store = evolutionStore(path.join(directory, "state.json"));
     let distributedTaskId = null;
     const collaboration = {
-      submitTask(request) { distributedTaskId = "collab-evolution-completed"; return { tasks: [{ taskId: distributedTaskId, evolutionProposalId: request.evolutionProposalId, state: "integrated" }] }; },
+      submitTask(request) { distributedTaskId = "collab-evolution-completed"; return { taskId: distributedTaskId, state: { tasks: [{ taskId: distributedTaskId, evolutionProposalId: request.evolutionProposalId, state: "integrated" }] } }; },
       state() { return { tasks: distributedTaskId ? [{ taskId: distributedTaskId, state: "integrated" }] : [] }; },
     };
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
@@ -1758,7 +1758,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
       state() { return { members: [{ memberId: "mo-caihuan", displayName: "墨彩环", enabled: true, kind: "worker" }, { memberId: "doctor-mo", displayName: "墨大夫", enabled: true, kind: "worker" }], tasks }; },
       submitTask(request) {
         tasks.push({ taskId: "one-shot-task", evolutionProposalId: request.evolutionProposalId, state: "executing", phase: "implementing", executorMemberId: "mo-caihuan", currentHandler: { memberId: "doctor-mo", displayName: "墨大夫" }, originalExecutor: { memberId: "doctor-mo", displayName: "墨大夫" }, snapshot: { title: request.title }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-        return this.state();
+        return { taskId: tasks.at(-1).taskId, state: this.state() };
       },
     };
     const readyConversation = {
@@ -1810,7 +1810,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
           integrationFailure: { kind: "local-change-ownership", detail, conflictFiles: ["apps/ai-desktop/electron/main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() },
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         });
-        return this.state();
+        return { taskId: tasks.at(-1).taskId, state: this.state() };
       },
       async recoverTask(taskId) {
         recoveryRequests += 1;
@@ -2183,7 +2183,7 @@ test("令狐专属提案接口退役但南宫业务提案仍须审批后派发",
   const directory = mkdtempSync(path.join(controlledTestRoot, "linghu-approval-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json")); let submitted;
-    const collaboration = { submitTask(request) { submitted = request; return { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] }; }, state() { return { tasks: [] }; } };
+    const collaboration = { submitTask(request) { submitted = request; return { taskId: "linghu-task", state: { tasks: [{ taskId: "linghu-task", evolutionProposalId: request.evolutionProposalId }] } }; }, state() { return { tasks: [] }; } };
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
     assert.equal(facade.createLinghuRepairProposal, undefined);
     assert.equal(store.createLinghuRepairProposal, undefined);
@@ -2206,7 +2206,7 @@ test("所有人物共用自身能力升级修订链并在任务中固定审批�
       { memberId: "custom-member", displayName: "自定义人物", enabled: true, kind: "worker" },
     ];
     const collaboration = {
-      submitTask(request) { submitted = request; return { tasks: [{ taskId: "self-upgrade-task", evolutionProposalId: request.evolutionProposalId }] }; },
+      submitTask(request) { submitted = request; return { taskId: "self-upgrade-task", state: { tasks: [{ taskId: "self-upgrade-task", evolutionProposalId: request.evolutionProposalId }] } }; },
       state() { return { members, tasks: [] }; },
     };
     const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent: () => undefined });
@@ -2392,4 +2392,52 @@ test("恢复当前未完成研讨保留运行与轮次，拒绝跨运行历史�
   legacy.deliberations[0].createdAt = "2020-01-01T00:00:00.000Z";
   writePersistedState(key, legacy);
   assert.throws(() => evolutionStore(key).resumePendingDeliberation("pending"), /没有可原位继续/);
+});
+
+
+test("任务创建回执不会把历史保障任务登记为新分发任务", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-task-receipt-"));
+  let facade;
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const tasks = [];
+    const collaboration = {
+      state() { return { members: [], tasks: structuredClone(tasks) }; },
+      submitTask(request) {
+        const task = { ...request, taskId: "new-approved-task", state: "executing", snapshot: { title: request.title } };
+        tasks.push(task);
+        // 回执状态故意把旧任务放在新任务前后，消费方不能依赖列表顺序。
+        return { taskId: task.taskId, state: { tasks: [tasks[0], task, tasks[1]] } };
+      },
+    };
+    facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, ...distributionServices, recordEvent() {} });
+    let state = facade.createTopic(topicRequest("准确关联新任务"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    tasks.push(
+      { taskId: "old-repair-1", evolutionProposalId: proposalId, state: "integrated", snapshot: { title: "旧保障一" } },
+      { taskId: "old-repair-2", evolutionProposalId: proposalId, state: "integrated", snapshot: { title: "旧保障二" } },
+    );
+    state = await facade.dispatch(proposalId);
+    assert.deepEqual(state.proposals[0].distributedTaskIds, ["new-approved-task"]);
+    assert.equal(state.proposals[0].status, "executing");
+
+    // 模拟旧版本已持久保存错误关联；新运行时必须依据创建审批事实恢复，不能重新创建任务。
+    const oldState = store.state();
+    oldState.proposals[0].distributedTaskIds = ["old-repair-1"];
+    oldState.proposals[0].status = "pending-acceptance";
+    writePersistedState(path.join(directory, "state.json"), oldState);
+    const restoredStore = evolutionStore(path.join(directory, "state.json"));
+    facade.stop();
+    facade = new PersonaEvolutionRuntime({ store: restoredStore, collaboration, conversation, ...distributionServices, recordEvent() {} });
+    facade.start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    facade.stop();
+    const restored = facade.state();
+    assert.deepEqual(restored.proposals[0].distributedTaskIds, ["new-approved-task"]);
+    assert.equal(restored.proposals[0].status, "executing", "未集成的实际任务必须阻止提前验收");
+    assert.equal(tasks.length, 3, "恢复只纠正关联，不重建任务或删除历史任务");
+    assert.ok(restored.archiveRecords.some((record) => record.eventType === "proposal.distribution_reconciled"));
+  } finally { facade?.stop(); rmSync(directory, { recursive: true, force: true }); }
 });
