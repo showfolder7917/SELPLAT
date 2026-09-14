@@ -448,7 +448,7 @@ test("最新验收范围待确认时旧技术卡点不得派发修复", async ()
   assert.equal(f.event.payload.checkpoint.phase, "waiting");
 });
 
- test("验收恢复完整继承专题和提案排除项，安全工具不自动获得授权", async () => {
+test("验收恢复完整继承专题和提案排除项，安全工具不自动获得授权", async () => {
   const f = fixture();
   f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
   f.evolution.topics[0].exclusions = ["不改变全窗口截图", "不开自动托管"];
@@ -458,6 +458,33 @@ test("最新验收范围待确认时旧技术卡点不得派发修复", async ()
   assert.deepEqual(repair.constraints.filter((item) => item.startsWith("原确认范围排除项：")), ["原确认范围排除项：不改变全窗口截图", "原确认范围排除项：不开自动托管", "原确认范围排除项：不扩展验收工具"]);
   assert.match(repair.confirmedIntent, /安全性不代表已获授权/);
   assert.match(repair.confirmedIntent, /等待明确授权/);
+});
+
+test("客户范围修订后旧卡点只按当前提案版本创建修复任务", async () => {
+  const f = fixture();
+  f.evolution.proposals[0].exclusions = ["后续状态更新失败"];
+  f.evolution.proposals.push({
+    proposalId: "proposal-2",
+    topicId: "topic-1",
+    title: "已收窄的验收范围",
+    supersedesProposalId: "proposal-1",
+    version: 2,
+    exclusions: ["后续状态更新失败", "不重建任务"],
+  });
+  // Evolution Store 在创建修订时会原子更新运行绑定；这里保留同一事实，
+  // 让协调器核对旧卡点是否真正读取到当前范围版本。
+  f.evolution.oneShotRun.proposalId = "proposal-2";
+
+  await f.run();
+
+  const repair = f.effects.submitted[0];
+  assert.equal(repair.evolutionProposalId, "proposal-2");
+  assert.equal(repair.evolutionRoundId, "proposal-2");
+  assert.match(repair.confirmedIntent, /已收窄的验收范围/);
+  assert.deepEqual(repair.constraints.filter((item) => item.startsWith("原确认范围排除项：")), [
+    "原确认范围排除项：后续状态更新失败",
+    "原确认范围排除项：不重建任务",
+  ]);
 });
 
 

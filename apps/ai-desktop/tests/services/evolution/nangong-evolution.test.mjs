@@ -947,6 +947,37 @@ test("专题流程从同一提案卡点原位恢复统一自动运行", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("客户确认的提案范围修订会替换运行使用的验收条件版本", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-scope-revision-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.beginOneShotRun(workspaceState, "zh-CN");
+    let state = store.createTopic(topicRequest("范围修订同步"));
+    const topicId = state.activeTopicId;
+    state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const original = state.proposals.at(-1);
+    store.updateOneShotRun("revising", "nangong-wan", "南宫婉", "正在按客户确认范围修订", topicId, original.proposalId);
+    store.decide(original.proposalId, "supplement-required", "客户已排除旧验收条件，请提交更新后的条件。", "manual-user", []);
+
+    state = store.revise(original.proposalId, {
+      submitterMemberId: original.submitterMemberId,
+      content: "保留完成通知、历史记录和人物真实状态，移除已排除的状态更新失败条件。",
+      evidence: ["客户范围修订"],
+      impactScope: ["验收范围"],
+      exclusions: ["后续状态更新失败"],
+      risks: ["旧验收目标误入返修"],
+      rollbackPlan: "回退本次提案版本。",
+      acceptanceCriteria: ["完成通知、历史记录和人物真实状态可验证"],
+    }, "南宫婉");
+
+    const revised = state.proposals.at(-1);
+    assert.equal(revised.supersedesProposalId, original.proposalId);
+    assert.deepEqual(revised.acceptanceCriteria, ["完成通知、历史记录和人物真实状态可验证"]);
+    assert.deepEqual(revised.exclusions, ["后续状态更新失败"]);
+    assert.equal(state.oneShotRun.proposalId, revised.proposalId);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("已审批提案在首次分发失败后从原卡点继续分发", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "approved-distribution-resume-"));
   try {
