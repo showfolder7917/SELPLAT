@@ -74,7 +74,12 @@ export class CheckpointCoordinator {
     // 先按异常关联标识寻找真实原任务。
     const task = this.options.collaboration().tasks.find((item) => item.taskId === event.correlationId || item.taskId === event.payload.taskId);
     // 再按异常提案标识或任务关系寻找原提案。
-    const proposal = evolution.proposals.find((item) => item.proposalId === event.payload.proposalId || item.proposalId === task?.evolutionProposalId);
+    const referencedProposal = evolution.proposals.find((item) => item.proposalId === event.payload.proposalId || item.proposalId === task?.evolutionProposalId);
+    // 卡点事件可能早于客户范围修订。恢复时沿不可变的替代链选择当前
+    // 提案版本，避免把旧验收条件重新写进新的修复任务。
+    const proposal = referencedProposal
+      ? currentProposalRevision(evolution, referencedProposal.proposalId)
+      : undefined;
     // 单任务提案即使原任务记录缺失，也能使用持久分发标识建立明确替代关系。
     let proposalTaskId: string | null = null;
     // 只有唯一分发任务时才能从提案确定原任务身份。
@@ -412,6 +417,25 @@ export class CheckpointCoordinator {
     Object.assign(state, aggregate.snapshot());
     this.#phase(event, state, "repairing", `令狐已接收第 ${state.round} 轮真实调查修复任务 ${state.repairTaskId}。`);
   }
+}
+
+/** 返回同一替代链的末端提案；旧异常只能服务于当前已确认的范围版本。 */
+function currentProposalRevision(
+  evolution: EvolutionStateOutDto,
+  proposalId: string,
+): EvolutionStateOutDto["proposals"][number] | undefined {
+  let current = evolution.proposals.find((item) => item.proposalId === proposalId);
+  const visited = new Set<string>();
+  while (current && !visited.has(current.proposalId)) {
+    visited.add(current.proposalId);
+    const successor = evolution.proposals
+      .filter((item) => item.supersedesProposalId === current!.proposalId)
+      .sort((left, right) => left.version - right.version)
+      .at(-1);
+    if (!successor) return current;
+    current = successor;
+  }
+  return undefined;
 }
 
 /** 比较同一原流程的卡点优先级，已有修复任务的记录优先，其次按发生顺序稳定排序。 */

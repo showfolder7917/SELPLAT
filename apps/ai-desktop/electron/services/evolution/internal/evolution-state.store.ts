@@ -756,6 +756,12 @@ export class EvolutionStateStore {
         status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
+      // 后续验收必须读取当前有效的提案版本。保留旧版本仅供审计，不能让
+      // 运行指针继续把客户已经排除的条件带回自动修复链。
+      if (state.oneShotRun?.proposalId === previous.proposalId) {
+        state.oneShotRun.proposalId = nextProposalId;
+        state.oneShotRun.updatedAt = now;
+      }
     });
   }
 
