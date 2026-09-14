@@ -621,7 +621,9 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   finishInteractionInquiryRetry: async () => { inquiryFixtureRelease?.(); },
   getInteractionInquiryRequest: async () => structuredClone(inquiryFixtureRequest),
-  getPersonaConversation: async (personaId) => structuredClone(personaId === "nangong-wan" ? evolutionState.conversation : hanliConversation),
+  getPersonaConversation: async (personaId) => process.env.AI_DESKTOP_INTERACTION_ACCEPTANCE_SESSION === "1"
+    ? ipcRenderer.invoke("interaction:acceptance-conversation", personaId)
+    : structuredClone(personaId === "nangong-wan" ? evolutionState.conversation : hanliConversation),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },
   setInteractionCheckpointMessages: async () => {
     const now = new Date().toISOString();
@@ -634,6 +636,7 @@ contextBridge.exposeInMainWorld("desktop", {
     for (const listener of personaConversationListeners) listener(structuredClone(evolutionState.conversation));
   },
   sendPersonaConversationMessage: async (personaId, request) => {
+    if (process.env.AI_DESKTOP_INTERACTION_ACCEPTANCE_SESSION === "1") return ipcRenderer.invoke("interaction:acceptance-send", personaId, request);
     if (personaId !== "han-li") return sendNangongTestConversation(request);
     if (inquiryFixtureEnabled && request.clientMessageId === "inquiry-ui-user") {
       inquiryFixtureRequest = structuredClone(request);

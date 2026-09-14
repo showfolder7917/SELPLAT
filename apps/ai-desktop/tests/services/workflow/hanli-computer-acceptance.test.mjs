@@ -51,7 +51,8 @@ function fixture(safe = true, sendResult = { status: "sent", composerLabel: "给
     return safe;
   }, sendInputEvent: (event) => inputs.push(event) } };
   const controller = new HanliComputerAcceptance({ save: async () => ({ id: `image-${++n}` }) });
-  return { inputs, boundsCalls, executedScripts, controller, run: (model, currentGoal = goal, workspaceEvidence, interactions = { allows: () => true }) => controller.run(currentGoal, window, model, (text) => progress.push(text), interactions, workspaceEvidence), progress };
+  const completedPersonaObservations = [];
+  return { inputs, boundsCalls, executedScripts, completedPersonaObservations, controller, run: (model, currentGoal = goal, workspaceEvidence, interactions = { allows: () => true, captureObservationReceipt: () => () => completedPersonaObservations.push(true) }) => controller.run(currentGoal, window, model, (text) => progress.push(text), interactions, workspaceEvidence), progress };
 }
 const observe = (tools) => tools.call("hanli_computer", { action: "observe", reason: "观察真实页面" });
 const id = (result) => JSON.parse(result.contentItems[0].text).observationId;
@@ -549,6 +550,15 @@ test("受控验收消息发送后可作为真实截图证据，悬停也形成�
   assert.equal(run.interactionSteps[0].operation.type, "send");
   assert.equal(run.interactionSteps[0].operation.target, "persona-composer");
   assert.equal(run.interactionSteps[1].operation.type, "hover");
+});
+test("发送中观察在首张截图保存后才释放窗口私有会话", async () => {
+  const f = fixture();
+  await f.run(async (tools) => {
+    const first = id(await observe(tools));
+    const sent = await tools.call("hanli_computer", { action: "send-test-message", reason: "保存发送中状态截图后再读取确认", observationId: first });
+    assert.equal(f.completedPersonaObservations.length, 2);
+    await finish(tools, id(sent));
+  });
 });
 test("受控发送在输入框或发送按钮不可用时明确拒绝", async () => {
   const f = fixture(true, { status: "发送按钮仍禁用", composerLabel: null });
