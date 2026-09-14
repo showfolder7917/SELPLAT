@@ -52,6 +52,8 @@ export class WorkspaceAcceptanceFixture {
   constructor(workspaces: WorkspaceStore, temporaryRoot: string) {
     this.#workspaces = workspaces;
     this.#temporaryRoot = temporaryRoot;
+    // 该服务在主进程启动阶段、Renderer 首次读取工作区之前创建；此处回收上次异常退出留下的私有夹具。
+    this.#cleanupStaleFixtures();
   }
 
   /**
@@ -63,7 +65,6 @@ export class WorkspaceAcceptanceFixture {
   reserve(mode: FixtureMode = "basic", trustedWebContentsId: number): FixtureReservation {
     if (!Number.isSafeInteger(trustedWebContentsId) || trustedWebContentsId <= 0) throw new Error("验收窗口身份无效，不能签发工作区夹具。");
     this.cleanup();
-    this.#cleanupStaleFixtures();
     const directory = realpathSync.native(mkdtempSync(path.join(this.#temporaryRoot, "韩立验收工作区-")));
     const displayName = path.basename(directory);
     // 标记只供主进程回收异常中断的夹具，避免按目录前缀误删用户工作区。
@@ -179,8 +180,8 @@ export class WorkspaceAcceptanceFixture {
   }
 
   /**
-   * 仅在新一轮验收开始前回收应用临时根中带私有标记的遗留夹具。
-   * 这样异常退出不会让下一轮错误复用旧根，也不会影响任何未被本夹具标记的用户目录。
+   * 在主进程启动服务装配时回收应用临时根中带私有标记的遗留夹具。
+   * Renderer 首次读取工作区前已经完成回收，同时不会影响任何未被本夹具标记的用户目录。
    */
   #cleanupStaleFixtures(): void {
     let temporaryRoot: string;

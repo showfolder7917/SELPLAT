@@ -139,7 +139,7 @@ test("夹具以真实路径绑定和清理 macOS 临时目录别名登记", () =
   }
 });
 
-test("新验收只回收带私有标记的遗留夹具，并生成可区分的新标签", () => {
+test("主进程重新装配夹具服务时先回收带私有标记的遗留内容", () => {
   const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-stale-test-"));
   const roots = [];
   const workspaces = {
@@ -158,13 +158,15 @@ test("新验收只回收带私有标记的遗留夹具，并生成可区分的�
     assert.ok(interruptedDirectory);
     roots.push({ id: "stale-fixture", path: interruptedDirectory });
     const unrelatedDirectory = mkdtempSync(path.join(temporaryRoot, "customer-workspace-"));
+    roots.push({ id: "formal-workspace", path: unrelatedDirectory });
 
     const nextFixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
-    const nextReservation = nextFixture.reserve("scenarios", 44);
 
-    assert.equal(existsSync(interruptedDirectory), false, "仅带私有标记的遗留目录应在下一轮启动前回收");
-    assert.equal(roots.some((root) => root.id === "stale-fixture"), false, "遗留夹具登记不得进入新一轮选择列表");
+    assert.equal(existsSync(interruptedDirectory), false, "带私有标记的遗留目录应在 Renderer 首次读取前回收");
+    assert.equal(roots.some((root) => root.id === "stale-fixture"), false, "遗留夹具登记不得进入重启后的首次工作区列表");
     assert.equal(existsSync(unrelatedDirectory), true, "未标记目录不能按名称或临时根位置被删除");
+    assert.equal(roots.some((root) => root.id === "formal-workspace"), true, "正式工作区登记必须保留");
+    const nextReservation = nextFixture.reserve("scenarios", 44);
     assert.notEqual(nextReservation.displayName, interruptedReservation.displayName, "本轮标签必须能在页面中区分旧夹具");
     nextFixture.cleanup();
   } finally {
