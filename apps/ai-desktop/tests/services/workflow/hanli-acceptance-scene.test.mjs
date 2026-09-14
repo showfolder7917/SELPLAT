@@ -774,7 +774,20 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
       const registered = await submission.tools.call("hanli_register_acceptance_scene_segment", { ...omittedCriterionPlan.segments[0], requestId });
       assert.equal(registered.success, true);
       assert.match(registered.contentItems[0].text, /criterion-2/);
-      assert.equal((await submission.tools.call("hanli_finalize_acceptance_scene", { requestId, reason: omittedCriterionPlan.reason })).success, false);
+      const rejected = await submission.tools.call("hanli_finalize_acceptance_scene", { requestId, reason: omittedCriterionPlan.reason });
+      assert.equal(rejected.success, false);
+      assert.deepEqual(JSON.parse(rejected.contentItems[0].text), {
+        message: "韩立验收场景计划未逐项覆盖原验收条件：criterion-2。",
+        planningContext: {
+          criteria: [
+            { criterionId: "criterion-1", text: goal.criteria[0] },
+            { criterionId: "criterion-2", text: goal.criteria[1] },
+          ],
+          requirements: [],
+          remainingCriterionIds: ["criterion-2"],
+          remainingRequirementIds: [],
+        },
+      });
       return;
     }
     assert.notEqual(planningContext, firstPlanningContext);
@@ -788,10 +801,10 @@ test("原条件遗漏时第二回合按当前目标重新生成完整编号计�
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
-  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件。" }]);
+  assert.deepEqual(rejections, [{ message: "韩立验收场景计划未逐项覆盖原验收条件：criterion-2。" }]);
 });
 
-test("无效阶段返回真实拒绝原因，第二回合从空权威模型重新登记", async () => {
+test("空归属 blocked 阶段返回当前剩余条件，第二回合从空权威模型重新登记", async () => {
   const rejections = [];
   const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
   let firstRequestId;
@@ -801,11 +814,23 @@ test("无效阶段返回真实拒绝原因，第二回合从空权威模型重�
       const rejected = await submission.tools.call("hanli_register_acceptance_scene_segment", {
         ...segment,
         requestId,
-        // 模拟发布版实际可见的说明词被当成参数值，不能默认替换成任意有效场景。
-        kind: "场景类型",
+        kind: "blocked",
+        ownedConditions: [],
+        relatedCriterionIds: [],
       });
       assert.equal(rejected.success, false);
-      assert.match(rejected.contentItems[0].text, /未提交有效的验收场景阶段/);
+      assert.deepEqual(JSON.parse(rejected.contentItems[0].text), {
+        message: "验收场景阶段必须唯一占用条件，或关联已有条件完成剩余场景。",
+        planningContext: {
+          criteria: [
+            { criterionId: "criterion-1", text: goal.criteria[0] },
+            { criterionId: "criterion-2", text: goal.criteria[1] },
+          ],
+          requirements: [],
+          remainingCriterionIds: ["criterion-1", "criterion-2"],
+          remainingRequirementIds: [],
+        },
+      });
       return;
     }
     assert.notEqual(requestId, firstRequestId);
@@ -814,7 +839,7 @@ test("无效阶段返回真实拒绝原因，第二回合从空权威模型重�
     assert.equal((await registerPlan(submission, requestId, plan)).success, true);
   });
   assert.deepEqual(result, plan);
-  assert.deepEqual(rejections, [{ message: "韩立未提交有效的验收场景阶段。" }]);
+  assert.deepEqual(rejections, [{ message: "验收场景阶段必须唯一占用条件，或关联已有条件完成剩余场景。" }]);
 });
 
 test("协作状态夹具的两种允许阶段由同一需求规则校验和纠正", async () => {

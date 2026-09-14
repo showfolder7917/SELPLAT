@@ -104,7 +104,9 @@ class AcceptanceScenePlanModel {
 
   assertCompleted(): void {
     const context = this.planningContext();
-    if (context.remainingCriterionIds.length) throw new Error("韩立验收场景计划未逐项覆盖原验收条件。");
+    if (context.remainingCriterionIds.length) {
+      throw new Error(`韩立验收场景计划未逐项覆盖原验收条件：${context.remainingCriterionIds.join(", ")}。`);
+    }
     const missingRequirement = this.#requirements.find((requirement) => context.remainingRequirementIds.includes(requirement.requirementId));
     if (missingRequirement) throw new Error(missingRequirement.missingMessage);
   }
@@ -279,6 +281,12 @@ function rejectionFrom(error: unknown): AcceptanceScenePlanRejection {
   return { message: typeof source.message === "string" ? source.message : String(error) };
 }
 
+/** 工具拒绝只回传本轮模型已知的剩余状态，帮助韩立补齐登记而不暴露候选计划或页面数据。 */
+function rejectedPlanningContext(message: string, attempt: ActiveAcceptanceSceneAttempt | null): string {
+  if (!attempt) return message;
+  return JSON.stringify({ message, planningContext: attempt.model.planningContext() });
+}
+
 /** 固定韩立验收会话通过工具提交场景；说明文字不进入机器协议，回合外与旧请求都不能写入。 */
 export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejection: AcceptanceScenePlanRejection): void } = {}) {
   let active: ActiveAcceptanceSceneAttempt | null = null;
@@ -313,7 +321,7 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
           // 审计只保留校验摘要；第二回合会从当前目标创建新的登记会话。
           options.onRejectedPlan?.(rejection);
         }
-        return { success: false, contentItems: [{ type: "inputText", text: message }] };
+        return { success: false, contentItems: [{ type: "inputText", text: rejectedPlanningContext(message, active) }] };
       }
     },
   };
