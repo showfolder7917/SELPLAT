@@ -80,24 +80,45 @@ export class HanliDecisionService {
     });
     const value = await this.#askForStructuredResult(prompt, state);
     if (value.mode === "page-experience") return "page-experience";
-    if (value.mode !== "code-conformance" || !Array.isArray(value.findings)) {
+    if (value.mode !== "code-conformance" && value.mode !== "mixed") {
       throw new Error("韩立没有返回有效的结果验收类型和逐项结论。");
     }
+    const allCriterionIds = proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
+    const pageCriterionIds = value.mode === "mixed" ? value.pageCriterionIds : [];
+    if (!Array.isArray(pageCriterionIds)
+      || pageCriterionIds.some((item) => typeof item !== "string")
+      || new Set(pageCriterionIds).size !== pageCriterionIds.length
+      || pageCriterionIds.some((item) => !allCriterionIds.includes(item))) {
+      throw new Error("韩立混合验收计划缺少有效且不重复的页面条件编号。");
+    }
+    if (value.mode === "mixed" && (pageCriterionIds.length === 0 || pageCriterionIds.length === allCriterionIds.length)) {
+      throw new Error("混合验收必须同时包含页面条件和代码符合性条件。");
+    }
+    if (!Array.isArray(value.findings)) {
+      throw new Error("韩立代码符合性审查缺少逐项结论。");
+    }
     const findings = value.findings as Array<Record<string, unknown>>;
-    const steps = proposal.acceptanceCriteria.map((criterion, index) => {
-      const finding = findings.find((item) => item.criterionId === `criterion-${index + 1}`);
+    const codeCriterionIds = allCriterionIds.filter((criterionId) => !pageCriterionIds.includes(criterionId));
+    if (findings.length !== codeCriterionIds.length) {
+      throw new Error("韩立代码符合性审查没有与混合计划的剩余条件逐项对应。");
+    }
+    const steps = codeCriterionIds.map((criterionId, operationIndex) => {
+      const index = allCriterionIds.indexOf(criterionId);
+      const criterion = proposal.acceptanceCriteria[index];
+      const finding = findings.find((item) => item.criterionId === criterionId);
       const status = finding?.status;
       const actual = typeof finding?.actual === "string" ? finding.actual.trim() : "";
       const references = Array.isArray(finding?.evidenceReferences)
         ? finding.evidenceReferences.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim())
         : [];
       if (!["passed", "failed", "blocked"].includes(String(status)) || !actual || references.length === 0) {
-        throw new Error(`韩立代码符合性审查缺少 criterion-${index + 1} 的明确结论或代码/测试依据。`);
+        throw new Error(`韩立代码符合性审查缺少 ${criterionId} 的明确结论或代码/测试依据。`);
       }
       return {
-        checkId: `criterion-${index + 1}`,
-        operationIndex: index,
-        operation: { type: "judgement" as const, criterionId: `criterion-${index + 1}` },
+        checkId: criterionId,
+        evidenceMode: "code-conformance" as const,
+        operationIndex,
+        operation: { type: "judgement" as const, criterionId },
         status: status as "passed" | "failed" | "blocked",
         actual: `${criterion}\n${actual}`,
         layoutStatus: "not-applicable" as const,
@@ -113,13 +134,14 @@ export class HanliDecisionService {
     const now = new Date().toISOString();
     return {
       version: 3,
-      mode: "code-conformance",
+      mode: value.mode,
       runId: `hanli-code-review-${randomUUID()}`,
       topicId: proposal.topicId,
       proposalId: proposal.proposalId,
       criteria: [...proposal.acceptanceCriteria],
+      ...(value.mode === "mixed" ? { pageCriterionIds } : {}),
       status,
-      windowTitle: "代码符合性审查",
+      windowTitle: value.mode === "mixed" ? "混合验收代码符合性审查" : "代码符合性审查",
       initialBounds: { x: 0, y: 0, width: 0, height: 0 },
       finalBounds: { x: 0, y: 0, width: 0, height: 0 },
       interactionSteps: [],

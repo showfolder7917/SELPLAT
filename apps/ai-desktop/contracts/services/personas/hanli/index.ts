@@ -5,7 +5,8 @@ export type { HanliAcceptanceExperienceCandidateOutDto } from "./dto/acceptance-
 export type { HanliAcceptanceFailureEvidenceOutDto } from "./dto/acceptance-evidence.out.dto.js";
 
 /** 韩立窗口验收允许执行的单步操作类型，限制模型只能使用受控点击、滚动、按键等动作。 */
-export type { HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "./value/acceptance.value.js";
+export { requiresPageAcceptanceEvidence } from "./value/acceptance.value.js";
+export type { HanliAcceptanceEvidenceModeValue, HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "./value/acceptance.value.js";
 
 /** 韩立会话聚合根可以返回的动作名称，用于应用服务选择唯一后续流程。 */
 export type { HanliConversationActionKindValue } from "./value/hanli-conversation.value.js";

@@ -170,7 +170,9 @@ export class HanliApplicationService implements HanliApplicationPort {
     // 可见说明明确指出通过依据来自真实用户路径。
     const advice = run.mode === "page-experience"
       ? "韩立已按真实用户路径完成页面检查，全部适用项目通过。"
-      : "韩立已只读审查代码、变更范围与测试依据，确认实现符合原客户要求。";
+      : run.mode === "mixed"
+        ? "韩立已逐项结合真实用户路径与只读代码、测试依据完成验收，全部适用项目通过。"
+        : "韩立已只读审查代码、变更范围与测试依据，确认实现符合原客户要求。";
     return this.#decideResult(run.proposalId, {
       mutation: {
         expectedStateVersion,

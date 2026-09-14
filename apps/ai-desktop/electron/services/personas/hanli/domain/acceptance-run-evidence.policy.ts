@@ -1,4 +1,4 @@
-import type { HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 
 export interface AcceptanceCriterionEvidenceDiagnostic {
   criterionId: string;
@@ -30,7 +30,8 @@ export function inspectAcceptanceRunEvidence(run: HanliAcceptanceRunOutDto): Acc
     const matches = run.stepResults.filter((step) => step.checkId === criterionId);
     const step = matches[0];
     const hasActual = Boolean(step?.actual?.trim());
-    const layoutApplicable = run.mode === "page-experience";
+    const pageEvidence = requiresPageAcceptanceEvidence(run.mode, step?.evidenceMode);
+    const layoutApplicable = pageEvidence;
     const hasLayoutActual = !layoutApplicable || Boolean(step?.layoutActual?.trim());
     const functionalScreenshotRegistered = Boolean(step?.screenshotAttachmentId && evidence.has(step.screenshotAttachmentId));
     const layoutScreenshotRegistered = !layoutApplicable || Boolean(step?.layoutScreenshotAttachmentId && evidence.has(step.layoutScreenshotAttachmentId));
@@ -38,7 +39,7 @@ export function inspectAcceptanceRunEvidence(run: HanliAcceptanceRunOutDto): Acc
       && step !== undefined
       && ["passed", "failed", "blocked"].includes(step.status)
       && hasActual
-      && (layoutApplicable ? functionalScreenshotRegistered : Boolean(step?.evidenceReferences?.length))
+      && (pageEvidence ? functionalScreenshotRegistered : Boolean(step?.evidenceReferences?.length))
       && (layoutApplicable
         ? ["passed", "failed", "blocked"].includes(step.layoutStatus)
         : step.layoutStatus === "not-applicable")
@@ -48,7 +49,7 @@ export function inspectAcceptanceRunEvidence(run: HanliAcceptanceRunOutDto): Acc
   });
   const hasValidVersion = run.version === 3;
   const hasInteractionSteps = run.stepResults.length > 0;
-  const hasEvidence = run.mode === "code-conformance" || run.evidenceAttachmentIds.length > 0;
+  const hasEvidence = run.stepResults.every((step) => step.evidenceMode !== "page-experience") || run.evidenceAttachmentIds.length > 0;
   // 统一生成不合格条件编号，避免不同调用方基于同一诊断再次推导而出现审计与拒绝原因不一致。
   const invalidCriterionIds = criteria.filter((criterion) => !criterion.valid).map((criterion) => criterion.criterionId);
   return { valid: hasValidVersion && hasInteractionSteps && hasEvidence && invalidCriterionIds.length === 0, hasEvidence, hasInteractionSteps, hasValidVersion, criteria, invalidCriterionIds };

@@ -4,10 +4,12 @@
  * 数据方向：真实输入、截图及模型逐项判断 -> 韩立/Renderer。
  * 本文件只保存事实证据，失败不会直接改变审批结果。
  */
-import type { HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
+import type { HanliAcceptanceEvidenceModeValue, HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
 
 export interface HanliAcceptanceStepResultOutDto {
   checkId: string;
+  /** 该原始条件的权威证据来源；mixed 运行据此分别执行门禁。 */
+  evidenceMode: HanliAcceptanceEvidenceModeValue;
   operationIndex: number;
   operation: HanliAcceptanceOperationValue;
   status: "passed" | "failed" | "blocked";
@@ -31,6 +33,8 @@ export interface HanliAcceptanceRunOutDto {
   topicId: string;
   proposalId: string;
   criteria: string[];
+  /** mixed 预审记录登记待由正式窗口验证的原始条件编号。 */
+  pageCriterionIds?: string[];
   status: "passed" | "failed" | "blocked";
   windowTitle: string;
   initialBounds: { x: number; y: number; width: number; height: number };

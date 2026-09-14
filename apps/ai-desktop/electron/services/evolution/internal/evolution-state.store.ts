@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto, type HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
@@ -606,7 +606,8 @@ export class EvolutionStateStore {
     const hasCompleteAcceptanceEvidence = Boolean(run) && run!.criteria.every((_criterion, index) => {
       const matches = run!.stepResults.filter((step) => step.checkId === `criterion-${index + 1}`);
       const step = matches[0];
-      const pageEvidence = run!.mode === "page-experience"
+      // mixed 记录必须按条件来源检查，不能把代码符合性条件误作页面截图条件。
+      const pageEvidence = requiresPageAcceptanceEvidence(run!.mode, step?.evidenceMode)
         ? Boolean(step?.screenshotAttachmentId)
           && run!.evidenceAttachmentIds.includes(step!.screenshotAttachmentId!)
           && step?.layoutStatus === "passed"
@@ -629,13 +630,18 @@ export class EvolutionStateStore {
         runId: run.runId,
 
         checkId: step.checkId,
-        target: run.mode === "page-experience" ? "真实应用界面" : "客户要求与实际代码",
+        target: requiresPageAcceptanceEvidence(run.mode, step.evidenceMode)
+          ? "真实应用界面"
+          : "客户要求与实际代码",
         severity: step.status === "blocked" || step.layoutStatus === "blocked" ? "blocking" : "major",
         reproductionOperations: [...(run.interactionSteps || []), ...run.stepResults]
           .sort((left, right) => left.operationIndex - right.operationIndex)
           .slice(0, step.operationIndex + 1)
           .map((item) => structuredClone(item.operation)),
-        actual: [step.status !== "passed" ? step.actual : "", run.mode === "page-experience" && step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : ""].filter(Boolean).join("；"),
+        actual: [
+          step.status !== "passed" ? step.actual : "",
+          requiresPageAcceptanceEvidence(run.mode, step.evidenceMode) && step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : "",
+        ].filter(Boolean).join("；"),
         expected: run.criteria?.[Number(step.checkId.replace("criterion-", "")) - 1] || "符合专题验收条件",
         screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, step.layoutScreenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
       };
