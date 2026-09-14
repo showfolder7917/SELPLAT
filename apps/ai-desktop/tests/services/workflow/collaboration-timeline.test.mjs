@@ -576,6 +576,29 @@ test("集成本地修改归属阻塞生成令狐等待节点并同步专题下�
   } finally { fixture.close(); }
 });
 
+test("旧版归属修复状态恢复为客户等待时保留独立时间线事实", () => {
+  const fixture = createFixture("integration-ownership-wait-restored");
+  try {
+    const blocked = task(fixture, 1, true, true);
+    blocked.state = "blocked";
+    blocked.currentHandler = null;
+    blocked.blockingReason = "合并前无法确认本地修改归属";
+    blocked.integrationFailure = { kind: "local-change-ownership", detail: blocked.blockingReason, conflictFiles: ["docs/问题.md"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: fixture.at(7) };
+    blocked.flowEvents.push(
+      flow("legacy-repair", "execution.repair_started", "recovery", "started", member("linghu-ancestor", "令狐老祖"), "旧版误启动源码修复", fixture.at(6)),
+      flow("ownership-wait-restored", "integration.local_change_ownership_wait_restored", "recovery", "waiting", null, "已保留未登记本地修改证据，等待客户确认文件归属", fixture.at(7)),
+    );
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(7), [blocked]), [blocked.taskId]);
+    const group = fixture.timeline.snapshot(fixture.at(8)).groups[0];
+    const restored = group.nodes.find((node) => node.action === "本地修改归属等待已恢复");
+    assert.equal(group.status, "blocked");
+    assert.equal(restored.status, "waiting");
+    assert.match(restored.content, /等待客户确认文件归属/);
+    assert.match(restored.detail, /无法确认本地修改归属/);
+    assert.equal(group.nextStep, "令狐老祖 · 本地修改归属等待已恢复");
+  } finally { fixture.close(); }
+});
+
 test("恢复请求结束本地修改归属等待节点并追加恢复节点", () => {
   const fixture = createFixture("integration-ownership-recovered");
   try {

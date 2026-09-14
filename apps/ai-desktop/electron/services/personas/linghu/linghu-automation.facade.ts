@@ -360,25 +360,8 @@ export class LinghuAutomationFacade {
         });
         return;
       }
-      // 未提交修改先作为技术卡点交给令狐调查；只有调查修复仍不能解除时才生成客户操作指导。
-      const started = await this.#collaboration.repairTechnicalFailure(task.taskId);
-      if (!started) {
-        this.#store.updateRuntime("automation.local_change_investigation_waiting", (state) => {
-          state.recoveryCheckpoint = checkpoint;
-          state.blockingReason = `${report}。令狐已收到工作区和文件证据，正在等待执行容量后调查修改来源。`;
-        });
-        return;
-      }
-      const investigated = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === task.taskId);
-      if (investigated?.integrationFailure?.kind === "local-change-ownership" && investigated.state === "blocked") {
-        await this.#ensureCustomerActionGuidance(investigated, snapshot, fingerprint, report);
-      } else {
-        this.#store.updateRuntime("automation.local_change_investigation_completed", (state) => {
-          state.currentFaultFingerprint = fingerprint;
-          state.recoveryCheckpoint = checkpoint;
-          state.blockingReason = "令狐已完成本地修改来源调查和针对性修复，原任务正在重新进入集成验证。";
-        });
-      }
+      // 文件归属不能由当前任务工作树证明，直接依据已有路径和任务事实生成客户操作指导。
+      await this.#ensureCustomerActionGuidance(task, snapshot, fingerprint, report);
       return;
     }
     if (task.state === "blocked" && task.recoveryTargetState === "preparing-worktree") {

@@ -8,7 +8,7 @@ export type CollaborationFlowEventTypeValue =
   | "task.code_verified" | "task.blocked" | "task.cancelled" | "task.interrupted" | "task.recovery_requested" | "task.scope_revised"
   | "customer.action_required"
   | "execution.repair_queued" | "execution.repair_started" | "execution.repair_investigated" | "execution.repair_completed" | "execution.repair_waiting"
-  | "integration.local_changes_transferred" | "integration.batch_frozen" | "integration.local_change_ownership_blocked"
+  | "integration.local_changes_transferred" | "integration.batch_frozen" | "integration.local_change_ownership_blocked" | "integration.local_change_ownership_wait_restored"
   | "integration.merge_conflict" | "integration.candidate_preparation_failed" | "integration.infrastructure_failed" | "integration.conflict_correction_requested"
   | "evolution.task_collected" | "unified_test.started" | "unified_test.passed" | "unified_test.failed" | "unified_test.retry_requested"
   | "unified_test.repair_started" | "unified_test.repair_investigated" | "unified_test.repair_completed" | "unified_test.repair_failed"
