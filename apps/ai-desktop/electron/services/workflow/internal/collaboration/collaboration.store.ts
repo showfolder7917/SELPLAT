@@ -243,8 +243,11 @@ export class CollaborationStore {
       // 只有聚合明确允许的失败状态可以进入恢复分支。
       if (!aggregate.canRequestRecovery()) throw new Error("当前任务不需要恢复。");
       const customerGuidance = task.customerActionGuidance || null;
+      // 新确认标记覆盖容量等待；历史与当前的本地修改归属同样天然需要客户确认，不能依赖旧记录补写标记。
+      const requiresCustomerAction = task.repairRequiresUserConfirmation
+        || task.integrationFailure?.kind === "local-change-ownership";
       // 客户控制的前置条件必须先有令狐生成的可执行指导；通用“继续”入口不能越过容量、归属等等待节点。
-      if (task.repairRequiresUserConfirmation && !customerGuidance) {
+      if (requiresCustomerAction && !customerGuidance) {
         throw new Error("请先按等待节点中的操作步骤处理客户前置条件；令狐给出完成标准后，才能从该卡点继续。");
       }
       if (task.state === "test-failed") {
