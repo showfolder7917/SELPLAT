@@ -1272,6 +1272,7 @@ test("分发计划连续两次无效 JSON 时阻断且不记录模型原文", as
     assert.equal(submitted, 0);
     assert.equal(JSON.stringify(events).includes(rawFailure), false);
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.responseLength), [rawFailure.length]);
+    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_failed").map((event) => event.details), [{ proposalId, attempt: 2, responseLength: rawFailure.length, candidateCount: 0, hasUnclosedObject: true, reason: "AI 返回的结构化判断不是有效 JSON。" }]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
