@@ -59,9 +59,10 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
   assert.match(integrationSource, /unified_test\.failed/);
 });
 
-test("普通中断和客户卡点的唯一恢复入口都位于下一流程", () => {
+test("任务级恢复入口在等待和恢复中都位于下一流程", () => {
   assert.match(taskGroupSource, /latestActiveRecoveryAction[\s\S]*node\.eventType === "customer\.action_required"[\s\S]*node\.eventType === "task\.interrupted"/);
-  assert.match(taskGroupSource, /visitedTaskIds[\s\S]*node\.status === "waiting"/);
+  assert.match(taskGroupSource, /node\.status === "current" && node\.eventType === "task\.recovery_requested"[\s\S]*pending: true/);
+  assert.match(taskGroupSource, /recoveryAction\?\.pending === true[\s\S]*disabled=\{recoveryPending\}[\s\S]*"恢复中…"/);
   assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(recoveryAction\.taskId\)/);
   assert.match(taskGroupSource, /recoveryAction\.customerAction \? "从卡点继续"/);
   assert.doesNotMatch(taskGroupSource, /task-node-recovery-action/);
@@ -74,6 +75,11 @@ test("普通中断和客户卡点的唯一恢复入口都位于下一流程", ()
   assert.match(developerSource, /continueTimelineTask[\s\S]*controller\.actions\.continueTask\(taskId\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
+});
+
+test("任务级恢复失败显示短原因并保留可展开证据", () => {
+  assert.match(taskGroupCardSource, /function RecoveryError[\s\S]*compactTimelineText\(detail\)[\s\S]*role="alert"/);
+  assert.match(taskGroupCardSource, /className="task-recovery-evidence"[\s\S]*查看完整原因与证据[\s\S]*<pre>\{detail\}<\/pre>/);
 });
 
 test("人工审批窗口读取待审批节点正文而非技术详情", () => {
