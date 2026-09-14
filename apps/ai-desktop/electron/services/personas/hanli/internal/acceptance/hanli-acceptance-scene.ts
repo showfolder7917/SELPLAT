@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/index.js";
 import type { AcceptanceSceneKind, AcceptanceScenePlanOutDto, AcceptanceSceneSegmentOutDto, HanliComputerAcceptanceInDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
-const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "workspace-lifecycle-review", "empty-task-group", "failure-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "cross-task-member-occupancy", "collaboration-state-syncing", "collaboration-state-unavailable", "blocked"];
+const sceneKinds: AcceptanceSceneKind[] = ["current-window", "workspace-explorer-fixture", "workspace-lifecycle-review", "empty-task-group", "completed-recovery-timeline", "inspection-lifecycle-timeline", "user-language-detail-timeline", "recovery-action-lifecycle", "persona-conversation-lifecycle", "persona-conversation-with-task-handoff", "cross-task-member-occupancy", "member-idle", "collaboration-state-syncing", "collaboration-state-unavailable", "blocked"];
 
 /** 验证韩立的结构化准备计划，任何缺项都退回环境排障，不默认为当前窗口。 */
 export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerAcceptanceInDto): AcceptanceScenePlanOutDto {
@@ -46,6 +46,15 @@ export function validateAcceptanceScenePlan(input: unknown, goal: HanliComputerA
   }
   if (segments.filter((segment) => segment.kind === "cross-task-member-occupancy").length > 1) {
     throw new Error("跨任务人物占用夹具只能使用一个验收阶段。");
+  }
+  if (segments.some((segment) => segment.kind === "member-idle") && !goal.memberIdleFixture) {
+    throw new Error("人物空闲场景缺少主进程签发的受控夹具。");
+  }
+  if (goal.memberIdleFixture && !segments.some((segment) => segment.kind === "member-idle")) {
+    throw new Error("本轮已经签发人物空闲夹具，场景计划必须使用该夹具阶段。");
+  }
+  if (segments.filter((segment) => segment.kind === "member-idle").length > 1) {
+    throw new Error("人物空闲夹具只能使用一个验收阶段。");
   }
   const usesStateProjection = segments.some((segment) => segment.kind === "collaboration-state-syncing" || segment.kind === "collaboration-state-unavailable");
   if (usesStateProjection && !goal.collaborationStateProjectionFixture) {

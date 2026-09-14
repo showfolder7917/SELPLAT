@@ -67,7 +67,7 @@ test("跨任务人物占用夹具从韩立契约桶导出", () => {
 test("韩立显式选择场景不依赖用户语言、页面名和词序", () => {
   assert.deepEqual(validateAcceptanceScenePlan(plan, goal), plan);
   assert.deepEqual(validateAcceptanceScenePlan(plan, { ...goal, criteria: ["Empty tasks guidance", "Adjacent button"] }), plan);
-  const recoveryPlan = { ...plan, segments: [{ ...segment, kind: "failure-recovery-timeline", reason: "条件要求核对失败与恢复的完整事实" }] };
+  const recoveryPlan = { ...plan, segments: [{ ...segment, kind: "completed-recovery-timeline", reason: "条件要求核对失败与恢复的完整事实" }] };
   assert.deepEqual(validateAcceptanceScenePlan(recoveryPlan, goal), recoveryPlan);
   const inspectionPlan = { ...plan, segments: [{ ...segment, kind: "inspection-lifecycle-timeline", reason: "条件要求核对三类巡检记录" }] };
   assert.deepEqual(validateAcceptanceScenePlan(inspectionPlan, goal), inspectionPlan);
@@ -139,7 +139,7 @@ test("工作区收尾与重启证据必须在夹具之后由专用生命周期�
   const lifecycleSegment = { ...segment, kind: "workspace-lifecycle-review", conditions: [segment.conditions[1]] };
   assert.deepEqual(validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, lifecycleSegment] }, lifecycleGoal), { ...plan, segments: [fixtureSegment, lifecycleSegment] });
   assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [lifecycleSegment, fixtureSegment] }, lifecycleGoal), /紧接夹具阶段/);
-  assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, { ...lifecycleSegment, kind: "failure-recovery-timeline" }] }, lifecycleGoal), /生命周期复核/);
+  assert.throws(() => validateAcceptanceScenePlan({ ...plan, segments: [fixtureSegment, { ...lifecycleSegment, kind: "completed-recovery-timeline" }] }, lifecycleGoal), /生命周期复核/);
 });
 test("一次性工作区夹具不能被拆分到多个正式验收阶段", () => {
   const splitFixturePlan = {
@@ -520,9 +520,9 @@ test("复合场景缺少交接快照时拒绝启动验收窗口", async () => {
   const f = fixture();
   await assert.rejects(prepareAcceptanceSceneWindow({ ...segment, kind: "persona-conversation-with-task-handoff" }, f.options), /缺少当前专题的只读交接记录/);
 });
-test("失败恢复场景创建同样只读的非持久化窗口", async () => {
+test("完成恢复场景创建同样只读的非持久化窗口", async () => {
   const f = fixture();
-  await prepareAcceptanceSceneWindow({ ...segment, kind: "failure-recovery-timeline", reason: "核对失败和恢复详情" }, f.options);
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "completed-recovery-timeline", reason: "核对失败和恢复详情" }, f.options);
   assert.equal(f.registered.size, 1);
   assert.equal(f.events.includes("show"), true);
 });
@@ -756,7 +756,7 @@ test("场景说明区分条件式规则与必须构造的验收状态", () => {
   assert.match(prompt, /若、如果、存在时、出现时/);
   assert.match(prompt, /不代表验收场景必须人为创建/);
   assert.match(prompt, /不得因此选择 blocked/);
-  assert.match(prompt, /failure-recovery-timeline/);
+  assert.match(prompt, /completed-recovery-timeline/);
   assert.match(prompt, /workspace-lifecycle-review/);
   assert.match(prompt, /inspection-lifecycle-timeline/);
   assert.match(prompt, /user-language-detail-timeline/);
@@ -771,7 +771,7 @@ test("后续场景被明确告知复用前序证据而不重复已释放夹具",
   assert.match(prompt, /不得重复前序场景动作/);
   assert.match(prompt, /一次性夹具已在段落结束时释放/);
   assert.match(prompt, /workspaceCleanupRecoveryEvidence/);
-  assert.match(prompt, /候选代码差异记录代替工作区恢复证据/);
+  assert.match(prompt, /completed-recovery-timeline 中的完成恢复记录代替工作区恢复证据/);
 });
 
 test("工作区重启验收由已打包隔离子进程提供最小证据", () => {

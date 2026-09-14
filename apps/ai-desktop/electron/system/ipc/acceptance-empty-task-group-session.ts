@@ -2,9 +2,9 @@ import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, Perso
 import type { ScreenshotCompletedEventOutDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CollaborationStateOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue } from "../../../contracts/services/workflow/index.js";
-import type { CollaborationStateProjectionFixtureContextOutDto, CrossTaskMemberOccupancyFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { CollaborationStateProjectionFixtureContextOutDto, CrossTaskMemberOccupancyFixtureContextOutDto, MemberIdleFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
 
-type IsolatedAcceptanceScenario = "empty-task-group" | "failure-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy" | "collaboration-state-syncing" | "collaboration-state-unavailable";
+type IsolatedAcceptanceScenario = "empty-task-group" | "completed-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy" | "member-idle" | "collaboration-state-syncing" | "collaboration-state-unavailable";
 
 const scenarioTaskId = "acceptance-failure-recovery-task";
 const scenarioTopicId = "acceptance-failure-recovery-topic";
@@ -26,13 +26,14 @@ export class AcceptanceEmptyTaskGroupSession {
   #personaConversations = new Map<number, Map<string, PersonaConversationOutDto>>();
   #taskHandoffs = new Map<number, CollaborationTimelineSnapshotOutDto>();
   #crossTaskMemberOccupancyFixtures = new Set<number>();
+  #memberIdleFixtures = new Set<number>();
   #collaborationStateProjectionFixtures = new Set<number>();
   #failedEarlierReads = new Set<string>();
   #personaScreenshotSequences = new Map<number, number>();
 
-  register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto, crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto, collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto): void {
+  register(webContentsId: number, sceneKind: IsolatedAcceptanceScenario = "empty-task-group", taskHandoff?: CollaborationTimelineSnapshotOutDto, crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto, collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto, memberIdleFixture?: MemberIdleFixtureContextOutDto): void {
     this.#scenarios.set(webContentsId, sceneKind);
-    this.#selectedMembers.set(webContentsId, sceneKind === "cross-task-member-occupancy" ? "linghu-ancestor" : "han-li");
+    this.#selectedMembers.set(webContentsId, sceneKind === "cross-task-member-occupancy" || sceneKind === "member-idle" ? "linghu-ancestor" : "han-li");
     this.#operatingModes.set(webContentsId, "collaboration");
     this.#recoveryLifecycleStarted.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
@@ -45,6 +46,9 @@ export class AcceptanceEmptyTaskGroupSession {
     if (sceneKind === "persona-conversation-with-task-handoff" && taskHandoff?.groups.length) this.#taskHandoffs.set(webContentsId, structuredClone(taskHandoff));
     if (sceneKind === "cross-task-member-occupancy" && crossTaskMemberOccupancyFixture?.kind === "cross-task-member-occupancy") {
       this.#crossTaskMemberOccupancyFixtures.add(webContentsId);
+    }
+    if (sceneKind === "member-idle" && memberIdleFixture?.kind === "member-idle-projection") {
+      this.#memberIdleFixtures.add(webContentsId);
     }
     if ((sceneKind === "collaboration-state-syncing" || sceneKind === "collaboration-state-unavailable")
       && collaborationStateProjectionFixture?.kind === "collaboration-state-projection") {
@@ -60,6 +64,7 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#personaConversations.delete(webContentsId);
     this.#taskHandoffs.delete(webContentsId);
     this.#crossTaskMemberOccupancyFixtures.delete(webContentsId);
+    this.#memberIdleFixtures.delete(webContentsId);
     this.#collaborationStateProjectionFixtures.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
@@ -114,6 +119,10 @@ export class AcceptanceEmptyTaskGroupSession {
       if (!this.#crossTaskMemberOccupancyFixtures.has(webContentsId)) throw new Error("跨任务人物占用验收场景缺少已签发夹具。");
       return crossTaskMemberOccupancyState(actual, this.#operatingModes.get(webContentsId) || "collaboration", this.#selectedMembers.get(webContentsId) || "linghu-ancestor");
     }
+    if (this.#scenarios.get(webContentsId) === "member-idle") {
+      if (!this.#memberIdleFixtures.has(webContentsId)) throw new Error("人物空闲验收场景缺少已签发夹具。");
+      return memberIdleState(actual, this.#operatingModes.get(webContentsId) || "collaboration", this.#selectedMembers.get(webContentsId) || "linghu-ancestor");
+    }
     return {
       ...actual,
       mode: this.#operatingModes.get(webContentsId) || "collaboration",
@@ -157,11 +166,12 @@ export class AcceptanceEmptyTaskGroupSession {
   timeline(webContentsId?: number): CollaborationTimelineSnapshotOutDto {
     const handoff = webContentsId === undefined ? undefined : this.#taskHandoffs.get(webContentsId);
     if (handoff) return structuredClone(handoff);
-    if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "failure-recovery-timeline") return failureRecoveryTimeline();
+    if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "completed-recovery-timeline") return completedRecoveryTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "inspection-lifecycle-timeline") return inspectionLifecycleTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "user-language-detail-timeline") return userLanguageDetailTimeline();
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "recovery-action-lifecycle") return recoveryActionLifecycleTimeline(this.#recoveryLifecycleStarted.has(webContentsId));
     if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "cross-task-member-occupancy") return crossTaskMemberOccupancyTimeline();
+    if (webContentsId !== undefined && this.#scenarios.get(webContentsId) === "member-idle") return completedRecoveryTimeline();
     return { version: 1, groups: [], updatedAt: new Date().toISOString() };
   }
 
@@ -257,6 +267,35 @@ function crossTaskMemberOccupancyState(
   };
 }
 
+/** 空闲状态也是主进程签发的当前投影，不能由完成专题历史推断。 */
+function memberIdleState(
+  actual: CollaborationStateOutDto,
+  mode: DesktopOperatingModeValue,
+  selectedMemberId: string,
+): CollaborationStateOutDto {
+  const now = new Date().toISOString();
+  if (!actual.members.some((member) => member.memberId === "linghu-ancestor")) {
+    throw new Error("人物空闲验收场景缺少令狐成员入口。");
+  }
+  return {
+    ...actual,
+    mode,
+    selectedMemberId,
+    members: actual.members.map((member) => member.memberId === "linghu-ancestor" ? {
+      ...member,
+      state: "idle",
+      role: null,
+      phase: null,
+      currentTaskId: null,
+      blockingReason: null,
+      updatedAt: now,
+    } : structuredClone(member)),
+    tasks: [],
+    integrationBatches: [],
+    updatedAt: now,
+  };
+}
+
 /** 返回完整任务协议，避免成员 currentTaskId 指向不存在的演示任务。 */
 function crossTaskMemberOccupancyTask(now: string, displayName: string): CollaborationStateOutDto["tasks"][number] {
   return {
@@ -334,49 +373,8 @@ function crossTaskMemberOccupancyTask(now: string, displayName: string): Collabo
 
 /** 已完成专题与另一项在途任务分开投影，专题时间线不得覆盖人物当前占用。 */
 function crossTaskMemberOccupancyTimeline(): CollaborationTimelineSnapshotOutDto {
-  const now = new Date().toISOString();
-  return {
-    version: 1,
-    updatedAt: now,
-    groups: [{
-      groupId: "acceptance-completed-topic",
-      topicId: "acceptance-completed-topic",
-      proposalId: "acceptance-completed-proposal",
-      title: "完成专题状态收口验收场景",
-      status: "completed",
-      summary: "专题已完成；令狐当前状态由另一项任务决定。",
-      executingCount: 0,
-      verifyingCount: 0,
-      waitingCount: 0,
-      completedCount: 1,
-      startedAt: now,
-      updatedAt: now,
-      durationMs: 0,
-      nextStep: "专题已完成",
-      failureNextStep: "无",
-      nextOwner: hanli,
-      nodes: [{
-        nodeId: "acceptance-completed-topic:resolved",
-        taskId: scenarioTaskId,
-        eventType: "checkpoint.resolved",
-        kind: "repair",
-        actor: linghu,
-        recipients: [hanli],
-        status: "completed",
-        action: "本轮恢复已完成",
-        summary: "同一恢复轮次已收口为一个完成事实。",
-        content: "专题完成结论只留在任务协作卡。",
-        contentRole: "repair-output",
-        detailRole: "result-evidence",
-        detail: "异常均已关闭并保留审计详情。令狐当前状态不从本历史节点推断。",
-        startedAt: now,
-        completedAt: now,
-        durationMs: 0,
-        automaticOpen: false,
-        manualApprovalProposalId: null,
-      }],
-    }],
-  };
+  // 完成历史与令狐另一项在途任务必须来自同一窗口私有投影，人物当前状态不从历史反推。
+  return completedRecoveryTimeline();
 }
 
 /** 为人物会话验收提供稳定、可分页且不落盘的消息集合。 */
@@ -426,23 +424,23 @@ function inspectionLifecycleTimeline(): CollaborationTimelineSnapshotOutDto {
   };
 }
 
-/** 失败恢复场景只投影可审计事实；它不创建任务、不提交恢复，也不读取正式专题。 */
-function failureRecoveryTimeline(): CollaborationTimelineSnapshotOutDto {
+/** 完成恢复场景只投影已收口的可审计事实；它不创建任务、不提交恢复，也不读取正式专题。 */
+function completedRecoveryTimeline(): CollaborationTimelineSnapshotOutDto {
   const now = new Date().toISOString();
-  const recoveryAction = "等待恢复操作";
-  const node = (nodeId: string, eventType: string, kind: "verification" | "repair", status: "completed" | "waiting" | "failed", action: string, summary: string, content: string, detail: string, detailRole: "verification-evidence" | "result-evidence" | "recovery-conditions") => ({
+  const node = (nodeId: string, eventType: string, kind: "verification" | "repair", status: "completed" | "failed", action: string, summary: string, content: string, detail: string, detailRole: "verification-evidence" | "result-evidence") => ({
     nodeId, taskId: scenarioTaskId, eventType, kind, actor: kind === "repair" ? linghu : hanli, recipients: [], status, action, summary, content, detailRole, detail,
-    contentRole: kind === "repair" ? "repair-output" as const : "verification-output" as const, startedAt: now, completedAt: status === "waiting" ? null : now, durationMs: 0, automaticOpen: status !== "completed", manualApprovalProposalId: null,
+    contentRole: kind === "repair" ? "repair-output" as const : "verification-output" as const, startedAt: now, completedAt: now, durationMs: 0, automaticOpen: false, manualApprovalProposalId: null,
   });
   return {
     version: 1, updatedAt: now, groups: [{
-      groupId: scenarioTopicId, topicId: scenarioTopicId, proposalId: scenarioProposalId, title: "失败与恢复详情验收场景", status: "blocked",
-      summary: "等待核对失败详情与恢复条件", executingCount: 0, verifyingCount: 0, waitingCount: 1, completedCount: 2,
-      startedAt: now, updatedAt: now, durationMs: 0, nextStep: `${linghu.displayName} · ${recoveryAction}`, failureNextStep: "确认恢复条件后继续执行", nextOwner: linghu,
+      groupId: scenarioTopicId, topicId: scenarioTopicId, proposalId: scenarioProposalId, title: "完成专题状态收口验收场景", status: "completed",
+      summary: "同一原任务、同一恢复轮次的异常已收口为一个完成事实。", executingCount: 0, verifyingCount: 0, waitingCount: 0, completedCount: 4,
+      startedAt: now, updatedAt: now, durationMs: 0, nextStep: "专题已完成", failureNextStep: "无", nextOwner: hanli,
       nodes: [
-        node("acceptance:failure", "unified_test.failed", "verification", "failed", "统一测试发现失败", "候选差异检查失败", "本批候选发现 trailing whitespace。", "失败原因：candidate.txt:1: trailing whitespace\n位置：候选差异检查\n影响：统一测试未通过，候选不能发布。", "verification-evidence"),
-        node("acceptance:investigation", "unified_test.repair_investigated", "repair", "completed", "调查失败根因", "已完成根因调查", "令狐已定位异常输出未被保留。", "调查：Git 校验的 stdout 未进入统一错误。\n修复：统一 Git 入口保留 stdout、stderr 与命令上下文。\n测试：候选差异回归测试通过。", "result-evidence"),
-        node("acceptance:recovery", "task.interrupted", "repair", "waiting", recoveryAction, "等待继续执行", "恢复入口仅用于验证可达性。", "恢复标识：等待令狐继续执行。\n恢复条件：确认修复结果后重新统一测试。\n本场景为只读，不会提交恢复或修改正式任务。", "recovery-conditions"),
+        node("acceptance:failure:first", "unified_test.failed", "verification", "failed", "统一测试发现失败", "候选差异检查失败", "第一条异常已记录。", "异常记录 1\n失败原因：candidate.txt:1: trailing whitespace\n处理人：韩立\n时间：2026-09-14T00:00:00.000Z", "verification-evidence"),
+        node("acceptance:failure:second", "unified_test.failed", "verification", "failed", "统一测试发现第二条异常", "命令上下文缺失", "第二条异常已记录。", "异常记录 2\n失败原因：统一校验未保留命令上下文\n处理人：韩立\n时间：2026-09-14T00:01:00.000Z", "verification-evidence"),
+        node("acceptance:investigation", "unified_test.repair_investigated", "repair", "completed", "调查并修复两条异常", "令狐已完成根因调查与修复", "两条异常保持独立审计关系。", "处理过程：令狐定位 stdout、stderr 与命令上下文保留缺口。\n处理人：令狐老祖\n时间：2026-09-14T00:02:00.000Z\n验证结果：候选差异回归通过。", "result-evidence"),
+        node("checkpoint-resolution:task:acceptance-failure-recovery-task:round:1", "checkpoint.resolved", "repair", "completed", "原流程已验证，卡点已解除", "同一恢复轮次只保留一个完成通知", "稳定完成身份重复投影时复用此节点。", "恢复结果：原流程已验证，卡点已解除。\n恢复轮次：1\n审计关联：异常记录 1、异常记录 2。\n验证结果：两条异常均已通过复验。", "result-evidence"),
       ],
     }],
   };

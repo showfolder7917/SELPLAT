@@ -12,6 +12,7 @@ export type HanliAcceptanceInteractionCapability =
   | "workspace-cleanup-recovery"
   | "workspace-startup-recovery"
   | "cross-task-member-occupancy"
+  | "member-idle-projection"
   | "collaboration-state-projection";
 
 /**
@@ -29,6 +30,12 @@ export interface WorkspaceAcceptanceFixtureContextOutDto {
 /** 主进程签发的窗口私有跨任务人物占用夹具，模型不能选择其任务或阶段。 */
 export interface CrossTaskMemberOccupancyFixtureContextOutDto {
   kind: "cross-task-member-occupancy";
+  instructions: string[];
+}
+
+/** 主进程签发的窗口私有人物空闲夹具，不能根据历史专题推断此状态。 */
+export interface MemberIdleFixtureContextOutDto {
+  kind: "member-idle-projection";
   instructions: string[];
 }
 
@@ -105,6 +112,8 @@ export interface HanliComputerAcceptanceInDto {
   workspaceAcceptanceFixture?: WorkspaceAcceptanceFixtureContextOutDto;
   /** 仅专用隔离场景可消费的跨任务人物占用夹具。 */
   crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto;
+  /** 仅专用隔离场景可消费的人物无 currentTaskId 夹具。 */
+  memberIdleFixture?: MemberIdleFixtureContextOutDto;
   /** 仅同步中与读取失败场景可消费的协作状态投影夹具。 */
   collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto;
   /** 当前已打包应用在隔离数据根中执行的真实重启回收结果；只用于对应重启条件的事实判断。 */

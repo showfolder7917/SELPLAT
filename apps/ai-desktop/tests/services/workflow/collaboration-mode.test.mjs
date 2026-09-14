@@ -1354,17 +1354,26 @@ test("目标分支修改无归属或多任务重叠时保持原状并阻止合�
     git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
     git(repositoryRoot, "add", "-A");
     git(repositoryRoot, "commit", "-m", "base");
-    writeFileSync(path.join(repositoryRoot, "unknown.txt"), "dirty\n");
+    writeFileSync(path.join(repositoryRoot, "unknown-a.txt"), "dirty\n");
+    writeFileSync(path.join(repositoryRoot, "unknown-b.txt"), "dirty\n");
+    writeFileSync(path.join(repositoryRoot, "unknown-c.txt"), "dirty\n");
     const manager = new VersionWorkspaceManager(repositoryRoot, path.join(directory, "managed-worktrees"));
     await assert.rejects(() => manager.transferOwnedLocalChanges([]), (error) => {
       assert.ok(error instanceof LocalChangeOwnershipError);
       assert.equal(error.workspaceRoot, repositoryRoot);
-      assert.deepEqual(error.conflictFiles, ["unknown.txt"]);
+      assert.deepEqual(error.conflictFiles, ["unknown-a.txt", "unknown-b.txt", "unknown-c.txt"]);
       assert.match(error.message, /本批没有可核对的待集成任务/);
+      assert.match(error.message, /unknown-a\.txt/u);
+      assert.match(error.message, /unknown-b\.txt/u);
+      assert.match(error.message, /unknown-c\.txt/u);
+      assert.match(error.message, /本次观察到的本地修改/u);
       return true;
     });
-    assert.match(git(repositoryRoot, "status", "--porcelain"), /unknown\.txt/);
-    assert.equal(readFileSync(path.join(repositoryRoot, "unknown.txt"), "utf8"), "dirty\n");
+    const status = git(repositoryRoot, "status", "--porcelain");
+    assert.match(status, /unknown-a\.txt/u);
+    assert.match(status, /unknown-b\.txt/u);
+    assert.match(status, /unknown-c\.txt/u);
+    assert.equal(readFileSync(path.join(repositoryRoot, "unknown-a.txt"), "utf8"), "dirty\n");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

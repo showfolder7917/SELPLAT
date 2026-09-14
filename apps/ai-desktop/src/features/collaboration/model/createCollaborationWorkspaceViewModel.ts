@@ -54,7 +54,10 @@ export function createCollaborationWorkspaceViewModel({
         snapshot: controller.data.timeline,
         liveTextByNodeId,
       },
-      presentation: { locale },
+      presentation: {
+        locale,
+        stateReadStatus: controller.data.stateReadStatus,
+      },
       actions: {
         onManualApproval,
         onContinueTask,

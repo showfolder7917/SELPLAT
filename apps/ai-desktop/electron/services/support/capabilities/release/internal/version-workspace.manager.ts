@@ -238,17 +238,25 @@ export class VersionWorkspaceManager {
     if (changedFiles.length === 0) return null;
     const owners = new Map<string, LocalChangeOwnershipCandidate>();
     const registeredTaskIds = [...new Set(candidates.map((candidate) => candidate.taskId))].sort();
+    const unregisteredFiles: string[] = [];
+    const ambiguousFiles: string[] = [];
     for (const changedFile of changedFiles) {
       const matching = candidates.filter((candidate) => normalizedFiles(candidate.changedFiles).has(changedFile));
-      if (matching.length !== 1) {
-        const registrationContext = registeredTaskIds.length > 0
-          ? `本批待集成任务：${registeredTaskIds.join("、")}。`
-          : "本批没有可核对的待集成任务。";
-        throw new LocalChangeOwnershipError(matching.length === 0
-          ? `本地修改 ${changedFile} 未登记到任何待集成任务，禁止自动提交或合并。${registrationContext}`
-          : `本地修改 ${changedFile} 同时属于多个待集成任务，禁止猜测归属。${registrationContext}`, [changedFile], this.#repositoryRoot);
-      }
-      owners.set(matching[0].taskId, matching[0]);
+      if (matching.length === 0) unregisteredFiles.push(changedFile);
+      else if (matching.length > 1) ambiguousFiles.push(changedFile);
+      else owners.set(matching[0].taskId, matching[0]);
+    }
+    if (unregisteredFiles.length || ambiguousFiles.length) {
+      const registrationContext = registeredTaskIds.length > 0
+        ? `本批待集成任务：${registeredTaskIds.join("、")}。`
+        : "本批没有可核对的待集成任务。";
+      const reasons = [
+        unregisteredFiles.length ? `本地修改 ${unregisteredFiles.join("、")} 未登记到任何待集成任务，禁止自动提交或合并。` : "",
+        ambiguousFiles.length ? `本地修改 ${ambiguousFiles.join("、")} 同时属于多个待集成任务，禁止猜测归属。` : "",
+      ].filter(Boolean);
+      // 先列出同批全部归属缺口，再决定是否转交；禁止只报第一处文件后让后续重试遗漏其他脏修改。
+      const observedContext = `本次观察到的本地修改：${changedFiles.join("、")}。`;
+      throw new LocalChangeOwnershipError(`${reasons.join("；")}${observedContext}${registrationContext}`, [...unregisteredFiles, ...ambiguousFiles], this.#repositoryRoot);
     }
     if (owners.size !== 1) throw new LocalChangeOwnershipError("本地修改分属多个任务，必须分别回到各自任务分支后再集成。", changedFiles, this.#repositoryRoot);
     const owner = [...owners.values()][0];

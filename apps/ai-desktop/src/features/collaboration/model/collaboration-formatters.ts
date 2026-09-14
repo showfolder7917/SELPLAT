@@ -16,6 +16,9 @@ import type {
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 
+/** 协作快照读取结果由人物页和任务群共用。 */
+export type CollaborationStateReadStatus = "syncing" | "ready" | "unavailable";
+
 /** 人物状态显示输入：只接受协作状态存储已发布的成员快照。 */
 export type CollaborationMemberDisplayModelInput = {
   /** 当前需要显示状态的协作成员；首次同步或读取失败时允许为空。 */
@@ -23,7 +26,7 @@ export type CollaborationMemberDisplayModelInput = {
   /** 当前界面语言。 */
   locale: LocaleValue;
   /** 协作状态存储的读取结果；页面不能把旧时间线当成当前成员状态。 */
-  status?: "syncing" | "ready" | "unavailable";
+  status?: CollaborationStateReadStatus;
 };
 
 type MemberState = CollaborationMemberOutDto["state"];
