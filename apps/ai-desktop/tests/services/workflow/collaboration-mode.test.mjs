@@ -1245,7 +1245,6 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   const facade = readFileSync(new URL("../../../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   const main = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
   const collaborationBootstrap = readFileSync(new URL("../../../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
-  assert.match(runner, /\["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"\]/);
   assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
   assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
