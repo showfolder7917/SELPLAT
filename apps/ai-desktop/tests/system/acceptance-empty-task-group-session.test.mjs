@@ -105,7 +105,7 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   assert.match(desktopIpcSource, /runHanliAcceptanceSceneSession/);
   assert.match(sceneSessionSource, /prepareAcceptanceSceneWindow/);
   assert.match(sceneSource, /--hanli-empty-task-group-acceptance/);
-  assert.match(sceneSource, /failure-recovery-timeline/);
+  assert.match(sceneSource, /completed-recovery-timeline/);
   assert.match(sceneSource, /user-language-detail-timeline/);
   assert.match(desktopIpcSource, /acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession/);
   assert.doesNotMatch(collaborationIpcSource, /rejectIsolatedMutation|rejectMutation/);
@@ -117,7 +117,7 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
   assert.match(runtimeSource, /taskIds: isolated \? \[\] : taskIds/);
   assert.match(source, /不允许执行会改变应用持久状态的操作/);
   assert.match(source, /tasks: \[\]/);
-  assert.match(source, /失败原因：candidate\.txt:1: trailing whitespace/);
+  assert.match(source, /原流程已验证，卡点已解除/);
   assert.doesNotMatch(preloadSource, /readOnlyAcceptanceWindow|acceptanceMutationNames|isolatedAcceptanceBridge/);
   assert.match(preloadSource, /主进程持有可信 webContents/);
   assert.match(eventCenterIpcSource, /desktopIpcAuthorizationPolicy\(event, channel\)/);
@@ -125,22 +125,32 @@ test("空状态条件只创建非持久化验收窗口，并在验收后关闭",
 });
 
 
-test("失败恢复验收场景只投影完整历史事实和只读恢复入口", () => {
+test("完成恢复验收场景只投影同轮多异常的唯一完成事实", () => {
   const session = new AcceptanceEmptyTaskGroupSession();
-  session.register(43, "failure-recovery-timeline");
+  session.register(43, "completed-recovery-timeline");
   const [group] = session.timeline(43).groups;
-  assert.equal(group.status, "blocked");
-  assert.equal(group.nextStep, "令狐老祖 · 等待恢复操作");
-  assert.doesNotMatch(group.nextStep, /失败原因|调查：|修复：|测试：/);
-  assert.equal(group.nodes.length, 3);
+  assert.equal(group.status, "completed");
+  assert.equal(group.nextStep, "专题已完成");
+  assert.equal(group.nodes.filter((node) => node.action === "原流程已验证，卡点已解除").length, 1);
+  assert.equal(group.nodes.length, 4);
   assert.match(group.nodes[0].detail, /失败原因/);
-  assert.match(group.nodes[1].detail, /调查：/);
-  assert.match(group.nodes[1].detail, /修复：/);
-  assert.match(group.nodes[1].detail, /测试：/);
-  assert.equal(group.nodes[2].eventType, "task.interrupted");
-  assert.equal(group.nodes[2].status, "waiting");
-  assert.match(group.nodes[2].detail, /恢复标识/);
+  assert.match(group.nodes[1].detail, /失败原因/);
+  assert.match(group.nodes[2].detail, /处理过程/);
+  assert.match(group.nodes[3].detail, /异常记录 1、异常记录 2/);
+  assert.equal(session.timeline(43).groups[0].nodes.filter((node) => node.eventType === "checkpoint.resolved").length, 1, "重复读取复用稳定完成节点");
   assert.throws(() => session.assertIpcAllowed(43, "desktop:submit-collaboration-task"), /持久状态/);
+});
+
+test("人物空闲场景只投影无 currentTaskId 的令狐状态", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  const actual = { ...collaborationState, members: [...collaborationState.members, { memberId: "linghu-ancestor", displayName: "令狐老祖", state: "working", role: "executor", phase: "verifying", currentTaskId: "formal-task", blockingReason: null, updatedAt: "2026-01-01T00:00:00.000Z" }] };
+  session.register(50, "member-idle", undefined, undefined, undefined, { kind: "member-idle-projection", instructions: ["只读。"] });
+  const projected = session.collaborationState(50, actual);
+  const linghu = projected.members.find((member) => member.memberId === "linghu-ancestor");
+  assert.equal(linghu.currentTaskId, null);
+  assert.equal(linghu.state, "idle");
+  assert.equal(actual.members.at(-1).currentTaskId, "formal-task");
+  assert.equal(session.timeline(50).groups[0].status, "completed");
 });
 
 test("巡检生命周期验收场景在同一专题保留三类只读记录", () => {

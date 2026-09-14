@@ -29,7 +29,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   } = model;
   // 权威数据提供实时节点正文，显示状态提供当前界面语言。
   const { liveTextByNodeId } = model.data;
-  const { locale } = model.presentation;
+  const { locale, stateReadStatus } = model.presentation;
   // 页面只读取人工审批和需求入口操作，继续任务由页面控制器包装异步反馈。
   const { onManualApproval, onOpenHanliConversation } = model.actions;
   // 页面控制器只消费模型，不再依赖组件外层的包装参数。
@@ -58,19 +58,26 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   };
 
   if (groups.length === 0) {
+    const statusMessage = stateReadStatus === "syncing"
+      ? (locale === "ja" ? "共同状態を同期しています" : "正在同步")
+      : stateReadStatus === "unavailable"
+        ? (locale === "ja" ? "共同状態はまだ更新されていません" : "状态暂未更新")
+        : null;
     return (
       <section className="task-collaboration-page">
         <div className="task-collaboration-empty">
-          <strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong>
-          <span className="task-collaboration-empty-intro">
-            {locale === "ja"
-              ? "申請、承認、配布と実行の履歴がここに表示されます。"
-              : "先点击“找韩立说需求”说明目标；会话会引导你确认需求与范围，之后的任务安排会显示在这里。"}
-          </span>
-          <button type="button" className="task-collaboration-empty-action" onClick={openHanliConversation}>
-            {locale === "ja" ? "韓立に要望を伝える" : "找韩立说需求"}
-          </button>
-          {locale !== "ja" && <span className="task-collaboration-empty-detail">审批、分发、执行和验证会按发生顺序显示在这里。</span>}
+          {statusMessage ? <strong role="status">{statusMessage}</strong> : <>
+            <strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong>
+            <span className="task-collaboration-empty-intro">
+              {locale === "ja"
+                ? "申請、承認、配布と実行の履歴がここに表示されます。"
+                : "先点击“找韩立说需求”说明目标；会话会引导你确认需求与范围，之后的任务安排会显示在这里。"}
+            </span>
+            <button type="button" className="task-collaboration-empty-action" onClick={openHanliConversation}>
+              {locale === "ja" ? "韓立に要望を伝える" : "找韩立说需求"}
+            </button>
+            {locale !== "ja" && <span className="task-collaboration-empty-detail">审批、分发、执行和验证会按发生顺序显示在这里。</span>}
+          </>}
         </div>
       </section>
     );

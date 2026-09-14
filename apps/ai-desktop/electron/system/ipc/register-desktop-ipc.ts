@@ -222,6 +222,10 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
           kind: "cross-task-member-occupancy" as const,
           instructions: ["仅观察令狐持有另一项在途任务时的当前状态；不得读取或修改正式协作任务。"],
         } } : {}),
+        ...(goal.interactionCapabilities?.includes("member-idle-projection") ? { memberIdleFixture: {
+          kind: "member-idle-projection" as const,
+          instructions: ["仅观察令狐没有 currentTaskId 时的当前空闲状态；不得从完成专题历史推断或修改正式协作任务。"],
+        } } : {}),
         ...(goal.interactionCapabilities?.includes("collaboration-state-projection") ? { collaborationStateProjectionFixture: {
           kind: "collaboration-state-projection" as const,
           instructions: ["仅在窗口私有状态源观察正在同步与状态暂未更新；不得读取或修改正式协作状态。"],
