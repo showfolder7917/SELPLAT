@@ -675,38 +675,51 @@ test("首次工具参数被拒绝时把真实校验原因交给第二回合并�
       conditions: plan.segments.flatMap((item) => item.conditions),
     }],
   };
-  const result = await submission.run(workspaceFixtureGoal, async (requestId, attempt, retryContext) => {
+  const result = await submission.run(workspaceFixtureGoal, async (requestId, attempt, planningContext) => {
     if (attempt === 1) {
-      assert.equal(retryContext, null);
+      assert.deepEqual(planningContext.criteria, [
+        { criterionId: "criterion-1", text: goal.criteria[0] },
+        { criterionId: "criterion-2", text: goal.criteria[1] },
+      ]);
+      assert.deepEqual(planningContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
       assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...splitFixturePlan, requestId })).success, false);
       return;
     }
-    assert.match(retryContext.rejectionMessage, /一次性工作区夹具只能使用一个验收阶段/);
-    assert.deepEqual(retryContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
-    assert.equal("submittedSceneKinds" in retryContext, false);
+    assert.match(planningContext.rejectionMessage, /一次性工作区夹具只能使用一个验收阶段/);
+    assert.deepEqual(planningContext.requiredSceneKinds, ["workspace-explorer-fixture"]);
+    assert.equal("submittedSceneKinds" in planningContext, false);
     assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...mergedFixturePlan, requestId })).success, true);
   });
   assert.deepEqual(result, mergedFixturePlan);
 });
 
-test("跨任务夹具遗漏时第二回合按当前目标重新生成计划且审计只保存结果", async () => {
+test("原条件遗漏时第二回合按当前目标重新生成完整编号计划且审计只保存结果", async () => {
   const rejections = [];
   const submission = createAcceptanceSceneSubmission({ onRejectedPlan: (rejection) => rejections.push(rejection) });
-  const omittedFixturePlan = { ...plan, segments: [{ ...segment, kind: "current-window", reason: "错误地只观察当前窗口" }] };
-  const correctedPlan = { ...plan, segments: [{ ...segment, kind: "cross-task-member-occupancy", reason: "核对令狐另一项任务的当前占用" }] };
-  const result = await submission.run(crossTaskMemberOccupancyGoal, async (requestId, attempt, retryContext) => {
+  const omittedCriterionPlan = { ...plan, segments: [{ ...segment, conditions: [segment.conditions[0]] }] };
+  let firstPlanningContext;
+  const result = await submission.run(goal, async (requestId, attempt, planningContext) => {
     if (attempt === 1) {
-      assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedFixturePlan, requestId })).success, false);
+      firstPlanningContext = planningContext;
+      assert.deepEqual(planningContext.criteria, [
+        { criterionId: "criterion-1", text: goal.criteria[0] },
+        { criterionId: "criterion-2", text: goal.criteria[1] },
+      ]);
+      assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedCriterionPlan, requestId })).success, false);
       return;
     }
-    assert.equal(retryContext.rejectionMessage, "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。");
-    assert.deepEqual(retryContext.requiredSceneKinds, ["cross-task-member-occupancy"]);
-    assert.equal("submittedSceneKinds" in retryContext, false);
-    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...correctedPlan, requestId })).success, true);
+    assert.notEqual(planningContext, firstPlanningContext);
+    assert.equal(planningContext.rejectionMessage, "韩立验收场景计划未逐项覆盖原验收条件。");
+    assert.deepEqual(planningContext.criteria, [
+      { criterionId: "criterion-1", text: goal.criteria[0] },
+      { criterionId: "criterion-2", text: goal.criteria[1] },
+    ]);
+    assert.equal("submittedSceneKinds" in planningContext, false);
+    assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...plan, requestId })).success, true);
   });
-  assert.deepEqual(result, correctedPlan);
+  assert.deepEqual(result, plan);
   assert.deepEqual(rejections, [{
-    message: "本轮已经签发跨任务人物占用夹具，场景计划必须使用该夹具阶段。",
+    message: "韩立验收场景计划未逐项覆盖原验收条件。",
   }]);
 });
 
@@ -714,13 +727,13 @@ test("协作状态夹具的两种允许阶段由同一需求规则校验和纠�
   const submission = createAcceptanceSceneSubmission();
   const omittedFixturePlan = { ...plan, segments: [{ ...segment, kind: "current-window", reason: "错误地跳过状态夹具" }] };
   const correctedPlan = { ...plan, segments: [{ ...segment, kind: "collaboration-state-unavailable", reason: "核对读取失败后的明确状态" }] };
-  const result = await submission.run(collaborationStateProjectionGoal, async (requestId, attempt, retryContext) => {
+  const result = await submission.run(collaborationStateProjectionGoal, async (requestId, attempt, planningContext) => {
     if (attempt === 1) {
       assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...omittedFixturePlan, requestId })).success, false);
       return;
     }
-    assert.equal(retryContext.rejectionMessage, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
-    assert.deepEqual(retryContext.requiredSceneKinds, ["collaboration-state-syncing", "collaboration-state-unavailable"]);
+    assert.equal(planningContext.rejectionMessage, "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ");
+    assert.deepEqual(planningContext.requiredSceneKinds, ["collaboration-state-syncing", "collaboration-state-unavailable"]);
     assert.equal((await submission.tools.call("hanli_submit_acceptance_scene", { ...correctedPlan, requestId })).success, true);
   });
   assert.deepEqual(result, correctedPlan);
@@ -750,6 +763,9 @@ test("韩立场景工具通过本轮阶段连接装配，结束与应用退出�
   assert.match(scene, /dynamicTools: submission.tools/);
   assert.match(workflowRuntime, /sceneContext/);
   assert.match(scene, /read: \(\) => null/);
+  assert.match(scene, /criteria: planningContext\.criteria/);
+  assert.match(scene, /requiredSceneKinds: planningContext\.requiredSceneKinds/);
+  assert.doesNotMatch(scene, /retryContext/);
   assert.match(scene, /finally/);
   assert.match(scene, /service.dispose\(\)/);
   assert.match(runtime, /hanliSceneCodex\?\.dispose\(\)/);
