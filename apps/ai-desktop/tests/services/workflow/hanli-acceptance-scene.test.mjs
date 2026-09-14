@@ -16,7 +16,7 @@ const { inspectAcceptanceRunEvidence } = await sourceModule("electron/services/p
 const { createCompletionGateGoal, createSegmentGoal } = await sourceModule("electron/system/ipc/hanli-acceptance-scene-goals.ts");
 const { appendRelatedAcceptanceRun, assertSegmentAcceptanceRun, mergeAcceptanceRuns } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-results.ts");
 const { prepareAcceptanceSceneWindow } = await sourceModule("electron/system/ipc/acceptance-scene-window.ts");
-const { AcceptanceEmptyTaskGroupSession } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
+const { AcceptanceEmptyTaskGroupSession, acceptanceRecoveryFailureMessage } = await sourceModule("electron/system/ipc/acceptance-empty-task-group-session.ts");
 const { runHanliAcceptanceSceneSession } = await bundledSourceModule("electron/system/ipc/hanli-acceptance-scene-session.ts");
 const hanliContractBarrel = readFileSync("contracts/services/personas/hanli/index.ts", "utf8");
 const goal = { topicId: "t", proposalId: "p", title: "引导", criteria: ["没有任务时，先告诉我怎么开始", "按钮和说明相邻"] };
@@ -174,6 +174,14 @@ test("不同证据源可以分段覆盖原条件且每项只能出现一次", ()
     ...composite,
     segments: composite.segments.map((item) => ({ ...item, ownedConditions: [segment.ownedConditions[0]] })),
   }, currentWindowGoal), /重复占用/);
+});
+test("要求人物会话发送态的条件必须使用既有人物会话生命周期场景", () => {
+  const conversationGoal = { ...currentWindowGoal, criteria: ["恢复入口显示当前状态", "活动或确认区域在发送中显示忙碌状态"] };
+  const recoverySegment = { ...segment, kind: "recovery-action-lifecycle", ownedConditions: [segment.ownedConditions[0]] };
+  const conversationSegment = { ...segment, kind: "persona-conversation-lifecycle", ownedConditions: [segment.ownedConditions[1]] };
+  const valid = { reason: "恢复入口和会话发送态分别在受控场景观察", segments: [recoverySegment, conversationSegment] };
+  assert.deepEqual(validateAcceptanceScenePlan(valid, conversationGoal), valid);
+  assert.throws(() => validateAcceptanceScenePlan({ ...valid, segments: [recoverySegment, { ...conversationSegment, kind: "current-window" }] }, conversationGoal), /人物会话生命周期/);
 });
 test("分段目标直接携带原条件编号并拒绝按局部位置重编号", () => {
   const secondSegment = { ...segment, ownedConditions: [segment.ownedConditions[1]] };
@@ -553,6 +561,24 @@ test("恢复入口生命周期场景创建同样非持久化的验收窗口", as
   await prepareAcceptanceSceneWindow({ ...segment, kind: "recovery-action-lifecycle", reason: "核对唯一入口和恢复中的收口状态" }, f.options);
   assert.equal(f.registered.size, 1);
   assert.equal(f.events.includes("show"), true);
+});
+test("恢复入口生命周期在窗口私有时间线中依次呈现恢复中和受控失败", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(94, "recovery-action-lifecycle");
+  const waiting = session.timeline(94).groups[0];
+  assert.equal(waiting.nodes.at(-1).eventType, "customer.action_required");
+  const started = session.continueRecoveryLifecycle(94, "acceptance-failure-recovery-task").groups[0];
+  assert.equal(started.status, "running");
+  assert.equal(started.nodes.at(-1).eventType, "task.recovery_requested");
+  const failed = session.failRecoveryLifecycle(94, "acceptance-failure-recovery-task").groups[0];
+  assert.equal(failed.status, "blocked");
+  assert.equal(failed.nodes.at(-1).eventType, "task.recovery_failed");
+  assert.equal(failed.nodes.at(-1).status, "failed");
+  assert.match(failed.nodes.at(-1).detail, /窗口私有时间线/);
+  assert.match(acceptanceRecoveryFailureMessage, /受控验收恢复失败/);
+  assert.throws(() => session.failRecoveryLifecycle(94, "acceptance-failure-recovery-task"), /没有可结束的恢复请求/);
+  assert.throws(() => session.continueRecoveryLifecycle(94, "acceptance-failure-recovery-task"), /不能重复继续/);
+  session.remove(94);
 });
 test("人物会话生命周期场景创建同样非持久化的验收窗口", async () => {
   const f = fixture();

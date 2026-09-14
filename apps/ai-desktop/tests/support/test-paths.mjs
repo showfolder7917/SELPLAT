@@ -28,9 +28,26 @@ function resolveTestWorkspaceRoot(sourceRoot) {
   mkdirSync(path.join(workspaceRoot, "apps", "ai-desktop"), { recursive: true });
   writeFileSync(path.join(workspaceRoot, "settings.gradle"), "rootProject.name='ai-desktop-direct-test'\n");
   writeFileSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"), '{"name":"ai-desktop"}\n');
+  writeAiMemoryPathFixture(workspaceRoot, sourceRoot);
   writePromptBundleFixture(workspaceRoot, sourceRoot);
   process.once("exit", () => rmSync(workspaceRoot, { recursive: true, force: true }));
   return workspaceRoot;
+}
+
+/**
+ * 直接测试的已选工程仍须具备生产路径解析所需的只读配置和版本控制策略。
+ * 仅复制这两份基线文件，不把候选源码目录作为运行数据根。
+ */
+function writeAiMemoryPathFixture(workspaceRoot, sourceRoot) {
+  const sourceAppRoot = path.join(sourceRoot, "apps", "ai-desktop");
+  const targetDatabaseRoot = path.join(workspaceRoot, "apps", "ai-desktop", "db");
+  mkdirSync(targetDatabaseRoot, { recursive: true });
+  writeFileSync(
+    path.join(targetDatabaseRoot, "ai-memory-paths.json"),
+    readFileSync(path.join(sourceAppRoot, "db", "ai-memory-paths.json"), "utf8"),
+    "utf8",
+  );
+  writeFileSync(path.join(workspaceRoot, ".gitignore"), readFileSync(path.join(sourceRoot, ".gitignore"), "utf8"), "utf8");
 }
 
 /**

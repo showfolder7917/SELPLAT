@@ -8,12 +8,13 @@ import { appRoot, controlledTestRoot, projectRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });
 
-test("正式配置把所有 Developer 运行入口固定到应用 db 根", () => {
+test("正式配置把所有 Developer 运行入口固定到已选工程的应用 db 根", () => {
   const resolved = resolveAiMemoryPaths(projectRoot);
-  assert.equal(resolved.configPath, path.join(appRoot, "db", "ai-memory-paths.json"));
-  assert.equal(resolved.databaseRoot, path.join(appRoot, "db"));
+  const databaseRoot = path.join(projectRoot, "apps", "ai-desktop", "db");
+  assert.equal(resolved.configPath, path.join(databaseRoot, "ai-memory-paths.json"));
+  assert.equal(resolved.databaseRoot, databaseRoot);
   assert.equal(resolved.databaseFile, "events.sqlite3");
-  assert.equal(resolved.databasePath, path.join(appRoot, "db", "events.sqlite3"));
+  assert.equal(resolved.databasePath, path.join(databaseRoot, "events.sqlite3"));
   assert.deepEqual(JSON.parse(readFileSync(resolved.configPath, "utf8")), {
     schemaVersion: 2,
     databaseFile: "events.sqlite3",

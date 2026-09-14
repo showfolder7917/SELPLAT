@@ -20,7 +20,7 @@ import type { EvolutionFacade } from "../../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../../services/workflow/index.js";
 import type { EventCenterFacade, EventCenterTimeline as CollaborationTimelineFacade } from "../../../services/support/capabilities/event-center/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
-import type { AcceptanceEmptyTaskGroupSession } from "../acceptance-empty-task-group-session.js";
+import { acceptanceRecoveryFailureMessage, type AcceptanceEmptyTaskGroupSession } from "../acceptance-empty-task-group-session.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(
@@ -62,13 +62,16 @@ export function registerCollaborationIpc(
     return isolated;
   });
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request).state);
-  handle("desktop:continue-collaboration-task", (event, taskId: string) => {
+  handle("desktop:continue-collaboration-task", async (event, taskId: string) => {
     if (isIsolatedAcceptance(event.sender.id)) {
       const timeline = acceptanceEmptyTaskGroupSession!.continueRecoveryLifecycle(event.sender.id, taskId);
       // Renderer 的继续调用契约始终返回协作状态；时间线只能经专用事件刷新。
-      const isolated = acceptanceEmptyTaskGroupSession!.collaborationState(event.sender.id, collaboration.state());
       event.sender.send("desktop:collaboration-timeline-changed", timeline);
-      return isolated;
+      // 先保留一次可观察的恢复中渲染，再以窗口私有失败走过既有错误提示和证据展开链路。
+      await new Promise<void>((resolve) => setTimeout(resolve, 160));
+      const failedTimeline = acceptanceEmptyTaskGroupSession!.failRecoveryLifecycle(event.sender.id, taskId);
+      if (!event.sender.isDestroyed()) event.sender.send("desktop:collaboration-timeline-changed", failedTimeline);
+      throw new Error(acceptanceRecoveryFailureMessage);
     }
     return collaboration.continueTask(taskId);
   });
