@@ -17,7 +17,7 @@ export function systemBridge() {
     setPrimaryWorkspace: (id: string) => invoke("desktop:set-primary-workspace", id),
     removeWorkspace: (id: string) => invoke("desktop:remove-workspace", id),
     listWorkspaceDirectory: (workspaceId: string, relativePath = "") => invoke("desktop:list-workspace-directory", workspaceId, relativePath),
-    readWorkspaceFile: (workspaceId: string, relativePath: string) => invoke("desktop:read-workspace-file", workspaceId, relativePath),
+    openWorkspaceFile: (workspaceId: string, relativePath: string) => invoke("desktop:open-workspace-file", workspaceId, relativePath),
     openExternalUrl: (url: string) => invoke("desktop:open-external-url", url),
     getTempDirectoryInfo: () => invoke("desktop:get-temp-directory-info"),
     openTempDirectory: () => invoke("desktop:open-temp-directory"),

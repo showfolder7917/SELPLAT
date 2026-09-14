@@ -1,4 +1,4 @@
-import { Dismiss16Regular } from "@fluentui/react-icons";
+import { Copy16Regular, Dismiss16Regular } from "@fluentui/react-icons";
 
 import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
 
@@ -12,13 +12,25 @@ type WorkspaceFilePreviewProps = {
 export function WorkspaceFilePreview({ locale, preview, onClose }: WorkspaceFilePreviewProps) {
   if (!preview.preview && !preview.error) return null;
   const text = locale === "ja"
-    ? { title: "ファイルプレビュー", close: "ファイルプレビューを閉じる" }
-    : { title: "文件预览", close: "关闭文件预览" };
+    ? { title: "ファイルプレビュー", close: "ファイルプレビューを閉じる", copy: "内容をコピー", copied: "ファイル内容をコピーしました。", copyFailed: "ファイル内容をコピーできませんでした。" }
+    : { title: "文件预览", close: "关闭文件预览", copy: "复制完整内容", copied: "已复制文件内容。", copyFailed: "无法复制文件内容。" };
+
+  async function copyContent() {
+    try {
+      const copied = await window.sel?.core?.copyText?.(preview.preview?.content || "");
+      window.sel?.core?.toast?.(copied ? text.copied : text.copyFailed, copied ? "success" : "error");
+    } catch {
+      window.sel?.core?.toast?.(text.copyFailed, "error");
+    }
+  }
 
   return <section className="workspace-file-preview-panel" aria-label={text.title}>
     <header>
       <div><strong>{preview.preview?.relativePath || text.title}</strong></div>
-      <button type="button" aria-label={text.close} title={text.close} onClick={onClose}><Dismiss16Regular /></button>
+      <div>
+        {preview.preview && <button type="button" aria-label={text.copy} title={text.copy} onClick={() => { void copyContent(); }}><Copy16Regular /></button>}
+        <button type="button" aria-label={text.close} title={text.close} onClick={onClose}><Dismiss16Regular /></button>
+      </div>
     </header>
     {preview.error ? <p role="alert">{preview.error}</p> : <pre>{preview.preview?.content}</pre>}
   </section>;

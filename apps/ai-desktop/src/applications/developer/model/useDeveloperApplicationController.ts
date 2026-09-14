@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCollaborationWorkspace } from "../../../features/collaboration";
 import { useCodexWorkspace, usePersonaConversation } from "../../../features/conversation";
@@ -55,6 +55,14 @@ export function useDeveloperApplicationController() {
       tone: "danger",
     }),
   });
+
+  // 右侧预览自身保留来源工作区；撤销登记后由预览状态所有者清除失效内容。
+  useEffect(() => {
+    const registeredIds = new Set(workspace.workspaces?.roots.map((root) => root.id) || []);
+    setWorkspaceFilePreview((current) => current.workspaceId && !registeredIds.has(current.workspaceId)
+      ? { preview: null, error: "", workspaceId: null }
+      : current);
+  }, [workspace.workspaces]);
 
   /** Explorer 只能提交只读结果，主内容区统一决定展示、错误和关闭。 */
   const setWorkspacePreview = useCallback((next: WorkspaceFilePreviewState) => {

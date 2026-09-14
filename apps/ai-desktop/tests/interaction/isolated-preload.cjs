@@ -411,7 +411,7 @@ contextBridge.exposeInMainWorld("desktop", {
   removeWorkspace: async () => workspace,
   // 目录和文件预览保持在隔离夹具内，避免交互测试 Renderer 越过主进程读取宿主工作区。
   listWorkspaceDirectory: async (workspaceId, relativePath = "") => ({ workspaceId, relativePath, entries: [] }),
-  readWorkspaceFile: async (workspaceId, relativePath) => ({ workspaceId, relativePath, content: "" }),
+  openWorkspaceFile: async (workspaceId, relativePath) => ({ kind: "preview", workspaceId, relativePath, content: "" }),
   // 隔离窗口没有审计主进程；保留有界本地记录，保证错误边界上报不会再次中断 Renderer。
   reportRendererException: (report) => {
     if (!globalThis.__interactionRendererExceptions) globalThis.__interactionRendererExceptions = [];

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { WorkspaceDirectoryOutDto } from "../../../../contracts/services/support/platform/workspace/index";
+import type { WorkspaceDirectoryOutDto, WorkspaceFileOpenOutDto, WorkspaceSystemFileOpenFailedOutDto } from "../../../../contracts/services/support/platform/workspace/index";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 import type { WorkspaceExplorerFeatureProps } from "./WorkspaceExplorerFeature.types";
 
@@ -17,7 +17,10 @@ export function useWorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
   const [selectedEntry, setSelectedEntry] = useState<SelectedEntry>(null);
   const pendingDirectoryLoads = useRef(new Map<string, Promise<void>>());
-  const previewWorkspaceId = useRef<string | null>(null);
+  // 每次文件点击取得递增编号，迟到的异步结果不能覆盖用户已切换后的选择。
+  const openRequestId = useRef(0);
+  // 相同文件仍在请求时复用同一 Promise，避免 PPT/PPTX 重复交给系统默认应用。
+  const pendingFileOpens = useRef(new Map<string, Promise<WorkspaceFileOpenOutDto | WorkspaceSystemFileOpenFailedOutDto>>());
   const workspaceIds = props.workspaces?.roots.map((root) => root.id) || [];
   const workspaceIdsKey = workspaceIds.join("\u0000");
   const registeredWorkspaceIds = useRef(new Set(workspaceIds));
@@ -37,10 +40,6 @@ export function useWorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     });
     setSelectedEntry((current) => current && !isRegisteredWorkspace(current.workspaceId) ? null : current);
-    if (previewWorkspaceId.current && !isRegisteredWorkspace(previewWorkspaceId.current)) {
-      previewWorkspaceId.current = null;
-      props.onFilePreviewChange({ preview: null, error: "", workspaceId: null });
-    }
   }, [workspaceIdsKey]);
 
   function loadDirectory(workspaceId: string, relativePath: string): Promise<void> {
@@ -83,16 +82,26 @@ export function useWorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps
   }
 
   async function openFile(workspaceId: string, relativePath: string) {
+    const requestId = ++openRequestId.current;
+    const fileKey = key(workspaceId, relativePath);
     try {
       const api = getOptionalSystemDesktopApi();
       if (!api) throw new Error("桌面接口不可用。");
-      const nextPreview = await api.readWorkspaceFile(workspaceId, relativePath);
-      if (!registeredWorkspaceIds.current.has(workspaceId)) return;
-      previewWorkspaceId.current = workspaceId;
-      props.onFilePreviewChange({ preview: nextPreview, error: "", workspaceId });
+      const pendingOpen = pendingFileOpens.current.get(fileKey);
+      const request = pendingOpen || api.openWorkspaceFile(workspaceId, relativePath);
+      if (!pendingOpen) {
+        pendingFileOpens.current.set(fileKey, request);
+        void request.finally(() => pendingFileOpens.current.delete(fileKey));
+      }
+      const result = await request;
+      if (requestId !== openRequestId.current || !registeredWorkspaceIds.current.has(workspaceId)) return;
+      if (result.kind === "preview") {
+        props.onFilePreviewChange({ preview: result, error: "", workspaceId });
+        return;
+      }
+      if (result.kind === "system-open-failed") window.sel?.core?.toast?.(result.message, "error");
     } catch (error) {
-      if (!registeredWorkspaceIds.current.has(workspaceId)) return;
-      previewWorkspaceId.current = workspaceId;
+      if (requestId !== openRequestId.current || !registeredWorkspaceIds.current.has(workspaceId)) return;
       props.onFilePreviewChange({ preview: null, error: error instanceof Error ? error.message : "文件预览失败。", workspaceId });
     }
   }

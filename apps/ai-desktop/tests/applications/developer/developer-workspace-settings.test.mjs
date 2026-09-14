@@ -23,7 +23,7 @@ test("工作区资源树使用受控目录与文本预览 API", () => {
   const retiredShellState = ["explorer", "Expanded"].join("");
   const retiredResizer = ["explorer", "-resizer"].join("");
   const directoryApi = ["list", "Workspace", "Directory"].join("");
-  const fileApi = ["read", "Workspace", "File"].join("");
+  const fileApi = ["open", "Workspace", "File"].join("");
   assert.doesNotMatch(application, new RegExp(`${retiredShellState}|${retiredResizer}`));
   assert.match(desktopApi, new RegExp(`${directoryApi}|${fileApi}`));
   assert.match(registry, /addWorkspace/);
@@ -39,4 +39,6 @@ test("文件内容在右侧主工作区阅读，左侧只保留目录树", () =>
   assert.match(preview, /workspace-file-preview-panel/);
   assert.match(preview, /aria-label/);
   assert.match(preview, /onClose/);
+  assert.match(preview, /copyText/);
+  assert.match(preview, /toast/);
 });
