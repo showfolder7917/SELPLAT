@@ -2628,6 +2628,47 @@ test("任务结果提交前通过真实 Git 状态阻断自修新增的范围外
   }
 });
 
+test("已提交且工作树干净的任务实现仍是执行门禁的变更证据", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "committed-task-change-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  const taskRoot = path.join(managedRoot, "task-committed-change");
+  try {
+    mkdirSync(repositoryRoot, { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "implementation.ts"), "export const implementation = 1;\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    mkdirSync(managedRoot, { recursive: true });
+    git(repositoryRoot, "worktree", "add", "-b", "codex/collab/task-committed-change/worker/r1", taskRoot, "HEAD");
+    const baseSha = git(taskRoot, "rev-parse", "HEAD");
+    const task = {
+      taskId: "TASK-COMMITTED-CHANGE",
+      versionWorkspace: {
+        workspaceId: "worktree:TASK-COMMITTED-CHANGE:r1",
+        rootPath: taskRoot,
+        branchName: "codex/collab/task-committed-change/worker/r1",
+        baseSha,
+        resultSha: null,
+        createdAt: new Date().toISOString(),
+        retiredAt: null,
+      },
+    };
+    writeFileSync(path.join(taskRoot, "implementation.ts"), "export const implementation = 2;\n");
+    git(taskRoot, "add", "-A");
+    git(taskRoot, "commit", "-m", "implementation");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    assert.equal(git(taskRoot, "status", "--porcelain"), "", "结果提交后工作树应保持干净");
+    assert.deepEqual(await manager.readTaskChangedFiles(task), ["implementation.ts"]);
+    assert.deepEqual(await manager.readTaskUncommittedFiles(task), []);
+    assert.deepEqual(await manager.validateTaskChangeScope(task, ["implementation.ts"]), []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("协同固定测试按签发 worktree 执行并隔离任务缓存和输出", () => {
   const runner = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
   const manifest = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8"));

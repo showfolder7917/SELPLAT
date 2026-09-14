@@ -18,6 +18,13 @@ test("旧整段 JSON 解析器不能进入发布包", () => {
   );
 });
 
+test("仅打入平衡提取帮助器但分发入口未迁移时拒绝发布包", () => {
+  assert.throws(
+    () => assertPackagedDistributionParser("function parseDistributionPlan(text) { return parseJsonObject(text); }\nfunction extractBalancedJsonObjects(text) { return []; }"),
+    /Packaged Nangong distribution parser is stale/,
+  );
+});
+
 test("发布内容校验提取并检查南宫婉分发解析器", () => {
   assert.match(packageContentVerifier, /extractFile\(asarPath, packagedDistributionServicePath\)/);
   assert.match(packageContentVerifier, /assertPackagedDistributionParser\(packagedDistributionService\.toString\("utf8"\)\)/);
