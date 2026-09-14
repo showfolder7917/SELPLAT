@@ -27,13 +27,18 @@ export function resolveAcceptanceInteractionCapabilities(proposal: EvolutionProp
     && /(?:收尾|清理|移除).*(?:失败|异常).*(?:恢复|重试|继续处理)|(?:失败|异常).*(?:收尾|清理|移除).*(?:恢复|重试|继续处理)/u.test(approvedScope);
   const excludesAcceptanceTool = proposal.exclusions.some((item) => /(?:验收工具|原生目录|工作区).*(?:不扩展|禁止|排除)|(?:不扩展|禁止|排除).*(?:验收工具|原生目录|工作区)/u.test(item));
   const hasCrossTaskMemberOccupancyScope = /(?:令狐|令狐老祖).*(?:另一(?:项)?(?:在途)?任务|处理(?:中)?其他任务)|(?:另一(?:项)?(?:在途)?任务|跨任务).*(?:令狐|人物(?:栏|页|状态)|当前任务)/u.test(approvedScope);
+  const hasCollaborationStateProjectionScope = /协作状态.*(?:尚未返回|首次读取失败|读取失败|暂未更新|正在同步)|(?:尚未返回|首次读取失败|读取失败|暂未更新|正在同步).*(?:协作状态|人物(?:栏|页|状态))/u.test(approvedScope);
   if (excludesAcceptanceTool) return [];
-  if (!hasWorkspaceExplorerScope) return hasCrossTaskMemberOccupancyScope ? ["cross-task-member-occupancy"] : [];
+  if (!hasWorkspaceExplorerScope) return [
+    ...(hasCrossTaskMemberOccupancyScope ? ["cross-task-member-occupancy" as const] : []),
+    ...(hasCollaborationStateProjectionScope ? ["collaboration-state-projection" as const] : []),
+  ];
   return [
     "workspace-explorer",
     ...(hasWorkspaceExplorerScenarioScope ? ["workspace-explorer-scenarios" as const] : []),
     ...(hasWorkspaceCleanupRecoveryScope ? ["workspace-cleanup-recovery" as const] : []),
     ...(hasWorkspaceStartupRecoveryScope ? ["workspace-startup-recovery" as const] : []),
     ...(hasCrossTaskMemberOccupancyScope ? ["cross-task-member-occupancy" as const] : []),
+    ...(hasCollaborationStateProjectionScope ? ["collaboration-state-projection" as const] : []),
   ];
 }

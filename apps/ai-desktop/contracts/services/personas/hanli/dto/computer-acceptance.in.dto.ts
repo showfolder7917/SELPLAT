@@ -11,7 +11,8 @@ export type HanliAcceptanceInteractionCapability =
   | "workspace-explorer-scenarios"
   | "workspace-cleanup-recovery"
   | "workspace-startup-recovery"
-  | "cross-task-member-occupancy";
+  | "cross-task-member-occupancy"
+  | "collaboration-state-projection";
 
 /**
  * 已签发工作区验收夹具的只读操作说明。
@@ -28,6 +29,12 @@ export interface WorkspaceAcceptanceFixtureContextOutDto {
 /** 主进程签发的窗口私有跨任务人物占用夹具，模型不能选择其任务或阶段。 */
 export interface CrossTaskMemberOccupancyFixtureContextOutDto {
   kind: "cross-task-member-occupancy";
+  instructions: string[];
+}
+
+/** 主进程签发的窗口私有协作状态读取夹具；模型不能选择失败原因或改变正式 Store。 */
+export interface CollaborationStateProjectionFixtureContextOutDto {
+  kind: "collaboration-state-projection";
   instructions: string[];
 }
 
@@ -98,6 +105,8 @@ export interface HanliComputerAcceptanceInDto {
   workspaceAcceptanceFixture?: WorkspaceAcceptanceFixtureContextOutDto;
   /** 仅专用隔离场景可消费的跨任务人物占用夹具。 */
   crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto;
+  /** 仅同步中与读取失败场景可消费的协作状态投影夹具。 */
+  collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto;
   /** 当前已打包应用在隔离数据根中执行的真实重启回收结果；只用于对应重启条件的事实判断。 */
   workspaceStartupRecoveryEvidence?: WorkspaceStartupRecoveryEvidenceOutDto;
   /** 当前夹具由同一生命周期控制器完成失败记录、重试、清理和页面同步后的只读结果。 */

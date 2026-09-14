@@ -66,6 +66,19 @@ test("跨任务人物占用只由已批准的明确验收条件签发", () => {
   })), []);
 });
 
+test("协作状态同步与读取失败只由已批准条件签发", () => {
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
+    content: "完成专题状态收口与人物真实状态同步。",
+    impactScope: ["人物栏只读取协作状态存储。"],
+    acceptanceCriteria: ["协作状态尚未返回时显示正在同步；读取失败时显示状态暂未更新。"],
+  })), ["collaboration-state-projection"]);
+  assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
+    content: "完成专题状态收口与人物真实状态同步。",
+    impactScope: ["人物栏只读取协作状态存储。"],
+    acceptanceCriteria: ["令狐没有 currentTaskId 时显示空闲。"],
+  })), []);
+});
+
 test("重启后回收临时工作区由批准范围签发独立能力", () => {
   assert.deepEqual(resolveAcceptanceInteractionCapabilities(proposal({
     acceptanceCriteria: ["左侧工作区树可以读取文件，应用重启后自动清理验收临时工作区。"],
