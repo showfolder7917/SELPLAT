@@ -32,6 +32,13 @@ test("南宫婉页面的新手说明覆盖真实页面区域和主要控制状�
   assert.match(controller, /返回页面结构真正需要的数据和具名操作/);
 });
 
+test("南宫婉空会话按首次使用顺序说明现象、事实和确认边界", () => {
+  assert.match(view, /你可以说明需要调查的现象，以及不可改变的约束。/);
+  assert.match(view, /请直接提供已经确认的事实、观察结果或截图。/);
+  assert.match(view, /南宫婉核实后会形成方案；是否实施仍遵循原有确认规则。/);
+  assert.match(view, /空状态提示：按首次使用顺序说明现象与约束、直接事实和原有确认边界/);
+});
+
 test("南宫婉页面模块的注释先写中文业务名称", () => {
   for (const source of [view, types, controller, activity]) {
     assert.doesNotMatch(source, /^\s*\/\/\s*[A-Za-z][A-Za-z0-9_.-]*\s/gm);

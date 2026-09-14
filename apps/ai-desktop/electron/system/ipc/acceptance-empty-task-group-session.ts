@@ -4,7 +4,7 @@ import type { EvolutionStateOutDto } from "../../../contracts/services/evolution
 import type { CollaborationStateOutDto, CollaborationTimelineSnapshotOutDto, DesktopOperatingModeValue } from "../../../contracts/services/workflow/index.js";
 import type { CollaborationStateProjectionFixtureContextOutDto, CrossTaskMemberOccupancyFixtureContextOutDto, MemberIdleFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
 
-type IsolatedAcceptanceScenario = "empty-task-group" | "completed-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy" | "member-idle" | "collaboration-state-syncing" | "collaboration-state-unavailable";
+type IsolatedAcceptanceScenario = "empty-task-group" | "completed-recovery-timeline" | "inspection-lifecycle-timeline" | "user-language-detail-timeline" | "recovery-action-lifecycle" | "persona-empty-conversation" | "persona-conversation-lifecycle" | "persona-conversation-with-task-handoff" | "cross-task-member-occupancy" | "member-idle" | "collaboration-state-syncing" | "collaboration-state-unavailable";
 
 const scenarioTaskId = "acceptance-failure-recovery-task";
 const scenarioTopicId = "acceptance-failure-recovery-topic";
@@ -38,9 +38,13 @@ export class AcceptanceEmptyTaskGroupSession {
     this.#recoveryLifecycleStarted.delete(webContentsId);
     this.#failedEarlierReads.delete(String(webContentsId));
     this.#personaScreenshotSequences.delete(webContentsId);
-    // 空任务页验收需要沿真实入口进入韩立会话并发送固定验收文案；消息只保存在当前窗口内存。
-    if (sceneKind === "empty-task-group" || sceneKind === "persona-conversation-lifecycle" || sceneKind === "persona-conversation-with-task-handoff") {
-      this.#personaConversations.set(webContentsId, personaConversationFixture(sceneKind === "empty-task-group" ? 0 : undefined));
+    // 人物会话验收沿真实页面入口发送固定验收文案；消息只保存在当前窗口内存。
+    if (sceneKind === "empty-task-group" || sceneKind === "persona-empty-conversation" || sceneKind === "persona-conversation-lifecycle" || sceneKind === "persona-conversation-with-task-handoff") {
+      const emptyPersonaConversation = sceneKind === "persona-empty-conversation";
+      this.#personaConversations.set(webContentsId, personaConversationFixture(
+        sceneKind === "empty-task-group" || emptyPersonaConversation ? 0 : undefined,
+        emptyPersonaConversation ? 0 : undefined,
+      ));
     }
     // 复合场景只保存准备瞬间已筛选的任务交接快照，后续正式任务变化不能进入验收窗口。
     if (sceneKind === "persona-conversation-with-task-handoff" && taskHandoff?.groups.length) this.#taskHandoffs.set(webContentsId, structuredClone(taskHandoff));
@@ -83,9 +87,9 @@ export class AcceptanceEmptyTaskGroupSession {
     const readsFormalEvolutionDossier = channel === "desktop:get-evolution-topic-dossier";
     const privateNavigationChannel = channel === "desktop:set-operating-mode" || channel === "desktop:select-collaboration-member";
     const privatePersonaMessage = channel === "desktop:send-persona-conversation-message"
-      && (scene === "empty-task-group" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
+      && (scene === "empty-task-group" || scene === "persona-empty-conversation" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
     const privatePersonaScreenshot = channel === "desktop:capture-screen"
-      && (scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
+      && (scene === "persona-empty-conversation" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff");
     const privateRecovery = channel === "desktop:continue-collaboration-task" && scene === "recovery-action-lifecycle";
     if ((readsApplicationState && !readsFormalEvolutionDossier) || privateNavigationChannel || privatePersonaMessage || privatePersonaScreenshot || privateRecovery) return;
     throw new Error("独立验收窗口不允许执行会改变应用持久状态的操作。");
@@ -94,7 +98,7 @@ export class AcceptanceEmptyTaskGroupSession {
   /** 仅人物会话验收场景接收内存截图完成事件，正式窗口仍使用真实截图能力。 */
   isPersonaConversationLifecycle(webContentsId: number): boolean {
     const scene = this.#scenarios.get(webContentsId);
-    return scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff";
+    return scene === "persona-empty-conversation" || scene === "persona-conversation-lifecycle" || scene === "persona-conversation-with-task-handoff";
   }
 
   /** 生成只在隔离窗口内可见的 PNG 附件回执，供既有 composer 回调验证附件保持。 */
@@ -378,7 +382,7 @@ function crossTaskMemberOccupancyTimeline(): CollaborationTimelineSnapshotOutDto
 }
 
 /** 为人物会话验收提供稳定、可分页且不落盘的消息集合。 */
-function personaConversationFixture(hanliMessageCount = 66): Map<string, PersonaConversationOutDto> {
+function personaConversationFixture(hanliMessageCount = 66, nangongMessageCount = 4): Map<string, PersonaConversationOutDto> {
   const createdAt = new Date().toISOString();
   const create = (personaId: string, count: number): PersonaConversationOutDto => ({
     ownerPersonaId: personaId,
@@ -399,7 +403,7 @@ function personaConversationFixture(hanliMessageCount = 66): Map<string, Persona
       completedAt: createdAt,
     })),
   });
-  return new Map([["han-li", create("han-li", hanliMessageCount)], ["nangong-wan", create("nangong-wan", 4)]]);
+  return new Map([["han-li", create("han-li", hanliMessageCount)], ["nangong-wan", create("nangong-wan", nangongMessageCount)]]);
 }
 
 /** 巡检验收场景在同一只读专题内保留普通、自动恢复和用户处理三类事实。 */

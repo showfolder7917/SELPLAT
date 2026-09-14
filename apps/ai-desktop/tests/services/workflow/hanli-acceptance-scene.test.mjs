@@ -83,6 +83,8 @@ test("韩立显式选择场景不依赖用户语言、页面名和词序", () =>
   assert.deepEqual(validateAcceptanceScenePlan(detailPlan, goal), detailPlan);
   const lifecyclePlan = { ...plan, segments: [{ ...segment, kind: "recovery-action-lifecycle", reason: "条件要求观察当前等待节点继续后的状态收口" }] };
   assert.deepEqual(validateAcceptanceScenePlan(lifecyclePlan, goal), lifecyclePlan);
+  const emptyConversationPlan = { ...plan, segments: [{ ...segment, kind: "persona-empty-conversation", reason: "条件要求在全新空会话中核对首次使用引导" }] };
+  assert.deepEqual(validateAcceptanceScenePlan(emptyConversationPlan, goal), emptyConversationPlan);
   const conversationPlan = { ...plan, segments: [{ ...segment, kind: "persona-conversation-lifecycle", reason: "条件要求核对人物会话补载、重试和附件" }] };
   assert.deepEqual(validateAcceptanceScenePlan(conversationPlan, goal), conversationPlan);
   const compositePlan = { ...plan, segments: [{ ...segment, kind: "persona-conversation-with-task-handoff", reason: "条件同时要求人物会话与当前专题的原任务交接记录" }] };
@@ -559,6 +561,13 @@ test("人物会话生命周期场景创建同样非持久化的验收窗口", as
   assert.equal(f.events.includes("show"), true);
 });
 
+test("首次使用人物会话场景创建两个人物都为空的非持久化窗口", async () => {
+  const f = fixture();
+  await prepareAcceptanceSceneWindow({ ...segment, kind: "persona-empty-conversation", reason: "核对两个人物的首次使用引导" }, f.options);
+  assert.equal(f.registered.size, 1);
+  assert.equal(f.events.includes("show"), true);
+});
+
 test("人物会话场景只在内存提供分页、一次失败重试和附件回显", () => {
   const session = new AcceptanceEmptyTaskGroupSession();
   session.register(91, "persona-conversation-lifecycle");
@@ -577,6 +586,23 @@ test("人物会话场景只在内存提供分页、一次失败重试和附件�
   assert.match(screenshot.dataUrl, /^data:image\/png;base64,/);
   session.remove(91);
   assert.equal(session.isActive(91), false);
+});
+
+test("首次使用人物会话场景保持两个人物为空且只在窗口内接收后续消息", () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(93, "persona-empty-conversation");
+  assert.equal(session.isPersonaConversationLifecycle(93), true);
+  const initialHanli = session.conversationWindow(93, "han-li");
+  const initialNangong = session.conversationWindow(93, "nangong-wan");
+  assert.equal(initialHanli.messages.length, 0);
+  assert.equal(initialHanli.hasEarlier, false);
+  assert.equal(initialNangong.messages.length, 0);
+  assert.equal(initialNangong.hasEarlier, false);
+  const sent = session.sendPersonaConversationMessage(93, "han-li", { clientMessageId: "empty-fixture-message", message: "首次使用验收", attachmentIds: [], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  assert.equal(sent.messages.length, 2);
+  assert.equal(session.conversationWindow(93, "han-li").messages.length, 2);
+  assert.equal(session.conversationWindow(93, "nangong-wan").messages.length, 0);
+  assert.equal(session.conversationWindow(93, "nangong-wan").hasEarlier, false);
 });
 
 // 复合场景的交接事实在窗口准备时冻结，人物消息仍不能回退读取正式会话。
@@ -921,6 +947,8 @@ test("场景说明区分条件式规则与必须构造的验收状态", () => {
   assert.match(prompt, /inspection-lifecycle-timeline/);
   assert.match(prompt, /user-language-detail-timeline/);
   assert.match(prompt, /recovery-action-lifecycle/);
+  assert.match(prompt, /persona-empty-conversation/);
+  assert.match(prompt, /全新空会话/);
   assert.match(prompt, /persona-conversation-lifecycle/);
   assert.match(prompt, /persona-conversation-with-task-handoff/);
 });

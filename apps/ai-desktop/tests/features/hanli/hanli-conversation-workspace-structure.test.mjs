@@ -45,6 +45,13 @@ test("韩立会话成为当前页时把焦点交给需求输入框", () => {
   assert.match(view, /<textarea[\s\S]*ref=\{messageInputRef\}/);
 });
 
+test("韩立空会话按首次使用顺序说明目标、材料和确认边界", () => {
+  assert.match(view, /你可以提出问题、目标，或想实现的功能。/);
+  assert.match(view, /直接描述你看到的情况，或附上截图；先说最在意的地方。/);
+  assert.match(view, /必要时韩立会交由南宫婉核实；是否实施仍遵循原有确认规则。/);
+  assert.match(view, /空状态说明：按首次使用顺序说明目标、直接材料和原有确认边界/);
+});
+
 test("自动托管作为韩立会话专属子模块并使用新手可读结构", () => {
   assert.match(view, /\.\/HanliConversationWorkspace\/HanliCustodySwitch/);
   assert.match(custodySwitch, /韩立会话页面中的“自动托管”子模块/);
