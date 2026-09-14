@@ -20,7 +20,6 @@ import type { EvolutionFacade } from "../../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../../services/workflow/index.js";
 import type { EventCenterFacade, EventCenterTimeline as CollaborationTimelineFacade } from "../../../services/support/capabilities/event-center/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
-import { acceptanceRecoveryFailureMessage, type AcceptanceEmptyTaskGroupSession } from "../acceptance-empty-task-group-session.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(
@@ -34,69 +33,28 @@ export function registerCollaborationIpc(
   eventCenter: EventCenterFacade,
   collaborationTimeline: CollaborationTimelineFacade | null,
   refreshWorkflowCheckpoints?: () => Promise<void>,
-  acceptanceEmptyTaskGroupSession?: AcceptanceEmptyTaskGroupSession,
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
-  const isIsolatedAcceptance = (webContentsId: number) => acceptanceEmptyTaskGroupSession?.isActive(webContentsId) === true;
-  handle("desktop:get-collaboration-state", async (event) => {
-    const state = collaboration.state();
-    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.readCollaborationState(event.sender.id, state) : state;
-  });
+  handle("desktop:get-collaboration-state", async () => collaboration.state());
   // 任务协作群只读取 SQLite 不可变事件；数据库不可用时抛给 EventCenter，禁止退回 JSON 快照拼接旧实现。
-  handle("desktop:get-collaboration-timeline", (event) => {
-    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.timeline(event.sender.id);
+  handle("desktop:get-collaboration-timeline", () => {
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineSnapshot();
   });
-  handle("desktop:set-operating-mode", (event, mode: DesktopOperatingModeValue) => {
-    if (!isIsolatedAcceptance(event.sender.id)) return collaboration.setMode(mode);
-    const isolated = acceptanceEmptyTaskGroupSession!.setMode(event.sender.id, mode, collaboration.state());
-    event.sender.send("desktop:collaboration-state", { state: isolated, reason: "mode.changed", taskIds: [] });
-    return isolated;
-  });
-  handle("desktop:select-collaboration-member", (event, memberId: string) => {
-    const state = collaboration.state();
-    if (!isIsolatedAcceptance(event.sender.id)) return collaboration.selectMember(memberId);
-    const isolated = acceptanceEmptyTaskGroupSession!.selectMember(event.sender.id, memberId, state);
-    event.sender.send("desktop:collaboration-state", { state: isolated, reason: "member.selected", taskIds: [] });
-    return isolated;
-  });
+  handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingModeValue) => collaboration.setMode(mode));
+  handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request).state);
-  handle("desktop:continue-collaboration-task", async (event, taskId: string) => {
-    if (isIsolatedAcceptance(event.sender.id)) {
-      const timeline = acceptanceEmptyTaskGroupSession!.continueRecoveryLifecycle(event.sender.id, taskId);
-      // Renderer 的继续调用契约始终返回协作状态；时间线只能经专用事件刷新。
-      event.sender.send("desktop:collaboration-timeline-changed", timeline);
-      // 先保留一次可观察的恢复中渲染，再以窗口私有失败走过既有错误提示和证据展开链路。
-      await new Promise<void>((resolve) => setTimeout(resolve, 160));
-      const failedTimeline = acceptanceEmptyTaskGroupSession!.failRecoveryLifecycle(event.sender.id, taskId);
-      if (!event.sender.isDestroyed()) event.sender.send("desktop:collaboration-timeline-changed", failedTimeline);
-      throw new Error(acceptanceRecoveryFailureMessage);
-    }
-    return collaboration.continueTask(taskId);
-  });
+  handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
   handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
   handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
   handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
   handle("desktop:new-linghu-display-conversation", () => linghuAutomation.newDisplayConversation());
-  handle("desktop:get-nangong-evolution-state", (event) => {
-    const state = evolution.state();
-    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.evolutionState(state) : state;
-  });
+  handle("desktop:get-nangong-evolution-state", () => evolution.state());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
   // 人物会话统一通过读取、发送、新建和模型选择四类入口访问；新人物只需注册处理器。
-  handle("desktop:get-persona-conversation", (event, personaId: string) => {
-    const conversation = personaConversations.conversation(personaId);
-    return isIsolatedAcceptance(event.sender.id) ? acceptanceEmptyTaskGroupSession!.conversation(event.sender.id, personaId, conversation) : conversation;
-  });
-  handle("desktop:get-persona-conversation-window", (event, personaId: string, request?: ReadPersonaConversationWindowInDto) => {
-    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.conversationWindow(event.sender.id, personaId, request || {});
-    return personaConversations.conversationWindow(personaId, request || {});
-  });
-  handle("desktop:send-persona-conversation-message", async (event, personaId: string, request: SendPersonaConversationMessageInDto) => {
-    if (isIsolatedAcceptance(event.sender.id)) return acceptanceEmptyTaskGroupSession!.sendPersonaConversationMessage(event.sender.id, personaId, request);
-    return personaConversations.send(personaId, request);
-  });
+  handle("desktop:get-persona-conversation", (_event, personaId: string) => personaConversations.conversation(personaId));
+  handle("desktop:get-persona-conversation-window", (_event, personaId: string, request?: ReadPersonaConversationWindowInDto) => personaConversations.conversationWindow(personaId, request || {}));
+  handle("desktop:send-persona-conversation-message", (_event, personaId: string, request: SendPersonaConversationMessageInDto) => personaConversations.send(personaId, request));
   handle("desktop:new-persona-conversation", (_event, personaId: string) => personaConversations.newConversation(personaId));
   handle("desktop:select-persona-conversation-model", (_event, personaId: string, selectedModel: string | null) => personaConversations.selectModel(personaId, selectedModel));
   handle("desktop:generate-nangong-topic-draft", (_event, request: GenerateNangongTopicDraftInDto) => nangong.generateTopicDraft(request));

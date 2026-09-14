@@ -50,8 +50,7 @@ export function canResumeOneShotForGroup(
   const proposal = evolutionState.proposals.find((item) => item.proposalId === run.proposalId);
   const runCanResume = run.status !== "completed" && (run.status === "blocked" || evolutionState.automationRuntime.status === "paused");
   const resumableProposalStates = ["pending-approval", "supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"];
-  const proposalCanResume = proposal && (resumableProposalStates.includes(proposal.status)
-    || (proposal.status === "completed" && run.resumeMode === "post-completion-review"));
+  const proposalCanResume = proposal && resumableProposalStates.includes(proposal.status);
   return Boolean(group.status === "blocked" && runCanResume && proposalCanResume);
 }
 

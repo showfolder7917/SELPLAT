@@ -1,4 +1,3 @@
-import { runHanliAcceptanceSceneSession } from "./hanli-acceptance-scene-session.js";
 import { execFile } from "node:child_process";
 import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
@@ -15,11 +14,9 @@ import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePr
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
-import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
+import type { HanliPageAcceptanceAuthorization } from "./hanli-page-acceptance-authorization.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
-import { WorkspaceAcceptanceFixture } from "./workspace-acceptance-fixture.js";
-import { runWorkspaceStartupRecoveryAcceptance } from "./workspace-startup-recovery-acceptance.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
 import { registerCodexIpc } from "./domains/register-codex-ipc.js";
 import { registerConversationIpc } from "./domains/register-conversation-ipc.js";
@@ -42,7 +39,6 @@ import { EventCenterFacade, type EventCenterTimeline as CollaborationTimelineFac
 import { WorkspaceFacade as WorkspaceStore } from "../../services/support/platform/workspace/index.js";
 import { ActiveUserRuleFacade as RuleService } from "../../services/support/capabilities/rules/index.js";
 import type { PromptLibraryPort } from "../../services/support/capabilities/prompts/index.js";
-import type { AcceptanceScenePlanOutDto, CompletionReviewGateOutDto, HanliComputerAcceptanceInDto, WorkspaceCleanupRecoveryEvidenceOutDto } from "../../../contracts/services/personas/hanli/index.js";
 
 interface DesktopIpcDependencies {
   aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto;
@@ -54,8 +50,6 @@ interface DesktopIpcDependencies {
   dispatch: ConversationDispatchStore;
   collaboration: CollaborationCoordinator;
   linghuAutomation: LinghuAutomationFacade;
-  /** 首次验收由韩立准备场景，令狐不会在失败前写入介入审计。 */
-  planAcceptanceScene(goal: HanliComputerAcceptanceInDto): Promise<AcceptanceScenePlanOutDto>;
   nangong: NangongFacade;
   hanli: HanliFacade;
   personaConversations: PersonaConversationFacade;
@@ -77,8 +71,8 @@ interface DesktopIpcDependencies {
   clearTestData: () => Promise<TestDataResetResultOutDto>;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
-  /** 应用运行时与 IPC 共用同一实例，保证推送状态不会覆盖隔离空状态投影。 */
-  acceptanceEmptyTaskGroupSession: AcceptanceEmptyTaskGroupSession;
+  /** 页面验收期间禁止模型通过当前正式窗口写入业务数据。 */
+  hanliPageAcceptanceAuthorization: HanliPageAcceptanceAuthorization;
 }
 
 interface ScreenshotWindowSession {
@@ -123,17 +117,15 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, planAcceptanceScene, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, acceptanceEmptyTaskGroupSession } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, hanliPageAcceptanceAuthorization } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
-  // 临时夹具只在已签发的工作区验收中被原登记 IPC 消费，普通用户操作没有该选择来源。
-  const workspaceAcceptanceFixture = new WorkspaceAcceptanceFixture(workspaces, app.getPath("temp"));
   // 仅登记被韩立动态工具打开的短生命周期空状态窗口，正式窗口绝不进入该投影。
   let screenCaptureAttemptId = 0;
 
   installDesktopIpcAuthorizationPolicy((event, channel) => {
-    acceptanceEmptyTaskGroupSession.assertIpcAllowed(event.sender.id, channel);
+    hanliPageAcceptanceAuthorization.assertIpcAllowed(event.sender.id, channel);
   });
 
   registerRulesIpc(rules, eventCenter);
@@ -146,141 +138,28 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     return state;
   };
 
-  personaWorkflow.setComputerAcceptanceSession(async (goal, onSceneReady, onCompletionReviewReady: (gate: CompletionReviewGateOutDto) => void) => {
+  personaWorkflow.setComputerAcceptanceSession(async (goal, onStarted) => {
     const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
-    // 规划期间主窗口可能被关闭；独立场景只复用此刻冻结的可见尺寸。
-    const targetBounds = targetWindow.getBounds();
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
-    const workspaceExplorerAcceptance = goal.interactionCapabilities?.includes("workspace-explorer") === true;
-    const workspaceExplorerScenarioAcceptance = goal.interactionCapabilities?.includes("workspace-explorer-scenarios") === true;
-    const workspaceCleanupRecoveryRequired = goal.interactionCapabilities?.includes("workspace-cleanup-recovery") === true;
-    const workspaceStartupRecoveryRequired = goal.interactionCapabilities?.includes("workspace-startup-recovery") === true;
-    const workspaceStartupRecoveryEvidence = workspaceStartupRecoveryRequired
-      ? await runWorkspaceStartupRecoveryAcceptance({
-        executable: process.execPath,
-        formalProjectRoot: projectRoot,
-        formalUserDataRoot: app.getPath("userData"),
-        temporaryParent: app.getPath("temp"),
-      })
-      : undefined;
-    if (workspaceStartupRecoveryEvidence) {
-      audit.recordEvent("hanli.acceptance_workspace_startup_recovery.checked", { ...identity, ...workspaceStartupRecoveryEvidence });
-    }
-    let plan: Awaited<ReturnType<typeof planAcceptanceScene>> | null = null;
-    let run: Awaited<ReturnType<typeof runHanliAcceptanceSceneSession>> | null = null;
-    let workspaceAcceptanceEnvironment: Awaited<ReturnType<typeof workspaceAcceptanceFixture.prepare>> | null = null;
-    let workspaceAcceptanceEnvironmentFinalized = false;
-    let workspaceCleanupRecoveryEvidence: WorkspaceCleanupRecoveryEvidenceOutDto | undefined;
-    const finalizeWorkspaceAcceptanceEnvironment = async (): Promise<WorkspaceCleanupRecoveryEvidenceOutDto | undefined> => {
-      if (!workspaceAcceptanceEnvironment || workspaceAcceptanceEnvironmentFinalized) return workspaceCleanupRecoveryEvidence;
-      let cleanup = await workspaceAcceptanceEnvironment.dispose();
-      const firstFailure = cleanup.status === "failed" ? cleanup : null;
-      if (cleanup.status === "failed") {
-        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_failed", {
-          ...identity, fixtureLabel: workspaceAcceptanceEnvironment.displayName, workspaceId: cleanup.workspaceId,
-          phase: cleanup.phase, reason: cleanup.reason,
-        });
-        cleanup = await workspaceAcceptanceEnvironment.dispose();
-        if (cleanup.status === "failed") throw new Error(`临时验收工作区清理失败：${cleanup.phase}。`);
-      }
-      if (cleanup.recovered) {
-        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_recovered", {
-          ...identity, fixtureLabel: workspaceAcceptanceEnvironment.displayName, workspaceId: cleanup.workspaceId,
-        });
-      }
-      workspaceAcceptanceEnvironmentFinalized = true;
-      workspaceCleanupRecoveryEvidence = {
-        status: "passed",
-        failureSimulated: workspaceCleanupRecoveryRequired && firstFailure?.reason === "受控验收模拟临时目录被占用。",
-        firstFailurePhase: firstFailure?.phase || null,
-        firstFailureReason: firstFailure?.reason || null,
-        recovered: cleanup.recovered,
-        workspaceRegistrationRemoved: true,
-        directoryRemoved: true,
-        windowProjectionReleased: true,
-      };
-      return workspaceCleanupRecoveryEvidence;
-    };
+    onStarted();
+    hanliPageAcceptanceAuthorization.begin(targetWindow.webContents.id);
+    let run;
     try {
-      // 环境准备完成前不进入场景规划；准备入口自身通过页面原有添加动作登记工作区并确认页面可见。
-      workspaceAcceptanceEnvironment = workspaceExplorerAcceptance
-        ? await workspaceAcceptanceFixture.prepare(workspaceExplorerScenarioAcceptance ? "scenarios" : "basic", targetWindow, workspaceCleanupRecoveryRequired)
-        : null;
-      const acceptanceGoal: HanliComputerAcceptanceInDto = {
-        ...goal,
-        ...(workspaceStartupRecoveryEvidence ? { workspaceStartupRecoveryEvidence } : {}),
-        ...(workspaceExplorerAcceptance ? { workspaceAcceptanceFixture: {
-          kind: "workspace-explorer",
-          mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
-          displayName: workspaceAcceptanceEnvironment!.displayName,
-          instructions: workspaceExplorerScenarioAcceptance
-            ? ["本轮临时工作区已通过真实页面添加并确认显示；只展开本轮标签对应根目录。slow-a 与 slow-b 用于并行加载，retry-once 首次读取失败后应在原位置重试，empty 是空目录。", "超长目录名称仅用于窄窗口布局检查；临时目录会在验收结束后自动撤销。"]
-            : ["本轮临时工作区已通过真实页面添加并确认显示。", "临时目录会在验收结束后自动撤销。"],
-        } } : {}),
-        ...(goal.interactionCapabilities?.includes("cross-task-member-occupancy") ? { crossTaskMemberOccupancyFixture: {
-          kind: "cross-task-member-occupancy" as const,
-          instructions: ["仅观察令狐持有另一项在途任务时的当前状态；不得读取或修改正式协作任务。"],
-        } } : {}),
-        ...(goal.interactionCapabilities?.includes("member-idle-projection") ? { memberIdleFixture: {
-          kind: "member-idle-projection" as const,
-          instructions: ["仅观察令狐没有 currentTaskId 时的当前空闲状态；不得从完成专题历史推断或修改正式协作任务。"],
-        } } : {}),
-        ...(goal.interactionCapabilities?.includes("collaboration-state-projection") ? { collaborationStateProjectionFixture: {
-          kind: "collaboration-state-projection" as const,
-          instructions: ["仅在窗口私有状态源观察正在同步与状态暂未更新；不得读取或修改正式协作状态。"],
-        } } : {}),
-      };
-      if (workspaceExplorerAcceptance) {
-        audit.recordEvent("hanli.acceptance_workspace_fixture.reserved", {
-          ...identity,
-          fixtureLabel: workspaceAcceptanceEnvironment!.displayName,
-          mode: workspaceExplorerScenarioAcceptance ? "scenarios" : "basic",
-          capabilities: goal.interactionCapabilities || [],
-        });
-      }
-      // 首次场景准备先留下韩立审计事实，任务卡不能再以令狐准备场景作为起始记录。
-      audit.recordEvent("hanli.acceptance_scene.planning", identity);
-      plan = await planAcceptanceScene(acceptanceGoal);
-      const taskHandoff = plan.segments.some((segment) => segment.kind === "persona-conversation-with-task-handoff") ? (() => {
-        const snapshot = collaborationTimeline?.getTimelineSnapshot();
-        const groups = snapshot?.groups.filter((group) => group.topicId === acceptanceGoal.topicId && group.proposalId === acceptanceGoal.proposalId) || [];
-        return groups.length ? { version: snapshot!.version, groups: structuredClone(groups), updatedAt: snapshot!.updatedAt } : undefined;
-      })() : undefined;
-      run = await runHanliAcceptanceSceneSession({
-        goal: acceptanceGoal,
-        plan,
-        targetWindow,
-        targetBounds,
-        preloadPath,
-        rendererRoot,
-        sessions: acceptanceEmptyTaskGroupSession,
-        taskHandoff,
-        createWindow: (options) => new BrowserWindow(options),
-        execute: (acceptanceGoal, window) => hanli.executeComputerAcceptance(acceptanceGoal, window, {
-          allows: (action) => acceptanceEmptyTaskGroupSession.allowsComputerAction(window.webContents.id, action),
-          captureObservationReceipt: () => acceptanceEmptyTaskGroupSession.capturePersonaSendingObservation(window.webContents.id),
-        }, {
-          readDirectory: (relativePath) => workspaceAcceptanceFixture.getDirectoryReadEvidence(window.webContents.id, relativePath),
-        }),
-        setWorkspaceFixtureSceneActive: (active) => workspaceAcceptanceFixture.setSceneActive(active),
-        finalizeWorkspaceFixture: finalizeWorkspaceAcceptanceEnvironment,
-        onSceneReady,
-        onCompletionReviewReady,
-        record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
+      // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面验收只能观察和使用既有安全导航。
+      run = await hanli.executeComputerAcceptance(goal, targetWindow, {
+        allows: (action) => action === "persona-navigation",
       });
     } finally {
-      await finalizeWorkspaceAcceptanceEnvironment();
+      hanliPageAcceptanceAuthorization.end(targetWindow.webContents.id);
     }
-    if (!run || !plan) throw new Error("韩立验收未产生运行记录。");
-    audit.recordEvent("hanli.acceptance.real_app_checked", {
+    audit.recordEvent("hanli.acceptance.result_checked", {
       runId: run.runId,
       topicId: run.topicId,
       proposalId: run.proposalId,
       status: run.status,
       evidenceCount: run.evidenceAttachmentIds.length,
-      segmentCount: plan.segments.length,
-      resumedPostCompletionReview: goal.reviewMode === "post-completion-review",
+      mode: run.mode,
     });
     return run;
   });
@@ -405,8 +284,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
   registerSettingsIpc(settings, eventCenter);
-  registerWorkspaceIpc(workspaces, eventCenter, workspaceAcceptanceFixture);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints, acceptanceEmptyTaskGroupSession);
+  registerWorkspaceIpc(workspaces, eventCenter);
+  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
@@ -445,12 +324,6 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     const parent = BrowserWindow.fromWebContents(event.sender);
     if (request && typeof request.hideOwnerWindow !== "undefined" && typeof request.hideOwnerWindow !== "boolean") {
       throw new Error("Invalid screenshot capture mode.");
-    }
-    // 人物会话验收只回放场景私有附件，避免真实屏幕录制、截图窗口和正式附件目录参与验证。
-    if (acceptanceEmptyTaskGroupSession?.isPersonaConversationLifecycle(event.sender.id)) {
-      const completed = acceptanceEmptyTaskGroupSession.createPersonaConversationScreenshot(event.sender.id);
-      event.sender.send("desktop:screenshot-completed", completed);
-      return { dataUrl: completed.dataUrl, width: 1, height: 1 };
     }
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();
     const hideOwnerWindow = request?.hideOwnerWindow === true;

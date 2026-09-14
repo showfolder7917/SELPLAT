@@ -1,36 +1,15 @@
 import { BrowserWindow, dialog } from "electron";
 
 import { WORKSPACE_PERMISSIONS, type WorkspacePermissionValue } from "../../../../contracts/foundation/index.js";
-import type { WorkspaceDirectoryOutDto, WorkspaceStateOutDto } from "../../../../contracts/services/support/platform/workspace/index.js";
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../../services/support/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
-interface WorkspaceAcceptanceFixturePort {
-  isDirectorySelectionBlocked(senderWebContentsId: number): boolean;
-  takeDirectory(senderWebContentsId: number): string | null;
-  registerWorkspace(senderWebContentsId: number, directory: string, state: WorkspaceStateOutDto): { displayName: string; workspaceId: string } | null;
-  readDirectory(senderWebContentsId: number, workspaceId: string, relativePath: string): { fixtureLabel: string; scenario: string; result: Promise<WorkspaceDirectoryOutDto> } | null;
-}
-
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */
-export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: EventCenterFacade, acceptanceFixture?: WorkspaceAcceptanceFixturePort): void {
+export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: EventCenterFacade): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-workspaces", () => workspaces.read());
   handle("desktop:add-workspace", async (event) => {
-    // 韩立验收只能消费主进程预备的一次性目录；不存在预备目录时保留用户原生选择流程。
-    if (acceptanceFixture?.isDirectorySelectionBlocked(event.sender.id)) {
-      eventCenter.recordEvent("workspace.fixture_selection_blocked", { source: "hanli-acceptance-fixture", reason: "fixture-scene-inactive-or-consumed" });
-      return workspaces.read();
-    }
-    const acceptanceDirectory = acceptanceFixture?.takeDirectory(event.sender.id) || null;
-    if (acceptanceDirectory) {
-      const state = workspaces.add(acceptanceDirectory);
-      const fixtureRegistration = acceptanceFixture?.registerWorkspace(event.sender.id, acceptanceDirectory, state);
-      // 验收归档只记录可见标签和工作区身份，避免临时绝对路径泄露且能证明本轮新增。
-      eventCenter.recordEvent("workspace.added", { fixtureLabel: fixtureRegistration?.displayName || null, source: "hanli-acceptance-fixture", workspaceId: fixtureRegistration?.workspaceId || null });
-      return state;
-    }
     const parent = BrowserWindow.fromWebContents(event.sender);
     const options = { properties: ["openDirectory", "createDirectory"] as ("openDirectory" | "createDirectory")[] };
     const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
@@ -55,17 +34,6 @@ export function registerWorkspaceIpc(workspaces: WorkspaceStore, eventCenter: Ev
     eventCenter.recordEvent("workspace.removed", { id });
     return state;
   });
-  handle("desktop:list-workspace-directory", async (event, id: string, relativePath: string = "") => {
-    const fixtureRead = acceptanceFixture?.readDirectory(event.sender.id, id, relativePath);
-    if (!fixtureRead) return workspaces.listDirectory(id, relativePath);
-    const details = { fixtureLabel: fixtureRead.fixtureLabel, source: "hanli-acceptance-fixture", workspaceId: id, scenario: fixtureRead.scenario, relativePath };
-    // 审计仅记录受控场景身份和结果，避免临时目录绝对路径进入验收归档。
-    eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "started" });
-    void fixtureRead.result.then(
-      () => eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "succeeded" }),
-      () => eventCenter.recordEvent("workspace.directory_read", { ...details, outcome: "failed" }),
-    );
-    return fixtureRead.result;
-  });
+  handle("desktop:list-workspace-directory", (_event, id: string, relativePath: string = "") => workspaces.listDirectory(id, relativePath));
   handle("desktop:read-workspace-file", (_event, id: string, relativePath: string) => workspaces.readFilePreview(id, relativePath));
 }

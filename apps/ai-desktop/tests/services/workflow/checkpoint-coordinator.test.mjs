@@ -26,10 +26,10 @@ const { CollaborationTimelineRepository } = await loadWorkflowSource("electron/s
 
 test("真实验收每轮使用独立故障身份，普通轮询仍保持稳定去重", () => {
   const base = { runId: "run-1", proposalId: "proposal-1" };
-  const first = createOneShotFailureFingerprint({ ...base, operation: "run_real_application_acceptance", occurrenceId: "attempt-1" });
-  const second = createOneShotFailureFingerprint({ ...base, operation: "run_real_application_acceptance", occurrenceId: "attempt-2" });
+  const first = createOneShotFailureFingerprint({ ...base, operation: "run_hanli_result_acceptance", occurrenceId: "attempt-1" });
+  const second = createOneShotFailureFingerprint({ ...base, operation: "run_hanli_result_acceptance", occurrenceId: "attempt-2" });
   assert.notEqual(first, second);
-  assert.throws(() => createOneShotFailureFingerprint({ ...base, operation: "run_real_application_acceptance" }), /缺少本轮发生身份/);
+  assert.throws(() => createOneShotFailureFingerprint({ ...base, operation: "run_hanli_result_acceptance" }), /缺少本轮发生身份/);
   assert.equal(
     createOneShotFailureFingerprint({ ...base, operation: "plan_and_dispatch_one_shot" }),
     createOneShotFailureFingerprint({ ...base, operation: "plan_and_dispatch_one_shot" }),
@@ -43,11 +43,11 @@ test("旧主卡点只保存恢复关系，修复事实选择本轮最新验收�
   };
   const currentAcceptance = {
     eventId: "current-acceptance", occurredAt: "2026-09-14T02:00:00Z", flowImpact: "blocked", message: "本轮验收条件编号不一致",
-    payload: { proposalId: "proposal-1", operation: "run_real_application_acceptance" },
+    payload: { proposalId: "proposal-1", operation: "run_hanli_result_acceptance" },
   };
   const unrelated = {
     eventId: "other-proposal", occurredAt: "2026-09-14T03:00:00Z", flowImpact: "blocked", message: "其他提案验收失败",
-    payload: { proposalId: "proposal-2", operation: "run_real_application_acceptance" },
+    payload: { proposalId: "proposal-2", operation: "run_hanli_result_acceptance" },
   };
   assert.equal(selectCurrentAcceptanceFailure(oldPrimary, [oldPrimary, currentAcceptance, unrelated], "proposal-1"), currentAcceptance);
 });
@@ -98,7 +98,7 @@ test("韩立验收卡点不因原开发任务已集成而误报解除", async ()
     taskId: "original", state: "integrated", phase: "integrated", updatedAt: "2026-09-05T00:00:00Z",
     executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: { constraints: [] },
   });
-  f.event.payload.operation = "run_real_application_acceptance";
+  f.event.payload.operation = "run_hanli_result_acceptance";
   f.evolution.proposals[0].distributedTaskIds = ["original"];
   await f.run();
   // 开发任务的 integrated 不能冒充韩立复验通过，令狐必须收到真实调查修复任务。
@@ -110,7 +110,7 @@ test("韩立验收卡点不因原开发任务已集成而误报解除", async ()
 
 test("韩立范围内验收失败建立令狐新修复任务并明确完整测试复验链", async () => {
   const f = fixture();
-  f.event.payload.operation = "repair_failed_real_application_acceptance";
+  f.event.payload.operation = "repair_failed_hanli_acceptance";
   f.event.payload.acceptanceFailureKind = "product-defect";
   f.event.payload.acceptanceFailureScope = {
     decision: "within-original-acceptance",
@@ -124,7 +124,7 @@ test("韩立范围内验收失败建立令狐新修复任务并明确完整测�
   assert.equal(repair.preferredExecutorMemberId, "linghu-ancestor");
   assert.match(repair.problemStatement, /原专题“验收”/);
   assert.match(repair.confirmedIntent, /代码测试、统一测试、运行版本更新和重启健康检查/);
-  assert.match(repair.confirmedIntent, /韩立真实界面验收/);
+  assert.match(repair.confirmedIntent, /韩立结果验收/);
   assert.match(repair.confirmedIntent, /故障分类：product-defect/);
   assert.match(repair.confirmedIntent, /相同条件证明原现象已经改变/);
   assert.ok(repair.constraints.some((item) => item.includes("不得仅修改韩立验收工具")));
@@ -135,7 +135,7 @@ test("韩立范围内验收失败建立令狐新修复任务并明确完整测�
 
 test("韩立工具受阻只允许修验收能力，不能反向修改产品页面", async () => {
   const f = fixture();
-  f.event.payload.operation = "run_real_application_acceptance";
+  f.event.payload.operation = "run_hanli_result_acceptance";
   f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
   await f.run();
   const repair = f.effects.submitted[0];
@@ -415,14 +415,14 @@ test("自动托管原点复验超过三轮仍交令狐调查，不关闭流程�
 
 test("复验出现新产品失败时沿原卡点派发最新证据，重启不重复派发", async () => {
   const f = fixture();
-  Object.assign(f.event.payload, { operation: "run_real_application_acceptance", acceptanceRunId: "old-run", acceptanceFailureKind: "acceptance-capability-blocked", evidenceAttachmentIds: ["old-shot"] });
+  Object.assign(f.event.payload, { operation: "run_hanli_result_acceptance", acceptanceRunId: "old-run", acceptanceFailureKind: "acceptance-capability-blocked", evidenceAttachmentIds: ["old-shot"] });
   await f.run();
   f.collaboration.tasks[0].state = "integrated";
   f.options.resume = async () => { f.evolution.oneShotRun.status = "running"; return f.evolution; };
   await f.run();
   f.evolution.oneShotRun.status = "blocked";
   f.events.push({ ...f.event, eventId: "issue-2", occurredAt: "2026-09-05T01:00:00Z", message: "已完成与验收中冲突", payload: {
-    runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "repair_failed_real_application_acceptance",
+    runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "repair_failed_hanli_acceptance",
     acceptanceRunId: "new-run", acceptanceFailureKind: "product-defect", evidenceAttachmentIds: ["new-shot"],
     acceptanceFailureScope: { decision: "within-original-acceptance", summary: "实际仍在验收，期望不得显示已完成" },
   } });
@@ -440,7 +440,7 @@ test("复验出现新产品失败时沿原卡点派发最新证据，重启不�
 
 test("最新验收范围待确认时旧技术卡点不得派发修复", async () => {
   const f = fixture();
-  f.event.payload.operation = "run_real_application_acceptance";
+  f.event.payload.operation = "run_hanli_result_acceptance";
   f.events.push({ ...f.event, eventId: "issue-2", category: "business-exception", occurredAt: "2026-09-05T01:00:00Z", message: "新失败范围需要用户确认", payload: {
     runId: "run-1", proposalId: "proposal-1", operation: "review_acceptance_failure_scope",
   } });
@@ -499,7 +499,7 @@ test("同一运行新确认提案不被旧提案卡点拦截，也不复用旧�
   f.evolution.oneShotRun.proposalId = "proposal-2";
   const current = { ...structuredClone(f.event), eventId: "new-proposal-failure", correlationId: "topic-2",
     occurredAt: "2026-09-05T02:00:00Z", message: "隔离启动器未接入真实验收", payload: {
-      runId: "run-1", proposalId: "proposal-2", phase: "accepting", operation: "run_real_application_acceptance",
+      runId: "run-1", proposalId: "proposal-2", phase: "accepting", operation: "run_hanli_result_acceptance",
       acceptanceFailureKind: "acceptance-capability-blocked",
     } };
   f.events.push(current);
@@ -553,7 +553,7 @@ test("旧技术主卡点把最新验收证据写回原任务，重启与重复�
     ...structuredClone(f.event), eventId: "latest-failure", occurredAt: "2026-09-06T00:00:00Z",
     message: "恢复中与失败状态未验证",
     payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting",
-      operation: "run_real_application_acceptance", acceptanceFailureKind: "acceptance-capability-blocked" },
+      operation: "run_hanli_result_acceptance", acceptanceFailureKind: "acceptance-capability-blocked" },
   };
   f.events.push(latest);
   await f.run();
@@ -575,7 +575,7 @@ test("最新验收需要范围确认时旧技术主卡点不得更新或重启�
   f.events.push({
     ...structuredClone(f.event), eventId: "scope-block", category: "business-exception",
     occurredAt: "2026-09-06T00:00:00Z",
-    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "run_real_application_acceptance" },
+    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "run_hanli_result_acceptance" },
   });
   await f.run();
   assert.equal(f.effects.refreshed, undefined);

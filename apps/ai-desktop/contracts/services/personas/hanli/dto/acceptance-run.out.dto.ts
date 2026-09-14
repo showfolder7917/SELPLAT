@@ -4,7 +4,7 @@
  * 数据方向：真实输入、截图及模型逐项判断 -> 韩立/Renderer。
  * 本文件只保存事实证据，失败不会直接改变审批结果。
  */
-import type { HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
+import type { HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
 
 export interface HanliAcceptanceStepResultOutDto {
   checkId: string;
@@ -13,17 +13,20 @@ export interface HanliAcceptanceStepResultOutDto {
   status: "passed" | "failed" | "blocked";
   actual: string;
   /** 同一验收条件下对位置、遮挡、拥挤、尺寸和整体协调性的独立判断。 */
-  layoutStatus: "passed" | "failed" | "blocked";
+  layoutStatus: "passed" | "failed" | "blocked" | "not-applicable";
   /** 韩立从真实截图观察到的布局结果；不能用功能操作成功代替。 */
   layoutActual: string;
   /** 布局判断引用的最新真实截图。 */
   layoutScreenshotAttachmentId: string | null;
   screenshotAttachmentId: string | null;
+  /** 非页面代码符合性审查引用的文件、差异或测试事实；页面验收通常为空。 */
+  evidenceReferences?: string[];
   occurredAt: string;
 }
 
 export interface HanliAcceptanceRunOutDto {
-  version: 2;
+  version: 3;
+  mode: HanliAcceptanceModeValue;
   runId: string;
   topicId: string;
   proposalId: string;

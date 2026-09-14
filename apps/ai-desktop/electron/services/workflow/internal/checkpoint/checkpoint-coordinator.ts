@@ -203,9 +203,9 @@ export class CheckpointCoordinator {
       && item.payload.proposalId === state.proposalId);
     const failureEvent = selectCurrentAcceptanceFailure(event, relatedEvents, state.proposalId || "");
 
-    // 直接关联 taskId 的异常属于任务自身；只有真实应用验收或没有任务直连的验收阶段才归韩立复验。
+    // 直接关联 taskId 的异常属于任务自身；只有韩立结果验收或没有任务直连的验收阶段才归韩立复验。
     const directlyTargetsTask = Boolean(task && (event.correlationId === task.taskId || event.payload.taskId === task.taskId));
-    // 韩立验收发生在开发任务集成之后；此时 integrated 只能说明代码已交付，不能说明真实界面复验通过。
+    // 韩立验收发生在开发任务集成之后；此时 integrated 只能说明代码已交付，不能说明客户要求已经通过。
     const isAcceptanceCheckpoint = isAcceptanceFailureOperation(failureEvent.payload.operation) || (state.sourcePhase === "accepting" && !directlyTargetsTask);
     // 一次性原流程明确 completed，才是验收卡点已经通过复验的权威事实。
     const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.proposalId === state.proposalId && run.status === "completed");
@@ -412,13 +412,13 @@ function buildCheckpointRepairRequest(
     // 标题明确这是流程卡点修复而不是原专题重新实施。
     title: `修复流程卡点：${topic.title}`,
     // 原异常正文作为问题事实。
-    problemStatement: `原专题“${topic.title}”在韩立真实界面验收中未通过。\n${failureEvent.message}`,
+    problemStatement: `原专题“${topic.title}”在韩立结果验收中未通过。\n${failureEvent.message}`,
     // 修复目标必须返回原提案步骤，不代替韩立验收。
-    confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。故障分类：${acceptanceFailureKind}。${repairBoundary} 修复前必须复现原实际结果；修复后必须用相同条件证明原现象已经改变，若未改变应判定本轮修复方向错误并重新调查，不能进入打包或声称完成。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立真实界面验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(failureEvent.payload, omitCheckpointSnapshot)}`,
+    confirmedIntent: `令狐根据韩立本轮真实失败证据，调查并修复仍属于原验收范围的具体缺陷。故障分类：${acceptanceFailureKind}。${repairBoundary} 修复前必须复现原实际结果；修复后必须用相同条件证明原现象已经改变，若未改变应判定本轮修复方向错误并重新调查，不能进入打包或声称完成。代码测试、统一测试、运行版本更新和重启健康检查完成后，必须回到提案“${proposal.title}”的韩立结果验收步骤；令狐的完成说明不能代替韩立验收。\n故障事实：${JSON.stringify(failureEvent.payload, omitCheckpointSnapshot)}`,
     // 限制修复只能处理已经确认的技术故障。
     constraints: [marker, `卡点故障事实：${failureEvent.eventId}`, repairBoundary, ...blockedStepInstructions, ...[...new Set([...(topic.exclusions || []), ...(proposal.exclusions || [])])].map((exclusion) => `原确认范围排除项：${exclusion}`), "仅修复 acceptanceFailureScope 中已经判定属于原验收范围的真实新缺陷；先调查再修改，保留原任务历史和恢复点。", "前一轮结果未改变原故障时必须明确标记修复方向错误，读取新的运行证据后更换根因假设；禁止重复相同修改或用测试替身代替真实复现。", "每次交接必须点名原专题、具体验收条件、实际结果、期望结果、当前负责人和下一步动作；禁止使用无明确指向的简称。", "不得修改生产数据库、跳过代码测试或统一测试、扩大业务范围、关闭权限门禁；需要用户授权时明确报告具体受阻事项。"],
     // 验收条件要求原因、修复和验证证据全部存在。
-    acceptanceCriteria: [...blockedStepInstructions, "逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果、期望结果及故障所有者", "生产修改必须对应故障分类，且相同复现条件下原现象已经改变；只改验收工具、提示词或假测试不能证明产品缺陷修复", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立真实界面验收"],
+    acceptanceCriteria: [...blockedStepInstructions, "逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果、期望结果及故障所有者", "生产修改必须对应故障分类，且相同复现条件下原现象已经改变；只改验收工具、提示词或假测试不能证明产品缺陷修复", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立结果验收"],
     // 复用原专题已经授权的工作区。
     workspaceState: topic.workspaceState,
     // 复用原专题语言环境。

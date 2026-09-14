@@ -30,7 +30,7 @@ function evolution(acceptanceStatus) {
     proposals: [{ proposalId: "proposal-current", topicId: "topic-current", title: "修正测试台修复状态误导", content: "统一状态投影", status: "pending-acceptance", distributedTaskIds: ["task-current"], updatedAt: "2026-09-12T04:00:00.000Z" }],
     topics: [{ topicId: "topic-current", title: "修正测试台修复状态误导" }],
     deliberations: [],
-    archiveRecords: [{ proposalId: "proposal-current", eventType: "acceptance.real_app_checked", occurredAt: "2026-09-12T04:42:19.000Z", payload: { acceptanceRun: { runId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", status: acceptanceStatus } } }],
+    archiveRecords: [{ proposalId: "proposal-current", eventType: "acceptance.result_checked", occurredAt: "2026-09-12T04:42:19.000Z", payload: { acceptanceRun: { runId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", status: acceptanceStatus } } }],
   };
 }
 

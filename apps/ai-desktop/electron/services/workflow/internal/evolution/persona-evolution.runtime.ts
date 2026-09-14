@@ -1,7 +1,7 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
-import type { CompletionReviewGateOutDto, HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../../contracts/services/personas/conversation/index.js";
 import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
@@ -20,7 +20,6 @@ import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggr
 import { ProposalRevisionChain } from "../../domain/proposal-revision-chain.js";
 import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
 import { AcceptanceFailureScopePolicy } from "../../domain/acceptance-failure-scope.policy.js";
-import { resolveAcceptanceInteractionCapabilities } from "../../domain/acceptance-interaction-capability.policy.js";
 import { AcceptanceHandoffService } from "../acceptance/acceptance-handoff.service.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../../personas/hanli/index.js";
@@ -30,7 +29,6 @@ import {
   type EvolutionMutationPort,
   type EvolutionStatePort,
 } from "../../../evolution/index.js";
-import { findCompletionReviewCheckpoint } from "../../../evolution/domain/completion-review-checkpoint.js";
 import { createOneShotFailureFingerprint } from "./one-shot-failure-identity.js";
 
 export interface PersonaEvolutionRuntimeOptions {
@@ -135,7 +133,7 @@ export class PersonaEvolutionRuntime {
   /** 当前是否正在执行人工恢复，防止重复继续。 */
   #resuming = false;
   /** Electron 窗口层注入的真实应用验收执行器。 */
-  #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto, onSceneReady: () => void, onCompletionReviewReady: (gate: CompletionReviewGateOutDto) => void) => Promise<HanliAcceptanceRunOutDto>) | null = null;
+  #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>) | null = null;
 
   /**
    * 组装跨人物演化顺序以及南宫人物入口。
@@ -257,7 +255,7 @@ export class PersonaEvolutionRuntime {
     this.#continuationTimer = null;
   }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
-  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onSceneReady: () => void, onCompletionReviewReady: (gate: CompletionReviewGateOutDto) => void) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
+  setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
   /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
   notifyWorkflowChanged(): void { void this.#tick(); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
@@ -400,72 +398,6 @@ export class PersonaEvolutionRuntime {
     return this.nangongRuntime.facade.distributeProposal(proposalId, mutation);
   }
 
-  /** 只恢复业务完成后的页面复核，不重新提交已经完成的审批、分发和结果决定。 */
-  async #resumePostCompletionReview(
-    state: EvolutionStateOutDto,
-    topic: EvolutionTopicOutDto,
-    proposal: EvolutionProposalOutDto,
-    run: EvolutionOneShotRunOutDto,
-  ): Promise<EvolutionStateOutDto> {
-    const checkpoint = findCompletionReviewCheckpoint(state, proposal.proposalId);
-    if (!checkpoint) {
-      return this.#blockOneShotFailure("technical", "resume_post_completion_review", new Error("完成态复核证据不完整。"), "完成态复核证据不完整，已拒绝重复执行已完成业务。 ");
-    }
-    if (!this.#computerAcceptanceSession) {
-      return this.#blockOneShotFailure("technical", "resume_post_completion_review", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。 ");
-    }
-
-    const attemptId = randomUUID();
-    const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
-    publishAcceptance("received", "已恢复原完成态复核卡点；本轮只读检查完成后的真实页面，不重复业务完成动作。");
-    const goal: HanliComputerAcceptanceInDto = {
-      topicId: topic.topicId,
-      proposalId: proposal.proposalId,
-      title: proposal.title,
-      criteria: proposal.acceptanceCriteria,
-      reviewMode: "post-completion-review",
-      priorPhaseEvidence: {
-        summary: checkpoint.initialPass.stepResults.map((step) => `${step.actual}；布局：${step.layoutActual || "未记录"}`).join("\n"),
-        evidenceAttachmentIds: checkpoint.initialPass.evidenceAttachmentIds,
-      },
-      sceneContext: {
-        topic: { topicId: topic.topicId, status: topic.status },
-        proposal: { proposalId: proposal.proposalId, topicId: proposal.topicId, status: proposal.status },
-        oneShotRun: { topicId: run.topicId, proposalId: run.proposalId, status: run.status, phase: run.phase },
-      },
-    };
-    try {
-      this.#store.updateOneShotRun("accepting", "linghu-ancestor", "令狐老祖", "正在恢复完成态只读验收场景", topic.topicId, proposal.proposalId);
-      const result = await this.#computerAcceptanceSession(goal, () => {
-        // 完成态复核属于后台只读检查，不能重新打开可见的“韩立验收中”节点污染被验收页面。
-        this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在只读复核完成态页面", topic.topicId, proposal.proposalId);
-      }, () => {
-        throw new Error("完成态复核恢复不得再次提交业务完成动作。");
-      });
-      this.#hanli.recordAcceptanceRun(result);
-      if (result.status !== "passed") {
-        const reason = result.stepResults
-          .filter((step) => step.status !== "passed" || step.layoutStatus !== "passed")
-          .map((step) => `${step.checkId}：功能 ${step.actual}；布局 ${step.layoutActual || "未提供布局判断"}`)
-          .join("\n") || "完成态复核没有取得通过证据。";
-        publishAcceptance("failed", `完成态复核仍未通过：\n${reason}`);
-        return this.#blockOneShotFailure(result.status === "blocked" ? "technical" : "business", "resume_post_completion_review", new Error(reason), reason, {
-          acceptanceRunId: result.runId,
-          evidenceAttachmentIds: result.evidenceAttachmentIds,
-        });
-      }
-      publishAcceptance("passed", `韩立完成态只读复核通过。运行记录：${result.runId}\n截图证据：${result.evidenceAttachmentIds.join("、")}`);
-      let next = this.#store.finishOneShotRun();
-      next = this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”的业务结果和完成态页面复核均已通过，记录已归档到专题工作台。`, []);
-      if (next.automationRuntime.status === "running") this.#scheduleContinuation(1_000);
-      return next;
-    } catch (error) {
-      const reason = `韩立完成态复核恢复失败：${error instanceof Error ? error.message : String(error)}`;
-      publishAcceptance("failed", reason);
-      return this.#blockOneShotFailure("technical", "resume_post_completion_review", error, reason);
-    }
-  }
-
   /** 一次性托管只调度现有动作；每次推进到需要等待真实任务状态的位置即返回。 */
   async #advanceOneShot(): Promise<EvolutionStateOutDto> {
     const transitionLimit = Math.max(12, this.state().automationSettings.maxCorrectionRounds * 3 + 8);
@@ -486,11 +418,6 @@ export class PersonaEvolutionRuntime {
         proposal = state.proposals.at(-1)!;
         this.#store.updateOneShotRun("approving", "han-li", "韩立", "正在审批南宫婉提交的演化方向", topic.topicId, proposal.proposalId);
         continue;
-      }
-
-      // 该显式模式只可能来自已验证的历史证据，必须先于“提案已完成”终态处理。
-      if (proposal.status === "completed" && run.resumeMode === "post-completion-review") {
-        return this.#resumePostCompletionReview(state, topic, proposal, run);
       }
 
       const flowAction = this.#flow.next(proposal);
@@ -600,70 +527,60 @@ export class PersonaEvolutionRuntime {
       if (flowAction === "accept-result") {
         const attemptId = randomUUID();
         const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
-        publishAcceptance("received", `已收到令狐返回的统一测试和重启健康结果。请韩立按本次范围实际操作验收：${proposal.acceptanceCriteria.join("；")}`);
-        if (!this.#computerAcceptanceSession) return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error("韩立交互式验收会话尚未接入。"), "韩立交互式验收会话尚未接入。", {}, attemptId);
+        publishAcceptance("received", `工程门禁已经完成，请韩立按客户原要求验收：${proposal.acceptanceCriteria.join("；")}`);
         try {
-          const sceneState = this.#store.state();
-          const sceneContext = {
-            topic: { topicId: topic.topicId, status: topic.status },
-            proposal: { proposalId: proposal.proposalId, topicId: proposal.topicId, status: proposal.status },
-            oneShotRun: sceneState.oneShotRun ? {
-              topicId: sceneState.oneShotRun.topicId,
-              proposalId: sceneState.oneShotRun.proposalId,
-              status: sceneState.oneShotRun.status,
-              phase: sceneState.oneShotRun.phase,
-            } : null,
-          };
-          // 场景规划仅接收该次验收目标的只读身份事实，不能自行查询或修改演化运行状态。
-          const goal: HanliComputerAcceptanceInDto = {
-            topicId: topic.topicId,
-            proposalId: proposal.proposalId,
-            title: proposal.title,
-            criteria: proposal.acceptanceCriteria,
-            interactionCapabilities: resolveAcceptanceInteractionCapabilities(proposal),
-            sceneContext,
-          };
-          // 首次验收仍由韩立负责；场景准备是窗口层的内部能力，不能形成令狐提前介入任务的交接事实。
-          this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在准备真实界面验收场景", topic.topicId, proposal.proposalId);
-          const runResult = await this.#computerAcceptanceSession(goal, () => {
-            publishAcceptance("started", "韩立已准备验收场景，正在观察真实页面并逐步操作验收。");
-            this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在观察页面并逐步操作验收", topic.topicId, proposal.proposalId);
-          }, (gate) => {
-            // 门禁只有场景就绪与局部截图，不能作为全量验收记录提交业务完成。
-            publishAcceptance("passed", `韩立已通过完成前验收门，正在只读复核完成态页面。运行记录：${gate.runId}\n截图证据：${gate.evidenceAttachmentIds.join("、")}`);
-            this.#store.prepareOneShotCompletionReview(topic.topicId, proposal.proposalId);
-          });
-          // 先把韩立已经完成本轮验收的时间线事实收口，避免专题完成状态先于验收节点到达页面。
+          const acceptanceTasks = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view().effectiveTasks;
+          const implementationEvidence = acceptanceTasks.map((task) => ({
+            taskId: task.taskId,
+            requirement: task.snapshot,
+            resultSummary: task.resultSummary,
+            finalResult: task.finalResult,
+            unifiedTest: task.unifiedTest,
+            executions: task.executionRecords.map((record) => ({ status: record.status, changedFiles: record.changedFiles, result: record.result })),
+          }));
+          this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
+          const review = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
+          let runResult: HanliAcceptanceRunOutDto;
+          if (review === "page-experience") {
+            if (!this.#computerAcceptanceSession) throw new Error("韩立页面验收会话尚未接入。");
+            const goal: HanliComputerAcceptanceInDto = {
+              topicId: topic.topicId,
+              proposalId: proposal.proposalId,
+              title: proposal.title,
+              criteria: proposal.acceptanceCriteria,
+            };
+            runResult = await this.#computerAcceptanceSession(goal, () => {
+              publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");
+              this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在当前正式应用中验收页面", topic.topicId, proposal.proposalId);
+            });
+          } else {
+            publishAcceptance("started", "该任务不涉及页面，韩立正在只读审查代码是否符合客户原要求。");
+            runResult = review;
+          }
           if (runResult.status === "passed") {
-            publishAcceptance("passed", `韩立真实界面验收通过。运行记录：${runResult.runId}\n逐步结果：\n${runResult.stepResults.map((step) => `${step.checkId} 第${step.operationIndex + 1}步 ${step.status}：${step.actual}`).join("\n")}\n截图证据：${runResult.evidenceAttachmentIds.join("、")}`);
+            publishAcceptance("passed", `韩立${runResult.mode === "page-experience" ? "页面验收" : "代码符合性审查"}通过。运行记录：${runResult.runId}\n逐项结果：\n${runResult.stepResults.map((step) => `${step.checkId} ${step.status}：${step.actual}`).join("\n")}`);
           }
           if (runResult.status === "blocked") {
             const reason = runResult.stepResults
               .filter((step) => step.status === "blocked" || step.layoutStatus === "blocked")
-              .map((step) => `${step.checkId}：功能 ${step.actual}；布局 ${step.layoutActual || "未提供布局判断"}`)
+              .map((step) => `${step.checkId}：${step.actual}`)
               .join("\n");
             publishAcceptance("failed", `验收受阻，已上报令狐处理：\n${reason}`);
-            // 工具无法完成验收属于验收能力故障，必须与已经观察到的产品失败分开，避免令狐修改错误对象。
-            return this.#blockOneShotFailure("technical", "run_real_application_acceptance", new Error(reason), reason, {
+            return this.#blockOneShotFailure("technical", "run_hanli_result_acceptance", new Error(reason), reason, {
               evidenceAttachmentIds: runResult.evidenceAttachmentIds,
               acceptanceRunId: runResult.runId,
               acceptanceFailureKind: "acceptance-capability-blocked",
             }, runResult.runId);
           }
-          // 受阻的门禁记录没有覆盖原始条件，不能送入正式验收记录校验；其余最终记录必须先通过该校验。
           this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "failed") {
-            // 先提取本轮真实新缺陷，再决定能否沿原验收范围自动修复。
             const scopeReview = this.#acceptanceFailureScope.review(proposal, runResult);
-            // 产品失败不能覆盖同轮未能验收的条件；完整保留能力阻塞供原范围内调查，不将未验证项判成产品缺陷。
             const acceptanceBlockedSteps = runResult.stepResults.filter((step) => step.status === "blocked" || step.layoutStatus === "blocked");
             const blockedSummary = acceptanceBlockedSteps.length
-              ? `\n本轮仍未验证的条件（需单独调查能力或环境阻塞，不代表产品失败）：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：功能 ${step.actual}；布局 ${step.layoutActual || "未提供布局判断"}`).join("\n")}`
+              ? `\n本轮仍未验证的条件：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：${step.actual}`).join("\n")}`
               : "";
-            // 可见传达点名具体条件、实际结果、期望结果和范围判断，同时保留混合结果中的未验证事实。
-            const failureMessage = `韩立验收未通过。\n本轮真实新缺陷：\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
+            const failureMessage = `韩立${runResult.mode === "page-experience" ? "页面验收" : "代码符合性审查"}未通过。\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
             publishAcceptance("failed", failureMessage);
-            // 范围不明确时保留原验收点等待确认，不能把相邻问题自动写入修复任务。
             if (scopeReview.decision !== "within-original-acceptance") {
               return this.#blockOneShotFailure("business", "review_acceptance_failure_scope", new Error(scopeReview.reason), failureMessage, {
                 acceptanceRunId: runResult.runId,
@@ -672,8 +589,7 @@ export class PersonaEvolutionRuntime {
                 acceptanceBlockedSteps,
               }, runResult.runId);
             }
-            // 范围内失败进入统一卡点入口，由令狐建立新的修复任务并在完成后回到韩立复验。
-            return this.#blockOneShotFailure("technical", "repair_failed_real_application_acceptance", new Error(scopeReview.summary), failureMessage, {
+            return this.#blockOneShotFailure("technical", "repair_failed_hanli_acceptance", new Error(scopeReview.summary), failureMessage, {
               acceptanceRunId: runResult.runId,
               evidenceAttachmentIds: runResult.evidenceAttachmentIds,
               acceptanceFailureScope: scopeReview,
@@ -682,16 +598,16 @@ export class PersonaEvolutionRuntime {
             }, runResult.runId);
           }
         } catch (error) {
-          const reason = `韩立真实应用验收失败：${error instanceof Error ? error.message : String(error)}`;
+          const reason = `韩立结果验收失败：${error instanceof Error ? error.message : String(error)}`;
           publishAcceptance("failed", reason);
-          return this.#blockOneShotFailure("technical", "run_real_application_acceptance", error, reason, {}, attemptId);
+          return this.#blockOneShotFailure("technical", "run_hanli_result_acceptance", error, reason, {}, attemptId);
         }
         continue;
       }
 
       if (flowAction === "complete" || topic.status === "completed") {
         state = this.#store.finishOneShotRun();
-        state = this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”已通过韩立审批、任务执行、令狐统一测试和韩立真实界面验收，全部记录已归档到专题工作台。`, []);
+        state = this.#store.appendConversation("nangong", `本轮演化已经完整完成：课题“${topic.title}”已通过韩立审批、任务执行、工程门禁和韩立结果验收，全部记录已归档到专题工作台。`, []);
         if (state.automationRuntime.status === "running") this.#scheduleContinuation(1_000);
         return state;
       }

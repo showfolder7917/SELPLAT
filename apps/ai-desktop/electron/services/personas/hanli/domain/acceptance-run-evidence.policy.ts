@@ -30,22 +30,25 @@ export function inspectAcceptanceRunEvidence(run: HanliAcceptanceRunOutDto): Acc
     const matches = run.stepResults.filter((step) => step.checkId === criterionId);
     const step = matches[0];
     const hasActual = Boolean(step?.actual?.trim());
-    const hasLayoutActual = Boolean(step?.layoutActual?.trim());
+    const layoutApplicable = run.mode === "page-experience";
+    const hasLayoutActual = !layoutApplicable || Boolean(step?.layoutActual?.trim());
     const functionalScreenshotRegistered = Boolean(step?.screenshotAttachmentId && evidence.has(step.screenshotAttachmentId));
-    const layoutScreenshotRegistered = Boolean(step?.layoutScreenshotAttachmentId && evidence.has(step.layoutScreenshotAttachmentId));
+    const layoutScreenshotRegistered = !layoutApplicable || Boolean(step?.layoutScreenshotAttachmentId && evidence.has(step.layoutScreenshotAttachmentId));
     const valid = matches.length === 1
       && step !== undefined
       && ["passed", "failed", "blocked"].includes(step.status)
       && hasActual
-      && functionalScreenshotRegistered
-      && ["passed", "failed", "blocked"].includes(step.layoutStatus)
+      && (layoutApplicable ? functionalScreenshotRegistered : Boolean(step?.evidenceReferences?.length))
+      && (layoutApplicable
+        ? ["passed", "failed", "blocked"].includes(step.layoutStatus)
+        : step.layoutStatus === "not-applicable")
       && hasLayoutActual
       && layoutScreenshotRegistered;
     return { criterionId, resultCount: matches.length, hasActual, hasLayoutActual, functionalScreenshotRegistered, layoutScreenshotRegistered, valid };
   });
-  const hasValidVersion = run.version === 2;
+  const hasValidVersion = run.version === 3;
   const hasInteractionSteps = run.stepResults.length > 0;
-  const hasEvidence = run.evidenceAttachmentIds.length > 0;
+  const hasEvidence = run.mode === "code-conformance" || run.evidenceAttachmentIds.length > 0;
   // 统一生成不合格条件编号，避免不同调用方基于同一诊断再次推导而出现审计与拒绝原因不一致。
   const invalidCriterionIds = criteria.filter((criterion) => !criterion.valid).map((criterion) => criterion.criterionId);
   return { valid: hasValidVersion && hasInteractionSteps && hasEvidence && invalidCriterionIds.length === 0, hasEvidence, hasInteractionSteps, hasValidVersion, criteria, invalidCriterionIds };

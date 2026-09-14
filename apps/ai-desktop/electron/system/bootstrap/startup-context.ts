@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,10 +6,8 @@ import { app, BrowserWindow } from "electron";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 
 import { resolveApplicationName, resolveAppVariant, resolveProjectRoot } from "../config/app-config.js";
-import { resolveAiMemoryPaths as resolveConfiguredAiMemoryPaths } from "../config/ai-memory-path-resolver.js";
 import { createBusinessAuditArchive, EventCenterFacade } from "../../services/support/capabilities/event-center/index.js";
 import { WorkspaceFacade } from "../../services/support/platform/workspace/index.js";
-import { isDescendantOrSame, resolveBoundaryPath } from "./path-boundary.js";
 import { resolvePublishedRuntimeSourceSha } from "./published-runtime-source.manifest.js";
 
 /** 启动前解析出的稳定环境；后续 Bootstrap 禁止再次读取启动参数推断另一套路径。 */
@@ -20,8 +18,6 @@ export interface StartupContext {
   readonly projectPaths: ReturnType<typeof resolveApplicationDataPaths>;
   readonly preloadPath: string;
   readonly healthCheckFile: string | null;
-  /** 隔离子进程只执行工作区启动回收验证，不装配正式运行时或创建 Renderer。 */
-  readonly workspaceRecoveryCheck: { resultFile: string; temporaryRoot: string } | null;
   /** 当前进程实际装载的候选源码提交；发布重启验收必须与批次集成提交一致。 */
   readonly runtimeSourceSha: string | null;
   readonly workspaces: WorkspaceFacade;
@@ -39,7 +35,6 @@ export function createStartupContext(): StartupContext {
 
   const configuredProjectRoot = resolveProjectRoot();
   const projectPaths = resolveApplicationDataPaths({ selplatRoot: configuredProjectRoot, applicationName });
-  auditAcceptanceIsolation({ applicationName, projectRoot: configuredProjectRoot, projectPaths });
   const workspaces = new WorkspaceFacade(path.join(app.getPath("userData"), "workspace-profiles.json"), configuredProjectRoot);
   const workspaceState = workspaces.read();
   const selectedWorkspace = workspaceState.roots.find((root) => root.id === workspaceState.primaryId);
@@ -49,10 +44,6 @@ export function createStartupContext(): StartupContext {
   }
 
   const projectRoot = path.resolve(selectedWorkspace.path);
-  if (readArgument("--ai-desktop-acceptance-isolation-root=")
-    && resolveBoundaryPath(projectRoot) !== resolveBoundaryPath(configuredProjectRoot)) {
-    throw new Error("隔离验收工作区不得在启动后切换项目根。");
-  }
   const eventCenter = new EventCenterFacade(createBusinessAuditArchive(projectPaths.sourceRoot, projectPaths.buildRoot, projectPaths.archiveLogRoot));
   eventCenter.installProcessExceptionBoundary();
 
@@ -60,18 +51,10 @@ export function createStartupContext(): StartupContext {
     ?.slice("--ai-desktop-health-check-file=".length)
     || process.env.AI_DESKTOP_HEALTH_CHECK_FILE
     || null;
-  const workspaceRecoveryCheckFile = readArgument("--ai-desktop-workspace-recovery-check-file=");
-  const workspaceRecoveryTemporaryRoot = readArgument("--ai-desktop-workspace-recovery-temp-root=");
-  const workspaceRecoveryCheck = workspaceRecoveryCheckFile && workspaceRecoveryTemporaryRoot
-    ? { resultFile: path.resolve(workspaceRecoveryCheckFile), temporaryRoot: path.resolve(workspaceRecoveryTemporaryRoot) }
-    : null;
-  if ((workspaceRecoveryCheckFile || workspaceRecoveryTemporaryRoot) && !workspaceRecoveryCheck) {
-    throw new Error("隔离工作区重启检查参数不完整。");
-  }
   // 候选包健康检查必须与已运行的桌面应用并存，不能被正常启动的单实例门禁提前退出。
-  const ownsApplicationInstance = healthCheckFile || workspaceRecoveryCheck ? true : app.requestSingleInstanceLock();
-  if (!healthCheckFile && !workspaceRecoveryCheck && !ownsApplicationInstance) app.quit();
-  else if (!healthCheckFile && !workspaceRecoveryCheck) app.on("second-instance", () => {
+  const ownsApplicationInstance = healthCheckFile ? true : app.requestSingleInstanceLock();
+  if (!healthCheckFile && !ownsApplicationInstance) app.quit();
+  else if (!healthCheckFile) app.on("second-instance", () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (!window) return;
     if (window.isMinimized()) window.restore();
@@ -89,7 +72,6 @@ export function createStartupContext(): StartupContext {
     projectPaths,
     preloadPath: path.join(electronDirectory, "preload", "preload.cjs"),
     healthCheckFile,
-    workspaceRecoveryCheck,
     runtimeSourceSha,
     workspaces,
     eventCenter,
@@ -97,57 +79,6 @@ export function createStartupContext(): StartupContext {
   };
 }
 
-/**
- * 在任何可写服务创建前校验验收进程的全部已知运行根。
- * 正式启动没有本参数，因此保持原有路径和行为。
- */
-function auditAcceptanceIsolation(options: {
-  applicationName: string;
-  projectRoot: string;
-  projectPaths: ReturnType<typeof resolveApplicationDataPaths>;
-}): void {
-  const isolationRootArgument = readArgument("--ai-desktop-acceptance-isolation-root=");
-  if (!isolationRootArgument) return;
-  if (!app.isPackaged) throw new Error("隔离验收只允许启动已打包的 AI Desktop。");
-  const isolationRoot = resolveBoundaryPath(isolationRootArgument);
-  const protectedProjectRoot = requireArgument("--ai-desktop-acceptance-protected-project-root=");
-  const protectedUserDataRoot = requireArgument("--ai-desktop-acceptance-protected-user-data-root=");
-  const userDataRoot = path.resolve(app.getPath("userData"));
-  const database = resolveConfiguredAiMemoryPaths(options.projectRoot);
-  const auditPath = path.join(isolationRoot, "path-audit", "runtime-paths.json");
-  const workspaceRecoveryCheckFile = readArgument("--ai-desktop-workspace-recovery-check-file=");
-  const workspaceRecoveryTemporaryRoot = readArgument("--ai-desktop-workspace-recovery-temp-root=");
-  const writablePaths = [
-    options.projectRoot, database.databasePath, `${database.databasePath}-wal`, `${database.databasePath}-shm`,
-    path.join(userDataRoot, "ai-memory-database-state.json"), path.join(userDataRoot, "workspace-profiles.json"),
-    path.join(userDataRoot, "rule-workspace"), path.join(userDataRoot, "codex-home"), path.join(userDataRoot, "collaboration"),
-    path.join(userDataRoot, "desktop-settings.json"), path.join(userDataRoot, "trusted-project-commands.json"),
-    path.join(userDataRoot, "conversation-dispatch.json"), path.join(userDataRoot, "corpus-semantic-backfill-workspace"),
-    path.join(userDataRoot, "corpus-semantic-backfill-session.json"), options.projectPaths.buildRoot, options.projectPaths.cacheRoot,
-    options.projectPaths.archiveLogRoot, options.projectPaths.temporaryMaterialsRoot, auditPath,
-    ...(workspaceRecoveryCheckFile ? [workspaceRecoveryCheckFile] : []),
-    ...(workspaceRecoveryTemporaryRoot ? [workspaceRecoveryTemporaryRoot] : []),
-  ].map(resolveBoundaryPath);
-  const protectedRoots = [protectedProjectRoot, protectedUserDataRoot].map(resolveBoundaryPath);
-  for (const candidate of writablePaths) {
-    if (!isDescendantOrSame(isolationRoot, candidate) || protectedRoots.some((root) => isDescendantOrSame(root, candidate))) {
-      throw new Error(`隔离验收路径越界，拒绝启动：${candidate}`);
-    }
-  }
-  process.env.AI_DESKTOP_ACCEPTANCE_ISOLATED = "1";
-  mkdirSync(path.dirname(auditPath), { recursive: true });
-  writeFileSync(auditPath, `${JSON.stringify({
-    mode: "acceptance-isolated", recordedAt: new Date().toISOString(), isolationRoot,
-    writablePaths, readonlyPaths: [path.join(process.resourcesPath, "prompts"), path.join(process.resourcesPath, "ruleengine"), path.join(app.getAppPath(), "dist", "developer")],
-  }, null, 2)}\n`, "utf8");
-}
-
 function readArgument(prefix: string): string | null {
   return process.argv.find((argument) => argument.startsWith(prefix))?.slice(prefix.length) || null;
-}
-
-function requireArgument(prefix: string): string {
-  const value = readArgument(prefix);
-  if (!value) throw new Error(`隔离验收缺少启动参数：${prefix}`);
-  return value;
 }

@@ -5,7 +5,6 @@ import type { HanliAcceptanceRunOutDto, HanliTopicCandidateOutDto } from "../../
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
 import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
-import { findCompletionReviewCheckpoint } from "../domain/completion-review-checkpoint.js";
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
@@ -151,28 +150,6 @@ export class EvolutionStateStore {
     }, { phase, actor, actorName, action, status: "running", nextOwner: actorName });
   }
 
-  /** 门禁通过后只投影完成态供只读复核；提案仍是 pending-acceptance，不能提前决定结果。 */
-  prepareOneShotCompletionReview(topicId: string, proposalId: string): EvolutionStateOutDto {
-    const current = this.#state.oneShotRun;
-    const proposal = this.#state.proposals.find((item) => item.proposalId === proposalId);
-    if (!current || current.status !== "running" || current.topicId !== topicId || current.proposalId !== proposalId
-      || proposal?.topicId !== topicId || proposal.status !== "pending-acceptance") {
-      throw new Error("当前运行不能进入完成态只读复核。");
-    }
-    const now = new Date().toISOString();
-    return this.#commit("one-shot.completion_review_ready", topicId, proposalId, (state) => {
-      const run = state.oneShotRun!;
-      run.phase = "accepting";
-      run.actor = "han-li";
-      run.actorName = "韩立";
-      run.action = "正在只读复核完成态页面";
-      run.blockingReason = null;
-      // 仅供时间线投影完成态预览；真正完成仍由完整验收记录和结果决定产生。
-      run.resumeMode = "post-completion-review";
-      run.updatedAt = now;
-    }, { phase: "accepting", actor: "han-li", actorName: "韩立", action: "正在只读复核完成态页面", status: "running", nextOwner: "han-li" });
-  }
-
   finishOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status !== "running") return this.state();
@@ -203,10 +180,7 @@ export class EvolutionStateStore {
       run.actorName = "系统";
       run.action = "等待处理无法自动完成的阻塞";
       run.blockingReason = required(reason, "一次性运行阻塞原因", 8_000);
-      // 业务已完成时只能恢复最后的只读复核，其他阻塞继续使用原阶段恢复。
-      run.resumeMode = current.proposalId && findCompletionReviewCheckpoint(state, current.proposalId)
-        ? "post-completion-review"
-        : "standard";
+      run.resumeMode = "standard";
       run.updatedAt = now;
       run.completedAt = now;
       state.automationRuntime.status = "blocked";
@@ -264,14 +238,11 @@ export class EvolutionStateStore {
     const current = this.#state.oneShotRun;
     if (!current || current.status === "completed" || (current.status !== "blocked" && this.#state.automationRuntime.status !== "paused") || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");
     const proposal = requireProposal(this.#state, current.proposalId);
-    const completionReview = current.resumeMode === "post-completion-review"
-      ? findCompletionReviewCheckpoint(this.#state, proposal.proposalId)
-      : null;
     const redistributing = proposal.status === "approved" && proposal.distributedTaskIds.length === 0;
-    if (!completionReview && !redistributing && !["pending-approval", "supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
+    if (!redistributing && !["pending-approval", "supplement-required", "rejected", "blocked", "pending-acceptance", "executing", "verifying"].includes(proposal.status)) throw new Error("当前提案状态不允许从卡点恢复。");
     // 依据提案的持久事实回到原阶段；验收故障不得重新分析、分发已经完成的任务。
     const approving = proposal.status === "pending-approval";
-    const accepting = proposal.status === "pending-acceptance" || Boolean(completionReview);
+    const accepting = proposal.status === "pending-acceptance";
     const executing = proposal.status === "executing" || proposal.status === "verifying";
     const phase = redistributing ? "distributing" : approving ? "approving" : accepting ? "accepting" : executing ? (proposal.status === "verifying" ? "testing" : "executing") : "revising";
     const now = new Date().toISOString();
@@ -281,7 +252,7 @@ export class EvolutionStateStore {
       run.phase = phase;
       run.actor = approving || accepting ? "han-li" : "nangong-wan";
       run.actorName = approving || accepting ? "韩立" : "南宫婉";
-      run.action = completionReview ? "正在从完成态复核卡点继续只读验收" : redistributing ? "正在从原分发卡点重新拆分并分发任务" : approving ? "正在从原审批卡点重新判断南宫婉提交的方向" : accepting ? "正在从原验收卡点继续真实界面验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
+      run.action = redistributing ? "正在从原分发卡点重新拆分并分发任务" : approving ? "正在从原审批卡点重新判断南宫婉提交的方向" : accepting ? "正在从原验收卡点继续结果验收" : executing ? "正在从原任务状态继续流程" : "正在重新调查韩立退回项并核对可验证的新事实";
       run.blockingReason = null;
       run.updatedAt = now;
       run.completedAt = null;
@@ -574,7 +545,7 @@ export class EvolutionStateStore {
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, run.proposalId);
     if (proposal.topicId !== run.topicId) throw new Error("真实验收记录与专题不一致。 ");
-    return this.#commit("acceptance.real_app_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
+    return this.#commit("acceptance.result_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
   }
 
   newConversation(): EvolutionStateOutDto {
@@ -631,23 +602,26 @@ export class EvolutionStateStore {
   decideResult(proposalId: string, decision: EvolutionApprovalDecisionValue, advice: string, source: EvolutionApprovalSourceValue = "manual-user"): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
-    const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.real_app_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
-    const hasCompleteLayoutEvidence = Boolean(run) && run!.criteria.every((_criterion, index) => {
+    const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.result_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
+    const hasCompleteAcceptanceEvidence = Boolean(run) && run!.criteria.every((_criterion, index) => {
       const matches = run!.stepResults.filter((step) => step.checkId === `criterion-${index + 1}`);
       const step = matches[0];
+      const pageEvidence = run!.mode === "page-experience"
+        ? Boolean(step?.screenshotAttachmentId)
+          && run!.evidenceAttachmentIds.includes(step!.screenshotAttachmentId!)
+          && step?.layoutStatus === "passed"
+          && Boolean(step.layoutActual?.trim())
+          && Boolean(step.layoutScreenshotAttachmentId)
+          && run!.evidenceAttachmentIds.includes(step.layoutScreenshotAttachmentId!)
+        : step?.layoutStatus === "not-applicable" && Boolean(step.evidenceReferences?.length);
       return matches.length === 1
         && step !== undefined
         && step.status === "passed"
         && Boolean(step.actual?.trim())
-        && Boolean(step.screenshotAttachmentId)
-        && run!.evidenceAttachmentIds.includes(step.screenshotAttachmentId!)
-        && step.layoutStatus === "passed"
-        && Boolean(step.layoutActual?.trim())
-        && Boolean(step.layoutScreenshotAttachmentId)
-        && run!.evidenceAttachmentIds.includes(step.layoutScreenshotAttachmentId!);
+        && pageEvidence;
     });
-    if (decision === "approved" && (run?.version !== 2 || run.status !== "passed" || !hasCompleteLayoutEvidence)) {
-      throw new Error("韩立必须先完成包含功能与布局证据的真实应用检查且全部通过，才能验收通过。 ");
+    if (decision === "approved" && (run?.version !== 3 || run.status !== "passed" || !hasCompleteAcceptanceEvidence)) {
+      throw new Error("韩立必须先完成适用的页面验收或代码符合性审查且全部通过，才能验收通过。 ");
     }
     const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed" || step.layoutStatus !== "passed").map((step) => {
       return {
@@ -655,13 +629,13 @@ export class EvolutionStateStore {
         runId: run.runId,
 
         checkId: step.checkId,
-        target: "真实应用界面",
+        target: run.mode === "page-experience" ? "真实应用界面" : "客户要求与实际代码",
         severity: step.status === "blocked" || step.layoutStatus === "blocked" ? "blocking" : "major",
         reproductionOperations: [...(run.interactionSteps || []), ...run.stepResults]
           .sort((left, right) => left.operationIndex - right.operationIndex)
           .slice(0, step.operationIndex + 1)
           .map((item) => structuredClone(item.operation)),
-        actual: [step.status !== "passed" ? step.actual : "", step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : ""].filter(Boolean).join("；"),
+        actual: [step.status !== "passed" ? step.actual : "", run.mode === "page-experience" && step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : ""].filter(Boolean).join("；"),
         expected: run.criteria?.[Number(step.checkId.replace("criterion-", "")) - 1] || "符合专题验收条件",
         screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, step.layoutScreenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
       };
@@ -892,20 +866,7 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
   } = state;
   const distribution = migrateDistributionValidation(current as EvolutionStateOutDto);
   const retiredSwitchFound = [_retiredEvolution, _retiredNangongApproval, _retiredLinghuApproval, _retiredExecution].some((value) => typeof value === "boolean");
-  const resumeMode = migrateOneShotResumeMode(distribution.state);
-  return { state: resumeMode.state, changed: retiredSwitchFound || distribution.changed || resumeMode.changed };
-}
-
-/** 为旧状态补齐恢复模式，使升级后仍能从原卡点继续而不重建任务。 */
-function migrateOneShotResumeMode(state: EvolutionStateOutDto): { state: EvolutionStateOutDto; changed: boolean } {
-  const run = state.oneShotRun;
-  if (!run) return { state, changed: false };
-  const resumeMode = run.status === "blocked"
-    ? run.proposalId && findCompletionReviewCheckpoint(state, run.proposalId) ? "post-completion-review" : "standard"
-    : run.status === "completed" ? null : run.resumeMode;
-  // 早期版本把完成态复核的 failed 结果误记为 standard；加载时按不可变验收证据纠正。
-  if (run.resumeMode === resumeMode) return { state, changed: false };
-  return { state: { ...state, oneShotRun: { ...run, resumeMode } }, changed: true };
+  return { state: distribution.state, changed: retiredSwitchFound || distribution.changed };
 }
 
 /** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
@@ -1019,8 +980,7 @@ function archiveTitle(reason: string): string {
     "proposal.distributed": "南宫婉分发实施任务",
     "proposal.progress_reconciled": "专题执行状态更新",
     "proposal.result_decided": "韩立完成实施结果验收",
-    "acceptance.plan_generated": "韩立生成真实界面验收计划",
-    "acceptance.real_app_checked": "韩立完成真实应用界面检查",
+    "acceptance.result_checked": "韩立完成适用的结果验收",
     "conversation.topic_group_replied": "专题群收到用户消息与南宫婉回复",
     "one-shot.activity": "一次性演化当前动作更新",
     "one-shot.completed": "一次性演化完整结束",

@@ -81,7 +81,7 @@ function confirmationUpdatedAt(evolution: EvolutionStateOutDto): string {
 }
 
 function readLatestAcceptance(evolution: EvolutionStateOutDto, proposalId: string): CurrentTopicAcceptanceOutDto | null {
-  const record = evolution.archiveRecords.filter((item) => item.proposalId === proposalId && item.eventType === "acceptance.real_app_checked")
+  const record = evolution.archiveRecords.filter((item) => item.proposalId === proposalId && item.eventType === "acceptance.result_checked")
     .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
   const acceptanceRun = record?.payload.acceptanceRun;
   if (!record || !acceptanceRun || typeof acceptanceRun !== "object") return null;
@@ -96,9 +96,9 @@ function latestEffectiveTask(tasks: CollaborationTaskOutDto[]): CollaborationTas
 
 function stageSummary(status: CurrentTopicStageOutDto["status"], executionSummary: string, acceptance: CurrentTopicAcceptanceOutDto | null): string {
   if (status === "failed-pending-repair") return acceptance ? `最新真实验收 ${acceptance.runId} 未通过，等待按原恢复点处理。` : executionSummary;
-  if (status === "pending-acceptance") return "当前有效任务已经完成，等待韩立开始真实界面验收。";
-  if (status === "accepting") return "韩立已开始本轮真实界面验收。";
-  if (status === "completed") return "韩立真实界面验收已经通过，专题已完成。";
+  if (status === "pending-acceptance") return "当前有效任务已经完成，等待韩立选择适用的结果验收方式。";
+  if (status === "accepting") return "韩立已开始本轮结果验收。";
+  if (status === "completed") return "韩立结果验收已经通过，专题已完成。";
   return executionSummary;
 }
 

@@ -8,7 +8,7 @@ import type {
   CollaborationTimelineGroupOutDto,
   // 时间线节点：筛选恢复入口并生成节点显示信息。
   CollaborationTimelineNodeOutDto,
-  // 一次性运行：把完成态复核卡点投影到原专题，而不改写历史时间线。
+  // 一次性运行：把当前卡点投影到原专题，而不改写历史时间线。
   EvolutionOneShotRunOutDto,
   // 界面语言：选择中文或日文文案。
   LocaleValue,
@@ -24,15 +24,6 @@ export function currentTaskGroupPresentation(
   if (!belongsToCurrentRun) return group;
   if (oneShotRun.status === "blocked") {
     return group.status === "blocked" ? group : { ...group, status: "blocked" };
-  }
-  if (oneShotRun.status === "running" && oneShotRun.resumeMode === "post-completion-review") {
-    return {
-      ...group,
-      status: "completed",
-      summary: "本专题已完成",
-      nextStep: "本专题已完成",
-      failureNextStep: null,
-    };
   }
   return group;
 }

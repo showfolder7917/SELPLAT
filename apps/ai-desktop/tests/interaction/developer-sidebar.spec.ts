@@ -129,7 +129,7 @@ test("完成态复核卡点在原卡显示继续入口且恢复开始后立即�
       actorName: "韩立",
       action: "success",
       blockingReason: "完成态页面复核仍需继续。",
-      resumeMode: "post-completion-review",
+      resumeMode: "standard",
       startedAt: now,
       updatedAt: now,
       completedAt: now,

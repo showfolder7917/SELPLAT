@@ -136,8 +136,7 @@ test("专题已经恢复运行时不显示旧一次性运行的恢复入口", ()
   assert.equal(render({ groupStatus: "completed" }), "");
 });
 
-test("业务已完成时只有正式登记的完成态复核卡点显示恢复入口", () => {
-  assert.match(render({ proposalStatus: "completed", resumeMode: "post-completion-review" }), /从卡点继续/);
+test("业务已完成时不再显示二次复核恢复入口", () => {
   assert.equal(render({ proposalStatus: "completed", resumeMode: "standard" }), "");
   assert.equal(render({ pending: true, proposalStatus: "completed", resumeMode: null, runStatus: "running", groupStatus: "completed" }), "");
 });

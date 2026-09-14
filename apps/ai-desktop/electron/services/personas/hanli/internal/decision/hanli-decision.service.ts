@@ -1,9 +1,11 @@
 
 import { reviewDesignCoverage } from "../../domain/hanli-design-review.policy.js";
+import { randomUUID } from "node:crypto";
 import type { CollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
+import type { HanliAcceptanceRunOutDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
 export interface HanliDecisionDependencies {
   /** Evolution 权威状态读取端口。 */
@@ -69,6 +71,65 @@ export class HanliDecisionService {
     };
   }
 
+  /** 先按客户可感知页面判断验收类型；非页面任务由韩立只读核对代码是否满足原要求。 */
+  async reviewResultAcceptance(proposal: EvolutionProposalOutDto, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto> {
+    const state = this.#dependencies.store.state();
+    const topic = state.topics.find((item) => item.topicId === proposal.topicId);
+    const prompt = this.#dependencies.prompts.render("hanli.result-acceptance", {
+      acceptanceContextJson: JSON.stringify({ topic, proposal, implementationEvidence }),
+    });
+    const value = await this.#askForStructuredResult(prompt, state);
+    if (value.mode === "page-experience") return "page-experience";
+    if (value.mode !== "code-conformance" || !Array.isArray(value.findings)) {
+      throw new Error("韩立没有返回有效的结果验收类型和逐项结论。");
+    }
+    const findings = value.findings as Array<Record<string, unknown>>;
+    const steps = proposal.acceptanceCriteria.map((criterion, index) => {
+      const finding = findings.find((item) => item.criterionId === `criterion-${index + 1}`);
+      const status = finding?.status;
+      const actual = typeof finding?.actual === "string" ? finding.actual.trim() : "";
+      const references = Array.isArray(finding?.evidenceReferences)
+        ? finding.evidenceReferences.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim())
+        : [];
+      if (!["passed", "failed", "blocked"].includes(String(status)) || !actual || references.length === 0) {
+        throw new Error(`韩立代码符合性审查缺少 criterion-${index + 1} 的明确结论或代码/测试依据。`);
+      }
+      return {
+        checkId: `criterion-${index + 1}`,
+        operationIndex: index,
+        operation: { type: "judgement" as const, criterionId: `criterion-${index + 1}` },
+        status: status as "passed" | "failed" | "blocked",
+        actual: `${criterion}\n${actual}`,
+        layoutStatus: "not-applicable" as const,
+        layoutActual: "非页面任务，不执行布局验收。",
+        layoutScreenshotAttachmentId: null,
+        screenshotAttachmentId: null,
+        evidenceReferences: references,
+        occurredAt: new Date().toISOString(),
+      };
+    });
+    const status = steps.some((item) => item.status === "failed") ? "failed"
+      : steps.some((item) => item.status === "blocked") ? "blocked" : "passed";
+    const now = new Date().toISOString();
+    return {
+      version: 3,
+      mode: "code-conformance",
+      runId: `hanli-code-review-${randomUUID()}`,
+      topicId: proposal.topicId,
+      proposalId: proposal.proposalId,
+      criteria: [...proposal.acceptanceCriteria],
+      status,
+      windowTitle: "代码符合性审查",
+      initialBounds: { x: 0, y: 0, width: 0, height: 0 },
+      finalBounds: { x: 0, y: 0, width: 0, height: 0 },
+      interactionSteps: [],
+      stepResults: steps,
+      evidenceAttachmentIds: [],
+      startedAt: now,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
   /** 韩立自己修正偶发的结构化输出错误；三次仍无效才交回统一异常中心。 */
   async #askForStructuredDecision(prompt: string, state: EvolutionStateOutDto): Promise<Record<string, unknown>> {
     let request = prompt;
@@ -83,6 +144,18 @@ export class HanliDecisionService {
       }
     }
     throw new Error(`韩立连续 3 次未返回有效的结构化判断：${lastError}`);
+  }
+
+  async #askForStructuredResult(prompt: string, state: EvolutionStateOutDto): Promise<Record<string, unknown>> {
+    let request = prompt;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const response = await this.#dependencies.askHanli(request, state);
+      try { return parseJsonObject(response); }
+      catch (error) {
+        request = `${prompt}\n\n上一次结果无法处理：${error instanceof Error ? error.message : String(error)}。请只返回符合约定的完整 JSON。`;
+      }
+    }
+    throw new Error("韩立连续 3 次未返回有效的结果验收判断。");
   }
 
 }

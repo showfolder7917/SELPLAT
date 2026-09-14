@@ -1,6 +1,6 @@
 const ACCEPTANCE_OPERATIONS = new Set([
-  "run_real_application_acceptance",
-  "repair_failed_real_application_acceptance",
+  "run_hanli_result_acceptance",
+  "repair_failed_hanli_acceptance",
   "review_acceptance_failure_scope",
 ]);
 

@@ -114,6 +114,11 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#approvals.decide(proposalId, decision.decision, decision.advice, "automatic-han-li", []);
   }
 
+  /** 页面型只返回交互验收路由；非页面型直接完成只读代码符合性审查。 */
+  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto> {
+    return this.#decision.reviewResultAcceptance(requireProposal(this.#store.state(), proposalId), implementationEvidence);
+  }
+
   /** 根据已保存人工偏好执行受控自动审批；缺少完整事实或历史依据时退回补充。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto {
     const state = this.#store.state();
@@ -163,7 +168,9 @@ export class HanliApplicationService implements HanliApplicationPort {
     // 全部验收条件通过后，韩立才能作出最终通过决定。
     const decision: DecideHanliResultInDto["decision"] = "approved";
     // 可见说明明确指出通过依据来自真实用户路径。
-    const advice = "韩立已按真实用户路径完成检查，全部适用项目通过。";
+    const advice = run.mode === "page-experience"
+      ? "韩立已按真实用户路径完成页面检查，全部适用项目通过。"
+      : "韩立已只读审查代码、变更范围与测试依据，确认实现符合原客户要求。";
     return this.#decideResult(run.proposalId, {
       mutation: {
         expectedStateVersion,

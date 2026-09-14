@@ -809,121 +809,6 @@ test("韩立审批输出异常后从原审批卡点继续", () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("完成态复核受阻后只从原复核卡点继续", async () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "completion-review-resume-"));
-  try {
-    const store = evolutionStore(path.join(directory, "state.json"));
-    const runId = store.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
-    let state = store.createTopic(topicRequest("完成态复核恢复"));
-    const topicId = state.activeTopicId;
-    state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
-    const proposalId = state.proposals.at(-1).proposalId;
-    store.updateOneShotRun("accepting", "han-li", "韩立", "正在执行完成前验收", topicId, proposalId);
-    store.markProgress(proposalId, "pending-acceptance", "等待验收");
-    const initialPass = computerRun("same-review-run", topicId, proposalId, "passed", "pre-shot");
-    store.recordAcceptanceRun(initialPass);
-    store.decideResult(proposalId, "approved", "完成前验收通过", "automatic-han-li");
-    store.recordAcceptanceRun(computerRun("same-review-run", topicId, proposalId, "blocked", "blocked-shot"));
-    state = store.blockOneShotRun("完成态页面复核连接中断");
-    assert.equal(state.oneShotRun.resumeMode, "post-completion-review");
-
-    const resultDecisionCount = state.archiveRecords.filter((record) => record.eventType === "proposal.result_decided").length;
-    const facade = new PersonaEvolutionRuntime({
-      store,
-      collaboration: { state() { return { tasks: [], members: [] }; } },
-      conversation,
-      recordEvent: () => undefined,
-    });
-    let receivedGoal;
-    let completionCallbacks = 0;
-    facade.setComputerAcceptanceSession(async (goal, onSceneReady, _onCompletionReviewReady) => {
-      receivedGoal = goal;
-      onSceneReady();
-      completionCallbacks += goal.reviewMode === "post-completion-review" ? 0 : 1;
-      return computerRun("resumed-review", topicId, proposalId, "passed", "review-shot");
-    });
-    state = await facade.resumeOneShotRun(runId);
-    assert.equal(receivedGoal.reviewMode, "post-completion-review");
-    assert.deepEqual(receivedGoal.priorPhaseEvidence.evidenceAttachmentIds, ["pre-shot"]);
-    assert.equal(completionCallbacks, 0);
-    assert.equal(state.oneShotRun.status, "completed");
-    assert.equal(state.proposals.length, 1);
-    assert.equal(state.archiveRecords.filter((record) => record.eventType === "proposal.result_decided").length, resultDecisionCount);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
-test("完成态复核产品失败及旧 standard 状态仍恢复原只读复核", () => {
-  const key = "completion-review-failed-migration";
-  const store = evolutionStore(key);
-  store.beginOneShotRun(workspaceState, "zh-CN");
-  let state = store.createTopic(topicRequest("完成态复核失败恢复"));
-  const topicId = state.activeTopicId;
-  state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
-  const proposalId = state.proposals.at(-1).proposalId;
-  store.updateOneShotRun("accepting", "han-li", "韩立", "正在执行完成前验收", topicId, proposalId);
-  store.markProgress(proposalId, "pending-acceptance", "等待验收");
-  store.recordAcceptanceRun(computerRun("same-failed-review", topicId, proposalId, "passed", "pre-shot"));
-  store.decideResult(proposalId, "approved", "完成前验收通过", "automatic-han-li");
-  store.recordAcceptanceRun(computerRun("same-failed-review", topicId, proposalId, "failed", "failed-shot"));
-  state = store.blockOneShotRun("完成态页面复核发现产品问题");
-  assert.equal(state.oneShotRun.resumeMode, "post-completion-review");
-
-  const legacy = readPersistedState(key);
-  legacy.oneShotRun.resumeMode = "standard";
-  writePersistedState(key, legacy);
-  const migrated = evolutionStore(key).state();
-  assert.equal(migrated.oneShotRun.resumeMode, "post-completion-review");
-  const resumedStore = evolutionStore(key);
-  let resumed = resumedStore.resumeOneShotRun();
-  assert.equal(resumed.oneShotRun.phase, "accepting");
-  resumed = resumedStore.updateOneShotRun("accepting", "han-li", "韩立", "正在只读复核完成态页面", topicId, proposalId);
-  assert.equal(resumed.oneShotRun.resumeMode, "post-completion-review");
-});
-
-test("完成提案缺少同一验收运行证据时拒绝伪造恢复", () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "completion-review-invalid-"));
-  try {
-    const store = evolutionStore(path.join(directory, "state.json"));
-    store.beginOneShotRun(workspaceState, "zh-CN");
-    let state = store.createTopic(topicRequest("拒绝伪造完成态恢复"));
-    const topicId = state.activeTopicId;
-    state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
-    const proposalId = state.proposals.at(-1).proposalId;
-    store.updateOneShotRun("accepting", "han-li", "韩立", "正在验收", topicId, proposalId);
-    store.markProgress(proposalId, "pending-acceptance", "等待验收");
-    store.recordAcceptanceRun(computerRun("initial-run", topicId, proposalId, "passed", "pre-shot"));
-    store.decideResult(proposalId, "approved", "完成前验收通过", "automatic-han-li");
-    store.recordAcceptanceRun(computerRun("different-run", topicId, proposalId, "blocked", "blocked-shot"));
-    state = store.blockOneShotRun("无可信完成态复核依据");
-    assert.equal(state.oneShotRun.resumeMode, "standard");
-    assert.throws(() => store.resumeOneShotRun(), /提案状态不允许/);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
-test("完成态只读复核再次受阻仍保留同一恢复入口", () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "completion-review-repeat-block-"));
-  try {
-    const store = evolutionStore(path.join(directory, "state.json"));
-    store.beginOneShotRun(workspaceState, "zh-CN");
-    let state = store.createTopic(topicRequest("完成态复核再次受阻"));
-    const topicId = state.activeTopicId;
-    state = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉");
-    const proposalId = state.proposals.at(-1).proposalId;
-    store.updateOneShotRun("accepting", "han-li", "韩立", "正在验收", topicId, proposalId);
-    store.markProgress(proposalId, "pending-acceptance", "等待验收");
-    store.recordAcceptanceRun(computerRun("initial-review", topicId, proposalId, "passed", "pre-shot"));
-    store.decideResult(proposalId, "approved", "完成前验收通过", "automatic-han-li");
-    store.recordAcceptanceRun(computerRun("initial-review", topicId, proposalId, "blocked", "first-blocked-shot"));
-    store.blockOneShotRun("第一次完成态复核受阻");
-    store.resumeOneShotRun();
-    store.updateOneShotRun("accepting", "han-li", "韩立", "再次执行只读复核", topicId, proposalId);
-    store.recordAcceptanceRun(computerRun("second-review", topicId, proposalId, "blocked", "second-blocked-shot"));
-    state = store.blockOneShotRun("第二次完成态复核受阻");
-    assert.equal(state.oneShotRun.resumeMode, "post-completion-review");
-    assert.equal(store.resumeOneShotRun().oneShotRun.phase, "accepting");
-  } finally { rmSync(directory, { recursive: true, force: true }); }
-});
-
 test("专题流程从同一提案卡点原位恢复统一自动运行", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-one-shot-resume-"));
   try {
@@ -1954,6 +1839,7 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
             evolutionRoundId: correctionProposalId,
             state: "integrated",
             snapshot: { title: "恢复后进入韩立验收" },
+            executionRecords: [],
             createdAt: "2026-09-11T00:00:00.000Z",
             updatedAt: "2026-09-11T00:01:00.000Z",
           }],
@@ -1961,14 +1847,20 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
       },
     };
     let acceptanceRuns = 0;
-    const facade = new PersonaEvolutionRuntime({ store, collaboration, conversation, recordEvent: () => undefined });
+    const facade = new PersonaEvolutionRuntime({
+      store,
+      collaboration,
+      conversation,
+      hanLi: { send: async () => '{"mode":"page-experience"}' },
+      recordEvent: () => undefined,
+    });
     facade.setComputerAcceptanceSession(async () => {
       acceptanceRuns += 1;
       return computerRun("recovered-acceptance-run", topicId, correctionProposalId, "passed", "recovered-shot");
     });
 
     facade.start();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     facade.stop();
 
     state = facade.state();
@@ -1978,7 +1870,7 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
     assert.equal(state.oneShotRun.phase, "completed");
 
     facade.start();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     facade.stop();
     assert.equal(acceptanceRuns, 1, "完成后的轮询不得重复执行韩立验收");
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -2082,7 +1974,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     state = store.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
-    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /包含功能与布局证据/);
+    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /页面验收或代码符合性审查且全部通过/);
     const legacyRun = computerRun("legacy-run", state.topics[0].topicId, proposalId, "passed", "legacy-shot");
     for (const step of legacyRun.stepResults) {
       delete step.layoutStatus;
@@ -2090,7 +1982,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
       delete step.layoutScreenshotAttachmentId;
     }
     store.recordAcceptanceRun(legacyRun);
-    assert.throws(() => store.decideResult(proposalId, "approved", "沿用旧验收记录"), /包含功能与布局证据/);
+    assert.throws(() => store.decideResult(proposalId, "approved", "沿用旧验收记录"), /页面验收或代码符合性审查且全部通过/);
     store.recordAcceptanceRun(computerRun("failure-run", state.topics[0].topicId, proposalId, "failed", "failure-shot"));
     state = store.decideResult(proposalId, "supplement-required", "修复设置侧栏滚动后重新提交");
     assert.equal(state.proposals[0].status, "supplement-required");
@@ -2128,13 +2020,14 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
     const proposalId = state.proposals.at(-1).proposalId;
     const originalCriterion = state.proposals.at(-1).acceptanceCriteria[0];
     store.updateOneShotRun("accepting", "han-li", "韩立", "正在验收具体条件", topicId, proposalId);
-    store.markProgress(proposalId, "pending-acceptance", "等待韩立真实界面验收");
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
     store.blockOneShotRun("准备从原验收点恢复");
     const failures = [];
     const facade = new PersonaEvolutionRuntime({
       store,
       collaboration: { state() { return { tasks: [], members: [] }; } },
       conversation,
+      hanLi: { send: async () => '{"mode":"page-experience"}' },
       recordEvent: () => undefined,
       recordFailure: (failure) => failures.push(failure),
     });
@@ -2144,7 +2037,7 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
       return {
         ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot"),
         criteria: [originalCriterion],
-        stepResults: computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot").stepResults.map(step => step.operation.type === "judgement" ? { ...step, layoutStatus: "blocked", layoutActual: "隔离环境未提供布局验收能力" } : step),
+        stepResults: computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot").stepResults.map(step => step.operation.type === "judgement" ? { ...step, layoutStatus: "blocked", layoutActual: "当前正式页面未提供布局验收能力" } : step),
       };
     });
     state = await facade.resumeOneShotRun(runId);
@@ -2153,14 +2046,14 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
     assert.equal(state.proposals.at(-1).status, "pending-acceptance");
     assert.equal(state.proposals.length, 1);
     assert.equal(failures.length, 1, JSON.stringify(failures.map((failure) => ({ operation: failure.operation, error: String(failure.error) }))));
-    assert.equal(failures.at(-1).operation, "repair_failed_real_application_acceptance");
+    assert.equal(failures.at(-1).operation, "repair_failed_hanli_acceptance");
     assert.equal(failures.at(-1).flowImpact, "blocked");
     assert.equal(failures.at(-1).details.acceptanceFailureScope.decision, "within-original-acceptance");
     assert.match(failures.at(-1).details.acceptanceFailureScope.summary, /实际结果：滚动位置没有变化/);
     assert.equal(failures.at(-1).details.acceptanceBlockedSteps.length, 1);
-    assert.equal(failures.at(-1).details.acceptanceBlockedSteps[0].layoutActual, "隔离环境未提供布局验收能力");
+    assert.equal(failures.at(-1).details.acceptanceBlockedSteps[0].layoutActual, "当前正式页面未提供布局验收能力");
     assert.match(state.oneShotRun.blockingReason, /本轮仍未验证的条件/);
-    assert.match(state.oneShotRun.blockingReason, /隔离环境未提供布局验收能力/);
+    assert.match(state.oneShotRun.blockingReason, /滚动位置没有变化/);
     facade.start();
     await new Promise((resolve) => setTimeout(resolve, 20));
     facade.stop();
@@ -2170,7 +2063,7 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
 
 function computerRun(runId, topicId, proposalId, status, shot) {
  const now = new Date().toISOString();
- return { version: 2, runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [
+ return { version: 3, mode: "page-experience", runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [
  { checkId: "interaction", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now },
  { checkId: "criterion-1", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
  ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };

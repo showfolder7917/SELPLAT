@@ -113,7 +113,7 @@ import {
 } from "../../services/workflow/index.js";
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
 import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from "../../services/personas/linghu/index.js";
-import { createAcceptanceSceneSubmission, createHanliRuntime, presentHanliTaskStatus, presentHanliWorkflowStatus } from "../../services/personas/hanli/index.js";
+import { createHanliRuntime, presentHanliTaskStatus, presentHanliWorkflowStatus } from "../../services/personas/hanli/index.js";
 import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
@@ -130,14 +130,13 @@ import { createCapabilityContext } from "./capabilities.bootstrap.js";
 import { createCollaborationContext } from "./collaboration.bootstrap.js";
 import { createPersonaApplicationContext } from "./personas.bootstrap.js";
 import { registerApplicationIpc } from "./ipc.bootstrap.js";
-import { AcceptanceEmptyTaskGroupSession } from "../ipc/acceptance-empty-task-group-session.js";
+import { HanliPageAcceptanceAuthorization } from "../ipc/hanli-page-acceptance-authorization.js";
 import { TestDataResetService } from "../../services/support/application/test-data-reset.service.js";
-import { completeWorkspaceStartupRecoveryCheck } from "../ipc/workspace-startup-recovery-acceptance.js";
 
 const startup = createStartupContext();
 const { applicationName: startupApplicationName, variant: startupVariant,
   projectRoot: startupProjectRoot, projectPaths: startupProjectPaths, preloadPath, healthCheckFile,
-  workspaceRecoveryCheck, workspaces: startupWorkspaces, eventCenter } = startup;
+  workspaces: startupWorkspaces, eventCenter } = startup;
 
 // 这些对象在 app.whenReady() 内创建，却要在 before-quit 中释放，因此在外层保存引用。
 // 主聊天 Codex：处理用户在 Developer 主窗口发起的普通会话。
@@ -153,8 +152,6 @@ let nangongDistributionCodex: CodexService | undefined;
 let corpusSemanticBackfillCodex: CodexService | undefined;
 // 客户操作指导使用令狐独立只读线程，不污染故障修复和普通人物会话。
 let linghuGuidanceCodex: CodexService | undefined;
-// 韩立场景准备工具仅存在于本轮连接，结束或应用退出立即回收。
-let hanliSceneCodex: CodexService | undefined;
 // 跨人物协作协调器，负责任务状态、工作树和集成流程。
 let collaboration: CollaborationCoordinator | undefined;
 // 令狐公开门面只暴露检查、恢复和统一测试等受控能力。
@@ -215,14 +212,6 @@ function prepareAiMemoryShutdown(): void {
 
 /** Electron ready 后创建完整应用运行时。 */
 export async function startApplication(): Promise<void> {
-  if (workspaceRecoveryCheck) {
-    const result = completeWorkspaceStartupRecoveryCheck(workspaceRecoveryCheck, startupWorkspaces);
-    mkdirSync(path.dirname(workspaceRecoveryCheck.resultFile), { recursive: true });
-    writeFileSync(workspaceRecoveryCheck.resultFile, `${JSON.stringify(result)}\n`, "utf8");
-    // 这是无窗口的一次性子进程；结果落盘后必须同步终止，避免 macOS 的应用生命周期继续驻留到父进程超时。
-    app.exit(0);
-    return;
-  }
   // 复用启动前已解析的稳定值，确保全部服务属于同一工程和产品变体。
   const variant = startupVariant;
   const projectRoot = startupProjectRoot;
@@ -287,7 +276,7 @@ export async function startApplication(): Promise<void> {
     : null;
   // 隔离验收不初始化外部 Codex 语料链路，避免读取正式用户目录或创建无意义的轮询器。
   // 正式启动仍按设置读取用户默认 CODEX_HOME。
-  const externalCorpusEnabled = process.env.AI_DESKTOP_ACCEPTANCE_ISOLATED !== "1";
+  const externalCorpusEnabled = true;
   const externalCodexHome = externalCorpusEnabled
     ? path.resolve(process.env.CODEX_HOME || path.join(app.getPath("home"), ".codex"))
     : null;
@@ -503,8 +492,7 @@ export async function startApplication(): Promise<void> {
       return parseCodexSemanticBackfillResponse(response.text);
     },
   }) : null;
-  // IPC 首次读取和后续协作状态推送必须共用这一隔离会话，避免正式专题覆盖空状态窗口。
-  const acceptanceEmptyTaskGroupSession = new AcceptanceEmptyTaskGroupSession();
+  const hanliPageAcceptanceAuthorization = new HanliPageAcceptanceAuthorization();
   /** 把一条去重后的流程状态写入韩立会话，并立即推送给现有窗口。 */
   const publishHanliInternalStatus = (messageId: string, content: string, createdAt: string, correlationId: string): boolean => {
     if (!collaborationMemory) return false;
@@ -573,10 +561,7 @@ export async function startApplication(): Promise<void> {
       }
       for (const window of BrowserWindow.getAllWindows()) {
         if (window.isDestroyed()) continue;
-        const isolated = acceptanceEmptyTaskGroupSession.isActive(window.webContents.id);
-        // 隔离窗口只接收对应的只读空状态投影，正式窗口仍接收完整状态与任务关联。
-        const projectedState = isolated ? acceptanceEmptyTaskGroupSession.collaborationState(window.webContents.id, state) : state;
-        window.webContents.send("desktop:collaboration-state", { state: projectedState, reason, taskIds: isolated ? [] : taskIds });
+        window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
       }
       // 人物页签和桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
       if (reason !== "member.selected" && reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
@@ -989,45 +974,6 @@ export async function startApplication(): Promise<void> {
   });
   // 业务调用方只持有 Facade；测试清理通过 Runtime 受控能力完成，Store 不离开令狐边界。
   linghuAutomation = linghuRuntime.facade;
-  // 首次真实验收的场景准备属于韩立验收职责；令狐只在真实失败后进入修复链路。
-  let hanliSceneQueue: Promise<unknown> = Promise.resolve();
-  const planAcceptanceScene = (goal: import("../../../contracts/services/personas/hanli/index.js").HanliComputerAcceptanceInDto) => {
-    const analysis = hanliSceneQueue.then(async () => {
-      const submission = createAcceptanceSceneSubmission({
-        // 失败审计只保存校验结果，候选计划和页面数据不能进入长期历史。
-        onRejectedPlan: (rejection) => eventCenter.recordEvent("hanli.acceptance_scene.plan_rejected", {
-          proposalId: goal.proposalId,
-          topicId: goal.topicId,
-          actor: { memberId: "han-li", displayName: "韩立" },
-          message: rejection.message,
-        }),
-      });
-      const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
-        codexHome, serviceName: "selplat_hanli_acceptance_scene", threadSource: "ai-desktop-hanli-acceptance-scene",
-        migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
-        readSettings: () => settings.read(), readRuleInstructions: readHanliRuleInstructions, dynamicTools: submission.tools,
-      }, (details) => eventCenter.recordEvent("hanli.acceptance_scene.tool_policy", details), (details) => eventCenter.recordEvent("hanli.acceptance_scene.thread", details));
-      hanliSceneCodex = service;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        return await Promise.race([
-          submission.run(goal, (requestId, attempt, planningContext) => service.send(
-            `${attempt === 2
-              ? "第二回合从当前验收目标重新建立场景计划模型；不得读取、沿用或补写第一回合的阶段。\n"
-              : ""}本轮结构化场景计划模型：${JSON.stringify(planningContext)}\n逐个或分组调用 hanli_register_acceptance_scene_segment；每次读取工具返回的剩余条件和必需场景状态。只有两者均为空时才调用 hanli_finalize_acceptance_scene。不要只回复说明文字。\n\n${prompts.render("hanli.acceptance-scene", { goalJson: JSON.stringify({ ...goal, requestId }) })}`,
-            settings.read().locale, "read-only", workspaces.read(), [], () => undefined, null,
-          )),
-          new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("韩立场景准备超过三分钟，尚未提交有效计划。")), 180_000); }),
-        ]);
-      } finally {
-        if (timer) clearTimeout(timer);
-        service.dispose();
-        if (hanliSceneCodex === service) hanliSceneCodex = undefined;
-      }
-    });
-    hanliSceneQueue = analysis.catch(() => undefined);
-    return analysis;
-  };
   const personaContext = createPersonaApplicationContext({
     memory: collaborationMemory,
     onConversationChanged: (conversation) => {
@@ -1096,7 +1042,6 @@ export async function startApplication(): Promise<void> {
     // 协作与人物能力。
     collaboration,
     linghuAutomation,
-    planAcceptanceScene,
     nangong: nangongRuntime.facade,
     hanli: hanliRuntime.facade,
     personaConversations,
@@ -1128,7 +1073,7 @@ export async function startApplication(): Promise<void> {
       if (!corpusSemanticBackfill) throw new Error("AI Memory 数据库不可用，无法补齐历史摘要。");
       return corpusSemanticBackfill.start(limit);
     },
-    acceptanceEmptyTaskGroupSession,
+    hanliPageAcceptanceAuthorization,
     prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 
@@ -1219,6 +1164,5 @@ export function disposeApplication(): void {
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
   corpusSemanticBackfillCodex?.dispose();
   linghuGuidanceCodex?.dispose();
-  hanliSceneCodex?.dispose();
   prepareAiMemoryShutdown();
 }

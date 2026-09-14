@@ -17,7 +17,8 @@ function proposal(criteria = ["右侧边缘可以拖动加宽", "放大图片后
 function failedRun(criteria = ["右侧边缘可以拖动加宽", "放大图片后仍可拖动查看边缘"], checkId = "criterion-2") {
   const now = "2026-09-06T00:00:00.000Z";
   return {
-    version: 2,
+    version: 3,
+    mode: "page-experience",
     runId: "acceptance-run-1",
     topicId: "topic-1",
     proposalId: "proposal-1",
