@@ -40,6 +40,7 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         sessions: options.sessions,
         taskHandoff: segment.kind === "persona-conversation-with-task-handoff" ? options.taskHandoff : undefined,
         crossTaskMemberOccupancyFixture: segment.kind === "cross-task-member-occupancy" ? options.goal.crossTaskMemberOccupancyFixture : undefined,
+        memberIdleFixture: segment.kind === "member-idle" ? options.goal.memberIdleFixture : undefined,
         collaborationStateProjectionFixture: segment.kind === "collaboration-state-syncing" || segment.kind === "collaboration-state-unavailable" ? options.goal.collaborationStateProjectionFixture : undefined,
         createWindow: options.createWindow,
       });

@@ -8,11 +8,12 @@ export function createSegmentGoal(goal: HanliComputerAcceptanceInDto, segment: A
     const index = Number(criterionId.replace("criterion-", "")) - 1;
     return goal.criteria[index];
   });
-  const { workspaceAcceptanceFixture, crossTaskMemberOccupancyFixture, collaborationStateProjectionFixture, ...segmentBase } = goal;
+  const { workspaceAcceptanceFixture, crossTaskMemberOccupancyFixture, memberIdleFixture, collaborationStateProjectionFixture, ...segmentBase } = goal;
   return {
     ...segmentBase,
     ...(segment.kind === "workspace-explorer-fixture" && workspaceAcceptanceFixture ? { workspaceAcceptanceFixture } : {}),
     ...(segment.kind === "cross-task-member-occupancy" && crossTaskMemberOccupancyFixture ? { crossTaskMemberOccupancyFixture } : {}),
+    ...(segment.kind === "member-idle" && memberIdleFixture ? { memberIdleFixture } : {}),
     ...((segment.kind === "collaboration-state-syncing" || segment.kind === "collaboration-state-unavailable") && collaborationStateProjectionFixture ? { collaborationStateProjectionFixture } : {}),
     criteria,
     criterionIds: segment.conditions.map(({ criterionId }) => criterionId),

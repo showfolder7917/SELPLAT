@@ -105,6 +105,13 @@ test("没有专题任务时可从空状态进入韩立会话，但不创建任�
   assert.doesNotMatch(taskGroupSource, /submitTask|submitConversationTask/);
 });
 
+test("任务群在协作状态未返回或读取失败时不把空专题当作当前事实", () => {
+  assert.match(collaborationViewModelSource, /taskGroup:[\s\S]*stateReadStatus: controller\.data\.stateReadStatus/);
+  assert.match(taskGroupSource, /stateReadStatus === "syncing"[\s\S]*正在同步/);
+  assert.match(taskGroupSource, /stateReadStatus === "unavailable"[\s\S]*状态暂未更新/);
+  assert.match(taskGroupSource, /statusMessage \? <strong role="status">\{statusMessage\}<\/strong> : <>/);
+});
+
 test("空任务页先引导说明需求，再展示后续协作安排", () => {
   assert.match(
     taskGroupSource,

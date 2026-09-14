@@ -9,6 +9,7 @@ import type {
   // 界面语言：页面状态和操作文案选择中文或日文。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
+import type { CollaborationStateReadStatus } from "../model/collaboration-formatters";
 import type {
   // 演化控制器：专题级恢复入口需要读取原运行并继续卡点。
   useEvolutionRuntime,
@@ -29,6 +30,8 @@ export type TaskCollaborationGroupModel = {
   presentation: {
     /** 当前界面语言。 */
     locale: LocaleValue;
+    /** 状态尚未返回时，空专题不能被当作当前协作事实。 */
+    stateReadStatus: CollaborationStateReadStatus;
   };
   /** 用户可以从任务群页面触发的业务操作。 */
   actions: {

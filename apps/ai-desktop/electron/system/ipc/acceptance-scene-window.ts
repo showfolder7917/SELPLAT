@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { BrowserWindow, BrowserWindowConstructorOptions } from "electron";
-import type { AcceptanceSceneSegmentOutDto, CollaborationStateProjectionFixtureContextOutDto, CrossTaskMemberOccupancyFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
+import type { AcceptanceSceneSegmentOutDto, CollaborationStateProjectionFixtureContextOutDto, CrossTaskMemberOccupancyFixtureContextOutDto, MemberIdleFixtureContextOutDto } from "../../../contracts/services/personas/hanli/index.js";
 import type { AcceptanceEmptyTaskGroupSession } from "./acceptance-empty-task-group-session.js";
 import type { CollaborationTimelineSnapshotOutDto } from "../../../contracts/services/workflow/index.js";
 
@@ -14,6 +14,7 @@ interface SceneWindowOptions {
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
   taskHandoff?: CollaborationTimelineSnapshotOutDto;
   crossTaskMemberOccupancyFixture?: CrossTaskMemberOccupancyFixtureContextOutDto;
+  memberIdleFixture?: MemberIdleFixtureContextOutDto;
   collaborationStateProjectionFixture?: CollaborationStateProjectionFixtureContextOutDto;
 }
 
@@ -30,7 +31,7 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceSceneSegmentO
   const window = options.createWindow({
     // 场景规划可能等待模型响应；独立窗口沿用开始时的可见尺寸，不读取已关闭的主窗口对象。
     ...options.targetBounds, frame: false, show: false, backgroundColor: "#080b12",
-    title: plan.kind === "failure-recovery-timeline" ? "AI Desktop 独立失败恢复验收" : plan.kind === "inspection-lifecycle-timeline" ? "AI Desktop 独立巡检生命周期验收" : plan.kind === "user-language-detail-timeline" ? "AI Desktop 独立任务卡详情验收" : plan.kind === "recovery-action-lifecycle" ? "AI Desktop 独立恢复入口验收" : plan.kind === "persona-conversation-lifecycle" || plan.kind === "persona-conversation-with-task-handoff" ? "AI Desktop 独立人物会话验收" : "AI Desktop 独立空状态验收",
+    title: plan.kind === "completed-recovery-timeline" ? "AI Desktop 独立完成恢复验收" : plan.kind === "member-idle" ? "AI Desktop 独立人物空闲验收" : plan.kind === "inspection-lifecycle-timeline" ? "AI Desktop 独立巡检生命周期验收" : plan.kind === "user-language-detail-timeline" ? "AI Desktop 独立任务卡详情验收" : plan.kind === "recovery-action-lifecycle" ? "AI Desktop 独立恢复入口验收" : plan.kind === "persona-conversation-lifecycle" || plan.kind === "persona-conversation-with-task-handoff" ? "AI Desktop 独立人物会话验收" : "AI Desktop 独立空状态验收",
     webPreferences: { preload: options.preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: true,
       // 不使用 persist 前缀，关闭后不会向正式会话写入空状态。
       partition: `acceptance-empty-${Date.now()}`,
@@ -44,7 +45,7 @@ export async function prepareAcceptanceSceneWindow(plan: AcceptanceSceneSegmentO
     options.sessions.remove(contentsId);
     if (!window.isDestroyed()) window.close();
   };
-  options.sessions.register(contentsId, plan.kind, options.taskHandoff, options.crossTaskMemberOccupancyFixture, options.collaborationStateProjectionFixture);
+  options.sessions.register(contentsId, plan.kind, options.taskHandoff, options.crossTaskMemberOccupancyFixture, options.collaborationStateProjectionFixture, options.memberIdleFixture);
   window.once("closed", dispose);
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
