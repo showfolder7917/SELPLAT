@@ -2721,7 +2721,7 @@ test("协同编排保持独立执行连接、心跳和整轮封存集成契约",
   assert.match(integrationVerifier, /ensureBuildDependencyLink\(candidateDesktopRoot, sourceModules\)/);
   assert.match(integrationVerifier, /releaseManagedDependencyLease\(dependencyLease\)/);
   assert.doesNotMatch(ui, /reviewAttempts\.some|decision-unrecognized/);
-  const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberStateLabel"));
+  const memberPageSource = ui.slice(ui.indexOf("function CollaborationMemberPage"), ui.indexOf("function collaborationMemberDisplayModel"));
   assert.doesNotMatch(memberPageSource, /durationMs|总耗时/);
   assert.doesNotMatch(ui, /CollaborationExecutionList/);
   assert.match(ui, /TaskCollaborationGroup/);

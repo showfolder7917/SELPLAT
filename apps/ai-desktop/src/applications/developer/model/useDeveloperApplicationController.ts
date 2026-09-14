@@ -8,7 +8,6 @@ import { useDesktopDiagnostics, useDesktopSettings } from "../../../features/set
 import { useWorkspaceRegistry } from "../../../features/workspace";
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { developerApplicationLabels } from "./developerApplicationLabels";
-import { getDeveloperPersonaActivities } from "./getDeveloperPersonaActivities";
 import { useDeveloperSidebar } from "./useDeveloperSidebar";
 import { useDeveloperTooltip } from "./useDeveloperTooltip";
 import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
@@ -114,8 +113,6 @@ export function useDeveloperApplicationController() {
     setAttachments,
   });
 
-  // 左侧人物状态由当前页面、回复、调查和审批状态共同决定。
-  const personaConversationActivities = getDeveloperPersonaActivities({ collaboration, codex, hanli, nangong });
   // 工具提示跟随整个 Developer 外壳创建和销毁。
   useDeveloperTooltip(shellRef);
 
@@ -137,7 +134,6 @@ export function useDeveloperApplicationController() {
     nangong,
     codex,
     screenshot,
-    personaConversationActivities,
   };
 }
 

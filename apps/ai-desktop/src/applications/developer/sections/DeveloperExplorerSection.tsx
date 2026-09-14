@@ -14,11 +14,9 @@ export function DeveloperExplorerSection({ viewModel }: DeveloperExplorerSection
     <DeveloperExplorer>
       <WorkspaceExplorerFeature expanded={viewModel.workspaceExpanded} locale={viewModel.locale} workspaces={viewModel.workspaces} workspaceError={viewModel.workspaceError} onToggle={viewModel.onToggleWorkspace} onAdd={viewModel.onAddWorkspace} onTogglePermission={viewModel.onToggleWorkspacePermission} onMakePrimary={viewModel.onMakePrimaryWorkspace} onRemove={viewModel.onRemoveWorkspace} onFilePreviewChange={viewModel.onFilePreviewChange} />
       <TaskExplorerFeature
-        evolution={viewModel.evolution}
         expanded={viewModel.expanded}
         locale={viewModel.locale}
         auditTask={viewModel.auditTask}
-        personaConversationActivities={viewModel.personaConversationActivities}
         controller={viewModel.collaboration}
         onToggle={viewModel.onToggle}
       />

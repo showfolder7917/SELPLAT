@@ -11,7 +11,5 @@ export { CollaborationWorkspaceFeature } from "./components/CollaborationWorkspa
 export { useCollaborationWorkspace } from "./model/useCollaborationWorkspace";
 /** 协作任务状态文案：供主会话把后端稳定状态码转换成中日文客户文案。 */
 export { collaborationTaskStateLabel } from "./model/collaboration-formatters";
-/** 人物导航显示转换器：供 Developer 左侧任务区解释成员的圆点与文字状态。 */
-export { collaborationMemberPresenceState, collaborationMemberStateLabel } from "./model/collaboration-formatters";
-/** 人物会话临时活动：供 Developer 左侧任务区显示正在回复、调查或等待审批。 */
-export type { PersonaConversationActivity } from "./model/collaboration-formatters";
+/** 人物状态显示模型：供左侧任务区和人物页读取同一份主进程协作状态。 */
+export { collaborationMemberDisplayModel } from "./model/collaboration-formatters";

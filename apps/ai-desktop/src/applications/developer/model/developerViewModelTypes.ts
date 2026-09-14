@@ -83,16 +83,12 @@ export type DeveloperActivityViewModel = {
 
 /** 左侧 Explorer 任务区域输入。 */
 export type DeveloperExplorerViewModel = {
-  /** 人物共同研讨状态用于显示协作人物信息。 */
-  evolution: Controller["evolution"]["state"];
   /** 任务区域是否展开。 */
   expanded: Controller["tasks"]["expanded"];
   /** 当前界面语言。 */
   locale: Controller["settings"]["locale"];
   /** 最近一次任务摘要用于单会话模式。 */
   auditTask: NonNullable<Controller["diagnostics"]["auditInfo"]>["latestTask"] | null;
-  /** 每个人物当前会话活动用于状态圆点。 */
-  personaConversationActivities: Controller["personaConversationActivities"];
   /** 协作 Feature 控制器只交给它自己的任务导航组件。 */
   collaboration: Controller["collaboration"];
   /** 点击标题时切换任务区域展开状态。 */

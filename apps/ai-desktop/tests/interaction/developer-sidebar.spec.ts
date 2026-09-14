@@ -636,10 +636,10 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   const hanliComposer = page.locator(".hanli-person-composer");
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("结合整理后的资料，告诉我现在最关键的目标。");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
-  await expect(taskList.getByRole("button", { name: /韩立/ })).toContainText("正在回复");
+  await expect(taskList.getByRole("button", { name: /韩立/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   await expect(page.locator(".developer-tab-page"), "后台回复时隐藏会话不能重新挂载").toHaveCount(1);
-  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("会话中");
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.locator(".developer-tab-page"), "返回韩立时应恢复顶层会话状态并保持单页渲染").toHaveCount(1);
   await expect(hanliConversation.getByText("结合整理后的资料，告诉我现在最关键的目标。", { exact: true })).toBeVisible();
@@ -666,7 +666,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
   const newNangongConversation = page.getByRole("button", { name: "重新建立南宫婉对话" });
   await newNangongConversation.click();
-  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("正在建立新会话");
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
   await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
@@ -1199,7 +1199,7 @@ test("韩立排查显示真实阶段并从原阶段重试，保留输入草稿�
     await retry.click();
     await expect(progress).toContainText("韩立正在整理结论");
     await expect(retry).toHaveCount(0);
-    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("整理结论");
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("空闲");
     await expect(draft).toHaveValue("保留这条待发送补充");
     const request = await page.evaluate(() => (window as any).desktop.getInteractionInquiryRequest());
     expect(request.clientMessageId).toBe("inquiry-ui-user");
@@ -1209,11 +1209,11 @@ test("韩立排查显示真实阶段并从原阶段重试，保留输入草稿�
     await expect(conversation.getByText("检查滚动条为什么会跳动", { exact: true })).toHaveCount(1);
     await expect(conversation.getByText("源码证据已确认，实际运行复现尚待验证。", { exact: true })).toBeVisible();
     await page.evaluate(() => (window as any).desktop.setInteractionInquiryPhase("investigating"));
-    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("等待核实");
-    await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("正在核实");
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("空闲");
+    await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
     await page.evaluate(() => (window as any).desktop.setInteractionInquiryPhase("assessing"));
-    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("判断证据");
-    await expect(tasks.getByRole("button", { name: /南宫婉/ })).not.toContainText("正在核实");
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("空闲");
+    await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   } catch (error) {
     await page.screenshot({ path: testInfo.outputPath("hanli-inquiry-failure.png") });
     throw error;
