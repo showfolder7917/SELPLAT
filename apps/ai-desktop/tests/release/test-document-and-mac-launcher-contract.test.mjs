@@ -133,6 +133,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(packageContentVerifier, /Packaged SQLite migration manifest is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration is missing/);
   assert.match(packageContentVerifier, /filter\(\(entry\) => entry && !entry\.startsWith\("#"\)\)/);
+  assert.match(packageContentVerifier, /assertPackagedDistributionParser/);
+  assert.match(packageContentVerifier, /packagedDistributionServicePath/);
   assert.match(packagedBootstrap, /await import\("\.\/main\.js"\)/);
   assert.doesNotMatch(packagedBootstrap, /external runtime|runtimeRoot|pathToFileURL/);
 });
