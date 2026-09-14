@@ -8,9 +8,10 @@ interface AcceptanceScenePlanRejection {
   message: string;
 }
 
-interface AcceptanceSceneRetryContext {
-  rejectionMessage: string;
+interface AcceptanceScenePlanningContext {
+  criteria: Array<{ criterionId: string; text: string }>;
   requiredSceneKinds: AcceptanceSceneKind[];
+  rejectionMessage?: string;
 }
 
 interface AcceptanceSceneRequirement {
@@ -141,12 +142,14 @@ function assertRequiredSceneRequirements(segments: AcceptanceSceneSegmentOutDto[
   }
 }
 
-/** 重试时从当前权威目标重新派生必需场景，拒绝结果不携带或读取上一份候选计划。 */
-function createRetryContext(goal: HanliComputerAcceptanceInDto, rejectionMessage: string): AcceptanceSceneRetryContext {
-  return {
-    rejectionMessage,
+/** 每次提交都从当前权威目标派生完整契约，拒绝结果不携带或读取上一份候选计划。 */
+function createPlanningContext(goal: HanliComputerAcceptanceInDto, rejectionMessage?: string): AcceptanceScenePlanningContext {
+  const context = {
+    // 明确交给规划器每条原条件的稳定编号，避免它在纠正回合自行推断并遗漏条件。
+    criteria: goal.criteria.map((text, index) => ({ criterionId: `criterion-${index + 1}`, text })),
     requiredSceneKinds: sceneRequirementsFor(goal).flatMap((requirement) => requirement.acceptedKinds),
   };
+  return rejectionMessage ? { ...context, rejectionMessage } : context;
 }
 
 /** 固定韩立验收会话通过工具提交场景；说明文字不进入机器协议，回合外与旧请求都不能写入。 */
@@ -190,14 +193,14 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
   };
   return {
     tools,
-    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, retryContext: AcceptanceSceneRetryContext | null) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
+    async run(goal: HanliComputerAcceptanceInDto, model: (requestId: string, attempt: 1 | 2, planningContext: AcceptanceScenePlanningContext) => Promise<unknown>): Promise<AcceptanceScenePlanOutDto> {
       if (active) throw new Error("韩立已有场景准备请求，不能并发覆盖。");
       const request = { requestId: randomUUID(), goal, plan: null as AcceptanceScenePlanOutDto | null, lastRejection: null as string | null };
       active = request;
       try {
         // 模型只输出说明文字属于可纠正的格式遗漏；原请求保持活动并限重试一次，避免把同一验收重新走完整修复发布链。
-        await model(request.requestId, 1, null);
-        if (!request.plan) await model(request.requestId, 2, request.lastRejection ? createRetryContext(goal, request.lastRejection) : null);
+        await model(request.requestId, 1, createPlanningContext(goal));
+        if (!request.plan) await model(request.requestId, 2, createPlanningContext(goal, request.lastRejection ?? undefined));
         if (!request.plan) {
           if (request.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${request.lastRejection}`);
           throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
