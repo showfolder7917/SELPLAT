@@ -42,6 +42,7 @@ test("工作区重启检查使用独立工程用户目录和临时根，并在�
   assert.match(startup, /--ai-desktop-workspace-recovery-check-file=/);
   assert.match(startup, /healthCheckFile \|\| workspaceRecoveryCheck \? true : app\.requestSingleInstanceLock/);
   assert.match(runtime, /if \(workspaceRecoveryCheck\)/);
+  assert.match(runtime, /writeFileSync\(workspaceRecoveryCheck\.resultFile[\s\S]*app\.exit\(0\)/);
   assert.ok(startApplication.indexOf("if (workspaceRecoveryCheck)") < startApplication.indexOf("createPersistenceContext"));
   assert.match(workspaceRecovery, /--ai-desktop-acceptance-isolation-root=/);
   assert.match(workspaceRecovery, /--ai-desktop-user-data-dir=/);

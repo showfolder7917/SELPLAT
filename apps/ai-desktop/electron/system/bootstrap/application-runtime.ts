@@ -219,7 +219,8 @@ export async function startApplication(): Promise<void> {
     const result = completeWorkspaceStartupRecoveryCheck(workspaceRecoveryCheck, startupWorkspaces);
     mkdirSync(path.dirname(workspaceRecoveryCheck.resultFile), { recursive: true });
     writeFileSync(workspaceRecoveryCheck.resultFile, `${JSON.stringify(result)}\n`, "utf8");
-    app.quit();
+    // 这是无窗口的一次性子进程；结果落盘后必须同步终止，避免 macOS 的应用生命周期继续驻留到父进程超时。
+    app.exit(0);
     return;
   }
   // 复用启动前已解析的稳定值，确保全部服务属于同一工程和产品变体。
