@@ -16,6 +16,7 @@ export const SYSTEM_DESKTOP_API_METHODS = [
   "getSettings",
   "updateSettings",
   "getWorkspaces",
+  "onWorkspaceStateChanged",
   "addWorkspace",
   "updateWorkspacePermission",
   "setPrimaryWorkspace",

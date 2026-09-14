@@ -169,6 +169,25 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     let plan: Awaited<ReturnType<typeof planAcceptanceScene>> | null = null;
     let run: Awaited<ReturnType<typeof runHanliAcceptanceSceneSession>> | null = null;
     let workspaceAcceptanceEnvironment: Awaited<ReturnType<typeof workspaceAcceptanceFixture.prepare>> | null = null;
+    let workspaceAcceptanceEnvironmentFinalized = false;
+    const finalizeWorkspaceAcceptanceEnvironment = async (): Promise<void> => {
+      if (!workspaceAcceptanceEnvironment || workspaceAcceptanceEnvironmentFinalized) return;
+      let cleanup = await workspaceAcceptanceEnvironment.dispose();
+      if (cleanup.status === "failed") {
+        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_failed", {
+          ...identity, fixtureLabel: workspaceAcceptanceEnvironment.displayName, workspaceId: cleanup.workspaceId,
+          phase: cleanup.phase, reason: cleanup.reason,
+        });
+        cleanup = await workspaceAcceptanceEnvironment.dispose();
+        if (cleanup.status === "failed") throw new Error(`临时验收工作区清理失败：${cleanup.phase}。`);
+      }
+      if (cleanup.recovered) {
+        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_recovered", {
+          ...identity, fixtureLabel: workspaceAcceptanceEnvironment.displayName, workspaceId: cleanup.workspaceId,
+        });
+      }
+      workspaceAcceptanceEnvironmentFinalized = true;
+    };
     try {
       // 环境准备完成前不进入场景规划；准备入口自身通过页面原有添加动作登记工作区并确认页面可见。
       workspaceAcceptanceEnvironment = workspaceExplorerAcceptance
@@ -216,26 +235,13 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
           readDirectory: (relativePath) => workspaceAcceptanceFixture.getDirectoryReadEvidence(window.webContents.id, relativePath),
         }),
         setWorkspaceFixtureSceneActive: (active) => workspaceAcceptanceFixture.setSceneActive(active),
+        finalizeWorkspaceFixture: finalizeWorkspaceAcceptanceEnvironment,
         onSceneReady,
         onCompletionReviewReady,
         record: (eventType, details) => audit.recordEvent(eventType, { ...identity, ...details }),
       });
     } finally {
-      let cleanup = workspaceAcceptanceEnvironment?.dispose();
-      if (cleanup?.status === "failed") {
-        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_failed", {
-          ...identity, fixtureLabel: workspaceAcceptanceEnvironment!.displayName, workspaceId: cleanup.workspaceId,
-          phase: cleanup.phase, reason: cleanup.reason,
-        });
-        // 清理句柄保留唯一状态；同一次验收立即重试一次，以便记录瞬时失败后的恢复。
-        cleanup = workspaceAcceptanceEnvironment!.dispose();
-        if (cleanup.status === "failed") throw new Error(`临时验收工作区清理失败：${cleanup.phase}。`);
-      }
-      if (cleanup?.recovered) {
-        audit.recordEvent("hanli.acceptance_workspace_fixture.cleanup_recovered", {
-          ...identity, fixtureLabel: workspaceAcceptanceEnvironment!.displayName, workspaceId: cleanup.workspaceId,
-        });
-      }
+      await finalizeWorkspaceAcceptanceEnvironment();
     }
     if (!run || !plan) throw new Error("韩立验收未产生运行记录。");
     audit.recordEvent("hanli.acceptance.real_app_checked", {

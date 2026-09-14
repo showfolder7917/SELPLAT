@@ -50,6 +50,8 @@ export interface DesktopApi {
   updateSettings(settings: UpdateDesktopSettingsInDto): Promise<DesktopSettingsOutDto>;
   /** 读取已登记工作区和当前主工作区。 */
   getWorkspaces(): Promise<WorkspaceStateOutDto>;
+  /** 订阅主进程完成的工作区登记变化；用于同步自动验收清理等非 Renderer 发起的更新。 */
+  onWorkspaceStateChanged(listener: (state: WorkspaceStateOutDto) => void): () => void;
   /** 打开系统目录选择器并登记选中的工作区。 */
   addWorkspace(): Promise<WorkspaceStateOutDto>;
   /** 修改指定工作区的只读或写入权限。 */

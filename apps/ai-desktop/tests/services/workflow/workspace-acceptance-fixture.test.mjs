@@ -61,7 +61,11 @@ test("统一准备入口确认页面可用与工作区可见后才交付清理�
   };
   try {
     const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
-    const target = { isDestroyed: () => false, webContents: { id: 77, executeJavaScript: async () => {
+    let pageCallCount = 0;
+    const publishedStates = [];
+    const target = { isDestroyed: () => false, webContents: { id: 77, send: (channel, state) => publishedStates.push({ channel, state }), executeJavaScript: async () => {
+      pageCallCount += 1;
+      if (pageCallCount > 1) return "released";
       const directory = fixture.takeDirectory(77);
       const state = workspaces.add(directory);
       fixture.registerWorkspace(77, directory, state);
@@ -70,9 +74,10 @@ test("统一准备入口确认页面可用与工作区可见后才交付清理�
     const environment = await fixture.prepare("basic", target);
     assert.equal(roots.length, 1, "只有页面确认显示后才向调用方交付环境");
     assert.equal(environment.displayName, path.basename(roots[0].path));
-    environment.dispose();
+    await environment.dispose();
     assert.equal(roots.length, 0);
     assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), false);
+    assert.deepEqual(publishedStates, [{ channel: "desktop:workspace-state-changed", state: { roots: [] } }], "主进程清理后必须把唯一工作区状态推送回原窗口");
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
@@ -115,20 +120,63 @@ test("隔离清理失败恢复场景在目录删除成功前保持同一环境�
       if (removeAttempts === 1) throw new Error("模拟目录正在被占用");
       rmSync(directory, { recursive: true, force: true });
     });
-    const target = { isDestroyed: () => false, webContents: { id: 79, executeJavaScript: async () => {
+    let pageCallCount = 0;
+    const target = { isDestroyed: () => false, webContents: { id: 79, send: () => undefined, executeJavaScript: async () => {
+      pageCallCount += 1;
+      if (pageCallCount > 1) return "released";
       const directory = fixture.takeDirectory(79);
       const state = workspaces.add(directory);
       fixture.registerWorkspace(79, directory, state);
       return "ready";
     } } };
     const environment = await fixture.prepare("basic", target);
-    const first = environment.dispose();
+    const first = await environment.dispose();
     assert.deepEqual(first, { status: "failed", phase: "directory", reason: "模拟目录正在被占用", workspaceId: "recovery-fixture" });
     assert.equal(roots.length, 0, "已移除工作区不能阻止同一环境重试目录清理");
     assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), true);
-    const second = environment.dispose();
+    const second = await environment.dispose();
     assert.deepEqual(second, { status: "completed", recovered: true, workspaceId: "recovery-fixture" });
     assert.equal(existsSync(path.join(temporaryRoot, environment.displayName)), false);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("页面投影首次未释放时沿用同一环境重试并标记恢复", async () => {
+  const temporaryRoot = mkdtempSync(path.join("/private/tmp", "ai-desktop-workspace-projection-recovery-test-"));
+  const roots = [];
+  const workspaces = {
+    read: () => ({ roots: [...roots] }),
+    add: (directory) => {
+      const root = { id: "projection-fixture", path: directory };
+      roots.push(root);
+      return { primaryId: root.id, roots: [...roots] };
+    },
+    remove: (id) => {
+      const index = roots.findIndex((root) => root.id === id);
+      if (index >= 0) roots.splice(index, 1);
+    },
+    listDirectory: () => ({ entries: [] }),
+  };
+  try {
+    const fixture = new WorkspaceAcceptanceFixture(workspaces, temporaryRoot);
+    let pageCallCount = 0;
+    const target = { isDestroyed: () => false, webContents: { id: 80, send: () => undefined, executeJavaScript: async () => {
+      pageCallCount += 1;
+      if (pageCallCount === 1) {
+        const directory = fixture.takeDirectory(80);
+        const state = workspaces.add(directory);
+        fixture.registerWorkspace(80, directory, state);
+        return "ready";
+      }
+      return pageCallCount === 2 ? "projection-stale" : "released";
+    } } };
+    const environment = await fixture.prepare("basic", target);
+    const first = await environment.dispose();
+    assert.equal(first.status, "failed");
+    assert.equal(first.phase, "workspace");
+    const second = await environment.dispose();
+    assert.deepEqual(second, { status: "completed", recovered: true, workspaceId: null });
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });
   }

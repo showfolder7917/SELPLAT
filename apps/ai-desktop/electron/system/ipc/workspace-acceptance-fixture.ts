@@ -9,7 +9,7 @@ type FixtureMode = "basic" | "scenarios";
 type FixtureReservation = { displayName: string };
 type CleanupPhase = "workspace" | "directory";
 export type WorkspaceAcceptanceCleanupResult = { status: "completed"; recovered: boolean; workspaceId: string | null } | { status: "failed"; phase: CleanupPhase; reason: string; workspaceId: string | null };
-export type WorkspaceAcceptanceEnvironment = FixtureReservation & { dispose(): WorkspaceAcceptanceCleanupResult };
+export type WorkspaceAcceptanceEnvironment = FixtureReservation & { dispose(): Promise<WorkspaceAcceptanceCleanupResult> };
 type FixtureRegistration = { displayName: string; workspaceId: string };
 type FixtureReadPath = "slow-a" | "slow-b" | "retry-once";
 type FixtureReadState = { requestCount: number; pending: boolean; outcome: "not-requested" | "started" | "succeeded" | "failed" };
@@ -76,15 +76,47 @@ export class WorkspaceAcceptanceFixture {
       await this.#addFixtureThroughVisibleWorkspacePage(targetWindow, reservation.displayName);
       if (!this.#reserved?.workspaceId) throw new Error("临时工作区未完成登记，不能开始韩立验收。");
       this.setSceneActive(false);
+      let disposeFailed = false;
       return {
         ...reservation,
         // 完成状态只存在于夹具的唯一保留状态中；失败后同一句柄可再次尝试清理。
-        dispose: () => this.cleanup(),
+        dispose: async () => {
+          const result = await this.#disposePreparedEnvironment(targetWindow, reservation.displayName);
+          if (result.status === "failed") {
+            disposeFailed = true;
+            return result;
+          }
+          return { ...result, recovered: result.recovered || disposeFailed };
+        },
       };
     } catch (error) {
       this.cleanup();
       throw error;
     }
+  }
+
+  /** 清理成功后把主进程权威状态推送回原窗口，并等待临时根与其文件预览都离开页面。 */
+  async #disposePreparedEnvironment(targetWindow: BrowserWindow, displayName: string): Promise<WorkspaceAcceptanceCleanupResult> {
+    const result = this.cleanup();
+    if (result.status === "failed" || targetWindow.isDestroyed()) return result;
+    targetWindow.webContents.send("desktop:workspace-state-changed", this.#workspaces.read());
+    const projection = await targetWindow.webContents.executeJavaScript(`new Promise((resolve) => {
+      const deadline = Date.now() + 10_000;
+      const fixtureLabel = ${JSON.stringify(displayName)};
+      const check = () => {
+        const labels = [...document.querySelectorAll("#developer-workspace-tree .workspace-root-header span")]
+          .map((element) => element.textContent?.trim());
+        const released = !labels.includes(fixtureLabel) && !document.querySelector(".workspace-file-preview-panel");
+        if (released) return resolve("released");
+        if (Date.now() >= deadline) return resolve("projection-stale");
+        setTimeout(check, 50);
+      };
+      check();
+    })`);
+    if (projection !== "released") {
+      return { status: "failed", phase: "workspace", reason: "临时工作区已清理，但验收窗口未同步移除对应页面状态。", workspaceId: result.workspaceId };
+    }
+    return result;
   }
 
   /**

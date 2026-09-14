@@ -1,5 +1,5 @@
 /** 系统、设置与工作区桥接；路径选择和权限校验全部由主进程完成。 */
-import { invoke, send } from "../ipc-client.cjs";
+import { invoke, send, subscribe } from "../ipc-client.cjs";
 
 export function systemBridge() {
   return {
@@ -11,6 +11,7 @@ export function systemBridge() {
     getSettings: () => invoke("desktop:get-settings"),
     updateSettings: (settings: unknown) => invoke("desktop:update-settings", settings),
     getWorkspaces: () => invoke("desktop:get-workspaces"),
+    onWorkspaceStateChanged: (listener: (state: unknown) => void) => subscribe("desktop:workspace-state-changed", listener),
     addWorkspace: () => invoke("desktop:add-workspace"),
     updateWorkspacePermission: (id: string, permission: "read-only" | "workspace-write") => invoke("desktop:update-workspace-permission", id, permission),
     setPrimaryWorkspace: (id: string) => invoke("desktop:set-primary-workspace", id),

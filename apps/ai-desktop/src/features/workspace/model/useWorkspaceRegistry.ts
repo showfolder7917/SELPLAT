@@ -17,9 +17,16 @@ export function useWorkspaceRegistry({ confirmRemove }: UseWorkspaceRegistryOpti
     const desktop = getOptionalSystemDesktopApi();
     if (!desktop) return;
     void desktop.getEnvironment().then((environment) => setProjectRoot(environment.projectRoot));
-    void desktop.getWorkspaces().then((state) => {
+    let receivedAuthoritativeChange = false;
+    const unsubscribe = desktop.onWorkspaceStateChanged((state) => {
+      receivedAuthoritativeChange = true;
       applyWorkspaceState(state);
     });
+    void desktop.getWorkspaces().then((state) => {
+      // 订阅先于初次读取建立；若主进程期间已推送更新，不能再用较早的读取结果覆盖它。
+      if (!receivedAuthoritativeChange) applyWorkspaceState(state);
+    });
+    return unsubscribe;
   }, []);
 
   /** 同步唯一工作区快照，并让窗口标题跟随当前主工作区。 */

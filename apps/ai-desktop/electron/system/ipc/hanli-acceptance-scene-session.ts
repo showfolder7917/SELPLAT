@@ -18,6 +18,7 @@ interface AcceptanceSceneSessionOptions {
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindow;
   execute(goal: HanliComputerAcceptanceInDto, window: BrowserWindow): Promise<HanliAcceptanceRunOutDto>;
   setWorkspaceFixtureSceneActive?(active: boolean): void;
+  finalizeWorkspaceFixture?(): Promise<void>;
   onSceneReady(): void;
   onCompletionReviewReady(gate: CompletionReviewGateOutDto): void;
   record(eventType: string, details: Record<string, unknown>): void;
@@ -71,6 +72,8 @@ export async function runHanliAcceptanceSceneSession(options: AcceptanceSceneSes
         continue;
       }
 
+      // 进入完成门前先结束临时环境；工作区树和文件预览同步后，门禁才能观察真实任务卡。
+      await options.finalizeWorkspaceFixture?.();
       const gateRun = await options.execute(createCompletionGateGoal(currentGoal), prepared.window);
       const gate = {
         ...gateRun,

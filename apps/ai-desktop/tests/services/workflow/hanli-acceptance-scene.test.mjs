@@ -278,6 +278,7 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
   const target = { name: "target", webContents: { id: 77 }, isDestroyed: () => false, getBounds: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
   const child = { name: "child", webContents: { id: 88, executeJavaScript: async () => true }, isDestroyed: () => false, once() {}, loadFile: async () => undefined, show() {}, close() {} };
   const execution = [];
+  const lifecycle = [];
   const active = new Set();
   let gate = null;
   const completionPlan = {
@@ -291,6 +292,7 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
     goal: currentWindowGoal, plan: completionPlan, targetWindow: target, targetBounds: target.getBounds(), preloadPath: "preload.cjs", rendererRoot: "renderer",
     sessions: { register: (id) => active.add(id), remove: (id) => active.delete(id), isActive: (id) => active.has(id) }, createWindow: () => child,
     execute: async (currentGoal, window) => {
+      lifecycle.push(currentGoal.reviewMode || "normal");
       execution.push({ criteria: currentGoal.criteria, reviewMode: currentGoal.reviewMode, window: window.name });
       const index = execution.length;
       const criterionId = currentGoal.criterionIds?.[0] || "criterion-1";
@@ -301,11 +303,13 @@ test("完成前门禁只交付复核许可，最终全量记录才覆盖原始�
         evidenceAttachmentIds: [`shot-${index}`], startedAt: "2026-09-13T00:00:00.000Z", completedAt: "2026-09-13T00:00:01.000Z",
       };
     },
+    finalizeWorkspaceFixture: async () => { lifecycle.push("workspace-released"); },
     onSceneReady() {},
-    onCompletionReviewReady: (value) => { gate = value; },
+    onCompletionReviewReady: (value) => { lifecycle.push("completion-ready"); gate = value; },
     record() {},
   });
   assert.deepEqual(execution.map((item) => item.reviewMode || "normal"), ["normal", "pre-completion-gate", "post-completion-review"]);
+  assert.deepEqual(lifecycle, ["normal", "workspace-released", "pre-completion-gate", "completion-ready", "post-completion-review"], "临时环境必须先释放，完成门和完成态复核才能继续");
   assert.deepEqual(gate.evidenceAttachmentIds, ["shot-1", "shot-2"]);
   assert.equal("stepResults" in gate, false);
   assert.deepEqual(result.stepResults.map((item) => item.checkId), ["criterion-1", "criterion-2"]);
@@ -646,7 +650,9 @@ test("首次真实验收不把场景准备投影为令狐任务交接", () => {
   assert.match(desktopIpc, /fixtureLabel: workspaceAcceptanceEnvironment!\.displayName/);
   assert.match(desktopIpc, /hanli\.acceptance_workspace_fixture\.cleanup_failed/);
   assert.match(desktopIpc, /hanli\.acceptance_workspace_fixture\.cleanup_recovered/);
-  assert.match(desktopIpc, /cleanup = workspaceAcceptanceEnvironment!\.dispose\(\)/);
+  assert.match(desktopIpc, /cleanup = await workspaceAcceptanceEnvironment\.dispose\(\)/);
+  assert.match(desktopIpc, /finalizeWorkspaceFixture: finalizeWorkspaceAcceptanceEnvironment/);
+  assert.match(sceneSession, /await options\.finalizeWorkspaceFixture\?\.\(\)/);
   assert.ok(
     desktopIpc.indexOf("workspaceAcceptanceFixture.prepare") < desktopIpc.indexOf("planAcceptanceScene(acceptanceGoal)"),
     "已确认页面可用的受控工作区必须在场景规划前准备好",
