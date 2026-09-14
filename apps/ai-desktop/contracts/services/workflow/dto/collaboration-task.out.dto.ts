@@ -64,7 +64,7 @@ export interface CollaborationTaskOutDto {
   repairKind?: "execution" | null;
   /** 触发本次修复流程的失败原因。 */
   repairFailureReason?: string | null;
-  /** true 表示文件范围需要客户重新确认，程序必须等待用户继续。 */
+  /** true 表示存在客户控制的前置条件，程序必须等待客户按指导确认后继续。 */
   repairRequiresUserConfirmation?: boolean;
   /** 令狐已经完成的修复诊断；尚未诊断时为 null。 */
   repairDiagnosis?: CollaborationRepairDiagnosisOutDto | null;

@@ -22,6 +22,14 @@ export interface CollaborationIntegrationFailureOutDto {
   impact?: string;
   /** 经过确认后建议执行的恢复动作。 */
   recoveryAction?: string;
+  /** 容量预检阻断的已测量事实；仅由固定开发包预检写入，其他失败为 null 或缺失。 */
+  capacity?: {
+    fileBytes: number;
+    directoryBytes: number;
+    headroomBytes: number;
+    requiredBytes: number;
+    availableBytes: number;
+  } | null;
   /** 用于调查的完整技术说明。 */
   detail: string;
   /** 发生未提交修改的真实工作区；只用于定位，不代表写权限。 */

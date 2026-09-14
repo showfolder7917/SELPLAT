@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync, symlinkSync, existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { assertDeveloperPackageInputCapacity, estimateDeveloperPackageInputCapacity, prepareDeveloperPackageInput, cleanupDeveloperPackageInput } from "../../scripts/developer-package-input.mjs";
+import { assertDeveloperPackageInputCapacity, developerPackageCapacityBlockedMarker, estimateDeveloperPackageInputCapacity, formatDeveloperPackageCapacityBlocked, prepareDeveloperPackageInput, cleanupDeveloperPackageInput } from "../../scripts/developer-package-input.mjs";
 
 function fixture() {
   // 受控依赖租约会把系统临时目录定向到来源缓存；隔离工作树可显式提供其可写测试目录。
@@ -72,4 +72,12 @@ test("容量不足时在复制前拒绝，且不创建临时输入目录", () =>
       getStorageStats: () => ({ bsize: 1024, bavail: estimate.requiredBytes / 1024 }),
     }));
   } finally { rmSync(f.projectRoot, { recursive: true, force: true }); }
+});
+
+test("容量预检使用固定跨进程记录，不把普通错误文本当作恢复协议", () => {
+  const capacity = { fileBytes: 1, directoryBytes: 2, headroomBytes: 3, requiredBytes: 6, availableBytes: 4 };
+  assert.equal(
+    formatDeveloperPackageCapacityBlocked(capacity),
+    `${developerPackageCapacityBlockedMarker}${JSON.stringify(capacity)}`,
+  );
 });

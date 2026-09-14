@@ -14,6 +14,16 @@ import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.faca
 
 // 固定清单阻止令狐文案扩大测试范围或注入任意 shell 命令。
 const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
+// 仅接受开发包预检写出的固定记录，避免把任意命令中的 ENOSPC 文本误判为等待授权。
+const DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER = "AI_DESKTOP_PACKAGE_CAPACITY_BLOCKED:";
+
+type DeveloperPackageCapacity = {
+  fileBytes: number;
+  directoryBytes: number;
+  headroomBytes: number;
+  requiredBytes: number;
+  availableBytes: number;
+};
 
 /** 表示候选测试已经执行，但宿主测试编排器无法读取统一工作区中的发布产物。 */
 export class UnifiedTestInfrastructureError extends Error {
@@ -33,6 +43,20 @@ export class UnifiedTestInfrastructureError extends Error {
     // 两个路径只用于错误诊断，不参与新的路径解析。
     this.selectedWorkspaceRoot = selectedWorkspaceRoot;
     this.buildRoot = buildRoot;
+  }
+}
+
+/** 表示容量预检已在构建前安全停止，必须由具有保留策略权限的人员处理空间后再验证。 */
+export class UnifiedTestCapacityBlockedError extends Error {
+  readonly script: string;
+  readonly capacity: DeveloperPackageCapacity;
+
+  constructor(script: string, capacity: DeveloperPackageCapacity) {
+    const shortfallBytes = capacity.requiredBytes - capacity.availableBytes;
+    super(`${script} 等待容量授权：候选卷还缺少 ${shortfallBytes} 字节可用空间。`);
+    this.name = "UnifiedTestCapacityBlockedError";
+    this.script = script;
+    this.capacity = capacity;
   }
 }
 
@@ -172,7 +196,32 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(`${script} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
+      else {
+        const capacity = parseDeveloperPackageCapacityBlocked(output);
+        if (capacity) reject(new UnifiedTestCapacityBlockedError(script, capacity));
+        else reject(new Error(`${script} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
+      }
     });
   });
+}
+
+/** 只解析预检输出的最后一条固定标记，避免构建日志中的任意文本改变故障恢复路线。 */
+function parseDeveloperPackageCapacityBlocked(output: string): DeveloperPackageCapacity | null {
+  const markerIndex = output.lastIndexOf(DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER);
+  if (markerIndex < 0) return null;
+  const encoded = output.slice(markerIndex + DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER.length).split(/\r?\n/, 1)[0];
+  try {
+    const parsed: unknown = JSON.parse(encoded);
+    if (!isDeveloperPackageCapacity(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** 容量字段必须是非负安全整数，损坏记录继续按普通脚本失败处理。 */
+function isDeveloperPackageCapacity(value: unknown): value is DeveloperPackageCapacity {
+  if (!value || typeof value !== "object") return false;
+  return ["fileBytes", "directoryBytes", "headroomBytes", "requiredBytes", "availableBytes"]
+    .every((field) => Number.isSafeInteger((value as Record<string, unknown>)[field]) && (value as Record<string, number>)[field] >= 0);
 }

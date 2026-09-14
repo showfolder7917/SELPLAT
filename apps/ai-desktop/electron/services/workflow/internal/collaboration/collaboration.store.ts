@@ -243,10 +243,9 @@ export class CollaborationStore {
       // 只有聚合明确允许的失败状态可以进入恢复分支。
       if (!aggregate.canRequestRecovery()) throw new Error("当前任务不需要恢复。");
       const customerGuidance = task.customerActionGuidance || null;
-      // 本地修改归属是客户前置条件。只有令狐已经给出可执行指导、客户从该等待节点确认完成后，
-      // 才能进入复查；历史通用“继续”入口不得把未解决条件伪装成恢复中。
-      if (task.integrationFailure?.kind === "local-change-ownership" && !customerGuidance) {
-        throw new Error("请先按等待节点中的操作步骤处理本地修改；令狐给出完成标准后，才能从该卡点继续。");
+      // 客户控制的前置条件必须先有令狐生成的可执行指导；通用“继续”入口不能越过容量、归属等等待节点。
+      if (task.repairRequiresUserConfirmation && !customerGuidance) {
+        throw new Error("请先按等待节点中的操作步骤处理客户前置条件；令狐给出完成标准后，才能从该卡点继续。");
       }
       if (task.state === "test-failed") {
         task.state = "ready-for-integration";

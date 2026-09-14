@@ -760,6 +760,57 @@ test("统一测试失败即使日志引用用户规则也由令狐修复而不�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("容量预检等待授权时令狐生成指导且不重复派发源码修复", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-capacity-waiting-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = collaborationStore.submitTask({ title: "等待开发包容量", problemStatement: "候选卷空间不足", confirmedIntent: "保留当前结果并等待授权处理空间", workspaceState, locale: "zh-CN" });
+    collaborationStore.updateTask(submitted.taskId, "fixture.capacity_blocked", (task) => {
+      task.state = "blocked";
+      task.repairRequiresUserConfirmation = true;
+      task.blockingReason = "开发包容量不足，等待保留策略授权";
+      task.recoveryTargetState = "ready-for-integration";
+      task.integrationFailure = {
+        kind: "infrastructure", summary: "开发包容量不足，等待保留策略授权", impact: "容量预检在构建前停止；当前还缺少 346083328 字节可用空间。",
+        recoveryAction: "由有保留策略权限的人员处理确认可释放的空间后重试。",
+        capacity: { fileBytes: 1500782592, directoryBytes: 7880704, headroomBytes: 67108864, requiredBytes: 1575772160, availableBytes: 1229688832 },
+        detail: "候选卷还缺少 346083328 字节可用空间", conflictFiles: [], baseSha: "base", resultSha: "result", generation: 174, occurredAt: new Date().toISOString(),
+      };
+    });
+    let repairRequests = 0;
+    let guidanceFacts = null;
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      continueTask: () => collaborationStore.state(),
+      recoverTask: () => collaborationStore.state(),
+      repairTechnicalFailure: async () => { repairRequests += 1; throw new Error("容量等待不得进入源码修复"); },
+      recordCustomerActionGuidance: (taskId, guidance) => collaborationStore.updateTask(taskId, "customer.capacity_action_required", (task) => { task.customerActionGuidance = guidance; }),
+    };
+    assert.throws(() => collaborationStore.continueTask(submitted.taskId), /客户前置条件/);
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
+    store.setEnabled(true);
+    const facade = new LinghuAutomationFacade({
+      store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined,
+      readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined,
+      analyzeCustomerActionGuidance: async (facts) => {
+        guidanceFacts = facts;
+        return JSON.stringify({
+        title: "等待保留策略授权", problem: "开发包容量预检已停止候选构建。", reasonCustomerMustAct: "只有具有保留策略权限的人员能确认哪些发布物可以处理。",
+        steps: ["确认可处理的发布物范围。", "完成处理后重新执行统一测试。"], completionCriteria: ["容量预检通过。"],
+        });
+      },
+    });
+    await facade.checkNow();
+    assert.equal(repairRequests, 0);
+    assert.deepEqual(guidanceFacts.integrationFailure.capacity, { fileBytes: 1500782592, directoryBytes: 7880704, headroomBytes: 67108864, requiredBytes: 1575772160, availableBytes: 1229688832 });
+    assert.match(guidanceFacts.integrationFailure.recoveryAction, /保留策略权限/);
+    assert.equal(collaborationStore.state().tasks[0].customerActionGuidance?.title, "等待保留策略授权");
+    assert.equal(facade.state().flowSnapshots[0].blockingKind, "business");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("同一统一测试故障只触发一次令狐源码修复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-test-repair-limit-"));
   try {
@@ -2894,4 +2945,32 @@ test("令狐活跃调查期间晚到恢复不得重排旧结果，真实进展�
     await coordinator.recoverTask(task.taskId, "重启前晚到超时");
     assert.equal(store.task(task.taskId).state, "awaiting-restart");
   } finally { finishDiagnosis?.("结束"); await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("容量等待的直接技术修复入口不绕过客户确认", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "capacity-repair-entry-"));
+  let coordinator;
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask({ title: "容量等待", problemStatement: "预检容量不足", confirmedIntent: "等待授权后重新验证", workspaceState, locale: "zh-CN" });
+    store.updateTask(task.taskId, "fixture.capacity_waiting", (current) => {
+      current.state = "blocked";
+      current.repairRequiresUserConfirmation = true;
+      current.blockingReason = "开发包容量不足，等待保留策略授权";
+      current.integrationFailure = { kind: "infrastructure", detail: "候选卷空间不足", conflictFiles: [], baseSha: "base", resultSha: "result", generation: 174, occurredAt: new Date().toISOString() };
+    });
+    let executorCreated = 0;
+    coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => {}, start: () => "span", instant: () => {}, interruptOpenSpans: () => {} },
+      workspaces: { commitTaskResult: async () => "new" },
+      executor: new ExecutorFacade({ createExecutor: async () => { executorCreated += 1; throw new Error("容量等待不得创建修复执行者"); } }),
+      integrationPipeline: { finishWaitingTask: () => {}, trackWaitingTask: () => {}, schedule: () => {}, dispose: () => {} },
+      emitState: () => {}, emitStream: () => {},
+    });
+    assert.equal(await coordinator.repairTechnicalFailure(task.taskId), false);
+    assert.equal(executorCreated, 0);
+    assert.equal(store.task(task.taskId).state, "blocked");
+    assert.equal(store.task(task.taskId).versionWorkspace, null);
+  } finally { await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
 });

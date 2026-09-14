@@ -5,6 +5,13 @@ import path from "node:path";
 const ownedInputs = new Set();
 const skippedDependencyEntries = new Set([".bin", ".package-lock.json"]);
 const packageInputHeadroomBytes = 64 * 1024 * 1024;
+// 子进程边界会丢失 Error 的自定义字段；此标记让统一测试只识别本预检的受控容量阻断。
+export const developerPackageCapacityBlockedMarker = "AI_DESKTOP_PACKAGE_CAPACITY_BLOCKED:";
+
+/** 将经过本模块确认的容量事实编码为跨进程诊断记录，普通 ENOSPC 不使用此格式。 */
+export function formatDeveloperPackageCapacityBlocked(capacity) {
+  return `${developerPackageCapacityBlockedMarker}${JSON.stringify(capacity)}`;
+}
 
 /** 逐层拒绝输出父目录链接，防止构建缓存中的链接把复制或清理引到工程外。 */
 function prepareInputParent(projectRoot) {

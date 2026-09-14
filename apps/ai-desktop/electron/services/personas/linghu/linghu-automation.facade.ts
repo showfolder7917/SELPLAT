@@ -16,7 +16,7 @@ import { LINGHU_AUTOMATION_MODULES, LINGHU_SAFEGUARD_INSTRUCTIONS, LinghuAutomat
 import { automaticFlowSnapshots, faultFingerprint, moduleCompletionReport, moduleInstruction, moduleLabel, taskHumanReport, testResourceContext } from "./internal/linghu-flow.analyzer.js";
 import { customerActionFacts, customerActionLocation, parseCustomerActionGuidance } from "./internal/linghu-customer-action-guidance.js";
 // 基础设施异常类型留在 internal，外部只能通过 Facade 的静态判断入口识别。
-import { isUnifiedTestInfrastructureError } from "../../support/capabilities/testing/index.js";
+import { isUnifiedTestCapacityBlockedError, isUnifiedTestInfrastructureError } from "../../support/capabilities/testing/index.js";
 
 // 固定人物 ID 用于任务发起人、恢复负责人和审计关联。
 const LINGHU_MEMBER_ID = "linghu-ancestor";
@@ -71,6 +71,11 @@ export class LinghuAutomationFacade {
   static isUnifiedTestInfrastructureError(error: unknown): boolean {
     // instanceof 判断仍在令狐模块内部完成，Runner 的具体异常类型不会进入公开 index。
     return isUnifiedTestInfrastructureError(error);
+  }
+
+  /** 容量预检阻断只能等待有权人员处理存储，不能创建新的源码修复。 */
+  static isUnifiedTestCapacityBlockedError(error: unknown): boolean {
+    return isUnifiedTestCapacityBlockedError(error);
   }
 
   // 私有字段保存注入端口，外部模块不能绕过公开方法调用内部实现。
@@ -331,8 +336,8 @@ export class LinghuAutomationFacade {
     // 人类报告用于状态、事件和等待原因保持同一事实表述。
     const report = taskHumanReport(this.#collaboration.state(), task, snapshot);
     this.#recordEvent("linghu.automation.issue_detected", { report, fingerprint }, task.taskId);
-    if (snapshot?.blockingKind === "business") {
-      // 业务选择只登记异常和检查点，令狐绝不调用 continue/recover 代替用户决定。
+    if (task.repairRequiresUserConfirmation || snapshot?.blockingKind === "business") {
+      // 客户前置条件优先于快照；快照暂缺时同样不得落入基础设施修复分支绕过授权。
       this.#recordEvent("business.exception", {
         operation: "linghu_recover_flow_requires_business_choice",
         sourceType: "task",
