@@ -1,13 +1,15 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { cleanupDeveloperPackageInput, prepareDeveloperPackageInput } from "./developer-package-input.mjs";
+import { assertDeveloperPackageInputCapacity, cleanupDeveloperPackageInput, prepareDeveloperPackageInput } from "./developer-package-input.mjs";
 
 const applicationRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = path.resolve(applicationRoot, "../..");
 const builderArguments = process.argv.slice(2);
 if (!builderArguments.length) throw new Error("Developer packaging requires an electron-builder target.");
 
+// 构建后可用空间仍可能变化，所有 electron-builder 调用都在复制依赖前再次确认候选卷容量。
+assertDeveloperPackageInputCapacity({ applicationRoot, projectRoot });
 const packageInputRoot = prepareDeveloperPackageInput({ applicationRoot, projectRoot });
 try {
   const result = spawnSync(

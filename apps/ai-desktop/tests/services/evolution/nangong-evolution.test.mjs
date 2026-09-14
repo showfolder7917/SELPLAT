@@ -94,7 +94,7 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
       readProjectScope: options.readProjectScope || (() => projectPaths.projectRoot),
       screenshots: {},
     });
-    super({ ...options, collaboration: { state: () => ({ tasks: [], members: [] }), ...options.collaboration }, prompts, hanli: hanliRuntime.facade });
+    super({ ...options, collaboration: { state: () => ({ tasks: [], members: [] }), ...options.collaboration }, prompts, hanli: hanliRuntime.facade, isCurrentUserTaskRuleId: options.isCurrentUserTaskRuleId || (() => true) });
     this.hanliRuntime = hanliRuntime;
   }
   sendConversationMessage(...args) { return this.nangongRuntime.facade.sendConversationMessage(...args); }
@@ -1357,6 +1357,46 @@ test("预计修改文件重叠时程序阻止多人重复分发", async () => {
     assert.equal(submitted, 0);
     assert.equal(facade.state().proposals[0].distributionPlan.validation.decision, "revise");
     assert.match(facade.state().proposals[0].distributionPlan.validation.findings.join("；"), /同时属于/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("分发计划中的 core 规则在创建任务前被当前用户目录校验拒绝", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-task-rule-catalog-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let attempts = 0;
+    let submittedAtAttempt = null;
+    let retryPrompt = "";
+    const invalidPlan = JSON.stringify({ summary: "首轮错误引用 core 规则。", units: [{ title: "校验专项规则目录", scope: "为任务分发补充当前用户规则目录校验", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: ["CODE_JS_RULES"], independentReason: "目录校验与分发在同一职责边界" }] });
+    const validPlan = JSON.stringify({ summary: "第二轮移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "为任务分发补充当前用户规则目录校验", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "目录校验与分发在同一职责边界" }] });
+    const facade = new PersonaEvolutionRuntime({
+      store,
+      conversation,
+      recordEvent: () => undefined,
+      isCurrentUserTaskRuleId: (logicalId) => logicalId === "XUNAN_REGISTERED_RULE",
+      collaboration: {
+        submitTask(request) {
+          submittedAtAttempt = attempts;
+          return { tasks: [{ taskId: "task-rule-catalog", evolutionProposalId: request.evolutionProposalId }] };
+        },
+      },
+      async planDistribution(prompt) {
+        attempts += 1;
+        if (attempts === 2) retryPrompt = prompt;
+        return attempts === 1 ? invalidPlan : validPlan;
+      },
+    });
+    let state = facade.createTopic(topicRequest("当前用户规则目录校验"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    state = await facade.dispatch(proposalId);
+    assert.equal(attempts, 2);
+    assert.equal(submittedAtAttempt, 2);
+    assert.match(retryPrompt, /CODE_JS_RULES/);
+    assert.match(retryPrompt, /当前用户未登记的专项规则/);
+    assert.deepEqual(state.proposals[0].distributionPlan.units[0].taskRuleIds, []);
+    assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

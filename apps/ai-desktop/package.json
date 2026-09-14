@@ -26,7 +26,7 @@
     "dist:win": "npm run dist:win:developer",
     "dist:win:developer": "node scripts/assert-package-host.mjs win32 && npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --win nsis --x64",
     "dist:mac:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --mac dmg",
-    "package:mac:developer": "npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --mac dir && node scripts/run-with-dependencies.mjs node scripts/sign-mac-developer-app.mjs",
+    "package:mac:developer": "node scripts/run-with-dependencies.mjs node scripts/assert-developer-package-space.mjs && npm run build:developer && node scripts/run-with-dependencies.mjs node scripts/package-developer.mjs --mac dir && node scripts/run-with-dependencies.mjs node scripts/sign-mac-developer-app.mjs",
     "verify:mac:developer": "node scripts/run-with-dependencies.mjs node scripts/verify-mac-developer-app.mjs",
     "verify:developer-package-root": "node scripts/run-with-dependencies.mjs node scripts/verify-developer-package-root.mjs",
     "verify:package-content": "node scripts/run-with-dependencies.mjs node scripts/verify-package-content.mjs",
