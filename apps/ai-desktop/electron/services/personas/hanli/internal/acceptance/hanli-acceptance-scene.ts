@@ -37,7 +37,6 @@ interface AcceptanceScenePlanningContext {
   requirements: Array<{ requirementId: string; acceptedKinds: AcceptanceSceneKind[]; completed: boolean }>;
   remainingCriterionIds: string[];
   remainingRequirementIds: string[];
-  previousAttemptFailure?: string;
 }
 
 interface AcceptanceSceneRequirement {
@@ -67,7 +66,7 @@ class AcceptanceScenePlanModel {
 
   get segments(): AcceptanceSceneSegmentOutDto[] { return this.#segments; }
 
-  planningContext(previousAttemptFailure?: string): AcceptanceScenePlanningContext {
+  planningContext(): AcceptanceScenePlanningContext {
     const ownedCriterionIds = this.#segments.flatMap((segment) => segment.ownedConditions.map(({ criterionId }) => criterionId));
     const completedRequirementIds = this.completedRequirementIds();
     const context: AcceptanceScenePlanningContext = {
@@ -80,7 +79,7 @@ class AcceptanceScenePlanModel {
       remainingCriterionIds: this.#expectedCriterionIds.filter((id) => !ownedCriterionIds.includes(id)),
       remainingRequirementIds: this.#requirements.map(({ requirementId }) => requirementId).filter((id) => !completedRequirementIds.includes(id)),
     };
-    return previousAttemptFailure ? { ...context, previousAttemptFailure } : context;
+    return context;
   }
 
   register(segment: AcceptanceSceneSegmentOutDto): AcceptanceScenePlanningContext {
@@ -231,6 +230,11 @@ function sceneRequirementsFor(goal: HanliComputerAcceptanceInDto): AcceptanceSce
     acceptedKinds: ["collaboration-state-syncing", "collaboration-state-unavailable"],
     missingMessage: "本轮已经签发协作状态夹具，场景计划必须覆盖同步中或状态暂未更新。 ",
   });
+  if (goal.interactionCapabilities?.some((capability) => capability === "workspace-cleanup-recovery" || capability === "workspace-startup-recovery")) requirements.push({
+    requirementId: "workspace-lifecycle-review",
+    acceptedKinds: ["workspace-lifecycle-review"],
+    missingMessage: "本轮已批准工作区收尾或重启回收，场景计划必须在工作区夹具阶段后完成生命周期复核。",
+  });
   return requirements;
 }
 
@@ -319,7 +323,7 @@ export function createAcceptanceSceneSubmission(options: { onRejectedPlan?(rejec
         if (firstAttempt.plan) return firstAttempt.plan;
         const secondAttempt = beginAttempt();
         active = secondAttempt;
-        await model(secondAttempt.requestId, 2, secondAttempt.model.planningContext(firstAttempt.lastRejection?.message));
+        await model(secondAttempt.requestId, 2, secondAttempt.model.planningContext());
         if (!secondAttempt.plan) {
           if (secondAttempt.lastRejection) throw new Error(`韩立两次提交的场景计划均未通过校验：${secondAttempt.lastRejection.message}`);
           throw new Error("韩立两次都未通过场景提交工具提交结果；普通说明文字不能代替场景计划。");
