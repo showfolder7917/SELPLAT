@@ -70,6 +70,11 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
   const oneShotRun = evolutionState.oneShotRun;
   // 没有正式提案标识的运行无法与当前专题安全关联。
   if (!oneShotRun?.proposalId) return null;
+  // 缺少专题或提案的历史卡片不能构造补验关联请求，保持不渲染。
+  if (!group.topicId || !group.proposalId) return null;
+  // 闭包内使用已收口的稳定身份，避免卡片重新投影时带入可空值。
+  const topicId = group.topicId;
+  const proposalId = group.proposalId;
 
   // 专题归属同时核对课题和提案，避免把另一专题的恢复按钮显示到当前卡片。
   const belongsToCurrentGroup = oneShotRun.topicId === group.topicId
@@ -94,7 +99,14 @@ export function TaskGroupRecovery({ group, evolution, locale }: TaskGroupRecover
 
   /** 继续同一个一次性运行，不创建新的专题或提案。 */
   const resumeOriginalRun = () => {
-    void evolution.resumeOneShot(oneShotRun.runId);
+    void evolution.resumeOneShot({
+      // 当前专题卡限定补验回到原专题，不允许恢复代码自行选择别的专题。
+      topicId,
+      // 当前专题卡的提案必须仍是修订链当前版本。
+      proposalId,
+      // 运行标识用于拒绝晚到请求继续已经替换的运行。
+      runId: oneShotRun.runId,
+    });
   };
 
   return (

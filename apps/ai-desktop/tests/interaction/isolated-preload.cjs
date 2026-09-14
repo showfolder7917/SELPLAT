@@ -548,8 +548,13 @@ contextBridge.exposeInMainWorld("desktop", {
     publishCollaborationTimelineChanged();
     return state;
   },
-  resumeEvolutionOneShot: async (runId) => {
-    if (evolutionState.oneShotRun?.runId !== runId) throw new Error("运行已变化");
+  resumeEvolutionOneShot: async (request) => {
+    const runId = request?.runId;
+    const topicId = request?.topicId;
+    const proposalId = request?.proposalId;
+    if (evolutionState.oneShotRun?.runId !== runId
+      || evolutionState.oneShotRun?.topicId !== topicId
+      || evolutionState.oneShotRun?.proposalId !== proposalId) throw new Error("补验未能关联原专题、当前提案和原运行");
     const mode = evolutionState.oneShotRun.action;
     await new Promise((resolve) => setTimeout(resolve, 500));
     if (mode === "failure") throw new Error("验收连接仍不可用");

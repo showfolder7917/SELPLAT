@@ -731,7 +731,7 @@ test("南宫韩立令狐以并列人物模块接入中立 Evolution 与 Workflow
   assert.match(main, /hanli:\s*hanliRuntime\.facade/);
   assert.doesNotMatch(main, /createHanliRuntime\(\{\s*application:/);
   assert.doesNotMatch(main, /const nangongStore\s*=/);
-  assert.match(collaborationIpc, /await personaWorkflow\.resumeOneShotRun\(runId\)[\s\S]*await refreshWorkflowCheckpoints\?\.\(\)/, "继续按钮必须立即唤醒统一卡点入口");
+  assert.match(collaborationIpc, /await personaWorkflow\.requestSupplementalAcceptance\(request\)[\s\S]*await refreshWorkflowCheckpoints\?\.\(\)/, "补验入口必须通过 Workflow 校验关联后立即唤醒统一卡点入口");
   for (const runtimeName of ["nangongRuntime", "hanliRuntime", "linghuRuntime"]) {
     assert.match(personaBootstrap, new RegExp(`memberId: (?:options\\.)?${runtimeName}\\.memberId`));
   }
