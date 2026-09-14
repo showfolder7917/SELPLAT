@@ -6,8 +6,10 @@ export interface AcceptanceSceneSegmentOutDto {
   reason: string;
   /** 原条件是否必须跨越“验收中 -> 已完成”才能取得完整证据；仅当前窗口可以启用。 */
   completionReviewRequired: boolean;
-  /** 本阶段负责的原验收条件及其前提。 */
-  conditions: { criterionId: string; prerequisite: string }[];
+  /** 本阶段唯一占用并产出正式结论的原验收条件及其前提。 */
+  ownedConditions: { criterionId: string; prerequisite: string }[];
+  /** 后续场景为完成已签发能力而关联的已占用条件；它不产生第二份正式结论。 */
+  relatedCriterionIds: string[];
 }
 
 /** 韩立可以组合多个只读证据阶段；程序按顺序执行并按原条件编号汇总结论。 */
