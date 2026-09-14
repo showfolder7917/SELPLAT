@@ -13,7 +13,7 @@ import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.faca
 // 只有经过验证的 Developer 可执行文件才能进入重启与发布流程。
 
 // 固定清单阻止令狐文案扩大测试范围或注入任意 shell 命令。
-const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:mac:developer"] as const;
+const FIXED_UNIFIED_SCRIPTS = ["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
 
 /** 表示候选测试已经执行，但宿主测试编排器无法读取统一工作区中的发布产物。 */
 export class UnifiedTestInfrastructureError extends Error {

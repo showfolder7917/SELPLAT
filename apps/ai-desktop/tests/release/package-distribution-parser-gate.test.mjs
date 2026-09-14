@@ -5,6 +5,7 @@ import { assertPackagedDistributionParser } from "../../scripts/package-distribu
 
 const distributionService = readFileSync(new URL("../../electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts", import.meta.url), "utf8");
 const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
+const unifiedTestRunner = readFileSync(new URL("../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 
 test("当前分发解析器可作为发布包内容", () => {
   assert.doesNotThrow(() => assertPackagedDistributionParser(distributionService));
@@ -20,4 +21,8 @@ test("旧整段 JSON 解析器不能进入发布包", () => {
 test("发布内容校验提取并检查南宫婉分发解析器", () => {
   assert.match(packageContentVerifier, /extractFile\(asarPath, packagedDistributionServicePath\)/);
   assert.match(packageContentVerifier, /assertPackagedDistributionParser\(packagedDistributionService\.toString\("utf8"\)\)/);
+});
+
+test("统一测试在 macOS 应用验证前检查刚打包的分发解析器", () => {
+  assert.match(unifiedTestRunner, /\["test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"\]/);
 });
