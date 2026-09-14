@@ -171,6 +171,64 @@ function mergeLiveOutput(
   };
 }
 
+/**
+ * 先接通实时事件，再读取当前快照；启动期间若已有新事件到达，迟到的旧快照不能覆盖它。
+ * 所有人物页面共享这一入口，避免各页面分别处理 Electron 初始化竞态。
+ */
+function connectAuthoritativeSnapshot<Snapshot>(input: {
+  read: () => Promise<Snapshot>;
+  subscribe: (listener: (snapshot: Snapshot) => void) => () => void;
+  apply: (snapshot: Snapshot) => void;
+  unavailable: (reason: unknown) => void;
+}): () => void {
+  let disposed = false;
+  let receivedEvent = false;
+  const unsubscribe = input.subscribe((snapshot) => {
+    receivedEvent = true;
+    if (!disposed) input.apply(snapshot);
+  });
+
+  void input.read()
+    .then((snapshot) => {
+      if (!disposed && !receivedEvent) input.apply(snapshot);
+    })
+    .catch((reason) => {
+      if (!disposed && !receivedEvent) input.unavailable(reason);
+    });
+
+  return () => {
+    disposed = true;
+    unsubscribe();
+  };
+}
+
+/** 订阅只通知“数据已变化”时，以递增读取序号保证最后发起的权威读取最后生效。 */
+function connectAuthoritativeRefresh<Snapshot>(input: {
+  read: () => Promise<Snapshot>;
+  subscribe: (refresh: () => void) => () => void;
+  apply: (snapshot: Snapshot) => void;
+  unavailable: (reason: unknown) => void;
+}): () => void {
+  let disposed = false;
+  let readSequence = 0;
+  const refresh = () => {
+    const currentSequence = ++readSequence;
+    void input.read()
+      .then((snapshot) => {
+        if (!disposed && currentSequence === readSequence) input.apply(snapshot);
+      })
+      .catch((reason) => {
+        if (!disposed && currentSequence === readSequence) input.unavailable(reason);
+      });
+  };
+  const unsubscribe = input.subscribe(refresh);
+  refresh();
+  return () => {
+    disposed = true;
+    unsubscribe();
+  };
+}
+
 /** 协作工作区的主进程订阅、页面状态、派生数据和业务操作统一入口。 */
 export function useCollaborationWorkspace() {
   // 协作总状态：控制当前模式、成员列表、任务列表和已选人物。
@@ -200,42 +258,30 @@ export function useCollaborationWorkspace() {
       return;
     }
 
-    /** 重新读取已提交的权威时间线，读取失败时保留当前页面并显示原因。 */
-    const refreshTimelineFromDesktop = () => {
-      void desktop.getCollaborationTimeline()
-        .then(setTimeline)
-        .catch((reason) => {
-          setError(readableDesktopError(reason, "无法读取任务协作时间线。"));
-        });
-    };
-
-    // 首次进入页面时读取三份独立状态，后续变化由各自事件通道更新。
-    void desktop.getCollaborationState()
-      .then((nextState) => {
+    // 先建立事件订阅再读初始快照，防止应用恢复任务时的新状态被迟到的启动快照覆盖。
+    const removeStateListener = connectAuthoritativeSnapshot({
+      read: () => desktop.getCollaborationState(),
+      subscribe: (listener) => desktop.onCollaborationState((event: CollaborationStateEventOutDto) => listener(event.state)),
+      apply: (nextState) => {
         setState(nextState);
         setStateReadStatus("ready");
-      })
-      .catch((reason) => {
+      },
+      unavailable: (reason) => {
         setStateReadStatus("unavailable");
         setError(readableDesktopError(reason, "无法读取协作状态。"));
-      });
-    refreshTimelineFromDesktop();
-    void desktop.getLinghuAutomationState().then((nextState) => {
-      setLinghuAutomation(nextState);
+      },
     });
-
-    // 成员或任务变化时，主进程会推送完整协作状态。
-    const removeStateListener = desktop.onCollaborationState((event: CollaborationStateEventOutDto) => {
-      setState(event.state);
-      setStateReadStatus("ready");
+    const removeTimelineListener = connectAuthoritativeRefresh({
+      read: () => desktop.getCollaborationTimeline(),
+      subscribe: (refresh) => desktop.onCollaborationTimelineChanged(refresh),
+      apply: setTimeline,
+      unavailable: (reason) => setError(readableDesktopError(reason, "无法读取任务协作时间线。")),
     });
-
-    // 时间线只在事务提交事件到达后重新读取，避免 Renderer 自己拼接审计历史。
-    const removeTimelineListener = desktop.onCollaborationTimelineChanged(refreshTimelineFromDesktop);
-
-    // 令狐自动化有独立生命周期，不能从普通协作成员状态推断。
-    const removeLinghuListener = desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => {
-      setLinghuAutomation(event.state);
+    const removeLinghuListener = connectAuthoritativeSnapshot({
+      read: () => desktop.getLinghuAutomationState(),
+      subscribe: (listener) => desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => listener(event.state)),
+      apply: setLinghuAutomation,
+      unavailable: (reason) => setError(readableDesktopError(reason, "无法读取令狐自动巡检状态。")),
     });
 
     // 同一流事件分别归档到任务和具体时间线节点，服务两个不同展示区域。

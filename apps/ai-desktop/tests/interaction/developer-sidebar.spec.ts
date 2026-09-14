@@ -678,6 +678,39 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await taskList.getByRole("button", { name: "单会话" }).click();
 });
 
+test("启动读取期间收到的新人物状态不会被迟到的空闲快照覆盖", async () => {
+  const isolatedEnvironment = { ...process.env, AI_DESKTOP_INTERACTION_COLLABORATION_READ_DELAY_MS: "500" };
+  delete isolatedEnvironment.ELECTRON_RUN_AS_NODE;
+  delete isolatedEnvironment.NODE_OPTIONS;
+  delete isolatedEnvironment.NODE_INSPECT_RESUME_ON_START;
+  delete isolatedEnvironment.VSCODE_INSPECTOR_OPTIONS;
+  const startupApplication = await electron.launch({
+    args: [path.resolve("tests/interaction/isolated-main.cjs")],
+    env: { ...isolatedEnvironment, AI_DESKTOP_INTERACTION_FILE: productionRendererFile },
+  });
+  try {
+    const startupPage = await startupApplication.firstWindow();
+    await startupPage.waitForLoadState("domcontentloaded");
+    await startupPage.getByRole("button", { name: "折叠任务" }).waitFor();
+    await startupPage.evaluate(async () => {
+      await (window as any).desktop.setInteractionCollaborationExecutionFixture(true);
+      await (window as any).desktop.setInteractionTaskTimelineFixture(true);
+    });
+    const tasks = startupPage.locator("#developer-task-list");
+    await tasks.getByRole("button", { name: "协同模式", exact: true }).click();
+    await expect(tasks.getByRole("button", { name: /冰魄仙子/ })).toContainText("正在执行");
+    await startupPage.waitForTimeout(550);
+    await expect(tasks.getByRole("button", { name: /冰魄仙子/ })).toContainText("正在执行");
+    await tasks.getByRole("button", { name: /任务协作群/ }).click();
+    const taskGroup = startupPage.getByRole("region", { name: "任务协作群" });
+    await expect(taskGroup.getByText("专题任务 01 · 修订截图按钮可用态", { exact: true })).toBeVisible();
+    await startupPage.waitForTimeout(550);
+    await expect(taskGroup.getByText("专题任务 01 · 修订截图按钮可用态", { exact: true })).toBeVisible();
+  } finally {
+    await startupApplication.close();
+  }
+});
+
 test("南宫婉会话保留自动演化入口且演化工作台已不兼容退役", async () => {
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();

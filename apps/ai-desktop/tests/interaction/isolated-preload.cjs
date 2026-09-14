@@ -71,6 +71,8 @@ let collaborationState = {
   nextIntegrationGeneration: 1,
   updatedAt: "2026-08-23T00:00:00.000Z",
 };
+let delayedCollaborationStateRead = Number(process.env.AI_DESKTOP_INTERACTION_COLLABORATION_READ_DELAY_MS) || null;
+let delayedCollaborationTimelineRead = Number(process.env.AI_DESKTOP_INTERACTION_COLLABORATION_READ_DELAY_MS) || null;
 let linghuAutomationState = {
   version: 2,
   enabled: false,
@@ -493,8 +495,20 @@ contextBridge.exposeInMainWorld("desktop", {
   clearTempFiles: async () => ({ path: process.env.AI_DESKTOP_TEMP_MATERIALS_ROOT, fileCount: 0, totalBytes: 0 }),
   getAuditLogInfo: async () => ({ path: process.env.AI_DESKTOP_ARCHIVE_LOG_ROOT, taskCount: 0, latestTask: null }),
   openAuditLogDirectory: async () => undefined,
-  getCollaborationState: async () => structuredClone(collaborationState),
-  getCollaborationTimeline: async () => structuredClone(interactionTimelineSnapshot()),
+  getCollaborationState: async () => {
+    if (!delayedCollaborationStateRead) return structuredClone(collaborationState);
+    const staleSnapshot = structuredClone(collaborationState);
+    await new Promise((resolve) => setTimeout(resolve, delayedCollaborationStateRead));
+    delayedCollaborationStateRead = null;
+    return staleSnapshot;
+  },
+  getCollaborationTimeline: async () => {
+    const staleSnapshot = structuredClone(interactionTimelineSnapshot());
+    if (!delayedCollaborationTimelineRead) return staleSnapshot;
+    await new Promise((resolve) => setTimeout(resolve, delayedCollaborationTimelineRead));
+    delayedCollaborationTimelineRead = null;
+    return staleSnapshot;
+  },
   onCollaborationTimelineChanged: (listener) => { collaborationTimelineListeners.add(listener); return () => collaborationTimelineListeners.delete(listener); },
   setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },
   selectCollaborationMember: async (memberId) => { collaborationState.selectedMemberId = memberId; return publishCollaborationState("member.selected"); },
@@ -744,6 +758,13 @@ contextBridge.exposeInMainWorld("desktop", {
     return structuredClone(interactionTimelineSnapshot());
   },
   setInteractionCollaborationExecutionFixture: async (active) => {
+    const executor = collaborationState.members.find((member) => member.displayName === "冰魄仙子");
+    if (executor) {
+      executor.state = active ? "working" : "idle";
+      executor.role = active ? "implementation" : null;
+      executor.currentTaskId = active ? "interaction-execution-task" : null;
+      executor.updatedAt = new Date().toISOString();
+    }
     collaborationState.tasks = active ? [{
       taskId: "interaction-execution-task", taskRevision: 1, assignmentId: "assignment-2", workerGeneration: 2, state: "integrated", phase: "ready", executorMemberId: "isolated-member-5", currentReviewerMemberId: null, currentPlanVersion: 1, explicitRejectionCount: 0, infrastructureFailureCount: 0, mergeStrategy: "INDEPENDENT", atomicGroupId: null, dependencyTaskIds: [], integrationGeneration: 2,
       initiator: { memberId: "han-li", displayName: "韩立" }, historyCompleteness: "complete",
