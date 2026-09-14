@@ -57,6 +57,7 @@ export class NangongTaskDistributionService {
 
     if (!proposal.distributionPlan || proposal.distributionPlan.validation.decision !== "passed") {
       let feedback = proposal.distributionPlan?.validation.findings.join("；") || "";
+      let feedbackKind: "conflict" | "format" = "conflict";
       for (let attempt = 1; attempt <= 2; attempt += 1) {
         const planningTaskId = `proposal:${proposal.proposalId}`;
         const planningStartedAt = new Date().toISOString();
@@ -71,7 +72,10 @@ export class NangongTaskDistributionService {
               impactScope: proposal.impactScope.join("；"),
               acceptanceCriteria: proposal.acceptanceCriteria.join("；"),
               exclusions: proposal.exclusions.join("；") || "无",
-              feedback: feedback ? `程序上一轮核对到的确定性冲突：${feedback}` : "这是首次拆分。",
+              // 格式纠正与任务冲突必须以不同语义传达，避免模型将输出格式问题误当作拆分结论。
+              feedback: feedback
+                ? `${feedbackKind === "format" ? "程序上一轮检测到格式错误" : "程序上一轮核对到的确定性冲突"}：${feedback}`
+                : "这是首次拆分。",
             }),
             topic.workspaceState,
             topic.locale,
@@ -89,6 +93,7 @@ export class NangongTaskDistributionService {
               ? "未提取到完整 JSON 对象"
               : `提取到 ${error.candidateCount} 个闭合对象但 JSON 语法无效`;
             feedback = `上一轮${formatDetail}（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
+            feedbackKind = "format";
             continue;
           }
           const detail = error instanceof Error ? error.message : String(error);
@@ -105,6 +110,7 @@ export class NangongTaskDistributionService {
         this.options.recordEvent("nangong.distribution_validation.completed", { proposalId, attempt, decision: validation.decision, reason: validation.reason, findings: validation.findings });
         if (validation.decision === "passed") break;
         feedback = [validation.reason, ...validation.findings].filter(Boolean).join("；");
+        feedbackKind = "conflict";
       }
     }
 
