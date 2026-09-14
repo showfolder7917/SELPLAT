@@ -1178,6 +1178,8 @@ test("分发计划外层对象未闭合但内部任务对象闭合时仍进入�
     assert.equal(submitted, 1);
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.candidateCount), [1]);
     assert.match(retryPrompt, /程序上一轮检测到格式错误：/);
+    assert.match(retryPrompt, /检测到未闭合 JSON 对象/);
+    assert.doesNotMatch(retryPrompt, /闭合对象但 JSON 语法无效/);
     assert.equal(JSON.stringify(events).includes(rawFailure), false);
     assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
   } finally { rmSync(directory, { recursive: true, force: true }); }
