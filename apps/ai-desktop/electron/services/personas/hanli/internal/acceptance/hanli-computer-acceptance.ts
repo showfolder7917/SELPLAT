@@ -13,6 +13,7 @@ export interface WorkspaceAcceptanceEvidencePort {
 export type AcceptancePrivateAction = "recovery" | "persona-message" | "persona-screenshot" | "persona-navigation";
 export interface AcceptanceWindowInteractionPort {
   allows(action: AcceptancePrivateAction): boolean;
+  completePersonaSendingObservation(): void;
 }
 
 /** 仅提供当前应用窗口的单步输入和真实截图，下一动作由模型看到结果后选择。 */
@@ -526,6 +527,8 @@ export class HanliComputerAcceptance {
             ...(windowResizeEvidence ? { acceptanceWindow: windowResizeEvidence } : {}),
           };
           const output = await images(interactionEvidence);
+          // 首张真实截图已经保存后才允许窗口私有会话完成，保证 sending 与确认态都有独立证据。
+          if (args.action === "send-test-message") interactions.completePersonaSendingObservation();
           const previewActual = formatImagePreviewEvidence(previewEvidence, dragEvidence);
           let operation: HanliAcceptanceStepResultOutDto["operation"];
           if (args.action === "send-test-message" || args.action === "send-test-screenshot") {

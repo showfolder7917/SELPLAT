@@ -111,6 +111,19 @@ test("当前窗口必须使用运行时核验过的同一专题、提案和验�
     sceneContext: { ...currentWindowGoal.sceneContext, proposal: { ...currentWindowGoal.sceneContext.proposal, topicId: "other-topic" } },
   }), /只读专题、提案或运行记录/);
 });
+test("提案替代与自动继续条件只能使用当前真实窗口", () => {
+  const revisionGoal = {
+    ...currentWindowGoal,
+    criteria: ["旧 proposal 处于 supplement-required 后，后继提案替代它且自动继续不会被阻断"],
+  };
+  const currentPlan = {
+    reason: "读取当前专题的提案替代和自动继续审计",
+    segments: [{ kind: "current-window", reason: "真实窗口保留当前专题的提案链", completionReviewRequired: false, ownedConditions: [{ criterionId: "criterion-1", prerequisite: "已核验当前专题、提案和运行身份" }], relatedCriterionIds: [] }],
+  };
+  assert.deepEqual(validateAcceptanceScenePlan(currentPlan, revisionGoal), currentPlan);
+  const inspectionPlan = { ...currentPlan, segments: [{ ...currentPlan.segments[0], kind: "inspection-lifecycle-timeline", reason: "错误地使用通用巡检夹具" }] };
+  assert.throws(() => validateAcceptanceScenePlan(inspectionPlan, revisionGoal), /旧提案、后继替代或自动继续/);
+});
 test("工作区夹具场景只能使用已签发的场景说明并复用真实窗口", async () => {
   const fixturePlan = { ...plan, segments: [{ ...segment, kind: "workspace-explorer-fixture", reason: "已签发加载、重试与空目录夹具", completionReviewRequired: false }] };
   assert.deepEqual(validateAcceptanceScenePlan(fixturePlan, workspaceFixtureGoal), fixturePlan);
@@ -645,6 +658,18 @@ test("人物会话发送等待在隔离窗口关闭后不补写确认消息", as
   session.remove(95);
   await assert.rejects(pending, /独立验收会话已关闭/);
   assert.equal(session.isActive(95), false);
+});
+test("人物会话发送在首张截图完成前保持等待，完成后才回传确认", async () => {
+  const session = new AcceptanceEmptyTaskGroupSession();
+  session.register(96, "persona-conversation-lifecycle");
+  const pending = session.sendPersonaConversationMessage(96, "han-li", { clientMessageId: "observation-fixture-message", message: "发送中观察", attachmentIds: [], workspaceState: { roots: [], primaryId: null }, locale: "zh-CN" });
+  let settled = false;
+  void pending.then(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  session.completePersonaSendingObservation(96);
+  const sent = await pending;
+  assert.equal(sent.messages.at(-1).content, "验收场景已收到当前人物消息。");
 });
 
 // 复合场景的交接事实在窗口准备时冻结，人物消息仍不能回退读取正式会话。
