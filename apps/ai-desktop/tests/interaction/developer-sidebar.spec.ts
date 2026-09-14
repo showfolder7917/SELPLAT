@@ -633,7 +633,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(page.locator(".developer-tab-page:visible"), "切换人物后同时只能显示当前会话页面").toHaveCount(1);
   await expect(page.locator(".developer-tab-page[hidden]"), "主页和已经打开的人物页应保留挂载状态").toHaveCount(2);
   const hanliConversation = page.locator(".hanli-person-chat");
-  await expect(hanliConversation.getByText("和韩立讨论客户真正需要什么", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("和韩立一起说清想解决的事", { exact: true })).toBeVisible();
   const hanliComposer = page.locator(".hanli-person-composer");
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("结合整理后的资料，告诉我现在最关键的目标。");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
@@ -663,13 +663,13 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(nangongConversation.getByRole("button", { name: "内部研讨历史（2）" })).toHaveCount(0);
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeVisible();
-  await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toHaveCount(0);
+  await expect(nangongConversation.getByText("请告诉南宫婉你观察到什么", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
   const newNangongConversation = page.getByRole("button", { name: "重新建立南宫婉对话" });
   await newNangongConversation.click();
   await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
-  await expect(nangongConversation.getByText("和南宫婉讨论演化方向", { exact: true })).toBeVisible();
+  await expect(nangongConversation.getByText("请告诉南宫婉你观察到什么", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
   await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
   const preserved = await page.evaluate(async () => (await window.desktop!.getPersonaConversation("han-li")).messages.filter((message) => message.messageId.startsWith("internal:")));
