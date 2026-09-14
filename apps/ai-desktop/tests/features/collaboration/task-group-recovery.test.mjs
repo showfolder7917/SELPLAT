@@ -83,29 +83,33 @@ test("任务节点已有精确恢复入口时不再显示专题级重复按钮",
   assert.equal(customerAction, "");
 });
 
-test("同一任务出现更新节点后旧等待节点不再压住专题恢复入口", () => {
+test("任务恢复中节点不让专题级入口重复显示", () => {
   const html = render({ nodes: [
     { taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
     { taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
   ] });
-  assert.match(html, /从卡点继续/);
+  assert.equal(html, "");
 });
 
-test("恢复选择器只认同一任务的最新事实", () => {
+test("恢复选择器将当前恢复请求投影为禁用入口，后续事实才会清除入口", () => {
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
-  ]), { nodeId: "customer-wait", taskId: "task-a", customerAction: true });
-  assert.equal(latestActiveRecoveryAction([
+  ]), { nodeId: "customer-wait", taskId: "task-a", customerAction: true, pending: false });
+  assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
     { nodeId: "recovery-running", taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
+  ]), { nodeId: "recovery-running", taskId: "task-a", customerAction: false, pending: true });
+  assert.equal(latestActiveRecoveryAction([
+    { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
+    { nodeId: "recovery-completed", taskId: "task-a", status: "completed", eventType: "task.recovery_requested" },
   ]), null);
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "interrupted-wait", taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
-  ]), { nodeId: "interrupted-wait", taskId: "task-a", customerAction: false });
+  ]), { nodeId: "interrupted-wait", taskId: "task-a", customerAction: false, pending: false });
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "history-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
     { nodeId: "current-wait", taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
-  ]), { nodeId: "current-wait", taskId: "task-a", customerAction: false });
+  ]), { nodeId: "current-wait", taskId: "task-a", customerAction: false, pending: false });
 });
 
 test("自动处理明确告知用户暂不需要操作，客户待办保持原有提示", () => {
@@ -114,8 +118,13 @@ test("自动处理明确告知用户暂不需要操作，客户待办保持原�
   assert.equal(primaryPresentation({ status: "completed" }).customerAction, "当前无需你操作。");
   assert.equal(primaryPresentation({
     status: "blocked",
-    recoveryAction: { taskId: "task-a", customerAction: true },
+    recoveryAction: { taskId: "task-a", customerAction: true, pending: false },
   }).customerAction, "需要你完成一项操作。");
+  const pendingRecovery = primaryPresentation({
+    recoveryAction: { taskId: "task-a", customerAction: false, pending: true },
+  });
+  assert.equal(pendingRecovery.customerAction, "正在恢复中，请勿重复操作。");
+  assert.equal(pendingRecovery.nextAction, "等待当前恢复处理完成。");
   const oneShot = primaryPresentation({ status: "blocked", oneShotRecoveryRequired: true });
   assert.equal(oneShot.customerAction, "需要你完成一项操作。");
   assert.equal(oneShot.nextAction, "查看卡点原因后点击“从卡点继续”。");
