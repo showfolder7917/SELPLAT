@@ -5,7 +5,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
-import { executeGit } from "./git-process.js";
+import { readAcceptancePlanCandidateSources } from "./acceptance-plan-candidate-source.ts";
+import { executeGit } from "./git-process.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -228,11 +229,7 @@ export async function verifyCollaborationIntegration(
  */
 export function verifyAcceptancePlanCapabilities(candidateProjectRoot: string): void {
   const root = path.resolve(candidateProjectRoot, "apps", "ai-desktop");
-  const sources = {
-    state: readFileSync(path.join(root, "electron/services/evolution/internal/evolution-state.store.ts"), "utf8"),
-    runtime: readFileSync(path.join(root, "electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"), "utf8"),
-    projection: readFileSync(path.join(root, "electron/services/workflow/domain/current-topic-stage.projection.ts"), "utf8"),
-  };
+  const sources = readAcceptancePlanCandidateSources(root);
   const capabilities: Array<[string, boolean]> = [
     ["验收计划持久化", sources.state.includes("saveAcceptancePlan") && sources.state.includes("acceptance.plan_frozen")],
     ["同专题重开", sources.state.includes("reopenCompletedAcceptance") && sources.state.includes("acceptance.reopened") && sources.projection.includes("acceptanceRoundId") && sources.projection.includes("currentRoundId") && !sources.state.includes("reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {\n    return this.resumeOneShotRun")],

@@ -5,6 +5,19 @@ import test from "node:test";
 import { controlledTestRoot } from "#test-paths";
 import { FixedUnifiedTestRunner } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.js";
 
+function writeAcceptancePlanCandidate(root) {
+  const services = path.join(root, "apps", "ai-desktop", "electron", "services");
+  const state = path.join(services, "evolution", "internal", "evolution-state.store.ts");
+  const runtime = path.join(services, "workflow", "internal", "evolution", "persona-evolution.runtime.ts");
+  const projection = path.join(services, "workflow", "domain", "current-topic-stage.projection.ts");
+  mkdirSync(path.dirname(state), { recursive: true });
+  mkdirSync(path.dirname(runtime), { recursive: true });
+  mkdirSync(path.dirname(projection), { recursive: true });
+  writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
+  writeFileSync(runtime, 'plan.conditions.filter mode: "mixed" completeAutomaticAcceptance');
+  writeFileSync(projection, "acceptanceRoundId currentRoundId");
+}
+
 test("全量测试失败时固定流程保留失败证据且不进入后续验证或发布", async () => {
   mkdirSync(controlledTestRoot, { recursive: true });
   const root = mkdtempSync(path.join(controlledTestRoot, "full-test-gate-"));
@@ -14,6 +27,7 @@ test("全量测试失败时固定流程保留失败证据且不进入后续验�
     test: "node -e \"console.error('full-suite-regression');process.exit(17)\"",
     "test:interaction": "node -e \"require('fs').writeFileSync('should-not-run','bad')\"",
   }}));
+  writeAcceptancePlanCandidate(root);
   const events = [];
   const runner = new FixedUnifiedTestRunner({
     sourceProjectRoot: root, applicationName: "ai-desktop", buildRoot: path.join(root, "build"),
