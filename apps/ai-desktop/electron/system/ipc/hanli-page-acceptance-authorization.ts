@@ -44,6 +44,9 @@ export class HanliPageAcceptanceAuthorization {
   /** 目录只可沿已授权文件的祖先路径展开，防止验收窗口浏览无关工作区内容。 */
   assertWorkspaceDirectoryAllowed(webContentsId: number, workspaceId: string, relativePath: string): void {
     if (this.#activeWebContentsId !== webContentsId) return;
+    if (!this.#materials.some((material) => material.workspaceId === workspaceId)) {
+      throw new Error(`专题 ${this.#activeTopicId} 的提案 ${this.#activeProposalId} 未冻结此工作区的验收材料，无法浏览目录。`);
+    }
     const normalizedDirectory = relativePath.replaceAll("\\", "/").replace(/^\/+|\/+$/gu, "");
     const allowed = this.#materials.some((material) => material.workspaceId === workspaceId
       && (normalizedDirectory === "" || material.relativePath.replaceAll("\\", "/").startsWith(`${normalizedDirectory}/`)));
