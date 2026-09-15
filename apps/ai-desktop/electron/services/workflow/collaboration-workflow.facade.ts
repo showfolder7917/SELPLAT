@@ -803,7 +803,16 @@ export class CollaborationCoordinator {
               ? status === "started" ? "executor.self_repair_started" : status === "failed" ? "executor.self_repair_failed" : "executor.self_repair_completed"
               : status === "started" ? "executor.self_test_started" : status === "failed" ? "executor.self_test_failed" : "executor.self_test_passed";
             if (current.flowEvents.some(item => item.type === type && item.details?.assignmentId === assignmentId && item.details?.validationRound === update.round)) return;
-            appendFlow(current, type, "execution", status, update.message, requireMember(state, memberId), status === "failed", { assignmentId: assignmentId || undefined, validationRound: update.round });
+            // 只有主进程受控测试执行器提供的结构化结论才能进入任务快照；执行人消息和任意日志仍仅是展示文本。
+            const verificationEvidence = update.verificationEvidence?.filter((evidence) => evidence.source === "task-worktree-test-runner") || [];
+            appendFlow(current, type, "execution", status, update.message, requireMember(state, memberId), status === "failed", {
+              assignmentId: assignmentId || undefined,
+              validationRound: update.round,
+              ...(verificationEvidence.length ? {
+                verificationEvidence,
+                technicalEvidence: verificationEvidence.map((evidence) => `${evidence.scenario}：${evidence.command}（${evidence.status}）`),
+              } : {}),
+            });
           });
         }
         this.#emitStream(taskId, memberId, event);

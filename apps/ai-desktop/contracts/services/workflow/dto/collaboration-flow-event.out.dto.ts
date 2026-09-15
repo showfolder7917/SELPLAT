@@ -13,6 +13,7 @@ import type { CollaborationFlowEventTypeValue } from "../value/collaboration-flo
 import type { CollaborationCustomerActionGuidanceOutDto } from "./collaboration-customer-action-guidance.out.dto.js";
 // CollaborationParticipantSnapshotOutDto 固定事件发生时参与人物的身份。
 import type { CollaborationParticipantSnapshotOutDto } from "./collaboration-member.out.dto.js";
+import type { ManagedExecutionVerificationEvidenceOutDto } from "../../support/platform/codex/dto/codex-stream.event.out.dto.js";
 
 /** 流程事件可能携带的补充事实；没有对应事实的字段保持未定义。 */
 export interface CollaborationFlowEventDetailsOutDto {
@@ -32,6 +33,8 @@ export interface CollaborationFlowEventDetailsOutDto {
   failureSummary?: string;
   /** 支持失败或修复结论的技术事实。 */
   technicalEvidence?: string[];
+  /** 已由主进程受控测试执行器写入的逐项验证结论。 */
+  verificationEvidence?: ManagedExecutionVerificationEvidenceOutDto[];
   /** 失败发生时的原执行者。 */
   originalExecutor?: CollaborationParticipantSnapshotOutDto | null;
   /** 决定把任务交给其他人物处理的路由者。 */

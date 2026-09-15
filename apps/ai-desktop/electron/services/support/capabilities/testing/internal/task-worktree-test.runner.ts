@@ -89,16 +89,18 @@ export class TaskWorktreeTestRunner {
     delete environment.VSCODE_INSPECTOR_OPTIONS;
     this.#recordEvent("collaboration.task_test.started", { worktreeRoot: request.worktreeRoot, dependencyMode: "managed-lease" }, request.taskId);
     try {
-      for (const script of TEST_SCRIPTS) {
+      for (const [scriptIndex, script] of TEST_SCRIPTS.entries()) {
+        // 每个固定脚本占用独立验证轮次，Workflow 的幂等去重不能吞掉后续脚本结论。
+        const validationRound = scriptIndex + 1;
         const command = `npm run ${script.name}`;
-        emitActivity(request.emit, request.taskId, script.name, "started", command, null);
+        emitActivity(request.emit, request.taskId, script.name, "started", command, null, undefined, validationRound);
         try {
           const output = await runNpmScript(script.name, desktopRoot, environment, script.timeout, evidenceRoot);
-          emitActivity(request.emit, request.taskId, script.name, "completed", command, output, 0);
+          emitActivity(request.emit, request.taskId, script.name, "completed", command, output, 0, validationRound);
           this.#recordEvent("collaboration.task_test.command_completed", { command, worktreeRoot: request.worktreeRoot }, request.taskId);
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
-          emitActivity(request.emit, request.taskId, script.name, "completed", command, detail, 1);
+          emitActivity(request.emit, request.taskId, script.name, "completed", command, detail, 1, validationRound);
           this.#recordEvent("collaboration.task_test.command_failed", { command, worktreeRoot: request.worktreeRoot, detail }, request.taskId);
           throw error;
         }
@@ -162,6 +164,7 @@ function emitActivity(
   summary: string,
   detail: string | null,
   exitCode?: number,
+  validationRound = 0,
 ): void {
   emit({
     type: "activity",
@@ -177,6 +180,28 @@ function emitActivity(
       ...(exitCode === undefined ? {} : { exitCode }),
     },
   });
+  // 验证结论由此受控执行器生成，与人物流式回复隔离；Workflow 只接收这类结构化事实。
+  if (phase === "completed" && exitCode !== undefined) {
+    emit({
+      type: "managed-execution",
+      turnId: `desktop-test:${taskId}`,
+      managedExecution: {
+        mode: "task-managed",
+        stage: "code-validation",
+        status: exitCode === 0 ? "completed" : "blocked",
+        round: validationRound,
+        maximumRounds: TEST_SCRIPTS.length,
+        message: `受控验证 ${scriptName}${exitCode === 0 ? " 通过" : " 失败"}`,
+        verificationEvidence: [{
+          scenario: scriptName,
+          command: summary,
+          status: exitCode === 0 ? "passed" : "failed",
+          source: "task-worktree-test-runner",
+          completedAt: new Date().toISOString(),
+        }],
+      },
+    });
+  }
 }
 
 function safeSegment(value: string): string {

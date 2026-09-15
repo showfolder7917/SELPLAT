@@ -7,8 +7,11 @@ import {
   FixedUnifiedTestRunner,
   UnifiedTestInfrastructureError,
   isUnifiedTestCapacityBlockedError as isFixedUnifiedTestCapacityBlockedError,
+  type FixedUnifiedTestRunResult,
   type FixedUnifiedTestRunnerOptions,
 } from "./internal/fixed-unified-test.runner.js";
+
+export type { FixedUnifiedTestRunResult } from "./internal/fixed-unified-test.runner.js";
 
 // Runner Port 只保留协作流程实际需要的执行方法，隐藏具体子进程和依赖租约实现。
 export type TaskWorktreeTestPort = Pick<TaskWorktreeTestRunner, "run">;
