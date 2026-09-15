@@ -2202,7 +2202,9 @@ test("韩立按页面编号失效原因纠正 mixed 分区后继续冻结计划"
       }).facade;
       const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
       assert.equal(promptsSeen.length, 3, `${testCase.name} 应在一次重试后冻结计划`);
+      assert.match(promptsSeen[0], /"criterionCatalog":\[{"criterionId":"criterion-1","criterion":"页面预览可见"}/);
       assert.match(promptsSeen[1], testCase.hint);
+      assert.match(promptsSeen[1], /"criterionCatalog":\[{"criterionId":"criterion-1","criterion":"页面预览可见"}/);
       assert.equal(result.review.mode, "mixed");
       assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "code-conformance"]);
     } finally { rmSync(directory, { recursive: true, force: true }); }
