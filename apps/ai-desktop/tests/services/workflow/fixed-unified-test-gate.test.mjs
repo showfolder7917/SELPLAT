@@ -55,15 +55,20 @@ test("候选缺少任一验收计划能力时固定流程不执行全量测试",
   const state = path.join(root, "apps", "ai-desktop", "electron", "services", "evolution", "internal", "evolution-state.store.ts");
   writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId");
   const events = [];
+  let resourceRuns = 0;
   const runner = new FixedUnifiedTestRunner({
     sourceProjectRoot: root, applicationName: "ai-desktop", buildRoot: path.join(root, "build"),
     initiatorMemberId: "linghu-ancestor", eventNamespace: "gate",
     recordEvent: (type, details) => events.push({ type, details }),
-    testResources: { run: async (_request, execute) => execute() },
+    testResources: { run: async (_request, execute) => {
+      resourceRuns += 1;
+      return execute();
+    } },
   });
   try {
     await assert.rejects(runner.run(), /失败归因/);
     assert.deepEqual(events, []);
+    assert.equal(resourceRuns, 0);
     assert.equal(existsSync(path.join(appRoot, "must-not-run")), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
