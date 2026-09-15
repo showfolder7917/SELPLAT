@@ -5,6 +5,7 @@ export { TestResourceCoordinatorFacade } from "./test-resource-coordinator.facad
 import { TaskWorktreeTestRunner } from "./internal/task-worktree-test.runner.js";
 import {
   FixedUnifiedTestRunner,
+  UnifiedTestAggregateError,
   UnifiedTestInfrastructureError,
   isUnifiedTestCapacityBlockedError as isFixedUnifiedTestCapacityBlockedError,
   type FixedUnifiedTestRunResult,
@@ -34,6 +35,11 @@ export function createFixedUnifiedTestRunner(options: FixedUnifiedTestRunnerOpti
 // 失败分类由测试能力自己判断，人物只据此选择恢复路线。
 export function isUnifiedTestInfrastructureError(error: unknown): boolean {
   return error instanceof UnifiedTestInfrastructureError;
+}
+
+/** 聚合失败由集成层保留完整证据，不能退化成首个脚本的局部报错。 */
+export function isUnifiedTestAggregateError(error: unknown): error is UnifiedTestAggregateError {
+  return error instanceof UnifiedTestAggregateError;
 }
 
 // 预检容量阻断需要等待保留策略授权，不能误派回候选源码修复。

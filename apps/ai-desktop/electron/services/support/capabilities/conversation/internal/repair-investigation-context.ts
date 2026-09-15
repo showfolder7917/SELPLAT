@@ -15,6 +15,7 @@ export function repairInvestigationContext(task: CollaborationTaskOutDto, platfo
     `失败候选目录：${task.integrationFailure?.workspaceRoot || "未记录，先读取发布批次归档"}`,
     `失败批次：${task.integrationFailure?.generation ?? "未记录"}`,
     "先比较任务 HEAD、已登记 resultSha 与失败候选包含的提交。修复未进入候选时先调查调度和交接，不重复修改已经修好的代码。",
+    "统一测试若一次报告多个未通过项，先按共同根因分组，列全每组的调用方、边界、修复项和回归项；全部纳入同一修复计划后再实施，不得处理第一项后提前交回。",
   ];
   if (completedRepairs > 0) {
     lines.push("本任务再次失败：必须对照前轮修改与新证据，检查共同根因、相关调用方和相邻失败路径，说明是否需要按职责重构及理由。不得只在最新报错处增加补丁。必要的同工程技术修复可以覆盖已证实的共同原因；新增产品需求仍须确认。");

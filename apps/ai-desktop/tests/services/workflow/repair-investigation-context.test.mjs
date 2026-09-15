@@ -9,7 +9,7 @@ test("重复失败上下文保留版本与前轮证据，要求共同根因调�
     { type: "unified_test.failed", occurredAt: "second", summary: "仍缺文件", details: { technicalEvidence: ["original-error"] } },
   ], versionWorkspace: { rootPath: "/candidate/task", resultSha: "new-result" }, integrationFailure: { workspaceRoot: "/candidate/release", generation: 14 } };
   const text = repairInvestigationContext(task, "darwin");
-  for (const expected of ["darwin", "same-task", "new-result", "/candidate/release", "previous-change", "original-error", "共同根因", "重构", "相邻回归"]) assert.ok(text.includes(expected), expected);
+  for (const expected of ["darwin", "same-task", "new-result", "/candidate/release", "previous-change", "original-error", "共同根因", "共同根因分组", "同一修复计划", "重构", "相邻回归"]) assert.ok(text.includes(expected), expected);
   assert.equal(task.flowEvents.length, 2);
 });
 

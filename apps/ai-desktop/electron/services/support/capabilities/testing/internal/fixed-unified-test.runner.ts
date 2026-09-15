@@ -16,7 +16,9 @@ import type { ManagedExecutionVerificationEvidenceOutDto } from "../../../../../
 
 // 固定清单阻止令狐文案扩大测试范围或注入任意 shell 命令。
 // 全量测试先于交互和发布；单个领域测试不能替代全部测试收集器。
-const FIXED_UNIFIED_SCRIPTS = ["test", "test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
+const FIXED_VALIDATION_SCRIPTS = ["test", "test:interaction", "test:collaboration", "test:managed"] as const;
+// 发布链存在产物依赖，只有全部独立验证通过后才允许依次打包、核对内容并验证可执行版本。
+const FIXED_RELEASE_SCRIPTS = ["package:mac:developer", "verify:package-content", "verify:mac:developer"] as const;
 // 仅接受开发包预检写出的固定记录，避免把任意命令中的 ENOSPC 文本误判为等待授权。
 const DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER = "AI_DESKTOP_PACKAGE_CAPACITY_BLOCKED:";
 const UNIFIED_TEST_CAPACITY_BLOCKED_ERROR_CODE = "unified-test-capacity-blocked";
@@ -62,6 +64,26 @@ export class UnifiedTestCapacityBlockedError extends Error {
     this.name = "UnifiedTestCapacityBlockedError";
     this.script = script;
     this.capacity = capacity;
+  }
+}
+
+export interface UnifiedTestScriptFailure {
+  script: string;
+  detail: string;
+}
+
+/** 一轮统一测试收齐全部独立验证失败，令狐据此一次调查共同根因。 */
+export class UnifiedTestAggregateError extends Error {
+  readonly failures: UnifiedTestScriptFailure[];
+
+  constructor(failures: UnifiedTestScriptFailure[]) {
+    const evidence = failures.map((failure, index) => [
+      `未通过项 ${index + 1}：npm run ${failure.script}`,
+      failure.detail,
+    ].join("\n")).join("\n\n");
+    super(`统一测试一次发现 ${failures.length} 个未通过项：\n${evidence}`);
+    this.name = "UnifiedTestAggregateError";
+    this.failures = failures.map((failure) => ({ ...failure }));
   }
 }
 
@@ -161,8 +183,9 @@ export class FixedUnifiedTestRunner {
       buildRoot,
     }, async () => {
       const verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[] = [];
-      // 脚本按固定顺序运行，前一项失败会停止后续发布动作。
-      for (const script of FIXED_UNIFIED_SCRIPTS) {
+      const validationFailures: UnifiedTestScriptFailure[] = [];
+      // 彼此独立的验证全部运行并收齐证据，避免一次只暴露一个漏点而反复返修。
+      for (const script of FIXED_VALIDATION_SCRIPTS) {
         // 开始事件先于子进程创建，卡住时仍能定位当前脚本。
         this.#recordEvent(`${this.#eventNamespace}.unified_test.started`, { script, candidateProjectRoot: resolvedProjectRoot });
         try {
@@ -178,7 +201,27 @@ export class FixedUnifiedTestRunner {
             completedAt: new Date().toISOString(),
           });
         } catch (error) {
-          // 失败事件保留脚本和末尾输出，然后把异常继续交给上层恢复链。
+          // 单项失败先登记但不打断其余独立验证；同轮结束后统一交给恢复链。
+          const detail = error instanceof Error ? error.message : String(error);
+          this.#recordEvent(`${this.#eventNamespace}.unified_test.failed`, { script, detail });
+          validationFailures.push({ script, detail });
+        }
+      }
+      if (validationFailures.length > 0) throw new UnifiedTestAggregateError(validationFailures);
+      // 发布验证有严格产物依赖，任一失败都必须停止后续发布动作。
+      for (const script of FIXED_RELEASE_SCRIPTS) {
+        this.#recordEvent(`${this.#eventNamespace}.unified_test.started`, { script, candidateProjectRoot: resolvedProjectRoot });
+        try {
+          await runNpmScript(desktopRoot, script, environment);
+          this.#recordEvent(`${this.#eventNamespace}.unified_test.completed`, { script, candidateProjectRoot: resolvedProjectRoot });
+          verificationEvidence.push({
+            scenario: script,
+            command: `npm run ${script}`,
+            status: "passed",
+            source: "fixed-unified-test-runner",
+            completedAt: new Date().toISOString(),
+          });
+        } catch (error) {
           const detail = error instanceof Error ? error.message : String(error);
           this.#recordEvent(`${this.#eventNamespace}.unified_test.failed`, { script, detail });
           throw error;

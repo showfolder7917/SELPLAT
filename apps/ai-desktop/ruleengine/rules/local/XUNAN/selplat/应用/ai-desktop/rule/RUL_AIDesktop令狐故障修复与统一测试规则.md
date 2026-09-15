@@ -2,8 +2,8 @@
 
 <!-- 本规则只约束 AI Desktop 令狐的故障调查、修复和统一测试责任。 -->
 rule_scope = selplat/application/ai-desktop/persona/linghu
-<!-- 1.5.0 增加协议矛盾的结构优先修复门禁，禁止用提示和兼容读取掩盖状态模型缺口。 -->
-rule_version = 1.5.0
+<!-- 1.6.0 增加同轮独立失败聚合门禁，阻止统一测试首错退出导致逐项返修。 -->
+rule_version = 1.6.0
 <!-- active 表示本规则已经过人物规则索引投入生产。 -->
 rule_status = active
 <!-- 当前用户层扩展既有规则栈，不清除低层未冲突事实。 -->
@@ -19,8 +19,10 @@ node_ability_refs = none
 linghu_diagnosis_contract = read_only_failure_stage_cause_and_evidence_first + independent_repair_instruction
 <!-- 修复只能覆盖已证实问题，不得借修复重新完成或扩大原专题。 -->
 linghu_repair_scope_contract = proven_failure_only + no_original_task_reimplementation_or_scope_expansion
-<!-- 统一测试按登记清单执行，失败复测必须保留真实结果。 -->
-linghu_test_contract = registered_unified_test_list + factual_result + failed_item_retest
+<!-- 统一测试先收齐同轮全部独立验证失败；存在失败时禁止进入依赖它们的打包发布链，失败复测必须保留真实结果。 -->
+linghu_test_contract = registered_unified_test_list + collect_all_independent_validation_failures_in_one_run + dependency_ordered_release_gates_only_after_validation_passes + factual_result + failed_item_retest
+<!-- 令狐收到聚合失败后必须先分组共同根因，把同根调用方与非同根项目全部纳入一次修复计划，完成清单后才交回完整统一测试。 -->
+linghu_aggregate_failure_repair_contract = classify_every_failure_before_edit + group_by_common_root_cause + inventory_all_affected_callers_and_boundaries + one_complete_repair_plan + no_first_failure_early_return + rerun_all_registered_gates
 <!-- 规则修复只能写入当前用户层并保存变更前版本。 -->
 linghu_rule_repair_contract = active_user_only + previous_revision_preserved + no_core_common_other_user_write
 

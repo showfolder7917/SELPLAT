@@ -31,5 +31,7 @@ test("发布内容校验提取并检查南宫婉分发解析器", () => {
 });
 
 test("统一测试在 macOS 应用验证前检查刚打包的分发解析器", () => {
-  assert.match(unifiedTestRunner, /\["test", "test:interaction", "test:collaboration", "test:managed", "package:mac:developer", "verify:package-content", "verify:mac:developer"\]/);
+  assert.match(unifiedTestRunner, /FIXED_VALIDATION_SCRIPTS = \["test", "test:interaction", "test:collaboration", "test:managed"\]/);
+  assert.match(unifiedTestRunner, /FIXED_RELEASE_SCRIPTS = \["package:mac:developer", "verify:package-content", "verify:mac:developer"\]/);
+  assert.ok(unifiedTestRunner.indexOf("if (validationFailures.length > 0)") < unifiedTestRunner.indexOf("for (const script of FIXED_RELEASE_SCRIPTS)"));
 });
