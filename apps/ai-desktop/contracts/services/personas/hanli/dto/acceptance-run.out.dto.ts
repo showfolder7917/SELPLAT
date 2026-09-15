@@ -4,7 +4,7 @@
  * 数据方向：真实输入、截图及模型逐项判断 -> 韩立/Renderer。
  * 本文件只保存事实证据，失败不会直接改变审批结果。
  */
-import type { HanliAcceptanceEvidenceModeValue, HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
+import type { HanliAcceptanceBlockerKindValue, HanliAcceptanceDispositionValue, HanliAcceptanceEvidenceModeValue, HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
 
 export interface HanliAcceptanceStepResultOutDto {
   checkId: string;
@@ -13,6 +13,8 @@ export interface HanliAcceptanceStepResultOutDto {
   operationIndex: number;
   operation: HanliAcceptanceOperationValue;
   status: "passed" | "failed" | "blocked";
+  /** 仅 blocked 使用；让后续分流依据受控事实，而不解析实际结果中的自由文本。 */
+  blockerKind?: HanliAcceptanceBlockerKindValue;
   actual: string;
   /** 同一验收条件下对位置、遮挡、拥挤、尺寸和整体协调性的独立判断。 */
   layoutStatus: "passed" | "failed" | "blocked" | "not-applicable";
@@ -40,6 +42,8 @@ export interface HanliAcceptanceRunOutDto {
   /** mixed 预审记录登记待由正式窗口验证的原始条件编号。 */
   pageCriterionIds?: string[];
   status: "passed" | "failed" | "blocked";
+  /** 运行时分类后写入的最终分流事实；旧归档记录按未分类读取。 */
+  acceptanceDisposition?: HanliAcceptanceDispositionValue;
   windowTitle: string;
   initialBounds: { x: number; y: number; width: number; height: number };
   finalBounds: { x: number; y: number; width: number; height: number };

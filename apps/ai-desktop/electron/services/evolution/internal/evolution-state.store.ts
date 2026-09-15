@@ -654,13 +654,17 @@ export class EvolutionStateStore {
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
     const plan = requireAcceptancePlan(proposal);
     const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.result_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
+    const acceptsMaterialInsufficiency = run?.acceptanceDisposition === "materials-insufficient-main-path-judged";
     const hasCompleteAcceptanceEvidence = Boolean(run) && run!.planId === plan.planId && run!.acceptanceRoundId === plan.currentRoundId && plan.conditions.every((condition) => {
       const matches = run!.stepResults.filter((step) => step.checkId === condition.conditionId);
       const step = matches[0];
+      const acceptedMaterialBlock = acceptsMaterialInsufficiency
+        && condition.evidenceType === "page-experience"
+        && step?.blockerKind === "materials-insufficient";
       const pageEvidence = condition.evidenceType === "page-experience"
         ? Boolean(step?.screenshotAttachmentId)
           && run!.evidenceAttachmentIds.includes(step!.screenshotAttachmentId!)
-          && step?.layoutStatus === "passed"
+          && (step?.layoutStatus === "passed" || (acceptedMaterialBlock && step?.layoutStatus === "blocked"))
           && Boolean(step.layoutActual?.trim())
           && Boolean(step.layoutScreenshotAttachmentId)
           && run!.evidenceAttachmentIds.includes(step.layoutScreenshotAttachmentId!)
@@ -668,11 +672,11 @@ export class EvolutionStateStore {
       return matches.length === 1
         && step !== undefined
         && step.evidenceMode === condition.evidenceType
-        && step.status === "passed"
+        && (step.status === "passed" || acceptedMaterialBlock && step.status === "blocked")
         && Boolean(step.actual?.trim())
         && pageEvidence;
     });
-    if (decision === "approved" && (run?.version !== 3 || run.status !== "passed" || !hasCompleteAcceptanceEvidence)) {
+    if (decision === "approved" && (run?.version !== 3 || (run.status !== "passed" && !acceptsMaterialInsufficiency) || !hasCompleteAcceptanceEvidence)) {
       throw new Error("韩立必须先完成适用的页面验收或代码符合性审查且全部通过，才能验收通过。 ");
     }
     const failureEvidence = decision === "approved" || !run ? [] : run.stepResults.filter((step) => step.status !== "passed" || step.layoutStatus !== "passed").map((step) => {

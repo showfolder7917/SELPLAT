@@ -22,6 +22,7 @@ export type { HanliAcceptanceMaterialActionValue, HanliAcceptanceMaterialAuthori
 
 /** 一轮韩立真实窗口验收的完整结果，包含运行状态、步骤和截图证据。 */
 export type { HanliAcceptanceRunOutDto } from "./dto/acceptance-run.out.dto.js";
+export type { HanliAcceptanceBlockerKindValue, HanliAcceptanceDispositionValue } from "./value/acceptance.value.js";
 
 /** 韩立真实窗口验收中的单步结果，用于关联操作、判断和对应截图。 */
 export type { HanliAcceptanceStepResultOutDto } from "./dto/acceptance-run.out.dto.js";
