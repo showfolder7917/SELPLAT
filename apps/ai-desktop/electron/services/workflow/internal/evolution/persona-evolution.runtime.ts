@@ -605,9 +605,11 @@ export class PersonaEvolutionRuntime {
               acceptanceFailureKind: "acceptance-capability-blocked",
             }, runResult.runId);
           }
-          this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
+          const acceptedState = this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
           if (runResult.status === "failed") {
-            const scopeReview = this.#acceptanceFailureScope.review(proposal, runResult);
+            const acceptedProposal = acceptedState.proposals.find((item) => item.proposalId === proposal.proposalId);
+            if (!acceptedProposal) throw new Error("验收写入后找不到当前提案，不能判断失败范围。");
+            const scopeReview = this.#acceptanceFailureScope.review(acceptedProposal, runResult);
             const acceptanceBlockedSteps = runResult.stepResults.filter((step) => step.status === "blocked" || step.layoutStatus === "blocked");
             const blockedSummary = acceptanceBlockedSteps.length
               ? `\n本轮仍未验证的条件：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：${step.actual}`).join("\n")}`

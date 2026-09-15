@@ -123,9 +123,14 @@ export class HanliApplicationService implements HanliApplicationPort {
   /** 页面型只返回交互验收路由；非页面型直接完成只读代码符合性审查。 */
   async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview> {
     const proposal = requireProposal(this.#store.state(), proposalId);
-    const review = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
-    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, review);
+    // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
+    const routingReview = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
+    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
     this.#store.saveAcceptancePlan(proposalId, plan);
+    // 代码结论可能要求核对计划本身，必须在计划落盘后重新读取权威提案再审查。
+    if (routingReview === "page-experience") return { plan, review: routingReview };
+    const frozenProposal = requireProposal(this.#store.state(), proposalId);
+    const review = await this.#decision.reviewResultAcceptance(frozenProposal, implementationEvidence);
     return { plan, review };
   }
 
