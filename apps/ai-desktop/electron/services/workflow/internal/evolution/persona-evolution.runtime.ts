@@ -532,26 +532,31 @@ export class PersonaEvolutionRuntime {
         publishAcceptance("received", `工程门禁已经完成，请韩立按客户原要求验收：${proposal.acceptanceCriteria.join("；")}`);
         try {
           const acceptanceTasks = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view().effectiveTasks;
-          const implementationEvidence = acceptanceTasks.map((task) => ({
-            taskId: task.taskId,
-            requirement: task.snapshot,
-            resultSummary: task.resultSummary,
-            finalResult: task.finalResult,
-            unifiedTest: task.unifiedTest,
-            // 只透传已落入任务状态机的验证事实。韩立不能根据“统一测试通过”猜测
-            // 某个超时或异常场景已经覆盖，也不能读取任意外部日志作为验收依据。
-            verificationEvidence: task.flowEvents
-              .filter((event) => /^executor\.self_(test|repair)_(passed|failed|completed)$/.test(event.type))
-              .map((event) => ({
-                eventType: event.type,
-                status: event.status,
-                summary: event.summary,
-                technicalEvidence: event.details?.technicalEvidence || [],
-                details: event.details || null,
-                occurredAt: event.occurredAt,
-              })),
-            executions: task.executionRecords.map((record) => ({ status: record.status, changedFiles: record.changedFiles, result: record.result })),
-          }));
+          const implementationEvidence = acceptanceTasks.map((task) => {
+            // 历史返修任务和外部恢复快照可能尚未带 flowEvents；缺失只表示没有逐项验证事实，
+            // 不能阻断韩立沿修订链重新验收，更不能用统一测试状态补造这些事实。
+            const verificationEvents = Array.isArray(task.flowEvents) ? task.flowEvents : [];
+            return {
+              taskId: task.taskId,
+              requirement: task.snapshot,
+              resultSummary: task.resultSummary,
+              finalResult: task.finalResult,
+              unifiedTest: task.unifiedTest,
+              // 只透传已落入任务状态机的验证事实。韩立不能根据“统一测试通过”猜测
+              // 某个超时或异常场景已经覆盖，也不能读取任意外部日志作为验收依据。
+              verificationEvidence: verificationEvents
+                .filter((event) => /^executor\.self_(test|repair)_(passed|failed|completed)$/.test(event.type))
+                .map((event) => ({
+                  eventType: event.type,
+                  status: event.status,
+                  summary: event.summary,
+                  technicalEvidence: event.details?.technicalEvidence || [],
+                  details: event.details || null,
+                  occurredAt: event.occurredAt,
+                })),
+              executions: task.executionRecords.map((record) => ({ status: record.status, changedFiles: record.changedFiles, result: record.result })),
+            };
+          });
           const acceptanceMaterials = uniqueAcceptanceMaterials(acceptanceTasks.flatMap((task) => task.snapshot.materials || []));
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
           const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence, acceptanceMaterials);
