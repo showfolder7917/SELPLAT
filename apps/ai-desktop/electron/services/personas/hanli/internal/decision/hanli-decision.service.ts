@@ -263,40 +263,42 @@ function parseJsonObjects(text: string): Record<string, unknown>[] {
   return values;
 }
 
-/** 提取独立、转义安全的对象候选，允许模型在 JSON 前后补充说明。 */
+/** 提取顶层、转义安全的对象候选，允许模型在 JSON 前后补充说明。 */
 function extractBalancedJsonObjects(text: string): { candidates: string[]; hasUnclosedObject: boolean } {
   const trimmed = text.trim();
   if (!trimmed) return { candidates: [], hasUnclosedObject: false };
   const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/iu)?.[1]?.trim();
   const source = fenced || trimmed;
   const candidates: string[] = [];
-  let hasUnclosedObject = false;
-  for (let start = 0; start < source.length; start += 1) {
-    if (source[start] !== "{") continue;
-    let depth = 0;
-    let quoted = false;
-    let escaped = false;
-    let closed = false;
-    for (let index = start; index < source.length; index += 1) {
-      const character = source[index];
-      if (quoted) {
-        if (escaped) escaped = false;
-        else if (character === "\\") escaped = true;
-        else if (character === '"') quoted = false;
-        continue;
-      }
-      if (character === '"') quoted = true;
-      else if (character === "{") depth += 1;
-      else if (character === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          candidates.push(source.slice(start, index + 1));
-          closed = true;
-          break;
-        }
+  let start = -1;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === "{") {
+      // 只从顶层对象起点开始，避免 findings 等嵌套对象覆盖外层验收结论。
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (character === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(source.slice(start, index + 1));
+        start = -1;
       }
     }
-    if (!closed) hasUnclosedObject = true;
   }
-  return { candidates: [...new Set(candidates)], hasUnclosedObject };
+  return { candidates: [...new Set(candidates)], hasUnclosedObject: depth !== 0 };
 }
