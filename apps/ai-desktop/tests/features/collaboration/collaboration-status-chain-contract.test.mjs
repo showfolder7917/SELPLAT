@@ -64,6 +64,7 @@ test("任务级恢复入口在等待和恢复中都位于下一流程", () => {
   assert.match(taskGroupSource, /node\.status === "current" && node\.eventType === "task\.recovery_requested"[\s\S]*submitted: true/);
   assert.match(taskGroupSource, /continuingTaskIds = useRef\(new Set<string>\(\)\)/);
   assert.match(developerSource, /RECOVERY_REQUEST_TIMEOUT_MS = 12_000[\s\S]*RECOVERY_RECHECK_TIMEOUT_MS = 4_000/);
+  assert.match(developerSource, /finally\(\(\) => window\.clearTimeout\(timer\)\)\.catch\(\(\) => undefined\)/);
   assert.match(taskGroupSource, /disabled=\{recoveryPending \|\| recoverySubmitted\}[\s\S]*"恢复中…"[\s\S]*"已提交，等待处理"/);
   assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(recoveryAction\.taskId\)/);
   assert.match(taskGroupSource, /recoveryAction\.customerAction \? "从卡点继续"/);

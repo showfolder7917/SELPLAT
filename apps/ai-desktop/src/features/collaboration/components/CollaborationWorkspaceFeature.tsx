@@ -21,7 +21,8 @@ class RecoveryTimeoutError extends Error {}
 function waitForRecovery<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new RecoveryTimeoutError()), timeoutMs);
-    void request.then(resolve, reject).finally(() => window.clearTimeout(timer));
+    // 超时后原 IPC 仍可能拒绝；消费 finally 派生 Promise，避免把迟到错误带到全局。
+    void request.then(resolve, reject).finally(() => window.clearTimeout(timer)).catch(() => undefined);
   });
 }
 
