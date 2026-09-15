@@ -302,12 +302,13 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
     readHanliSemanticContext: () => ({ concerns: [], trajectories: [], inspectionExperiences: [] }),
     registerPersonaRound: (round) => {
       messages.push(
-        { messageId: round.userMessageId, speakerType: "user", speakerPersonaId: null, content: round.userContent, replyToMessageId: null },
-        { messageId: round.personaMessageId, speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent, replyToMessageId: round.userMessageId },
+        { messageId: round.userMessageId, messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: round.userContent, replyToMessageId: null },
+        { messageId: round.personaMessageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent, replyToMessageId: round.userMessageId },
       );
       return snapshot(round.completedAt);
     },
-    appendPersonaInternalMessage: (message) => { messages.push({ ...message, speakerType: "persona" }); return snapshot(message.createdAt); },
+    appendPersonaInternalMessage: (message) => { messages.push({ ...message, messageType: "internal-deliberation", speakerType: "persona" }); return snapshot(message.createdAt); },
+    appendPersonaRecoveryCheckpoint: (message) => { messages.push({ ...message, messageType: "internal-recovery", speakerType: "system", speakerPersonaId: null, replyToMessageId: message.requestId }); return snapshot(message.createdAt); },
   };
   const clarification = { ...understanding, status: "clarification-required", ambiguities: ["需要确认源码还是当前运行版本"], investigationQuestion: undefined };
   const service = new HanliConversationService({
@@ -357,8 +358,8 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
     readLatestRequirementDiscussionContext: () => prior,
     recordRequirementDiscussionContext: (context) => recorded.push(structuredClone(context)),
     registerPersonaRound: (round) => { messages.push(
-      { messageId: round.userMessageId, speakerType: "user", speakerPersonaId: null, content: round.userContent },
-      { messageId: round.personaMessageId, speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent },
+      { messageId: round.userMessageId, messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: round.userContent },
+      { messageId: round.personaMessageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent },
     ); return snapshot(); },
   };
   const decision = { ...topic, userIntent: "根据已核实的长消息问题形成修正方案" };
