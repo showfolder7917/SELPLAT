@@ -1,5 +1,5 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { EvolutionAcceptanceMaterialAuthorizationOutDto, EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
@@ -538,8 +538,9 @@ export class PersonaEvolutionRuntime {
             unifiedTest: task.unifiedTest,
             executions: task.executionRecords.map((record) => ({ status: record.status, changedFiles: record.changedFiles, result: record.result })),
           }));
+          const acceptanceMaterials = uniqueAcceptanceMaterials(acceptanceTasks.flatMap((task) => task.snapshot.materials || []));
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
-          const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
+          const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence, acceptanceMaterials);
           const plan = reviewedAcceptance.plan;
           const review = reviewedAcceptance.review;
           let runResult: HanliAcceptanceRunOutDto;
@@ -840,4 +841,15 @@ function currentExecutionActivity(
 
 function itemFailureReason(task: ReturnType<CollaborationWorkflowFacade["state"]>["tasks"][number]): string {
   return task.blockingReason || task.repairFailureReason || task.unifiedTest?.failureReason || `任务 ${task.snapshot.title} 未能继续，交给令狐按原恢复线路处理。`;
+}
+
+/** 同一提案的多个任务引用同一材料时，计划只冻结一条授权。 */
+function uniqueAcceptanceMaterials(materials: EvolutionAcceptanceMaterialAuthorizationOutDto[]): EvolutionAcceptanceMaterialAuthorizationOutDto[] {
+  const keys = new Set<string>();
+  return materials.filter((material) => {
+    const key = `${material.workspaceId}\u0000${material.relativePath}`;
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  });
 }
