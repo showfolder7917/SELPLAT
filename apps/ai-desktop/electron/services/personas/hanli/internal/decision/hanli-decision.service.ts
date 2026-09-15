@@ -77,8 +77,10 @@ export class HanliDecisionService {
   async reviewResultAcceptance(proposal: EvolutionProposalOutDto, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto> {
     const state = this.#dependencies.store.state();
     const topic = state.topics.find((item) => item.topicId === proposal.topicId);
+    const criterionCatalog = proposal.acceptancePlan?.conditions.map(({ conditionId, criterion }) => ({ criterionId: conditionId, criterion }))
+      || proposal.acceptanceCriteria.map((criterion, index) => ({ criterionId: `criterion-${index + 1}`, criterion }));
     const prompt = this.#dependencies.prompts.render("hanli.result-acceptance", {
-      acceptanceContextJson: JSON.stringify({ topic, proposal, implementationEvidence }),
+      acceptanceContextJson: JSON.stringify({ topic, proposal, criterionCatalog, implementationEvidence }),
     });
     return this.#askForStructuredResult(prompt, state, (value) => this.#createResultAcceptanceReview(proposal, value));
   }

@@ -9,6 +9,7 @@ test("韩立按条件分区页面体验与代码符合性验收", () => {
   assert.match(prompt, /按每条原始条件选择证据来源/);
   assert.match(prompt, /受控失败、并发或延迟时序、重复触发、路径越界、符号链接、默认应用不可用、定向测试、回归或版本控制证据/);
   assert.match(prompt, /pageCriterionIds/);
+  assert.match(prompt, /criterionCatalog 是页面和代码条件编号的唯一目录/);
   assert.match(prompt, /两组不得重复、不得遗漏/);
   assert.match(prompt, /实现是否符合客户原要求/);
   assert.match(prompt, /不得启动隔离环境/);
