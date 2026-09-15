@@ -2014,6 +2014,46 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("冻结验收计划后才审查计划持久化条件", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-frozen-plan-review-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({
+      ...topicRequest("冻结计划后核对持久化"),
+      acceptanceCriteria: ["页面预览可见", "计划已持久化并可读取条件编号"],
+    });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const promptsSeen = [];
+    const replies = [
+      JSON.stringify({
+        mode: "mixed",
+        pageCriterionIds: ["criterion-1"],
+        findings: [{ criterionId: "criterion-2", status: "failed", actual: "当前专题记录的 acceptancePlan 为 null。", evidenceReferences: ["首次分类尚未冻结计划"] }],
+      }),
+      JSON.stringify({
+        mode: "mixed",
+        pageCriterionIds: ["criterion-1"],
+        findings: [{ criterionId: "criterion-2", status: "passed", actual: "当前专题记录已保存 acceptancePlan，条件编号和证据类型可读取。", evidenceReferences: ["acceptance.plan_frozen"] }],
+      }),
+    ];
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanli: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.equal(promptsSeen.length, 2, "代码符合性结论必须在计划冻结后重新审查");
+    assert.match(promptsSeen[0], /"acceptancePlan":null/);
+    assert.match(promptsSeen[1], new RegExp(result.plan.planId));
+    assert.equal(result.review.mode, "mixed");
+    assert.equal(result.review.stepResults[0].status, "passed");
+    assert.match(result.review.stepResults[0].actual, /已保存 acceptancePlan/);
+    assert.equal(store.state().proposals.at(-1).acceptancePlan.planId, result.plan.planId);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("自动韩立验收失败保留原提案并进入范围内令狐修复卡点", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-repair-checkpoint-"));
   try {
