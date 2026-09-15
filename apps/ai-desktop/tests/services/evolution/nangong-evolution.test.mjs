@@ -2092,6 +2092,33 @@ test("韩立把全量 mixed 分类纠正为严格子集后继续冻结验收计�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立把未知结果验收类型纠正为代码符合性审查后继续冻结计划", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-mode-retry-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("结果类型重试"), acceptanceCriteria: ["代码证据可读取"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const accepted = JSON.stringify({
+      mode: "code-conformance",
+      findings: [{ criterionId: "criterion-1", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+    });
+    const replies = [JSON.stringify({ mode: "unknown" }), accepted, accepted];
+    const promptsSeen = [];
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanli: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.equal(promptsSeen.length, 3);
+    assert.match(promptsSeen[1], /mode 只能是 page-experience、code-conformance 或 mixed/);
+    assert.equal(result.review.mode, "code-conformance");
+    assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["code-conformance"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立结果验收拒绝未闭合的 JSON 对象并保留三次重试", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-unclosed-result-json-"));
   try {
