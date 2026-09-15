@@ -223,6 +223,9 @@ function resultAcceptanceRetryHint(lastError: string): string {
   if (lastError === "混合验收必须同时包含页面条件和代码符合性条件。") {
     return " mixed 的 pageCriterionIds 必须是全部 criterion 编号的非空严格子集：空列表时改为 code-conformance，列表包含全部条件时改为 page-experience。";
   }
+  if (lastError === "韩立混合验收计划缺少有效且不重复的页面条件编号。") {
+    return " mixed 必须提供 pageCriterionIds 非空数组；每项必须是当前条件中的唯一 criterion-N，不能重复、越界或使用其他类型；findings 只覆盖其余条件。";
+  }
   if (lastError === "韩立没有返回有效的结果验收类型和逐项结论。") {
     return " mode 只能是 page-experience、code-conformance 或 mixed：全部页面条件只返回 page-experience；全部代码条件返回 code-conformance 和每个 criterion 的 finding；混合条件才返回 mixed、页面编号严格子集及其余 finding。";
   }
@@ -238,7 +241,11 @@ function summarizeResultAcceptanceCandidates(values: Record<string, unknown>[]):
     const findings = Array.isArray(value.findings)
       ? `array:${value.findings.length}`
       : value.findings === undefined ? "missing" : "invalid";
-    return `mode=${mode},findings=${findings}`;
+    // 只记录页面编号字段的形状，帮助区分混合分区错误且不泄露条件内容。
+    const pageCriterionIds = Array.isArray(value.pageCriterionIds)
+      ? `array:${value.pageCriterionIds.length}`
+      : value.pageCriterionIds === undefined ? "missing" : "invalid";
+    return `mode=${mode},pageCriterionIds=${pageCriterionIds},findings=${findings}`;
   });
   return `结构化候选摘要：count=${values.length}; ${candidates.join("|")}`;
 }

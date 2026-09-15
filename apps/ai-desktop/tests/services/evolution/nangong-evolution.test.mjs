@@ -2162,11 +2162,48 @@ test("韩立结果验收失败只记录候选协议形状", async () => {
     await assert.rejects(
       () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
       (error) => {
-        assert.match(error.message, /结构化候选摘要：count=1; mode=unsupported,findings=missing/);
+        assert.match(error.message, /结构化候选摘要：count=1; mode=unsupported,pageCriterionIds=missing,findings=missing/);
         assert.doesNotMatch(error.message, /unexpected-mode|不得出现在诊断中/);
         return true;
       },
     );
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("韩立把缺失或重复的 mixed 页面编号纠正后继续冻结计划", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-mixed-page-ids-retry-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({
+      ...topicRequest("混合页面编号重试"),
+      acceptanceCriteria: ["页面预览可见", "代码证据可读取"],
+    });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const accepted = JSON.stringify({
+      mode: "mixed",
+      pageCriterionIds: ["criterion-1"],
+      findings: [{ criterionId: "criterion-2", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+    });
+    const replies = [
+      JSON.stringify({ mode: "mixed", findings: [{ criterionId: "criterion-2" }] }),
+      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-1"], findings: [] }),
+      accepted,
+      accepted,
+    ];
+    const promptsSeen = [];
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanli: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.equal(promptsSeen.length, 4);
+    assert.match(promptsSeen[1], /mixed 必须提供 pageCriterionIds 非空数组/);
+    assert.match(promptsSeen[2], /不能重复、越界或使用其他类型/);
+    assert.equal(result.review.mode, "mixed");
+    assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "code-conformance"]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -2201,7 +2238,7 @@ test("韩立结果验收只以顶层对象保留嵌套 findings 的真实校验�
       () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
       (error) => {
         assert.match(error.message, /韩立代码符合性审查缺少 criterion-5 的明确结论或代码\/测试依据/);
-        assert.match(error.message, /结构化候选摘要：count=1; mode=supported,findings=array:5/);
+        assert.match(error.message, /结构化候选摘要：count=1; mode=supported,pageCriterionIds=missing,findings=array:5/);
         assert.doesNotMatch(error.message, /韩立没有返回有效的结果验收类型和逐项结论/);
         return true;
       },
