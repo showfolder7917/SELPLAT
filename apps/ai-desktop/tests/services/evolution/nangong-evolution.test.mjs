@@ -1429,6 +1429,7 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     assert.equal(state.proposals[0].status, "pending-acceptance");
     assert.equal(state.proposals[0].resultSummary, "全部当前有效任务已经完成，等待韩立按真实用户路径验收结果。");
     assert.equal(state.topics.length, 1);
+    state = freezePageAcceptancePlan(store, state, proposalId);
     store.recordAcceptanceRun(computerRun("completed-run", state.topics[0].topicId, proposalId, "passed", "shot-completed"));
     state = facade.decideResult(proposalId, { mutation: mutation(facade), decision: "approved", advice: "真实操作和视觉检查符合目标。" });
     assert.equal(state.proposals[0].status, "completed");
@@ -1974,6 +1975,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     state = store.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
+    state = freezePageAcceptancePlan(store, state, proposalId);
     assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /页面验收或代码符合性审查且全部通过/);
     const legacyRun = computerRun("legacy-run", state.topics[0].topicId, proposalId, "passed", "legacy-shot");
     for (const step of legacyRun.stepResults) {
@@ -1997,6 +1999,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     state = store.revise(proposalId, { submitterMemberId: state.proposals[0].submitterMemberId, content: "修复设置侧栏高度与滚动容器，确保窄窗口下最后一个控件可达。", evidence: ["失败截图与滚动位置记录"], impactScope: ["设置侧栏"], risks: ["小窗口布局变化"], rollbackPlan: "回退侧栏滚动容器变更", acceptanceCriteria: ["最后一个控件可滚动到达"] }, "南宫婉");
     const correction = state.proposals.at(-1);
     store.markProgress(correction.proposalId, "pending-acceptance", "修复完成，等待复验");
+    state = freezePageAcceptancePlan(store, state, correction.proposalId);
     store.recordAcceptanceRun(computerRun("retest-run", state.topics[0].topicId, correction.proposalId, "passed", "retest-shot"));
     state = store.decideResult(correction.proposalId, "approved", "复验通过");
     const candidate = state.archiveRecords.at(-1).payload.experienceCandidate;
@@ -2063,10 +2066,34 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
 
 function computerRun(runId, topicId, proposalId, status, shot) {
  const now = new Date().toISOString();
- return { version: 3, mode: "page-experience", runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [
- { checkId: "interaction", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now },
- { checkId: "criterion-1", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
+ return { version: 3, mode: "page-experience", runId, topicId, proposalId, planId: `test-page-plan-${proposalId}`, acceptanceRoundId: `test-page-round-${proposalId}`, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, interactionSteps: [
+ { checkId: "interaction", evidenceMode: "page-experience", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
+ ], stepResults: [
+ { checkId: "criterion-1", evidenceMode: "page-experience", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
  ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };
+}
+
+function freezePageAcceptancePlan(store, state, proposalId) {
+ const proposal = state.proposals.find((item) => item.proposalId === proposalId);
+ const now = new Date().toISOString();
+ const planId = `test-page-plan-${proposalId}`;
+ const roundId = `test-page-round-${proposalId}`;
+ return store.saveAcceptancePlan(proposalId, {
+   version: 1,
+   planId,
+   topicId: proposal.topicId,
+   proposalId,
+   proposalVersion: proposal.version,
+   conditions: proposal.acceptanceCriteria.map((criterion, index) => ({
+     conditionId: `criterion-${index + 1}`,
+     criterion,
+     evidenceType: "page-experience",
+     completionRequirement: "真实页面截图和布局判断",
+   })),
+   rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+   currentRoundId: roundId,
+   createdAt: now,
+ });
 }
 
 test("南宫婉线程删除最终失败时保留原页面消息", async () => {
