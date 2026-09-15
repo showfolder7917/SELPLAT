@@ -2032,11 +2032,11 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
         pageCriterionIds: ["criterion-1"],
         findings: [{ criterionId: "criterion-2", status: "failed", actual: "当前专题记录的 acceptancePlan 为 null。", evidenceReferences: ["首次分类尚未冻结计划"] }],
       }),
-      JSON.stringify({
+      `补充说明 {not-json}，请采用第二个对象。\n\n\`\`\`json\n${JSON.stringify({ mode: "unsupported" })}\n${JSON.stringify({
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
-        findings: [{ criterionId: "criterion-2", status: "passed", actual: "当前专题记录已保存 acceptancePlan，条件编号和证据类型可读取。", evidenceReferences: ["acceptance.plan_frozen"] }],
-      }),
+        findings: [{ criterionId: "criterion-2", status: "passed", actual: "当前专题记录已保存 acceptancePlan，条件编号和证据类型可读取，包含\\\"转义引号\\\"。", evidenceReferences: ["acceptance.plan_frozen"] }],
+      })}\n\`\`\``,
     ];
     const hanli = createHanliRuntime({
       store, prompts, memory: null, screenshots: {},
@@ -2051,6 +2051,28 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
     assert.equal(result.review.stepResults[0].status, "passed");
     assert.match(result.review.stepResults[0].actual, /已保存 acceptancePlan/);
     assert.equal(store.state().proposals.at(-1).acceptancePlan.planId, result.plan.planId);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("韩立结果验收拒绝未闭合的 JSON 对象并保留三次重试", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-unclosed-result-json-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("未闭合结果对象"), acceptanceCriteria: ["计划可读取"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    let attempts = 0;
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanli: async () => { attempts += 1; return "说明文字 {\"mode\":\"mixed\""; },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    await assert.rejects(
+      () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
+      /韩立连续 3 次未返回有效的结果验收判断：AI 返回的结构化判断不是有效 JSON。/,
+    );
+    assert.equal(attempts, 3);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
