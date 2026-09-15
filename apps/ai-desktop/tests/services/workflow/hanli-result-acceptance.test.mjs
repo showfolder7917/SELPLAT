@@ -91,7 +91,9 @@ test("受控测试结论和任务协作群检查保留验收边界", () => {
   assert.match(unifiedRunner, /return \{ executable: resolveVerifiedDeveloperExecutable\(buildRoot\), verificationEvidence \}/);
   assert.match(pipeline, /verificationEvidence = verifiedCandidate\.verificationEvidence/);
   assert.match(pipeline, /appendFlow\(task, "unified_test\.passed"[\s\S]*verificationEvidence,/);
-  assert.match(computer, /必须先按截图点击既有安全导航进入任务协作群/);
+  assert.match(computer, /先确认任务区已展开/);
+  assert.match(computer, /button\.section-toggle\[aria-controls="developer-task-list"\]/);
+  assert.doesNotMatch(computer, /node\.classList\.contains\("section-toggle"\)/);
   assert.match(computer, /只有导航后仍不可见时才记录 hidden/);
 });
 
