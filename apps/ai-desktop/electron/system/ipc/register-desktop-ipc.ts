@@ -284,7 +284,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
   registerSettingsIpc(settings, eventCenter);
-  registerWorkspaceIpc(workspaces, eventCenter);
+  registerWorkspaceIpc(workspaces, eventCenter, hanliPageAcceptanceAuthorization);
   registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });

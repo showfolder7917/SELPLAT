@@ -5,7 +5,7 @@ import type {
   ReopenHanliAcceptanceInDto,
 } from "../../../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
-import type { EvolutionAcceptancePlanOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
+import type { EvolutionAcceptanceMaterialAuthorizationOutDto, EvolutionAcceptancePlanOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../../evolution/index.js";
 import type { HanliApplicationPort } from "../../hanli.facade.js";
 import { EvolutionApprovalService } from "../decision/evolution-approval.service.js";
@@ -121,11 +121,11 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 页面型只返回交互验收路由；非页面型直接完成只读代码符合性审查。 */
-  async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview> {
+  async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown, materials: EvolutionAcceptanceMaterialAuthorizationOutDto[] = []): Promise<HanliResultAcceptanceReview> {
     const proposal = requireProposal(this.#store.state(), proposalId);
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
     const routingReview = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
-    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
+    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview, materials);
     this.#store.saveAcceptancePlan(proposalId, plan);
     // 代码结论可能要求核对计划本身，必须在计划落盘后重新读取权威提案再审查。
     if (routingReview === "page-experience") return { plan, review: routingReview };
@@ -297,7 +297,7 @@ export class HanliApplicationService implements HanliApplicationPort {
 }
 
 /** 把韩立的首次分类冻结成提案版本事实；后续复验必须继续消费该计划。 */
-function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: "page-experience" | HanliAcceptanceRunOutDto): EvolutionAcceptancePlanOutDto {
+function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: "page-experience" | HanliAcceptanceRunOutDto, materials: EvolutionAcceptanceMaterialAuthorizationOutDto[]): EvolutionAcceptancePlanOutDto {
   const pageConditionIds = review === "page-experience"
     ? proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`)
     : review.mode === "mixed" ? review.pageCriterionIds || [] : [];
@@ -314,8 +314,8 @@ function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: "page-e
       const evidenceType = pageConditionIds.includes(conditionId) ? "page-experience" as const : "code-conformance" as const;
       return { conditionId, criterion, evidenceType, completionRequirement: evidenceType === "page-experience" ? "真实页面截图、功能结果和布局判断均通过" : "代码或测试证据引用并确认实际符合条件" };
     }),
-    // 未提供经确认的材料时显式冻结空授权，电脑验收不得由缺省路径取得工作区访问权。
-    materials: [],
+    // 只冻结当前提案关联任务中已经登记的材料，不能从工作区扫描补造路径。
+    materials: structuredClone(materials),
     rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
     currentRoundId: roundId,
     createdAt: now,
