@@ -155,6 +155,11 @@ export class HanliComputerAcceptance {
                     type: "string",
                     enum: ["passed", "failed", "blocked"],
                   },
+                  blockerKind: {
+                    type: "string",
+                    enum: ["materials-insufficient", "acceptance-capability", "runtime-environment"],
+                    description: "仅当功能或布局为 blocked 时填写；观察到真实页面或安全不符合时必须使用 failed。",
+                  },
                   actual: { type: "string" },
                   evidenceId: { type: "string" },
                   layoutStatus: {
@@ -228,6 +233,10 @@ export class HanliComputerAcceptance {
               const hasKnownLayoutStatus = finding
                 ? ["passed", "failed", "blocked"].includes(String(finding.layoutStatus))
                 : false;
+              const hasBlockedResult = finding?.status === "blocked" || finding?.layoutStatus === "blocked";
+              const hasKnownBlockerKind = finding
+                ? ["materials-insufficient", "acceptance-capability", "runtime-environment"].includes(String(finding.blockerKind))
+                : false;
               const hasLayoutResult = finding
                 ? typeof finding.layoutActual === "string" && Boolean(finding.layoutActual.trim())
                 : false;
@@ -246,6 +255,9 @@ export class HanliComputerAcceptance {
               if (!hasSingleFinding || !hasKnownStatus || !hasActualResult || !hasValidEvidence
                 || !hasKnownLayoutStatus || !hasLayoutResult || !hasValidLayoutEvidence) {
                 throw new Error(`${criterionId}缺少唯一功能判断、布局判断或操作后的真实截图依据`);
+              }
+              if (hasBlockedResult && !hasKnownBlockerKind) {
+                throw new Error(`${criterionId}受阻时必须说明材料、验收能力或运行环境原因；真实页面或安全不符合应填写 failed`);
               }
             }
             const containsFailure = findings.some((item) => item.status === "failed" || item.layoutStatus === "failed");
@@ -267,6 +279,7 @@ export class HanliComputerAcceptance {
                   criterionId: String(item.criterionId),
                 },
                 status: item.status as "passed" | "failed" | "blocked",
+                blockerKind: item.blockerKind as HanliAcceptanceStepResultOutDto["blockerKind"],
                 actual: String(item.actual),
                 layoutStatus: item.layoutStatus as "passed" | "failed" | "blocked",
                 layoutActual: String(item.layoutActual),
@@ -490,6 +503,7 @@ export class HanliComputerAcceptance {
             criterionId,
           },
           status: "blocked",
+          blockerKind: "runtime-environment",
           actual,
           layoutStatus: "blocked",
           layoutActual,

@@ -47,6 +47,32 @@ test("混合运行按条件强制页面截图与代码引用证据", () => {
   assert.match(stateStore, /客户要求与实际代码/);
 });
 
+test("验收受阻先经唯一分类策略，再决定产品修复或可恢复重跑", () => {
+  const classification = readFileSync("electron/services/workflow/domain/acceptance-result-classification.policy.ts", "utf8");
+  const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+  const computer = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(classification, /product-or-safety-failure/);
+  assert.match(classification, /materials-insufficient-main-path-judged/);
+  assert.match(classification, /acceptance-capability-or-runtime-blocked/);
+  assert.match(classification, /blockerKind === "materials-insufficient"/);
+  assert.match(computer, /真实页面或安全不符合时必须使用 failed/);
+  assert.match(runtime, /const classification = classifyAcceptanceRun\(runResult\)/);
+  assert.match(runtime, /classification\.disposition === "materials-insufficient-main-path-judged"/);
+  assert.match(runtime, /classification\.disposition === "acceptance-capability-or-runtime-blocked"/);
+  assert.doesNotMatch(runtime, /if \(runResult\.status === "blocked"\)/);
+});
+
+test("验收交接把固定混合摘要与折叠技术详情分开投影", () => {
+  const handoff = readFileSync("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts", "utf8");
+  const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+  assert.match(handoff, /export interface AcceptanceHandoffContent/);
+  assert.match(handoff, /summary: handoff\.summary/);
+  assert.match(handoff, /content: handoff\.content/);
+  assert.match(handoff, /detail: handoff\.detail/);
+  assert.match(runtime, /混合验收没有同时满足页面条件与代码符合性条件/);
+  assert.match(runtime, /detail: failureMessage/);
+});
+
 test("混合计划语义错误会在模型重试内返回具体分区原因", () => {
   const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
   assert.match(decision, /#askForStructuredResult\(prompt, state, \(value\) => this\.#createResultAcceptanceReview/);

@@ -20,7 +20,8 @@ import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggr
 import { ProposalRevisionChain } from "../../domain/proposal-revision-chain.js";
 import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
 import { AcceptanceFailureScopePolicy } from "../../domain/acceptance-failure-scope.policy.js";
-import { AcceptanceHandoffService } from "../acceptance/acceptance-handoff.service.js";
+import { classifyAcceptanceRun } from "../../domain/acceptance-result-classification.policy.js";
+import { AcceptanceHandoffService, type AcceptanceHandoffContent } from "../acceptance/acceptance-handoff.service.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../../personas/hanli/index.js";
 import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../../personas/nangong/index.js";
@@ -526,7 +527,8 @@ export class PersonaEvolutionRuntime {
 
       if (flowAction === "accept-result") {
         const attemptId = randomUUID();
-        const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
+        // 交接包装必须完整透传客户摘要与折叠技术详情，不能把新投影结构缩窄回旧字符串契约。
+        const publishAcceptance = (phase: "received" | "started" | "passed" | "failed", content: string | AcceptanceHandoffContent) => this.#acceptanceHandoff.publish(proposal, phase, content, attemptId);
         publishAcceptance("received", `工程门禁已经完成，请韩立按客户原要求验收：${proposal.acceptanceCriteria.join("；")}`);
         try {
           const acceptanceTasks = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view().effectiveTasks;
@@ -593,15 +595,30 @@ export class PersonaEvolutionRuntime {
             publishAcceptance("started", "该任务不涉及页面，韩立正在只读审查代码是否符合客户原要求。");
             runResult = { ...review, planId: plan.planId, acceptanceRoundId: plan.currentRoundId };
           }
-          if (runResult.status === "passed") {
-            publishAcceptance("passed", `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}通过。运行记录：${runResult.runId}\n逐项结果：\n${runResult.stepResults.map((step) => `${step.checkId} ${step.status}：${step.actual}`).join("\n")}`);
+          const classification = classifyAcceptanceRun(runResult);
+          runResult = { ...runResult, acceptanceDisposition: classification.disposition };
+          if (classification.disposition === "passed" || classification.disposition === "materials-insufficient-main-path-judged") {
+            const materialNote = classification.disposition === "materials-insufficient-main-path-judged"
+              ? `\n材料受阻条件：${classification.blockedCriterionIds.join("、")}；已保留可恢复重跑条件。`
+              : "";
+            publishAcceptance("passed", {
+              summary: classification.disposition === "materials-insufficient-main-path-judged" ? "验收通过，材料受阻事实已归档" : "验收通过",
+              content: `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}通过。运行记录：${runResult.runId}${materialNote}`,
+              detail: `逐项结果：\n${runResult.stepResults.map((step) => `${step.checkId} ${step.status}：${step.actual}`).join("\n")}`,
+            });
+            this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
+            continue;
           }
-          if (runResult.status === "blocked") {
+          if (classification.disposition === "acceptance-capability-or-runtime-blocked") {
             const reason = runResult.stepResults
               .filter((step) => step.status === "blocked" || step.layoutStatus === "blocked")
               .map((step) => `${step.checkId}：${step.actual}`)
               .join("\n");
-            publishAcceptance("failed", `验收受阻，已上报令狐处理：\n${reason}`);
+            publishAcceptance("failed", {
+              summary: "验收能力或运行环境受阻",
+              content: "验收未形成产品失败结论，等待原条件下可恢复重跑。",
+              detail: `受阻条件与实际结果：\n${reason}`,
+            });
             return this.#blockOneShotFailure("technical", "run_hanli_result_acceptance", new Error(reason), reason, {
               evidenceAttachmentIds: runResult.evidenceAttachmentIds,
               acceptanceRunId: runResult.runId,
@@ -618,7 +635,11 @@ export class PersonaEvolutionRuntime {
               ? `\n本轮仍未验证的条件：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：${step.actual}`).join("\n")}`
               : "";
             const failureMessage = `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}未通过。\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
-            publishAcceptance("failed", failureMessage);
+            publishAcceptance("failed", {
+              summary: runResult.mode === "mixed" ? "混合验收没有同时满足页面条件与代码符合性条件" : "验收未通过",
+              content: "验收未通过，已按原验收范围判断后续处理。",
+              detail: failureMessage,
+            });
             if (scopeReview.decision !== "within-original-acceptance") {
               return this.#blockOneShotFailure("business", "review_acceptance_failure_scope", new Error(scopeReview.reason), failureMessage, {
                 acceptanceRunId: runResult.runId,

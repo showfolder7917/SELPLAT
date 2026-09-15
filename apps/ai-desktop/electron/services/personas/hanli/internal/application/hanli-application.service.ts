@@ -182,8 +182,9 @@ export class HanliApplicationService implements HanliApplicationPort {
   /** 一次性流程把真实运行结果交给韩立；失败先保留证据，由 Workflow 判断修复范围。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto {
     this.recordAcceptanceRun(run);
-    // 工具受阻和产品失败都要保留原提案待验收，不能退回南宫婉重做原提案。
-    if (run.status !== "passed") {
+    const acceptedWithMaterialInsufficiency = run.acceptanceDisposition === "materials-insufficient-main-path-judged";
+    // 真实产品、能力和环境故障都要保留原提案待验收，不能退回南宫婉重做原提案。
+    if (run.status !== "passed" && !acceptedWithMaterialInsufficiency) {
       // Workflow 会先提取本轮真实缺陷并判断是否仍属于原验收范围。
       return this.#store.state();
     }
@@ -191,7 +192,9 @@ export class HanliApplicationService implements HanliApplicationPort {
     // 全部验收条件通过后，韩立才能作出最终通过决定。
     const decision: DecideHanliResultInDto["decision"] = "approved";
     // 可见说明明确指出通过依据来自真实用户路径。
-    const advice = run.mode === "page-experience"
+    const advice = acceptedWithMaterialInsufficiency
+      ? "韩立已完成代表性页面主路径、代码符合性与工程门禁核对；缺少的材料已归档为可恢复重跑条件，不阻断本轮结果验收。"
+      : run.mode === "page-experience"
       ? "韩立已按真实用户路径完成页面检查，全部适用项目通过。"
       : run.mode === "mixed"
         ? "韩立已逐项结合真实用户路径与只读代码、测试依据完成验收，全部适用项目通过。"
