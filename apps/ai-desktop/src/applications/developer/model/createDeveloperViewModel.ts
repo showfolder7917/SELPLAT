@@ -75,6 +75,7 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       locale: controller.settings.locale,
       auditTask: controller.diagnostics.auditInfo?.latestTask || null,
       collaboration: controller.collaboration,
+      evolutionState: controller.evolution.state,
       onToggle: controller.tasks.toggle,
       workspaceExpanded: controller.workspaceExplorer.expanded,
       workspaces: controller.workspace.workspaces,

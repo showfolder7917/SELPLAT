@@ -91,6 +91,8 @@ export type DeveloperExplorerViewModel = {
   auditTask: NonNullable<Controller["diagnostics"]["auditInfo"]>["latestTask"] | null;
   /** 协作 Feature 控制器只交给它自己的任务导航组件。 */
   collaboration: Controller["collaboration"];
+  /** 内部研讨真实运行态用于人物导航状态投影，不参与协作任务写入。 */
+  evolutionState: Controller["evolution"]["state"];
   /** 点击标题时切换任务区域展开状态。 */
   onToggle: Controller["tasks"]["toggle"];
   workspaceExpanded: Controller["workspaceExplorer"]["expanded"];

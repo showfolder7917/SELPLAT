@@ -18,6 +18,7 @@ export function DeveloperExplorerSection({ viewModel }: DeveloperExplorerSection
         locale={viewModel.locale}
         auditTask={viewModel.auditTask}
         controller={viewModel.collaboration}
+        evolutionState={viewModel.evolutionState}
         onToggle={viewModel.onToggle}
       />
     </DeveloperExplorer>

@@ -19,6 +19,7 @@ import type {
   // 界面语言决定左侧导航使用中文还是日文。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
+import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/dto/evolution-state.out.dto";
 import type {
   // 协作控制器提供模式、人物和任务群页面操作。
   useCollaborationWorkspace,
@@ -38,6 +39,8 @@ type TaskExplorerFeatureProps = {
   auditTask: AuditTaskSummaryOutDto | null;
   /** 协作状态和跨进程业务操作的唯一控制器。 */
   controller: CollaborationController;
+  /** 调查阶段的权威运行状态只用于左侧人物状态展示。 */
+  evolutionState: EvolutionStateOutDto | null;
   /** 展开或收起左侧任务区域。 */
   onToggle: () => void;
 };
@@ -48,6 +51,7 @@ export function TaskExplorerFeature({
   locale,
   auditTask,
   controller,
+  evolutionState,
   onToggle,
 }: TaskExplorerFeatureProps) {
   // 当前运行模式来自导航状态，模式切换与页面切换来自业务操作组。
@@ -75,6 +79,7 @@ export function TaskExplorerFeature({
       <CollaborationTaskNavigation
         controller={controller}
         locale={locale}
+        evolutionState={evolutionState}
       />
     );
   } else {

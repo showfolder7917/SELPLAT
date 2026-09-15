@@ -203,7 +203,7 @@ export class HanliConversationService {
       return this.#recordControlReply(
         request,
         conversation,
-        "当前观点已经进入内部研讨，无需重复启动。请在任务协作群查看当前节点和后续交接。",
+        "当前观点正在内部研讨中，无需重复启动。请在韩立或南宫婉页面查看调查进展；调查形成方案后，才会生成任务协作群。",
         START_DELIBERATION_DECISION,
       );
     }

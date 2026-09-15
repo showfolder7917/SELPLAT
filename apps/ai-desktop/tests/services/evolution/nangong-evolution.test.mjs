@@ -616,7 +616,8 @@ test("韩立会话已有活动研讨时重复输入1只返回原流程", async (
   const result = await service.send({ clientMessageId: "duplicate-confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
 
   assert.equal(started, 0);
-  assert.match(result.messages.at(-1).content, /已经进入内部研讨，无需重复启动/);
+  assert.match(result.messages.at(-1).content, /正在内部研讨中，无需重复启动/);
+  assert.match(result.messages.at(-1).content, /调查形成方案后，才会生成任务协作群/);
 });
 
 test("韩立只学习提问调查扩展方法并回显每轮真实读入字数", async () => {

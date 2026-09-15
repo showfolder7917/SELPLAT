@@ -13,6 +13,7 @@ import type {
   // 界面语言决定任务群和人物状态使用中文还是日文。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
+import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/dto/evolution-state.out.dto";
 import {
   // 左侧人物栏与人物页共用主进程协作状态的显示模型。
   collaborationMemberDisplayModel,
@@ -27,12 +28,15 @@ type CollaborationTaskNavigationProps = {
   controller: CollaborationController;
   /** 当前界面语言。 */
   locale: LocaleValue;
+  /** Evolution 只读运行态补足调查阶段的真实人物状态。 */
+  evolutionState: EvolutionStateOutDto | null;
 };
 
 /** 协同导航展示任务群入口和全部真实成员。 */
 export function CollaborationTaskNavigation({
   controller,
   locale,
+  evolutionState,
 }: CollaborationTaskNavigationProps) {
   // 权威数据提供成员列表和任务群时间线。
   const { state, stateReadStatus, timeline } = controller.data;
@@ -65,7 +69,12 @@ export function CollaborationTaskNavigation({
         )}
         {state?.members.map((member) => {
           const memberSelected = panel === "member" && member.memberId === state.selectedMemberId;
-          const display = collaborationMemberDisplayModel({ member, locale, status: stateReadStatus });
+          const display = collaborationMemberDisplayModel({
+            member,
+            locale,
+            status: stateReadStatus,
+            oneShotRun: evolutionState?.oneShotRun,
+          });
           const selectCurrentMember = () => void openMemberPage(member.memberId);
 
           return (

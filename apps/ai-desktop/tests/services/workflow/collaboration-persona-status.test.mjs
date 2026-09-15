@@ -21,6 +21,14 @@ test("无当前任务时只显示空闲，不由会话或历史状态重新投�
   assert.deepEqual(display({ member, locale: "ja" }), { presence: "idle", label: "待機" });
 });
 
+test("内部调查尚未生成执行任务时，只有权威运行态指定的人物显示处理中", () => {
+  const run = { actor: "nangong-wan", phase: "preparing-topic", status: "running" };
+  const nangong = { memberId: "nangong-wan", state: "idle", currentTaskId: null, phase: null };
+  const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", oneShotRun: run }), { presence: "working", label: "梳理调查问题中" });
+  assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run }), { presence: "idle", label: "空闲" });
+});
+
 test("状态尚未取得或更新失败时明确显示同步结果，不读取历史状态", () => {
   assert.deepEqual(display({ member: null, locale: "zh-CN", status: "syncing" }), { presence: "offline", label: "正在同步" });
   assert.deepEqual(display({ member: null, locale: "zh-CN", status: "unavailable" }), { presence: "offline", label: "状态暂未更新" });

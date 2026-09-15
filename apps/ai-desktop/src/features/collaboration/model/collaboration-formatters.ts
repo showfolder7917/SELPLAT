@@ -15,6 +15,7 @@ import type {
   // 界面语言：在中文和日文文案之间选择。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
+import type { EvolutionOneShotRunOutDto } from "../../../../contracts/services/evolution/dto/evolution-one-shot-run.out.dto";
 
 /** 协作快照读取结果由人物页和任务群共用。 */
 export type CollaborationStateReadStatus = "syncing" | "ready" | "unavailable";
@@ -27,6 +28,11 @@ export type CollaborationMemberDisplayModelInput = {
   locale: LocaleValue;
   /** 协作状态存储的读取结果；页面不能把旧时间线当成当前成员状态。 */
   status?: CollaborationStateReadStatus;
+  /**
+   * 内部研讨尚未产生执行任务时的权威运行事实。
+   * 这是只读展示投影：不能据此创建任务或改写协作成员存储。
+   */
+  oneShotRun?: Pick<EvolutionOneShotRunOutDto, "actor" | "phase" | "status"> | null;
 };
 
 type MemberState = CollaborationMemberOutDto["state"];
@@ -113,11 +119,42 @@ function memberPhaseLabel(member: CollaborationMemberOutDto): string | null {
   return labels[member.phase];
 }
 
+/**
+ * 内部研讨与执行任务属于相邻但独立的生命周期。
+ * 调查阶段没有任务是正常事实；当权威运行态明确指向某个协作成员时，左侧栏应如实显示该成员正在处理，
+ * 不能因为 currentTaskId 尚为空就把其投影为空闲。
+ */
+function deliberationMemberDisplay(
+  member: CollaborationMemberOutDto,
+  oneShotRun: CollaborationMemberDisplayModelInput["oneShotRun"],
+  locale: LocaleValue,
+): { presence: MemberState; label: string } | null {
+  if (!oneShotRun || oneShotRun.status !== "running" || oneShotRun.actor !== member.memberId) return null;
+
+  const chineseLabels: Partial<Record<EvolutionOneShotRunOutDto["phase"], string>> = {
+    "preparing-topic": "梳理调查问题中",
+    "forming-proposal": "整理方案中",
+    approving: "正在审批",
+    revising: "补充调查中",
+    distributing: "正在分派",
+  };
+  const japaneseLabels: Partial<Record<EvolutionOneShotRunOutDto["phase"], string>> = {
+    "preparing-topic": "調査質問を整理中",
+    "forming-proposal": "提案を整理中",
+    approving: "承認中",
+    revising: "追加調査中",
+    distributing: "タスクを配分中",
+  };
+  const labels = locale === "ja" ? japaneseLabels : chineseLabels;
+  const fallback = locale === "ja" ? "内部検討中" : "内部研讨中";
+  return { presence: "working", label: labels[oneShotRun.phase] || fallback };
+}
+
 /** 左侧人物栏与人物页共用的当前状态模型，只读取成员状态、任务编号和阶段。 */
 export function collaborationMemberDisplayModel(
   input: CollaborationMemberDisplayModelInput,
 ): { presence: MemberState; label: string } {
-  const { member, locale, status = "ready" } = input;
+  const { member, locale, status = "ready", oneShotRun = null } = input;
   // 成员快照尚未取得或读取失败时，不从历史节点推测人物仍在处理什么。
   if (!member) {
     const label = status === "unavailable"
@@ -125,7 +162,10 @@ export function collaborationMemberDisplayModel(
       : locale === "ja" ? "同期中" : "正在同步";
     return { presence: "offline", label };
   }
-  // 没有当前任务时，历史时间线、研讨或会话活动均不能把成员重新投影为忙碌。
+  // 运行中的内部研讨是主进程已发布的当前事实，优先于“没有执行任务”的默认空闲显示。
+  const deliberationDisplay = deliberationMemberDisplay(member, oneShotRun, locale);
+  if (deliberationDisplay) return deliberationDisplay;
+  // 没有当前任务、也没有归属本人的运行中研讨时，历史状态不能把成员重新投影为忙碌。
   const presence = member.currentTaskId ? member.state : "idle";
   // 阶段只属于当前在途任务；空闲成员不能继续显示上一轮的阶段。
   const phaseLabel = member.currentTaskId ? memberPhaseLabel(member) : null;
