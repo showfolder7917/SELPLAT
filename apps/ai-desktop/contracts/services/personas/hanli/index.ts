@@ -18,7 +18,7 @@ export type { HanliConversationActionValue } from "./value/hanli-conversation.va
 export type { HanliConversationViewpointValue } from "./value/hanli-conversation.value.js";
 
 /** 发起韩立真实窗口验收时传入的目标、提案和逐项验收条件。 */
-export type { HanliComputerAcceptanceInDto } from "./dto/computer-acceptance.in.dto.js";
+export type { HanliAcceptanceMaterialActionValue, HanliAcceptanceMaterialAuthorizationInDto, HanliComputerAcceptanceInDto } from "./dto/computer-acceptance.in.dto.js";
 
 /** 一轮韩立真实窗口验收的完整结果，包含运行状态、步骤和截图证据。 */
 export type { HanliAcceptanceRunOutDto } from "./dto/acceptance-run.out.dto.js";
