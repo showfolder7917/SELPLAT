@@ -4,9 +4,10 @@ import { WORKSPACE_PERMISSIONS, type WorkspacePermissionValue } from "../../../.
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
 import type { WorkspaceFacade } from "../../../services/support/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
+import type { HanliPageAcceptanceAuthorization } from "../hanli-page-acceptance-authorization.js";
 
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */
-export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: EventCenterFacade): void {
+export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: EventCenterFacade, hanliAuthorization?: HanliPageAcceptanceAuthorization): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-workspaces", () => workspaces.read());
   handle("desktop:add-workspace", async (event) => {
@@ -35,5 +36,8 @@ export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: E
     return state;
   });
   handle("desktop:list-workspace-directory", (_event, id: string, relativePath: string = "") => workspaces.listDirectory(id, relativePath));
-  handle("desktop:open-workspace-file", (_event, id: string, relativePath: string) => workspaces.openFile(id, relativePath));
+  handle("desktop:open-workspace-file", (event, id: string, relativePath: string) => {
+    hanliAuthorization?.assertWorkspaceFileAllowed(event.sender.id, id, relativePath);
+    return workspaces.openFile(id, relativePath);
+  });
 }

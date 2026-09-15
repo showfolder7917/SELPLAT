@@ -12,6 +12,7 @@ import type { WorkspaceStateOutDto } from "../../support/platform/workspace/inde
 import type { CollaborationAutomationSourceValue } from "../value/collaboration-task.value.js";
 // CollaborationMergeStrategyValue 决定任务结果完成后如何进入版本集成。
 import type { CollaborationMergeStrategyValue } from "../value/collaboration-task.value.js";
+import type { EvolutionAcceptanceMaterialAuthorizationOutDto } from "../../evolution/index.js";
 
 /** 发起方提交给 Workflow 并在创建时冻结的任务输入。 */
 export interface SubmitCollaborationTaskInDto {
@@ -29,6 +30,8 @@ export interface SubmitCollaborationTaskInDto {
   sourceMessageIds?: number[];
   /** 本任务需要读取的附件标识。 */
   attachmentIds?: string[];
+  /** 仅供验收使用的已确认工作区材料，创建后与任务一起冻结。 */
+  materials?: EvolutionAcceptanceMaterialAuthorizationOutDto[];
   /** 已经由用户确认的工作区范围。 */
   workspaceState: WorkspaceStateOutDto;
   /** 任务内容和结果使用的语言。 */

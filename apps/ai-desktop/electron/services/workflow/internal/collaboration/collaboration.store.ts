@@ -159,6 +159,7 @@ export class CollaborationStore {
         acceptanceCriteria: (request.acceptanceCriteria || []).map((item) => item.trim()).filter(Boolean),
         sourceMessageIds: [...new Set(request.sourceMessageIds || [])],
         attachmentIds: [...new Set(request.attachmentIds || [])],
+        materials: normalizeAcceptanceMaterials(request.materials),
         workspaceState: structuredClone(request.workspaceState),
         locale: request.locale,
         contentHash: sha256(normalizedIntent),
@@ -342,6 +343,26 @@ export class CollaborationStore {
     writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
     renameSync(temporary, this.#filePath);
   }
+}
+
+function normalizeAcceptanceMaterials(materials: unknown): { workspaceId: string; relativePath: string; allowedActions: ("preview" | "copy" | "system-open")[] }[] {
+  if (!Array.isArray(materials)) return [];
+  const seen = new Set<string>();
+  return materials.map((material) => {
+    if (!material || typeof material !== "object") throw new Error("任务验收材料格式无效。 ");
+    const value = material as { workspaceId?: unknown; relativePath?: unknown; allowedActions?: unknown };
+    const workspaceId = typeof value.workspaceId === "string" ? value.workspaceId.trim() : "";
+    const relativePath = typeof value.relativePath === "string" ? value.relativePath.trim() : "";
+    if (!workspaceId || !relativePath) throw new Error("任务验收材料缺少工作区或相对路径。 ");
+    if (!Array.isArray(value.allowedActions) || !value.allowedActions.length) throw new Error("任务验收材料缺少允许操作。 ");
+    const allowedActions = value.allowedActions.map((action) => typeof action === "string" ? action : "");
+    if (allowedActions.some((action) => !["preview", "copy", "system-open"].includes(action))) throw new Error("任务验收材料包含不支持的允许操作。 ");
+    if (new Set(allowedActions).size !== allowedActions.length) throw new Error("任务验收材料允许操作重复。 ");
+    const key = `${workspaceId}\u0000${relativePath}`;
+    if (seen.has(key)) throw new Error("任务验收材料重复。 ");
+    seen.add(key);
+    return { workspaceId, relativePath, allowedActions: allowedActions as ("preview" | "copy" | "system-open")[] };
+  });
 }
 
 /** 一次完成协同运行基础环境准备；保留业务历史，同时清除上一进程遗留的运行占用。 */
