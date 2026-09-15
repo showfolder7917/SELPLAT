@@ -12,6 +12,8 @@ import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspa
 import { CollaborationMemberPage } from "./CollaborationMemberPage";
 import { TaskCollaborationGroup } from "./TaskCollaborationGroup";
 
+const RECOVERY_REQUEST_TIMEOUT_MS = 12_000;
+
 type CollaborationWorkspaceFeatureProps = {
   /** 当前语言决定任务群和人物页面显示中文还是日文。 */
   locale: LocaleValue;
