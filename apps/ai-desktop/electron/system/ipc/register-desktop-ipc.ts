@@ -143,7 +143,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
     onStarted();
-    hanliPageAcceptanceAuthorization.begin(targetWindow.webContents.id);
+    hanliPageAcceptanceAuthorization.begin(targetWindow.webContents.id, goal);
     let run;
     try {
       // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面验收只能观察和使用既有安全导航。
