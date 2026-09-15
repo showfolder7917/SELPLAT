@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "rootDir": ".",
     "outDir": "../../build/ai-desktop/electron",
+    "rewriteRelativeImportExtensions": true,
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,

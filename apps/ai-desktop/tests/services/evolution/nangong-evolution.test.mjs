@@ -911,7 +911,7 @@ test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
     const filePath = path.join(directory, "state.json");
     writePersistedState(filePath, { version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] });
     const state = evolutionStore(filePath).state();
-    assert.equal(state.version, 8);
+    assert.equal(state.version, 9);
     assert.equal("automaticNangongApprovalEnabled" in state, false);
     assert.deepEqual(state.topics, []);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -1429,7 +1429,8 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     assert.equal(state.proposals[0].status, "pending-acceptance");
     assert.equal(state.proposals[0].resultSummary, "全部当前有效任务已经完成，等待韩立按真实用户路径验收结果。");
     assert.equal(state.topics.length, 1);
-    store.recordAcceptanceRun(computerRun("completed-run", state.topics[0].topicId, proposalId, "passed", "shot-completed"));
+    state = freezePageAcceptancePlan(store, state, proposalId);
+    store.recordAcceptanceRun(computerRun("completed-run", state.topics[0].topicId, proposalId, "passed", "shot-completed", state.proposals[0].acceptancePlan));
     state = facade.decideResult(proposalId, { mutation: mutation(facade), decision: "approved", advice: "真实操作和视觉检查符合目标。" });
     assert.equal(state.proposals[0].status, "completed");
     assert.equal(state.proposals[0].approvals.at(-1).stage, "result");
@@ -1816,6 +1817,8 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
     store.updateOneShotRun("testing", "linghu-ancestor", "令狐老祖", "等待本地修改归属恢复", topicId, proposalId);
     store.markDispatched(proposalId, failedTaskId);
     store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    state = freezePageAcceptancePlan(store, state, proposalId);
+    store.recordAcceptanceRun(computerRun("original-failure-run", topicId, proposalId, "failed", "original-failure-shot", state.proposals[0].acceptancePlan));
     store.decideResult(proposalId, "supplement-required", "真实验收失败，需要返修", "automatic-han-li");
     store.blockOneShotRun("韩立真实应用验收失败");
     state = store.revise(proposalId, {
@@ -1856,7 +1859,7 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
     });
     facade.setComputerAcceptanceSession(async () => {
       acceptanceRuns += 1;
-      return computerRun("recovered-acceptance-run", topicId, correctionProposalId, "passed", "recovered-shot");
+      return computerRun("recovered-acceptance-run", topicId, correctionProposalId, "passed", "recovered-shot", facade.state().proposals.find((proposal) => proposal.proposalId === correctionProposalId).acceptancePlan);
     });
 
     facade.start();
@@ -1970,12 +1973,13 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-acceptance-failure-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    let state = store.createTopic(topicRequest("真实界面失败返还"));
+    let state = store.createTopic({ ...topicRequest("真实界面失败返还"), acceptanceCriteria: ["最后一个控件可达"] });
     state = store.createProposal(state.topics[0].topicId, proposalRequest());
     const proposalId = state.proposals[0].proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
+    state = freezePageAcceptancePlan(store, state, proposalId);
     assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /页面验收或代码符合性审查且全部通过/);
-    const legacyRun = computerRun("legacy-run", state.topics[0].topicId, proposalId, "passed", "legacy-shot");
+    const legacyRun = computerRun("legacy-run", state.topics[0].topicId, proposalId, "passed", "legacy-shot", state.proposals[0].acceptancePlan);
     for (const step of legacyRun.stepResults) {
       delete step.layoutStatus;
       delete step.layoutActual;
@@ -1983,7 +1987,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     }
     store.recordAcceptanceRun(legacyRun);
     assert.throws(() => store.decideResult(proposalId, "approved", "沿用旧验收记录"), /页面验收或代码符合性审查且全部通过/);
-    store.recordAcceptanceRun(computerRun("failure-run", state.topics[0].topicId, proposalId, "failed", "failure-shot"));
+    store.recordAcceptanceRun(computerRun("failure-run", state.topics[0].topicId, proposalId, "failed", "failure-shot", state.proposals[0].acceptancePlan));
     state = store.decideResult(proposalId, "supplement-required", "修复设置侧栏滚动后重新提交");
     assert.equal(state.proposals[0].status, "supplement-required");
     const resultRecord = state.archiveRecords.at(-1);
@@ -1997,7 +2001,8 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     state = store.revise(proposalId, { submitterMemberId: state.proposals[0].submitterMemberId, content: "修复设置侧栏高度与滚动容器，确保窄窗口下最后一个控件可达。", evidence: ["失败截图与滚动位置记录"], impactScope: ["设置侧栏"], risks: ["小窗口布局变化"], rollbackPlan: "回退侧栏滚动容器变更", acceptanceCriteria: ["最后一个控件可滚动到达"] }, "南宫婉");
     const correction = state.proposals.at(-1);
     store.markProgress(correction.proposalId, "pending-acceptance", "修复完成，等待复验");
-    store.recordAcceptanceRun(computerRun("retest-run", state.topics[0].topicId, correction.proposalId, "passed", "retest-shot"));
+    state = freezePageAcceptancePlan(store, state, correction.proposalId);
+    store.recordAcceptanceRun(computerRun("retest-run", state.topics[0].topicId, correction.proposalId, "passed", "retest-shot", state.proposals.at(-1).acceptancePlan));
     state = store.decideResult(correction.proposalId, "approved", "复验通过");
     const candidate = state.archiveRecords.at(-1).payload.experienceCandidate;
     assert.equal(candidate.status, "candidate");
@@ -2035,9 +2040,9 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
     facade.setComputerAcceptanceSession(async () => {
       acceptanceRuns += 1;
       return {
-        ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot"),
+        ...computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot", facade.state().proposals.find((proposal) => proposal.proposalId === proposalId).acceptancePlan),
         criteria: [originalCriterion],
-        stepResults: computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot").stepResults.map(step => step.operation.type === "judgement" ? { ...step, layoutStatus: "blocked", layoutActual: "当前正式页面未提供布局验收能力" } : step),
+        stepResults: computerRun("failed-current-run", topicId, proposalId, "failed", "failure-shot", facade.state().proposals.find((proposal) => proposal.proposalId === proposalId).acceptancePlan).stepResults.map(step => step.operation.type === "judgement" ? { ...step, layoutStatus: "blocked", layoutActual: "当前正式页面未提供布局验收能力" } : step),
       };
     });
     state = await facade.resumeOneShotRun(runId);
@@ -2061,12 +2066,36 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-function computerRun(runId, topicId, proposalId, status, shot) {
+function computerRun(runId, topicId, proposalId, status, shot, plan) {
  const now = new Date().toISOString();
- return { version: 3, mode: "page-experience", runId, topicId, proposalId, criteria: ["最后一个控件可达"], status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, stepResults: [
- { checkId: "interaction", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now },
- { checkId: "criterion-1", operationIndex: 1, operation: { type:"judgement",criterionId:"criterion-1" }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
+ return { version: 3, mode: "page-experience", runId, topicId, proposalId, planId: plan.planId, acceptanceRoundId: plan.currentRoundId, criteria: plan.conditions.map((condition) => condition.criterion), status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, interactionSteps: [
+ { checkId: "interaction", evidenceMode: "page-experience", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
+ ], stepResults: [
+ ...plan.conditions.map((condition, index) => ({ checkId: condition.conditionId, evidenceMode: condition.evidenceType, operationIndex: index + 1, operation: { type:"judgement",criterionId:condition.conditionId }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }))
  ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };
+}
+
+function freezePageAcceptancePlan(store, state, proposalId) {
+ const proposal = state.proposals.find((item) => item.proposalId === proposalId);
+ const now = new Date().toISOString();
+ const planId = `test-page-plan-${proposalId}`;
+ const roundId = `test-page-round-${proposalId}`;
+ return store.saveAcceptancePlan(proposalId, {
+   version: 1,
+   planId,
+   topicId: proposal.topicId,
+   proposalId,
+   proposalVersion: proposal.version,
+   conditions: proposal.acceptanceCriteria.map((criterion, index) => ({
+     conditionId: `criterion-${index + 1}`,
+     criterion,
+     evidenceType: "page-experience",
+     completionRequirement: "真实页面截图和布局判断",
+   })),
+   rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+   currentRoundId: roundId,
+   createdAt: now,
+ });
 }
 
 test("南宫婉线程删除最终失败时保留原页面消息", async () => {

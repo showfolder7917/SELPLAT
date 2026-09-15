@@ -86,20 +86,33 @@ export class HanliDecisionService {
    * 这里同时校验页面条件和代码条件，避免 JSON 合法却无法进入正式窗口验收。
    */
   #createResultAcceptanceReview(proposal: EvolutionProposalOutDto, value: Record<string, unknown>): "page-experience" | HanliAcceptanceRunOutDto {
-    if (value.mode === "page-experience") return "page-experience";
+    if (value.mode === "page-experience") {
+      const frozenPlan = proposal.acceptancePlan;
+      if (frozenPlan && frozenPlan.conditions.some((item) => item.evidenceType !== "page-experience")) {
+        throw new Error("韩立不能在已冻结验收计划后把代码条件改判为页面条件。 ");
+      }
+      return "page-experience";
+    }
     if (value.mode !== "code-conformance" && value.mode !== "mixed") {
       throw new Error("韩立没有返回有效的结果验收类型和逐项结论。");
     }
-    const allCriterionIds = proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
-    const pageCriterionIds = value.mode === "mixed" ? value.pageCriterionIds : [];
+    const frozenPlan = proposal.acceptancePlan;
+    const allCriterionIds = frozenPlan?.conditions.map((item) => item.conditionId) || proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
+    const pageCriterionIds = frozenPlan
+      ? frozenPlan.conditions.filter((item) => item.evidenceType === "page-experience").map((item) => item.conditionId)
+      : value.mode === "mixed" ? value.pageCriterionIds : [];
     if (!Array.isArray(pageCriterionIds)
       || pageCriterionIds.some((item) => typeof item !== "string")
       || new Set(pageCriterionIds).size !== pageCriterionIds.length
       || pageCriterionIds.some((item) => !allCriterionIds.includes(item))) {
       throw new Error("韩立混合验收计划缺少有效且不重复的页面条件编号。");
     }
-    if (value.mode === "mixed" && (pageCriterionIds.length === 0 || pageCriterionIds.length === allCriterionIds.length)) {
+    if (!frozenPlan && value.mode === "mixed" && (pageCriterionIds.length === 0 || pageCriterionIds.length === allCriterionIds.length)) {
       throw new Error("混合验收必须同时包含页面条件和代码符合性条件。");
+    }
+    // 此分支已排除 page-experience；若冻结计划全是页面条件，模型必须走上方的页面验收入口。
+    if (frozenPlan && pageCriterionIds.length === allCriterionIds.length) {
+      throw new Error("韩立不能在已冻结验收计划后重新改变页面与代码证据分类。 ");
     }
     if (!Array.isArray(value.findings)) {
       throw new Error("韩立代码符合性审查缺少逐项结论。");
@@ -111,7 +124,7 @@ export class HanliDecisionService {
     }
     const steps = codeCriterionIds.map((criterionId, operationIndex) => {
       const index = allCriterionIds.indexOf(criterionId);
-      const criterion = proposal.acceptanceCriteria[index];
+      const criterion = frozenPlan?.conditions[index]?.criterion || proposal.acceptanceCriteria[index];
       const finding = findings.find((item) => item.criterionId === criterionId);
       const status = finding?.status;
       const actual = typeof finding?.actual === "string" ? finding.actual.trim() : "";

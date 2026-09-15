@@ -2,9 +2,10 @@ import type {
   DecideHanliProposalInDto,
   DecideHanliResultInDto,
   HanliAcceptanceRunOutDto,
+  ReopenHanliAcceptanceInDto,
 } from "../../../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
-import type { EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
+import type { EvolutionAcceptancePlanOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../../evolution/index.js";
 import type { HanliApplicationPort } from "../../hanli.facade.js";
 import { EvolutionApprovalService } from "../decision/evolution-approval.service.js";
@@ -14,6 +15,11 @@ import { HanliConversationService } from "../conversation/hanli-conversation.ser
 import { inspectAcceptanceRunEvidence } from "../../domain/acceptance-run-evidence.policy.js";
 
 export type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
+
+export type HanliResultAcceptanceReview = {
+  plan: EvolutionAcceptancePlanOutDto;
+  review: "page-experience" | HanliAcceptanceRunOutDto;
+};
 
 /** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */
 export class HanliApplicationService implements HanliApplicationPort {
@@ -115,8 +121,12 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 页面型只返回交互验收路由；非页面型直接完成只读代码符合性审查。 */
-  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto> {
-    return this.#decision.reviewResultAcceptance(requireProposal(this.#store.state(), proposalId), implementationEvidence);
+  async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview> {
+    const proposal = requireProposal(this.#store.state(), proposalId);
+    const review = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
+    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, review);
+    this.#store.saveAcceptancePlan(proposalId, plan);
+    return { plan, review };
   }
 
   /** 根据已保存人工偏好执行受控自动审批；缺少完整事实或历史依据时退回补充。 */
@@ -154,6 +164,10 @@ export class HanliApplicationService implements HanliApplicationPort {
   /** 保存人工最终验收判断；真实运行证据是否充足仍由 Evolution 状态门禁核对。 */
   decideResult(proposalId: string, request: DecideHanliResultInDto): EvolutionStateOutDto {
     return this.#decideResult(proposalId, request, "manual-user");
+  }
+
+  reopenCompletedAcceptance(request: ReopenHanliAcceptanceInDto): EvolutionStateOutDto {
+    return this.#store.reopenCompletedAcceptance(request.topicId, request.proposalId, request.reason, request.sourceRecordId);
   }
 
   /** 一次性流程把真实运行结果交给韩立；失败先保留证据，由 Workflow 判断修复范围。 */
@@ -275,6 +289,30 @@ export class HanliApplicationService implements HanliApplicationPort {
       [latest.approvalId],
     );
   }
+}
+
+/** 把韩立的首次分类冻结成提案版本事实；后续复验必须继续消费该计划。 */
+function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: "page-experience" | HanliAcceptanceRunOutDto): EvolutionAcceptancePlanOutDto {
+  const pageConditionIds = review === "page-experience"
+    ? proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`)
+    : review.mode === "mixed" ? review.pageCriterionIds || [] : [];
+  const now = new Date().toISOString();
+  const roundId = `acceptance-round-${crypto.randomUUID()}`;
+  return {
+    version: 1,
+    planId: `acceptance-plan-${crypto.randomUUID()}`,
+    topicId: proposal.topicId,
+    proposalId: proposal.proposalId,
+    proposalVersion: proposal.version,
+    conditions: proposal.acceptanceCriteria.map((criterion, index) => {
+      const conditionId = `criterion-${index + 1}`;
+      const evidenceType = pageConditionIds.includes(conditionId) ? "page-experience" as const : "code-conformance" as const;
+      return { conditionId, criterion, evidenceType, completionRequirement: evidenceType === "page-experience" ? "真实页面截图、功能结果和布局判断均通过" : "代码或测试证据引用并确认实际符合条件" };
+    }),
+    rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+    currentRoundId: roundId,
+    createdAt: now,
+  };
 }
 
 function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto {

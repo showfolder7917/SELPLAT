@@ -19,7 +19,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1025");
+    assert.equal(first.status.schemaVersion, "1026");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -32,9 +32,9 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 26);
+      assert.equal(Number(row.count), 27);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1025", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1026", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
       assert.equal(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopEvolutionWorkbenchPreference'").get(), undefined);
       assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get());
@@ -49,9 +49,9 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
 test("候选包可用自身迁移清单升级仍停在旧版本的受控工程数据库", () => {
   const fixture = createFixture("candidate-packaged-migrations");
   try {
-    installSchemaUpTo(fixture, 1024);
+    installSchemaUpTo(fixture, 1025);
     const legacy = initializeAiMemoryDatabase(fixture.options);
-    assert.equal(legacy.status.schemaVersion, "1024");
+    assert.equal(legacy.status.schemaVersion, "1025");
     legacy.database?.close();
 
     const candidateMigrationRoot = path.join(appRoot, "db", "sql");
@@ -60,10 +60,55 @@ test("候选包可用自身迁移清单升级仍停在旧版本的受控工程�
       migrationSqlRoot: candidateMigrationRoot,
     });
     assert.equal(upgraded.status.state, "ready");
-    assert.equal(upgraded.status.schemaVersion, "1025");
+    assert.equal(upgraded.status.schemaVersion, "1026");
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get(),
     ));
+    upgraded.database?.close();
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("1026 保留 v8 演化快照并由应用层迁移后写回 v9", () => {
+  const fixture = createFixture("evolution-state-v9");
+  try {
+    installSchemaUpTo(fixture, 1025);
+    const legacy = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(legacy.status.schemaVersion, "1025");
+    new PersonaConversationRepository(legacy.database).create("nangong-wan");
+    const updatedAt = "2026-09-15T00:00:00.000Z";
+    const v8State = {
+      version: 8,
+      automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 },
+      automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null },
+      oneShotConfirmation: null,
+      oneShotRun: null,
+      automationContext: { workspaceState: null, locale: "zh-CN" },
+      preferenceSnapshotVersion: 0,
+      activeTopicId: null,
+      topics: [],
+      proposals: [],
+      deliberations: [],
+      archiveRecords: [],
+      updatedAt,
+    };
+    legacy.database?.withConnection((connection) => connection.prepare(`
+      INSERT INTO AiDesktopEvolutionState (singletonId, stateVersion, stateJson, updatedAt)
+      VALUES (1, 8, $stateJson, $updatedAt)
+    `).run({ $stateJson: JSON.stringify(v8State), $updatedAt: updatedAt }));
+    legacy.database?.close();
+
+    installSchemaUpTo(fixture, 1026);
+    const upgraded = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(upgraded.status.schemaVersion, "1026");
+    const state = new EvolutionStateStore(new EvolutionStateRepository(upgraded.database)).state();
+    assert.equal(state.version, 9);
+    const persisted = upgraded.database?.withConnection((connection) => connection.prepare(
+      "SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1",
+    ).get());
+    assert.equal(Number(persisted.stateVersion), 9);
+    assert.equal(JSON.parse(String(persisted.stateJson)).version, 9);
     upgraded.database?.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
@@ -176,7 +221,7 @@ test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", 
     store.clearTestData();
     store.assertTestDataCleared();
     const persisted = initialized.database?.withConnection((connection) => connection.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1").get());
-    assert.equal(Number(persisted.stateVersion), 8);
+    assert.equal(Number(persisted.stateVersion), 9);
     assert.equal(JSON.parse(String(persisted.stateJson)).conversation, undefined);
     const preservedMessage = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT content FROM AiDesktopPersonaConversationMessage
