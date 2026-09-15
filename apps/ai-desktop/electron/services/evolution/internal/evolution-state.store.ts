@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { EvolutionAcceptanceMaterialAuthorizationOutDto, EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto, type HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
@@ -564,6 +564,7 @@ export class EvolutionStateStore {
     if (proposal.status !== "pending-acceptance") throw new Error("只有待验收提案可以冻结验收计划。 ");
     if (!plan.conditions.length || !plan.currentRoundId || !plan.rounds.some((item) => item.roundId === plan.currentRoundId)) throw new Error("验收计划缺少条件或当前验收轮次。 ");
     if (new Set(plan.conditions.map((item) => item.conditionId)).size !== plan.conditions.length) throw new Error("验收计划条件编号重复。 ");
+    validateAcceptanceMaterials(plan.materials ?? []);
     if (proposal.acceptancePlan) {
       if (proposal.acceptancePlan.planId !== plan.planId) throw new Error("同一提案版本已经冻结另一份验收计划。 ");
       return this.state();
@@ -970,6 +971,20 @@ function required(value: unknown, label: string, maximum: number): string {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) throw new Error(`${label}不能为空。`);
   return text.slice(0, maximum);
+}
+function validateAcceptanceMaterials(materials: EvolutionAcceptanceMaterialAuthorizationOutDto[]): void {
+  const materialKeys = new Set<string>();
+  const allowedActions = new Set(["preview", "copy", "system-open"]);
+  for (const material of materials) {
+    const workspaceId = required(material.workspaceId, "验收材料工作区", 256);
+    const relativePath = required(material.relativePath, "验收材料相对路径", 4_000);
+    if (!material.allowedActions.length) throw new Error("验收材料至少需要一项允许操作。 ");
+    if (material.allowedActions.some((action) => !allowedActions.has(action))) throw new Error("验收材料包含不支持的允许操作。 ");
+    if (new Set(material.allowedActions).size !== material.allowedActions.length) throw new Error("验收材料允许操作重复。 ");
+    const materialKey = `${workspaceId}\u0000${relativePath}`;
+    if (materialKeys.has(materialKey)) throw new Error("验收材料工作区和相对路径重复。 ");
+    materialKeys.add(materialKey);
+  }
 }
 function normalizedList(values: unknown, label: string): string[] { const result = normalizedOptionalList(values); if (!result.length) throw new Error(`${label}至少需要一项。`); return result; }
 function normalizedOptionalList(values: unknown): string[] { return Array.isArray(values) ? [...new Set(values.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean))].slice(0, 100) : []; }
