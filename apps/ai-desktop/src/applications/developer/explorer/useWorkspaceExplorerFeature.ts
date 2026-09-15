@@ -20,7 +20,8 @@ class FileOperationTimeoutError extends Error {
 function waitForFileOperation<T>(request: Promise<T>, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new FileOperationTimeoutError(message)), FILE_OPERATION_TIMEOUT_MS);
-    void request.then(resolve, reject).finally(() => window.clearTimeout(timer));
+    // finally 会沿用原请求的拒绝结果；显式消费其派生 Promise，避免迟到失败成为未处理拒绝。
+    void request.then(resolve, reject).finally(() => window.clearTimeout(timer)).catch(() => undefined);
   });
 }
 
