@@ -391,8 +391,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 当前恢复动作（recoveryAction）来自任务最新等待或恢复请求事实，历史节点不能重新获得按钮。
   const recoveryAction = latestActiveRecoveryAction(visibleNodes);
   // 恢复提交中（recoveryPending）仅禁用下一流程的唯一入口，避免重复请求。
-  const recoveryPending = recoveryAction?.pending === true
-    || recoveryAction?.taskId === model.presentation.continuingTaskId;
+  const recoveryPending = recoveryAction?.taskId === model.presentation.continuingTaskId;
+  const recoverySubmitted = recoveryAction?.submitted === true;
   // 一次性运行恢复与按钮共用同一选择器，卡头不会再把阻塞状态说成自动处理中。
   const oneShotRecoveryRequired = evolution.state
     ? canResumeOneShotForGroup(presentedGroup, evolution.state)
@@ -420,12 +420,13 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
               type="button"
               className="task-recovery-continue"
               data-task-recovery-id={recoveryAction.taskId}
-              disabled={recoveryPending}
+              disabled={recoveryPending || recoverySubmitted}
               onClick={() => model.actions.onContinueTask(recoveryAction.taskId)}
             >
               <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
               {recoveryPending
                 ? locale === "ja" ? "復旧中…" : "恢复中…"
+                : recoverySubmitted ? locale === "ja" ? "送信済み・待機中" : "已提交，等待处理"
                 : recoveryAction.customerAction ? "从卡点继续" : locale === "ja" ? "実行を続ける" : "继续执行"}
             </button>
           )}
