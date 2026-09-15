@@ -65,6 +65,10 @@ export class HanliApplicationService implements HanliApplicationPort {
       askHanli: options.askHanli || (async () => {
         throw new Error("韩立研讨会话尚未接入。");
       }),
+      // 旧装配未提供专用端口时保持测试与离线调用可用；正式运行时必须注入隔离验收会话。
+      askHanliResultAcceptance: options.askHanliResultAcceptance || options.askHanli || (async () => {
+        throw new Error("韩立结果验收会话尚未接入。");
+      }),
       readStableUserId: this.#readStableUserId,
       readProjectScope: () => this.#readProjectScope(),
     });

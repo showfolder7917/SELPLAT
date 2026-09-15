@@ -2119,6 +2119,33 @@ test("韩立把未知结果验收类型纠正为代码符合性审查后继续�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立结果验收使用专用模型端口，不复用提案判断端口", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-acceptance-port-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("结果验收专用端口"), acceptanceCriteria: ["代码证据可读取"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const accepted = JSON.stringify({
+      mode: "code-conformance",
+      findings: [{ criterionId: "criterion-1", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+    });
+    let proposalCalls = 0;
+    let acceptanceCalls = 0;
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanli: async () => { proposalCalls += 1; throw new Error("结果验收不得复用提案判断端口"); },
+      askHanliResultAcceptance: async () => { acceptanceCalls += 1; return accepted; },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.equal(proposalCalls, 0);
+    assert.equal(acceptanceCalls, 2, "首次分类和冻结计划后的代码复核均应走专用端口");
+    assert.equal(result.review.mode, "code-conformance");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立结果验收拒绝未闭合的 JSON 对象并保留三次重试", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-unclosed-result-json-"));
   try {

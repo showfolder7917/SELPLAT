@@ -145,6 +145,8 @@ let codex: CodexService | undefined;
 let nangongCodex: CodexService | undefined;
 let nangongInquiryCodex: CodexService | undefined;
 let hanLiCodex: CodexService | undefined;
+// 结果验收必须隔离于客户对话，并在每次请求前丢弃自己的短会话。
+let hanliResultAcceptanceCodex: CodexService | undefined;
 // 研讨和分发当前复用南宫婉会话；不同变量用于表达不同业务场景。
 let nangongDeliberationCodex: CodexService | undefined;
 let nangongDistributionCodex: CodexService | undefined;
@@ -423,6 +425,23 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("han-li.evolution.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("han-li.evolution.thread.lifecycle", details),
   );
+  hanliResultAcceptanceCodex = new CodexService(
+    projectRoot,
+    trustedCommands,
+    createSqliteCodexSessionRepository(aiMemoryDatabase, "hanli-result-acceptance"),
+    {
+      codexHome,
+      serviceName: "selplat_ai_desktop_han_li_result_acceptance",
+      threadSource: "ai-desktop-han-li-result-acceptance",
+      migrateLegacySession: false,
+      sessionStorage: "ai-desktop",
+      validationOwner: "desktop",
+      readSettings: () => settings.read(),
+      readRuleInstructions: readHanliRuleInstructions,
+    },
+    (details) => eventCenter.recordEvent("han-li.result_acceptance.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("han-li.result_acceptance.thread.lifecycle", details),
+  );
   // 南宫婉的聊天、研讨和分发共享同一人物线程，业务节点仍由各自领域事件区分。
   nangongDeliberationCodex = nangongCodex;
   nangongDistributionCodex = nangongCodex;
@@ -676,6 +695,13 @@ export async function startApplication(): Promise<void> {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
     },
     askHanli: async (prompt, state) => (await hanLiCodex!.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text,
+    askHanliResultAcceptance: async (prompt, state) => {
+      const acceptanceCodex = hanliResultAcceptanceCodex;
+      if (!acceptanceCodex) throw new Error("韩立结果验收服务尚未就绪。");
+      // 每次重试都从独立空线程开始，避免无效回答和客户对话污染固定输出契约。
+      await acceptanceCodex.newChat();
+      return (await acceptanceCodex.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text;
+    },
     conversation: {
       send: async (request, prompt, selectedModel, options) => {
         // 排查判断和解释只消费原请求范围；普通自由会话继续沿用当前登记工作区策略。
@@ -1161,6 +1187,7 @@ export function disposeApplication(): void {
   nangongCodex?.dispose();
   nangongInquiryCodex?.dispose();
   hanLiCodex?.dispose();
+  hanliResultAcceptanceCodex?.dispose();
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
   corpusSemanticBackfillCodex?.dispose();
   linghuGuidanceCodex?.dispose();
