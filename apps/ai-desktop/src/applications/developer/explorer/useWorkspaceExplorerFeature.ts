@@ -2,28 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import type { WorkspaceDirectoryOutDto, WorkspaceFileOpenOutDto, WorkspaceSystemFileOpenFailedOutDto } from "../../../../contracts/services/support/platform/workspace/index";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
+import { FileOperationTimeoutError, waitForFileOperation } from "./file-operation-timeout";
 import type { WorkspaceExplorerFeatureProps } from "./WorkspaceExplorerFeature.types";
 
 type DirectoryState = { loading: boolean; error: string; entries: WorkspaceDirectoryOutDto["entries"] };
 type SelectedEntry = { workspaceId: string; relativePath: string } | null;
-
-const FILE_OPERATION_TIMEOUT_MS = 12_000;
-
-class FileOperationTimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "FileOperationTimeoutError";
-  }
-}
-
-/** 页面等待只收口本地状态，不会取消已经发送给主进程的文件操作。 */
-function waitForFileOperation<T>(request: Promise<T>, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new FileOperationTimeoutError(message)), FILE_OPERATION_TIMEOUT_MS);
-    // finally 会沿用原请求的拒绝结果；显式消费其派生 Promise，避免迟到失败成为未处理拒绝。
-    void request.then(resolve, reject).finally(() => window.clearTimeout(timer)).catch(() => undefined);
-  });
-}
 
 function opensWithSystemApplication(relativePath: string): boolean {
   return /\.pptx?$/iu.test(relativePath);
