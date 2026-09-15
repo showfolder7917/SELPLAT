@@ -28,6 +28,14 @@ export interface HanliAcceptanceStepResultOutDto {
   occurredAt: string;
 }
 
+/** 每轮结果审查都必须包含的源码质量结论，不与客户页面条件混成同一证据。 */
+export interface HanliSourceReviewOutDto {
+  status: "passed" | "failed" | "blocked";
+  actual: string;
+  /** 必须指向实际修改文件或结构位置，不能用测试日志替代。 */
+  evidenceReferences: string[];
+}
+
 export interface HanliAcceptanceRunOutDto {
   version: 3;
   mode: HanliAcceptanceModeValue;
@@ -41,6 +49,8 @@ export interface HanliAcceptanceRunOutDto {
   criteria: string[];
   /** mixed 预审记录登记待由正式窗口验证的原始条件编号。 */
   pageCriterionIds?: string[];
+  /** 韩立对高内聚、低耦合和新手可读性的独立源码审查。旧归档可缺省。 */
+  sourceReview?: HanliSourceReviewOutDto;
   status: "passed" | "failed" | "blocked";
   /** 运行时分类后写入的最终分流事实；旧归档记录按未分类读取。 */
   acceptanceDisposition?: HanliAcceptanceDispositionValue;

@@ -305,7 +305,7 @@ export class CheckpointCoordinator {
     const marker = `卡点标识：${state.runId}:proposal:${state.proposalId}:round:${state.round}`;
     const repair = this.options.collaboration().tasks.find((item) => item.taskId === state.repairTaskId || item.snapshot.constraints.includes(marker));
     if (repair) {
-      const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent, task?.snapshot.materials || []);
+      const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent);
       const evidenceMarker = `卡点故障事实：${failureEvent.eventId}`;
       if (repair.state !== "cancelled" && isAcceptanceFailureOperation(failureEvent.payload.operation)
         && !repair.snapshot.constraints.includes(evidenceMarker)) {
@@ -399,7 +399,7 @@ export class CheckpointCoordinator {
       // 下一次监督轮询会继续核对当前任务。
       return;
     }
-    const result = this.options.submitRepair(buildCheckpointRepairRequest(state, topic, proposal, failureEvent, task?.snapshot.materials || []));
+    const result = this.options.submitRepair(buildCheckpointRepairRequest(state, topic, proposal, failureEvent));
     const repairTaskId = result.tasks.find((item) => item.snapshot.constraints.includes(marker))?.taskId || null;
     if (!repairTaskId) throw new Error("未获得真实修复任务标识，不能报告派发完成");
     const aggregate = new WorkflowCheckpointAggregate(state);
@@ -416,7 +416,6 @@ function buildCheckpointRepairRequest(
   topic: EvolutionStateOutDto["topics"][number],
   proposal: EvolutionStateOutDto["proposals"][number],
   failureEvent: WorkflowExceptionRecordOutDto,
-  sourceMaterials: SubmitCollaborationTaskInDto["materials"] = [],
 ): SubmitCollaborationTaskInDto {
   const marker = `卡点标识：${state.runId}:proposal:${state.proposalId}:round:${state.round}`;
   const acceptanceFailureKind = failureEvent.payload.acceptanceFailureKind === "product-defect"
@@ -445,8 +444,6 @@ function buildCheckpointRepairRequest(
     acceptanceCriteria: [...blockedStepInstructions, "逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果、期望结果及故障所有者", "生产修改必须对应故障分类，且相同复现条件下原现象已经改变；只改验收工具、提示词或假测试不能证明产品缺陷修复", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立结果验收"],
     // 复用原专题已经授权的工作区。
     workspaceState: topic.workspaceState,
-    // 修复任务替代原任务后仍须保留已确认材料，避免验收计划从空快照重新冻结授权。
-    materials: structuredClone(sourceMaterials),
     // 复用原专题语言环境。
     locale: topic.locale,
     // 原步骤人物是本修复事实的发起人。

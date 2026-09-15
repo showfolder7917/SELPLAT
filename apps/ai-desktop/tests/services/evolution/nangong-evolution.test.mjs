@@ -7,6 +7,12 @@ import { build } from "esbuild";
 import { controlledTestRoot, projectPaths } from "#test-paths";
 import { personaConversationMessage } from "../../support/persona-conversation-message.fixture.mjs";
 
+const passedSourceReview = {
+  status: "passed",
+  actual: "源码职责集中、依赖清楚并且便于新手阅读。",
+  evidenceReferences: ["src/example.ts"],
+};
+
 // 回归测试只在内存中转换当前工作树源码，避免把其他候选的生成模块当作本轮验证结果。
 async function loadWorkflowSource(entryPoint) {
   const result = await build({ entryPoints: [entryPoint], bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
@@ -1873,7 +1879,7 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
       store,
       collaboration,
       conversation,
-      hanLi: { send: async () => '{"mode":"page-experience"}' },
+      hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
       recordEvent: () => undefined,
     });
     facade.setComputerAcceptanceSession(async () => {
@@ -1997,7 +2003,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
     const proposalId = state.proposals[0].proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待真实检查");
     state = freezePageAcceptancePlan(store, state, proposalId);
-    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /页面验收或代码符合性审查且全部通过/);
+    assert.throws(() => store.decideResult(proposalId, "approved", "直接通过"), /正式页面检查和源码审查且全部通过/);
     const legacyRun = computerRun("legacy-run", state.topics[0].topicId, proposalId, "passed", "legacy-shot", state.proposals[0].acceptancePlan);
     for (const step of legacyRun.stepResults) {
       delete step.layoutStatus;
@@ -2005,7 +2011,7 @@ test("韩立验收失败把复现步骤和截图沿原结果线路返还南宫�
       delete step.layoutScreenshotAttachmentId;
     }
     store.recordAcceptanceRun(legacyRun);
-    assert.throws(() => store.decideResult(proposalId, "approved", "沿用旧验收记录"), /页面验收或代码符合性审查且全部通过/);
+    assert.throws(() => store.decideResult(proposalId, "approved", "沿用旧验收记录"), /正式页面检查和源码审查且全部通过/);
     store.recordAcceptanceRun(computerRun("failure-run", state.topics[0].topicId, proposalId, "failed", "failure-shot", state.proposals[0].acceptancePlan));
     state = store.decideResult(proposalId, "supplement-required", "修复设置侧栏滚动后重新提交");
     assert.equal(state.proposals[0].status, "supplement-required");
@@ -2050,11 +2056,13 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
         findings: [{ criterionId: "criterion-2", status: "failed", actual: "当前专题记录的 acceptancePlan 为 null。", evidenceReferences: ["首次分类尚未冻结计划"] }],
+        sourceReview: passedSourceReview,
       }),
       `补充说明 {not-json}，请采用第二个对象。\n\n\`\`\`json\n${JSON.stringify({ mode: "unsupported" })}\n${JSON.stringify({
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
         findings: [{ criterionId: "criterion-2", status: "passed", actual: "当前专题记录已保存 acceptancePlan，条件编号和证据类型可读取，包含\\\"转义引号\\\"。", evidenceReferences: ["acceptance.plan_frozen"] }],
+        sourceReview: passedSourceReview,
       })}\n\`\`\``,
     ];
     const hanli = createHanliRuntime({
@@ -2073,7 +2081,7 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("韩立把全量 mixed 分类纠正为严格子集后继续冻结验收计划", async () => {
+test("页面条件覆盖全部原要求时仍同时完成源码结构审查", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-mixed-routing-retry-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -2084,19 +2092,8 @@ test("韩立把全量 mixed 分类纠正为严格子集后继续冻结验收计�
     state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
     const proposalId = state.proposals.at(-1).proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
-    const replies = [
-      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], findings: [] }),
-      JSON.stringify({
-        mode: "mixed",
-        pageCriterionIds: ["criterion-1"],
-        findings: [{ criterionId: "criterion-2", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
-      }),
-      JSON.stringify({
-        mode: "mixed",
-        pageCriterionIds: ["criterion-1"],
-        findings: [{ criterionId: "criterion-2", status: "passed", actual: "冻结计划中的代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
-      }),
-    ];
+    const accepted = JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], findings: [], sourceReview: passedSourceReview });
+    const replies = [accepted, accepted];
     const promptsSeen = [];
     const hanli = createHanliRuntime({
       store, prompts, memory: null, screenshots: {},
@@ -2104,10 +2101,10 @@ test("韩立把全量 mixed 分类纠正为严格子集后继续冻结验收计�
       recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
     }).facade;
     const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
-    assert.equal(promptsSeen.length, 3);
-    assert.match(promptsSeen[1], /pageCriterionIds 必须是全部 criterion 编号的非空严格子集/);
+    assert.equal(promptsSeen.length, 2);
     assert.equal(result.review.mode, "mixed");
-    assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "code-conformance"]);
+    assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "page-experience"]);
+    assert.equal(result.review.sourceReview.status, "passed");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -2122,6 +2119,7 @@ test("韩立把未知结果验收类型纠正为代码符合性审查后继续�
     const accepted = JSON.stringify({
       mode: "code-conformance",
       findings: [{ criterionId: "criterion-1", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+      sourceReview: passedSourceReview,
     });
     const replies = [JSON.stringify({ mode: "unknown" }), accepted, accepted];
     const promptsSeen = [];
@@ -2132,7 +2130,7 @@ test("韩立把未知结果验收类型纠正为代码符合性审查后继续�
     }).facade;
     const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
     assert.equal(promptsSeen.length, 3);
-    assert.match(promptsSeen[1], /mode 只能是 page-experience、code-conformance 或 mixed/);
+    assert.match(promptsSeen[1], /mode 只能是 code-conformance 或 mixed/);
     assert.equal(result.review.mode, "code-conformance");
     assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["code-conformance"]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -2149,6 +2147,7 @@ test("韩立结果验收使用专用模型端口，不复用提案判断端口",
     const accepted = JSON.stringify({
       mode: "code-conformance",
       findings: [{ criterionId: "criterion-1", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+      sourceReview: passedSourceReview,
     });
     let proposalCalls = 0;
     let acceptanceCalls = 0;
@@ -2211,6 +2210,7 @@ test("韩立按页面编号失效原因纠正 mixed 分区后继续冻结计划"
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
         findings: [{ criterionId: "criterion-2", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+        sourceReview: passedSourceReview,
       });
       const replies = [JSON.stringify(testCase.value), accepted, accepted];
       const promptsSeen = [];
@@ -2250,6 +2250,7 @@ test("韩立结果验收只以顶层对象保留嵌套 findings 的真实校验�
         { criterionId: "criterion-4", status: "passed", actual: "条件四已核对。", evidenceReferences: ["tests/four"] },
         { criterionId: "criterion-4", status: "passed", actual: "重复项不能替代条件五。", evidenceReferences: ["tests/four-repeat"] },
       ],
+      sourceReview: passedSourceReview,
     });
     let attempts = 0;
     const hanli = createHanliRuntime({
@@ -2260,7 +2261,7 @@ test("韩立结果验收只以顶层对象保留嵌套 findings 的真实校验�
     await assert.rejects(
       () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
       (error) => {
-        assert.match(error.message, /韩立代码符合性审查缺少 criterion-5 的明确结论或代码\/测试依据/);
+        assert.match(error.message, /韩立源码审查缺少 criterion-5 的明确结论或源码依据/);
         assert.match(error.message, /结构化候选摘要：count=1; mode=supported,pageCriterionIds=missing,findings=array:5/);
         assert.doesNotMatch(error.message, /韩立没有返回有效的结果验收类型和逐项结论/);
         return true;
@@ -2292,20 +2293,16 @@ test("韩立结果验收拒绝未闭合的 JSON 对象并保留三次重试", as
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("冻结验收计划只接受完整且唯一的材料授权", () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "frozen-acceptance-materials-"));
+test("冻结审查计划不再保存已退役的文件清单", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "frozen-review-plan-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
-    let state = store.createTopic({ ...topicRequest("冻结材料授权"), acceptanceCriteria: ["文本预览可见"] });
+    let state = store.createTopic({ ...topicRequest("冻结页面检查"), acceptanceCriteria: ["文本预览可见"] });
     state = store.createProposal(state.activeTopicId, proposalRequest());
     const proposalId = state.proposals.at(-1).proposalId;
-    store.markProgress(proposalId, "pending-acceptance", "等待材料验收");
-    assert.throws(
-      () => freezePageAcceptancePlan(store, state, proposalId, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "preview"] }]),
-      /验收材料允许操作重复/,
-    );
-    state = freezePageAcceptancePlan(store, state, proposalId, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "copy"] }]);
-    assert.deepEqual(state.proposals.at(-1).acceptancePlan.materials, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "copy"] }]);
+    store.markProgress(proposalId, "pending-acceptance", "等待页面与源码审查");
+    state = freezePageAcceptancePlan(store, state, proposalId);
+    assert.equal("materials" in state.proposals.at(-1).acceptancePlan, false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -2327,7 +2324,7 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
       store,
       collaboration: { state() { return { tasks: [], members: [] }; } },
       conversation,
-      hanLi: { send: async () => '{"mode":"page-experience"}' },
+      hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
       recordEvent: () => undefined,
       recordFailure: (failure) => failures.push(failure),
     });
@@ -2363,14 +2360,14 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
 
 function computerRun(runId, topicId, proposalId, status, shot, plan) {
  const now = new Date().toISOString();
- return { version: 3, mode: "page-experience", runId, topicId, proposalId, planId: plan.planId, acceptanceRoundId: plan.currentRoundId, criteria: plan.conditions.map((condition) => condition.criterion), status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, interactionSteps: [
+ return { version: 3, mode: "page-experience", runId, topicId, proposalId, planId: plan.planId, acceptanceRoundId: plan.currentRoundId, criteria: plan.conditions.map((condition) => condition.criterion), sourceReview: { status, actual: status === "failed" ? "源码结构不符合要求" : "源码职责集中且便于新手阅读", evidenceReferences: ["src/example.ts"] }, status, windowTitle: "AI Desktop", initialBounds: { x:0,y:0,width:1000,height:800 }, finalBounds: { x:0,y:0,width:1000,height:800 }, interactionSteps: [
  { checkId: "interaction", evidenceMode: "page-experience", operationIndex: 0, operation: { type: "scroll", x:100,y:100,deltaY:600,reason:"检查滚动" }, status:"passed", actual:"已发送滚动输入", layoutStatus:"passed", layoutActual:"布局无异常", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }
  ], stepResults: [
  ...plan.conditions.map((condition, index) => ({ checkId: condition.conditionId, evidenceMode: condition.evidenceType, operationIndex: index + 1, operation: { type:"judgement",criterionId:condition.conditionId }, status, actual:status==="failed"?"滚动位置没有变化":"末项可达", layoutStatus:"passed", layoutActual:"末项布局可见且无遮挡", layoutScreenshotAttachmentId:shot, screenshotAttachmentId:shot, occurredAt:now }))
  ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };
 }
 
-function freezePageAcceptancePlan(store, state, proposalId, materials = []) {
+function freezePageAcceptancePlan(store, state, proposalId) {
  const proposal = state.proposals.find((item) => item.proposalId === proposalId);
  const now = new Date().toISOString();
  const planId = `test-page-plan-${proposalId}`;
@@ -2387,7 +2384,6 @@ function freezePageAcceptancePlan(store, state, proposalId, materials = []) {
      evidenceType: "page-experience",
      completionRequirement: "真实页面截图和布局判断",
    })),
-   materials,
    rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
    currentRoundId: roundId,
    createdAt: now,

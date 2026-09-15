@@ -50,7 +50,11 @@ export function inspectAcceptanceRunEvidence(run: HanliAcceptanceRunOutDto): Acc
   const hasValidVersion = run.version === 3;
   const hasInteractionSteps = run.stepResults.length > 0;
   const hasEvidence = run.stepResults.every((step) => step.evidenceMode !== "page-experience") || run.evidenceAttachmentIds.length > 0;
+  const sourceReviewValid = Boolean(run.sourceReview
+    && ["passed", "failed", "blocked"].includes(run.sourceReview.status)
+    && run.sourceReview.actual.trim()
+    && run.sourceReview.evidenceReferences.length);
   // 统一生成不合格条件编号，避免不同调用方基于同一诊断再次推导而出现审计与拒绝原因不一致。
   const invalidCriterionIds = criteria.filter((criterion) => !criterion.valid).map((criterion) => criterion.criterionId);
-  return { valid: hasValidVersion && hasInteractionSteps && hasEvidence && invalidCriterionIds.length === 0, hasEvidence, hasInteractionSteps, hasValidVersion, criteria, invalidCriterionIds };
+  return { valid: hasValidVersion && hasInteractionSteps && hasEvidence && sourceReviewValid && invalidCriterionIds.length === 0, hasEvidence, hasInteractionSteps, hasValidVersion, criteria, invalidCriterionIds };
 }

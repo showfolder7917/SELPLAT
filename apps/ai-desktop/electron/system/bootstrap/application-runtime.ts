@@ -130,7 +130,7 @@ import { createCapabilityContext } from "./capabilities.bootstrap.js";
 import { createCollaborationContext } from "./collaboration.bootstrap.js";
 import { createPersonaApplicationContext } from "./personas.bootstrap.js";
 import { registerApplicationIpc } from "./ipc.bootstrap.js";
-import { HanliPageAcceptanceAuthorization } from "../ipc/hanli-page-acceptance-authorization.js";
+import { HanliPageReviewGuard } from "../ipc/hanli-page-review-guard.js";
 import { TestDataResetService } from "../../services/support/application/test-data-reset.service.js";
 
 const startup = createStartupContext();
@@ -276,7 +276,7 @@ export async function startApplication(): Promise<void> {
   const corpusIngestion = aiMemoryDatabase
     ? createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
     : null;
-  // 隔离验收不初始化外部 Codex 语料链路，避免读取正式用户目录或创建无意义的轮询器。
+  // 页面检查线程不初始化外部 Codex 语料链路，避免读取正式用户目录或创建无意义的轮询器。
   // 正式启动仍按设置读取用户默认 CODEX_HOME。
   const externalCorpusEnabled = true;
   const externalCodexHome = externalCorpusEnabled
@@ -511,7 +511,7 @@ export async function startApplication(): Promise<void> {
       return parseCodexSemanticBackfillResponse(response.text);
     },
   }) : null;
-  const hanliPageAcceptanceAuthorization = new HanliPageAcceptanceAuthorization();
+  const hanliPageReviewGuard = new HanliPageReviewGuard();
   /** 把一条去重后的流程状态写入韩立会话，并立即推送给现有窗口。 */
   const publishHanliInternalStatus = (messageId: string, content: string, createdAt: string, correlationId: string): boolean => {
     if (!collaborationMemory) return false;
@@ -797,7 +797,7 @@ export async function startApplication(): Promise<void> {
     computerAcceptance: async (goal, dynamicTools, session) => {
       const topic = evolutionStateStore.state().topics.find((item) => item.topicId === goal.topicId);
       if (!topic) throw new Error("验收专题不存在。");
-      // 独立连接隔离验收工具与普通聊天；本轮结束即销毁，旧工具不回流普通会话。
+      // 页面检查工具与普通聊天使用独立短连接；本轮结束即销毁，旧工具不回流普通会话。
       const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
         codexHome, serviceName: "selplat_hanli_computer_acceptance", threadSource: "ai-desktop-hanli-acceptance", migrateLegacySession: false,
         sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions: readHanliRuleInstructions, dynamicTools,
@@ -1099,7 +1099,7 @@ export async function startApplication(): Promise<void> {
       if (!corpusSemanticBackfill) throw new Error("AI Memory 数据库不可用，无法补齐历史摘要。");
       return corpusSemanticBackfill.start(limit);
     },
-    hanliPageAcceptanceAuthorization,
+    hanliPageReviewGuard,
     prepareForApplicationExit: prepareAiMemoryShutdown,
   });
 

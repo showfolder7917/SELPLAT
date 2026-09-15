@@ -4,8 +4,7 @@ export type HanliAcceptanceOperationValue =
   | { type: "scroll"; x: number; y: number; deltaY: number; reason: string }
   | { type: "scroll-task-collaboration"; deltaY: number; reason: string }
   | { type: "scroll-settings-panel"; deltaY: number; reason: string }
-  | { type: "inspect-task-collaboration-state"; reason: string }
-  | { type: "resize-acceptance-window"; preset: "narrow" | "restore"; reason: string }
+  | { type: "resize-formal-window"; preset: "narrow" | "restore"; reason: string }
   | { type: "key"; key: string; reason: string }
   | { type: "hover"; x: number; y: number; reason: string }
   | { type: "judgement"; criterionId: string };
@@ -14,10 +13,10 @@ export type HanliAcceptanceOperationValue =
 export type HanliAcceptanceEvidenceModeValue = "page-experience" | "code-conformance";
 
 /** 页面条件受阻时的可审计原因；产品实际不符合必须使用 failed，不能伪装成受阻。 */
-export type HanliAcceptanceBlockerKindValue = "materials-insufficient" | "acceptance-capability" | "runtime-environment";
+export type HanliAcceptanceBlockerKindValue = "acceptance-capability" | "runtime-environment";
 
 /** 验收运行写入共同状态前的唯一业务分流结论。 */
-export type HanliAcceptanceDispositionValue = "passed" | "product-or-safety-failure" | "materials-insufficient-main-path-judged" | "acceptance-capability-or-runtime-blocked";
+export type HanliAcceptanceDispositionValue = "passed" | "product-or-safety-failure" | "acceptance-capability-or-runtime-blocked";
 
 /**
  * 韩立结果验收的运行方式。mixed 只汇总逐条件的两类证据，任何方式都不创建隔离验收环境。

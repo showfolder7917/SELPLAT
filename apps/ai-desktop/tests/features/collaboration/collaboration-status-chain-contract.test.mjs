@@ -124,11 +124,11 @@ test("协作页面和控制器使用具名模型归组公开依赖", () => {
   assert.match(collaborationModelSource, /data: \{[\s\S]*navigation: \{[\s\S]*feedback: \{[\s\S]*actions: \{[\s\S]*configuration: \{/);
 });
 
-test("会话任务只冻结调用方明确确认的验收材料", () => {
-  assert.match(collaborationModelSource, /materials\?: EvolutionAcceptanceMaterialAuthorizationOutDto\[\]/);
-  assert.match(collaborationModelSource, /materials: structuredClone\(materials\)/);
-  assert.match(collaborationModelSource, /不能从工作区或附件自动猜测路径/);
-  assert.match(collaborationModelSource, /materials: EvolutionAcceptanceMaterialAuthorizationOutDto\[\] = \[\]/);
+test("会话任务不再携带已退役的页面审查文件清单", () => {
+  const storeSource = readFileSync("electron/services/workflow/internal/collaboration/collaboration.store.ts", "utf8");
+  assert.doesNotMatch(collaborationModelSource, /EvolutionAcceptanceMaterialAuthorizationOutDto/);
+  assert.doesNotMatch(collaborationModelSource, /materials: structuredClone\(materials\)/);
+  assert.match(storeSource, /delete \(task\.snapshot as unknown as \{ materials\?: unknown \}\)\.materials/);
 });
 
 test("没有专题任务时可从空状态进入韩立会话，但不创建任务", () => {

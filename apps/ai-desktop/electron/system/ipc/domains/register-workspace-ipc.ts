@@ -4,10 +4,10 @@ import { WORKSPACE_PERMISSIONS, type WorkspacePermissionValue } from "../../../.
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
 import type { WorkspaceFacade } from "../../../services/support/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
-import type { HanliPageAcceptanceAuthorization } from "../hanli-page-acceptance-authorization.js";
+import type { HanliPageReviewGuard } from "../hanli-page-review-guard.js";
 
 /** 工作区领域独立登记目录选择、权限和主目录通道，避免系统对话框逻辑混入总注册器。 */
-export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: EventCenterFacade, hanliAuthorization?: HanliPageAcceptanceAuthorization): void {
+export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: EventCenterFacade, hanliPageReviewGuard?: HanliPageReviewGuard): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-workspaces", () => workspaces.read());
   handle("desktop:add-workspace", async (event) => {
@@ -36,12 +36,11 @@ export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: E
     return state;
   });
   handle("desktop:list-workspace-directory", (event, id: string, relativePath: string = "") => {
-    // 验收会话只可展开冻结材料的祖先目录；普通客户工作区浏览保持既有行为。
-    hanliAuthorization?.assertWorkspaceDirectoryAllowed(event.sender.id, id, relativePath);
+    hanliPageReviewGuard?.assertWorkspaceDirectoryAllowed(event.sender.id);
     return workspaces.listDirectory(id, relativePath);
   });
   handle("desktop:open-workspace-file", (event, id: string, relativePath: string) => {
-    hanliAuthorization?.assertWorkspaceFileAllowed(event.sender.id, id, relativePath);
+    hanliPageReviewGuard?.assertWorkspaceFileAllowed(event.sender.id);
     return workspaces.openFile(id, relativePath);
   });
 }

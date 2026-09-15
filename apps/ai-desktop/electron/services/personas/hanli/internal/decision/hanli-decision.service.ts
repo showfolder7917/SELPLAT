@@ -74,7 +74,7 @@ export class HanliDecisionService {
   }
 
   /** 先按客户可感知页面判断验收类型；非页面任务由韩立只读核对代码是否满足原要求。 */
-  async reviewResultAcceptance(proposal: EvolutionProposalOutDto, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto> {
+  async reviewResultAcceptance(proposal: EvolutionProposalOutDto, implementationEvidence: unknown): Promise<HanliAcceptanceRunOutDto> {
     const state = this.#dependencies.store.state();
     const topic = state.topics.find((item) => item.topicId === proposal.topicId);
     const criterionCatalog = proposal.acceptancePlan?.conditions.map(({ conditionId, criterion }) => ({ criterionId: conditionId, criterion }))
@@ -89,14 +89,7 @@ export class HanliDecisionService {
    * 将模型计划转换为可执行的验收路由；调用方必须通过 #askForStructuredResult 重试语义错误。
    * 这里同时校验页面条件和代码条件，避免 JSON 合法却无法进入正式窗口验收。
    */
-  #createResultAcceptanceReview(proposal: EvolutionProposalOutDto, value: Record<string, unknown>): "page-experience" | HanliAcceptanceRunOutDto {
-    if (value.mode === "page-experience") {
-      const frozenPlan = proposal.acceptancePlan;
-      if (frozenPlan && frozenPlan.conditions.some((item) => item.evidenceType !== "page-experience")) {
-        throw new Error("韩立不能在已冻结验收计划后把代码条件改判为页面条件。 ");
-      }
-      return "page-experience";
-    }
+  #createResultAcceptanceReview(proposal: EvolutionProposalOutDto, value: Record<string, unknown>): HanliAcceptanceRunOutDto {
     if (value.mode !== "code-conformance" && value.mode !== "mixed") {
       throw new Error("韩立没有返回有效的结果验收类型和逐项结论。");
     }
@@ -111,12 +104,8 @@ export class HanliDecisionService {
     }
     // 只在通过类型和范围校验后向验收计划传递页面条件编号。
     const pageCriterionIds = pageCriterionIdsResult.pageCriterionIds;
-    if (!frozenPlan && value.mode === "mixed" && (pageCriterionIds.length === 0 || pageCriterionIds.length === allCriterionIds.length)) {
-      throw new Error("混合验收必须同时包含页面条件和代码符合性条件。");
-    }
-    // 此分支已排除 page-experience；若冻结计划全是页面条件，模型必须走上方的页面验收入口。
-    if (frozenPlan && pageCriterionIds.length === allCriterionIds.length) {
-      throw new Error("韩立不能在已冻结验收计划后重新改变页面与代码证据分类。 ");
+    if (!frozenPlan && value.mode === "mixed" && pageCriterionIds.length === 0) {
+      throw new Error("页面与源码审查必须至少包含一条可在正式页面检查的条件。");
     }
     if (!Array.isArray(value.findings)) {
       throw new Error("韩立代码符合性审查缺少逐项结论。");
@@ -136,7 +125,7 @@ export class HanliDecisionService {
         ? finding.evidenceReferences.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim())
         : [];
       if (!["passed", "failed", "blocked"].includes(String(status)) || !actual || references.length === 0) {
-        throw new Error(`韩立代码符合性审查缺少 ${criterionId} 的明确结论或代码/测试依据。`);
+        throw new Error(`韩立源码审查缺少 ${criterionId} 的明确结论或源码依据。`);
       }
       return {
         checkId: criterionId,
@@ -153,8 +142,21 @@ export class HanliDecisionService {
         occurredAt: new Date().toISOString(),
       };
     });
-    const status = steps.some((item) => item.status === "failed") ? "failed"
-      : steps.some((item) => item.status === "blocked") ? "blocked" : "passed";
+    const sourceReviewValue = value.sourceReview;
+    if (!sourceReviewValue || typeof sourceReviewValue !== "object" || Array.isArray(sourceReviewValue)) {
+      throw new Error("韩立缺少独立的源码结构与新手可读性审查结论。");
+    }
+    const sourceReviewRecord = sourceReviewValue as Record<string, unknown>;
+    const sourceReviewStatus = sourceReviewRecord.status;
+    const sourceReviewActual = typeof sourceReviewRecord.actual === "string" ? sourceReviewRecord.actual.trim() : "";
+    const sourceReviewReferences = Array.isArray(sourceReviewRecord.evidenceReferences)
+      ? sourceReviewRecord.evidenceReferences.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim())
+      : [];
+    if (!["passed", "failed", "blocked"].includes(String(sourceReviewStatus)) || !sourceReviewActual || !sourceReviewReferences.length) {
+      throw new Error("韩立源码审查必须明确判断高内聚、低耦合和新手可读性，并引用实际源码位置。");
+    }
+    const status = steps.some((item) => item.status === "failed") || sourceReviewStatus === "failed" ? "failed"
+      : steps.some((item) => item.status === "blocked") || sourceReviewStatus === "blocked" ? "blocked" : "passed";
     const now = new Date().toISOString();
     return {
       version: 3,
@@ -164,8 +166,13 @@ export class HanliDecisionService {
       proposalId: proposal.proposalId,
       criteria: [...proposal.acceptanceCriteria],
       ...(value.mode === "mixed" ? { pageCriterionIds } : {}),
+      sourceReview: {
+        status: sourceReviewStatus as "passed" | "failed" | "blocked",
+        actual: sourceReviewActual,
+        evidenceReferences: sourceReviewReferences,
+      },
       status,
-      windowTitle: value.mode === "mixed" ? "混合验收代码符合性审查" : "代码符合性审查",
+      windowTitle: value.mode === "mixed" ? "正式页面与源码审查" : "源码审查",
       initialBounds: { x: 0, y: 0, width: 0, height: 0 },
       finalBounds: { x: 0, y: 0, width: 0, height: 0 },
       interactionSteps: [],
@@ -202,7 +209,7 @@ export class HanliDecisionService {
       const response = await this.#dependencies.askHanliResultAcceptance(request, state);
       try {
         const values = parseJsonObjects(response);
-        // 仅保留协议形状，避免把模型原文或客户材料写入异常记录。
+        // 仅保留协议形状，避免把模型原文或客户事实写入异常记录。
         lastCandidateSummary = summarizeResultAcceptanceCandidates(values);
         for (const value of values) {
           try { return validate(value); }
@@ -222,14 +229,14 @@ export class HanliDecisionService {
 
 /** 仅补足结果验收的歧义分类提示；语义校验仍是唯一允许放行的边界。 */
 function resultAcceptanceRetryHint(lastError: string): string {
-  if (lastError === "混合验收必须同时包含页面条件和代码符合性条件。") {
-    return " mixed 的 pageCriterionIds 必须是全部 criterion 编号的非空严格子集：空列表时改为 code-conformance，列表包含全部条件时改为 page-experience。";
+  if (lastError === "页面与源码审查必须至少包含一条可在正式页面检查的条件。") {
+    return " mixed 的 pageCriterionIds 必须列出至少一条正式页面条件；纯源码任务改为 code-conformance。";
   }
   if (lastError.startsWith("韩立混合验收计划页面条件编号")) {
-    return " mixed 的 pageCriterionIds 必须是非空数组；移除非字符串项、重复项和当前条件外编号，只保留当前条件中的唯一 criterion-N；findings 只覆盖其余条件。";
+    return " mixed 的 pageCriterionIds 必须是非空数组；移除非字符串项、重复项和当前条件外编号；findings 只覆盖其余条件。";
   }
   if (lastError === "韩立没有返回有效的结果验收类型和逐项结论。") {
-    return " mode 只能是 page-experience、code-conformance 或 mixed：全部页面条件只返回 page-experience；全部代码条件返回 code-conformance 和每个 criterion 的 finding；混合条件才返回 mixed、页面编号严格子集及其余 finding。";
+    return " mode 只能是 code-conformance 或 mixed：页面相关任务返回 mixed 和页面编号；纯源码任务返回 code-conformance。两种方式都必须返回 sourceReview。";
   }
   return "";
 }

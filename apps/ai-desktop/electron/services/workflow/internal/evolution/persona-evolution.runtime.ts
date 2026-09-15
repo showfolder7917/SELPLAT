@@ -1,5 +1,5 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionAcceptanceMaterialAuthorizationOutDto, EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
@@ -22,6 +22,7 @@ import { EvolutionFlowPolicy } from "../../domain/evolution-flow.policy.js";
 import { AcceptanceFailureScopePolicy } from "../../domain/acceptance-failure-scope.policy.js";
 import { classifyAcceptanceRun } from "../../domain/acceptance-result-classification.policy.js";
 import { AcceptanceHandoffService, type AcceptanceHandoffContent } from "../acceptance/acceptance-handoff.service.js";
+import { buildHanliResultReviewContext, composeHanliResultReview } from "../acceptance/hanli-result-review.coordinator.js";
 import { HanliNangongDeliberationService } from "./hanli-nangong-deliberation.service.js";
 import type { HanliWorkflowPort } from "../../../personas/hanli/index.js";
 import { createNangongRuntime, createNangongTaskDistribution, type NangongRuntime } from "../../../personas/nangong/index.js";
@@ -532,45 +533,18 @@ export class PersonaEvolutionRuntime {
         publishAcceptance("received", `工程门禁已经完成，请韩立按客户原要求验收：${proposal.acceptanceCriteria.join("；")}`);
         try {
           const acceptanceTasks = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view().effectiveTasks;
-          const implementationEvidence = acceptanceTasks.map((task) => {
-            // 历史返修任务和外部恢复快照可能尚未带 flowEvents；缺失只表示没有逐项验证事实，
-            // 不能阻断韩立沿修订链重新验收，更不能用统一测试状态补造这些事实。
-            const verificationEvents = Array.isArray(task.flowEvents) ? task.flowEvents : [];
-            return {
-              taskId: task.taskId,
-              requirement: task.snapshot,
-              resultSummary: task.resultSummary,
-              finalResult: task.finalResult,
-              unifiedTest: task.unifiedTest,
-              // 只透传已落入任务状态机的验证事实。固定统一测试只有随 unified_test.passed
-              // 一起携带结构化逐脚本结果时才能被消费；韩立不能根据“统一测试通过”猜测
-              // 某个超时或异常场景已经覆盖，也不能读取任意外部日志作为验收依据。
-              verificationEvidence: verificationEvents
-                .filter((event) => /^executor\.self_(test|repair)_(passed|failed|completed)$/.test(event.type) || event.type === "unified_test.passed")
-                .map((event) => ({
-                  eventType: event.type,
-                  status: event.status,
-                  summary: event.summary,
-                  technicalEvidence: event.details?.technicalEvidence || [],
-                  verificationEvidence: event.details?.verificationEvidence || [],
-                  details: event.details || null,
-                  occurredAt: event.occurredAt,
-                })),
-              executions: task.executionRecords.map((record) => ({ status: record.status, changedFiles: record.changedFiles, result: record.result })),
-            };
-          });
-          const acceptanceMaterials = uniqueAcceptanceMaterials(acceptanceTasks.flatMap((task) => task.snapshot.materials || []));
+          const implementationEvidence = buildHanliResultReviewContext(acceptanceTasks);
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
-          const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence, acceptanceMaterials);
+          const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
           const plan = reviewedAcceptance.plan;
           const review = reviewedAcceptance.review;
           let runResult: HanliAcceptanceRunOutDto;
-          if (review === "page-experience" || review.mode === "mixed") {
-            if (!this.#computerAcceptanceSession) throw new Error("韩立页面验收会话尚未接入。");
+          if (review.mode === "mixed") {
+            if (!this.#computerAcceptanceSession) throw new Error("韩立正式页面检查能力尚未接入。");
             const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience").map((item) => item.conditionId);
             const pageCriteria = pageCriterionIds.map((criterionId) => {
               const criterion = plan.conditions.find((item) => item.conditionId === criterionId)?.criterion;
-              if (!criterion) throw new Error(`混合验收页面条件不存在：${criterionId}`);
+              if (!criterion) throw new Error(`正式页面检查条件不存在：${criterionId}`);
               return criterion;
             });
             const goal: HanliComputerAcceptanceInDto = {
@@ -579,50 +553,22 @@ export class PersonaEvolutionRuntime {
               title: proposal.title,
               criteria: pageCriteria,
               criterionIds: pageCriterionIds,
-              // 电脑验收只接收计划冻结的材料；当前未登记材料时继续保持空授权。
-              materials: structuredClone(plan.materials ?? []),
             };
             const pageRun = await this.#computerAcceptanceSession(goal, () => {
               publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");
               this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在当前正式应用中验收页面", topic.topicId, proposal.proposalId);
             });
-            if (review === "page-experience") {
-              runResult = { ...pageRun, planId: plan.planId, acceptanceRoundId: plan.currentRoundId };
-            } else {
-              const expectedIds = new Set(pageCriterionIds);
-              if (pageRun.stepResults.length !== pageCriterionIds.length
-                || pageRun.stepResults.some((step) => !expectedIds.has(step.checkId))) {
-                throw new Error("混合验收页面结果没有与已登记的原始条件逐项对应。");
-              }
-              const stepResults = [...review.stepResults, ...pageRun.stepResults]
-                .sort((left, right) => Number(left.checkId.slice("criterion-".length)) - Number(right.checkId.slice("criterion-".length)))
-                .map((step, operationIndex) => ({ ...step, operationIndex }));
-              const status = stepResults.some((step) => step.status === "failed" || step.layoutStatus === "failed") ? "failed"
-                : stepResults.some((step) => step.status === "blocked" || step.layoutStatus === "blocked") ? "blocked" : "passed";
-              runResult = {
-                ...pageRun,
-                mode: "mixed",
-                planId: plan.planId,
-                acceptanceRoundId: plan.currentRoundId,
-                criteria: plan.conditions.map((item) => item.criterion),
-                pageCriterionIds,
-                status,
-                stepResults,
-              };
-            }
+            runResult = composeHanliResultReview(plan, review, pageRun);
           } else {
             publishAcceptance("started", "该任务不涉及页面，韩立正在只读审查代码是否符合客户原要求。");
             runResult = { ...review, planId: plan.planId, acceptanceRoundId: plan.currentRoundId };
           }
           const classification = classifyAcceptanceRun(runResult);
           runResult = { ...runResult, acceptanceDisposition: classification.disposition };
-          if (classification.disposition === "passed" || classification.disposition === "materials-insufficient-main-path-judged") {
-            const materialNote = classification.disposition === "materials-insufficient-main-path-judged"
-              ? `\n材料受阻条件：${classification.blockedCriterionIds.join("、")}；已保留可恢复重跑条件。`
-              : "";
+          if (classification.disposition === "passed") {
             publishAcceptance("passed", {
-              summary: classification.disposition === "materials-insufficient-main-path-judged" ? "验收通过，材料受阻事实已归档" : "验收通过",
-              content: `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}通过。运行记录：${runResult.runId}${materialNote}`,
+              summary: "验收通过",
+              content: `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "页面与源码审查" : "源码审查"}通过。运行记录：${runResult.runId}`,
               detail: `逐项结果：\n${runResult.stepResults.map((step) => `${step.checkId} ${step.status}：${step.actual}`).join("\n")}`,
             });
             this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
@@ -653,9 +599,9 @@ export class PersonaEvolutionRuntime {
             const blockedSummary = acceptanceBlockedSteps.length
               ? `\n本轮仍未验证的条件：\n${acceptanceBlockedSteps.map((step) => `${step.checkId}：${step.actual}`).join("\n")}`
               : "";
-            const failureMessage = `韩立${runResult.mode === "page-experience" ? "页面验收" : runResult.mode === "mixed" ? "混合验收" : "代码符合性审查"}未通过。\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
+            const failureMessage = `韩立${runResult.mode === "mixed" ? "页面与源码审查" : "源码审查"}未通过。\n${scopeReview.summary}\n范围判断：${scopeReview.reason}${blockedSummary}`;
             publishAcceptance("failed", {
-              summary: runResult.mode === "mixed" ? "混合验收没有同时满足页面条件与代码符合性条件" : "验收未通过",
+              summary: runResult.mode === "mixed" ? "正式页面或源码审查未通过" : "源码审查未通过",
               content: "验收未通过，已按原验收范围判断后续处理。",
               detail: failureMessage,
             });
@@ -881,15 +827,4 @@ function currentExecutionActivity(
 
 function itemFailureReason(task: ReturnType<CollaborationWorkflowFacade["state"]>["tasks"][number]): string {
   return task.blockingReason || task.repairFailureReason || task.unifiedTest?.failureReason || `任务 ${task.snapshot.title} 未能继续，交给令狐按原恢复线路处理。`;
-}
-
-/** 同一提案的多个任务引用同一材料时，计划只冻结一条授权。 */
-function uniqueAcceptanceMaterials(materials: EvolutionAcceptanceMaterialAuthorizationOutDto[]): EvolutionAcceptanceMaterialAuthorizationOutDto[] {
-  const keys = new Set<string>();
-  return materials.filter((material) => {
-    const key = `${material.workspaceId}\u0000${material.relativePath}`;
-    if (keys.has(key)) return false;
-    keys.add(key);
-    return true;
-  });
 }

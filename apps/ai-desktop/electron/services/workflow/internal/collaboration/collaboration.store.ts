@@ -159,7 +159,6 @@ export class CollaborationStore {
         acceptanceCriteria: (request.acceptanceCriteria || []).map((item) => item.trim()).filter(Boolean),
         sourceMessageIds: [...new Set(request.sourceMessageIds || [])],
         attachmentIds: [...new Set(request.attachmentIds || [])],
-        materials: normalizeAcceptanceMaterials(request.materials),
         workspaceState: structuredClone(request.workspaceState),
         locale: request.locale,
         contentHash: sha256(normalizedIntent),
@@ -345,32 +344,16 @@ export class CollaborationStore {
   }
 }
 
-function normalizeAcceptanceMaterials(materials: unknown): { workspaceId: string; relativePath: string; allowedActions: ("preview" | "copy" | "system-open")[] }[] {
-  if (!Array.isArray(materials)) return [];
-  const seen = new Set<string>();
-  return materials.map((material) => {
-    if (!material || typeof material !== "object") throw new Error("任务验收材料格式无效。 ");
-    const value = material as { workspaceId?: unknown; relativePath?: unknown; allowedActions?: unknown };
-    const workspaceId = typeof value.workspaceId === "string" ? value.workspaceId.trim() : "";
-    const relativePath = typeof value.relativePath === "string" ? value.relativePath.trim() : "";
-    if (!workspaceId || !relativePath) throw new Error("任务验收材料缺少工作区或相对路径。 ");
-    if (!Array.isArray(value.allowedActions) || !value.allowedActions.length) throw new Error("任务验收材料缺少允许操作。 ");
-    const allowedActions = value.allowedActions.map((action) => typeof action === "string" ? action : "");
-    if (allowedActions.some((action) => !["preview", "copy", "system-open"].includes(action))) throw new Error("任务验收材料包含不支持的允许操作。 ");
-    if (new Set(allowedActions).size !== allowedActions.length) throw new Error("任务验收材料允许操作重复。 ");
-    const key = `${workspaceId}\u0000${relativePath}`;
-    if (seen.has(key)) throw new Error("任务验收材料重复。 ");
-    seen.add(key);
-    return { workspaceId, relativePath, allowedActions: allowedActions as ("preview" | "copy" | "system-open")[] };
-  });
-}
-
 /** 一次完成协同运行基础环境准备；保留业务历史，同时清除上一进程遗留的运行占用。 */
 function prepareCollaborationRuntimeState(state: CollaborationStateOutDto): void {
   // 每次启动进入协同模式；仅重置展示模式，不改变任务、人物或恢复点。
   state.mode = "collaboration";
   // 先补齐稳定人物与迁移字段，后续恢复判断只读取完整权威状态。
   mergeDefaultMembers(state);
+  // 已退役的页面检查文件清单不能在重启后重新进入任务、修复或人物上下文。
+  for (const task of state.tasks) {
+    delete (task.snapshot as unknown as { materials?: unknown }).materials;
+  }
   // 最后统一收口上一进程的任务和人物租约，让待恢复工作能够重新调度。
   recoverInterruptedState(state);
 }

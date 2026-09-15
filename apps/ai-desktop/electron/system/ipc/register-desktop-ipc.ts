@@ -14,7 +14,7 @@ import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePr
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
-import type { HanliPageAcceptanceAuthorization } from "./hanli-page-acceptance-authorization.js";
+import type { HanliPageReviewGuard } from "./hanli-page-review-guard.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
@@ -71,8 +71,8 @@ interface DesktopIpcDependencies {
   clearTestData: () => Promise<TestDataResetResultOutDto>;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
-  /** 页面验收期间禁止模型通过当前正式窗口写入业务数据。 */
-  hanliPageAcceptanceAuthorization: HanliPageAcceptanceAuthorization;
+  /** 正式页面检查期间禁止模型通过当前窗口写入业务数据。 */
+  hanliPageReviewGuard: HanliPageReviewGuard;
 }
 
 interface ScreenshotWindowSession {
@@ -117,7 +117,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, hanliPageAcceptanceAuthorization } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, hanliPageReviewGuard } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -125,7 +125,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   let screenCaptureAttemptId = 0;
 
   installDesktopIpcAuthorizationPolicy((event, channel) => {
-    hanliPageAcceptanceAuthorization.assertIpcAllowed(event.sender.id, channel);
+    hanliPageReviewGuard.assertIpcAllowed(event.sender.id, channel);
   });
 
   registerRulesIpc(rules, eventCenter);
@@ -143,15 +143,15 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
     onStarted();
-    hanliPageAcceptanceAuthorization.begin(targetWindow.webContents.id, goal);
+    hanliPageReviewGuard.begin(targetWindow.webContents.id);
     let run;
     try {
-      // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面验收只能观察和使用既有安全导航。
+      // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面检查只能观察和使用既有安全导航。
       run = await hanli.executeComputerAcceptance(goal, targetWindow, {
         allows: (action) => action === "persona-navigation",
       });
     } finally {
-      hanliPageAcceptanceAuthorization.end(targetWindow.webContents.id);
+      hanliPageReviewGuard.end(targetWindow.webContents.id);
     }
     audit.recordEvent("hanli.acceptance.result_checked", {
       runId: run.runId,
@@ -284,7 +284,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
   registerSettingsIpc(settings, eventCenter);
-  registerWorkspaceIpc(workspaces, eventCenter, hanliPageAcceptanceAuthorization);
+  registerWorkspaceIpc(workspaces, eventCenter, hanliPageReviewGuard);
   registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });

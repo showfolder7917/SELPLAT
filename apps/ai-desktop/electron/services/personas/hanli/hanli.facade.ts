@@ -7,10 +7,10 @@ import type {
   HanliAcceptanceRunOutDto,
 } from "../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
-import type { EvolutionAcceptanceMaterialAuthorizationOutDto, EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions, type HanliResultAcceptanceReview } from "./internal/application/hanli-application.service.js";
-import { HanliComputerAcceptance, type AcceptanceWindowInteractionPort } from "./internal/acceptance/hanli-computer-acceptance.js";
+import { HanliComputerAcceptance, type PageReviewInteractionPort } from "./internal/acceptance/hanli-computer-acceptance.js";
 import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semantic-extraction.runner.js";
 
 /** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */
@@ -29,7 +29,7 @@ export interface HanliApplicationPort {
   /** 请求韩立自动审阅一次性提案。 */
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   /** 判断结果应走真实页面验收还是只读代码符合性审查。 */
-  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown, materials?: EvolutionAcceptanceMaterialAuthorizationOutDto[]): Promise<HanliResultAcceptanceReview>;
+  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview>;
   /** 根据已经沉淀的人工偏好尝试自动审批。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
   /** 保存真实应用验收过程产生的证据。 */
@@ -47,7 +47,7 @@ export interface HanliWorkflowPort {
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
   /** Workflow 请求韩立完成一次审批判断的入口。 */
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
-  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown, materials?: EvolutionAcceptanceMaterialAuthorizationOutDto[]): Promise<HanliResultAcceptanceReview>;
+  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview>;
   /** Workflow 根据历史偏好请求自动审批的入口。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
   /** Workflow 提交真实验收结果的入口。 */
@@ -115,8 +115,8 @@ export class HanliFacade {
     return this.#application.reviewAndDecideProposal(proposalId);
   }
   /** 韩立基于原要求和实施证据选择且执行唯一适用的结果验收方式。 */
-  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown, materials?: EvolutionAcceptanceMaterialAuthorizationOutDto[]) {
-    return this.#application.reviewResultAcceptance(proposalId, implementationEvidence, materials);
+  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown) {
+    return this.#application.reviewResultAcceptance(proposalId, implementationEvidence);
   }
   /** 根据已登记偏好执行受控自动审批；缺少事实时退回补充。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto {
@@ -131,7 +131,7 @@ export class HanliFacade {
     return this.#application.completeAutomaticAcceptance(run, idempotencyKey);
   }
   /** 每次工具调用返回真实截图，韩立自行选择下一步并形成结论。 */
-  executeComputerAcceptance(goal: HanliComputerAcceptanceInDto, targetWindow: BrowserWindow, interactions: AcceptanceWindowInteractionPort) {
+  executeComputerAcceptance(goal: HanliComputerAcceptanceInDto, targetWindow: BrowserWindow, interactions: PageReviewInteractionPort) {
     if (!this.#options.computerAcceptance) {
       throw new Error("韩立Computer Use尚未接入");
     }

@@ -11,7 +11,6 @@
 import type { LocaleValue } from "../../../foundation/index.js";
 // WorkspaceStateOutDto 保存任务被提交时已经确认的工作区范围。
 import type { WorkspaceStateOutDto } from "../../support/platform/workspace/index.js";
-import type { EvolutionAcceptanceMaterialAuthorizationOutDto } from "../../evolution/index.js";
 
 /** 一次任务实际加载的规则及其版本，用于复现当时的执行环境。 */
 export interface CollaborationTaskRuleContextOutDto {
@@ -55,8 +54,6 @@ export interface CollaborationTaskSnapshotOutDto {
   sourceMessageIds: number[];
   /** 本任务引用的附件标识。 */
   attachmentIds: string[];
-  /** 已确认的验收材料；不从整个任务工作区推断文件路径。 */
-  materials: EvolutionAcceptanceMaterialAuthorizationOutDto[];
   /** 任务提交时已经确认的工作区。 */
   workspaceState: WorkspaceStateOutDto;
   /** 任务内容应使用的语言和区域设置。 */
