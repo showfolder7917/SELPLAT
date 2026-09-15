@@ -52,6 +52,9 @@ test("混合计划语义错误会在模型重试内返回具体分区原因", ()
   assert.match(decision, /const values = parseJsonObjects\(response\)/);
   assert.match(decision, /for \(const value of values\)/);
   assert.match(decision, /return validate\(value\)/);
+  assert.match(decision, /只从顶层对象起点开始，避免 findings 等嵌套对象覆盖外层验收结论/);
+  assert.match(decision, /if \(depth === 0\) start = index/);
+  assert.match(decision, /hasUnclosedObject: depth !== 0/);
   assert.match(decision, /pageCriterionIds 必须是全部 criterion 编号的非空严格子集/);
   assert.match(decision, /mode 只能是 page-experience、code-conformance 或 mixed/);
   assert.match(decision, /韩立混合验收计划缺少有效且不重复的页面条件编号/);

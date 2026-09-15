@@ -2170,6 +2170,46 @@ test("韩立结果验收失败只记录候选协议形状", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立结果验收只以顶层对象保留嵌套 findings 的真实校验错误", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-acceptance-top-level-json-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({
+      ...topicRequest("顶层结果对象边界"),
+      acceptanceCriteria: ["代码条件一", "代码条件二", "代码条件三", "代码条件四", "代码条件五"],
+    });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const response = JSON.stringify({
+      mode: "code-conformance",
+      findings: [
+        { criterionId: "criterion-1", status: "passed", actual: "条件一已核对。", evidenceReferences: ["tests/one"] },
+        { criterionId: "criterion-2", status: "passed", actual: "条件二已核对。", evidenceReferences: ["tests/two"] },
+        { criterionId: "criterion-3", status: "passed", actual: "条件三已核对。", evidenceReferences: ["tests/three"] },
+        { criterionId: "criterion-4", status: "passed", actual: "条件四已核对。", evidenceReferences: ["tests/four"] },
+        { criterionId: "criterion-4", status: "passed", actual: "重复项不能替代条件五。", evidenceReferences: ["tests/four-repeat"] },
+      ],
+    });
+    let attempts = 0;
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanliResultAcceptance: async () => { attempts += 1; return response; },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    await assert.rejects(
+      () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
+      (error) => {
+        assert.match(error.message, /韩立代码符合性审查缺少 criterion-5 的明确结论或代码\/测试依据/);
+        assert.match(error.message, /结构化候选摘要：count=1; mode=supported,findings=array:5/);
+        assert.doesNotMatch(error.message, /韩立没有返回有效的结果验收类型和逐项结论/);
+        return true;
+      },
+    );
+    assert.equal(attempts, 3);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立结果验收拒绝未闭合的 JSON 对象并保留三次重试", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-unclosed-result-json-"));
   try {
