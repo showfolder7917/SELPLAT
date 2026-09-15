@@ -92,10 +92,10 @@ export class HanliInquiryService {
   }
 
   #publishInternalDeliberation(state: InquirySnapshot, messageId: string, speakerPersonaId: "han-li" | "nangong-wan",
-    content: string, replyToMessageId?: string, attachmentIds: string[] = []): PersonaConversationOutDto {
+    content: string, replyToMessageId?: string, attachmentIds: string[] = [], contentRole: "conversation" | "technical-evidence" = "conversation"): PersonaConversationOutDto {
     const next = this.#options.memory!.appendPersonaInternalMessage({
       ownerPersonaId: "han-li", conversationId: state.conversationId, messageId, speakerPersonaId,
-      content, replyToMessageId, attachmentIds, createdAt: new Date().toISOString(),
+      content, replyToMessageId, attachmentIds, contentRole, createdAt: new Date().toISOString(),
     });
     const projected = this.project(next);
     this.#options.onPersonaConversationChanged?.(projected);
@@ -196,6 +196,8 @@ export class HanliInquiryService {
     // 先保留结构化证据，后续显示、评估或解释失败均可恢复。
     this.#save(state);
     this.#publishInternalDeliberation(state, answerId, "nangong-wan", buildInvestigationReport(findings), questionId);
+    const evidence = buildInvestigationEvidence(findings);
+    if (evidence) this.#publishInternalDeliberation(state, `${answerId}:evidence`, "nangong-wan", evidence, answerId, [], "technical-evidence");
   }
 
   async #assess(aggregate: HanliInquiryAggregate): Promise<void> {
@@ -263,26 +265,23 @@ export class HanliInquiryService {
   }
 }
 
-/** 把南宫婉的结构化调查结果转换为韩立会话中的可读内部交接消息。 */
+/** 可读交接只说明结论和仍待核实事项；依据进入关联的折叠技术证据消息。 */
 function buildInvestigationReport(findings: NangongInquiryResultOutDto): string {
   let heading = "尚未完全核实";
   if (findings.status === "verified") {
     heading = "核实结果";
   }
 
-  const evidenceBlocks: string[] = [];
-  for (const evidence of findings.evidence) {
-    evidenceBlocks.push(`依据：${evidence.source}\n${evidence.detail}`);
-  }
-
   let report = `${heading}：${findings.summary}`;
-  if (evidenceBlocks.length > 0) {
-    report += `\n\n${evidenceBlocks.join("\n\n")}`;
-  }
   if (findings.unknowns.length > 0) {
     report += `\n\n尚未核实：${findings.unknowns.join("；")}`;
   }
   return report;
+}
+
+/** 技术依据保持可追溯，但绝不与人物可读交接拼成同一正文。 */
+function buildInvestigationEvidence(findings: NangongInquiryResultOutDto): string {
+  return findings.evidence.map((evidence) => `依据：${evidence.source}\n${evidence.detail}`).join("\n\n");
 }
 
 /** 把客户原话和韩立已经形成的结构化理解整理成南宫婉无需猜测上下文的交接说明。 */

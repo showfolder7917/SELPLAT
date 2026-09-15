@@ -23,6 +23,7 @@ import {
 import { ConversationMessageImage, MarkdownMessage } from "../../conversation";
 // 统一会话外壳（SelUiConversation）提供人物会话共用的时间线和输入区结构。
 import { SelUiConversation } from "../../conversation";
+import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 // 南宫婉页面参数类型（NangongConversationWorkspaceProps）描述父路由传入的全部数据和操作。
 import type { NangongConversationWorkspaceProps } from "./NangongConversationWorkspace.types";
 // 后台动作子组件（NangongConversationActivity）展示本页面专属的调查与授权状态。
@@ -127,6 +128,16 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
                 : null}
             {/* 消息文字区：统一渲染客户原文和人物回复。 */}
             <MarkdownMessage text={message.content} />
+            {/* 失败发送仍绑定原消息身份，重试不会在时间线生成第二条客户消息。 */}
+            {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>重试发送</button>}
+            {/* 技术依据只关联到对应研讨消息，以折叠内容展示，不能并入人物正文。 */}
+            {(controller.technicalEvidenceByReply.get(message.messageId) || []).map((evidence) => <SelUiDisclosure
+              key={evidence.messageId}
+              idPrefix={`nangong-evidence-${evidence.messageId}`}
+              className="nangong-technical-evidence"
+              open={false}
+              trigger="查看技术依据"
+            ><MarkdownMessage text={evidence.content} /></SelUiDisclosure>)}
           </div>
         </article>;
       })}
@@ -175,7 +186,7 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       {/* 新建会话状态区：重新建立南宫婉会话时显示真实等待状态。 */}
       {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
       {/* 页面错误区：展示发送、草稿或桌面通信失败原因。 */}
-      {error && <div className="composer-error" role="alert"><span>{error}</span></div>}
+      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.visibleMessages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <button type="button" onClick={() => void controller.retrySend()}>重试发送</button>}</div>}
       {/* 模型目录失败保留真实原因和重读入口，不把空目录伪装成默认模型正常可用。 */}
       {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
         <span>{props.runtime.modelCatalogError}</span>

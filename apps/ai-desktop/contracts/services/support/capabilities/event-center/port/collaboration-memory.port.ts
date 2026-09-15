@@ -1,6 +1,6 @@
 /** 事件中心向人物业务提供的最小记忆行为接口。 */
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../evolution/index.js";
-import type { PersonaConversationOutDto } from "../../../../personas/conversation/index.js";
+import type { PersonaConversationContentRoleValue, PersonaConversationOutDto } from "../../../../personas/conversation/index.js";
 import type { ApprovalMemoryEvidenceOutDto, TrainingCorpusTopicSearchResultOutDto } from "../dto/collaboration-memory.out.dto.js";
 import type { ConversationRoundTopicDecisionInDto } from "../dto/conversation-round-topic-decision.in.dto.js";
 import type { HanliSemanticExtractionInDto } from "../dto/hanli-semantic-extraction.in.dto.js";
@@ -35,6 +35,8 @@ export interface CollaborationMemoryPort {
     /** 内部消息需要展示的原始截图身份；未提供时保持为空。 */
     attachmentIds?: string[];
     replyToMessageId?: string | null;
+    /** 技术依据与人物可读研讨共用消息链，但由内容职责决定页面展示方式。 */
+    contentRole?: PersonaConversationContentRoleValue;
     createdAt: string;
   }): PersonaConversationOutDto;
   appendPersonaRecoveryCheckpoint(input: {

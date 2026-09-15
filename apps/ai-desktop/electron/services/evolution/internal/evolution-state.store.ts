@@ -464,6 +464,7 @@ export class EvolutionStateStore {
         messageId,
         // 正式会话的用户输入与南宫婉回复必须供客户页面投影。
         messageType: "customer-visible",
+        contentRole: "conversation",
         sequenceNumber: state.conversation.messages.length,
         speakerType: role === "user" ? "user" : "persona",
         speakerPersonaId: role === "user" ? null : "nangong-wan",
@@ -488,6 +489,7 @@ export class EvolutionStateStore {
         messageId: `evolution-message-${randomUUID()}`, sequenceNumber: state.conversation.messages.length,
         // 本次回合的正式答复延续客户可见消息流，不能归入内部恢复或研讨记录。
         messageType: "customer-visible",
+        contentRole: "conversation",
         speakerType: "persona", speakerPersonaId: "nangong-wan", content: required(content, "南宫婉回复", 30_000), replyToMessageId: userMessageId,
         deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now,
       });

@@ -27,3 +27,4 @@
 1025|migration-1025-add-persona-conversation-model.sql|为统一人物会话头保存可选官方模型
 1026|migration-1026-evolution-state-version-9.sql|允许专题演化状态从 v8 平滑升级到 v9
 1027|migration-1027-add-persona-conversation-message-type.sql|为统一人物会话消息建立客户、恢复和内部研讨类型
+1028|migration-1028-add-persona-conversation-content-role.sql|区分人物研讨正文与折叠技术证据

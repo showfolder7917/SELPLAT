@@ -12,6 +12,7 @@ export interface RealtimeConversationMessage {
 export function projectPersonaConversation<T extends {
   messageId: string;
   messageType: "customer-visible" | "internal-recovery" | "internal-deliberation";
+  contentRole: "conversation" | "technical-evidence";
   sequenceNumber: number;
   replyToMessageId: string | null;
   speakerType: "user" | "persona" | "system";
