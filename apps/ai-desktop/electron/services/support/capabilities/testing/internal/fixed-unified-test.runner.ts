@@ -7,6 +7,7 @@ import {
   acquireManagedDependencyLease,
   releaseManagedDependencyLease,
   resolveVerifiedDeveloperExecutable,
+  verifyAcceptancePlanCapabilities,
 } from "../../release/index.js";
 // 测试资源协调器串行管理 Electron、端口和构建目录，避免并行任务互相破坏。
 import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.facade.js";
@@ -150,6 +151,8 @@ export class FixedUnifiedTestRunner {
       port: 4197,
       buildRoot,
     }, async () => {
+      // 候选已经完成冲突解决；固定统一测试先核对验收计划能力，不能由单个任务分支的通过替代。
+      verifyAcceptancePlanCapabilities(resolvedProjectRoot);
       // 脚本按固定顺序运行，前一项失败会停止后续发布动作。
       for (const script of FIXED_UNIFIED_SCRIPTS) {
         // 开始事件先于子进程创建，卡住时仍能定位当前脚本。

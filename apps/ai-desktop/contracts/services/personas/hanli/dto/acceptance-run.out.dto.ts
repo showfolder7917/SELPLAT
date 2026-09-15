@@ -32,6 +32,10 @@ export interface HanliAcceptanceRunOutDto {
   runId: string;
   topicId: string;
   proposalId: string;
+  /** 本轮运行只可消费已持久化的提案验收计划。 */
+  planId?: string;
+  /** 本轮运行对应计划中的当前验收轮次。 */
+  acceptanceRoundId?: string;
   criteria: string[];
   /** mixed 预审记录登记待由正式窗口验证的原始条件编号。 */
   pageCriterionIds?: string[];

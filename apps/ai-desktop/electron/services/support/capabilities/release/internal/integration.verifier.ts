@@ -222,6 +222,28 @@ export async function verifyCollaborationIntegration(
   }
 }
 
+/**
+ * 最终候选验收计划能力清单。
+ * 由固定统一测试运行器检查冲突解决后的候选源码；任何能力缺失都会使统一测试失败。
+ */
+export function verifyAcceptancePlanCapabilities(candidateProjectRoot: string): void {
+  const root = path.resolve(candidateProjectRoot, "apps", "ai-desktop");
+  const sources = {
+    state: readFileSync(path.join(root, "electron/services/evolution/internal/evolution-state.store.ts"), "utf8"),
+    runtime: readFileSync(path.join(root, "electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"), "utf8"),
+    projection: readFileSync(path.join(root, "electron/services/workflow/domain/current-topic-stage.projection.ts"), "utf8"),
+  };
+  const capabilities: Array<[string, boolean]> = [
+    ["验收计划持久化", sources.state.includes("saveAcceptancePlan") && sources.state.includes("acceptance.plan_frozen")],
+    ["同专题重开", sources.state.includes("reopenCompletedAcceptance") && sources.state.includes("acceptance.reopened") && sources.projection.includes("acceptanceRoundId") && sources.projection.includes("currentRoundId") && !sources.state.includes("reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {\n    return this.resumeOneShotRun")],
+    ["混合证据汇总", sources.runtime.includes("plan.conditions.filter") && sources.runtime.includes("mode: \"mixed\"")],
+    ["自动与人工共用完成门禁", sources.state.includes("decideResult(proposalId") && sources.runtime.includes("completeAutomaticAcceptance")],
+    ["失败归因", sources.state.includes("plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
+  ];
+  const missing = capabilities.filter(([, present]) => !present).map(([name]) => name);
+  if (missing.length) throw new Error(`最终候选缺少验收计划能力：${missing.join("、")}`);
+}
+
 /** 只核对本批候选相对冻结基线引入的差异，禁止历史提交中的旧问题阻断当前批次。 */
 export async function verifyCandidateDelta(rootPath: string, candidateRange: Readonly<{ baseSha: string; candidateSha: string }>): Promise<void> {
   await executeGit(["diff", "--check", `${candidateRange.baseSha}..${candidateRange.candidateSha}`], rootPath, { timeout: 180_000 });
