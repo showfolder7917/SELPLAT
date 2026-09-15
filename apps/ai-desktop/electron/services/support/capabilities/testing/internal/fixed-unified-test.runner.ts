@@ -120,6 +120,8 @@ export class FixedUnifiedTestRunner {
     const desktopRoot = path.join(resolvedProjectRoot, "apps", this.#applicationName);
     // 候选工作树只提供待测源码；缓存、测试协调、构建、打包和最终验收始终共用用户选择工作区的数据根。
     const buildRoot = this.#buildRoot;
+    // 验收能力缺失时不应申请依赖或测试资源，避免无效候选占用共享环境后才被拒绝。
+    verifyAcceptancePlanCapabilities(resolvedProjectRoot);
     // 运行 ID 关联资源占用、事件和测试证据。
     const runId = `${this.#eventNamespace}-unified-${Date.now()}`;
     // 源工程直接使用自身依赖；候选树必须先申请受管租约。
@@ -151,8 +153,6 @@ export class FixedUnifiedTestRunner {
       port: 4197,
       buildRoot,
     }, async () => {
-      // 候选已经完成冲突解决；固定统一测试先核对验收计划能力，不能由单个任务分支的通过替代。
-      verifyAcceptancePlanCapabilities(resolvedProjectRoot);
       // 脚本按固定顺序运行，前一项失败会停止后续发布动作。
       for (const script of FIXED_UNIFIED_SCRIPTS) {
         // 开始事件先于子进程创建，卡住时仍能定位当前脚本。

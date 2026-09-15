@@ -230,15 +230,24 @@ export async function verifyCollaborationIntegration(
 export function verifyAcceptancePlanCapabilities(candidateProjectRoot: string): void {
   const root = path.resolve(candidateProjectRoot, "apps", "ai-desktop");
   const sources = readAcceptancePlanCandidateSources(root);
-  const capabilities: Array<[string, boolean]> = [
+  const missing = acceptancePlanCapabilityChecks(sources)
+    .filter(([, present]) => !present)
+    .map(([name]) => name);
+  if (missing.length) throw new Error(`最终候选缺少验收计划能力：${missing.join("、")}`);
+}
+
+/**
+ * 将每项完成门禁集中为独立检查，候选测试可以逐项删除能力并证明发布被阻断。
+ * 这里仅核对冲突解决后的候选源码，不以任务摘要或历史测试结果替代候选事实。
+ */
+function acceptancePlanCapabilityChecks(sources: ReturnType<typeof readAcceptancePlanCandidateSources>): Array<[string, boolean]> {
+  return [
     ["验收计划持久化", sources.state.includes("saveAcceptancePlan") && sources.state.includes("acceptance.plan_frozen")],
     ["同专题重开", sources.state.includes("reopenCompletedAcceptance") && sources.state.includes("acceptance.reopened") && sources.projection.includes("acceptanceRoundId") && sources.projection.includes("currentRoundId") && !sources.state.includes("reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {\n    return this.resumeOneShotRun")],
     ["混合证据汇总", sources.runtime.includes("plan.conditions.filter") && sources.runtime.includes("mode: \"mixed\"")],
     ["自动与人工共用完成门禁", sources.state.includes("decideResult(proposalId") && sources.runtime.includes("completeAutomaticAcceptance")],
     ["失败归因", sources.state.includes("plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
   ];
-  const missing = capabilities.filter(([, present]) => !present).map(([name]) => name);
-  if (missing.length) throw new Error(`最终候选缺少验收计划能力：${missing.join("、")}`);
 }
 
 /** 只核对本批候选相对冻结基线引入的差异，禁止历史提交中的旧问题阻断当前批次。 */
