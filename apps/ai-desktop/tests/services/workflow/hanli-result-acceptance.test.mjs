@@ -43,7 +43,8 @@ test("混合运行按条件强制页面截图与代码引用证据", () => {
   assert.match(runtime, /review\.mode === "mixed"/);
   assert.match(runtime, /criterionIds: pageCriterionIds/);
   assert.match(runtime, /mode: "mixed"/);
-  assert.match(runtime, /verificationEvidence: task\.flowEvents/);
+  assert.match(runtime, /const verificationEvents = Array\.isArray\(task\.flowEvents\) \? task\.flowEvents : \[\]/);
+  assert.match(runtime, /verificationEvidence: verificationEvents/);
   assert.match(runtime, /executor\\\.self_\(test\|repair\)_\(passed\|failed\|completed\)/);
   assert.match(runtime, /technicalEvidence: event\.details\?\.technicalEvidence \|\| \[\]/);
   assert.match(runtime, /details: event\.details \|\| null/);
