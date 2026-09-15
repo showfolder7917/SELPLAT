@@ -14,6 +14,11 @@ import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/
 import { AcceptanceHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance/acceptance-handoff.service.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
+/** 手工会话快照也必须声明持久化类别，避免绕过 TypeScript 后把可见性事实遗漏给仓储。 */
+function conversationMessage(messageType, message) {
+  return { ...message, messageType };
+}
+
 mkdirSync(controlledTestRoot, { recursive: true });
 
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
@@ -22,12 +27,13 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
     for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopPersonaConversation", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1026");
+    assert.equal(fixture.database.latestSchemaVersion, "1027");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream", "AiDesktopEvolutionWorkbenchPreference"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
       }
       assert.ok(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaSession'").get());
+      assert.ok(connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='messageType'").get());
     });
   } finally {
     fixture.close();
@@ -61,10 +67,11 @@ test("人物内部消息只保留业务记录且不生成或领取语义资料",
     memory.savePersonaConversation({
       ownerPersonaId: "han-li",
       conversationId: "persona-internal-conversation",
-      messages: [{ messageId: "nangong-internal", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "韩立，这是人物内部状态同步。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" }],
+      messages: [conversationMessage("internal-deliberation", { messageId: "nangong-internal", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "韩立，这是人物内部状态同步。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" })],
       updatedAt: "2026-09-02T00:00:00.000Z",
     });
     assert.equal(fixture.repository.tableCount("AiDesktopPersonaConversationMessage"), 1, "内部消息仍可作为业务记录查询");
+    assert.equal(memory.readPersonaConversation("han-li", "persona-internal-conversation").messages[0].messageType, "internal-deliberation");
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusTopic"), 0);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
     assert.deepEqual(memory.claimHanliCorpusExtractions("XUNAN", appRoot, "extractor-v1", 10), []);
@@ -106,7 +113,7 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
     const memory = new CollaborationMemoryService(fixture.database);
     memory.savePersonaConversation({ ownerPersonaId: "nangong-wan", conversationId: "training-conversation", messages: [
-      { messageId: "training-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "这是必须保留的训练原话。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z", completedAt: "2026-08-28T00:00:02.000Z" },
+      conversationMessage("customer-visible", { messageId: "training-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "这是必须保留的训练原话。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z", completedAt: "2026-08-28T00:00:02.000Z" }),
     ], updatedAt: "2026-08-28T00:00:02.000Z" });
     fixture.database.withConnection((connection) => {
       connection.prepare(`INSERT INTO AiDesktopPersonaSession (sessionKey, threadId, workspaceSignature, updatedAt)
@@ -408,17 +415,19 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
       ownerPersonaId: "nangong-wan",
       conversationId: "conversation-old",
       messages: [
-        { messageId: "user-old", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "我的原话必须逐字保留，包括空格  和换行\n不能拿摘要替代。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:00:00.000Z", completedAt: "2026-08-25T00:00:00.000Z" },
-        { messageId: "nangong-old", sequenceNumber: 1, speakerType: "persona", speakerPersonaId: "nangong-wan", content: `南宫婉完整回答：${"详细调查内容".repeat(20)}`, replyToMessageId: "user-old", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:00:01.000Z", completedAt: "2026-08-25T00:00:01.000Z" },
+        conversationMessage("customer-visible", { messageId: "user-old", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "我的原话必须逐字保留，包括空格  和换行\n不能拿摘要替代。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:00:00.000Z", completedAt: "2026-08-25T00:00:00.000Z" }),
+        conversationMessage("customer-visible", { messageId: "nangong-old", sequenceNumber: 1, speakerType: "persona", speakerPersonaId: "nangong-wan", content: `南宫婉完整回答：${"详细调查内容".repeat(20)}`, replyToMessageId: "user-old", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:00:01.000Z", completedAt: "2026-08-25T00:00:01.000Z" }),
       ],
       updatedAt: "2026-08-25T00:00:01.000Z",
     };
     firstConversation.messages[0].inferredIntent = "完整保存用户原话，不得由摘要替代。";
     memory.registerNangongRound(firstConversation, "user-old", "nangong-old", { title: "统一日志入口", type: "架构治理", switchTopic: false, userIntent: firstConversation.messages[0].inferredIntent, tags: ["日志", "架构"], summary: "南宫婉确认完整保存用户原话。" });
-    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content FROM AiDesktopPersonaConversationMessage WHERE messageId='nangong-old'").get());
-    const storedUser = fixture.database.withConnection((connection) => connection.prepare("SELECT content, inferredIntent FROM AiDesktopPersonaConversationMessage WHERE messageId='user-old'").get());
+    const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT content, messageType FROM AiDesktopPersonaConversationMessage WHERE messageId='nangong-old'").get());
+    const storedUser = fixture.database.withConnection((connection) => connection.prepare("SELECT content, inferredIntent, messageType FROM AiDesktopPersonaConversationMessage WHERE messageId='user-old'").get());
     assert.equal(storedUser.inferredIntent, "完整保存用户原话，不得由摘要替代。");
+    assert.equal(storedUser.messageType, "customer-visible");
     assert.equal(stored.content, firstConversation.messages[1].content);
+    assert.equal(stored.messageType, "customer-visible");
     assert.equal(fixture.database.withConnection((connection) => connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopConversationTopic").get()).count, 1);
     const firstContext = memory.buildNangongContext(firstConversation);
     assert.match(firstContext, /我的原话必须逐字保留，包括空格  和换行/);
@@ -427,8 +436,8 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
     const continued = {
       ...firstConversation,
       messages: [...firstConversation.messages,
-        { messageId: "user-next", sequenceNumber: 2, speakerType: "user", speakerPersonaId: null, content: "继续处理这个统一入口。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:01:00.000Z", completedAt: "2026-08-25T00:01:00.000Z" },
-        { messageId: "nangong-next", sequenceNumber: 3, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "继续调查并给出证据。", replyToMessageId: "user-next", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:01:01.000Z", completedAt: "2026-08-25T00:01:01.000Z" },
+        conversationMessage("customer-visible", { messageId: "user-next", sequenceNumber: 2, speakerType: "user", speakerPersonaId: null, content: "继续处理这个统一入口。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:01:00.000Z", completedAt: "2026-08-25T00:01:00.000Z" }),
+        conversationMessage("customer-visible", { messageId: "nangong-next", sequenceNumber: 3, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "继续调查并给出证据。", replyToMessageId: "user-next", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-25T00:01:01.000Z", completedAt: "2026-08-25T00:01:01.000Z" }),
       ],
       updatedAt: "2026-08-25T00:01:01.000Z",
     };
@@ -440,8 +449,8 @@ test("用户与南宫婉完整原文独立保存预览且每轮自由登记主�
       ownerPersonaId: "nangong-wan",
       conversationId: "conversation-old",
       messages: [...continued.messages,
-        { messageId: "user-new", sequenceNumber: 4, speakerType: "user", speakerPersonaId: null, content: "现在切换到审批习惯分析。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-26T00:00:00.000Z", completedAt: "2026-08-26T00:00:00.000Z" },
-        { messageId: "nangong-new", sequenceNumber: 5, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "已识别为新的话题中心。", replyToMessageId: "user-new", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-26T00:00:01.000Z", completedAt: "2026-08-26T00:00:01.000Z" },
+        conversationMessage("customer-visible", { messageId: "user-new", sequenceNumber: 4, speakerType: "user", speakerPersonaId: null, content: "现在切换到审批习惯分析。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-26T00:00:00.000Z", completedAt: "2026-08-26T00:00:00.000Z" }),
+        conversationMessage("customer-visible", { messageId: "nangong-new", sequenceNumber: 5, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "已识别为新的话题中心。", replyToMessageId: "user-new", deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-26T00:00:01.000Z", completedAt: "2026-08-26T00:00:01.000Z" }),
       ],
       updatedAt: "2026-08-26T00:00:01.000Z",
     };

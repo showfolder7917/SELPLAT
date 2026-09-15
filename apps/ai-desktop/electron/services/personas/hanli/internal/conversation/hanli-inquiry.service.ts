@@ -91,7 +91,7 @@ export class HanliInquiryService {
     return next;
   }
 
-  #publish(state: InquirySnapshot, messageId: string, speakerPersonaId: "han-li" | "nangong-wan",
+  #publishInternalDeliberation(state: InquirySnapshot, messageId: string, speakerPersonaId: "han-li" | "nangong-wan",
     content: string, replyToMessageId?: string, attachmentIds: string[] = []): PersonaConversationOutDto {
     const next = this.#options.memory!.appendPersonaInternalMessage({
       ownerPersonaId: "han-li", conversationId: state.conversationId, messageId, speakerPersonaId,
@@ -103,9 +103,14 @@ export class HanliInquiryService {
   }
 
   #save(state: InquirySnapshot): PersonaConversationOutDto {
-    // 恢复点与内部讨论共用 SQLite 原子追加入口，不建立旁路文件或第二份事实库。
-    return this.#publish(state, `${INQUIRY_CHECKPOINT_PREFIX}${state.requestId}:${randomUUID()}:assessment`,
-      "han-li", JSON.stringify(state), state.requestId);
+    const saved = this.#options.memory!.appendPersonaRecoveryCheckpoint({
+      ownerPersonaId: "han-li", conversationId: state.conversationId,
+      messageId: `${INQUIRY_CHECKPOINT_PREFIX}${state.requestId}:${randomUUID()}`,
+      requestId: state.requestId, content: JSON.stringify(state), createdAt: new Date().toISOString(),
+    });
+    const projected = this.project(saved);
+    this.#options.onPersonaConversationChanged?.(projected);
+    return projected;
   }
 
   async #execute(aggregate: HanliInquiryAggregate): Promise<PersonaConversationOutDto> {
@@ -143,7 +148,7 @@ export class HanliInquiryService {
         } else if (state.phase === "explaining") {
           const reply = await this.#explain(aggregate);
           this.#recordDiscussion(state, aggregate.findings(), reply);
-          this.#publish(state, resultId, "han-li", reply, `inquiry:${state.requestId}:progress`);
+          this.#publishCustomerConclusion(state, resultId, reply, `inquiry:${state.requestId}:progress`);
           aggregate.finish();
           const result = this.#save(state);
           const completed = result.activity?.status === "completed";
@@ -179,7 +184,7 @@ export class HanliInquiryService {
       ...state.goal, investigationQuestion: aggregate.current.question,
       previousFindings: state.rounds.flatMap((item) => item.findings ? [item.findings] : []),
     };
-    this.#publish(state, questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, state.request.attachmentIds || []);
+    this.#publishInternalDeliberation(state, questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, state.request.attachmentIds || []);
     if (!this.#options.investigateWithNangong) throw new Error("南宫婉只读核实服务尚未接入");
     aggregate.transition("queued", `第 ${round} 轮调查等待南宫婉接收。`);
     this.#save(state);
@@ -190,7 +195,7 @@ export class HanliInquiryService {
     aggregate.receive(findings);
     // 先保留结构化证据，后续显示、评估或解释失败均可恢复。
     this.#save(state);
-    this.#publish(state, answerId, "nangong-wan", buildInvestigationReport(findings), questionId);
+    this.#publishInternalDeliberation(state, answerId, "nangong-wan", buildInvestigationReport(findings), questionId);
   }
 
   async #assess(aggregate: HanliInquiryAggregate): Promise<void> {
@@ -222,6 +227,22 @@ export class HanliInquiryService {
     const reply = response.text.trim();
     if (!reply) throw new Error("韩立没有返回客户解释");
     return reply;
+  }
+
+  /** 只登记稳定身份的客户最终结论，通过专用客户写入入口避免与恢复 JSON 混写。 */
+  #publishCustomerConclusion(state: InquirySnapshot, messageId: string, content: string, replyToMessageId: string): PersonaConversationOutDto {
+    const memory = this.#options.memory!;
+    const prior = memory.readPersonaConversation("han-li", state.conversationId);
+    const customerMessage = prior.messages.find((message) => message.messageId === state.requestId);
+    if (!customerMessage) throw new Error("客户原问题尚未提交，不能保存排查结论。");
+    if (prior.messages.some((message) => message.messageId === messageId)) return this.project(prior);
+    const saved = memory.appendPersonaCustomerMessage({
+      ownerPersonaId: "han-li", conversationId: state.conversationId, messageId,
+      speakerPersonaId: "han-li", content, replyToMessageId, createdAt: new Date().toISOString(),
+    });
+    const projected = this.project(saved);
+    this.#options.onPersonaConversationChanged?.(projected);
+    return projected;
   }
 
   #recordDiscussion(state: InquirySnapshot, findings: NangongInquiryResultOutDto, customerReply: string): void {

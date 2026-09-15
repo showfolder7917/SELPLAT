@@ -131,7 +131,7 @@ export class HanliConversationAggregate {
       // currentMessage 是当前扫描位置的权威持久消息。
       const currentMessage = this.#messages[index];
       // 内部研讨消息不属于韩立面向用户形成的当前观点。
-      if (currentMessage.messageId.startsWith("internal:")) {
+      if (currentMessage.messageType !== "customer-visible") {
         // 跳过内部消息后继续寻找最近的直接韩立回复。
         continue;
       }
@@ -205,7 +205,7 @@ export class HanliConversationAggregate {
       // candidate 是本次扫描检查的持久消息。
       const candidate = this.#messages[index];
       // 第一条非内部消息就是当前页面最后一条直接对话。
-      if (!latestDirect && !candidate.messageId.startsWith("internal:")) {
+      if (!latestDirect && candidate.messageType === "customer-visible") {
         // 保存消息对象，后续必须确认锚点仍然指向它。
         latestDirect = candidate;
       }

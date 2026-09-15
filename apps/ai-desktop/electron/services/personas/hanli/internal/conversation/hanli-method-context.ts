@@ -88,19 +88,14 @@ export function buildHanliMethodContext(context: HanliSemanticContextOutDto): st
 }
 
 /** 后续会话保留完整用户原话，人物长回答只提供八十字预览，并从最新消息向前装入固定预算。 */
-export function buildHanliRecentConversation(messages: Array<{ messageId?: string; speakerType: string; speakerPersonaId: string | null; content: string }>): string {
+export function buildHanliRecentConversation(messages: Array<{ messageId?: string; messageType: "customer-visible" | "internal-recovery" | "internal-deliberation"; speakerType: string; speakerPersonaId: string | null; content: string }>): string {
   const blocks: string[] = [];
   let characters = 0;
-  // 持久排查恢复点不是人物发言，必须在截取最近窗口之前排除。
+  // 内部恢复点和内部研讨不是客户对话，必须在截取最近窗口之前排除。
   const recentMessages = messages
-    .filter((message) => !message.messageId?.startsWith("internal:inquiry-checkpoint:"))
+    .filter((message) => message.messageType === "customer-visible")
     .slice(-16).reverse();
   for (const message of recentMessages) {
-    const isInquiryAnchor = message.messageId?.startsWith("internal:hanli-inquiry-anchor:");
-    const isDiscussionContext = message.messageId?.startsWith("internal:requirement-discussion-context:");
-    if (isInquiryAnchor || isDiscussionContext) {
-      continue;
-    }
     const speaker = readableSpeakerName(message);
     let content = message.content;
     if (message.speakerType !== "user") {

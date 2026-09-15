@@ -22,12 +22,12 @@ export function writePersonaConversationMessage(
   const sequenceNumber = existing?.sequenceNumber ?? Number(maximum.value) + 1;
   connection.prepare(`
     INSERT INTO AiDesktopPersonaConversationMessage
-      (messageId, ownerPersonaId, conversationId, sequenceNumber, speakerType, speakerPersonaId, content,
+      (messageId, ownerPersonaId, conversationId, sequenceNumber, messageType, speakerType, speakerPersonaId, content,
        inferredIntent, attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt, recordedAt)
-    VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, $speakerType, $speakerPersonaId, $content,
+    VALUES ($messageId, $ownerPersonaId, $conversationId, $sequenceNumber, $messageType, $speakerType, $speakerPersonaId, $content,
       $inferredIntent, $attachmentIds, $replyToMessageId, $deliveryStatus, $createdAt, $completedAt, $recordedAt)
     ON CONFLICT(messageId) DO UPDATE SET
-      content=excluded.content, inferredIntent=excluded.inferredIntent, attachmentIdsJson=excluded.attachmentIdsJson,
+      messageType=excluded.messageType, content=excluded.content, inferredIntent=excluded.inferredIntent, attachmentIdsJson=excluded.attachmentIdsJson,
       replyToMessageId=excluded.replyToMessageId, deliveryStatus=excluded.deliveryStatus,
       completedAt=excluded.completedAt, recordedAt=excluded.recordedAt
   `).run({
@@ -35,6 +35,7 @@ export function writePersonaConversationMessage(
     $ownerPersonaId: ownerPersonaId,
     $conversationId: conversationId,
     $sequenceNumber: sequenceNumber,
+    $messageType: message.messageType,
     $speakerType: message.speakerType,
     $speakerPersonaId: message.speakerType === "persona" ? requiredSpeaker(message.speakerPersonaId) : null,
     $content: message.content,

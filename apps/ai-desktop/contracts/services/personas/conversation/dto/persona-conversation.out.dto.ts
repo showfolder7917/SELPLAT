@@ -3,9 +3,14 @@ import type { PersonaConversationActivityOutDto } from "./persona-conversation-a
 /** 人物会话中的发言主体类型；具体人物由 speakerPersonaId 标识，不再扩充固定角色枚举。 */
 export type PersonaConversationSpeakerTypeValue = "user" | "persona" | "system";
 
+/** 消息的持久化业务类别；页面投影只能使用此字段，不能猜测 messageId 的命名含义。 */
+export type PersonaConversationMessageTypeValue = "customer-visible" | "internal-recovery" | "internal-deliberation";
+
 /** 所有人物页面共用的消息协议。 */
 export interface PersonaConversationMessageOutDto {
   messageId: string;
+  /** 写入方声明的可见性类别；恢复 JSON 不得伪装成客户或内部研讨正文。 */
+  messageType: PersonaConversationMessageTypeValue;
   sequenceNumber: number;
   speakerType: PersonaConversationSpeakerTypeValue;
   /** 用户和系统消息为 null；人物消息填写稳定 personaId。 */

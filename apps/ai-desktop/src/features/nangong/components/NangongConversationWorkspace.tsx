@@ -109,7 +109,7 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
         // 内部消息需要在人物名称后显示其真实业务来源。
         if (internal) {
           // 验收消息属于人物之间的内部交接，其他内部消息属于研讨。
-          internalLabel = message.messageId.startsWith("internal:acceptance:") ? " · 内部交接" : " · 内部研讨";
+          internalLabel = " · 内部研讨";
         }
         // 消息身份文字（speakerLabel）是消息头最终显示的客户或人物名称。
         const speakerLabel = message.speakerType === "user" ? `我${deliveryLabel}` : `${personaName}${internalLabel}`;

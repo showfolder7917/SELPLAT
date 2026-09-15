@@ -97,8 +97,49 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     const attachmentIds = [...new Set(input.attachmentIds || [])].filter((id) => id.trim()).slice(0, 20);
     this.#database.transaction((connection) => {
       writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.messageId, speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
+        messageId: input.messageId, messageType: "internal-deliberation", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
         content, attachmentIds, replyToMessageId: input.replyToMessageId || null,
+        deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
+      }, "append");
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
+      });
+    });
+    return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
+  }
+
+  /** 仅保存可恢复的韩立排查快照；该 JSON 不会被当作人物发言或客户结果投影。 */
+  appendPersonaRecoveryCheckpoint(input: {
+    ownerPersonaId: string; conversationId: string; messageId: string; requestId: string; content: string; createdAt: string;
+  }): PersonaConversationOutDto {
+    const content = input.content.trim();
+    if (!content) throw new Error("人物恢复检查点不能为空。");
+    this.#database.transaction((connection) => {
+      writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
+        messageId: input.messageId, messageType: "internal-recovery", speakerType: "system", speakerPersonaId: null,
+        content, attachmentIds: [], replyToMessageId: input.requestId,
+        deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
+      }, "append");
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
+      });
+    });
+    return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
+  }
+
+  /** 仅追加已经确定的客户可见人物回复；调用方负责稳定身份和业务正文。 */
+  appendPersonaCustomerMessage(input: {
+    ownerPersonaId: string; conversationId: string; messageId: string; speakerPersonaId: string;
+    content: string; replyToMessageId: string; createdAt: string;
+  }): PersonaConversationOutDto {
+    const content = input.content.trim();
+    if (!content) throw new Error("客户可见人物消息不能为空。");
+    this.#database.transaction((connection) => {
+      writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
+        messageId: input.messageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
+        content, attachmentIds: [], replyToMessageId: input.replyToMessageId,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
       }, "append");
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
@@ -146,12 +187,12 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       // Renderer 重试同一 clientMessageId 时整轮已经原子提交，不再分配新序号或复制语料。
       if (existing) return;
       const userSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.userMessageId, speakerType: "user", speakerPersonaId: null, content: input.userContent,
+        messageId: input.userMessageId, messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: input.userContent,
         inferredIntent: input.decision.userIntent || undefined, attachmentIds: input.attachmentIds, replyToMessageId: null,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.completedAt,
       }, "append");
       const personaSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.personaMessageId, speakerType: "persona", speakerPersonaId: input.responderPersonaId,
+        messageId: input.personaMessageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: input.responderPersonaId,
         content: input.personaContent, attachmentIds: [], replyToMessageId: input.userMessageId,
         deliveryStatus: "completed", createdAt: input.completedAt, completedAt: input.completedAt,
       }, "append");

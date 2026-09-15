@@ -31,6 +31,7 @@
     "verify:package-content": "node scripts/run-with-dependencies.mjs node scripts/verify-package-content.mjs",
     "migrate:data-layout": "node scripts/run-with-dependencies.mjs node scripts/migrate-project-data-layout.mjs",
     "paths:resolve": "node scripts/run-with-dependencies.mjs node scripts/resolve-application-paths.mjs",
+    "check:no-retired-assessment-markers": "node scripts/run-with-dependencies.mjs node scripts/assert-no-retired-assessment-markers.mjs",
     "migrate:dependencies": "node scripts/migrate-dependencies-to-cache.mjs",
     "rollback:codex-runtime": "node scripts/rollback-codex-runtime.mjs",
     "dependencies:ensure": "node scripts/ensure-dependency-cache.mjs",
