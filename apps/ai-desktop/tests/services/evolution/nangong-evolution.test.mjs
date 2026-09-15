@@ -956,6 +956,24 @@ test("清空测试数据删除专题运行历史并保留人物对话、自动�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("演进会话把客户消息和完成后的南宫婉答复标记为客户可见", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-conversation-message-type-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const pending = store.appendConversation("user", "请确认当前实现。", [], {
+      messageId: "customer-message-1",
+      deliveryStatus: "sending",
+    });
+    assert.equal(pending.conversation.messages.at(-1).messageType, "customer-visible");
+
+    const completed = store.completeConversationTurn("customer-message-1", "当前实现已经确认。");
+    assert.deepEqual(
+      completed.conversation.messages.map((message) => message.messageType),
+      ["customer-visible", "customer-visible"],
+    );
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("自动审批无人工偏好时退回补充，人工决定形成版本化偏好", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-approval-"));
   try {

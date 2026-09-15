@@ -299,6 +299,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     }));
     const pendingMessages = outgoingMessage ? [{
       messageId: outgoingMessage.messageId,
+      messageType: "customer-visible" as const,
       sequenceNumber: outgoingMessage.sequenceNumber ?? conversation.messages.length,
       speakerType: "user" as const,
       speakerPersonaId: null,
@@ -312,7 +313,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
       completedAt: outgoingMessage.failed ? new Date().toISOString() : null,
     }] : [];
     const timelineMessages = mergeRealtimeConversationTimeline(directMessages, pendingMessages);
-    const sharedMessages = sharedInternalMessages.filter((message) => !message.messageId.startsWith("internal:acceptance:"));
+    const sharedMessages = sharedInternalMessages.filter((message) => message.messageType === "internal-deliberation");
     const internalEntries = [...sharedMessages, ...projected.internal].map((message) => [message.messageId, message] as const);
     const currentInternal = [...new Map(internalEntries).values()]
       .filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);

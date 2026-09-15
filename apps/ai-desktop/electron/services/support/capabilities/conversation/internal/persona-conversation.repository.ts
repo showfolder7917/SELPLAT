@@ -43,7 +43,7 @@ export class PersonaConversationRepository {
       if (!header) return emptyConversation(ownerPersonaId);
 
       const rows = connection.prepare(`
-        SELECT messageId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
+        SELECT messageId, sequenceNumber, messageType, speakerType, speakerPersonaId, content, inferredIntent,
           attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt
         FROM AiDesktopPersonaConversationMessage
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId
@@ -81,7 +81,7 @@ export class PersonaConversationRepository {
         .get({ $owner: owner, $conversation: conversationId }) as { conversationId: string; selectedModel: string | null; createdAt: string; updatedAt: string } | undefined;
       if (!header) return emptyWindow(owner);
       const before = Number.isInteger(request.beforeSequenceNumber) ? Number(request.beforeSequenceNumber) : Number.MAX_SAFE_INTEGER;
-      const rows = connection.prepare(`SELECT messageId, sequenceNumber, speakerType, speakerPersonaId, content, inferredIntent,
+      const rows = connection.prepare(`SELECT messageId, sequenceNumber, messageType, speakerType, speakerPersonaId, content, inferredIntent,
         attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt
         FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$owner AND conversationId=$conversation AND sequenceNumber<$before
         ORDER BY sequenceNumber DESC LIMIT $limit`).all({ $owner: owner, $conversation: conversationId, $before: before, $limit: limit }) as unknown as Array<Record<string, unknown>>;
@@ -167,6 +167,7 @@ export class PersonaConversationRepository {
 function mapMessage(row: Record<string, unknown>): PersonaConversationMessageOutDto {
   return {
     messageId: String(row.messageId),
+    messageType: row.messageType as PersonaConversationMessageOutDto["messageType"],
     sequenceNumber: Number(row.sequenceNumber),
     speakerType: row.speakerType as PersonaConversationMessageOutDto["speakerType"],
     speakerPersonaId: row.speakerPersonaId ? String(row.speakerPersonaId) : null,

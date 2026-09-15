@@ -189,6 +189,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   const messages = useMemo(() => mergeRealtimeConversationTimeline(directMessages, pending ? [{
     // 临时消息编号（messageId）沿用发送前生成的编号，后端返回后可以替换临时消息。
     messageId: pending.messageId,
+    messageType: "customer-visible" as const,
     // 页面顺序号（sequenceNumber）暂放在当前历史末尾，正式顺序以后端结果为准。
     sequenceNumber: conversation.messages.length,
     // 发言方类型（speakerType）使用 user 表示这条临时消息来自当前客户。

@@ -692,8 +692,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(nangongConversation.getByText("南宫婉核实后会形成方案；是否实施仍遵循原有确认规则。", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("韩立 · 内部研讨", { exact: true })).toBeHidden();
   await expect(nangongConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toBeHidden();
-  const preserved = await page.evaluate(async () => (await window.desktop!.getPersonaConversation("han-li")).messages.filter((message) => message.messageId.startsWith("internal:")));
-  expect(preserved).toHaveLength(3);
+  const preserved = await page.evaluate(async () => (await window.desktop!.getPersonaConversation("han-li")).messages);
+  expect(preserved.filter((message) => message.messageType === "internal-deliberation")).toHaveLength(2);
+  expect(preserved.filter((message) => message.messageType === "internal-recovery")).toHaveLength(1);
   await page.screenshot({ path: test.info().outputPath("nangong-new-conversation-isolated.png"), fullPage: true });
   await taskList.getByRole("button", { name: "单会话" }).click();
 });

@@ -12,6 +12,7 @@ assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 const conversationContract = read("contracts/services/personas/conversation/dto/persona-conversation.out.dto.ts");
 const repository = read("electron/services/support/capabilities/conversation/internal/persona-conversation.repository.ts");
 const migration = read("db/sql/migration-1025-add-persona-conversation-model.sql");
+const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversation-message-type.sql");
 const loadOrder = read("db/sql/load-order.txt");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
@@ -29,6 +30,21 @@ test("人物会话头以可空 selectedModel 保存并迁移既有数据", () =>
   assert.match(repository, /SELECT conversationId, selectedModel, createdAt, updatedAt/);
   assert.match(repository, /selectedModel=COALESCE\(excluded\.selectedModel, AiDesktopPersonaConversation\.selectedModel\)/);
   assert.match(repository, /selectModel\(ownerPersonaId: string, conversationId: string, selectedModel: string \| null\)/);
+});
+
+test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID 前后缀", () => {
+  const projector = read("src/features/conversation/model/realtime-conversation.ts");
+  const inquiry = read("electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.ts");
+  assert.match(conversationContract, /PersonaConversationMessageTypeValue = "customer-visible" \| "internal-recovery" \| "internal-deliberation"/);
+  assert.match(messageTypeMigration, /ADD COLUMN messageType TEXT NOT NULL DEFAULT 'customer-visible'/);
+  assert.match(messageTypeMigration, /messageType = 'internal-recovery'/);
+  assert.match(projector, /message\.messageType === "customer-visible"/);
+  assert.match(projector, /message\.messageType === "internal-deliberation"/);
+  assert.doesNotMatch(projector, /startsWith\("internal:"\)|endsWith\(":assessment"\)/);
+  assert.match(inquiry, /appendPersonaRecoveryCheckpoint/);
+  assert.match(inquiry, /appendPersonaCustomerMessage/);
+  assert.doesNotMatch(inquiry, /:assessment/);
+  assert.doesNotMatch(read("electron/services/personas/hanli/internal/conversation/hanli-inquiry-checkpoint.ts"), /messageId\.startsWith/);
 });
 
 test("韩立和南宫婉各自从会话头读取模型并将实际模型传给 Harness", () => {

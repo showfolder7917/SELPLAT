@@ -370,8 +370,9 @@ async function sendNangongTestConversation(request) {
   const userMessageId = request.clientMessageId || `user-${now}`;
   const nangongMessageId = `nangong-${now}`;
   const sequenceNumber = evolutionState.conversation.messages.length;
-  evolutionState.conversation.messages.push({ messageId: userMessageId, sequenceNumber, speakerType: "user", speakerPersonaId: null, content: request.message, replyToMessageId: null, deliveryStatus: "completed", createdAt: now, completedAt: now });
-  evolutionState.conversation.messages.push({ messageId: nangongMessageId, sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "已确认事实：令狐持续修正需要先形成可审批方案。", replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
+  // 隔离快照也遵守正式会话契约，页面只能依赖 messageType 决定是否展示。
+  evolutionState.conversation.messages.push({ messageId: userMessageId, messageType: "customer-visible", sequenceNumber, speakerType: "user", speakerPersonaId: null, content: request.message, replyToMessageId: null, deliveryStatus: "completed", createdAt: now, completedAt: now });
+  evolutionState.conversation.messages.push({ messageId: nangongMessageId, messageType: "customer-visible", sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "已确认事实：令狐持续修正需要先形成可审批方案。", replyToMessageId: userMessageId, deliveryStatus: "completed", createdAt: now, completedAt: now });
   if (request.subject?.type === "evolution-topic") evolutionState.archiveRecords.push({ recordId: `interaction-topic-group-${Date.now()}`, deliberationId: null, topicId: request.subject.id, proposalId: null, taskId: null, sequenceNumber: evolutionState.archiveRecords.length + 1, category: "source", eventType: "conversation.topic_group_replied", actor: "system", title: "专题群收到用户消息与南宫婉回复", payload: { conversationId: evolutionState.conversation.conversationId, userMessageId, userPreview: request.message, nangongMessageId, nangongPreview: "已确认事实：令狐持续修正需要先形成可审批方案。", status: "replied", nextOwner: "han-li" }, occurredAt: now });
   if (request.message.trim() === "1" && evolutionState.oneShotConfirmation) {
     evolutionState.oneShotConfirmation = null;
@@ -607,7 +608,7 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     hanliConversation = {
       ownerPersonaId: "han-li", conversationId: "inquiry-ui", updatedAt: now, messages: [
-        { messageId: "inquiry-ui-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null,
+        { messageId: "inquiry-ui-user", messageType: "customer-visible", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null,
           content: "检查滚动条为什么会跳动", replyToMessageId: null, attachmentIds: [], deliveryStatus: "completed", createdAt: now, completedAt: now },
       ],
       activity: { kind: "inquiry", requestId: "inquiry-ui-user", phase: "explaining", status: "retryable",
@@ -628,9 +629,9 @@ contextBridge.exposeInMainWorld("desktop", {
   setInteractionCheckpointMessages: async () => {
     const now = new Date().toISOString();
     const messages = [
-      { messageId: "checkpoint:fixture:1:returned", speakerPersonaId: "linghu-ancestor", content: "第1轮修复结果已返回，交回原步骤复验。", replyToMessageId: null },
-      { messageId: "internal:acceptance:fixture:attempt1:received:question", speakerPersonaId: "nangong-wan", content: "请韩立实际操作复验。", replyToMessageId: null },
-      { messageId: "internal:acceptance:fixture:attempt1:passed:answer", speakerPersonaId: "han-li", content: "实际操作复验通过，结果已返回南宫婉。", replyToMessageId: "internal:acceptance:fixture:attempt1:received:question" },
+      { messageId: "checkpoint:fixture:1:returned", messageType: "customer-visible", speakerPersonaId: "linghu-ancestor", content: "第1轮修复结果已返回，交回原步骤复验。", replyToMessageId: null },
+      { messageId: "internal:acceptance:fixture:attempt1:received:question", messageType: "internal-deliberation", speakerPersonaId: "nangong-wan", content: "请韩立实际操作复验。", replyToMessageId: null },
+      { messageId: "internal:acceptance:fixture:attempt1:passed:answer", messageType: "customer-visible", speakerPersonaId: "han-li", content: "实际操作复验通过，结果已返回南宫婉。", replyToMessageId: "internal:acceptance:fixture:attempt1:received:question" },
     ];
     evolutionState.conversation.messages = messages.map((message, sequenceNumber) => ({ ...message, sequenceNumber, speakerType: "persona", deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now }));
     for (const listener of personaConversationListeners) listener(structuredClone(evolutionState.conversation));
@@ -645,7 +646,7 @@ contextBridge.exposeInMainWorld("desktop", {
       await new Promise((resolve) => { inquiryFixtureRelease = resolve; });
       inquiryFixtureRelease = null;
       const now = new Date().toISOString();
-      hanliConversation.messages.push({ messageId: "inquiry:inquiry-ui-user:result", sequenceNumber: 1,
+      hanliConversation.messages.push({ messageId: "inquiry:inquiry-ui-user:result", messageType: "customer-visible", sequenceNumber: 1,
         speakerType: "persona", speakerPersonaId: "han-li", content: "源码证据已确认，实际运行复现尚待验证。",
         replyToMessageId: "inquiry-ui-user", attachmentIds: [], deliveryStatus: "completed", createdAt: now, completedAt: now });
       hanliConversation.activity = { ...hanliConversation.activity, status: "completed", phase: "completed", summary: "排查结论已返回。" };
@@ -657,15 +658,15 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     const userMessageId = request.clientMessageId || `hanli-user-${Date.now()}`;
     const sequenceNumber = hanliConversation.messages.length;
-    hanliConversation.messages.push({ messageId: userMessageId, sequenceNumber, speakerType: "user", speakerPersonaId: null, content: request.message, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: request.attachmentIds || [], createdAt: now, completedAt: now });
+    hanliConversation.messages.push({ messageId: userMessageId, messageType: "customer-visible", sequenceNumber, speakerType: "user", speakerPersonaId: null, content: request.message, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: request.attachmentIds || [], createdAt: now, completedAt: now });
     if (request.message.trim() === "1") {
-      hanliConversation.messages.push({ messageId: `hanli-confirmed-${Date.now()}`, sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "已启动韩立与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
-      hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:question`, sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前需求最关键的验收边界是什么？", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
-      hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:answer`, sequenceNumber: sequenceNumber + 3, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "验收时需确认内部一问一答可见，且不写入用户语义资料。", replyToMessageId: `internal:${sequenceNumber}:question`, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
-      hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:assessment`, sequenceNumber: sequenceNumber + 4, speakerType: "persona", speakerPersonaId: "han-li", content: "判断：这是一条历史后台判断，不是聊天正文。", replyToMessageId: `internal:${sequenceNumber}:answer`, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `hanli-confirmed-${Date.now()}`, messageType: "customer-visible", sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "已启动韩立与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:question`, messageType: "internal-deliberation", sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前需求最关键的验收边界是什么？", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:answer`, messageType: "internal-deliberation", sequenceNumber: sequenceNumber + 3, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "验收时需确认内部一问一答可见，且不写入用户语义资料。", replyToMessageId: `internal:${sequenceNumber}:question`, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:assessment`, messageType: "internal-recovery", sequenceNumber: sequenceNumber + 4, speakerType: "system", speakerPersonaId: null, content: "判断：这是一条历史后台判断，不是聊天正文。", replyToMessageId: `internal:${sequenceNumber}:answer`, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
     } else {
-      hanliConversation.messages.push({ messageId: `hanli-answer-${Date.now()}`, sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
-      hanliConversation.messages.push({ messageId: `hanli-viewpoint-${Date.now()}`, sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `hanli-answer-${Date.now()}`, messageType: "customer-visible", sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
+      hanliConversation.messages.push({ messageId: `hanli-viewpoint-${Date.now()}`, messageType: "customer-visible", sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
     }
     hanliConversation.updatedAt = now;
     for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));

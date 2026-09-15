@@ -53,7 +53,7 @@ function fixture(investigate, explain = async () => ({ text: "源码已经修改
   const append = (message) => {
     if (!messages.some((item) => item.messageId === message.messageId)) messages.push({
       speakerType: "persona", sequenceNumber: messages.length, deliveryStatus: "completed",
-      replyToMessageId: null, ...structuredClone(message),
+      messageType: "customer-visible", replyToMessageId: null, ...structuredClone(message),
     });
   };
   const memory = {
@@ -63,7 +63,9 @@ function fixture(investigate, explain = async () => ({ text: "源码已经修改
       append({ messageId: round.personaMessageId, speakerPersonaId: "han-li", content: round.personaContent });
       return snapshot(round.conversationId);
     },
-    appendPersonaInternalMessage: (message) => { append(message); order.push(message.messageId); return snapshot(message.conversationId); },
+    appendPersonaInternalMessage: (message) => { append({ ...message, messageType: "internal-deliberation" }); order.push(message.messageId); return snapshot(message.conversationId); },
+    appendPersonaRecoveryCheckpoint: (message) => { append({ ...message, messageType: "internal-recovery", speakerType: "system", speakerPersonaId: null, replyToMessageId: message.requestId }); order.push(message.messageId); return snapshot(message.conversationId); },
+    appendPersonaCustomerMessage: (message) => { append({ ...message, messageType: "customer-visible", speakerType: "persona" }); order.push(message.messageId); return snapshot(message.conversationId); },
     recordRequirementDiscussionContext: (context) => { discussionContexts.push(structuredClone(context)); order.push("discussion-context-recorded"); },
   };
   const options = {
@@ -218,7 +220,7 @@ test("自动调查最多三轮，无依据或外部阻碍都不能升级为完�
 test("重启后的孤儿运行显示中断；改变工作区或原问题不能复用恢复点", async () => {
   const f = fixture(async () => { throw new Error("断线"); });
   const failed = await f.service.run(request, "original", customerQuestion, understanding, topic);
-  const checkpoint = f.messages.filter((message) => message.messageId.startsWith("internal:inquiry-checkpoint:")).at(-1);
+  const checkpoint = f.messages.filter((message) => message.messageType === "internal-recovery").at(-1);
   const state = JSON.parse(checkpoint.content);
   state.status = "running";
   checkpoint.content = JSON.stringify(state);
@@ -231,7 +233,7 @@ test("重启后的孤儿运行显示中断；改变工作区或原问题不能�
 test("恢复记录损坏不回退到旧调查阶段", async () => {
   const f = fixture(async () => { throw new Error("断线"); });
   const failed = await f.service.run(request, "original", customerQuestion, understanding, topic);
-  failed.messages.filter((message) => message.messageId.startsWith("internal:inquiry-checkpoint:")).at(-1).content = "{}";
+  failed.messages.filter((message) => message.messageType === "internal-recovery").at(-1).content = "{}";
   assert.throws(() => f.createService().resume(request, failed), /恢复记录不完整/);
 });
 
@@ -384,10 +386,10 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
 });
 
 test("排查恢复点不进入后续客户对话上下文，也不挤掉真实问答", () => {
-  const messages = [{ messageId: "user-1", speakerType: "user", speakerPersonaId: null, content: "滚动条为何跳动" }];
+  const messages = [{ messageId: "user-1", messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: "滚动条为何跳动" }];
   for (let index = 0; index < 30; index += 1) messages.push({
-    messageId: `internal:inquiry-checkpoint:u1:${index}:assessment`, speakerType: "persona",
-    speakerPersonaId: "han-li", content: "内部恢复记录不应进入对话",
+    messageId: `inquiry-checkpoint:u1:${index}`, messageType: "internal-recovery", speakerType: "system",
+    speakerPersonaId: null, content: "内部恢复记录不应进入对话",
   });
   const context = buildHanliRecentConversation(messages);
   assert.match(context, /滚动条为何跳动/);
