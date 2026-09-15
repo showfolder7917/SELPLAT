@@ -8,23 +8,11 @@ import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 import { evolutionMutationRequest, type useEvolutionRuntime } from "../../evolution";
 import { useSelUi } from "../../../theme/SelUiProvider";
 import { createCollaborationWorkspaceViewModel } from "../model/createCollaborationWorkspaceViewModel";
+import { continueTaskWithRecovery } from "../model/recovery-operation";
 import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspace";
 import { CollaborationMemberPage } from "./CollaborationMemberPage";
 import { TaskCollaborationGroup } from "./TaskCollaborationGroup";
 import type { TaskRecoveryResult } from "./TaskCollaborationGroup.types";
-
-const RECOVERY_REQUEST_TIMEOUT_MS = 12_000;
-const RECOVERY_RECHECK_TIMEOUT_MS = 4_000;
-
-class RecoveryTimeoutError extends Error {}
-
-function waitForRecovery<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new RecoveryTimeoutError()), timeoutMs);
-    // 超时后原 IPC 仍可能拒绝；消费 finally 派生 Promise，避免把迟到错误带到全局。
-    void request.then(resolve, reject).finally(() => window.clearTimeout(timer)).catch(() => undefined);
-  });
-}
 
 type CollaborationWorkspaceFeatureProps = {
   /** 当前语言决定任务群和人物页面显示中文还是日文。 */
@@ -84,25 +72,7 @@ export function CollaborationWorkspaceFeature({
 
   /** 等待节点继续原任务时交给协作控制器执行。 */
   async function continueTimelineTask(taskId: string): Promise<TaskRecoveryResult> {
-    try {
-      await waitForRecovery(controller.actions.continueTask(taskId), RECOVERY_REQUEST_TIMEOUT_MS);
-      // 写操作已经返回主进程权威状态；时间线刷新不再阻塞按钮收口。
-      void controller.actions.refreshRecoveryState().catch(() => undefined);
-      return { kind: "confirmed", message: "" };
-    } catch (error) {
-      if (!(error instanceof RecoveryTimeoutError)) throw error;
-      try {
-        const snapshot = await waitForRecovery(controller.actions.refreshRecoveryState(), RECOVERY_RECHECK_TIMEOUT_MS);
-        const queued = snapshot.timeline.groups.some((group) => group.nodes.some((node) => {
-          return node.taskId === taskId && node.eventType === "task.recovery_requested";
-        }));
-        return queued
-          ? { kind: "queued", message: "恢复请求已提交，正在排队。" }
-          : { kind: "unavailable", message: "恢复请求未取消，但暂时无法确认状态。" };
-      } catch {
-        return { kind: "unavailable", message: "恢复请求未取消，但状态确认未返回。" };
-      }
-    }
+    return continueTaskWithRecovery(taskId, controller.actions);
   }
 
   // ViewModel 只把 Controller 状态映射成任务群和人物页面输入。
