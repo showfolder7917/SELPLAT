@@ -203,12 +203,18 @@ export class HanliDecisionService {
         throw new Error(lastError || "AI 返回的结构化判断不符合结果验收约定。");
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
-        request = `${prompt}\n\n上一次结果无法处理：${lastError}。请按原始 criterion 编号修正页面与代码条件的完整分区，只返回符合约定的完整 JSON。`;
+        request = `${prompt}\n\n上一次结果无法处理：${lastError}。请按原始 criterion 编号修正页面与代码条件的完整分区。${resultAcceptanceRetryHint(lastError)}只返回符合约定的完整 JSON。`;
       }
     }
     throw new Error(`韩立连续 3 次未返回有效的结果验收判断：${lastError}`);
   }
 
+}
+
+/** 仅补足结果验收的歧义分类提示；语义校验仍是唯一允许放行的边界。 */
+function resultAcceptanceRetryHint(lastError: string): string {
+  if (lastError !== "混合验收必须同时包含页面条件和代码符合性条件。") return "";
+  return " mixed 的 pageCriterionIds 必须是全部 criterion 编号的非空严格子集：空列表时改为 code-conformance，列表包含全部条件时改为 page-experience。";
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {
