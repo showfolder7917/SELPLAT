@@ -96,7 +96,11 @@ test("韩立验收卡点不因原开发任务已集成而误报解除", async ()
   const f = fixture();
   f.collaboration.tasks.push({
     taskId: "original", state: "integrated", phase: "integrated", updatedAt: "2026-09-05T00:00:00Z",
-    executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: { constraints: [] },
+    executorMemberId: "mo-caihuan", evolutionProposalId: "proposal-1", snapshot: {
+      constraints: [],
+      // 已冻结材料必须随验收修复任务保留，不能因替代链变为空授权。
+      materials: [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "copy"] }],
+    },
   });
   f.event.payload.operation = "run_hanli_result_acceptance";
   f.evolution.proposals[0].distributedTaskIds = ["original"];
@@ -104,6 +108,7 @@ test("韩立验收卡点不因原开发任务已集成而误报解除", async ()
   // 开发任务的 integrated 不能冒充韩立复验通过，令狐必须收到真实调查修复任务。
   assert.deepEqual(f.effects.resolved, []);
   assert.equal(f.effects.submitted.length, 1);
+  assert.deepEqual(f.effects.submitted[0].materials, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "copy"] }]);
   assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
   assert.equal(f.event.payload.checkpoint.phase, "repairing");
 });
