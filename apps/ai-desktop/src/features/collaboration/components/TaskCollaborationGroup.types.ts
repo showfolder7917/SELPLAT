@@ -16,6 +16,11 @@ import type {
 } from "../../evolution";
 
 /** Developer 右侧“任务协作群”页面使用的完整模型。 */
+export type TaskRecoveryResult = {
+  kind: "confirmed" | "queued" | "unavailable";
+  message: string;
+};
+
 export type TaskCollaborationGroupModel = {
   /** 专题演化状态和原运行恢复操作。 */
   evolution: ReturnType<typeof useEvolutionRuntime>;
@@ -38,7 +43,7 @@ export type TaskCollaborationGroupModel = {
     /** 用户对待审批提案执行人工审批。 */
     onManualApproval: (proposalId: string, title: string, content: string) => void;
     /** 用户从最新等待节点继续原协作任务。 */
-    onContinueTask: (taskId: string) => Promise<void>;
+    onContinueTask: (taskId: string) => Promise<TaskRecoveryResult>;
     /** 打开韩立人物会话，让用户从需求讨论开始，不提交协作任务。 */
     onOpenHanliConversation: () => Promise<void>;
   };

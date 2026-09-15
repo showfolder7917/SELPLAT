@@ -71,6 +71,8 @@ export type ActiveRecoveryAction = {
   customerAction: boolean;
   /** 恢复请求已成为当前节点时，保留入口并禁用重复操作。 */
   pending: boolean;
+  /** 主进程已记录请求时显示排队事实，不把它当作页面本地转圈。 */
+  submitted: boolean;
 };
 
 /** 任务卡主区域固定展示的四项用户信息。 */
@@ -99,6 +101,7 @@ export function taskGroupPrimaryPresentation(
   const nextOwner = group.nextOwner?.displayName;
   // 当前恢复请求仍占用原恢复入口，避免页面把受控恢复误说成普通自动处理。
   const recoveryPending = recoveryAction?.pending === true;
+  const recoverySubmitted = recoveryAction?.submitted === true;
   // 运行或验证中的专题没有客户卡点时，明确告知用户系统仍在自动处理。
   const recoveryRequired = Boolean(recoveryAction) || oneShotRecoveryRequired;
   const automaticallyProcessing = !recoveryRequired
@@ -109,11 +112,13 @@ export function taskGroupPrimaryPresentation(
       ownerAndStatus: nextOwner ? `${nextOwner}：${activity.statusLabel}` : activity.statusLabel,
       customerAction: recoveryPending
         ? "復旧処理中です。繰り返し操作しないでください。"
+        : recoverySubmitted ? "復旧リクエストは送信され、順番待ちです。"
         : recoveryAction?.customerAction || oneShotRecoveryRequired
         ? "お客様の操作が必要です。"
         : automaticallyProcessing ? "自動処理中です。お客様の操作は不要です。" : "お客様の操作は不要です。",
       nextAction: recoveryPending
         ? "現在の復旧処理が完了するまでお待ちください。"
+        : recoverySubmitted ? "主プロセスの処理開始を待機しています。"
         : recoveryRequired ? "停止理由を確認してから「続行」を選んでください。" : group.nextStep,
     };
   }
@@ -122,11 +127,13 @@ export function taskGroupPrimaryPresentation(
     ownerAndStatus: nextOwner ? `${nextOwner} · ${activity.statusLabel}` : activity.statusLabel,
     customerAction: recoveryPending
       ? "正在恢复中，请勿重复操作。"
+      : recoverySubmitted ? "恢复请求已提交，正在排队。"
       : recoveryAction?.customerAction || oneShotRecoveryRequired
       ? "需要你完成一项操作。"
       : automaticallyProcessing ? "正在自动处理中，暂不需要你操作。" : "当前无需你操作。",
     nextAction: recoveryPending
       ? "等待当前恢复处理完成。"
+      : recoverySubmitted ? "等待主进程开始处理。"
       : recoveryRequired ? "查看卡点原因后点击“从卡点继续”。" : group.nextStep,
   };
 }
@@ -141,13 +148,14 @@ export function latestActiveRecoveryAction(nodes: CollaborationTimelineNodeOutDt
     const node = nodes[index];
     if (!node.taskId || visitedTaskIds.has(node.taskId)) continue;
     visitedTaskIds.add(node.taskId);
-    // 恢复已受理时仍显示原按钮的忙碌状态，防止用户重复发起同一任务恢复。
+    // 已受理是权威排队事实，不等同于 Renderer 本地请求仍在等待。
     if (node.status === "current" && node.eventType === "task.recovery_requested") {
       return {
         nodeId: node.nodeId,
         taskId: node.taskId,
         customerAction: false,
-        pending: true,
+        pending: false,
+        submitted: true,
       };
     }
     const isRecoveryWait = node.status === "waiting"
@@ -158,6 +166,7 @@ export function latestActiveRecoveryAction(nodes: CollaborationTimelineNodeOutDt
       taskId: node.taskId,
       customerAction: node.eventType === "customer.action_required",
       pending: false,
+      submitted: false,
     };
   }
   return null;

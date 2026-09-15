@@ -27,9 +27,12 @@ test("Developer 左侧任务区按可见职责拆分并保留折叠状态入口"
   assert.match(workspaceController, /撤销登记后立即移除旧树和选择/);
   assert.match(workspaceController, /setSelectedEntry\(\(current\) => current && !isRegisteredWorkspace\(current\.workspaceId\) \? null : current\)/);
   assert.match(workspaceController, /openRequestId/);
+  assert.match(workspaceController, /waitForFileOperation[\s\S]*FILE_OPERATION_TIMEOUT_MS/);
+  assert.match(workspaceController, /directoryRequestId/);
   assert.match(workspaceController, /pendingFileOpens/);
   assert.match(workspaceController, /requestId !== openRequestId\.current/);
   assert.match(workspaceController, /result\.kind === "system-open-failed"/);
+  assert.match(workspaceController, /result\.kind === "system-opened"[\s\S]*toast/);
   assert.match(workspaceController, /!registeredWorkspaceIds\.current\.has\(workspaceId\)/);
   assert.doesNotMatch(workspaceExplorer, /workspace-file-preview/);
   assert.match(applicationController, /workspaceFilePreview/);
