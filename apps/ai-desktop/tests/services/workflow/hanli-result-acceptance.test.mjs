@@ -26,6 +26,7 @@ test("页面验收使用当前正式窗口并保持业务写入授权门", () =>
 });
 
 test("混合运行按条件强制页面截图与代码引用证据", () => {
+  const prompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
   const policy = readFileSync("electron/services/personas/hanli/domain/acceptance-run-evidence.policy.ts", "utf8");
   const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
   const contract = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
@@ -42,6 +43,12 @@ test("混合运行按条件强制页面截图与代码引用证据", () => {
   assert.match(runtime, /review\.mode === "mixed"/);
   assert.match(runtime, /criterionIds: pageCriterionIds/);
   assert.match(runtime, /mode: "mixed"/);
+  assert.match(runtime, /verificationEvidence: task\.flowEvents/);
+  assert.match(runtime, /executor\\\.self_\(test\|repair\)_\(passed\|failed\|completed\)/);
+  assert.match(runtime, /technicalEvidence: event\.details\?\.technicalEvidence \|\| \[\]/);
+  assert.match(runtime, /details: event\.details \|\| null/);
+  assert.match(prompt, /verificationEvidence/);
+  assert.match(prompt, /统一测试通过.*不能替代/);
   const stateStore = readFileSync("electron/services/evolution/internal/evolution-state.store.ts", "utf8");
   assert.match(stateStore, /requiresPageAcceptanceEvidence/);
   assert.match(stateStore, /客户要求与实际代码/);

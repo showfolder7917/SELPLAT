@@ -538,6 +538,18 @@ export class PersonaEvolutionRuntime {
             resultSummary: task.resultSummary,
             finalResult: task.finalResult,
             unifiedTest: task.unifiedTest,
+            // 只透传已落入任务状态机的验证事实。韩立不能根据“统一测试通过”猜测
+            // 某个超时或异常场景已经覆盖，也不能读取任意外部日志作为验收依据。
+            verificationEvidence: task.flowEvents
+              .filter((event) => /^executor\.self_(test|repair)_(passed|failed|completed)$/.test(event.type))
+              .map((event) => ({
+                eventType: event.type,
+                status: event.status,
+                summary: event.summary,
+                technicalEvidence: event.details?.technicalEvidence || [],
+                details: event.details || null,
+                occurredAt: event.occurredAt,
+              })),
             executions: task.executionRecords.map((record) => ({ status: record.status, changedFiles: record.changedFiles, result: record.result })),
           }));
           const acceptanceMaterials = uniqueAcceptanceMaterials(acceptanceTasks.flatMap((task) => task.snapshot.materials || []));
