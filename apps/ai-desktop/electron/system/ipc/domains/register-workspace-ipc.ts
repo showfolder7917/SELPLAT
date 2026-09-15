@@ -35,7 +35,11 @@ export function registerWorkspaceIpc(workspaces: WorkspaceFacade, eventCenter: E
     eventCenter.recordEvent("workspace.removed", { id });
     return state;
   });
-  handle("desktop:list-workspace-directory", (_event, id: string, relativePath: string = "") => workspaces.listDirectory(id, relativePath));
+  handle("desktop:list-workspace-directory", (event, id: string, relativePath: string = "") => {
+    // 验收会话只可展开冻结材料的祖先目录；普通客户工作区浏览保持既有行为。
+    hanliAuthorization?.assertWorkspaceDirectoryAllowed(event.sender.id, id, relativePath);
+    return workspaces.listDirectory(id, relativePath);
+  });
   handle("desktop:open-workspace-file", (event, id: string, relativePath: string) => {
     hanliAuthorization?.assertWorkspaceFileAllowed(event.sender.id, id, relativePath);
     return workspaces.openFile(id, relativePath);
