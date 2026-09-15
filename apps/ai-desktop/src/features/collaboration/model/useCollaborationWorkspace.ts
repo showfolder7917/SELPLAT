@@ -34,6 +34,7 @@ import type {
   // 工作区快照：让执行端知道用户已经登记了哪些源码目录。
   WorkspaceStateOutDto,
 } from "../../../../contracts/system/desktop/index";
+import type { EvolutionAcceptanceMaterialAuthorizationOutDto } from "../../../../contracts/services/evolution/index";
 import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 import {
   // 流事件合并器：把 Codex 增量事件安全地累加成一条可显示消息。
@@ -94,10 +95,12 @@ function createConversationTaskRequest(
     locale: LocaleValue;
     /** 当前协作状态，用于确定真实会话负责人。 */
     state: CollaborationStateOutDto | null;
+    /** 用户已确认、仅供后续验收读取的精确工作区材料。 */
+    materials?: EvolutionAcceptanceMaterialAuthorizationOutDto[];
   },
 ): SubmitCollaborationTaskInDto {
   // 具名输入让调用方无需记忆五个相邻业务参数的位置顺序。
-  const { confirmedMessage, messages, workspaces, locale, state } = input;
+  const { confirmedMessage, messages, workspaces, locale, state, materials = [] } = input;
   const latestUserMessage = findLatestUserMessage(messages);
   const originalQuestion = latestUserMessage?.text || confirmedMessage.text;
   const conversationOwner = state?.members.find((member) => member.kind === "conversation-owner");
@@ -117,6 +120,8 @@ function createConversationTaskRequest(
     sourceMessageIds: messages.map((item) => item.id),
     // 来源附件：执行人读取本轮会话材料时使用。
     attachmentIds: collectAttachmentIds(messages),
+    // 材料必须由调用方显式确认；不能从工作区或附件自动猜测路径。
+    materials: structuredClone(materials),
     // 工作区状态：执行端据此确定可用的工程目录和当前选择。
     workspaceState: workspaces,
     // 界面语言：任务侧反馈沿用用户当前语言。
@@ -366,6 +371,7 @@ export function useCollaborationWorkspace() {
     messages: Message[],
     workspaces: WorkspaceStateOutDto,
     locale: LocaleValue,
+    materials: EvolutionAcceptanceMaterialAuthorizationOutDto[] = [],
   ) => {
     const request = createConversationTaskRequest({
       confirmedMessage: message,
@@ -373,6 +379,7 @@ export function useCollaborationWorkspace() {
       workspaces,
       locale,
       state,
+      materials,
     });
     const nextState = await submitTask(request);
 
