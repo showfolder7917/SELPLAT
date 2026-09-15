@@ -18,13 +18,7 @@ import {
 } from "./version-workspace.manager.js";
 import { inspectAcceptancePlanCandidateEvidence } from "./integration.verifier.js";
 import { executeGit } from "./git-process.js";
-
-const RUNTIME_ACTIVATION_PATHS = [
-  "apps/ai-desktop/electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts",
-  "apps/ai-desktop/electron/services/support/capabilities/release/internal/integration.verifier.ts",
-  "apps/ai-desktop/electron/services/support/capabilities/release/internal/acceptance-plan-candidate-source.ts",
-  "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
-] as const;
+import { requiresRuntimeActivation } from "./runtime-activation.policy.js";
 
 export interface VersionIntegrationPipelineOptions {
   store: CollaborationStatePort;
@@ -241,8 +235,11 @@ export class VersionIntegrationPipeline {
       // 门禁前先冻结候选来源、运行器身份和逐项结果；失败后候选工作树会回收，归档仍可复核实际材料。
       releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
       this.#releaseBatches.write(releaseDocument);
-      if (await requiresRuntimeActivation(candidate.rootPath, candidate.baseSha, candidate.candidateSha)
-        && this.#loadedRuntimeSha !== candidate.candidateSha) {
+      if (requiresRuntimeActivation(
+        await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha),
+        this.#loadedRuntimeSha,
+        candidate.candidateSha,
+      )) {
         throw new Error(`候选修改统一测试运行器，必须先受控激活候选运行包：已加载 ${this.#loadedRuntimeSha || "未登记"}，候选 ${candidate.candidateSha}。`);
       }
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
@@ -421,10 +418,9 @@ export class VersionIntegrationPipeline {
 }
 
 /** 运行器、候选读取器或门禁自身变更时，旧进程不得继续验证该候选。 */
-async function requiresRuntimeActivation(rootPath: string, baseSha: string, candidateSha: string): Promise<boolean> {
+async function candidateChangedFiles(rootPath: string, baseSha: string, candidateSha: string): Promise<string[]> {
   const { stdout } = await executeGit(["diff", "--name-only", `${baseSha}..${candidateSha}`], rootPath);
-  const changedFiles = new Set(stdout.split(/\r?\n/).filter(Boolean));
-  return RUNTIME_ACTIVATION_PATHS.some((file) => changedFiles.has(file));
+  return stdout.split(/\r?\n/).filter(Boolean);
 }
 
 function integrationFailurePresentation(

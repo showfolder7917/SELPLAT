@@ -12,6 +12,7 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   const releaseContractIndex = read("contracts/services/support/capabilities/release/index.ts");
   const verifier = read("electron/services/support/capabilities/release/internal/integration.verifier.ts");
   const pipeline = read("electron/services/support/capabilities/release/internal/version-integration.pipeline.ts");
+  const runtimeActivationPolicy = read("electron/services/support/capabilities/release/internal/runtime-activation.policy.ts");
   const store = read("electron/services/support/capabilities/release/internal/release-batch.store.ts");
   assert.match(contract, /candidateEvidence: ReleaseBatchCandidateEvidenceOutDto \| null/);
   assert.match(contract, /loadedRuntimeSha: string \| null/);
@@ -27,7 +28,9 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(verifier, /createHash\("sha256"\)/);
   assert.match(verifier, /readError:/);
   assert.match(pipeline, /candidateEvidence = inspectAcceptancePlanCandidateEvidence\(candidate\.rootPath, candidate\.candidateSha, this\.#loadedRuntimeSha\)/);
-  assert.match(pipeline, /RUNTIME_ACTIVATION_PATHS/);
+  assert.match(pipeline, /requiresRuntimeActivation/);
   assert.match(pipeline, /必须先受控激活候选运行包/);
+  assert.match(runtimeActivationPolicy, /RUNTIME_ACTIVATION_PATHS/);
+  assert.match(runtimeActivationPolicy, /loadedRuntimeSha !== candidateSha/);
   assert.match(store, /candidateEvidence: null/);
 });
