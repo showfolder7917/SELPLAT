@@ -7,6 +7,7 @@ import type { ManagedExecutionModeValue } from "../../../../../../contracts/foun
 import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { PromptLibraryPort, PromptVariables } from "../../prompts/index.js";
 // 范围聚合负责冻结文件集合，结构化错误负责把范围确认从普通测试失败中分离。
+import { isReadOnlyInspectionCommand } from "./command-evidence.classifier.ts";
 import { TaskRepairScopeAggregate, TaskRepairScopeViolationError } from "../domain/task-repair-scope.aggregate.js";
 
 type RunTurn = (
@@ -345,6 +346,8 @@ class ExecutionEvidence {
     const command = activity.summary || "(unknown command)";
     const succeeded = commandSucceeded(activity);
     if (!succeeded) {
+      // 只读检查的缺文件或无匹配是现场事实，活动流已保留该错误；不能把它伪装成测试或构建失败。
+      if (isReadOnlyInspectionCommand(command)) return;
       this.#roundFailures.push(command);
       return;
     }

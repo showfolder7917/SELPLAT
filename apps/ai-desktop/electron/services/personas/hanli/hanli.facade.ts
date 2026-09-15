@@ -2,13 +2,14 @@ import type { BrowserWindow } from "electron";
 import type {
   DecideHanliProposalInDto,
   DecideHanliResultInDto,
+  ReopenHanliAcceptanceInDto,
   HanliComputerAcceptanceInDto,
   HanliAcceptanceRunOutDto,
 } from "../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
-import { HanliApplicationService, type HanliApplicationServiceOptions } from "./internal/application/hanli-application.service.js";
+import { HanliApplicationService, type HanliApplicationServiceOptions, type HanliResultAcceptanceReview } from "./internal/application/hanli-application.service.js";
 import { HanliComputerAcceptance, type AcceptanceWindowInteractionPort } from "./internal/acceptance/hanli-computer-acceptance.js";
 import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semantic-extraction.runner.js";
 
@@ -28,7 +29,7 @@ export interface HanliApplicationPort {
   /** 请求韩立自动审阅一次性提案。 */
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   /** 判断结果应走真实页面验收还是只读代码符合性审查。 */
-  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto>;
+  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview>;
   /** 根据已经沉淀的人工偏好尝试自动审批。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
   /** 保存真实应用验收过程产生的证据。 */
@@ -37,6 +38,7 @@ export interface HanliApplicationPort {
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto;
   /** 保存用户作出的最终结果判断。 */
   decideResult(proposalId: string, request: DecideHanliResultInDto): EvolutionStateOutDto;
+  reopenCompletedAcceptance(request: ReopenHanliAcceptanceInDto): EvolutionStateOutDto;
 }
 
 /** Workflow 可调用的韩立最小端口；不包含人工 IPC 或真实窗口执行能力。 */
@@ -45,7 +47,7 @@ export interface HanliWorkflowPort {
   requestProposalReview(proposalId: string): EvolutionStateOutDto;
   /** Workflow 请求韩立完成一次审批判断的入口。 */
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
-  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<"page-experience" | HanliAcceptanceRunOutDto>;
+  reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview>;
   /** Workflow 根据历史偏好请求自动审批的入口。 */
   autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
   /** Workflow 提交真实验收结果的入口。 */
@@ -141,6 +143,9 @@ export class HanliFacade {
   /** 审批最终执行结果；旧提案与既有验收证据不会被覆盖。 */
   decideResult(proposalId: string, request: DecideHanliResultInDto): EvolutionStateOutDto {
     return this.#application.decideResult(proposalId, request);
+  }
+  reopenCompletedAcceptance(request: ReopenHanliAcceptanceInDto): EvolutionStateOutDto {
+    return this.#application.reopenCompletedAcceptance(request);
   }
 }
 

@@ -32,6 +32,7 @@ export type { DecideHanliProposalInDto } from "./dto/decide-proposal.in.dto.js";
 
 /** 用户向韩立提交最终实施结果判断时使用的输入协议。 */
 export type { DecideHanliResultInDto } from "./dto/decide-result.in.dto.js";
+export type { ReopenHanliAcceptanceInDto } from "./dto/reopen-acceptance.in.dto.js";
 
 /** 韩立与南宫婉一次研讨问答的持久输出，记录问题、回答、判断和确认事实。 */
 export type { HanliDeliberationRoundOutDto } from "./dto/deliberation.out.dto.js";

@@ -6,6 +6,7 @@ import {
   cleanupIntegrationDependencyLinks,
   ensureIntegrationDependencies,
   releaseManagedDependencyLease,
+  verifyAcceptancePlanCapabilities,
   verifyCandidateDelta,
   verifyCollaborationIntegration,
 } from "./internal/integration.verifier.js";
@@ -46,6 +47,7 @@ export {
   releaseManagedDependencyLease,
   resolveVerifiedDeveloperExecutable,
   stageVerifiedDeveloperExecutable,
+  verifyAcceptancePlanCapabilities,
   verifyCandidateDelta,
   verifyCollaborationIntegration,
 };

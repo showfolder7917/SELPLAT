@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto, type HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
@@ -424,7 +424,7 @@ export class EvolutionStateStore {
         content: required(request.content, "提案内容", 30_000), evidence: [...mutableTopic.evidence],
         impactScope: [...mutableTopic.scope], exclusions: [...mutableTopic.exclusions],
         risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
-        acceptanceCriteria: [...mutableTopic.acceptanceCriteria],
+        acceptanceCriteria: [...mutableTopic.acceptanceCriteria], acceptancePlan: null,
         distributionPlan: null, status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
@@ -545,13 +545,56 @@ export class EvolutionStateStore {
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, run.proposalId);
     if (proposal.topicId !== run.topicId) throw new Error("真实验收记录与专题不一致。 ");
-    const expectedCriterionIds = proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
+    const plan = requireAcceptancePlan(proposal);
+    if (run.planId !== plan.planId || run.acceptanceRoundId !== plan.currentRoundId) throw new Error("真实验收记录没有绑定当前提案验收计划或验收轮次。 ");
+    const expectedCriterionIds = plan.conditions.map((item) => item.conditionId);
     const recordedCriterionIds = run.stepResults.map((step) => step.checkId);
-    if (run.criteria.length !== proposal.acceptanceCriteria.length
-      || expectedCriterionIds.some((criterionId) => recordedCriterionIds.filter((item) => item === criterionId).length !== 1)) {
+    if (run.criteria.length !== plan.conditions.length
+      || expectedCriterionIds.some((criterionId) => recordedCriterionIds.filter((item) => item === criterionId).length !== 1)
+      || run.stepResults.some((step) => plan.conditions.find((item) => item.conditionId === step.checkId)?.evidenceType !== step.evidenceMode)) {
       throw new Error("验收记录没有逐项覆盖原提案条件，不能进入结果完成门禁。 ");
     }
     return this.#commit("acceptance.result_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
+  }
+
+  /** 在第一次结果验收前冻结韩立已分类的条件；同一提案版本不得由重试覆盖。 */
+  saveAcceptancePlan(proposalId: string, plan: EvolutionAcceptancePlanOutDto): EvolutionStateOutDto {
+    const proposal = requireProposal(this.#state, proposalId);
+    if (proposal.topicId !== plan.topicId || proposal.proposalId !== plan.proposalId || proposal.version !== plan.proposalVersion) throw new Error("验收计划没有绑定当前专题和提案版本。 ");
+    if (proposal.status !== "pending-acceptance") throw new Error("只有待验收提案可以冻结验收计划。 ");
+    if (!plan.conditions.length || !plan.currentRoundId || !plan.rounds.some((item) => item.roundId === plan.currentRoundId)) throw new Error("验收计划缺少条件或当前验收轮次。 ");
+    if (new Set(plan.conditions.map((item) => item.conditionId)).size !== plan.conditions.length) throw new Error("验收计划条件编号重复。 ");
+    if (proposal.acceptancePlan) {
+      if (proposal.acceptancePlan.planId !== plan.planId) throw new Error("同一提案版本已经冻结另一份验收计划。 ");
+      return this.state();
+    }
+    return this.#commit("acceptance.plan_frozen", proposal.topicId, proposalId, (state) => {
+      requireProposal(state, proposalId).acceptancePlan = structuredClone(plan);
+    }, { planId: plan.planId, acceptanceRoundId: plan.currentRoundId, nextOwner: "han-li" });
+  }
+
+  /** 已完成专题只可显式建立新的验收轮次；不复用阻塞运行的 resumeOneShotRun。 */
+  reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {
+    const proposal = requireProposal(this.#state, proposalId);
+    const topic = requireTopic(this.#state, topicId);
+    const plan = requireAcceptancePlan(proposal);
+    if (proposal.topicId !== topicId || proposal.status !== "completed" || topic.status !== "completed") throw new Error("只有同一已完成专题和提案可以重新验收。 ");
+    const completedRecord = this.#state.archiveRecords.find((item) => item.recordId === sourceRecordId && item.proposalId === proposalId && item.eventType === "proposal.result_decided");
+    if (!completedRecord) throw new Error("重新验收必须引用原完成决定记录。 ");
+    const now = new Date().toISOString();
+    const nextRound = { roundId: `acceptance-round-${randomUUID()}`, roundNumber: plan.rounds.length + 1, reopenedFromRecordId: completedRecord.recordId, reopenReason: required(reason, "重新验收原因", 8_000), reopenSourceRecordId: sourceRecordId, openedAt: now };
+    return this.#commit("acceptance.reopened", topicId, proposalId, (state) => {
+      const mutable = requireProposal(state, proposalId);
+      mutable.status = "pending-acceptance";
+      mutable.acceptancePlan!.rounds.push(nextRound);
+      mutable.acceptancePlan!.currentRoundId = nextRound.roundId;
+      mutable.updatedAt = now;
+      const mutableTopic = requireTopic(state, topicId);
+      mutableTopic.status = "pending-acceptance";
+      mutableTopic.recoveryPoint = `acceptance-reopened:${nextRound.roundId}`;
+      mutableTopic.updatedAt = now;
+      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, topicId, proposalId, status: "running", phase: "accepting", actor: "han-li", actorName: "韩立", action: "正在执行同一专题的重新验收", blockingReason: null, resumeMode: null, startedAt: now, updatedAt: now, completedAt: null };
+    }, { planId: plan.planId, acceptanceRoundId: nextRound.roundId, reopenedFromRecordId: sourceRecordId, reopenReason: nextRound.reopenReason, nextOwner: "han-li" });
   }
 
   newConversation(): EvolutionStateOutDto {
@@ -608,12 +651,12 @@ export class EvolutionStateStore {
   decideResult(proposalId: string, decision: EvolutionApprovalDecisionValue, advice: string, source: EvolutionApprovalSourceValue = "manual-user"): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.status !== "pending-acceptance") throw new Error("当前提案还没有进入结果验收状态。");
+    const plan = requireAcceptancePlan(proposal);
     const run = [...this.#state.archiveRecords].reverse().find((record) => record.proposalId === proposalId && record.eventType === "acceptance.result_checked")?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
-    const hasCompleteAcceptanceEvidence = Boolean(run) && run!.criteria.every((_criterion, index) => {
-      const matches = run!.stepResults.filter((step) => step.checkId === `criterion-${index + 1}`);
+    const hasCompleteAcceptanceEvidence = Boolean(run) && run!.planId === plan.planId && run!.acceptanceRoundId === plan.currentRoundId && plan.conditions.every((condition) => {
+      const matches = run!.stepResults.filter((step) => step.checkId === condition.conditionId);
       const step = matches[0];
-      // mixed 记录必须按条件来源检查，不能把代码符合性条件误作页面截图条件。
-      const pageEvidence = requiresPageAcceptanceEvidence(run!.mode, step?.evidenceMode)
+      const pageEvidence = condition.evidenceType === "page-experience"
         ? Boolean(step?.screenshotAttachmentId)
           && run!.evidenceAttachmentIds.includes(step!.screenshotAttachmentId!)
           && step?.layoutStatus === "passed"
@@ -623,6 +666,7 @@ export class EvolutionStateStore {
         : step?.layoutStatus === "not-applicable" && Boolean(step.evidenceReferences?.length);
       return matches.length === 1
         && step !== undefined
+        && step.evidenceMode === condition.evidenceType
         && step.status === "passed"
         && Boolean(step.actual?.trim())
         && pageEvidence;
@@ -648,7 +692,7 @@ export class EvolutionStateStore {
           step.status !== "passed" ? step.actual : "",
           requiresPageAcceptanceEvidence(run.mode, step.evidenceMode) && step.layoutStatus !== "passed" ? `布局：${step.layoutActual}` : "",
         ].filter(Boolean).join("；"),
-        expected: run.criteria?.[Number(step.checkId.replace("criterion-", "")) - 1] || "符合专题验收条件",
+        expected: plan.conditions.find((condition) => condition.conditionId === step.checkId)?.criterion || "符合专题验收条件",
         screenshotAttachmentIds: [...new Set([step.screenshotAttachmentId, step.layoutScreenshotAttachmentId, ...run.evidenceAttachmentIds].filter((item): item is string => Boolean(item)))],
       };
     });
@@ -737,7 +781,7 @@ export class EvolutionStateStore {
         exclusions: request.exclusions === undefined ? [...previous.exclusions] : normalizedOptionalList(request.exclusions),
         risks: normalizedList(request.risks, "修订风险"),
         rollbackPlan: required(request.rollbackPlan, "修订回退方案", 8_000),
-        acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件"),
+        acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件"), acceptancePlan: null,
         distributionPlan: null,
         status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
@@ -842,7 +886,7 @@ export class EvolutionStateStore {
   #load(): EvolutionStateOutDto {
     try {
       const raw = this.#repository.load() as (Partial<EvolutionStateOutDto> & Partial<RetiredAutomationSwitches>) | null;
-      if (raw && raw.version === 8 && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
+      if (raw && ((raw as { version?: number }).version === 8 || raw.version === 9) && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
         && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext) {
         const migrated = migrateEvolutionState(raw as EvolutionStateOutDto & Partial<RetiredAutomationSwitches>);
         if (migrated.changed) this.#repository.save(migrated.state);
@@ -876,9 +920,17 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
     automaticExecutionEnabled: _retiredExecution,
     ...current
   } = state;
-  const distribution = migrateDistributionValidation(current as EvolutionStateOutDto);
+  const acceptance = migrateAcceptancePlans(current as EvolutionStateOutDto & { version?: number });
+  const distribution = migrateDistributionValidation(acceptance.state);
   const retiredSwitchFound = [_retiredEvolution, _retiredNangongApproval, _retiredLinghuApproval, _retiredExecution].some((value) => typeof value === "boolean");
-  return { state: distribution.state, changed: retiredSwitchFound || distribution.changed };
+  return { state: distribution.state, changed: retiredSwitchFound || acceptance.changed || distribution.changed };
+}
+
+/** v8 没有验收计划；保留全部历史事实，但不把旧运行伪造为新计划。 */
+function migrateAcceptancePlans(state: EvolutionStateOutDto & { version?: number }): { state: EvolutionStateOutDto; changed: boolean } {
+  const proposals = state.proposals.map((proposal) => proposal.acceptancePlan === undefined ? { ...proposal, acceptancePlan: null } : proposal);
+  const changed = state.version !== 9 || proposals.some((proposal, index) => proposal !== state.proposals[index]);
+  return { state: { ...state, version: 9, proposals } as EvolutionStateOutDto, changed };
 }
 
 /** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
@@ -911,7 +963,7 @@ function migrateDistributionValidation(state: EvolutionStateOutDto): { state: Ev
 }
 
 function createInitialState(): EvolutionStateOutDto {
-  return { version: 8, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+  return { version: 9, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
 function required(value: unknown, label: string, maximum: number): string {
@@ -945,6 +997,10 @@ function normalizeDiscoveries(values: HanliTopicCandidateOutDto["discoveries"]):
 }
 function requireTopic(state: EvolutionStateOutDto, topicId: string) { const topic = state.topics.find((item) => item.topicId === topicId); if (!topic) throw new Error("专项课题不存在。"); return topic; }
 function requireProposal(state: EvolutionStateOutDto, proposalId: string) { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
+function requireAcceptancePlan(proposal: EvolutionProposalOutDto): EvolutionAcceptancePlanOutDto {
+  if (!proposal.acceptancePlan) throw new Error("当前提案尚未冻结验收计划，不能记录或完成验收。 ");
+  return proposal.acceptancePlan;
+}
 function requireDeliberation(state: EvolutionStateOutDto, deliberationId: string) { const deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId); if (!deliberation) throw new Error("韩立专题研讨不存在。"); return deliberation; }
 function requireDeliberationRound(deliberation: EvolutionStateOutDto["deliberations"][number], roundId: string) { const round = deliberation.rounds.find((item) => item.roundId === roundId); if (!round) throw new Error("韩立专题研讨轮次不存在。"); return round; }
 function assertTopicEditableBeforeProposal(state: EvolutionStateOutDto, topic: EvolutionStateOutDto["topics"][number]): void {

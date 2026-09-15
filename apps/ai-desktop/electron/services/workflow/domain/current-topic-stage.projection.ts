@@ -31,7 +31,7 @@ export function projectCurrentTopicStage(
   }
 
   const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
-  const latestAcceptance = readLatestAcceptance(evolution, proposal.proposalId);
+  const latestAcceptance = readLatestAcceptance(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
   const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
   // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
@@ -80,13 +80,15 @@ function confirmationUpdatedAt(evolution: EvolutionStateOutDto): string {
   return evolution.oneShotConfirmation?.createdAt || evolution.deliberations.flatMap((item) => item.rounds).at(-1)?.confirmation?.offeredAt || evolution.updatedAt;
 }
 
-function readLatestAcceptance(evolution: EvolutionStateOutDto, proposalId: string): CurrentTopicAcceptanceOutDto | null {
-  const record = evolution.archiveRecords.filter((item) => item.proposalId === proposalId && item.eventType === "acceptance.result_checked")
+function readLatestAcceptance(evolution: EvolutionStateOutDto, proposal: EvolutionStateOutDto["proposals"][number]): CurrentTopicAcceptanceOutDto | null {
+  const record = evolution.archiveRecords.filter((item) => item.proposalId === proposal.proposalId && item.eventType === "acceptance.result_checked")
     .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
   const acceptanceRun = record?.payload.acceptanceRun;
   if (!record || !acceptanceRun || typeof acceptanceRun !== "object") return null;
-  const value = acceptanceRun as { runId?: unknown; status?: unknown };
+  const value = acceptanceRun as { runId?: unknown; status?: unknown; planId?: unknown; acceptanceRoundId?: unknown };
   if (typeof value.runId !== "string" || !["running", "passed", "failed", "blocked"].includes(String(value.status))) return null;
+  // 新计划链只显示当前验收轮次；旧归档没有计划时保留历史投影，但不能覆盖重开后的待验收状态。
+  if (proposal.acceptancePlan && (value.planId !== proposal.acceptancePlan.planId || value.acceptanceRoundId !== proposal.acceptancePlan.currentRoundId)) return null;
   return { runId: value.runId, status: value.status as CurrentTopicAcceptanceOutDto["status"], occurredAt: record.occurredAt };
 }
 

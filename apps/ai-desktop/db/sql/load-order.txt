@@ -25,3 +25,4 @@
 1023|migration-1023-generalize-persona-corpus-source.sql|取消训练语料对固定人物来源和说话人的枚举限制
 1024|migration-1024-retire-evolution-workbench.sql|物理删除已退役演化工作台的界面偏好表
 1025|migration-1025-add-persona-conversation-model.sql|为统一人物会话头保存可选官方模型
+1026|migration-1026-evolution-state-version-9.sql|允许专题演化状态从 v8 平滑升级到 v9

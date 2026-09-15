@@ -6,6 +6,7 @@
  * 本文件只表达共享提案事实，不接收人物命令或直接分发任务。
  */
 import type { EvolutionApprovalOutDto } from "./evolution-approval.out.dto.js";
+import type { EvolutionAcceptancePlanOutDto } from "./evolution-acceptance-plan.out.dto.js";
 import type { EvolutionProposalOriginValue, EvolutionTopicStatusValue } from "../value/evolution-topic.value.js";
 
 
@@ -56,6 +57,8 @@ export interface EvolutionProposalOutDto {
   risks: string[];
   rollbackPlan: string;
   acceptanceCriteria: string[];
+  /** 提案版本专属的验收计划；旧归档允许为空，但不会被用于新的完成判定。 */
+  acceptancePlan: EvolutionAcceptancePlanOutDto | null;
   distributionPlan: EvolutionDistributionPlanOutDto | null;
   status: Exclude<EvolutionTopicStatusValue, "registered" | "investigating">;
   approvals: EvolutionApprovalOutDto[];

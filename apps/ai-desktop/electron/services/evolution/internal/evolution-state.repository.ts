@@ -4,7 +4,7 @@ import type { DatabasePort as SqliteDatabase } from "../../support/platform/pers
 
 /**
  * 作用：为南宫婉专题演化状态提供唯一 SQLite 持久化边界。
- * 真实传参示例：保存 version=8 且 oneShotRun=null 的当前状态。
+ * 真实传参示例：保存 version=9 且 oneShotRun=null 的当前状态。
  * 真实返回示例：重新启动后读取同一份完整专题状态，并从统一人物会话表装配南宫婉原话。
  * 异常或副作用示例：数据库不可用或状态 JSON 损坏时阻断写入，不回退到 JSON 文件。
  */
