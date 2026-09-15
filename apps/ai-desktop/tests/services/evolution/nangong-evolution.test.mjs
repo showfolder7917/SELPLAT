@@ -2146,6 +2146,30 @@ test("韩立结果验收使用专用模型端口，不复用提案判断端口",
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立结果验收失败只记录候选协议形状", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-acceptance-diagnostic-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("结果验收失败摘要"), acceptanceCriteria: ["代码证据可读取"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanliResultAcceptance: async () => JSON.stringify({ mode: "unexpected-mode", customerEvidence: "不得出现在诊断中" }),
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    await assert.rejects(
+      () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
+      (error) => {
+        assert.match(error.message, /结构化候选摘要：count=1; mode=unsupported,findings=missing/);
+        assert.doesNotMatch(error.message, /unexpected-mode|不得出现在诊断中/);
+        return true;
+      },
+    );
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立结果验收拒绝未闭合的 JSON 对象并保留三次重试", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-unclosed-result-json-"));
   try {
