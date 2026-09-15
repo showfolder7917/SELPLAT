@@ -100,15 +100,15 @@ export class HanliDecisionService {
     }
     const frozenPlan = proposal.acceptancePlan;
     const allCriterionIds = frozenPlan?.conditions.map((item) => item.conditionId) || proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
-    const pageCriterionIds = frozenPlan
+    const pageCriterionIdsValue = frozenPlan
       ? frozenPlan.conditions.filter((item) => item.evidenceType === "page-experience").map((item) => item.conditionId)
       : value.mode === "mixed" ? value.pageCriterionIds : [];
-    if (!Array.isArray(pageCriterionIds)
-      || pageCriterionIds.some((item) => typeof item !== "string")
-      || new Set(pageCriterionIds).size !== pageCriterionIds.length
-      || pageCriterionIds.some((item) => !allCriterionIds.includes(item))) {
-      throw new Error("韩立混合验收计划缺少有效且不重复的页面条件编号。");
+    const pageCriterionIdsResult = pageCriterionIdsValidationResult(pageCriterionIdsValue, allCriterionIds);
+    if (!pageCriterionIdsResult.ok) {
+      throw new Error(`韩立混合验收计划页面条件编号${pageCriterionIdsResult.error}。`);
     }
+    // 只在通过类型和范围校验后向验收计划传递页面条件编号。
+    const pageCriterionIds = pageCriterionIdsResult.pageCriterionIds;
     if (!frozenPlan && value.mode === "mixed" && (pageCriterionIds.length === 0 || pageCriterionIds.length === allCriterionIds.length)) {
       throw new Error("混合验收必须同时包含页面条件和代码符合性条件。");
     }
@@ -223,8 +223,8 @@ function resultAcceptanceRetryHint(lastError: string): string {
   if (lastError === "混合验收必须同时包含页面条件和代码符合性条件。") {
     return " mixed 的 pageCriterionIds 必须是全部 criterion 编号的非空严格子集：空列表时改为 code-conformance，列表包含全部条件时改为 page-experience。";
   }
-  if (lastError === "韩立混合验收计划缺少有效且不重复的页面条件编号。") {
-    return " mixed 必须提供 pageCriterionIds 非空数组；每项必须是当前条件中的唯一 criterion-N，不能重复、越界或使用其他类型；findings 只覆盖其余条件。";
+  if (lastError.startsWith("韩立混合验收计划页面条件编号")) {
+    return " mixed 的 pageCriterionIds 必须是非空数组；移除非字符串项、重复项和当前条件外编号，只保留当前条件中的唯一 criterion-N；findings 只覆盖其余条件。";
   }
   if (lastError === "韩立没有返回有效的结果验收类型和逐项结论。") {
     return " mode 只能是 page-experience、code-conformance 或 mixed：全部页面条件只返回 page-experience；全部代码条件返回 code-conformance 和每个 criterion 的 finding；混合条件才返回 mixed、页面编号严格子集及其余 finding。";
@@ -243,11 +243,30 @@ function summarizeResultAcceptanceCandidates(values: Record<string, unknown>[]):
       : value.findings === undefined ? "missing" : "invalid";
     // 只记录页面编号字段的形状，帮助区分混合分区错误且不泄露条件内容。
     const pageCriterionIds = Array.isArray(value.pageCriterionIds)
-      ? `array:${value.pageCriterionIds.length}`
+      ? pageCriterionIdsSummary(value.pageCriterionIds)
       : value.pageCriterionIds === undefined ? "missing" : "invalid";
     return `mode=${mode},pageCriterionIds=${pageCriterionIds},findings=${findings}`;
   });
   return `结构化候选摘要：count=${values.length}; ${candidates.join("|")}`;
+}
+
+/** 校验混合验收页面编号，成功时返回已收窄的数组，失败时只返回脱敏原因。 */
+function pageCriterionIdsValidationResult(value: unknown, allCriterionIds: string[])
+  : { ok: true; pageCriterionIds: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(value)) return { ok: false, error: "必须是数组" };
+  if (value.some((item) => typeof item !== "string")) return { ok: false, error: "包含非字符串项" };
+  const pageCriterionIds = value as string[];
+  if (new Set(pageCriterionIds).size !== pageCriterionIds.length) return { ok: false, error: "存在重复项" };
+  if (pageCriterionIds.some((item) => !allCriterionIds.includes(item))) return { ok: false, error: "包含当前条件外编号" };
+  return { ok: true, pageCriterionIds };
+}
+
+/** 汇总数组形状而不记录实际编号，便于定位模型格式偏差。 */
+function pageCriterionIdsSummary(value: unknown[]): string {
+  const stringIds = value.filter((item): item is string => typeof item === "string");
+  const duplicate = new Set(stringIds).size !== stringIds.length ? "yes" : "no";
+  const nonString = stringIds.length !== value.length ? "yes" : "no";
+  return `array:${value.length},duplicate=${duplicate},nonString=${nonString}`;
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {

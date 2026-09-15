@@ -2170,41 +2170,43 @@ test("韩立结果验收失败只记录候选协议形状", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("韩立把缺失或重复的 mixed 页面编号纠正后继续冻结计划", async () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-mixed-page-ids-retry-"));
-  try {
-    const store = evolutionStore(path.join(directory, "state.json"));
-    let state = store.createTopic({
-      ...topicRequest("混合页面编号重试"),
-      acceptanceCriteria: ["页面预览可见", "代码证据可读取"],
-    });
-    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
-    const proposalId = state.proposals.at(-1).proposalId;
-    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
-    const accepted = JSON.stringify({
-      mode: "mixed",
-      pageCriterionIds: ["criterion-1"],
-      findings: [{ criterionId: "criterion-2", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
-    });
-    const replies = [
-      JSON.stringify({ mode: "mixed", findings: [{ criterionId: "criterion-2" }] }),
-      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-1"], findings: [] }),
-      accepted,
-      accepted,
-    ];
-    const promptsSeen = [];
-    const hanli = createHanliRuntime({
-      store, prompts, memory: null, screenshots: {},
-      askHanli: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
-      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
-    }).facade;
-    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
-    assert.equal(promptsSeen.length, 4);
-    assert.match(promptsSeen[1], /mixed 必须提供 pageCriterionIds 非空数组/);
-    assert.match(promptsSeen[2], /不能重复、越界或使用其他类型/);
-    assert.equal(result.review.mode, "mixed");
-    assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "code-conformance"]);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+test("韩立按页面编号失效原因纠正 mixed 分区后继续冻结计划", async () => {
+  const cases = [
+    { name: "缺失", value: { mode: "mixed", findings: [] }, hint: /必须是非空数组/ },
+    { name: "非字符串", value: { mode: "mixed", pageCriterionIds: ["criterion-1", 1], findings: [] }, hint: /移除非字符串项/ },
+    { name: "重复", value: { mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-1"], findings: [] }, hint: /重复项/ },
+    { name: "越界", value: { mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-99"], findings: [] }, hint: /当前条件外编号/ },
+  ];
+  for (const testCase of cases) {
+    const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-mixed-page-ids-retry-"));
+    try {
+      const store = evolutionStore(path.join(directory, "state.json"));
+      let state = store.createTopic({
+        ...topicRequest(`混合页面编号重试：${testCase.name}`),
+        acceptanceCriteria: ["页面预览可见", "代码证据可读取"],
+      });
+      state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+      const proposalId = state.proposals.at(-1).proposalId;
+      store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+      const accepted = JSON.stringify({
+        mode: "mixed",
+        pageCriterionIds: ["criterion-1"],
+        findings: [{ criterionId: "criterion-2", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
+      });
+      const replies = [JSON.stringify(testCase.value), accepted, accepted];
+      const promptsSeen = [];
+      const hanli = createHanliRuntime({
+        store, prompts, memory: null, screenshots: {},
+        askHanli: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
+        recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+      }).facade;
+      const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+      assert.equal(promptsSeen.length, 3, `${testCase.name} 应在一次重试后冻结计划`);
+      assert.match(promptsSeen[1], testCase.hint);
+      assert.equal(result.review.mode, "mixed");
+      assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "code-conformance"]);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
 });
 
 test("韩立结果验收只以顶层对象保留嵌套 findings 的真实校验错误", async () => {
