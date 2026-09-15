@@ -19,8 +19,15 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(contract, /acceptancePlanChecks:/);
   assert.match(releaseContractIndex, /ReleaseBatchCandidateEvidenceOutDto/);
   assert.match(verifier, /inspectAcceptancePlanCandidateEvidence/);
+  assert.match(verifier, /hasMixedEvidenceAggregation/);
+  assert.match(verifier, /review\\\.mode/);
+  assert.match(verifier, /page-experience/);
+  assert.match(verifier, /composeHanliResultReview/);
+  assert.doesNotMatch(verifier, /includes\("mode: \\"mixed\\"\)/);
   assert.match(verifier, /createHash\("sha256"\)/);
   assert.match(verifier, /readError:/);
   assert.match(pipeline, /candidateEvidence = inspectAcceptancePlanCandidateEvidence\(candidate\.rootPath, candidate\.candidateSha, this\.#loadedRuntimeSha\)/);
+  assert.match(pipeline, /RUNTIME_ACTIVATION_PATHS/);
+  assert.match(pipeline, /必须先受控激活候选运行包/);
   assert.match(store, /candidateEvidence: null/);
 });

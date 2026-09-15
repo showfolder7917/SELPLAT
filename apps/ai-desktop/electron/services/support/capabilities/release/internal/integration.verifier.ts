@@ -276,10 +276,21 @@ function acceptancePlanCapabilityChecks(sources: ReturnType<typeof readAcceptanc
   return [
     ["验收计划持久化", sources.state.includes("saveAcceptancePlan") && sources.state.includes("acceptance.plan_frozen")],
     ["同专题重开", sources.state.includes("reopenCompletedAcceptance") && sources.state.includes("acceptance.reopened") && sources.projection.includes("acceptanceRoundId") && sources.projection.includes("currentRoundId") && !sources.state.includes("reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {\n    return this.resumeOneShotRun")],
-    ["混合证据汇总", sources.runtime.includes("plan.conditions.filter") && sources.runtime.includes("mode: \"mixed\"")],
+    ["混合证据汇总", hasMixedEvidenceAggregation(sources.runtime)],
     ["自动与人工共用完成门禁", sources.state.includes("decideResult(proposalId") && sources.runtime.includes("completeAutomaticAcceptance")],
     ["失败归因", sources.state.includes("plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
   ];
+}
+
+/**
+ * 混合验收必须进入 mixed 分支，将页面条件从源码审查条件中分流，并在页面结果返回后统一汇总。
+ * 候选预检只能读取源码，故按这三个不可替代的结构事实校验，不能依赖实现中恰好出现的对象字面量文本。
+ */
+function hasMixedEvidenceAggregation(runtime: string): boolean {
+  const entersMixedReview = /if\s*\(\s*review\.mode\s*===\s*["']mixed["']\s*\)/.test(runtime);
+  const separatesPageConditions = /plan\.conditions\.filter\s*\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.evidenceType\s*===\s*["']page-experience["']\s*\)/.test(runtime);
+  const mergesSourceAndPageReview = /composeHanliResultReview\s*\(\s*plan\s*,\s*review\s*,\s*pageRun\s*\)/.test(runtime);
+  return entersMixedReview && separatesPageConditions && mergesSourceAndPageReview;
 }
 
 /** 只核对本批候选相对冻结基线引入的差异，禁止历史提交中的旧问题阻断当前批次。 */

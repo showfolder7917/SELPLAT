@@ -1,9 +1,35 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { registerHooks } from "node:module";
 import path from "node:path";
 import test from "node:test";
+import ts from "typescript";
 import { controlledTestRoot } from "#test-paths";
-import { FixedUnifiedTestRunner } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.js";
+
+// 定向门禁测试不得读取上一次构建的验证器；存在同名源码时把编译路径解析到工作树 TypeScript。
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith(".") && specifier.endsWith(".js")) {
+      const sourceUrl = new URL(`${specifier.slice(0, -3)}.ts`, context.parentURL);
+      if (existsSync(sourceUrl)) return { url: sourceUrl.href, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url.endsWith(".ts")) {
+      const source = ts.transpileModule(readFileSync(new URL(url), "utf8"), {
+        compilerOptions: {
+          module: ts.ModuleKind.ESNext,
+          target: ts.ScriptTarget.ES2022,
+        },
+      }).outputText;
+      return { format: "module", source, shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+const { FixedUnifiedTestRunner } = await import("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts");
 
 function writeAcceptancePlanCandidate(root) {
   const services = path.join(root, "apps", "ai-desktop", "electron", "services");
@@ -14,7 +40,11 @@ function writeAcceptancePlanCandidate(root) {
   mkdirSync(path.dirname(runtime), { recursive: true });
   mkdirSync(path.dirname(projection), { recursive: true });
   writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
-  writeFileSync(runtime, 'plan.conditions.filter mode: "mixed" completeAutomaticAcceptance');
+  writeFileSync(runtime, `if (review.mode === "mixed") {
+    const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience");
+    runResult = composeHanliResultReview(plan, review, pageRun);
+  }
+  completeAutomaticAcceptance`);
   writeFileSync(projection, "acceptanceRoundId currentRoundId");
 }
 
@@ -69,8 +99,10 @@ test("候选分别缺少每项验收计划能力时固定流程不执行全量�
   const candidates = [
     ["验收计划持久化", () => writeFileSync(state, "reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
     ["同专题重开", () => writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
-    ["混合证据汇总", () => writeFileSync(runtime, "plan.conditions.filter completeAutomaticAcceptance")],
-    ["自动与人工共用完成门禁", () => writeFileSync(runtime, 'plan.conditions.filter mode: "mixed"')],
+    ["混合证据汇总", () => writeFileSync(runtime, "if (review.mode === \"mixed\") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === \"page-experience\"); } completeAutomaticAcceptance")],
+    ["混合证据汇总", () => writeFileSync(runtime, "if (review.mode === \"mixed\") { runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance")],
+    ["混合证据汇总", () => writeFileSync(runtime, "const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === \"page-experience\"); runResult = composeHanliResultReview(plan, review, pageRun); completeAutomaticAcceptance")],
+    ["自动与人工共用完成门禁", () => writeFileSync(runtime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience"); runResult = composeHanliResultReview(plan, review, pageRun); }')],
     ["失败归因", () => writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId")],
   ];
   const events = [];
