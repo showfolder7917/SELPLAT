@@ -37,6 +37,23 @@ export interface CollaborationMemoryPort {
     replyToMessageId?: string | null;
     createdAt: string;
   }): PersonaConversationOutDto;
+  appendPersonaRecoveryCheckpoint(input: {
+    ownerPersonaId: string;
+    conversationId: string;
+    messageId: string;
+    requestId: string;
+    content: string;
+    createdAt: string;
+  }): PersonaConversationOutDto;
+  appendPersonaCustomerMessage(input: {
+    ownerPersonaId: string;
+    conversationId: string;
+    messageId: string;
+    speakerPersonaId: string;
+    content: string;
+    replyToMessageId: string;
+    createdAt: string;
+  }): PersonaConversationOutDto;
   registerPersonaRound(input: {
     ownerPersonaId: string;
     responderPersonaId: string;

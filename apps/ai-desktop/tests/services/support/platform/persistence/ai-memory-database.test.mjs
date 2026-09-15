@@ -19,7 +19,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1026");
+    assert.equal(first.status.schemaVersion, "1027");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -32,12 +32,13 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 27);
+      assert.equal(Number(row.count), 28);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1026", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1027", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
       assert.equal(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopEvolutionWorkbenchPreference'").get(), undefined);
       assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get());
+      assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='messageType'").get());
     } finally {
       inspection.close();
     }
@@ -60,9 +61,12 @@ test("候选包可用自身迁移清单升级仍停在旧版本的受控工程�
       migrationSqlRoot: candidateMigrationRoot,
     });
     assert.equal(upgraded.status.state, "ready");
-    assert.equal(upgraded.status.schemaVersion, "1026");
+    assert.equal(upgraded.status.schemaVersion, "1027");
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get(),
+    ));
+    assert.ok(upgraded.database?.withConnection((connection) =>
+      connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='messageType'").get(),
     ));
     upgraded.database?.close();
   } finally {
@@ -70,7 +74,7 @@ test("候选包可用自身迁移清单升级仍停在旧版本的受控工程�
   }
 });
 
-test("1026 保留 v8 演化快照并由应用层迁移后写回 v9", () => {
+test("1026 升级演化快照、1027 补齐消息类型后由应用层写回 v9", () => {
   const fixture = createFixture("evolution-state-v9");
   try {
     installSchemaUpTo(fixture, 1025);
@@ -99,9 +103,9 @@ test("1026 保留 v8 演化快照并由应用层迁移后写回 v9", () => {
     `).run({ $stateJson: JSON.stringify(v8State), $updatedAt: updatedAt }));
     legacy.database?.close();
 
-    installSchemaUpTo(fixture, 1026);
+    installSchemaUpTo(fixture, 1027);
     const upgraded = initializeAiMemoryDatabase(fixture.options);
-    assert.equal(upgraded.status.schemaVersion, "1026");
+    assert.equal(upgraded.status.schemaVersion, "1027");
     const state = new EvolutionStateStore(new EvolutionStateRepository(upgraded.database)).state();
     assert.equal(state.version, 9);
     const persisted = upgraded.database?.withConnection((connection) => connection.prepare(
@@ -455,11 +459,12 @@ test("旧演化快照与内部交接交错追加仍保留全部原文和唯一�
     const evolution = new EvolutionStateStore(new EvolutionStateRepository(database));
     evolution.appendConversation("user", "客户原问题");
     const stale = structuredClone(evolution.state().conversation);
-    const internal = { messageId: "internal-interleaved", speakerType: "persona", speakerPersonaId: "han-li", content: "新追加的内部交接", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: stale.updatedAt, completedAt: stale.updatedAt };
+    const internal = { messageId: "internal-interleaved", messageType: "internal-deliberation", speakerType: "persona", speakerPersonaId: "han-li", content: "新追加的内部交接", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: stale.updatedAt, completedAt: stale.updatedAt };
     database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, internal, "append"));
     const saved = evolution.appendConversation("nangong", "验收完成结果").conversation;
     assert.deepEqual(saved.messages.map((m) => m.content), ["客户原问题", "新追加的内部交接", "验收完成结果"]);
     assert.deepEqual(saved.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
+    assert.deepEqual(saved.messages.map((m) => m.messageType), ["customer-visible", "internal-deliberation", "customer-visible"]);
     database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, content: "重复投递不覆盖原文" }, "append"));
     stale.messages[0].content = "客户原问题补充";
     const updated = repository.save(stale);

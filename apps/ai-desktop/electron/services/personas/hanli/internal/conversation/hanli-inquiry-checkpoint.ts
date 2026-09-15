@@ -1,18 +1,15 @@
-/**
- * 排查恢复点存入既有内部事实消息；只追加，不覆盖用户原文或历史证据。
- * assessment 后缀沿用内部状态排除约定，不把 JSON 状态冒充人物发言。
- */
+/** 排查恢复点作为独立恢复事实追加；不覆盖用户原文、历史证据或人物发言。 */
 import type { PersonaConversationOutDto } from "../../../../../../contracts/services/personas/conversation/index.js";
 import type { InquirySnapshot, InquiryAssessment } from "../../domain/hanli-inquiry.aggregate.js";
 import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 
-export const INQUIRY_CHECKPOINT_PREFIX = "internal:inquiry-checkpoint:";
+export const INQUIRY_CHECKPOINT_PREFIX = "inquiry-checkpoint:";
 
 /** 仅读取本会话精确请求的最新恢复点；损坏状态阻断，不退回旧阶段重跑。 */
 export function readInquiryCheckpoint(conversation: PersonaConversationOutDto, requestId?: string): InquirySnapshot | null {
   const candidates = [...conversation.messages].reverse();
   for (const message of candidates) {
-    if (!message.messageId.startsWith(INQUIRY_CHECKPOINT_PREFIX)) continue;
+    if (message.messageType !== "internal-recovery") continue;
     if (requestId && message.replyToMessageId !== requestId) continue;
     const state = JSON.parse(message.content) as InquirySnapshot;
     if (state.version !== 1 || state.conversationId !== conversation.conversationId
