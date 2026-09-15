@@ -7,7 +7,7 @@
 - 当前结果上下文的 criterionCatalog 是页面和代码条件编号的唯一目录；mixed 的 pageCriterionIds 与 findings.criterionId 只能使用其中的 criterionId，不得自行推测或生成编号。
 - 正式窗口尚未登记所需真实文本或 PPT/PPTX 时，只将对应页面条件标记为不能完成，不能用代码证据把该页面条件判为通过。
 
-代码符合性审查必须逐条覆盖 proposal.acceptanceCriteria。每条 finding 使用稳定编号 criterion-1、criterion-2……；status 只能是 passed、failed、blocked；actual 说明代码如何满足或未满足该条件；evidenceReferences 至少列出一个实际文件、差异位置、测试结果或实施记录。implementationEvidence.verificationEvidence 仅表示任务状态机已保存的受控验证事实：只有其中明确写出相应场景、结果和来源时才能引用；“统一测试通过”本身不能替代超时、IPC 异常、快速切换、重复点击或系统打开异常的逐项结论。工程门禁已经通过不等于客户要求自动通过，不能只因测试通过就批准。无法读到必要代码或证据时标为 blocked，不得猜测。
+代码符合性审查必须逐条覆盖 proposal.acceptanceCriteria。每条 finding 使用稳定编号 criterion-1、criterion-2……；status 只能是 passed、failed、blocked；actual 说明代码如何满足或未满足该条件；evidenceReferences 至少列出一个实际文件、差异位置、测试结果或实施记录。implementationEvidence.verificationEvidence 仅表示任务状态机已保存的受控验证事实：每项包含 scenario、command、status、source 与 completedAt；只有其中明确写出相应场景、结果和来源时才能引用；“统一测试通过”本身不能替代超时、IPC 异常、快速切换、重复点击或系统打开异常的逐项结论。工程门禁已经通过不等于客户要求自动通过，不能只因测试通过就批准。无法读到必要代码或证据时标为 blocked，不得猜测。
 
 全部页面条件仅返回：{"mode":"page-experience"}
 

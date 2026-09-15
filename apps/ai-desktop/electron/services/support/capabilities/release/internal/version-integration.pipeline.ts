@@ -1,8 +1,9 @@
 import { summarizeTestFailure } from "../../testing/index.js";
 import { randomUUID } from "node:crypto";
 
-import type { CollaborationIntegrationFailureKindValue, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
+import type { CollaborationFlowEventDetailsOutDto, CollaborationIntegrationFailureKindValue, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import type { IntegrationReleaseInDto, ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
+import type { ManagedExecutionVerificationEvidenceOutDto } from "../../../../../../contracts/services/support/platform/codex/index.js";
 import type { CollaborationDurationPort, CollaborationStatePort } from "../../../../workflow/index.js";
 import { ReleaseBatchStore } from "./release-batch.store.js";
 import { StablePublishedApplicationCollisionError } from "./verified-package.release.js";
@@ -21,7 +22,7 @@ export interface VersionIntegrationPipelineOptions {
   durations: CollaborationDurationPort;
   workspaces: VersionWorkspaceManager;
   actorMemberId: string;
-  verifyCandidate(candidate: IntegrationCandidate, taskIds: string[], releaseBatchId: string): Promise<string>;
+  verifyCandidate(candidate: IntegrationCandidate, taskIds: string[], releaseBatchId: string): Promise<{ executable: string; verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[] }>;
   acquireRelease(request: IntegrationReleaseInDto): Promise<() => void>;
   releaseVersion: string;
   releaseBatches: ReleaseBatchStore;
@@ -171,6 +172,7 @@ export class VersionIntegrationPipeline {
     let releaseLease: (() => void) | null = null;
     let releaseDocument: ReleaseBatchDocumentOutDto | null = null;
     let publishedExecutable: string | null = null;
+    let verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[] = [];
     let candidate: IntegrationCandidate | null = null;
     let verifySpan: string | null = null;
     let reconcileSpan: string | null = null;
@@ -246,7 +248,9 @@ export class VersionIntegrationPipeline {
       verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
       releaseDocument.state = "testing";
       this.#releaseBatches.write(releaseDocument);
-      publishedExecutable = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
+      const verifiedCandidate = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
+      publishedExecutable = verifiedCandidate.executable;
+      verificationEvidence = verifiedCandidate.verificationEvidence;
       if (taskIds.some((taskId) => this.#invalidatedTaskIds.has(taskId))) {
         const reason = "客户已修正任务范围，本批旧候选已停止，等待原任务按新范围重新验证。";
         releaseDocument.state = "failed";
@@ -298,7 +302,10 @@ export class VersionIntegrationPipeline {
           }
           task.completedAt = null;
           task.blockingReason = null;
-          appendFlow(task, "unified_test.passed", "integration", "completed", `${currentActor.displayName}统一测试通过，等待打包版本重启健康检查`, currentActor);
+          appendFlow(task, "unified_test.passed", "integration", "completed", `${currentActor.displayName}统一测试通过，等待打包版本重启健康检查`, currentActor, false, {
+            verificationEvidence,
+            technicalEvidence: verificationEvidence.map((evidence) => `${evidence.scenario}：${evidence.command}（${evidence.status}）`),
+          });
         }
       });
 
@@ -462,6 +469,7 @@ function appendFlow(
   summary: string,
   actor: Pick<CollaborationMemberOutDto, "memberId" | "displayName"> | null,
   error = false,
+  details?: CollaborationFlowEventDetailsOutDto,
 ): void {
   task.flowEvents.push({
     eventId: randomUUID(),
@@ -472,6 +480,7 @@ function appendFlow(
     summary: error ? summarizeTestFailure(summary) : summary.slice(0, 2_000),
     occurredAt: new Date().toISOString(),
     error,
+    details,
   });
 }
 

@@ -46,9 +46,12 @@ test("混合运行按条件强制页面截图与代码引用证据", () => {
   assert.match(runtime, /const verificationEvents = Array\.isArray\(task\.flowEvents\) \? task\.flowEvents : \[\]/);
   assert.match(runtime, /verificationEvidence: verificationEvents/);
   assert.match(runtime, /executor\\\.self_\(test\|repair\)_\(passed\|failed\|completed\)/);
+  assert.match(runtime, /event\.type === "unified_test\.passed"/);
   assert.match(runtime, /technicalEvidence: event\.details\?\.technicalEvidence \|\| \[\]/);
+  assert.match(runtime, /verificationEvidence: event\.details\?\.verificationEvidence \|\| \[\]/);
   assert.match(runtime, /details: event\.details \|\| null/);
   assert.match(prompt, /verificationEvidence/);
+  assert.match(prompt, /scenario、command、status、source 与 completedAt/);
   assert.match(prompt, /统一测试通过.*不能替代/);
   const stateStore = readFileSync("electron/services/evolution/internal/evolution-state.store.ts", "utf8");
   assert.match(stateStore, /requiresPageAcceptanceEvidence/);
@@ -68,6 +71,28 @@ test("验收受阻先经唯一分类策略，再决定产品修复或可恢复�
   assert.match(runtime, /classification\.disposition === "materials-insufficient-main-path-judged"/);
   assert.match(runtime, /classification\.disposition === "acceptance-capability-or-runtime-blocked"/);
   assert.doesNotMatch(runtime, /if \(runResult\.status === "blocked"\)/);
+});
+
+test("受控测试结论和任务协作群检查保留验收边界", () => {
+  const codexContracts = readFileSync("contracts/services/support/platform/codex/index.ts", "utf8");
+  const runner = readFileSync("electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", "utf8");
+  const unifiedRunner = readFileSync("electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", "utf8");
+  const workflow = readFileSync("electron/services/workflow/collaboration-workflow.facade.ts", "utf8");
+  const pipeline = readFileSync("electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", "utf8");
+  const computer = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+  assert.match(runner, /source: "task-worktree-test-runner"/);
+  assert.match(runner, /verificationEvidence:/);
+  assert.match(runner, /const validationRound = scriptIndex \+ 1/);
+  assert.match(workflow, /evidence\.source === "task-worktree-test-runner"/);
+  assert.match(workflow, /verificationEvidence,/);
+  assert.match(unifiedRunner, /export interface FixedUnifiedTestRunResult/);
+  assert.match(codexContracts, /ManagedExecutionVerificationEvidenceOutDto/);
+  assert.match(unifiedRunner, /source: "fixed-unified-test-runner"/);
+  assert.match(unifiedRunner, /return \{ executable: resolveVerifiedDeveloperExecutable\(buildRoot\), verificationEvidence \}/);
+  assert.match(pipeline, /verificationEvidence = verifiedCandidate\.verificationEvidence/);
+  assert.match(pipeline, /appendFlow\(task, "unified_test\.passed"[\s\S]*verificationEvidence,/);
+  assert.match(computer, /必须先按截图点击既有安全导航进入任务协作群/);
+  assert.match(computer, /只有导航后仍不可见时才记录 hidden/);
 });
 
 test("验收交接把固定混合摘要与折叠技术详情分开投影", () => {
