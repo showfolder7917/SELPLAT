@@ -911,7 +911,7 @@ test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
     const filePath = path.join(directory, "state.json");
     writePersistedState(filePath, { version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] });
     const state = evolutionStore(filePath).state();
-    assert.equal(state.version, 8);
+    assert.equal(state.version, 9);
     assert.equal("automaticNangongApprovalEnabled" in state, false);
     assert.deepEqual(state.topics, []);
   } finally { rmSync(directory, { recursive: true, force: true }); }
