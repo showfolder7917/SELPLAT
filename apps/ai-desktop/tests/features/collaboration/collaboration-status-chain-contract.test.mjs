@@ -76,6 +76,7 @@ test("任务级恢复入口在等待和恢复中都位于下一流程", () => {
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);
   assert.match(developerSource, /continueTimelineTask[\s\S]*controller\.actions\.continueTask\(taskId\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
+  assert.match(collaborationModelSource, /const continueTask = async \(taskId: string\)[\s\S]*if \(!desktop\) throw new Error\("无法连接协作状态服务。"\)[\s\S]*desktop\.continueCollaborationTask\(taskId\)/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
 });

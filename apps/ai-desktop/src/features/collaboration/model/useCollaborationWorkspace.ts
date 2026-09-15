@@ -393,8 +393,11 @@ export function useCollaborationWorkspace() {
   };
 
   /** 从最近保存的恢复点继续协作任务。 */
-  const continueTask = (taskId: string) => {
-    return applyStateRequest(getOptionalCollaborationDesktopApi()?.continueCollaborationTask(taskId));
+  const continueTask = async (taskId: string) => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    // API 不可用不能伪装成已恢复；调用方会结束按钮忙碌并显示这条可重试错误。
+    if (!desktop) throw new Error("无法连接协作状态服务。");
+    return applyStateRequest(desktop.continueCollaborationTask(taskId));
   };
 
   /** 取消尚未结束的协作任务。 */
