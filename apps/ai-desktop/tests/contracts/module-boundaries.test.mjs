@@ -444,7 +444,7 @@ test("tests mirror production owners and the full runner discovers them recursiv
   const rootTestFiles = rootEntries.filter((entry) => entry.isFile() && entry.name.endsWith(".test.mjs"));
   assert.deepEqual(rootTestFiles, [], "tests 根目录不得继续平铺业务测试");
   const ownerDirectories = rootEntries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-  assert.deepEqual(ownerDirectories, ["applications", "contracts", "features", "interaction", "release", "services", "support", "system"]);
+  assert.deepEqual(ownerDirectories, ["applications", "contracts", "features", "interaction", "release", "scripts", "services", "support", "system"]);
 
   const manifest = JSON.parse(source("package.json"));
   assert.equal(manifest.scripts.test, "npm run build:electron && node scripts/run-with-dependencies.mjs node scripts/run-owned-tests.mjs");
