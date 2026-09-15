@@ -11,8 +11,19 @@ import { createCollaborationWorkspaceViewModel } from "../model/createCollaborat
 import type { useCollaborationWorkspace } from "../model/useCollaborationWorkspace";
 import { CollaborationMemberPage } from "./CollaborationMemberPage";
 import { TaskCollaborationGroup } from "./TaskCollaborationGroup";
+import type { TaskRecoveryResult } from "./TaskCollaborationGroup.types";
 
 const RECOVERY_REQUEST_TIMEOUT_MS = 12_000;
+const RECOVERY_RECHECK_TIMEOUT_MS = 4_000;
+
+class RecoveryTimeoutError extends Error {}
+
+function waitForRecovery<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new RecoveryTimeoutError()), timeoutMs);
+    void request.then(resolve, reject).finally(() => window.clearTimeout(timer));
+  });
+}
 
 type CollaborationWorkspaceFeatureProps = {
   /** 当前语言决定任务群和人物页面显示中文还是日文。 */
@@ -71,10 +82,26 @@ export function CollaborationWorkspaceFeature({
   }
 
   /** 等待节点继续原任务时交给协作控制器执行。 */
-  async function continueTimelineTask(taskId: string) {
-    await controller.actions.continueTask(taskId);
-    // 恢复请求成功后立即读取权威时间线，让旧等待入口在同一次用户操作中收口。
-    await controller.actions.refreshTimeline();
+  async function continueTimelineTask(taskId: string): Promise<TaskRecoveryResult> {
+    try {
+      await waitForRecovery(controller.actions.continueTask(taskId), RECOVERY_REQUEST_TIMEOUT_MS);
+      // 写操作已经返回主进程权威状态；时间线刷新不再阻塞按钮收口。
+      void controller.actions.refreshRecoveryState().catch(() => undefined);
+      return { kind: "confirmed", message: "" };
+    } catch (error) {
+      if (!(error instanceof RecoveryTimeoutError)) throw error;
+      try {
+        const snapshot = await waitForRecovery(controller.actions.refreshRecoveryState(), RECOVERY_RECHECK_TIMEOUT_MS);
+        const queued = snapshot.timeline.groups.some((group) => group.nodes.some((node) => {
+          return node.taskId === taskId && node.eventType === "task.recovery_requested";
+        }));
+        return queued
+          ? { kind: "queued", message: "恢复请求已提交，正在排队。" }
+          : { kind: "unavailable", message: "恢复请求未取消，但暂时无法确认状态。" };
+      } catch {
+        return { kind: "unavailable", message: "恢复请求未取消，但状态确认未返回。" };
+      }
+    }
   }
 
   // ViewModel 只把 Controller 状态映射成任务群和人物页面输入。

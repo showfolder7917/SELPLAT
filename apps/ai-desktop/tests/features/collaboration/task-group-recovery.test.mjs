@@ -94,22 +94,22 @@ test("任务恢复中节点不让专题级入口重复显示", () => {
 test("恢复选择器将当前恢复请求投影为禁用入口，后续事实才会清除入口", () => {
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
-  ]), { nodeId: "customer-wait", taskId: "task-a", customerAction: true, pending: false });
+  ]), { nodeId: "customer-wait", taskId: "task-a", customerAction: true, pending: false, submitted: false });
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
     { nodeId: "recovery-running", taskId: "task-a", status: "current", eventType: "task.recovery_requested" },
-  ]), { nodeId: "recovery-running", taskId: "task-a", customerAction: false, pending: true });
+  ]), { nodeId: "recovery-running", taskId: "task-a", customerAction: false, pending: false, submitted: true });
   assert.equal(latestActiveRecoveryAction([
     { nodeId: "customer-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
     { nodeId: "recovery-completed", taskId: "task-a", status: "completed", eventType: "task.recovery_requested" },
   ]), null);
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "interrupted-wait", taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
-  ]), { nodeId: "interrupted-wait", taskId: "task-a", customerAction: false, pending: false });
+  ]), { nodeId: "interrupted-wait", taskId: "task-a", customerAction: false, pending: false, submitted: false });
   assert.deepEqual(latestActiveRecoveryAction([
     { nodeId: "history-wait", taskId: "task-a", status: "waiting", eventType: "customer.action_required" },
     { nodeId: "current-wait", taskId: "task-a", status: "waiting", eventType: "task.interrupted" },
-  ]), { nodeId: "current-wait", taskId: "task-a", customerAction: false, pending: false });
+  ]), { nodeId: "current-wait", taskId: "task-a", customerAction: false, pending: false, submitted: false });
 });
 
 test("自动处理明确告知用户暂不需要操作，客户待办保持原有提示", () => {

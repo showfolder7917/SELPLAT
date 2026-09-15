@@ -4,7 +4,7 @@
  */
 
 // React 状态容器：保存人工展开选择、继续任务反馈和当前时间。
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type {
   // 时间线专题：定位当前专题和节点时使用。
@@ -50,6 +50,8 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
   const [continuingTaskId, setContinuingTaskId] = useState<string | null>(null);
   // 继续任务失败原因：统一显示在对应专题卡列表下方。
   const [continueError, setContinueError] = useState("");
+  // React 状态会在下一轮渲染才生效；同步锁覆盖同一事件循环中的连续点击。
+  const continuingTaskIds = useRef(new Set<string>());
   const groups = snapshot?.groups || [];
   const currentGroupId = findCurrentGroupId(groups);
 
@@ -95,15 +97,19 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
 
   /** 调用主进程继续任务，并把忙碌和失败状态完整反馈给页面。 */
   const continueTask = async (taskId: string) => {
+    if (continuingTaskIds.current.has(taskId)) return;
+    continuingTaskIds.current.add(taskId);
     setContinuingTaskId(taskId);
     setContinueError("");
 
     try {
-      await onContinueTask(taskId);
+      const result = await onContinueTask(taskId);
+      if (result.kind !== "confirmed") setContinueError(result.message);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setContinueError(message);
     } finally {
+      continuingTaskIds.current.delete(taskId);
       setContinuingTaskId(null);
     }
   };

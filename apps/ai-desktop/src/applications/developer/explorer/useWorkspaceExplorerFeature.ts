@@ -9,6 +9,25 @@ type SelectedEntry = { workspaceId: string; relativePath: string } | null;
 
 const FILE_OPERATION_TIMEOUT_MS = 12_000;
 
+class FileOperationTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FileOperationTimeoutError";
+  }
+}
+
+/** 页面等待只收口本地状态，不会取消已经发送给主进程的文件操作。 */
+function waitForFileOperation<T>(request: Promise<T>, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new FileOperationTimeoutError(message)), FILE_OPERATION_TIMEOUT_MS);
+    void request.then(resolve, reject).finally(() => window.clearTimeout(timer));
+  });
+}
+
+function opensWithSystemApplication(relativePath: string): boolean {
+  return /\.pptx?$/iu.test(relativePath);
+}
+
 function key(workspaceId: string, relativePath: string): string {
   return `${workspaceId}:${relativePath}`;
 }
@@ -19,6 +38,7 @@ export function useWorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps
   const [expandedPaths, setExpandedPaths] = useState<Record<string, boolean>>({});
   const [selectedEntry, setSelectedEntry] = useState<SelectedEntry>(null);
   const pendingDirectoryLoads = useRef(new Map<string, Promise<void>>());
+  const directoryRequestId = useRef(new Map<string, number>());
   // 每次文件点击取得递增编号，迟到的异步结果不能覆盖用户已切换后的选择。
   const openRequestId = useRef(0);
   // 相同文件仍在请求时复用同一 Promise，避免 PPT/PPTX 重复交给系统默认应用。
@@ -49,21 +69,26 @@ export function useWorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps
     const pendingLoad = pendingDirectoryLoads.current.get(directoryKey);
     if (pendingLoad) return pendingLoad;
 
-    const request = (async () => {
+    const requestId = (directoryRequestId.current.get(directoryKey) || 0) + 1;
+    directoryRequestId.current.set(directoryKey, requestId);
+    let request!: Promise<void>;
+    request = (async () => {
+      // 先让调用方写入去重 Map，避免同步失败时留下已完成的悬挂登记。
+      await Promise.resolve();
       setDirectories((current) => ({ ...current, [directoryKey]: { loading: true, error: "", entries: current[directoryKey]?.entries || [] } }));
       try {
         const api = getOptionalSystemDesktopApi();
         if (!api) throw new Error("桌面接口不可用。");
-        const directory = await api.listWorkspaceDirectory(workspaceId, relativePath);
+        const directory = await waitForFileOperation(api.listWorkspaceDirectory(workspaceId, relativePath), "目录读取未及时返回，可重试。");
         // 请求返回前工作区可能已被移除；此时不能把旧内容重新写回树状态。
-        if (!registeredWorkspaceIds.current.has(workspaceId)) return;
+        if (!registeredWorkspaceIds.current.has(workspaceId) || directoryRequestId.current.get(directoryKey) !== requestId) return;
         setDirectories((current) => ({ ...current, [directoryKey]: { loading: false, error: "", entries: directory.entries } }));
       } catch (error) {
-        if (!registeredWorkspaceIds.current.has(workspaceId)) return;
+        if (!registeredWorkspaceIds.current.has(workspaceId) || directoryRequestId.current.get(directoryKey) !== requestId) return;
         const message = error instanceof Error ? error.message : "目录读取失败。";
         setDirectories((current) => ({ ...current, [directoryKey]: { loading: false, error: message, entries: current[directoryKey]?.entries || [] } }));
       } finally {
-        pendingDirectoryLoads.current.delete(directoryKey);
+        if (pendingDirectoryLoads.current.get(directoryKey) === request) pendingDirectoryLoads.current.delete(directoryKey);
       }
     })();
     pendingDirectoryLoads.current.set(directoryKey, request);
@@ -86,24 +111,38 @@ export function useWorkspaceExplorerFeature(props: WorkspaceExplorerFeatureProps
   async function openFile(workspaceId: string, relativePath: string) {
     const requestId = ++openRequestId.current;
     const fileKey = key(workspaceId, relativePath);
+    let request: Promise<WorkspaceFileOpenOutDto | WorkspaceSystemFileOpenFailedOutDto> | undefined;
     try {
       const api = getOptionalSystemDesktopApi();
       if (!api) throw new Error("桌面接口不可用。");
       const pendingOpen = pendingFileOpens.current.get(fileKey);
-      const request = pendingOpen || api.openWorkspaceFile(workspaceId, relativePath);
+      request = pendingOpen || api.openWorkspaceFile(workspaceId, relativePath);
       if (!pendingOpen) {
         pendingFileOpens.current.set(fileKey, request);
-        void request.finally(() => pendingFileOpens.current.delete(fileKey));
+        void request.finally(() => {
+          if (pendingFileOpens.current.get(fileKey) === request) pendingFileOpens.current.delete(fileKey);
+        }).catch(() => undefined);
       }
-      const result = await request;
+      const result = await waitForFileOperation(request, "文件打开未及时返回，可重试。");
       if (requestId !== openRequestId.current || !registeredWorkspaceIds.current.has(workspaceId)) return;
       if (result.kind === "preview") {
         props.onFilePreviewChange({ preview: result, error: "", workspaceId });
         return;
       }
+      if (result.kind === "system-opened") {
+        window.sel?.core?.toast?.("已使用系统默认应用打开演示文稿。", "success");
+        return;
+      }
       if (result.kind === "system-open-failed") window.sel?.core?.toast?.(result.message, "error");
     } catch (error) {
+      if (error instanceof FileOperationTimeoutError && request && pendingFileOpens.current.get(fileKey) === request) {
+        pendingFileOpens.current.delete(fileKey);
+      }
       if (requestId !== openRequestId.current || !registeredWorkspaceIds.current.has(workspaceId)) return;
+      if (opensWithSystemApplication(relativePath)) {
+        window.sel?.core?.toast?.(error instanceof Error ? error.message : "演示文稿打开失败，可重试。", "error");
+        return;
+      }
       props.onFilePreviewChange({ preview: null, error: error instanceof Error ? error.message : "文件预览失败。", workspaceId });
     }
   }

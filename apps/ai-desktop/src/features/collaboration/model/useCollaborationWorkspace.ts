@@ -402,6 +402,20 @@ export function useCollaborationWorkspace() {
     return nextTimeline;
   };
 
+  /** 恢复等待超时后同时重读主进程协作状态和已落库时间线。 */
+  const refreshRecoveryState = async () => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop) throw new Error("无法连接协作状态服务。");
+    const [nextState, nextTimeline] = await Promise.all([
+      desktop.getCollaborationState(),
+      desktop.getCollaborationTimeline(),
+    ]);
+    setState(nextState);
+    setStateReadStatus("ready");
+    setTimeline((current) => reconcileCollaborationTimeline(current, nextTimeline));
+    return { state: nextState, timeline: nextTimeline };
+  };
+
   // 公开返回值按“权威数据、导航状态、反馈、业务操作、稳定配置”分组，调用方不再面对二十多个平铺字段。
   return {
     // 权威数据（data）来自主进程状态、SQLite 时间线或实时事件投影。
@@ -467,6 +481,8 @@ export function useCollaborationWorkspace() {
       cancelTask,
       // 时间线刷新：人工审批后重新读取已经落库的历史。
       refreshTimeline,
+      // 恢复复查：一次读取协作状态和时间线，供页面结束本地等待。
+      refreshRecoveryState,
     },
     // 稳定配置（configuration）公开任务终态集合，供路由派生只读人物视图。
     configuration: {
