@@ -113,6 +113,13 @@ test("协作页面和控制器使用具名模型归组公开依赖", () => {
   assert.match(collaborationModelSource, /data: \{[\s\S]*navigation: \{[\s\S]*feedback: \{[\s\S]*actions: \{[\s\S]*configuration: \{/);
 });
 
+test("会话任务只冻结调用方明确确认的验收材料", () => {
+  assert.match(collaborationModelSource, /materials\?: EvolutionAcceptanceMaterialAuthorizationOutDto\[\]/);
+  assert.match(collaborationModelSource, /materials: structuredClone\(materials\)/);
+  assert.match(collaborationModelSource, /不能从工作区或附件自动猜测路径/);
+  assert.match(collaborationModelSource, /materials: EvolutionAcceptanceMaterialAuthorizationOutDto\[\] = \[\]/);
+});
+
 test("没有专题任务时可从空状态进入韩立会话，但不创建任务", () => {
   assert.match(taskGroupSource, /groups\.length === 0[\s\S]*onClick=\{openHanliConversation\}[\s\S]*找韩立说需求/);
   assert.match(collaborationModelSource, /const openMemberPage = async \(memberId: string\)[\s\S]*selectMember\(memberId\)[\s\S]*setPanel\("member"\)/);
