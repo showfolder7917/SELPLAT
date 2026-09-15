@@ -16,6 +16,7 @@ import {
   type IntegrationCandidate,
   VersionWorkspaceManager,
 } from "./version-workspace.manager.js";
+import { inspectAcceptancePlanCandidateEvidence } from "./integration.verifier.js";
 
 export interface VersionIntegrationPipelineOptions {
   store: CollaborationStatePort;
@@ -229,6 +230,8 @@ export class VersionIntegrationPipeline {
       releaseDocument.state = "candidate-ready";
       releaseDocument.candidateBranch = candidate.branchName;
       releaseDocument.candidateSha = candidate.candidateSha;
+      // 门禁前先冻结候选来源、运行器身份和逐项结果；失败后候选工作树会回收，归档仍可复核实际材料。
+      releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
       this.#releaseBatches.write(releaseDocument);
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
       reconcileSpan = null;

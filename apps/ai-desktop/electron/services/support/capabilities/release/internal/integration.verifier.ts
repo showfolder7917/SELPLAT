@@ -5,8 +5,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
-import { readAcceptancePlanCandidateSources } from "./acceptance-plan-candidate-source.ts";
+import { readAcceptancePlanCandidateSources, readAcceptancePlanCandidateSourceRecords } from "./acceptance-plan-candidate-source.ts";
 import { executeGit } from "./git-process.ts";
+import type { ReleaseBatchCandidateEvidenceOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -228,12 +229,43 @@ export async function verifyCollaborationIntegration(
  * 由固定统一测试运行器检查冲突解决后的候选源码；任何能力缺失都会使统一测试失败。
  */
 export function verifyAcceptancePlanCapabilities(candidateProjectRoot: string): void {
-  const root = path.resolve(candidateProjectRoot, "apps", "ai-desktop");
-  const sources = readAcceptancePlanCandidateSources(root);
-  const missing = acceptancePlanCapabilityChecks(sources)
-    .filter(([, present]) => !present)
-    .map(([name]) => name);
+  const evidence = inspectAcceptancePlanCandidateEvidence(candidateProjectRoot, null, null);
+  if (evidence.readError) throw new Error(evidence.readError);
+  const missing = evidence.acceptancePlanChecks
+    .filter((check) => !check.passed)
+    .map((check) => check.capability);
   if (missing.length) throw new Error(`最终候选缺少验收计划能力：${missing.join("、")}`);
+}
+
+/** 在预检前冻结候选来源与逐项结果；读取失败也必须进入发布归档。 */
+export function inspectAcceptancePlanCandidateEvidence(
+  candidateProjectRoot: string,
+  candidateSha: string | null,
+  loadedRuntimeSha: string | null,
+): ReleaseBatchCandidateEvidenceOutDto {
+  const projectRoot = path.resolve(candidateProjectRoot);
+  const desktopRoot = path.join(projectRoot, "apps", "ai-desktop");
+  try {
+    const records = readAcceptancePlanCandidateSourceRecords(desktopRoot);
+    const sources = Object.fromEntries(records.map(({ source, content }) => [source, content])) as ReturnType<typeof readAcceptancePlanCandidateSources>;
+    return {
+      candidateProjectRoot: projectRoot,
+      candidateSha,
+      loadedRuntimeSha,
+      sourceBlobs: records.map(({ source, relativePath, content }) => ({ source, relativePath, sha256: createHash("sha256").update(content).digest("hex") })),
+      acceptancePlanChecks: acceptancePlanCapabilityChecks(sources).map(([capability, passed]) => ({ capability, passed })),
+      readError: null,
+    };
+  } catch (error) {
+    return {
+      candidateProjectRoot: projectRoot,
+      candidateSha,
+      loadedRuntimeSha,
+      sourceBlobs: [],
+      acceptancePlanChecks: [],
+      readError: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**

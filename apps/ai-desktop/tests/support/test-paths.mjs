@@ -10,7 +10,11 @@ export const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 export const sourceProjectRoot = path.resolve(appRoot, "../..");
 export const projectRoot = resolveTestWorkspaceRoot(sourceProjectRoot);
 export const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
-export const controlledTestRoot = assertWorkspaceDataPath(projectRoot, path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "正式测试"));
+// 受限协作工作树可显式指定可写测试根；未指定时仍严格使用已选工程的数据目录。
+const explicitTestTemporaryRoot = String(process.env.AI_DESKTOP_TEST_TEMP_ROOT || "").trim();
+export const controlledTestRoot = explicitTestTemporaryRoot
+  ? path.join(path.resolve(explicitTestTemporaryRoot), "ai-desktop-formal-tests")
+  : assertWorkspaceDataPath(projectRoot, path.join(projectPaths.temporaryMaterialsRoot, "测试证据", "正式测试"));
 mkdirSync(controlledTestRoot, { recursive: true });
 
 /**
