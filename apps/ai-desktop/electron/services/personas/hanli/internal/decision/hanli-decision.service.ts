@@ -194,10 +194,14 @@ export class HanliDecisionService {
   async #askForStructuredResult<T>(prompt: string, state: EvolutionStateOutDto, validate: (value: Record<string, unknown>) => T): Promise<T> {
     let request = prompt;
     let lastError = "";
+    let lastCandidateSummary = "";
     for (let attempt = 1; attempt <= 3; attempt += 1) {
+      lastCandidateSummary = "";
       const response = await this.#dependencies.askHanliResultAcceptance(request, state);
       try {
         const values = parseJsonObjects(response);
+        // 仅保留协议形状，避免把模型原文或客户材料写入异常记录。
+        lastCandidateSummary = summarizeResultAcceptanceCandidates(values);
         for (const value of values) {
           try { return validate(value); }
           catch (error) { lastError = error instanceof Error ? error.message : String(error); }
@@ -208,7 +212,8 @@ export class HanliDecisionService {
         request = `${prompt}\n\n上一次结果无法处理：${lastError}。请按原始 criterion 编号修正页面与代码条件的完整分区。${resultAcceptanceRetryHint(lastError)}只返回符合约定的完整 JSON。`;
       }
     }
-    throw new Error(`韩立连续 3 次未返回有效的结果验收判断：${lastError}`);
+    const diagnostic = lastCandidateSummary ? `；${lastCandidateSummary}` : "";
+    throw new Error(`韩立连续 3 次未返回有效的结果验收判断：${lastError}${diagnostic}`);
   }
 
 }
@@ -222,6 +227,20 @@ function resultAcceptanceRetryHint(lastError: string): string {
     return " mode 只能是 page-experience、code-conformance 或 mixed：全部页面条件只返回 page-experience；全部代码条件返回 code-conformance 和每个 criterion 的 finding；混合条件才返回 mixed、页面编号严格子集及其余 finding。";
   }
   return "";
+}
+
+/** 只输出固定状态和计数，让运行故障可定位且不泄露模型原文或客户证据。 */
+function summarizeResultAcceptanceCandidates(values: Record<string, unknown>[]): string {
+  const candidates = values.slice(0, 3).map((value) => {
+    const mode = value.mode === "page-experience" || value.mode === "code-conformance" || value.mode === "mixed"
+      ? "supported"
+      : typeof value.mode === "string" ? "unsupported" : "missing";
+    const findings = Array.isArray(value.findings)
+      ? `array:${value.findings.length}`
+      : value.findings === undefined ? "missing" : "invalid";
+    return `mode=${mode},findings=${findings}`;
+  });
+  return `结构化候选摘要：count=${values.length}; ${candidates.join("|")}`;
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {
