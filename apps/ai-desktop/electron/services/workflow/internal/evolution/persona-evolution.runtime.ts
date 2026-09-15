@@ -542,15 +542,17 @@ export class PersonaEvolutionRuntime {
               resultSummary: task.resultSummary,
               finalResult: task.finalResult,
               unifiedTest: task.unifiedTest,
-              // 只透传已落入任务状态机的验证事实。韩立不能根据“统一测试通过”猜测
+              // 只透传已落入任务状态机的验证事实。固定统一测试只有随 unified_test.passed
+              // 一起携带结构化逐脚本结果时才能被消费；韩立不能根据“统一测试通过”猜测
               // 某个超时或异常场景已经覆盖，也不能读取任意外部日志作为验收依据。
               verificationEvidence: verificationEvents
-                .filter((event) => /^executor\.self_(test|repair)_(passed|failed|completed)$/.test(event.type))
+                .filter((event) => /^executor\.self_(test|repair)_(passed|failed|completed)$/.test(event.type) || event.type === "unified_test.passed")
                 .map((event) => ({
                   eventType: event.type,
                   status: event.status,
                   summary: event.summary,
                   technicalEvidence: event.details?.technicalEvidence || [],
+                  verificationEvidence: event.details?.verificationEvidence || [],
                   details: event.details || null,
                   occurredAt: event.occurredAt,
                 })),

@@ -12,6 +12,7 @@ import {
   verifyCollaborationIntegration,
 } from "../../services/support/capabilities/release/index.js";
 import { createTaskWorktreeTestRunner, TestResourceCoordinatorFacade } from "../../services/support/capabilities/testing/index.js";
+import type { FixedUnifiedTestRunResult } from "../../services/support/capabilities/testing/index.js";
 import { createSqliteCodexSessionRepository } from "../../services/support/platform/codex/index.js";
 import { createExecutorRuntime } from "../../services/personas/executor/index.js";
 import {
@@ -29,7 +30,7 @@ export interface CollaborationBootstrapOptions {
   linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
   releaseVersion: string;
   readRuleInstructions(memberId: string, task: import("../../../contracts/services/workflow/index.js").CollaborationTaskOutDto): string;
-  runUnifiedTests(rootPath: string): Promise<string>;
+  runUnifiedTests(rootPath: string): Promise<FixedUnifiedTestRunResult>;
   publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   onStateChanged: CoordinatorOptions["emitState"];
   onStream: CoordinatorOptions["emitStream"];
@@ -99,8 +100,12 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
         port: 4197,
         buildRoot: projectPaths.buildRoot,
       }, () => verifyCollaborationIntegration(rootPath, taskIds, projectRoot, applicationName, candidate));
-      const candidateExecutable = await options.runUnifiedTests(rootPath);
-      return stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId, candidate.candidateSha);
+      const unifiedTestResult = await options.runUnifiedTests(rootPath);
+      const candidateExecutable = unifiedTestResult.executable;
+      return {
+        executable: stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId, candidate.candidateSha),
+        verificationEvidence: unifiedTestResult.verificationEvidence,
+      };
     },
     acquireRelease: (request) => integrationReleases.acquire(request),
     releaseVersion: options.releaseVersion,

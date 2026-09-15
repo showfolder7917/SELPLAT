@@ -11,6 +11,7 @@ import {
 } from "../../release/index.js";
 // 测试资源协调器串行管理 Electron、端口和构建目录，避免并行任务互相破坏。
 import { TestResourceCoordinatorFacade } from "../test-resource-coordinator.facade.js";
+import type { ManagedExecutionVerificationEvidenceOutDto } from "../../../../../../contracts/services/support/platform/codex/index.js";
 // 只有经过验证的 Developer 可执行文件才能进入重启与发布流程。
 
 // 固定清单阻止令狐文案扩大测试范围或注入任意 shell 命令。
@@ -86,6 +87,12 @@ export interface FixedUnifiedTestRunnerOptions {
   eventNamespace: string;
 }
 
+/** 固定统一测试完成后交给集成流水线的受控产物与逐脚本验证事实。 */
+export interface FixedUnifiedTestRunResult {
+  executable: string;
+  verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[];
+}
+
 export class FixedUnifiedTestRunner {
   // 源工程根是稳定依赖、构建数据和发布元数据的权威来源。
   readonly #sourceProjectRoot: string;
@@ -113,7 +120,7 @@ export class FixedUnifiedTestRunner {
     this.#eventNamespace = options.eventNamespace;
   }
 
-  async run(candidateProjectRoot = this.#sourceProjectRoot): Promise<string> {
+  async run(candidateProjectRoot = this.#sourceProjectRoot): Promise<FixedUnifiedTestRunResult> {
     // 没有候选参数时测试源工程；集成流程可以传入独立候选工作树。
     const resolvedProjectRoot = path.resolve(candidateProjectRoot);
     // 应用根由候选工程根和登记应用名组成，禁止固定机器路径。
@@ -153,6 +160,7 @@ export class FixedUnifiedTestRunner {
       port: 4197,
       buildRoot,
     }, async () => {
+      const verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[] = [];
       // 脚本按固定顺序运行，前一项失败会停止后续发布动作。
       for (const script of FIXED_UNIFIED_SCRIPTS) {
         // 开始事件先于子进程创建，卡住时仍能定位当前脚本。
@@ -162,6 +170,13 @@ export class FixedUnifiedTestRunner {
           await runNpmScript(desktopRoot, script, environment);
           // 退出码为零后才记录完成。
           this.#recordEvent(`${this.#eventNamespace}.unified_test.completed`, { script, candidateProjectRoot: resolvedProjectRoot });
+          verificationEvidence.push({
+            scenario: script,
+            command: `npm run ${script}`,
+            status: "passed",
+            source: "fixed-unified-test-runner",
+            completedAt: new Date().toISOString(),
+          });
         } catch (error) {
           // 失败事件保留脚本和末尾输出，然后把异常继续交给上层恢复链。
           const detail = error instanceof Error ? error.message : String(error);
@@ -171,7 +186,7 @@ export class FixedUnifiedTestRunner {
       }
       // 全部脚本通过后验证正式可执行文件确实存在于稳定 build 根。
       try {
-        return resolveVerifiedDeveloperExecutable(buildRoot);
+        return { executable: resolveVerifiedDeveloperExecutable(buildRoot), verificationEvidence };
       } catch (error) {
         this.#recordEvent(`${this.#eventNamespace}.unified_test.infrastructure_failed`, {
           candidateProjectRoot: resolvedProjectRoot,

@@ -5,6 +5,7 @@ import type { AtomicJsonPersistencePort } from "../../../support/platform/persis
 // 测试资源协调器作为运行时装配端口传入，Runner 仍由令狐内部创建。
 import {
   createFixedUnifiedTestRunner,
+  type FixedUnifiedTestRunResult,
   type TestResourceCoordinatorFacade,
 } from "../../../support/capabilities/testing/index.js";
 // 主进程运行时由唯一 Facade 和唯一 Store 组成，调用方不再分别装配内部文件。
@@ -43,7 +44,7 @@ export interface LinghuRuntime {
   // `facade` 是检测、恢复、文案和启停操作的唯一外部入口。
   facade: LinghuAutomationFacade;
   // 版本集成通过运行时执行候选统一测试，调用方看不到具体 Runner。
-  runUnifiedTests(candidateProjectRoot?: string): Promise<string>;
+  runUnifiedTests(candidateProjectRoot?: string): Promise<FixedUnifiedTestRunResult>;
   // 清空测试数据是受控生命周期能力，不返回 Store。
   clearTestData(): number;
   // 清空后断言由内部 Store 执行，外部只接收成功或异常。
@@ -86,7 +87,8 @@ export function createLinghuRuntime(options: CreateLinghuRuntimeOptions): Linghu
     readTestResourceState: options.readTestResourceState,
     runUnifiedTestAndRestart: async (onVerified) => {
       // 只有固定统一测试全部通过后才更新令狐报告并通知组合根执行重启。
-      const executable = await unifiedTests.run();
+      const unifiedTestResult = await unifiedTests.run();
+      const executable = unifiedTestResult.executable;
       onVerified();
       await options.unifiedTest.onVerified(executable);
     },
