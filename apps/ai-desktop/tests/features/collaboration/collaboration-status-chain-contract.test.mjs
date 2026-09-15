@@ -101,6 +101,14 @@ test("专题卡使用单一卡片模型归组显示状态和用户操作", () =>
   assert.match(taskGroupSource, /function TaskTimelineNode\([\s\S]*model: TaskGroupCardModel/);
 });
 
+test("任务时间线公开稳定时间边界供韩立区分本轮与历史审计", () => {
+  assert.match(taskGroupCardSource, /data-task-timeline-topic-id=\{group\.topicId \|\| ""\}/);
+  assert.match(taskGroupCardSource, /data-task-timeline-proposal-id=\{group\.proposalId \|\| ""\}/);
+  assert.match(taskGroupCardSource, /data-task-timeline-event-type=\{node\.eventType\}/);
+  assert.match(taskGroupCardSource, /data-task-timeline-started-at=\{node\.startedAt\}/);
+  assert.match(taskGroupCardSource, /data-task-timeline-status=\{node\.status\}/);
+});
+
 test("动态耗时只刷新局部文字，不能驱动整页时间线重绘", () => {
   assert.doesNotMatch(taskGroupSource, /const \[nowMs, setNowMs\][\s\S]*useTaskCollaborationGroup/);
   assert.match(taskGroupCardSource, /function TimelineDuration[\s\S]*window\.setInterval/);

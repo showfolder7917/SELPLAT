@@ -823,7 +823,13 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(group.locator(":scope > .seldisclosure-content")).toBeHidden();
   await pageRoot.getByRole("button", { name: "定位当前步骤" }).click();
   await expect(group.locator(":scope > .seldisclosure-content")).toBeVisible();
+  await expect(group.locator(".task-timeline-list")).toHaveAttribute("data-task-timeline-topic-id", "interaction-timeline");
+  await expect(group.locator(".task-timeline-list")).toHaveAttribute("data-task-timeline-proposal-id", "interaction-timeline-proposal");
   await expect(group.locator(".task-timeline-node")).toHaveCount(1);
+  const firstTimelinePosition = group.locator(".task-timeline-position").first();
+  await expect(firstTimelinePosition).toHaveAttribute("data-task-timeline-event-type", /\S+/);
+  await expect(firstTimelinePosition).toHaveAttribute("data-task-timeline-started-at", /^\d{4}-\d{2}-\d{2}T/);
+  await expect(firstTimelinePosition).toHaveAttribute("data-task-timeline-status", /^(completed|current|waiting|failed)$/);
   const applicationNode = group.locator(".task-timeline-node").first();
   await expect(applicationNode).toContainText("南宫婉");
   await expect(applicationNode).toContainText("→ 韩立");

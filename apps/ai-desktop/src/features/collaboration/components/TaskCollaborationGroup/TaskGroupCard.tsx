@@ -315,6 +315,9 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
     <div
       className={`task-timeline-position ${node.status}`}
       data-task-timeline-node-id={node.nodeId}
+      data-task-timeline-event-type={node.eventType}
+      data-task-timeline-started-at={node.startedAt}
+      data-task-timeline-status={node.status}
     >
       {/* 节点序号：帮助用户按真实发生顺序阅读完整协作过程。 */}
       <span className="task-timeline-index">{index + 1}</span>
@@ -433,7 +436,11 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         </span>
       </div>
       {/* 人物时间线：按后端确定的稳定顺序展示过滤后的真实节点。 */}
-      <div className="task-timeline-list">
+      <div
+        className="task-timeline-list"
+        data-task-timeline-topic-id={group.topicId || ""}
+        data-task-timeline-proposal-id={group.proposalId || ""}
+      >
         {visibleNodes.map((node, index) => (
           <TaskTimelineNode
             key={node.nodeId}

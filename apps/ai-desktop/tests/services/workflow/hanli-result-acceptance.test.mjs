@@ -95,6 +95,13 @@ test("受控测试结论和任务协作群检查保留验收边界", () => {
   assert.match(computer, /button\.section-toggle\[aria-controls="developer-task-list"\]/);
   assert.doesNotMatch(computer, /node\.classList\.contains\("section-toggle"\)/);
   assert.match(computer, /只有导航后仍不可见时才记录 hidden/);
+  assert.match(computer, /readTaskCollaborationState\.toString\(\).*JSON\.stringify\(startedAt\).*JSON\.stringify\(goal\.topicId\).*JSON\.stringify\(goal\.proposalId\)/s);
+  assert.match(computer, /currentAcceptanceWindow/);
+  assert.match(computer, /historicalAudit/);
+  assert.match(computer, /excludedFromCurrentAcceptance: true/);
+  assert.match(computer, /current-topic-hidden/);
+  assert.match(computer, /必须等本次 finish 后才会发生.*blocked 和 acceptance-capability/);
+  assert.match(computer, /更早的已完成卡点只是历史审计，不能作为本轮 failed 证据/);
 });
 
 test("验收交接把固定混合摘要与折叠技术详情分开投影", () => {
