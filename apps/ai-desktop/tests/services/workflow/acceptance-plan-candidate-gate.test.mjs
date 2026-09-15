@@ -16,13 +16,27 @@ function writeCandidate(root, state, runtime, projection) {
   writeFileSync(path.join(desktop, "workflow", "domain", "current-topic-stage.projection.ts"), projection);
 }
 
-test("最终候选缺少任一验收计划能力时不得进入统一测试", () => {
+test("最终候选分别缺少每项验收计划能力时不得进入统一测试", () => {
   const root = mkdtempSync(path.join(controlledTestRoot, "acceptance-plan-candidate-"));
   try {
-    writeCandidate(root, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)", "plan.conditions.filter mode: \"mixed\" completeAutomaticAcceptance", "acceptanceRoundId currentRoundId");
+    const complete = {
+      state: "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)",
+      runtime: "plan.conditions.filter mode: \"mixed\" completeAutomaticAcceptance",
+      projection: "acceptanceRoundId currentRoundId",
+    };
+    writeCandidate(root, complete.state, complete.runtime, complete.projection);
     assert.doesNotThrow(() => verifyAcceptancePlanCapabilities(root));
-    writeCandidate(root, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId", "plan.conditions.filter mode: \"mixed\" completeAutomaticAcceptance", "acceptanceRoundId currentRoundId");
-    assert.throws(() => verifyAcceptancePlanCapabilities(root), /失败归因/);
+    const missingCapabilities = [
+      ["验收计划持久化", { ...complete, state: complete.state.replace("acceptance.plan_frozen", "") }],
+      ["同专题重开", { ...complete, state: complete.state.replace("acceptance.reopened", "") }],
+      ["混合证据汇总", { ...complete, runtime: complete.runtime.replace("mode: \"mixed\"", "") }],
+      ["自动与人工共用完成门禁", { ...complete, runtime: complete.runtime.replace("completeAutomaticAcceptance", "") }],
+      ["失败归因", { ...complete, state: complete.state.replace("plan.conditions.find((condition) => condition.conditionId === step.checkId)", "") }],
+    ];
+    for (const [capability, candidate] of missingCapabilities) {
+      writeCandidate(root, candidate.state, candidate.runtime, candidate.projection);
+      assert.throws(() => verifyAcceptancePlanCapabilities(root), new RegExp(capability));
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
