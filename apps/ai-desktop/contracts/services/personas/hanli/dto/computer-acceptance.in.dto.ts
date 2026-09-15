@@ -1,12 +1,11 @@
-/** 单份专题材料在当前电脑验收会话中允许执行的操作。 */
-export type HanliAcceptanceMaterialActionValue = "preview" | "copy" | "system-open";
+import type {
+  EvolutionAcceptanceMaterialActionValue,
+  EvolutionAcceptanceMaterialAuthorizationOutDto,
+} from "../../../evolution/index.js";
 
-/** 绑定已冻结提案版本的工作区材料；未登记材料不能由验收会话访问。 */
-export interface HanliAcceptanceMaterialAuthorizationInDto {
-  workspaceId: string;
-  relativePath: string;
-  allowedActions: HanliAcceptanceMaterialActionValue[];
-}
+/** 电脑验收只消费验收计划已冻结的材料授权，不能另建授权来源。 */
+export type HanliAcceptanceMaterialActionValue = EvolutionAcceptanceMaterialActionValue;
+export type HanliAcceptanceMaterialAuthorizationInDto = EvolutionAcceptanceMaterialAuthorizationOutDto;
 
 /**
  * 页面型任务交给韩立真实窗口验收的最小目标。

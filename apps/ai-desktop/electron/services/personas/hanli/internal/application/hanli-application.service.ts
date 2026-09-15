@@ -314,6 +314,8 @@ function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: "page-e
       const evidenceType = pageConditionIds.includes(conditionId) ? "page-experience" as const : "code-conformance" as const;
       return { conditionId, criterion, evidenceType, completionRequirement: evidenceType === "page-experience" ? "真实页面截图、功能结果和布局判断均通过" : "代码或测试证据引用并确认实际符合条件" };
     }),
+    // 未提供经确认的材料时显式冻结空授权，电脑验收不得由缺省路径取得工作区访问权。
+    materials: [],
     rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
     currentRoundId: roundId,
     createdAt: now,

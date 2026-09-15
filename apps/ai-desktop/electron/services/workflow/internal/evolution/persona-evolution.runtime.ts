@@ -557,6 +557,8 @@ export class PersonaEvolutionRuntime {
               title: proposal.title,
               criteria: pageCriteria,
               criterionIds: pageCriterionIds,
+              // 电脑验收只接收计划冻结的材料；当前未登记材料时继续保持空授权。
+              materials: structuredClone(plan.materials ?? []),
             };
             const pageRun = await this.#computerAcceptanceSession(goal, () => {
               publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");

@@ -2054,6 +2054,23 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("冻结验收计划只接受完整且唯一的材料授权", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "frozen-acceptance-materials-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("冻结材料授权"), acceptanceCriteria: ["文本预览可见"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest());
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待材料验收");
+    assert.throws(
+      () => freezePageAcceptancePlan(store, state, proposalId, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "preview"] }]),
+      /验收材料允许操作重复/,
+    );
+    state = freezePageAcceptancePlan(store, state, proposalId, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "copy"] }]);
+    assert.deepEqual(state.proposals.at(-1).acceptancePlan.materials, [{ workspaceId: "workspace-1", relativePath: "notes/readme.txt", allowedActions: ["preview", "copy"] }]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("自动韩立验收失败保留原提案并进入范围内令狐修复卡点", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-repair-checkpoint-"));
   try {
@@ -2115,7 +2132,7 @@ function computerRun(runId, topicId, proposalId, status, shot, plan) {
  ], evidenceAttachmentIds:[shot], startedAt:now, completedAt:now };
 }
 
-function freezePageAcceptancePlan(store, state, proposalId) {
+function freezePageAcceptancePlan(store, state, proposalId, materials = []) {
  const proposal = state.proposals.find((item) => item.proposalId === proposalId);
  const now = new Date().toISOString();
  const planId = `test-page-plan-${proposalId}`;
@@ -2132,6 +2149,7 @@ function freezePageAcceptancePlan(store, state, proposalId) {
      evidenceType: "page-experience",
      completionRequirement: "真实页面截图和布局判断",
    })),
+   materials,
    rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
    currentRoundId: roundId,
    createdAt: now,
