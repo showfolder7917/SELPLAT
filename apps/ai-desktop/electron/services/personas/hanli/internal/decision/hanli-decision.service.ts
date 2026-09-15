@@ -194,8 +194,14 @@ export class HanliDecisionService {
     let lastError = "";
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const response = await this.#dependencies.askHanli(request, state);
-      try { return validate(parseJsonObject(response)); }
-      catch (error) {
+      try {
+        const values = parseJsonObjects(response);
+        for (const value of values) {
+          try { return validate(value); }
+          catch (error) { lastError = error instanceof Error ? error.message : String(error); }
+        }
+        throw new Error(lastError || "AI 返回的结构化判断不符合结果验收约定。");
+      } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
         request = `${prompt}\n\n上一次结果无法处理：${lastError}。请按原始 criterion 编号修正页面与代码条件的完整分区，只返回符合约定的完整 JSON。`;
       }
@@ -206,13 +212,59 @@ export class HanliDecisionService {
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {
-  const candidate = text.match(/\{[\s\S]*\}/u)?.[0];
-  if (!candidate) {
-    throw new Error("AI 没有返回可解析的结构化判断。");
-  }
-  try {
-    return JSON.parse(candidate) as Record<string, unknown>;
-  } catch {
+  return parseJsonObjects(text)[0];
+}
+
+/** 分别解析模型回答中的完整对象，避免首尾贪婪匹配把说明文字和相邻对象拼成无效 JSON。 */
+function parseJsonObjects(text: string): Record<string, unknown>[] {
+  const { candidates, hasUnclosedObject } = extractBalancedJsonObjects(text);
+  const values = candidates.flatMap((candidate): Record<string, unknown>[] => {
+    try {
+      const value = JSON.parse(candidate);
+      return value && typeof value === "object" && !Array.isArray(value) ? [value as Record<string, unknown>] : [];
+    } catch { return []; }
+  });
+  if (!values.length) {
+    if (!candidates.length && !hasUnclosedObject) throw new Error("AI 没有返回可解析的结构化判断。");
     throw new Error("AI 返回的结构化判断不是有效 JSON。");
   }
+  return values;
+}
+
+/** 提取独立、转义安全的对象候选，允许模型在 JSON 前后补充说明。 */
+function extractBalancedJsonObjects(text: string): { candidates: string[]; hasUnclosedObject: boolean } {
+  const trimmed = text.trim();
+  if (!trimmed) return { candidates: [], hasUnclosedObject: false };
+  const fenced = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/iu)?.[1]?.trim();
+  const source = fenced || trimmed;
+  const candidates: string[] = [];
+  let hasUnclosedObject = false;
+  for (let start = 0; start < source.length; start += 1) {
+    if (source[start] !== "{") continue;
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    let closed = false;
+    for (let index = start; index < source.length; index += 1) {
+      const character = source[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') quoted = false;
+        continue;
+      }
+      if (character === '"') quoted = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          candidates.push(source.slice(start, index + 1));
+          closed = true;
+          break;
+        }
+      }
+    }
+    if (!closed) hasUnclosedObject = true;
+  }
+  return { candidates: [...new Set(candidates)], hasUnclosedObject };
 }

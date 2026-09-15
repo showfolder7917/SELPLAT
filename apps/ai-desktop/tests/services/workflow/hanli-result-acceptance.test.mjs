@@ -49,7 +49,9 @@ test("混合运行按条件强制页面截图与代码引用证据", () => {
 test("混合计划语义错误会在模型重试内返回具体分区原因", () => {
   const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
   assert.match(decision, /#askForStructuredResult\(prompt, state, \(value\) => this\.#createResultAcceptanceReview/);
-  assert.match(decision, /validate\(parseJsonObject\(response\)\)/);
+  assert.match(decision, /const values = parseJsonObjects\(response\)/);
+  assert.match(decision, /for \(const value of values\)/);
+  assert.match(decision, /return validate\(value\)/);
   assert.match(decision, /韩立混合验收计划缺少有效且不重复的页面条件编号/);
   assert.match(decision, /请按原始 criterion 编号修正页面与代码条件的完整分区/);
   assert.match(decision, /连续 3 次未返回有效的结果验收判断：\$\{lastError\}/);
