@@ -7,6 +7,8 @@ import type { WorkspaceExplorerFeatureProps } from "./WorkspaceExplorerFeature.t
 type DirectoryState = { loading: boolean; error: string; entries: WorkspaceDirectoryOutDto["entries"] };
 type SelectedEntry = { workspaceId: string; relativePath: string } | null;
 
+const FILE_OPERATION_TIMEOUT_MS = 12_000;
+
 function key(workspaceId: string, relativePath: string): string {
   return `${workspaceId}:${relativePath}`;
 }
