@@ -213,8 +213,13 @@ export class HanliDecisionService {
 
 /** 仅补足结果验收的歧义分类提示；语义校验仍是唯一允许放行的边界。 */
 function resultAcceptanceRetryHint(lastError: string): string {
-  if (lastError !== "混合验收必须同时包含页面条件和代码符合性条件。") return "";
-  return " mixed 的 pageCriterionIds 必须是全部 criterion 编号的非空严格子集：空列表时改为 code-conformance，列表包含全部条件时改为 page-experience。";
+  if (lastError === "混合验收必须同时包含页面条件和代码符合性条件。") {
+    return " mixed 的 pageCriterionIds 必须是全部 criterion 编号的非空严格子集：空列表时改为 code-conformance，列表包含全部条件时改为 page-experience。";
+  }
+  if (lastError === "韩立没有返回有效的结果验收类型和逐项结论。") {
+    return " mode 只能是 page-experience、code-conformance 或 mixed：全部页面条件只返回 page-experience；全部代码条件返回 code-conformance 和每个 criterion 的 finding；混合条件才返回 mixed、页面编号严格子集及其余 finding。";
+  }
+  return "";
 }
 
 function parseJsonObject(text: string): Record<string, unknown> {
