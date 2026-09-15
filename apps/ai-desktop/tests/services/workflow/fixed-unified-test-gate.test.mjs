@@ -43,17 +43,22 @@ test("全量测试失败时固定流程保留失败证据且不进入后续验�
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("候选缺少任一验收计划能力时固定流程不执行全量测试", async () => {
+test("候选分别缺少每项验收计划能力时固定流程不执行全量测试", async () => {
   const root = mkdtempSync(path.join(controlledTestRoot, "missing-acceptance-capability-"));
   const appRoot = path.join(root, "apps", "ai-desktop");
   mkdirSync(appRoot, { recursive: true });
   writeFileSync(path.join(appRoot, "package.json"), JSON.stringify({ scripts: {
     test: "node -e \"require('fs').writeFileSync('must-not-run','bad')\"",
   }}));
-  // 删除失败归因能力时，候选门禁必须在任何固定脚本开始前拒绝。
-  writeAcceptancePlanCandidate(root);
   const state = path.join(root, "apps", "ai-desktop", "electron", "services", "evolution", "internal", "evolution-state.store.ts");
-  writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId");
+  const runtime = path.join(root, "apps", "ai-desktop", "electron", "services", "workflow", "internal", "evolution", "persona-evolution.runtime.ts");
+  const candidates = [
+    ["验收计划持久化", () => writeFileSync(state, "reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
+    ["同专题重开", () => writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
+    ["混合证据汇总", () => writeFileSync(runtime, "plan.conditions.filter completeAutomaticAcceptance")],
+    ["自动与人工共用完成门禁", () => writeFileSync(runtime, 'plan.conditions.filter mode: "mixed"')],
+    ["失败归因", () => writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId")],
+  ];
   const events = [];
   let resourceRuns = 0;
   const runner = new FixedUnifiedTestRunner({
@@ -66,9 +71,13 @@ test("候选缺少任一验收计划能力时固定流程不执行全量测试",
     } },
   });
   try {
-    await assert.rejects(runner.run(), /失败归因/);
-    assert.deepEqual(events, []);
-    assert.equal(resourceRuns, 0);
-    assert.equal(existsSync(path.join(appRoot, "must-not-run")), false);
+    for (const [capability, removeCapability] of candidates) {
+      writeAcceptancePlanCandidate(root);
+      removeCapability();
+      await assert.rejects(runner.run(), new RegExp(capability));
+      assert.deepEqual(events, []);
+      assert.equal(resourceRuns, 0);
+      assert.equal(existsSync(path.join(appRoot, "must-not-run")), false);
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
