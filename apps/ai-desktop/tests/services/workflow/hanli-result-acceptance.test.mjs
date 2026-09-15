@@ -59,6 +59,16 @@ test("混合计划语义错误会在模型重试内返回具体分区原因", ()
   assert.match(decision, /连续 3 次未返回有效的结果验收判断：\$\{lastError\}/);
 });
 
+test("结果验收在独立短会话中重试，不重置客户韩立对话", () => {
+  const runtime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
+  assert.match(runtime, /createSqliteCodexSessionRepository\(aiMemoryDatabase, "hanli-result-acceptance"\)/);
+  assert.match(runtime, /askHanliResultAcceptance: async/);
+  assert.match(runtime, /await acceptanceCodex\.newChat\(\)/);
+  assert.match(decision, /askHanliResultAcceptance\(request, state\)/);
+  assert.match(decision, /#askForStructuredDecision[\s\S]*?askHanli\(request, state\)/);
+});
+
 test("旧隔离入口与场景提示已从产品清单移除", () => {
   const manifest = JSON.parse(readFileSync("prompts/manifest.json", "utf8"));
   assert.equal(manifest.prompts.some((item) => item.id === "hanli.acceptance-scene"), false);

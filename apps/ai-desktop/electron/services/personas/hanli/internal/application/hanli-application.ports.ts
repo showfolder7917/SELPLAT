@@ -51,6 +51,8 @@ export interface HanliApplicationServiceOptions {
   memory?: CollaborationMemoryPort | null;
   /** 韩立内部判断模型端口，只用于提案判断等非普通会话场景。 */
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
+  /** 结果验收使用独立短会话，避免客户对话上下文影响固定 JSON 契约。 */
+  askHanliResultAcceptance?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   /** 后台训练语料语义分析端口。 */
   analyzeCorpus?: (prompt: string) => Promise<string>;
   /** 韩立向南宫婉发起一次只读事实调查的受控端口。 */

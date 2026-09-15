@@ -16,6 +16,8 @@ export interface HanliDecisionDependencies {
   memory: CollaborationMemoryPort | null;
   /** 调用韩立模型完成结构化提案判断。 */
   askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
+  /** 调用隔离短会话完成结果验收，避免复用客户对话线程。 */
+  askHanliResultAcceptance(prompt: string, state: EvolutionStateOutDto): Promise<string>;
   /** 返回当前稳定用户标识，隔离不同客户资料。 */
   readStableUserId(): string;
   /** 返回当前提案所属的工程语义范围。 */
@@ -193,7 +195,7 @@ export class HanliDecisionService {
     let request = prompt;
     let lastError = "";
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const response = await this.#dependencies.askHanli(request, state);
+      const response = await this.#dependencies.askHanliResultAcceptance(request, state);
       try {
         const values = parseJsonObjects(response);
         for (const value of values) {
