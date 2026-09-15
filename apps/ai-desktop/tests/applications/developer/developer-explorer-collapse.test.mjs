@@ -9,6 +9,7 @@ test("Developer 左侧任务区按可见职责拆分并保留折叠状态入口"
   const taskExplorer = source("src/applications/developer/explorer/TaskExplorerFeature.tsx");
   const workspaceExplorer = source("src/applications/developer/explorer/WorkspaceExplorerFeature.tsx");
   const workspaceController = source("src/applications/developer/explorer/useWorkspaceExplorerFeature.ts");
+  const fileOperationTimeout = source("src/applications/developer/explorer/file-operation-timeout.ts");
   const workspaceSection = source("src/applications/developer/sections/DeveloperWorkspaceSection.tsx");
   const applicationController = source("src/applications/developer/model/useDeveloperApplicationController.ts");
   const styles = source("src/applications/styles/desktop-applications.css");
@@ -27,8 +28,9 @@ test("Developer 左侧任务区按可见职责拆分并保留折叠状态入口"
   assert.match(workspaceController, /撤销登记后立即移除旧树和选择/);
   assert.match(workspaceController, /setSelectedEntry\(\(current\) => current && !isRegisteredWorkspace\(current\.workspaceId\) \? null : current\)/);
   assert.match(workspaceController, /openRequestId/);
-  assert.match(workspaceController, /waitForFileOperation[\s\S]*FILE_OPERATION_TIMEOUT_MS/);
-  assert.match(workspaceController, /finally\(\(\) => window\.clearTimeout\(timer\)\)\.catch\(\(\) => undefined\)/);
+  assert.match(workspaceController, /import \{ FileOperationTimeoutError, waitForFileOperation \} from "\.\/file-operation-timeout"/);
+  assert.match(fileOperationTimeout, /waitForFileOperation[\s\S]*FILE_OPERATION_TIMEOUT_MS/);
+  assert.match(fileOperationTimeout, /finally\(\(\) => globalThis\.clearTimeout\(timer\)\)\.catch\(\(\) => undefined\)/);
   assert.match(workspaceController, /directoryRequestId/);
   assert.match(workspaceController, /pendingFileOpens/);
   assert.match(workspaceController, /requestId !== openRequestId\.current/);
