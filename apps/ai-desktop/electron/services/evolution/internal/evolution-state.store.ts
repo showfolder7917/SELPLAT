@@ -545,6 +545,12 @@ export class EvolutionStateStore {
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, run.proposalId);
     if (proposal.topicId !== run.topicId) throw new Error("真实验收记录与专题不一致。 ");
+    const expectedCriterionIds = proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
+    const recordedCriterionIds = run.stepResults.map((step) => step.checkId);
+    if (run.criteria.length !== proposal.acceptanceCriteria.length
+      || expectedCriterionIds.some((criterionId) => recordedCriterionIds.filter((item) => item === criterionId).length !== 1)) {
+      throw new Error("验收记录没有逐项覆盖原提案条件，不能进入结果完成门禁。 ");
+    }
     return this.#commit("acceptance.result_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
   }
 
