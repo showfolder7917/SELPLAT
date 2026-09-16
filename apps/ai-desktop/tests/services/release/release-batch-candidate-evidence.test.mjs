@@ -12,6 +12,7 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   const releaseContractIndex = read("contracts/services/support/capabilities/release/index.ts");
   const verifier = read("electron/services/support/capabilities/release/internal/integration.verifier.ts");
   const pipeline = read("electron/services/support/capabilities/release/internal/version-integration.pipeline.ts");
+  const workspaceManager = read("electron/services/support/capabilities/release/internal/version-workspace.manager.ts");
   const runtimeActivationPolicy = read("electron/services/support/capabilities/release/internal/runtime-activation.policy.ts");
   const store = read("electron/services/support/capabilities/release/internal/release-batch.store.ts");
   assert.match(contract, /candidateEvidence: ReleaseBatchCandidateEvidenceOutDto \| null/);
@@ -37,6 +38,11 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(runtimeActivationPolicy, /RUNTIME_ACTIVATION_PATHS/);
   assert.match(runtimeActivationPolicy, /loadedRuntimeSha !== candidateSha/);
   assert.match(store, /candidateEvidence: null/);
+  assert.match(workspaceManager, /class CandidateCompletenessError/);
+  assert.match(workspaceManager, /assertCandidateContainsTaskResults/);
+  assert.match(workspaceManager, /merge-base", "--is-ancestor", resultSha, candidate\.candidateSha/);
+  assert.match(pipeline, /await this\.\#workspaces\.assertCandidateContainsTaskResults\(candidate, tasks\)/);
+  assert.match(pipeline, /candidateIncomplete \? "candidate-branch-conflict"/);
 });
 
 test("本地修改转交只在一次性工作树应用恢复快照，冲突不会污染任务工作树", () => {

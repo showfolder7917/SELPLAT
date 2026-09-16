@@ -80,6 +80,14 @@ export class CandidateWorkspaceDirtyError extends Error {
   }
 }
 
+/** 候选必须包含每个冻结任务的结果提交，不能以候选分支名或历史运行包替代。 */
+export class CandidateCompletenessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CandidateCompletenessError";
+  }
+}
+
 /** 阻止候选合并已被任务工作区后续提交替代的旧结果快照。 */
 export class StaleTaskResultError extends Error {
   readonly taskId: string;
@@ -302,6 +310,18 @@ export class VersionWorkspaceManager {
 
   async createIntegrationCandidate(generation: number, tasks: CollaborationTaskOutDto[]): Promise<IntegrationCandidate> {
     return this.createReleaseCandidate(`integration-g${generation}`, "0.0.0", generation, tasks, true);
+  }
+
+  /** 统一测试前核对候选 HEAD 和每个任务的冻结 resultSha 属于同一提交链。 */
+  async assertCandidateContainsTaskResults(candidate: IntegrationCandidate, tasks: readonly CollaborationTaskOutDto[]): Promise<void> {
+    const actualCandidateSha = await this.#git(candidate.rootPath, ["rev-parse", "HEAD"]);
+    if (actualCandidateSha !== candidate.candidateSha) throw new CandidateCompletenessError(`候选 HEAD 与冻结候选 SHA 不一致：${actualCandidateSha} !== ${candidate.candidateSha}。`);
+    for (const task of tasks) {
+      const resultSha = task.versionWorkspace?.resultSha;
+      if (!resultSha) throw new CandidateCompletenessError(`任务 ${task.taskId} 缺少冻结 resultSha，不能开始统一测试。`);
+      const contains = await this.#git(candidate.rootPath, ["merge-base", "--is-ancestor", resultSha, candidate.candidateSha]).then(() => true, () => false);
+      if (!contains) throw new CandidateCompletenessError(`候选 ${candidate.candidateSha} 未包含任务 ${task.taskId} 的冻结结果 ${resultSha}。`);
+    }
   }
 
   /** 从固定基线创建可追溯的 release/<version>-rc 候选；只有发布锁持有者可以调用。 */

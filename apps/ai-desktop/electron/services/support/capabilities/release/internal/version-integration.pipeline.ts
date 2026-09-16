@@ -11,6 +11,7 @@ import { LinghuAutomationFacade } from "../../../../personas/linghu/index.js";
 import { createCollaborationResultSummary } from "../../../../workflow/index.js";
 import {
   CandidateBranchConflictError,
+  CandidateCompletenessError,
   LocalChangeOwnershipError,
   MergeConflictError,
   type IntegrationCandidate,
@@ -338,6 +339,8 @@ export class VersionIntegrationPipeline {
       // 门禁前先冻结候选来源、运行器身份和逐项结果；失败后候选工作树会回收，归档仍可复核实际材料。
       releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
       this.#releaseBatches.write(releaseDocument);
+      // 只有候选确实包含同批冻结结果后才能记录 unified_test.started。
+      await this.#workspaces.assertCandidateContainsTaskResults(candidate, tasks);
       if (requiresRuntimeActivation(
         await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha),
         this.#loadedRuntimeSha,
@@ -459,11 +462,12 @@ export class VersionIntegrationPipeline {
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
       const mergeConflict = error instanceof MergeConflictError;
       const candidateBranchConflict = error instanceof CandidateBranchConflictError;
+      const candidateIncomplete = error instanceof CandidateCompletenessError;
       const capacityBlocked = LinghuAutomationFacade.isUnifiedTestCapacityBlockedError(error);
       const capacityFailure = capacityBlocked ? error as { capacity: { fileBytes: number; directoryBytes: number; headroomBytes: number; requiredBytes: number; availableBytes: number } } : null;
       const infrastructureFailure = capacityBlocked || LinghuAutomationFacade.isUnifiedTestInfrastructureError(error) || error instanceof StablePublishedApplicationCollisionError;
-      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
-      const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
+      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict || candidateIncomplete ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
+      const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
       const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error), capacityFailure);
       // 本地修改归属异常同样必须保留具体文件，不能在进入令狐调查前把证据清空。
       const conflictFiles = ownershipBlocked ? error.conflictFiles : mergeConflict ? error.conflictFiles : [];
@@ -481,7 +485,7 @@ export class VersionIntegrationPipeline {
         }
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = ownershipBlocked || mergeConflict || candidateBranchConflict || infrastructureFailure ? "blocked" : "test-failed";
+          task.state = ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete || infrastructureFailure ? "blocked" : "test-failed";
           task.phase = null;
           // 容量不足需要保留策略授权；此标记使自动恢复生成操作指导而不会再次签发源码修复。
           task.repairRequiresUserConfirmation = capacityBlocked;
@@ -500,7 +504,7 @@ export class VersionIntegrationPipeline {
           if (failurePhase === "verification" || capacityBlocked) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
           appendFlow(
             task,
-            ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict ? "integration.candidate_preparation_failed" : infrastructureFailure ? "integration.infrastructure_failed" : "unified_test.failed",
+            ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict || candidateIncomplete ? "integration.candidate_preparation_failed" : infrastructureFailure ? "integration.infrastructure_failed" : "unified_test.failed",
             "integration", ownershipBlocked || mergeConflict || infrastructureFailure ? "waiting" : "failed", failurePresentation.summary, currentActor,
             !ownershipBlocked && !mergeConflict && !infrastructureFailure,
           );
