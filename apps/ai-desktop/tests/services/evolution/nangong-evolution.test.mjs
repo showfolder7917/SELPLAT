@@ -559,7 +559,8 @@ test("韩立会话已有当前观点时收到独立1直接启动内部研讨", a
   assert.equal(recordedContexts[0].customerConclusion, "我的观点是：只保留右侧边框拖拽调宽，并移除左侧拖拽入口。");
   assert.equal(externalChatCalls, 0);
   assert.equal(result.messages.at(-2).content, "1");
-  assert.match(result.messages.at(-1).content, /请你确认，再进入实施/);
+  assert.match(result.messages.at(-1).content, /确认范围和影响后/);
+  assert.doesNotMatch(result.messages.at(-1).content, /内部研讨|自动托管/u);
 });
 
 test("韩立会话没有当前观点时输入1不创建空研讨", async () => {
