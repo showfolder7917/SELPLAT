@@ -1,6 +1,6 @@
 // Evolution 门面文件集中提供共同业务数据的装配入口，不把 Repository 或 Store 实现公开给人物和 IPC。
 import type { DatabasePort } from "../support/platform/persistence/index.js";
-import type { EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
+import type { CurrentTopicReadRecoveryOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CreateNangongTopicInDto } from "../../../contracts/services/personas/nangong/index.js";
 import { EvolutionMutationCoordinator } from "./internal/evolution-mutation.coordinator.js";
 import { EvolutionStateRepository } from "./internal/evolution-state.repository.js";
@@ -26,6 +26,8 @@ export function createEvolutionMutationCoordinator(
 /** Evolution Facade 使用的最小应用端口，只包含共同状态和人物流程共享能力。 */
 export interface EvolutionApplicationPort {
   state(): EvolutionStateOutDto;
+  /** 读取状态失败时返回当前专题档案已经声明的恢复政策。 */
+  readRecovery(): CurrentTopicReadRecoveryOutDto;
   dossier(topicId: string): EvolutionTopicDossierOutDto;
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto;
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]): () => void;
@@ -38,6 +40,8 @@ export class EvolutionFacade {
   constructor(application: EvolutionApplicationPort) { this.#application = application; }
   /** 返回共同状态副本，调用方不能绕过 Store 修改内部对象。 */
   state() { return this.#application.state(); }
+  /** 返回读取受阻时的最小政策，不把 Store 或旧时间线暴露给 Renderer。 */
+  readRecovery() { return this.#application.readRecovery(); }
   /** 返回指定专题的共同档案，其中可以包含多个人物留下的事实。 */
   dossier(topicId: string) { return this.#application.dossier(topicId); }
   /** 创建共同专题；来源人物由请求事实记录，不改变状态所有权。 */

@@ -3,7 +3,7 @@ export type { EvolutionApprovalOutDto } from "./dto/evolution-approval.out.dto.j
 /** 提案版本冻结的验收条件、证据要求和验收轮次。 */
 export type { EvolutionAcceptanceEvidenceTypeValue, EvolutionAcceptancePlanConditionOutDto, EvolutionAcceptancePlanOutDto, EvolutionAcceptanceRoundOutDto } from "./dto/evolution-acceptance-plan.out.dto.js";
 /** 当前专题的统一只读阶段，供页面避免分别解释任务与验收事实。 */
-export type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, CurrentTopicStageStatusValue } from "./dto/current-topic-stage.out.dto.js";
+export type { CurrentTopicAcceptanceOutDto, CurrentTopicReadRecoveryOutDto, CurrentTopicStageOutDto, CurrentTopicStageStatusValue } from "./dto/current-topic-stage.out.dto.js";
 export type { EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionApprovalStageValue, EvolutionFeedbackTargetValue } from "./value/evolution-approval.value.js";
 export type { EvolutionArchiveRecordOutDto } from "./dto/evolution-archive-record.out.dto.js";
 export type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue } from "./value/evolution-archive-record.value.js";

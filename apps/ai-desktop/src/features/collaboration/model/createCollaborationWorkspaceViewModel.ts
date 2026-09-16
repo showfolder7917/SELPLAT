@@ -60,6 +60,7 @@ export function createCollaborationWorkspaceViewModel({
         deliveryReadStatus: evolution.readStatus,
         timelineReadStatus: controller.data.timelineReadStatus,
         readError: evolution.readError || controller.data.timelineReadError,
+        readRecovery: evolution.readRecovery,
       },
       actions: {
         onManualApproval,

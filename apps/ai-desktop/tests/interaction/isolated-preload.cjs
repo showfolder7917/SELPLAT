@@ -648,6 +648,13 @@ contextBridge.exposeInMainWorld("desktop", {
   newLinghuDisplayConversation: async () => { linghuAutomationState.displayConversationStartedAt = new Date().toISOString(); return publishLinghuAutomation("automation.display_conversation_created"); },
   onLinghuAutomationState: (listener) => { linghuAutomationListeners.add(listener); return () => linghuAutomationListeners.delete(listener); },
   getEvolutionState: async () => structuredClone(evolutionState),
+  // 与正式 preload 一致：读取失败后的操作政策来自当前专题投影，而不是隔离页面的失败次数。
+  getEvolutionReadRecovery: async () => structuredClone(evolutionState.currentTopicStage?.readRecovery || {
+    policyId: "interaction-automatic-read",
+    waitingFor: "当前交付投影",
+    requiresUserAction: false,
+    nextAction: "系统将自动重新读取当前交付投影；读取成功后再显示当前结论。",
+  }),
   setInteractionTestConsoleFixture: async (enabled) => structuredClone(setInteractionTestConsoleFixture(enabled)),
   setInteractionOneShotRun: async (run) => {
     evolutionState.oneShotRun = run ? structuredClone(run) : null;

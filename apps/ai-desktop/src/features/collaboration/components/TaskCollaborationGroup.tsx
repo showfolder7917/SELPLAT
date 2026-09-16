@@ -3,7 +3,7 @@
  * 一个专题对应一张任务卡，卡内按真实发生顺序展示申请、审批、分发、执行和验证节点。
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   // 专题任务卡：展示一个专题的摘要、完整人物时间线和操作入口。
@@ -17,6 +17,10 @@ import type {
   // 页面参数：包含权威快照、实时正文、语言和人工操作。
   TaskCollaborationGroupProps,
 } from "./TaskCollaborationGroup.types";
+import type {
+  // 读取受阻政策：由当前专题投影签发，页面只消费不改写。
+  CurrentTopicReadRecoveryOutDto,
+} from "../../../../contracts/services/evolution/index";
 import {
   // 页面状态控制器：管理展开选择、定位、动态耗时和继续任务反馈。
   useTaskCollaborationGroup,
@@ -24,6 +28,8 @@ import {
 
 /** 读取受阻的页面投影只描述重读政策，不能从旧专题或时间线猜测当前任务。 */
 type ReadObstructionPresentation = {
+  /** 当前专题投影版本，用来区分下一次独立读取故障。 */
+  policyId: string;
   /** 当前无法取得的权威对象。 */
   waitingFor: string;
   /** 后台是否正在执行一次安全的只读重试。 */
@@ -34,44 +40,35 @@ type ReadObstructionPresentation = {
   nextAction: string;
 };
 
-/** 将两条权威读取状态和本次重试结果收敛为任务区唯一的读取受阻说明。 */
+/** 将读取状态与主进程签发的恢复政策收敛为任务区唯一的读取受阻说明。 */
 function createReadObstructionPresentation(input: {
   deliveryUnavailable: boolean;
   timelineUnavailable: boolean;
-  automaticRetryPending: boolean;
-  automaticRetryFinished: boolean;
+  recovery: CurrentTopicReadRecoveryOutDto;
 }): ReadObstructionPresentation | null {
   if (!input.deliveryUnavailable && !input.timelineUnavailable) return null;
 
-  const waitingFor = input.deliveryUnavailable && input.timelineUnavailable
-    ? "当前交付投影和专题历史证据"
-    : input.deliveryUnavailable ? "当前交付投影" : "专题历史证据";
-  const retryingAutomatically = input.automaticRetryPending || !input.automaticRetryFinished;
-  if (retryingAutomatically) {
-    return {
-      waitingFor,
-      retryingAutomatically: true,
-      requiresUserAction: false,
-      nextAction: "正在自动重新读取权威交付信息；读取成功后再显示当前结论。",
-    };
-  }
+  const waitingFor = input.deliveryUnavailable ? input.recovery.waitingFor : "专题历史证据";
   return {
+    policyId: input.recovery.policyId,
     waitingFor,
-    retryingAutomatically: false,
-    requiresUserAction: true,
-    nextAction: "自动重试仍未恢复；请重新读取权威交付信息，读取成功后再显示当前结论。",
+    retryingAutomatically: input.deliveryUnavailable && !input.recovery.requiresUserAction,
+    requiresUserAction: input.deliveryUnavailable && input.recovery.requiresUserAction,
+    nextAction: input.deliveryUnavailable ? input.recovery.nextAction : "系统将自动重新读取专题历史证据；读取成功后再显示当前结论。",
   };
 }
 
 /** 按专题展示完整协作历史的主页面。 */
 export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const [retryingRead, setRetryingRead] = useState(false);
-  const [automaticReadRetryFinished, setAutomaticReadRetryFinished] = useState(false);
+  /** 已提交状态只对应同一份档案政策；政策变化后不能继续禁用新的人工读取机会。 */
+  const [submittedReadPolicyId, setSubmittedReadPolicyId] = useState<string | null>(null);
+  const automaticRetryPolicyId = useRef<string | null>(null);
   // 页面模型（model）是任务群展示状态和业务操作的唯一输入。
   const { model } = props;
   // 权威数据提供实时节点正文，显示状态提供当前界面语言。
   const { liveTextByNodeId } = model.data;
-  const { locale, stateReadStatus, deliveryReadStatus, timelineReadStatus, readError } = model.presentation;
+  const { locale, stateReadStatus, deliveryReadStatus, timelineReadStatus, readError, readRecovery } = model.presentation;
   // 页面只读取人工审批和需求入口操作，继续任务由页面控制器包装异步反馈。
   const { onManualApproval, onOpenHanliConversation, onRetryDeliveryRead } = model.actions;
   // 页面控制器只消费模型，不再依赖组件外层的包装参数。
@@ -104,29 +101,30 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const readObstruction = createReadObstructionPresentation({
     deliveryUnavailable,
     timelineUnavailable,
-    automaticRetryPending: retryingRead,
-    automaticRetryFinished: automaticReadRetryFinished,
+    recovery: readRecovery,
   });
 
-  /** 首次读取失败只自动重读一次；后续明确交给用户，避免后台循环掩盖持续故障。 */
+  /** 自动重读只按档案政策执行一次；失败后仍等待同一政策，不把权限改成手动入口。 */
   useEffect(() => {
-    if (!readObstruction || automaticReadRetryFinished || retryingRead) return;
+    if (!readObstruction || readObstruction.requiresUserAction || retryingRead || automaticRetryPolicyId.current === readObstruction.policyId) return;
+    automaticRetryPolicyId.current = readObstruction.policyId;
     setRetryingRead(true);
     void onRetryDeliveryRead()
       .catch(() => undefined)
-      .finally(() => {
-        setAutomaticReadRetryFinished(true);
-        setRetryingRead(false);
-      });
-  }, [automaticReadRetryFinished, onRetryDeliveryRead, readObstruction, retryingRead]);
+      .finally(() => setRetryingRead(false));
+  }, [onRetryDeliveryRead, readObstruction, retryingRead]);
 
-  /** 权威读取恢复后，下一次独立故障仍可获得一次自动重读机会。 */
+  /** 读取恢复或档案政策更新后，下一次独立故障重新按主进程政策判断。 */
   useEffect(() => {
-    if (!readObstruction && automaticReadRetryFinished) setAutomaticReadRetryFinished(false);
-  }, [automaticReadRetryFinished, readObstruction]);
+    if (!readObstruction) {
+      automaticRetryPolicyId.current = null;
+      setSubmittedReadPolicyId(null);
+    }
+  }, [readObstruction]);
 
   /** 用户手动重读不推进协作任务，并在请求结束后继续展示最新权威读取结论。 */
   const retryDeliveryRead = () => {
+    setSubmittedReadPolicyId(readObstruction?.policyId || null);
     setRetryingRead(true);
     void onRetryDeliveryRead()
       .catch(() => undefined)
@@ -144,8 +142,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
           <span>下一步：{readObstruction.nextAction}</span>
           {readError && <small>{readError}</small>}
           {readObstruction.requiresUserAction && (
-            <button type="button" className="task-recovery-continue" disabled={retryingRead} onClick={retryDeliveryRead}>
-              {retryingRead ? "重新读取中…" : "重新读取"}
+            <button type="button" className="task-recovery-continue" disabled={retryingRead || submittedReadPolicyId === readObstruction.policyId} onClick={retryDeliveryRead}>
+              {retryingRead ? "重新读取中…" : submittedReadPolicyId === readObstruction.policyId ? "已提交，等待处理" : "重新读取"}
             </button>
           )}
         </div>
