@@ -418,7 +418,7 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
 });
 
 test("排查恢复点不进入后续客户对话上下文，也不挤掉真实问答", () => {
-  const messages = [{ messageId: "user-1", messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: "滚动条为何跳动" }];
+  const messages = [{ messageId: "user-1", messageType: "customer-visible", customerDisplayState: "ready", speakerType: "user", speakerPersonaId: null, content: "滚动条为何跳动" }];
   for (let index = 0; index < 30; index += 1) messages.push({
     messageId: `inquiry-checkpoint:u1:${index}`, messageType: "internal-recovery", speakerType: "system",
     speakerPersonaId: null, content: "内部恢复记录不应进入对话",
