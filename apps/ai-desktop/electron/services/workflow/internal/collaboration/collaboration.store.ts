@@ -434,6 +434,28 @@ function mergeDefaultMembers(state: CollaborationStateOutDto): void {
     task.sourceEvolutionApprovalId ??= null;
     task.recoveryTargetState ??= null;
     task.customerActionGuidance ??= null;
+    // 旧的受控激活失败分支只保存了 test-failed 与统一测试正文，遗漏了调度器消费的
+    // integrationFailure。启动迁移从同一任务的已持久失败事实补齐结构化契约，避免
+    // 令狐空闲却无法接续修复；不从页面文案或历史时间线猜测失败类型。
+    if (task.state === "test-failed" && !task.integrationFailure && task.unifiedTest?.status === "failed") {
+      const detail = task.unifiedTest.failureReason || task.repairFailureReason || task.blockingReason || "统一测试失败证据不完整";
+      task.integrationFailure = {
+        kind: "verification",
+        phase: "verification",
+        summary: "统一测试发现未通过项，已转入修复",
+        impact: "候选版本已经开始统一测试，验证命令返回失败，本批次暂不能发布。",
+        recoveryAction: `当前测试负责人根据失败证据修复后重新执行统一测试；原始证据保留：${detail.slice(0, 240)}`,
+        capacity: null,
+        detail,
+        workspaceRoot: task.versionWorkspace?.rootPath || null,
+        conflictFiles: [],
+        baseSha: task.versionWorkspace?.baseSha || null,
+        resultSha: task.versionWorkspace?.resultSha || null,
+        generation: task.integrationGeneration || 0,
+        occurredAt: task.unifiedTest.completedAt || task.updatedAt,
+      };
+      task.blockingReason = "统一测试发现未通过项，已转入修复";
+    }
     migrateTaskHistory(task, state);
   }
   if (!state.members.some((member) => member.memberId === state.selectedMemberId)) state.selectedMemberId = "han-li";

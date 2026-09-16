@@ -13,6 +13,32 @@ const request = { title: "恢复原任务", problemStatement: "原执行失败",
 const durations = { startWait: () => "wait", finish() {}, start: () => "span", instant() {}, interruptOpenSpans() {} };
 const verified = { status: "code-verified", text: "目标代码已验证", pendingActions: [], changedFiles: [], successfulCommands: ["targeted-check"] };
 
+test("重启补齐旧受控激活失败的结构化验证事实", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "activated-failure-migration-"));
+  try {
+    const file = path.join(directory, "state.json");
+    const store = new CollaborationStore(file);
+    const submitted = store.submitTask(request);
+    store.updateTask(submitted.taskId, "legacy.activation.failed", (task) => {
+      task.state = "test-failed";
+      task.phase = null;
+      task.integrationGeneration = 37;
+      task.blockingReason = "候选运行包已激活，但恢复统一测试失败";
+      task.unifiedTest = {
+        status: "failed", owner: { memberId: "linghu-ancestor", displayName: "令狐老祖" },
+        failureReason: "npm run test 失败", startedAt: "2026-09-16T09:00:00.000Z", completedAt: "2026-09-16T09:01:00.000Z",
+      };
+      delete task.integrationFailure;
+    });
+    const restored = new CollaborationStore(file).task(submitted.taskId);
+    assert.equal(restored.integrationFailure?.kind, "verification");
+    assert.equal(restored.integrationFailure?.phase, "verification");
+    assert.equal(restored.integrationFailure?.generation, 37);
+    assert.equal(restored.integrationFailure?.detail, "npm run test 失败");
+    assert.equal(restored.blockingReason, "统一测试发现未通过项，已转入修复");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 for (const complete of [true, false, "invalid"]) test(`修复后按完成证据续接：${complete}`, async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "repair-decision-"));
   let coordinator;
