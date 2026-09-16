@@ -35,6 +35,7 @@ import type {
   // 含义：AI Memory 数据库健康状态，包含 ready/recovery-required/unavailable、结构版本和提示消息。
   // 用法：main.ts 保存初始化结果，并通过 IPC 交给诊断界面；不会把数据库路径、连接或 SQL 暴露给页面。
   AiMemoryDatabaseStatusOutDto,
+  CorpusIngestionStatusOutDto,
   // 来源：同一个 persistence/database.ts。
   // 含义：历史语料语义补齐任务的进度 DTO，包含目标数、处理数、成功数、失败数和起止时间。
   // 用法：IPC 查询补齐状态时约束返回结构；数据库不可用时也必须返回同样完整的失败结构。
@@ -312,6 +313,14 @@ export async function startApplication(): Promise<void> {
   // running 防止并发扫描；requested 表示扫描期间又收到了一次触发，需要结束后再补跑。
   let corpusIngestionRunning = false;
   let corpusIngestionRequested = false;
+  let corpusIngestionStatus: CorpusIngestionStatusOutDto = {
+    state: settings.read().codexAppCorpusIngestionEnabled ? "completed" : "stopped",
+    message: settings.read().codexAppCorpusIngestionEnabled ? "等待下一次自动入库。" : "自动入库已停止。",
+    lastSucceededAt: null,
+    retryable: false,
+  };
+  /** 设置卡片只控制外部 Codex 自动入库；应用自身会话仍按既有完成回合语义补录，不能反向把“已停止”伪装成成功。 */
+  const isExternalCorpusIngestionEnabled = () => externalCorpusEnabled && settings.read().codexAppCorpusIngestionEnabled;
   let requestHanliSemanticRefresh: () => void = () => undefined;
   let startHanliInternalDeliberation: (
     request: SendPersonaConversationMessageInDto,
@@ -331,11 +340,15 @@ export async function startApplication(): Promise<void> {
       return;
     }
     corpusIngestionRunning = true;
+    const exposeStatusForThisRun = isExternalCorpusIngestionEnabled();
+    if (exposeStatusForThisRun) {
+      corpusIngestionStatus = { ...corpusIngestionStatus, state: "running", message: "正在处理 Codex 会话入库…", retryable: false };
+    }
     void (async () => {
       try {
         // AI Desktop 自身会话始终导入；外部 Codex App 会话受用户设置控制。
         const summaries = [await corpusIngestion.ingestPendingRolloutsIncrementally()];
-        if (settings.read().codexAppCorpusIngestionEnabled) {
+        if (isExternalCorpusIngestionEnabled()) {
           for (const ingestion of externalCorpusIngestions) summaries.push(await ingestion.ingestPendingRolloutsIncrementally());
         }
         const summary = summaries.reduce((total, current) => ({
@@ -346,10 +359,26 @@ export async function startApplication(): Promise<void> {
           skippedInternalFileCount: total.skippedInternalFileCount + current.skippedInternalFileCount,
         }), { scannedFileCount: 0, changedFileCount: 0, ingestedMessageCount: 0, skippedInternalFileCount: 0 });
         eventCenter.recordEvent("training_corpus.ingested", { trigger, ...summary });
+        if (exposeStatusForThisRun && isExternalCorpusIngestionEnabled()) {
+          corpusIngestionStatus = {
+            state: "completed",
+            message: `最近成功：新增 ${summary.ingestedMessageCount} 条训练语料。`,
+            lastSucceededAt: new Date().toISOString(),
+            retryable: false,
+          };
+        }
         requestHanliSemanticRefresh();
       } catch (error) {
         // 数据库或尾行暂不可用时保留 rollout 与旧水位；事件登记失败也不能覆盖原始会话。
         try { eventCenter.recordEvent("training_corpus.ingestion_failed", { trigger, message: error instanceof Error ? error.message : String(error) }); } catch { /* AI Memory 故障由启动状态统一回显。 */ }
+        if (exposeStatusForThisRun && isExternalCorpusIngestionEnabled()) {
+          corpusIngestionStatus = {
+            state: "failed",
+            message: `自动入库失败：${error instanceof Error ? error.message : String(error)}`,
+            lastSucceededAt: corpusIngestionStatus.lastSucceededAt,
+            retryable: true,
+          };
+        }
       } finally {
         // 无论成功失败都释放运行锁；若期间收到新触发，则立刻按最新来源补扫。
         corpusIngestionRunning = false;
@@ -364,7 +393,11 @@ export async function startApplication(): Promise<void> {
   ingestTrainingCorpus("startup");
   // 用户刚打开外部语料开关时立即导入，不必等待目录下一次变化。
   settings.subscribe((next) => {
-    if (externalCorpusEnabled && next.codexAppCorpusIngestionEnabled) ingestTrainingCorpus("codex-app-enabled");
+    if (!next.codexAppCorpusIngestionEnabled) {
+      corpusIngestionStatus = { ...corpusIngestionStatus, state: "stopped", message: "自动入库已停止。", retryable: false };
+      return;
+    }
+    if (externalCorpusEnabled) ingestTrainingCorpus("codex-app-enabled");
   });
   // 只监听 Codex 的持久会话目录；开关关闭时回调不读取外部会话，开启后下一次变化或30秒兜底扫描立即补录。
   if (externalCorpusEnabled) {
@@ -1137,6 +1170,7 @@ export async function startApplication(): Promise<void> {
       state: "failed", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0,
       failedCount: 1, message: "AI Memory 数据库不可用，无法补齐历史摘要。", startedAt: null, completedAt: null,
     } satisfies CorpusSemanticBackfillStatusOutDto),
+    corpusIngestionStatus: () => ({ ...corpusIngestionStatus }),
     startCorpusSemanticBackfill: (limit?: number) => {
       // 用户主动启动补齐时，数据库不可用属于明确业务失败，不能静默忽略。
       if (!corpusSemanticBackfill) throw new Error("AI Memory 数据库不可用，无法补齐历史摘要。");

@@ -6,7 +6,7 @@
  * 数据方向：main -> preload -> renderer。
  * 本文件不暴露数据库绝对路径、连接对象或 SQL 内容。
  */
-import type { AiMemoryDatabaseStateValue, CorpusSemanticBackfillStateValue } from "../value/database-state.value.js";
+import type { AiMemoryDatabaseStateValue, CorpusIngestionStateValue, CorpusSemanticBackfillStateValue } from "../value/database-state.value.js";
 
 export interface AiMemoryDatabaseStatusOutDto {
   state: AiMemoryDatabaseStateValue;
@@ -25,4 +25,12 @@ export interface CorpusSemanticBackfillStatusOutDto {
   message: string | null;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+/** 自动入库只返回后台生命周期和汇总结果；页面不读取会话文件、检查点或原始对话内容。 */
+export interface CorpusIngestionStatusOutDto {
+  state: CorpusIngestionStateValue;
+  message: string | null;
+  lastSucceededAt: string | null;
+  retryable: boolean;
 }

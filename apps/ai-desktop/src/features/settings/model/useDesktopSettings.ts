@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type {
   CorpusSemanticBackfillStatusOutDto,
+  CorpusIngestionStatusOutDto,
   CodexModelCatalogOutDto,
   DesktopSettingsOutDto,
   LocaleValue,
@@ -26,6 +27,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
   const [serviceTier, setServiceTier] = useState<ModelServiceTierValue>("default");
   const [codexAppCorpusIngestionEnabled, setCodexAppCorpusIngestionEnabled] = useState(false);
   const [corpusSemanticBackfill, setCorpusSemanticBackfill] = useState<CorpusSemanticBackfillStatusOutDto | null>(null);
+  const [corpusIngestion, setCorpusIngestion] = useState<CorpusIngestionStatusOutDto | null>(null);
   const [modelCatalog, setModelCatalog] = useState<CodexModelCatalogOutDto>({ models: [] });
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
@@ -35,16 +37,26 @@ export function useDesktopSettings(settingsOpen: boolean) {
     const desktop = getOptionalSystemDesktopApi();
     if (!desktop) return;
     void desktop.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
+    // 安装包更新中的旧隔离 preload 尚未提供这个纯状态查询时，保持“已停止”即可；不能因此阻断整个 Developer 页面。
+    if (typeof desktop.getCorpusIngestionStatus === "function") {
+      void desktop.getCorpusIngestionStatus().then(setCorpusIngestion);
+    } else {
+      setCorpusIngestion({ state: "stopped", message: "自动入库已停止。", lastSucceededAt: null, retryable: false });
+    }
     void desktop.getSettings().then(applySettings);
   }, []);
 
   useEffect(() => {
-    if (corpusSemanticBackfill?.state !== "running") return;
+    if (corpusSemanticBackfill?.state !== "running" && corpusIngestion?.state !== "running") return;
     const timer = window.setInterval(() => {
       void getOptionalSystemDesktopApi()?.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
+      const desktop = getOptionalSystemDesktopApi();
+      if (typeof desktop?.getCorpusIngestionStatus === "function") {
+        void desktop.getCorpusIngestionStatus().then(setCorpusIngestion);
+      }
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [corpusSemanticBackfill?.state]);
+  }, [corpusSemanticBackfill?.state, corpusIngestion?.state]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -106,6 +118,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
     serviceTier,
     codexAppCorpusIngestionEnabled,
     corpusSemanticBackfill,
+    corpusIngestion,
     modelCatalog,
     modelCatalogLoaded,
     modelCatalogLoading,
