@@ -668,13 +668,16 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
       timeline.scrollTo({ top: timeline.scrollHeight });
       const composerBounds = composer.getBoundingClientRect();
       const lastMessageBounds = lastMessage.getBoundingClientRect();
-      // 输入区是时间线上的固定浮层；消息内容依靠动态留白滚到浮层上方，而不是缩短时间线盒子。
+      // 韩立输入区占用独立网格行；时间线滚到底时的可视范围必须止于输入区上方。
       const composerReserve = Number.parseFloat(window.getComputedStyle(timeline).getPropertyValue("--selconversation-composer-reserve"));
-      return { maximumScrollTop, scrollTop: timeline.scrollTop, composerHeight: composerBounds.height, composerReserve, composerTop: composerBounds.top, lastMessageBottom: lastMessageBounds.bottom };
+      const timelineBounds = timeline.getBoundingClientRect();
+      const composerPosition = window.getComputedStyle(composer).position;
+      return { maximumScrollTop, scrollTop: timeline.scrollTop, composerReserve, composerPosition, timelineBottom: timelineBounds.bottom, composerTop: composerBounds.top, lastMessageBottom: lastMessageBounds.bottom };
     });
     expect(hanliTimelineGeometry.maximumScrollTop, "韩立会话必须产生可验证的内部滚动距离").toBeGreaterThan(0);
     expect(hanliTimelineGeometry.scrollTop, "消息时间线必须实际滚动到末尾").toBeGreaterThanOrEqual(hanliTimelineGeometry.maximumScrollTop - 1);
-    expect(hanliTimelineGeometry.composerReserve, "动态底部留白必须覆盖固定输入区的真实高度和安全间距").toBeGreaterThanOrEqual(Math.ceil(hanliTimelineGeometry.composerHeight) + 48);
+    expect(hanliTimelineGeometry.composerPosition, "韩立输入区必须占用独立布局行，不能覆盖消息时间线").toBe("static");
+    expect(hanliTimelineGeometry.timelineBottom, "韩立消息时间线的可视范围必须止于固定输入区上方").toBeLessThanOrEqual(hanliTimelineGeometry.composerTop);
     expect(hanliTimelineGeometry.lastMessageBottom, "滚动到末尾后最后一条韩立消息必须完整位于固定输入区上方").toBeLessThanOrEqual(hanliTimelineGeometry.composerTop);
   }
   await expect(hanliConversation.getByText("韩立 · 内部研讨", { exact: true })).toHaveCount(0);
