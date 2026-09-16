@@ -115,6 +115,8 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
             {corpus.statusMessage}{corpus.statusProgress ? ` · ${corpus.statusProgress}` : ""}
           </em>
         )}
+        {/* 自动入库状态来自 Worker 任务表，不能被历史摘要按钮的即时回执遮蔽。 */}
+        {corpus.ingestionStatusMessage && <small>{corpus.ingestionStatusMessage}</small>}
         <div>
           <button type="button" aria-pressed={corpus.ingestionEnabled} onClick={corpus.onToggle}>
             {corpus.toggleLabel}
