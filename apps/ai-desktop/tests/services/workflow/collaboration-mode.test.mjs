@@ -152,6 +152,8 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(integrationPipelineSource, /release\.restart_healthy/);
   assert.match(integrationPipelineSource, /unified_test\.passed/);
   assert.match(integrationPipelineSource, /unified_test\.failed/);
+  assert.match(integrationPipelineSource, /runtime_activation_failed[\s\S]*task\.integrationFailure = \{[\s\S]*kind: "verification"[\s\S]*phase: "verification"/,
+    "受控激活后继续测试失败也必须保存自动修复调度器消费的结构化验证失败");
 });
 
 const workspaceState = {

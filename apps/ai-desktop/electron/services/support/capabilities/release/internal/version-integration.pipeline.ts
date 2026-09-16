@@ -232,10 +232,12 @@ export class VersionIntegrationPipeline {
       });
       publishedExecutable = verified.executable;
     } catch (error) {
+      const failureDetail = errorMessage(error);
+      const failurePresentation = integrationFailurePresentation("verification", document.generation, failureDetail);
       document.state = "failed";
-      document.failureReason = errorMessage(error);
+      document.failureReason = failureDetail;
       document.completedAt = new Date().toISOString();
-      if (document.runtimeActivation) document.runtimeActivation = { ...document.runtimeActivation, state: "failed", detail: errorMessage(error), updatedAt: new Date().toISOString() };
+      if (document.runtimeActivation) document.runtimeActivation = { ...document.runtimeActivation, state: "failed", detail: failureDetail, updatedAt: new Date().toISOString() };
       this.#releaseBatches.write(document);
       this.#store.updateTask(taskIds[0], "integration.runtime_activation_failed", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === document.generation);
@@ -248,11 +250,28 @@ export class VersionIntegrationPipeline {
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           task.state = "test-failed";
           task.phase = null;
-          task.blockingReason = "候选运行包已激活，但恢复统一测试失败";
+          task.blockingReason = failurePresentation.summary;
           task.recoveryTargetState = "ready-for-integration";
+          // 受控激活后的验证失败必须与普通统一测试失败使用同一结构化契约；
+          // 自动修复调度器只消费该事实，不能退回到字符串或卡点时间线猜测。
+          task.integrationFailure = {
+            kind: "verification",
+            phase: "verification",
+            summary: failurePresentation.summary,
+            impact: failurePresentation.impact,
+            recoveryAction: failurePresentation.recoveryAction,
+            capacity: null,
+            detail: failureDetail,
+            workspaceRoot: candidate.rootPath,
+            conflictFiles: [],
+            baseSha: candidate.baseSha,
+            resultSha: task.versionWorkspace?.resultSha || null,
+            generation: document.generation,
+            occurredAt: new Date().toISOString(),
+          };
           task.currentHandler = participantSnapshot(requireActor(mutable, this.#actorMemberId));
-          task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
-          appendFlow(task, "unified_test.failed", "integration", "failed", errorMessage(error), actor, true);
+          task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: failureDetail, startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          appendFlow(task, "unified_test.failed", "integration", "failed", failureDetail, actor, true);
         }
       });
       throw error;
