@@ -24,6 +24,44 @@ export function reconcileCollaborationTimeline(
     : { ...incoming, groups };
 }
 
+/** 把按通知读取的专题替换进最近成功快照；未受影响卡片保持原内容与顺序。 */
+export function reconcileChangedCollaborationTimeline(
+  previous: CollaborationTimelineSnapshotOutDto | null,
+  incoming: CollaborationTimelineSnapshotOutDto,
+  changedGroupIds: string[],
+): CollaborationTimelineSnapshotOutDto {
+  if (!previous) return incoming;
+  const changed = new Set(changedGroupIds);
+  const replacement = new Map(incoming.groups.map((group) => [group.groupId, group]));
+  const groups = previous.groups.map((group) => changed.has(group.groupId) ? replacement.get(group.groupId) || group : group);
+  for (const group of incoming.groups) if (!previous.groups.some((current) => current.groupId === group.groupId)) groups.push(group);
+  return { version: 1, groups, updatedAt: incoming.updatedAt };
+}
+
+/**
+ * 启动全量读取尚未完成时，变更事件已经取得了指定专题的新快照。
+ * 初始快照可能早于该事件，不能用其中的旧专题覆盖已经收到的变更；其余专题仍由全量快照补齐。
+ */
+export function reconcileInitialCollaborationTimeline(
+  previous: CollaborationTimelineSnapshotOutDto | null,
+  incoming: CollaborationTimelineSnapshotOutDto,
+  changedGroupIdsDuringRead: ReadonlySet<string>,
+): CollaborationTimelineSnapshotOutDto {
+  if (!previous || changedGroupIdsDuringRead.size === 0) return reconcileCollaborationTimeline(previous, incoming);
+
+  const previousGroups = new Map(previous.groups.map((group) => [group.groupId, group]));
+  const incomingGroupIds = new Set(incoming.groups.map((group) => group.groupId));
+  const groups = incoming.groups.map((group) => {
+    const previousGroup = previousGroups.get(group.groupId);
+    if (changedGroupIdsDuringRead.has(group.groupId) && previousGroup) return previousGroup;
+    return reconcileGroup(previousGroup, group);
+  });
+  for (const group of previous.groups) {
+    if (changedGroupIdsDuringRead.has(group.groupId) && !incomingGroupIds.has(group.groupId)) groups.push(group);
+  }
+  return { ...incoming, groups };
+}
+
 function reconcileGroup(
   previous: CollaborationTimelineGroupOutDto | undefined,
   incoming: CollaborationTimelineGroupOutDto,

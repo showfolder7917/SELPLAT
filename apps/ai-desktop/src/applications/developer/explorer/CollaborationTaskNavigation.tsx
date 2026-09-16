@@ -41,7 +41,7 @@ export function CollaborationTaskNavigation({
   // 权威数据提供成员列表和任务群时间线。
   const { state, stateReadStatus, timeline } = controller.data;
   // 导航状态提供当前选中的页面。
-  const { panel } = controller.navigation;
+  const { panel, savingMemberId } = controller.navigation;
   // 导航操作集中负责选人和切换右侧页面。
   const { setPanel, openMemberPage } = controller.actions;
 
@@ -68,14 +68,15 @@ export function CollaborationTaskNavigation({
           <small>{collaborationMemberDisplayModel({ member: null, locale, status: stateReadStatus }).label}</small>
         )}
         {state?.members.map((member) => {
-          const memberSelected = panel === "member" && member.memberId === state.selectedMemberId;
+          const memberSelected = panel === "member" && member.memberId === controller.navigation.selectedMemberId;
           const display = collaborationMemberDisplayModel({
             member,
             locale,
             status: stateReadStatus,
             oneShotRun: evolutionState?.oneShotRun,
           });
-          const selectCurrentMember = () => void openMemberPage(member.memberId);
+          const saving = savingMemberId === member.memberId;
+          const selectCurrentMember = () => openMemberPage(member.memberId);
 
           return (
             <button
@@ -83,13 +84,15 @@ export function CollaborationTaskNavigation({
               key={member.memberId}
               className={`collaboration-member ${memberSelected ? "selected" : ""}`}
               aria-pressed={memberSelected}
+              aria-busy={saving}
+              disabled={saving}
               onClick={selectCurrentMember}
             >
               <span>
                 <i className={display.presence} />
                 {member.displayName}
               </span>
-              <small>{display.label}</small>
+              <small>{saving ? (locale === "ja" ? "保存中" : "保存中") : display.label}</small>
             </button>
           );
         })}

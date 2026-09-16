@@ -19,8 +19,6 @@ export interface CollaborationStateOutDto {
   version: 1;
   /** 桌面当前运行模式。 */
   mode: DesktopOperatingModeValue;
-  /** 当前界面选中的成员标识。 */
-  selectedMemberId: string;
   /** 当前存在的全部协作成员。 */
   members: CollaborationMemberOutDto[];
   /** 当前及历史协作任务。 */

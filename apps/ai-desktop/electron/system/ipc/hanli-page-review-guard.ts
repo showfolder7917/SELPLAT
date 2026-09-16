@@ -18,7 +18,7 @@ export class HanliPageReviewGuard {
       throw new Error("韩立检查页面时不能浏览工作区文件；源码由独立只读代码审查通道检查。");
     }
     const readOnly = /^(desktop:(get|list)-|desktop:resolve-effective-rule$|desktop:read-attachment-previews$)/u.test(channel);
-    const navigation = channel === "desktop:set-operating-mode" || channel === "desktop:select-collaboration-member";
+    const navigation = channel === "desktop:set-operating-mode";
     if (readOnly || navigation) return;
     throw new Error("韩立检查页面时只允许读取和安全导航，不能修改正式业务数据。");
   }

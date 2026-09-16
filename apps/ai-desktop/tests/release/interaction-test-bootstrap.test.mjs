@@ -89,13 +89,10 @@ test("隔离 preload 覆盖正式系统桌面桥接并保留工作区订阅清�
   assert.match(isolatedPreload, /reportRendererException: \(report\)/);
 });
 
-test("隔离 preload 覆盖人物客户显示窗口桥接", () => {
+test("隔离 preload 覆盖正式协同桌面桥接", () => {
   const declaration = collaborationDesktopApi.match(/COLLABORATION_DESKTOP_API_METHODS\s*=\s*\[([\s\S]*?)\]\s+as const/);
   assert.ok(declaration, "正式协同桥接必须声明方法集合");
   const methods = [...declaration[1].matchAll(/"([^" ]+)"/g)].map((match) => match[1]);
-  for (const method of ["getPersonaConversationWindow", "retryPersonaCustomerDisplayMessage"]) {
-    assert.ok(methods.includes(method), `正式协同桥接必须声明 ${method}`);
-    assert.match(isolatedPreload, new RegExp(`\\b${method}\\s*:`), `隔离 preload 缺少 ${method}`);
-  }
+  for (const method of methods) assert.match(isolatedPreload, new RegExp(`\\b${method}\\s*:`), `隔离 preload 缺少 ${method}`);
   assert.match(isolatedPreload, /message\.messageType === "customer-visible"/);
 });

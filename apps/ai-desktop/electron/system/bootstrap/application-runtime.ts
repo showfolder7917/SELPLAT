@@ -612,7 +612,7 @@ export async function startApplication(): Promise<void> {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, timelineNodeId, event });
     },
   });
-  const { collaborationStore, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
+  const { collaborationStore, collaborationNavigationPreference, collaborationInteractionPerformance, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
   collaboration = collaborationContext.collaboration;
   // 人物长期线程和临时执行线程共用同一全局授权路由；否则人物请求会停在主进程内存中，Renderer 永远看不到弹窗。
   collaborationRegistry.registerPersona({
@@ -1098,6 +1098,8 @@ export async function startApplication(): Promise<void> {
     dispatch,
     // 协作与人物能力。
     collaboration,
+    collaborationNavigationPreference,
+    collaborationInteractionPerformance,
     linghuAutomation,
     nangong: nangongRuntime.facade,
     hanli: hanliRuntime.facade,

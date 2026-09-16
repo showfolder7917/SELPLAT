@@ -88,7 +88,6 @@ export class CollaborationCoordinator {
   /** 订阅协作事实提交；交付投影使用它刷新只读结论，不能反向写入协作状态。 */
   subscribe(listener: CollaborationStateListener): () => void { return this.#store.subscribe(listener); }
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
-  selectMember(memberId: string): CollaborationStateOutDto { return this.#store.selectMember(memberId); }
 
   /**
    * 把客户在韩立会话中的最新纠正写回当前演化修复任务。

@@ -6,7 +6,7 @@
  */
 
 // React 生命周期：页面打开时建立主进程订阅，页面关闭时释放订阅。
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 // React 状态容器：保存协作状态、时间线、实时输出和当前页面选择。
 import { useState } from "react";
 
@@ -49,7 +49,11 @@ import type {
   // 协作实时输出：把消息正文和所属回合绑定，防止不同回合互相串流。
   CollaborationLiveOutput,
 } from "./collaboration-live-output";
-import { reconcileCollaborationTimeline } from "./reconcileCollaborationTimeline";
+import {
+  reconcileChangedCollaborationTimeline,
+  reconcileCollaborationTimeline,
+  reconcileInitialCollaborationTimeline,
+} from "./reconcileCollaborationTimeline";
 
 /** 右侧协作区只有“人物会话”和“任务协作群”两个一级页面。 */
 export type CollaborationPanel = "member" | "task-group";
@@ -230,6 +234,21 @@ function connectAuthoritativeRefresh<Snapshot>(input: {
   };
 }
 
+/** 受控性能 fixture 通过根元素数据属性指定相同数据集及对比阶段；普通页面沿用候选阶段默认值。 */
+function interactionPerformanceContext(): { datasetId: string; phase: "baseline" | "candidate" } {
+  const datasetId = document.documentElement.dataset.collaborationPerformanceDataset?.trim() || "retained-history";
+  const phase = document.documentElement.dataset.collaborationPerformancePhase;
+  return { datasetId, phase: phase === "baseline" ? "baseline" : "candidate" };
+}
+
+/** 交互样本只在性能 API 可用时异步落入临时目录，不影响页面和协作事实。 */
+function recordInteractionPerformance(operation: string, startedAt: number, details: Record<string, string | number | boolean | null>): void {
+  const desktop = getOptionalCollaborationDesktopApi();
+  if (!desktop) return;
+  const context = interactionPerformanceContext();
+  void desktop.recordCollaborationInteractionPerformance({ operation, durationMs: Math.max(0, performance.now() - startedAt), datasetId: context.datasetId, phase: context.phase, details });
+}
+
 /** 协作工作区的主进程订阅、页面状态、派生数据和业务操作统一入口。 */
 export function useCollaborationWorkspace() {
   // 协作总状态：控制当前模式、成员列表、任务列表和已选人物。
@@ -248,6 +267,13 @@ export function useCollaborationWorkspace() {
   const [timelineStreams, setTimelineStreams] = useState<Record<string, CollaborationLiveOutput>>({});
   // 当前协作子页面：默认先显示人物页。
   const [panel, syncPanel] = useState<CollaborationPanel>("member");
+  // 当前查看人物只是 Renderer 导航偏好，不能再写入协作成员和任务事实。
+  const [selectedMemberId, setSelectedMemberId] = useState("han-li");
+  // 保存中的人物只影响对应按钮，其他人物仍可立即切换。
+  const [savingMemberId, setSavingMemberId] = useState<string | null>(null);
+  const navigationIntent = useRef(0);
+  const navigationPreferenceRestored = useRef(false);
+  const timelineGroupVersions = useRef(new Map<string, number>());
   // 导航修订号：重复点击同一入口时也能通知页签重新聚焦。
   const [navigationRevision, setNavigationRevision] = useState(0);
   // 页面错误：集中显示跨进程读取或人工操作失败原因。
@@ -274,12 +300,54 @@ export function useCollaborationWorkspace() {
         setError(readableDesktopError(reason, "无法读取协作状态。"));
       },
     });
-    const removeTimelineListener = connectAuthoritativeRefresh({
-      read: () => desktop.getCollaborationTimeline(),
-      subscribe: (refresh) => desktop.onCollaborationTimelineChanged(refresh),
-      apply: (snapshot) => { setTimeline((current) => reconcileCollaborationTimeline(current, snapshot)); setTimelineReadStatus("ready"); setTimelineReadError(""); },
-      unavailable: (reason) => { setTimelineReadStatus("unavailable"); setTimelineReadError(readableDesktopError(reason, "无法读取任务协作时间线。")); },
+    // 首次读取完整权威快照；后续只读取提交通知指定的专题卡。
+    let timelineDisposed = false;
+    let initialTimelineReadPending = true;
+    const changedGroupIdsDuringInitialRead = new Set<string>();
+    const readInitialTimeline = () => void desktop.getCollaborationTimeline()
+      .then((snapshot) => {
+        initialTimelineReadPending = false;
+        if (!timelineDisposed) {
+          setTimeline((current) => reconcileInitialCollaborationTimeline(current, snapshot, changedGroupIdsDuringInitialRead));
+          setTimelineReadStatus("ready");
+          setTimelineReadError("");
+        }
+      })
+      .catch((reason) => {
+        initialTimelineReadPending = false;
+        if (!timelineDisposed) {
+          setTimelineReadStatus("unavailable");
+          setTimelineReadError(readableDesktopError(reason, "无法读取任务协作时间线。"));
+        }
+      });
+    const removeTimelineListener = desktop.onCollaborationTimelineChanged((event) => {
+      const changedGroupIds = event.groupIds.filter((groupId) => {
+        const version = event.groupVersions[groupId];
+        if (!Number.isInteger(version) || version < 1) return false;
+        const previousVersion = timelineGroupVersions.current.get(groupId) || 0;
+        if (version <= previousVersion) return false;
+        timelineGroupVersions.current.set(groupId, version);
+        return true;
+      });
+      if (initialTimelineReadPending) changedGroupIds.forEach((groupId) => changedGroupIdsDuringInitialRead.add(groupId));
+      if (!changedGroupIds.length) return;
+      const requestedVersions = new Map(changedGroupIds.map((groupId) => [groupId, timelineGroupVersions.current.get(groupId)!]));
+      const startedAt = performance.now();
+      void desktop.getCollaborationTimelineGroups(changedGroupIds)
+        .then((snapshot) => {
+          if (timelineDisposed || changedGroupIds.some((groupId) => timelineGroupVersions.current.get(groupId) !== requestedVersions.get(groupId))) return;
+          setTimeline((current) => reconcileChangedCollaborationTimeline(current, snapshot, changedGroupIds));
+          setTimelineReadStatus("ready");
+          setTimelineReadError("");
+          recordInteractionPerformance("timeline-read-processing", startedAt, { groupCount: changedGroupIds.length });
+        })
+        .catch((reason) => {
+          // 同一版本的读取失败不能被视为已消费；保留最近成功内容并允许该专题的下一次通知或人工重读再次请求。
+          for (const groupId of changedGroupIds) if (timelineGroupVersions.current.get(groupId) === requestedVersions.get(groupId)) timelineGroupVersions.current.delete(groupId);
+          if (!timelineDisposed) { setTimelineReadStatus("unavailable"); setTimelineReadError(readableDesktopError(reason, "无法读取已变化专题。")); }
+        });
     });
+    readInitialTimeline();
     const removeLinghuListener = connectAuthoritativeSnapshot({
       read: () => desktop.getLinghuAutomationState(),
       subscribe: (listener) => desktop.onLinghuAutomationState((event: LinghuAutomationStateEventOutDto) => listener(event.state)),
@@ -309,6 +377,7 @@ export function useCollaborationWorkspace() {
     // 页面卸载时释放全部 Electron 事件监听，防止重复订阅和内存泄漏。
     return () => {
       removeStateListener();
+      timelineDisposed = true;
       removeTimelineListener();
       removeLinghuListener();
       removeStreamListener();
@@ -323,8 +392,24 @@ export function useCollaborationWorkspace() {
 
   // 当前是否处于多人协作模式。
   const collaborationMode = state?.mode === "collaboration";
+  // 首次取得成员清单后恢复主进程已校验的导航偏好；用户先点击时不接受迟到的恢复结果。
+  useEffect(() => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop || !state?.members.length || navigationPreferenceRestored.current) return;
+    navigationPreferenceRestored.current = true;
+    const intentAtRead = navigationIntent.current;
+    void desktop.getCollaborationNavigationPreference().then((memberId) => {
+      if (memberId && navigationIntent.current === intentAtRead) setSelectedMemberId(memberId);
+    }).catch((reason) => setError(readableDesktopError(reason, "无法恢复上次查看的人物。")));
+  }, [state]);
+  // 状态恢复后校验本地导航目标；已退出成员时回退到会话负责人。
+  useEffect(() => {
+    if (!state?.members.length) return;
+    if (state.members.some((member) => member.memberId === selectedMemberId)) return;
+    setSelectedMemberId(state.members.find((member) => member.kind === "conversation-owner")?.memberId || state.members[0]!.memberId);
+  }, [selectedMemberId, state]);
   // 当前人物必须来自后端成员列表，找不到时明确返回空。
-  const selectedMember = state?.members.find((member) => member.memberId === state.selectedMemberId) || null;
+  const selectedMember = state?.members.find((member) => member.memberId === selectedMemberId) || null;
   // 人物当前任务只保留未结束且确实由该人物发起、执行或参与过的任务。
   const selectedMemberTasks = state?.tasks.filter((task) => {
     if (TERMINAL_TASK_STATES.has(task.state)) return false;
@@ -345,16 +430,31 @@ export function useCollaborationWorkspace() {
     return applyStateRequest(getOptionalCollaborationDesktopApi()?.setDesktopOperatingMode(mode));
   };
 
-  /** 选择右侧要打开的协作成员。 */
-  const selectMember = (memberId: string) => {
-    return applyStateRequest(getOptionalCollaborationDesktopApi()?.selectCollaborationMember(memberId));
+  /** 选择右侧要打开的协作成员；先切换页面，偏好保存保持异步且不触发协作状态同步。 */
+  const selectMember = async (memberId: string) => {
+    navigationIntent.current += 1;
+    const intent = navigationIntent.current;
+    const startedAt = performance.now();
+    setSelectedMemberId(memberId);
+    setSavingMemberId(memberId);
+    requestAnimationFrame(() => requestAnimationFrame(() => recordInteractionPerformance("member-page-feedback", startedAt, { memberId })));
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop) {
+      setSavingMemberId(null);
+      setError("无法连接协作导航偏好服务。");
+      return;
+    }
+    const ipcStartedAt = performance.now();
+    void desktop.saveCollaborationNavigationPreference(memberId)
+      .then(() => recordInteractionPerformance("navigation-preference-ipc", ipcStartedAt, { memberId }))
+      .catch((reason) => { if (navigationIntent.current === intent) setError(readableDesktopError(reason, "无法保存查看位置，请重试。")); })
+      .finally(() => { if (navigationIntent.current === intent) setSavingMemberId(null); });
   };
 
   /** 选择成员并切换到对应人物页，不创建或提交协作任务。 */
   const openMemberPage = async (memberId: string) => {
-    const nextState = await selectMember(memberId);
-    if (!nextState) return;
     setPanel("member");
+    void selectMember(memberId);
   };
 
   /** 提交已经构造好的类型化协作任务。 */
@@ -453,6 +553,8 @@ export function useCollaborationWorkspace() {
       collaborationMode,
       // 当前人物：从权威成员列表解析，缺失时明确为空。
       selectedMember,
+      selectedMemberId,
+      savingMemberId,
       // 当前人物任务：只保留尚未结束且与该人物真实相关的任务。
       selectedMemberTasks,
     },

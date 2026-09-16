@@ -166,6 +166,21 @@ export class CollaborationTimelineRepository {
     });
   }
 
+  /** 只读取通知指出的专题，避免一次事实提交重新反序列化全部历史。 */
+  snapshotGroups(groupIds: string[], now = new Date().toISOString()): CollaborationTimelineSnapshotOutDto {
+    const ids = [...new Set(groupIds)].filter(Boolean);
+    if (!ids.length) return { version: 1, groups: [], updatedAt: now };
+    return this.#database.withConnection((connection) => {
+      const topics = ids.flatMap((groupId) => {
+        const row = connection.prepare(`SELECT groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt
+          FROM AiDesktopTaskTimelineTopic WHERE groupId=$groupId`).get({ $groupId: groupId }) as Record<string, unknown> | undefined;
+        return row ? [row] : [];
+      });
+      const groups = topics.map((topic) => this.#group(connection, topic, now));
+      return { version: 1, groups, updatedAt: groups.map((group) => group.updatedAt).sort().at(-1) || now };
+    });
+  }
+
   #upsertTopic(connection: DatabaseSync, input: {
     groupId: string; topicId: string | null; proposalId: string | null; title: string;
     status: CollaborationTimelineGroupOutDto["status"]; summary: string; startedAt: string; updatedAt: string;
