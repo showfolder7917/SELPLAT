@@ -346,6 +346,25 @@ export async function startApplication(): Promise<void> {
     })
     .catch((error) => { corpusIngestionStatus = { state: "failed", message: `无法恢复自动入库状态：${error instanceof Error ? error.message : String(error)}`, lastSucceededAt: null, retryable: true }; })
     : Promise.resolve();
+  /** IPC 保持同步返回缓存，但缓存只从 Worker 的持久任务表刷新，不能由摘要任务状态覆盖。 */
+  const refreshCorpusIngestionStatus = async (): Promise<void> => {
+    if (!backgroundPersistence) return;
+    try {
+      const stored = await backgroundPersistence.request<Partial<CorpusIngestionStatusOutDto> | null>({
+        operation: "read-corpus-ingestion-status",
+        payload: {},
+      });
+      if (!stored) return;
+      corpusIngestionStatus = {
+        state: stored.state === "running" || stored.state === "completed" || stored.state === "failed" || stored.state === "stopped" ? stored.state : "stopped",
+        message: typeof stored.message === "string" ? stored.message : "自动入库已停止。",
+        lastSucceededAt: typeof stored.lastSucceededAt === "string" ? stored.lastSucceededAt : null,
+        retryable: stored.retryable === true,
+      };
+    } catch {
+      // 保留最后一次已知持久状态；读取暂时失败不能把未完成任务伪装为完成。
+    }
+  };
   /** 设置卡片只控制外部 Codex 自动入库；应用自身会话仍按既有完成回合语义补录，不能反向把“已停止”伪装成成功。 */
   const isExternalCorpusIngestionEnabled = () => externalCorpusEnabled && settings.read().codexAppCorpusIngestionEnabled;
   let requestHanliSemanticRefresh: () => void = () => undefined;
@@ -418,6 +437,9 @@ export async function startApplication(): Promise<void> {
   };
   // 必须先恢复持久状态；否则启动扫描可能把上次失败或处理中记录覆盖为新的默认状态。
   void restoreCorpusIngestionStatus.then(() => ingestTrainingCorpus("startup"));
+  // 无论当前状态是否为 running 都刷新，停止、失败和重启后的卡片无需等待下一次扫描。
+  const corpusIngestionStatusTimer = setInterval(() => void refreshCorpusIngestionStatus(), 5_000);
+  corpusIngestionStatusTimer.unref();
   // 用户刚打开外部语料开关时立即导入，不必等待目录下一次变化。
   settings.subscribe((next) => {
     if (!next.codexAppCorpusIngestionEnabled) {
