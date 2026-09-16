@@ -30,6 +30,8 @@ const taskGroupCardSource = readFileSync(new URL("../../../src/features/collabor
 const collaborationModelSource = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
 const recoveryOperationSource = readFileSync(new URL("../../../src/features/collaboration/model/recovery-operation.ts", import.meta.url), "utf8");
 const collaborationViewModelSource = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
+const evolutionRuntimeSource = readFileSync(new URL("../../../src/features/evolution/model/useEvolutionRuntime.ts", import.meta.url), "utf8");
+const interactionPreloadSource = readFileSync(new URL("../../interaction/isolated-preload.cjs", import.meta.url), "utf8");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 
 test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
@@ -137,13 +139,15 @@ test("没有专题任务时可从空状态进入韩立会话，但不创建任�
 
 test("任务群在协作状态未返回或读取失败时不把空专题当作当前事实", () => {
   assert.match(collaborationViewModelSource, /taskGroup:[\s\S]*stateReadStatus: controller\.data\.stateReadStatus/);
-  assert.match(collaborationViewModelSource, /deliveryReadStatus: evolution\.readStatus[\s\S]*timelineReadStatus: controller\.data\.timelineReadStatus/);
+  assert.match(collaborationViewModelSource, /deliveryReadStatus: evolution\.readStatus[\s\S]*timelineReadStatus: controller\.data\.timelineReadStatus[\s\S]*readRecovery: evolution\.readRecovery/);
+  assert.match(evolutionRuntimeSource, /function readRecoveryAfterFailure[\s\S]*desktop\.getEvolutionReadRecovery[\s\S]*return automaticReadRecovery/);
+  assert.match(interactionPreloadSource, /getEvolutionReadRecovery: async \(\) => structuredClone\(evolutionState\.currentTopicStage\?\.readRecovery/);
   assert.match(taskGroupSource, /const deliveryUnavailable = deliveryReadStatus === "unavailable"[\s\S]*const timelineUnavailable = timelineReadStatus === "unavailable"[\s\S]*if \(readObstruction\)[\s\S]*当前无法读取/);
-  assert.match(taskGroupSource, /function createReadObstructionPresentation[\s\S]*retryingAutomatically[\s\S]*requiresUserAction/);
-  assert.match(taskGroupSource, /正在自动重新读取权威交付信息/);
+  assert.match(taskGroupSource, /function createReadObstructionPresentation[\s\S]*recovery: CurrentTopicReadRecoveryOutDto[\s\S]*input\.recovery\.requiresUserAction/);
+  assert.match(taskGroupSource, /自动重读只按档案政策执行一次[\s\S]*automaticRetryPolicyId/);
+  assert.doesNotMatch(taskGroupSource, /automaticReadRetryFinished/);
   assert.match(taskGroupSource, /正在等待：[\s\S]*是否需要你操作：[\s\S]*下一步：\{readObstruction\.nextAction\}/);
-  assert.match(taskGroupSource, /首次读取失败只自动重读一次[\s\S]*onRetryDeliveryRead[\s\S]*setAutomaticReadRetryFinished\(true\)/);
-  assert.match(taskGroupSource, /readObstruction\.requiresUserAction[\s\S]*task-recovery-continue[\s\S]*disabled=\{retryingRead\}[\s\S]*重新读取中…/);
+  assert.match(taskGroupSource, /submittedReadPolicyId[\s\S]*readObstruction\.requiresUserAction[\s\S]*task-recovery-continue[\s\S]*disabled=\{retryingRead \|\| submittedReadPolicyId === readObstruction\.policyId\}[\s\S]*重新读取中…[\s\S]*已提交，等待处理/);
   assert.match(taskGroupSource, /stateReadStatus === "syncing"[\s\S]*正在同步/);
   assert.match(taskGroupSource, /stateReadStatus === "unavailable"[\s\S]*状态暂未更新/);
   assert.match(taskGroupSource, /statusMessage \? <strong role="status">\{statusMessage\}<\/strong> : <>/);

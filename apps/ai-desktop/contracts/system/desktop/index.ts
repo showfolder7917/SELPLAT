@@ -92,6 +92,7 @@ export type {
 
 export type {
   CurrentTopicAcceptanceOutDto,
+  CurrentTopicReadRecoveryOutDto,
   CurrentTopicStageOutDto,
   CurrentTopicStageStatusValue,
   EvolutionApprovalOutDto,

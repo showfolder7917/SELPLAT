@@ -40,6 +40,18 @@ export interface CurrentTopicDeliveryEvidenceOutDto {
   acceptance: "missing" | "running" | "passed" | "failed" | "blocked";
 }
 
+/** 当前专题档案对读取受阻给出的唯一恢复政策；Renderer 不得依据本地重试次数改写它。 */
+export interface CurrentTopicReadRecoveryOutDto {
+  /** 同一份阶段投影的稳定版本，读取恢复后可开始下一次独立自动重试。 */
+  policyId: string;
+  /** 当前正在等待的权威对象或明确需要操作的人。 */
+  waitingFor: string;
+  /** 只有档案当前阶段明确要求用户确认或恢复时才为 true。 */
+  requiresUserAction: boolean;
+  /** 读取失败后系统或用户应采取的下一步。 */
+  nextAction: string;
+}
+
 /** 一个专题在当前时刻唯一可展示的阶段结论。 */
 export interface CurrentTopicStageOutDto {
   /** 当前专题；没有已建立专题时为 null。 */
@@ -62,6 +74,8 @@ export interface CurrentTopicStageOutDto {
   nextAction: string;
   /** 当前是否需要用户操作；读取受阻时由 Renderer 覆盖为重试政策。 */
   userAction: "none" | "confirmation" | "resume";
+  /** 读取交付投影或历史证据受阻时使用的唯一恢复政策。 */
+  readRecovery: CurrentTopicReadRecoveryOutDto;
   /** 当前有效任务链，供页面关联只读执行记录。 */
   effectiveTaskIds: string[];
   /** 替代链损坏或任务缺失时保留稳定标识，禁止猜测完成。 */
