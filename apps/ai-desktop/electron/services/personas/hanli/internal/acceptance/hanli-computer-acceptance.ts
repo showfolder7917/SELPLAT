@@ -370,7 +370,7 @@ export class HanliComputerAcceptance {
               throw new Error("任务协作页滚动距离必须为非零整数且不超过1000。");
             }
             const result = await window.webContents.executeJavaScript(`(${scrollTaskCollaboration.toString()})(${deltaY})`) as Record<string, unknown>;
-            if (result.status !== "scrolled" && result.status !== "at-boundary") {
+            if (result.status !== "scrolled" && result.status !== "at-boundary" && result.status !== "not-ready") {
               throw new Error(`任务协作页未滚动：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
@@ -612,18 +612,34 @@ export class HanliComputerAcceptance {
 }
 
 /** 只滚动当前可见任务协作群的详情面板，不能推动页面标题与主要操作离开视口。 */
-function scrollTaskCollaboration(deltaY: number): Record<string, unknown> {
+async function scrollTaskCollaboration(deltaY: number): Promise<Record<string, unknown>> {
   const page = document.querySelector<HTMLElement>(".task-collaboration-page");
   const detail = page?.querySelector<HTMLElement>(".task-timeline-detail-pane");
-  const pageRect = page?.getBoundingClientRect();
-  const pageStyle = page ? getComputedStyle(page) : null;
-  const detailRect = detail?.getBoundingClientRect();
-  const detailStyle = detail ? getComputedStyle(detail) : null;
-  const pageVisible = Boolean(page && pageRect && pageRect.width > 0 && pageRect.height > 0
-    && pageStyle?.display !== "none" && pageStyle?.visibility !== "hidden");
-  const detailVisible = Boolean(detail && detailRect && detailRect.width > 0 && detailRect.height > 0
-    && detailStyle?.display !== "none" && detailStyle?.visibility !== "hidden");
-  if (!page || !detail || !pageVisible || !detailVisible) return { status: "hidden" };
+  const readSurface = () => {
+    const pageRect = page?.getBoundingClientRect();
+    const pageStyle = page ? getComputedStyle(page) : null;
+    const detailRect = detail?.getBoundingClientRect();
+    const detailStyle = detail ? getComputedStyle(detail) : null;
+    const pageVisible = Boolean(page && pageRect && pageRect.width > 0 && pageRect.height > 0
+      && pageStyle?.display !== "none" && pageStyle?.visibility !== "hidden");
+    const detailVisible = Boolean(detail && detailRect && detailRect.width > 0 && detailRect.height > 0
+      && detailStyle?.display !== "none" && detailStyle?.visibility !== "hidden");
+    return {
+      pageVisible,
+      detailVisible,
+      pageSize: pageRect ? { width: Math.round(pageRect.width), height: Math.round(pageRect.height) } : null,
+      detailSize: detailRect ? { width: Math.round(detailRect.width), height: Math.round(detailRect.height) } : null,
+    };
+  };
+  let surface = readSurface();
+  // 窄窗口调整和折叠区展开会跨帧完成；只等待已触发的页面回显，不读取或改写业务事实。
+  for (let attempt = 0; attempt < 3 && (!surface.pageVisible || !surface.detailVisible); attempt += 1) {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    surface = readSurface();
+  }
+  if (!page || !detail || !surface.pageVisible || !surface.detailVisible) {
+    return { status: "not-ready", detailConnected: Boolean(detail?.isConnected), ...surface };
+  }
   const pageScrollTop = page.scrollTop;
   const before = detail.scrollTop;
   const maxScrollTop = Math.max(0, detail.scrollHeight - detail.clientHeight);
@@ -643,11 +659,16 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
   const region = page?.closest<HTMLElement>('[role="region"][aria-label="任务协作群"]') || page;
   const rect = page?.getBoundingClientRect();
   const visible = Boolean(page && region && rect && rect.width > 0 && rect.height > 0 && getComputedStyle(page).display !== "none" && getComputedStyle(page).visibility !== "hidden");
+  const detail = page?.querySelector<HTMLElement>(".task-timeline-detail-pane");
+  const detailRect = detail?.getBoundingClientRect();
+  const detailVisible = Boolean(detail && detailRect && detailRect.width > 0 && detailRect.height > 0 && getComputedStyle(detail).display !== "none" && getComputedStyle(detail).visibility !== "hidden");
   const panelToggle = document.querySelector<HTMLButtonElement>('button.section-toggle[aria-controls="developer-task-list"]');
   return {
     status: visible ? "visible" : "hidden",
     taskPanelExpanded: panelToggle?.getAttribute("aria-expanded") === "true",
-    detailPaneVisible: Boolean(page?.querySelector<HTMLElement>(".task-timeline-detail-pane")),
+    detailPaneConnected: Boolean(detail?.isConnected),
+    detailPaneVisible: detailVisible,
+    detailPaneSize: detailRect ? { width: Math.round(detailRect.width), height: Math.round(detailRect.height) } : null,
   };
 }
 
