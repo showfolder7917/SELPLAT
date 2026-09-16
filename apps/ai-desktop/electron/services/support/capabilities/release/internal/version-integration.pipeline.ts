@@ -468,7 +468,7 @@ export class VersionIntegrationPipeline {
       const infrastructureFailure = capacityBlocked || LinghuAutomationFacade.isUnifiedTestInfrastructureError(error) || error instanceof StablePublishedApplicationCollisionError;
       const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict || candidateIncomplete ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
       const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
-      const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error), capacityFailure);
+      const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error), capacityFailure, candidateIncomplete);
       // 本地修改归属异常同样必须保留具体文件，不能在进入令狐调查前把证据清空。
       const conflictFiles = ownershipBlocked ? error.conflictFiles : mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
@@ -560,11 +560,17 @@ function integrationFailurePresentation(
   generation: number,
   detail: string,
   capacityBlocked: { capacity: { requiredBytes: number; availableBytes: number } } | null = null,
+  candidateIncomplete = false,
 ): {
   summary: string;
   impact: string;
   recoveryAction: string;
 } {
+  if (candidateIncomplete) return {
+    summary: `发布候选批次 ${generation} 缺少冻结任务结果，统一测试尚未启动`,
+    impact: "候选提交链未包含全部已登记 resultSha；当前失败属于候选准备，不是产品源码或测试用例失败。",
+    recoveryAction: "保留候选 SHA、任务 resultSha 和完整性诊断，重新组装包含冻结结果的候选后再开始统一测试。",
+  };
   if (kind === "candidate-branch-conflict") return {
     summary: `发布候选批次 ${generation} 冲突，统一测试尚未启动`,
     impact: "候选分支创建阶段被阻断，本批次尚未运行统一测试命令，不能记作测试用例未通过。",
