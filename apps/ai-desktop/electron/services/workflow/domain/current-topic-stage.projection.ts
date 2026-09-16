@@ -173,6 +173,8 @@ function stageSummary(status: CurrentTopicStageOutDto["status"], executionSummar
 
 function stageWaitingFor(status: CurrentTopicStageOutDto["status"], deliveryGate: DeliveryGate | null): string {
   if (deliveryGate?.status === status) return deliveryGate.waitingFor;
+  // 专题已经完成时不再虚构处理中处理人，卡片只说明当前无需操作。
+  if (status === "completed") return "当前无需操作";
   if (status === "awaiting-confirmation") return "用户确认";
   if (status === "awaiting-release") return "发布服务";
   if (status === "awaiting-restart-health") return "新版本重启健康检查";
@@ -183,6 +185,8 @@ function stageWaitingFor(status: CurrentTopicStageOutDto["status"], deliveryGate
 
 function stageNextAction(status: CurrentTopicStageOutDto["status"], deliveryGate: DeliveryGate | null): string {
   if (deliveryGate?.status === status) return deliveryGate.nextAction;
+  // 完成结论已闭合，下一步是开始独立的新专题而不是继续当前处理。
+  if (status === "completed") return "可开始下一专题。";
   if (status === "awaiting-confirmation") return "确认当前范围说明后继续。";
   if (status === "awaiting-release") return "发布最终候选，并记录发布结果。";
   if (status === "awaiting-restart-health") return "完成新版本重启健康检查。";

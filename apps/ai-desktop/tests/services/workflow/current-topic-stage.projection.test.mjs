@@ -108,6 +108,11 @@ test("完成必须绑定同一最终候选的测试、发布、重启健康与�
   const complete = deliveredCollaboration();
   const completed = projectCurrentTopicStage(evolution(complete.acceptanceStatus), complete);
   assert.equal(completed.status, "completed");
+  assert.equal(completed.summary, "韩立结果验收已经通过，专题已完成。");
+  assert.equal(completed.waitingFor, "当前无需操作");
+  assert.equal(completed.nextAction, "可开始下一专题。");
+  assert.equal(completed.userAction, "none");
+  assert.equal(completed.readRecovery.requiresUserAction, false);
   assert.equal(completed.deliveryEvidence.candidate.integrationSha, "final-candidate-sha");
 
   const missingRelease = deliveredCollaboration({ published: false });
