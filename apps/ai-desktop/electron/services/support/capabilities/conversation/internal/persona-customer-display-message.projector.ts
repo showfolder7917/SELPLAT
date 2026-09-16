@@ -6,20 +6,28 @@ export interface PersonaCustomerDisplayDerivation {
   readonly failureReason: string | null;
 }
 
+/** 历史补写比新消息更保守：无法证明正文安全时保留失败位置。 */
+export interface PersonaCustomerDisplayDerivationOptions {
+  readonly historical?: boolean;
+}
+
 /**
  * 客户显示派生规则的版本。
  *
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 3;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 4;
 
 /**
  * 生成客户可见正文。
  *
  * 原始消息只在持久化边界短暂读取；调用方只能取得派生后的安全正文或不可显示状态。
  */
-export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "speakerType">>): PersonaCustomerDisplayDerivation {
+export function derivePersonaCustomerDisplayMessage(
+  message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "speakerType">>,
+  options: PersonaCustomerDisplayDerivationOptions = {},
+): PersonaCustomerDisplayDerivation {
   if (message.messageType !== "customer-visible") {
     return { state: "excluded", content: null, failureReason: null };
   }
@@ -31,6 +39,9 @@ export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConvers
   if (message.speakerType === "user") return { state: "ready", content, failureReason: null };
   try {
     const legacyReply = extractLegacyReply(content);
+    if (options.historical && legacyReply === content && containsHistoricalInternalProse(content)) {
+      throw new Error("legacy reply cannot be safely separated");
+    }
     return { state: "ready", content: legacyReply, failureReason: null };
   } catch {
     return { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" };
@@ -58,6 +69,22 @@ function legacyFieldLabel(line: string): string | null {
     .replace(/^\*\*([^*]+)\*\*/u, "$1")
     .replace(/^【([^】]+)】/u, "$1")
     .trim();
-  const match = /^(用户原话|用户目标|调查对象|期望结果|交给南宫婉核实|contentRole)(?:\s*(?:[：:=]|标注)|\s*$)/u.exec(plain);
+  const match = /^(用户原话|用户目标|目标|调查对象|期望结果|交给南宫婉核实|contentRole)(?:\s*(?:[：:=]|标注)|\s*$)/u.exec(plain);
   return match?.[1] || null;
+}
+
+/**
+ * 历史技术长文可能没有可截取的字段行。命中多项受控概念时，无法证明其中
+ * 哪一段属于客户答复，必须失败而不是显示原文。
+ */
+function containsHistoricalInternalProse(content: string): boolean {
+  const markers = [
+    /用户原话/u,
+    /用户目标|(?:^|[、，,；;：:\s])目标(?:$|[、，,；;：:\s])/u,
+    /调查对象/u,
+    /期望结果/u,
+    /contentRole/u,
+    /交给南宫婉核实/u,
+  ];
+  return markers.filter((marker) => marker.test(content)).length >= 3;
 }

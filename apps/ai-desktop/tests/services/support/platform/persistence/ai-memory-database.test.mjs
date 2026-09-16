@@ -10,6 +10,7 @@ import { EvolutionStateStore } from "../../../../../../../build/ai-desktop/elect
 import { runSqliteTransaction } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-transaction.js";
 import { PersonaConversationRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation.repository.js";
 import { writePersonaConversationMessage } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation-message.writer.js";
+import { PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -130,7 +131,57 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-mixed-message'
     `).get());
-    assert.equal(version?.derivationVersion, 3);
+    assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
+  } finally {
+    initialized.database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("打开 v3 历史技术长文时保留失败位置，不能重新显示未能安全分离的内部正文", () => {
+  const fixture = createFixture("customer-display-v4-safe-failure");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  try {
+    const repository = new PersonaConversationRepository(initialized.database);
+    const conversation = repository.create("han-li");
+    const raw = [
+      "我会先按既有流程核对历史记录。",
+      "用户原话、目标、调查对象和期望结果已经整理，交给南宫婉核实。",
+      "contentRole、持久化、恢复和页面投影仅供内部协作使用。",
+    ].join("\n\n");
+    repository.save({
+      ...conversation,
+      updatedAt: "2026-09-16T04:00:00.000Z",
+      messages: [{
+        messageId: "legacy-technical-message",
+        sequenceNumber: 0,
+        messageType: "customer-visible",
+        contentRole: "conversation",
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: raw,
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt: "2026-09-16T04:00:00.000Z",
+        completedAt: "2026-09-16T04:00:00.000Z",
+      }],
+    });
+    initialized.database?.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopPersonaCustomerDisplayMessage
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=3
+      WHERE sourceMessageId='legacy-technical-message'
+    `).run({ $raw: raw }));
+
+    const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
+      content: "此消息暂时无法安全显示。", state: "failed",
+    }]);
+    assert.doesNotMatch(window.messages[0].content, /用户原话|目标|调查对象|期望结果|contentRole|持久化|恢复|页面投影/u);
+    const version = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-technical-message'
+    `).get());
+    assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
   } finally {
     initialized.database?.close();
     rmSync(fixture.projectRoot, { recursive: true, force: true });
