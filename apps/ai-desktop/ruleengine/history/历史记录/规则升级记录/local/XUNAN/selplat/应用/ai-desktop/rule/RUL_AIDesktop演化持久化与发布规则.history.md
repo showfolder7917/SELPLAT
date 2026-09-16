@@ -7,3 +7,6 @@ upgrade_record_5_110 = 2026-08-30:新增AiDesktopEvolutionState单例状态表_�
 
 <!-- 5.113.0 把南宫婉会话正文移出 Evolution JSON，改由统一人物会话表装配。 -->
 upgrade_record_5_113 = 2026-09-03:Evolution_JSON只保存专题运行事实_南宫婉正文按ownerPersonaId从统一人物会话表读取_删除AiDesktopConversationMemory运行时恢复描述_数据库不可用继续安全阻断且不设第二存储
+
+<!-- 5.120.0 固定当前验收计划跨结果审查和重试的唯一证据分区，避免韩立重复改分区后被同一计划拒绝。 -->
+upgrade_record_5_120 = 2026-09-16:版本2当前验收计划的证据分区跨结果审查和重试保持不变_findings逐项覆盖全部冻结代码条件_计划与证据冲突时阻断而不私自改分区_版本1旧计划继续禁止恢复或消费

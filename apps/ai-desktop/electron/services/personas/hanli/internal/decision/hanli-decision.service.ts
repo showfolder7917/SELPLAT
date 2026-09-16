@@ -232,6 +232,9 @@ export class HanliDecisionService {
 
 /** 仅补足结果验收的歧义分类提示；语义校验仍是唯一允许放行的边界。 */
 function resultAcceptanceRetryHint(lastError: string): string {
+  if (lastError === "韩立代码符合性审查没有与混合计划的剩余条件逐项对应。") {
+    return " acceptancePlan 已存在时必须保持其 evidenceType 分区；findings 逐项覆盖计划内全部 code-conformance 条件，不得用新 pageCriterionIds 排除冻结的代码条件。";
+  }
   if (lastError === "页面与源码审查必须至少包含一条可在正式页面检查的条件。") {
     return " mixed 的 pageCriterionIds 必须列出至少一条正式页面条件；纯源码任务改为 code-conformance。";
   }

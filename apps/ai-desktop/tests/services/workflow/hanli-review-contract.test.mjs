@@ -67,6 +67,14 @@ test("需要发送或创建数据的条件归令狐证据而不是韩立正式�
   assert.match(prompt, /不得创建、重建或恢复任何已退役的隔离验收环境/);
 });
 
+test("冻结的当前验收计划必须逐项复用且不得在结果审查时重新分区", () => {
+  assert.match(prompt, /acceptancePlan\.version 为 2/);
+  assert.match(prompt, /必须逐项照用其中的 evidenceType/);
+  assert.match(prompt, /findings 必须逐项覆盖其余 code-conformance 条件/);
+  assert.match(prompt, /不存在 page-experience 条件时返回 code-conformance/);
+  assert.match(decision, /acceptancePlan 已存在时必须保持其 evidenceType 分区/);
+});
+
 test("客户未通过摘要与技术详情保持分离", () => {
   const handoff = readFileSync("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts", "utf8");
   assert.match(handoff, /export interface AcceptanceHandoffContent/);
