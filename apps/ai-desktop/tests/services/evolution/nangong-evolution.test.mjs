@@ -2135,6 +2135,48 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("冻结混合计划忽略页面条件的冗余源码结论但仍要求全部代码条件", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-frozen-plan-extra-page-findings-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({
+      ...topicRequest("冻结计划容忍冗余页面源码结论"),
+      acceptanceCriteria: ["正式页面完成态可见", "投影结构只保留一个恢复入口", "源码边界便于新手理解"],
+    });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const routing = JSON.stringify({
+      mode: "mixed",
+      pageCriterionIds: ["criterion-1"],
+      findings: [
+        { criterionId: "criterion-2", status: "passed", actual: "恢复入口只读取交付投影。", evidenceReferences: ["src/features/collaboration"] },
+        { criterionId: "criterion-3", status: "passed", actual: "源码职责边界清楚。", evidenceReferences: ["electron/services/workflow"] },
+      ],
+      sourceReview: passedSourceReview,
+    });
+    const frozenReviewWithPageFinding = JSON.stringify({
+      mode: "mixed",
+      pageCriterionIds: ["criterion-1"],
+      findings: [
+        { criterionId: "criterion-1", status: "failed", actual: "这是页面条件的冗余源码判断，不能替代正式页面验收。", evidenceReferences: ["src/features/collaboration"] },
+        { criterionId: "criterion-2", status: "passed", actual: "恢复入口只读取交付投影。", evidenceReferences: ["src/features/collaboration"] },
+        { criterionId: "criterion-3", status: "passed", actual: "源码职责边界清楚。", evidenceReferences: ["electron/services/workflow"] },
+      ],
+      sourceReview: passedSourceReview,
+    });
+    const replies = [routing, frozenReviewWithPageFinding];
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanliResultAcceptance: async () => replies.shift(),
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.deepEqual(result.review.stepResults.map((step) => step.checkId), ["criterion-2", "criterion-3"]);
+    assert.equal(result.review.status, "passed", "页面条件的冗余源码判断不得覆盖正式页面验收结果");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("页面条件覆盖全部原要求时仍同时完成源码结构审查", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-mixed-routing-retry-"));
   try {
@@ -2392,7 +2434,7 @@ test("韩立结果验收只以顶层对象保留嵌套 findings 的真实校验�
     await assert.rejects(
       () => hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" }),
       (error) => {
-        assert.match(error.message, /韩立源码审查缺少 criterion-5 的明确结论或源码依据/);
+        assert.match(error.message, /韩立代码符合性审查包含重复的条件编号/);
         assert.match(error.message, /结构化候选摘要：count=1; mode=supported,pageCriterionIds=missing,findings=array:5/);
         assert.doesNotMatch(error.message, /韩立没有返回有效的结果验收类型和逐项结论/);
         return true;

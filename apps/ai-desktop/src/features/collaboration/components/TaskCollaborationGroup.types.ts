@@ -49,6 +49,8 @@ export type TaskCollaborationGroupModel = {
     onManualApproval: (proposalId: string, title: string, content: string) => void;
     /** 用户从最新等待节点继续原协作任务。 */
     onContinueTask: (taskId: string) => Promise<TaskRecoveryResult>;
+    /** 用户从原专题卡恢复被阻塞的一次性验收运行。 */
+    onResumeAcceptance: (request: { topicId: string; proposalId: string; runId: string }) => Promise<TaskRecoveryResult>;
     /** 打开韩立人物会话，让用户从需求讨论开始，不提交协作任务。 */
     onOpenHanliConversation: () => Promise<void>;
     /** 仅重新读取交付投影和时间线，不触发任务恢复。 */

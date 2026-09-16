@@ -67,7 +67,7 @@ test("任务级恢复入口在等待和恢复中都位于下一流程", () => {
   assert.match(recoveryOperationSource, /RECOVERY_REQUEST_TIMEOUT_MS = 12_000[\s\S]*RECOVERY_RECHECK_TIMEOUT_MS = 4_000/);
   assert.match(recoveryOperationSource, /finally\(\(\) => globalThis\.clearTimeout\(timer\)\)\.catch\(\(\) => undefined\)/);
   assert.match(taskGroupSource, /disabled=\{recoveryPending\}[\s\S]*"恢复中…"[\s\S]*"从卡点继续"/);
-  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(projectedResumeTaskId\)/);
+  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onResumeAcceptance[\s\S]*onContinueTask\(projectedResumeTaskId!/);
   assert.doesNotMatch(taskGroupSource, /latestActiveRecoveryAction|TaskGroupRecovery|task-node-recovery-action/);
   const nextFlowBlock = taskGroupCardSource.slice(taskGroupCardSource.indexOf('<div className="task-timeline-next">'), taskGroupCardSource.indexOf('<div className="task-timeline-list">'));
   assert.doesNotMatch(nextFlowBlock, /failureNextStep/);
@@ -78,6 +78,7 @@ test("任务级恢复入口在等待和恢复中都位于下一流程", () => {
   assert.match(developerSource, /continueTimelineTask[\s\S]*continueTaskWithRecovery\(taskId, controller\.actions\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
   assert.match(recoveryOperationSource, /dependencies\.continueTask\(taskId\)[\s\S]*dependencies\.refreshRecoveryState\(\)/);
   assert.match(collaborationModelSource, /const continueTask = async \(taskId: string\)[\s\S]*if \(!desktop\) throw new Error\("无法连接协作状态服务。"\)[\s\S]*desktop\.continueCollaborationTask\(taskId\)/);
+  assert.match(evolutionRuntimeSource, /resumeEvolutionOneShot\(request\)[\s\S]*return next/);
   assert.match(developerStyles, /\.task-recovery-continue[\s\S]*background: var\(--sel-theme-workbench-accent\)[\s\S]*font-weight: 700/);
   assert.match(developerStyles, /\.task-recovery-continue:focus-visible/);
 });

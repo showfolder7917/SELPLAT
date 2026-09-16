@@ -74,6 +74,8 @@ export interface CurrentTopicStageOutDto {
   nextAction: string;
   /** 当前是否需要用户操作；读取受阻时由 Renderer 覆盖为重试政策。 */
   userAction: "none" | "confirmation" | "resume";
+  /** 当前恢复动作属于一次性专题运行时，提供原运行标识；任务级恢复时为空。 */
+  resumeOneShotRunId: string | null;
   /** 读取交付投影或历史证据受阻时使用的唯一恢复政策。 */
   readRecovery: CurrentTopicReadRecoveryOutDto;
   /** 当前有效任务链，供页面关联只读执行记录。 */

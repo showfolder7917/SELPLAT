@@ -86,6 +86,7 @@ test("完成态后的当前复核运行阻塞时优先显示原卡恢复状态",
   const stage = projectCurrentTopicStage(state, { tasks: [task()] });
   assert.equal(stage.status, "failed-pending-repair");
   assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeOneShotRunId, "completion-review");
 });
 
 test("真实验收进行中优先于已经完成的提案状态", () => {
@@ -168,5 +169,6 @@ test("读取恢复政策只随当前专题档案的用户操作变化", () => {
   blocked.oneShotRun = { topicId: "topic-current", proposalId: "proposal-current", runId: "blocked-run", status: "blocked", updatedAt: "2026-09-12T05:00:00.000Z" };
   const manual = projectCurrentTopicStage(blocked, { tasks: [task()] });
   assert.equal(manual.readRecovery.requiresUserAction, true);
+  assert.equal(manual.resumeOneShotRunId, "blocked-run");
   assert.match(manual.readRecovery.nextAction, /重新读取当前交付投影/);
 });

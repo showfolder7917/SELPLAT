@@ -75,6 +75,15 @@ export function CollaborationWorkspaceFeature({
     return continueTaskWithRecovery(taskId, controller.actions);
   }
 
+  /** 一次性验收卡点必须恢复原专题运行，不能误走已经集成完成的任务级恢复接口。 */
+  async function resumeTimelineAcceptance(request: { topicId: string; proposalId: string; runId: string }): Promise<TaskRecoveryResult> {
+    const next = await evolution.resumeOneShot(request);
+    if (!next) return { kind: "queued", message: "原专题正在恢复，请等待当前请求完成。" };
+    const run = next.oneShotRun;
+    if (run?.status === "blocked") return { kind: "unavailable", message: `已检查但仍未恢复：${run.blockingReason || "仍有阻塞，尚未满足恢复条件。"}` };
+    return { kind: "confirmed", message: run?.status === "completed" ? "本轮已完成。" : "已恢复原专题验收，请查看后续流程。" };
+  }
+
   // ViewModel 只把 Controller 状态映射成任务群和人物页面输入。
   const viewModel = createCollaborationWorkspaceViewModel({
     locale,
@@ -82,6 +91,7 @@ export function CollaborationWorkspaceFeature({
     evolution,
     onManualApproval: requestManualApproval,
     onContinueTask: continueTimelineTask,
+    onResumeAcceptance: resumeTimelineAcceptance,
   });
 
   return (

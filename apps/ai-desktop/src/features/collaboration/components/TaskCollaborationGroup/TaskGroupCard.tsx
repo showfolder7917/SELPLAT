@@ -72,6 +72,8 @@ type TaskGroupCardActions = {
   onManualApproval: (proposalId: string, title: string, content: string) => void;
   /** 从最新等待节点继续原任务。 */
   onContinueTask: (taskId: string) => void;
+  /** 从验收卡点恢复原一次性专题运行。 */
+  onResumeAcceptance: (request: { topicId: string; proposalId: string; runId: string }) => void;
 };
 
 /** 恢复失败先显示简短警告，完整错误证据仍由用户按需展开查看。 */
@@ -389,12 +391,14 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 历史时间线不再决定当前恢复入口。
   const currentStage = model.presentation.currentTopicStage?.topicId === group.topicId && model.presentation.currentTopicStage?.proposalId === group.proposalId
     ? model.presentation.currentTopicStage : null;
-  // 当前投影明确要求客户恢复时，只使用有效任务链中的稳定标识，不读取时间线节点。
+  // 当前投影明确要求客户恢复时，优先使用它签发的原一次性运行标识；普通任务卡点才读取有效任务链。
+  const projectedResumeRunId = currentStage?.userAction === "resume" ? currentStage.resumeOneShotRunId : null;
   const projectedResumeTaskId = currentStage?.userAction === "resume"
-    ? currentStage.effectiveTaskIds.at(-1) || null
+    && !projectedResumeRunId ? currentStage.effectiveTaskIds.at(-1) || null
     : null;
-  // 继续请求只适用于投影明确要求恢复的当前有效任务链。
-  const recoveryPending = projectedResumeTaskId === model.presentation.continuingTaskId;
+  // 两类恢复共用一个页面忙碌锁，但分别调用各自已有的权威业务入口。
+  const projectedRecoveryId = projectedResumeRunId || projectedResumeTaskId;
+  const recoveryPending = projectedRecoveryId === model.presentation.continuingTaskId;
 
   return (
     // 专题卡根折叠区统一承载卡片头部、恢复入口、人物时间线和下一流程。
@@ -411,13 +415,15 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
         <span className="task-timeline-next-current">
           <span>{currentStage?.nextAction || group.nextStep}</span>
-          {projectedResumeTaskId && (
+          {projectedRecoveryId && currentStage?.topicId && currentStage.proposalId && (
             <button
               type="button"
               className="task-recovery-continue"
-              data-task-recovery-id={projectedResumeTaskId}
+              data-task-recovery-id={projectedRecoveryId}
               disabled={recoveryPending}
-              onClick={() => model.actions.onContinueTask(projectedResumeTaskId)}
+              onClick={() => projectedResumeRunId
+                ? model.actions.onResumeAcceptance({ topicId: currentStage.topicId!, proposalId: currentStage.proposalId!, runId: projectedResumeRunId })
+                : model.actions.onContinueTask(projectedResumeTaskId!)}
             >
               <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
               {recoveryPending

@@ -84,11 +84,17 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     setNodeOpen,
     locateCurrentStep,
     continueTask,
+    resumeAcceptance,
   } = controller;
 
   /** 任务卡只发出任务标识；页面控制器负责完整的异步状态和异常处理。 */
   const requestContinueTask = (taskId: string) => {
     void continueTask(taskId);
+  };
+
+  /** 验收卡点恢复原一次性运行，不再把已集成任务误交给任务级恢复接口。 */
+  const requestResumeAcceptance = (request: { topicId: string; proposalId: string; runId: string }) => {
+    void resumeAcceptance(request);
   };
 
   /** 空状态入口只打开韩立会话，不把用户带入任务提交流程。 */
@@ -233,6 +239,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               onManualApproval,
               // 继续任务操作（onContinueTask）从时间线保存的恢复点继续原任务。
               onContinueTask: requestContinueTask,
+              // 验收恢复操作（onResumeAcceptance）使用交付投影签发的原专题、提案和运行标识。
+              onResumeAcceptance: requestResumeAcceptance,
             },
           };
 

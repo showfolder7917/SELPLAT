@@ -115,7 +115,16 @@ export class HanliDecisionService {
     }
     const findings = value.findings as Array<Record<string, unknown>>;
     const codeCriterionIds = allCriterionIds.filter((criterionId) => !pageCriterionIds.includes(criterionId));
-    if (findings.length !== codeCriterionIds.length) {
+    // 冻结计划是证据分区的唯一权威。模型即使为页面条件额外返回源码结论，也不能让这些冗余项替代或阻断真实页面验收。
+    // 仍严格拒绝未知编号和重复编号，并要求每个代码条件都有唯一、完整的源码结论，因此不会削弱任何验收门禁。
+    const findingCriterionIds = findings.map((item) => item.criterionId);
+    if (findingCriterionIds.some((criterionId) => typeof criterionId !== "string" || !allCriterionIds.includes(criterionId))) {
+      throw new Error("韩立代码符合性审查包含当前验收计划之外的条件编号。");
+    }
+    if (new Set(findingCriterionIds).size !== findingCriterionIds.length) {
+      throw new Error("韩立代码符合性审查包含重复的条件编号。");
+    }
+    if (codeCriterionIds.some((criterionId) => !findingCriterionIds.includes(criterionId))) {
       throw new Error("韩立代码符合性审查没有与混合计划的剩余条件逐项对应。");
     }
     const steps = codeCriterionIds.map((criterionId, operationIndex) => {

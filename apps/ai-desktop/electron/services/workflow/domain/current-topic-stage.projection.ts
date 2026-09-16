@@ -20,6 +20,7 @@ export function projectCurrentTopicStage(
       topicId: null, proposalId: null, status: "awaiting-confirmation", title: "等待用户确认",
       summary: "南宫婉已经给出本轮范围说明，等待用户确认。", repairContent: "", remaining: "等待用户确认范围说明。",
       waitingFor: "用户确认", nextAction: "确认当前范围说明后继续。", userAction: "confirmation",
+      resumeOneShotRunId: null,
       readRecovery: readRecovery("confirmation", "用户确认", "确认当前范围说明后继续。", confirmationUpdatedAt(evolution)),
       effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: confirmationUpdatedAt(evolution),
     };
@@ -29,6 +30,7 @@ export function projectCurrentTopicStage(
     return {
       topicId: null, proposalId: null, status: "not-run", title: "暂无修复任务", summary: "当前没有可展示的专题提案。", repairContent: "", remaining: "",
       waitingFor: "南宫婉", nextAction: "等待形成可执行专题。", userAction: "none",
+      resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "当前交付投影", "系统将自动重新读取当前交付投影。", evolution.updatedAt),
       effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
     };
@@ -75,6 +77,8 @@ export function projectCurrentTopicStage(
     waitingFor,
     nextAction,
     userAction,
+    // 一次性专题阻塞必须携带原运行标识，Renderer 才能调用已有补验恢复入口；任务级卡点继续保持空值。
+    resumeOneShotRunId: userAction === "resume" && runBlocked ? run.runId : null,
     readRecovery: readRecovery(userAction, waitingFor, nextAction, updatedAt),
     effectiveTaskIds: execution.effectiveTasks.map((item) => item.taskId),
     missingTaskIds: execution.missingTaskIds,

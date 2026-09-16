@@ -41,7 +41,7 @@ function findCurrentGroupId(groups: CollaborationTimelineGroupOutDto[]): string 
 export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
   // 权威时间线来自模型数据组，继续操作来自模型业务操作组。
   const { snapshot } = model.data;
-  const { onContinueTask } = model.actions;
+  const { onContinueTask, onResumeAcceptance } = model.actions;
   // 专题卡人工展开选择；没有记录时由当前专题规则决定默认值。
   const [groupOpenOverrides, setGroupOpenOverrides] = useState<Map<string, boolean>>(new Map());
   // 时间线节点人工展开选择；没有记录时使用主进程给出的 automaticOpen。
@@ -118,6 +118,26 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
     }
   };
 
+  /** 恢复同一专题的一次性验收运行，并复用任务卡既有的忙碌、成功和失败反馈。 */
+  const resumeAcceptance = async (request: { topicId: string; proposalId: string; runId: string }) => {
+    if (continuingTaskIds.current.has(request.runId)) return;
+    continuingTaskIds.current.add(request.runId);
+    setContinuingTaskId(request.runId);
+    setContinueError("");
+    setContinueFeedback("");
+    try {
+      const result = await onResumeAcceptance(request);
+      if (result.kind === "confirmed") setContinueFeedback(result.message);
+      else setContinueError(result.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setContinueError(message.replace(/^Error invoking remote method '[^']+':\s*/, ""));
+    } finally {
+      continuingTaskIds.current.delete(request.runId);
+      setContinuingTaskId(null);
+    }
+  };
+
   return {
     groups,
     currentGroupId,
@@ -130,5 +150,6 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
     setNodeOpen,
     locateCurrentStep,
     continueTask,
+    resumeAcceptance,
   };
 }
