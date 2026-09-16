@@ -40,6 +40,11 @@ export function createCodexConversationCorpusIngestion(
   return new CodexConversationCorpusIngestion(database, sessionsRoot, policy);
 }
 
+/** 组合根用此 URL 启动语料 Worker；平台端口不需要知道能力模块的内部文件结构。 */
+export function createCodexCorpusPersistenceWorkerUrl(): URL {
+  return new URL("./internal/corpus/background-persistence.worker.js", import.meta.url);
+}
+
 // 文件监听器只触发增量扫描，真正的去重和水位提交仍由语料入口负责。
 export function createCodexConversationCorpusWatcher(
   ...arguments_: ConstructorParameters<typeof CodexConversationCorpusWatcher>

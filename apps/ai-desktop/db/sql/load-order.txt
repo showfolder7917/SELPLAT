@@ -30,3 +30,4 @@
 1028|migration-1028-add-persona-conversation-content-role.sql|区分人物研讨正文与折叠技术证据
 1029|migration-1029-add-persona-customer-display-message.sql|为客户显示正文建立可审计派生记录
 1030|migration-1030-version-persona-customer-display-message.sql|允许客户显示派生按净化规则版本安全重算
+1031|migration-1031-add-corpus-ingestion-job.sql|持久化自动入库的恢复状态与重试事实
