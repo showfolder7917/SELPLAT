@@ -175,6 +175,16 @@ test("任务协作群说明在全部窗口宽度都完整换行而不使用省�
   assert.doesNotMatch(developerStyles, /\.task-group-header-content small, \.task-node-main > small \{[^}]*text-overflow: ellipsis/);
 });
 
+test("长任务详情只在卡片内容区滚动并保留主操作", () => {
+  assert.match(taskGroupCardSource, /className="task-timeline-next"[\s\S]*className="task-timeline-detail-pane"[\s\S]*className="task-timeline-list"/);
+  assert.match(taskGroupCardSource, /\{open && <>[\s\S]*task-timeline-detail-pane[\s\S]*<\/>}/);
+  assert.match(developerStyles, /\.task-collaboration-page \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*overflow: hidden/);
+  assert.match(developerStyles, /\.task-collaboration-group > \.seldisclosure-content \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*overflow: hidden/);
+  assert.match(developerStyles, /\.task-timeline-detail-pane \{[\s\S]*min-height: 0[\s\S]*overflow: auto/);
+  assert.match(taskGroupSource, /closest<HTMLElement>\("\.task-timeline-detail-pane"\)[\s\S]*detailPane\.scrollTo/);
+  assert.doesNotMatch(taskGroupSource, /scrollIntoView\(/);
+});
+
 test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {
   // 任务主协议只负责组合当前状态，执行、集成和提交快照分别由独立文件解释。
   assert.doesNotMatch(contractDefinitionSource, /interface CollaborationExecutionRecordOutDto|interface CollaborationIntegrationFailureOutDto|interface CollaborationTaskSnapshotOutDto/);
