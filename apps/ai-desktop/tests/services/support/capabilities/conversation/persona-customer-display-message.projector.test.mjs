@@ -151,18 +151,20 @@ test("旧 hanli-design 按稳定来源身份只迁移首段的客户结论", () 
 });
 
 test("旧 hanli-reply 只在后续段落命中稳定治理边界时迁移客户首段", () => {
-  const customerReply = "这次要治理的是旧消息留下的内部内容，不是重新验证新回复是否还会混入。客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留在内部记录中，供追溯和既有协作使用。";
+  const customerReply = "这次要治理的是旧消息留下的内部内容，不是重新验证新回复是否还会混入。";
+  const inlineInternalContinuation = "客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留在内部记录中，供追溯和既有协作使用。";
   const mixed = derivePersonaCustomerDisplayMessage({
     messageId: "hanli-reply:legacy-request",
     messageType: "customer-visible",
     speakerType: "persona",
     content: [
-      customerReply,
+      `${customerReply}${inlineInternalContinuation}`,
       "页面实现需要核对保存结构、内容归类、恢复读取和时间线投影。",
       "发送、新建会话、制造数据和恢复任务属于工程验证范围。",
     ].join("\n\n"),
   });
   assert.deepEqual(mixed, { state: "ready", content: customerReply, failureReason: null });
+  assert.doesNotMatch(mixed.content, /客户时间线|原始消息|内部事实|审计依据/u);
 
   const ordinary = "第一段是客户说明。\n\n第二段继续解释使用方式。";
   assert.deepEqual(derivePersonaCustomerDisplayMessage({
@@ -171,4 +173,12 @@ test("旧 hanli-reply 只在后续段落命中稳定治理边界时迁移客户�
     speakerType: "persona",
     content: ordinary,
   }), { state: "ready", content: ordinary, failureReason: null });
+
+  const unprovenInlineBoundary = `${customerReply}${inlineInternalContinuation}`;
+  assert.deepEqual(derivePersonaCustomerDisplayMessage({
+    messageId: "hanli-reply:current-inline-request",
+    messageType: "customer-visible",
+    speakerType: "persona",
+    content: unprovenInlineBoundary,
+  }), { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
 });

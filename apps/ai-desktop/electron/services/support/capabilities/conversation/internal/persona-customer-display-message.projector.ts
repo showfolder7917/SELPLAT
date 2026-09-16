@@ -12,7 +12,7 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 11;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 12;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
@@ -84,9 +84,26 @@ function extractLegacyHanliReply(content: string): string {
   const paragraphs = content.split(/\r?\n\s*\r?\n/u).map((paragraph) => paragraph.trim()).filter(Boolean);
   const firstInternalContinuation = paragraphs.findIndex((paragraph, index) => index > 0 && containsLegacyInternalContinuation(paragraph));
   if (firstInternalContinuation < 0) return content;
-  const reply = paragraphs.slice(0, firstInternalContinuation).join("\n\n").trim();
+  const customerParagraphs = paragraphs.slice(0, firstInternalContinuation);
+  const reply = customerParagraphs.length === 1
+    ? extractLegacyHanliReplyLead(customerParagraphs[0] || "")
+    : customerParagraphs.join("\n\n").trim();
   if (!reply) throw new Error("legacy hanli reply is empty");
   return reply;
+}
+
+/**
+ * 已确认的一条旧 hanli-reply 把自然结论和客户时间线治理说明写在同一段。
+ * 只有后续段落已证明该记录属于旧混合格式，且同段尾部同时命中三项审计概念时，
+ * 才在明确的句号边界截取自然结论；普通当前回复不会进入此分支。
+ */
+function extractLegacyHanliReplyLead(content: string): string {
+  const inlineBoundary = content.search(/(?<=[。！？])客户时间线应只显示/u);
+  if (inlineBoundary < 0) return content;
+  const continuation = content.slice(inlineBoundary);
+  const auditMarkers = [/原始消息/u, /内部事实/u, /审计依据/u];
+  if (auditMarkers.some((marker) => !marker.test(continuation))) return content;
+  return content.slice(0, inlineBoundary).trim();
 }
 
 function containsLegacyInternalContinuation(content: string): boolean {

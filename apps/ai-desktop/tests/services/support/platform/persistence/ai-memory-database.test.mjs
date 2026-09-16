@@ -342,15 +342,16 @@ test("打开 v9 自动托管启动回执时从客户时间线排除，原始协�
   }
 });
 
-test("打开 v10 旧 hanli-reply 混合记录时迁移客户首段并保留原始审计正文", () => {
+test("打开 v11 旧 hanli-reply 混合记录时迁移自然结论并保留原始审计正文", () => {
   const fixture = createFixture("customer-display-v10-hanli-reply");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
     const repository = new PersonaConversationRepository(initialized.database);
     const conversation = repository.create("han-li");
-    const customerReply = "这次要治理的是旧消息留下的内部内容。客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留。";
+    const customerReply = "这次要治理的是旧消息留下的内部内容。";
+    const inlineInternalContinuation = "客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留。";
     const raw = [
-      customerReply,
+      `${customerReply}${inlineInternalContinuation}`,
       "页面实现需要核对保存结构、内容归类、恢复读取和时间线投影。",
       "发送、新建会话、制造数据和恢复任务属于工程验证范围。",
     ].join("\n\n");
@@ -374,9 +375,9 @@ test("打开 v10 旧 hanli-reply 混合记录时迁移客户首段并保留原�
     });
     initialized.database?.withConnection((connection) => connection.prepare(`
       UPDATE AiDesktopPersonaCustomerDisplayMessage
-      SET displayState='failed', displayContent=NULL, failureReason='旧规则无法派生', derivationVersion=10
+      SET displayState='ready', displayContent=$oldDisplay, failureReason=NULL, derivationVersion=11
       WHERE sourceMessageId='hanli-reply:legacy-request'
-    `).run());
+    `).run({ oldDisplay: `${customerReply}${inlineInternalContinuation}` }));
 
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => message.content), [customerReply]);
