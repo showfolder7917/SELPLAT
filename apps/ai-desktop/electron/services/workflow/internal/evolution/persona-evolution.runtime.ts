@@ -1,5 +1,5 @@
 ﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
@@ -220,6 +220,16 @@ export class PersonaEvolutionRuntime {
   /** 读取当前 Evolution 快照；返回值是副本，调用方不能绕过 Store 直接改状态。 */
   state(): EvolutionStateOutDto {
     return this.#withCurrentTopicStage(this.#store.state());
+  }
+
+  /** 读取失败时只返回当前专题投影的恢复政策，避免 Renderer 从旧时间线或本地次数推断权限。 */
+  readRecovery(): CurrentTopicReadRecoveryOutDto {
+    return this.state().currentTopicStage?.readRecovery || {
+      policyId: "not-run",
+      waitingFor: "当前交付投影",
+      requiresUserAction: false,
+      nextAction: "系统将自动重新读取当前交付投影；读取成功后再显示当前结论。",
+    };
   }
 
   /** 在完整 Evolution 快照上附加只读阶段，避免以页面投影替换领域状态。 */

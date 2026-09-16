@@ -23,6 +23,7 @@ export const COLLABORATION_DESKTOP_API_METHODS = [
   "newLinghuDisplayConversation",
   "onLinghuAutomationState",
   "getEvolutionState",
+  "getEvolutionReadRecovery",
   "getEvolutionTopicDossier",
   "getPersonaConversation",
   "getPersonaConversationWindow",

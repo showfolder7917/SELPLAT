@@ -50,6 +50,7 @@ export function registerCollaborationIpc(
   handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
   handle("desktop:new-linghu-display-conversation", () => linghuAutomation.newDisplayConversation());
   handle("desktop:get-nangong-evolution-state", () => evolution.state());
+  handle("desktop:get-nangong-evolution-read-recovery", () => evolution.readRecovery());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
   // 人物会话统一通过读取、发送、新建和模型选择四类入口访问；新人物只需注册处理器。
   handle("desktop:get-persona-conversation", (_event, personaId: string) => personaConversations.conversation(personaId));

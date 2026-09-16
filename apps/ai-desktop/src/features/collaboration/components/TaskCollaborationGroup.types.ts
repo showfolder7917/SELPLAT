@@ -9,7 +9,7 @@ import type {
   // 界面语言：页面状态和操作文案选择中文或日文。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
-import type { CurrentTopicStageOutDto } from "../../../../contracts/services/evolution/index";
+import type { CurrentTopicReadRecoveryOutDto, CurrentTopicStageOutDto } from "../../../../contracts/services/evolution/index";
 import type { CollaborationStateReadStatus } from "../model/collaboration-formatters";
 
 /** Developer 右侧“任务协作群”页面使用的完整模型。 */
@@ -40,6 +40,8 @@ export type TaskCollaborationGroupModel = {
     timelineReadStatus: CollaborationStateReadStatus;
     /** 读取失败的可读原因。 */
     readError: string;
+    /** 当前专题投影签发的读取恢复政策；页面不得以本地次数覆盖它。 */
+    readRecovery: CurrentTopicReadRecoveryOutDto;
   };
   /** 用户可以从任务群页面触发的业务操作。 */
   actions: {

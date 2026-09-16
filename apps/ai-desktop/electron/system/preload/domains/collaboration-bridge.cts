@@ -18,6 +18,7 @@ export function collaborationBridge() {
     newLinghuDisplayConversation: () => invoke("desktop:new-linghu-display-conversation"),
     onLinghuAutomationState: (listener: (event: unknown) => void) => subscribe("desktop:linghu-automation-state", listener),
     getEvolutionState: () => invoke("desktop:get-nangong-evolution-state"),
+    getEvolutionReadRecovery: () => invoke("desktop:get-nangong-evolution-read-recovery"),
     getEvolutionTopicDossier: (topicId: string) => invoke("desktop:get-evolution-topic-dossier", topicId),
     // 页面只传人物 ID；增加新人物时 preload 不需要再增加方法。
     getPersonaConversation: (personaId: string) => invoke("desktop:get-persona-conversation", personaId),

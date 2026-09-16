@@ -17,7 +17,7 @@ import type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, EnqueueMe
 import type { TestDataResetResultOutDto } from "../../../services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
 import type { LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto } from "../../../services/personas/linghu/index.js";
-import type { EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto } from "../../../services/evolution/index.js";
+import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto } from "../../../services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
@@ -170,6 +170,8 @@ export interface DesktopApi {
   onLinghuAutomationState(listener: (event: LinghuAutomationStateEventOutDto) => void): () => void;
   /** 读取专题、提案、审批和自动化运行状态。 */
   getEvolutionState(): Promise<EvolutionStateOutDto>;
+  /** Evolution 快照读取失败时，读取当前专题档案签发的恢复政策。 */
+  getEvolutionReadRecovery(): Promise<CurrentTopicReadRecoveryOutDto>;
   /** 读取指定专题的来源、对话、审批和执行档案。 */
   getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossierOutDto>;
   /** 读取韩立当前固定人物会话。 */
