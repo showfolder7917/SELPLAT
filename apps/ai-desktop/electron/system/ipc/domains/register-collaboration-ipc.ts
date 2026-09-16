@@ -47,7 +47,7 @@ export function registerCollaborationIpc(
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineGroups(Array.isArray(groupIds) ? groupIds.filter((value): value is string => typeof value === "string") : []);
   });
-  handle("desktop:get-collaboration-timeline-projection-status", () => collaborationTimeline?.getProjectionStatus() || { status: "ready", message: "" });
+  handle("desktop:get-collaboration-timeline-projection-status", () => collaborationTimeline?.getProjectionStatus() || { status: "ready", message: "", taskId: null, operation: "none" });
   handle("desktop:retry-collaboration-timeline-projection", () => {
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，无法重试进度更新。");
     collaborationTimeline.retryProjection();

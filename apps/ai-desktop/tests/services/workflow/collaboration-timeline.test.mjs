@@ -186,12 +186,15 @@ test("流式进度投影失败保留现有内容并重试同一片段", () => {
 
     assert.throws(() => facade.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", text: "保留的进度正文" }), /确认失败/);
     assert.equal(facade.getProjectionStatus().status, "unavailable");
+    assert.equal(facade.getProjectionStatus().taskId, running.taskId);
+    assert.equal(facade.getProjectionStatus().operation, "stream");
     assert.equal(facade.getTimelineSnapshot(fixture.at(4)).groups[0].nodes.find((node) => node.status === "current").content, "保留的进度正文");
 
     failAfterCommit = false;
     facade.retryProjection();
     unsubscribe();
     assert.equal(facade.getProjectionStatus().status, "ready");
+    assert.deepEqual(facade.getProjectionStatus(), { status: "ready", message: "", taskId: null, operation: "none" });
     assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskTimelineStream").get().count)), 1);
     assert.deepEqual(statuses.map((status) => status.status), ["unavailable", "ready"]);
   } finally { fixture.close(); }

@@ -978,10 +978,6 @@ export async function startApplication(): Promise<void> {
     if (run && workflowStatus) {
       const progressIdentity = createHash("sha256").update(JSON.stringify({
         runId: run.runId,
-        status: run.status,
-        phase: run.phase,
-        action: run.action,
-        blockingReason: run.blockingReason,
         workflowStatus,
       })).digest("hex");
       const messageId = `hanli-workflow-status:${run.runId}:${progressIdentity}`;

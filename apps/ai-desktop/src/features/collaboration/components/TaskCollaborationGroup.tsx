@@ -246,7 +246,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         <span>{readError || "任务进度更新失败，正在保留上次成功内容。"}</span>
         <button type="button" disabled={retryingRead} onClick={retryTimelineRead}>{retryingRead ? "重新读取中…" : "重新读取更新"}</button>
       </div>}
-      {timelineProjectionUnavailable && <div className="task-collaboration-refresh-status" role="alert">
+      {timelineProjectionUnavailable && <div className="task-collaboration-refresh-status" role="alert" data-task-id={model.presentation.timelineProjectionStatus.taskId || undefined} data-projection-operation={model.presentation.timelineProjectionStatus.operation}>
         <span>{model.presentation.timelineProjectionStatus.message || "任务进度更新失败，正在保留上次成功内容。"}</span>
         <button type="button" disabled={retryingProjection} onClick={retryTimelineProjection}>{retryingProjection ? "重试更新中…" : "重试进度更新"}</button>
       </div>}

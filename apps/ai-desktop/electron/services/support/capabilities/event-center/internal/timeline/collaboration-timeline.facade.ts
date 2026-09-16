@@ -15,6 +15,7 @@ type ProjectionStatusListener = (status: CollaborationTimelineProjectionStatusOu
 
 /** 页面重试只重放这一次未确认写入，不能把其他时间线操作一并重复。 */
 type ProjectionRetry = () => void;
+type ProjectionOperation = "stream" | "task-flow" | "business-event";
 
 /**
  * 任务时间线唯一业务门面：所有写入先提交 SQLite，再向订阅者发布变更。
@@ -24,7 +25,7 @@ export class CollaborationTimelineFacade {
   readonly #repository: CollaborationTimelineRepository;
   readonly #listeners = new Set<TimelineChangedListener>();
   readonly #projectionStatusListeners = new Set<ProjectionStatusListener>();
-  #projectionFailure: { message: string; retry: ProjectionRetry } | null = null;
+  #projectionFailure: { message: string; retry: ProjectionRetry; taskId: string | null; operation: ProjectionOperation } | null = null;
 
   constructor(database: SqliteDatabase) {
     this.#repository = new CollaborationTimelineRepository(database);
@@ -34,7 +35,7 @@ export class CollaborationTimelineFacade {
     const write = () => this.#repository.appendBusinessEvent(event);
     let commit: ReturnType<CollaborationTimelineRepository["appendBusinessEvent"]>;
     try { commit = write(); }
-    catch (error) { this.#recordProjectionFailure(error, write); throw error; }
+    catch (error) { this.#recordProjectionFailure(error, write, event.fact.taskId, "business-event"); throw error; }
     if (commit) this.#publish(commit);
   }
 
@@ -42,7 +43,7 @@ export class CollaborationTimelineFacade {
     const write = () => this.#repository.appendTaskFlowEvents(state, taskIds);
     let commit: ReturnType<CollaborationTimelineRepository["appendTaskFlowEvents"]>;
     try { commit = write(); }
-    catch (error) { this.#recordProjectionFailure(error, write); throw error; }
+    catch (error) { this.#recordProjectionFailure(error, write, taskIds.length === 1 ? taskIds[0]! : null, "task-flow"); throw error; }
     if (commit) this.#publish(commit);
   }
 
@@ -51,13 +52,15 @@ export class CollaborationTimelineFacade {
     const failed = this.#projectionFailure;
     if (!failed) return;
     try { failed.retry(); }
-    catch (error) { this.#recordProjectionFailure(error, failed.retry); throw error; }
+    catch (error) { this.#recordProjectionFailure(error, failed.retry, failed.taskId, failed.operation); throw error; }
     this.#projectionFailure = null;
     this.#publishProjectionStatus();
   }
 
   getProjectionStatus(): CollaborationTimelineProjectionStatusOutDto {
-    return this.#projectionFailure ? { status: "unavailable", message: this.#projectionFailure.message } : { status: "ready", message: "" };
+    return this.#projectionFailure
+      ? { status: "unavailable", message: this.#projectionFailure.message, taskId: this.#projectionFailure.taskId, operation: this.#projectionFailure.operation }
+      : { status: "ready", message: "", taskId: null, operation: "none" };
   }
 
   /** 只投影明确问题与实际动作，正常且无变化的巡检不产生会话消息。 */
@@ -90,7 +93,7 @@ export class CollaborationTimelineFacade {
     const write = () => this.#repository.appendStream(taskId, memberId, event, occurredAt, chunkId);
     let commit: ReturnType<CollaborationTimelineRepository["appendStream"]>;
     try { commit = write(); }
-    catch (error) { this.#recordProjectionFailure(error, write); throw error; }
+    catch (error) { this.#recordProjectionFailure(error, write, taskId, "stream"); throw error; }
     if (!commit) return null;
     // 流式增量已经通过专用 IPC 直接送到页面；逐字发布“时间线已变化”会让页面反复全量读取历史。
     // 一轮正文完成或报错时再通知完整快照收口，既保留持久化记录，也避免长任务拖慢人物切换。
@@ -126,8 +129,8 @@ export class CollaborationTimelineFacade {
   }
 
   /** 失败状态只保存技术重试上下文，不把失败伪造为任务或时间线业务事实。 */
-  #recordProjectionFailure(error: unknown, retry: ProjectionRetry): void {
-    this.#projectionFailure = { message: error instanceof Error ? error.message : String(error), retry };
+  #recordProjectionFailure(error: unknown, retry: ProjectionRetry, taskId: string | null, operation: ProjectionOperation): void {
+    this.#projectionFailure = { message: error instanceof Error ? error.message : String(error), retry, taskId, operation };
     this.#publishProjectionStatus();
   }
 }
