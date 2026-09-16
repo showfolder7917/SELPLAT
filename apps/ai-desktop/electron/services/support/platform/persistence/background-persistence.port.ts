@@ -1,15 +1,16 @@
-/**
- * AI Memory 后台持久化的唯一异步边界。
- * 语料、摘要和人物记忆只能提交可序列化命令；后台所有者独占 SQLite 连接。
- */
-export interface BackgroundPersistencePort {
-  execute<TResult>(command: BackgroundPersistenceCommand<TResult>): Promise<TResult>;
-  close(): Promise<void>;
-}
+/** 后台端口只传递结构化数据；主进程不能把闭包或 SQLite 对象交给 Worker。 */
+export type BackgroundPersistenceOperation =
+  | "ingest-rollouts"
+  | "read-corpus-ingestion-status"
+  | "set-corpus-ingestion-status";
 
-/** 命令不允许携带主进程闭包、DatabaseSync 或 StatementSync。 */
-export interface BackgroundPersistenceCommand<TResult> {
-  readonly kind: string;
-  readonly payload: unknown;
-  readonly decode: (value: unknown) => TResult;
+export type BackgroundPersistenceRequest = {
+  operation: BackgroundPersistenceOperation;
+  payload: Record<string, unknown>;
+};
+
+/** Worker 是语料与检查点写入的唯一所有者，调用方只能等待队列结果。 */
+export interface BackgroundPersistencePort {
+  request<TResult>(request: BackgroundPersistenceRequest): Promise<TResult>;
+  close(): Promise<void>;
 }
