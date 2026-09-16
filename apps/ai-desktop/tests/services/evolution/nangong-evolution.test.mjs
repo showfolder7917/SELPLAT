@@ -103,7 +103,18 @@ class PersonaEvolutionRuntime extends WorkflowPersonaEvolutionRuntime {
       readProjectScope: options.readProjectScope || (() => projectPaths.projectRoot),
       screenshots: {},
     });
-    super({ ...options, collaboration: { state: () => ({ tasks: [], members: [] }), ...options.collaboration }, prompts, hanli: hanliRuntime.facade, isCurrentUserTaskRuleId: options.isCurrentUserTaskRuleId || (() => true) });
+    super({
+      ...options,
+      collaboration: {
+        state: () => ({ tasks: [], members: [] }),
+        // 测试适配器实现生产 Facade 的订阅契约；无事件场景返回可安全释放的空订阅。
+        subscribe: () => () => undefined,
+        ...options.collaboration,
+      },
+      prompts,
+      hanli: hanliRuntime.facade,
+      isCurrentUserTaskRuleId: options.isCurrentUserTaskRuleId || (() => true),
+    });
     this.hanliRuntime = hanliRuntime;
   }
   sendConversationMessage(...args) { return this.nangongRuntime.facade.sendConversationMessage(...args); }
