@@ -133,7 +133,9 @@ test("会话任务不再携带已退役的页面审查文件清单", () => {
 
 test("没有专题任务时可从空状态进入韩立会话，但不创建任务", () => {
   assert.match(taskGroupSource, /groups\.length === 0[\s\S]*onClick=\{openHanliConversation\}[\s\S]*找韩立说需求/);
-  assert.match(collaborationModelSource, /const openMemberPage = async \(memberId: string\)[\s\S]*selectMember\(memberId\)[\s\S]*setPanel\("member"\)/);
+  assert.match(collaborationModelSource, /const openMemberPage = async \(memberId: string\)[\s\S]*setPanel\("member"\)[\s\S]*void selectMember\(memberId\)/);
+  assert.match(collaborationModelSource, /desktop\.saveCollaborationNavigationPreference\(memberId\)/);
+  assert.doesNotMatch(collaborationModelSource, /selectedMemberId/);
   assert.match(collaborationViewModelSource, /onOpenHanliConversation: \(\) => controller\.actions\.openMemberPage\("han-li"\)/);
   assert.doesNotMatch(taskGroupSource, /submitTask|submitConversationTask/);
 });

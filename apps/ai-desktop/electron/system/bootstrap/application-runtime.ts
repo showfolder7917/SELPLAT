@@ -596,8 +596,8 @@ export async function startApplication(): Promise<void> {
         if (window.isDestroyed()) continue;
         window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
       }
-      // 人物页签和桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
-      if (reason !== "member.selected" && reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
+      // 桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
+      if (reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
     },
     onStream: (taskId, memberId, event) => {
       // 原始逐字增量已保存在时间线流表；全局事件中心只记录阶段事实，避免同一内容重复膨胀数据库。

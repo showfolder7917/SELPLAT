@@ -68,7 +68,7 @@ export function CollaborationTaskNavigation({
           <small>{collaborationMemberDisplayModel({ member: null, locale, status: stateReadStatus }).label}</small>
         )}
         {state?.members.map((member) => {
-          const memberSelected = panel === "member" && member.memberId === controller.navigation.selectedMemberId;
+          const memberSelected = panel === "member" && member.memberId === controller.navigation.viewedMemberId;
           const display = collaborationMemberDisplayModel({
             member,
             locale,

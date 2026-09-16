@@ -268,7 +268,7 @@ export function useCollaborationWorkspace() {
   // 当前协作子页面：默认先显示人物页。
   const [panel, syncPanel] = useState<CollaborationPanel>("member");
   // 当前查看人物只是 Renderer 导航偏好，不能再写入协作成员和任务事实。
-  const [selectedMemberId, setSelectedMemberId] = useState("han-li");
+  const [viewedMemberId, setViewedMemberId] = useState("han-li");
   // 保存中的人物只影响对应按钮，其他人物仍可立即切换。
   const [savingMemberId, setSavingMemberId] = useState<string | null>(null);
   const navigationIntent = useRef(0);
@@ -399,17 +399,17 @@ export function useCollaborationWorkspace() {
     navigationPreferenceRestored.current = true;
     const intentAtRead = navigationIntent.current;
     void desktop.getCollaborationNavigationPreference().then((memberId) => {
-      if (memberId && navigationIntent.current === intentAtRead) setSelectedMemberId(memberId);
+      if (memberId && navigationIntent.current === intentAtRead) setViewedMemberId(memberId);
     }).catch((reason) => setError(readableDesktopError(reason, "无法恢复上次查看的人物。")));
   }, [state]);
   // 状态恢复后校验本地导航目标；已退出成员时回退到会话负责人。
   useEffect(() => {
     if (!state?.members.length) return;
-    if (state.members.some((member) => member.memberId === selectedMemberId)) return;
-    setSelectedMemberId(state.members.find((member) => member.kind === "conversation-owner")?.memberId || state.members[0]!.memberId);
-  }, [selectedMemberId, state]);
+    if (state.members.some((member) => member.memberId === viewedMemberId)) return;
+    setViewedMemberId(state.members.find((member) => member.kind === "conversation-owner")?.memberId || state.members[0]!.memberId);
+  }, [viewedMemberId, state]);
   // 当前人物必须来自后端成员列表，找不到时明确返回空。
-  const selectedMember = state?.members.find((member) => member.memberId === selectedMemberId) || null;
+  const selectedMember = state?.members.find((member) => member.memberId === viewedMemberId) || null;
   // 人物当前任务只保留未结束且确实由该人物发起、执行或参与过的任务。
   const selectedMemberTasks = state?.tasks.filter((task) => {
     if (TERMINAL_TASK_STATES.has(task.state)) return false;
@@ -435,7 +435,7 @@ export function useCollaborationWorkspace() {
     navigationIntent.current += 1;
     const intent = navigationIntent.current;
     const startedAt = performance.now();
-    setSelectedMemberId(memberId);
+    setViewedMemberId(memberId);
     setSavingMemberId(memberId);
     requestAnimationFrame(() => requestAnimationFrame(() => recordInteractionPerformance("member-page-feedback", startedAt, { memberId })));
     const desktop = getOptionalCollaborationDesktopApi();
@@ -553,7 +553,7 @@ export function useCollaborationWorkspace() {
       collaborationMode,
       // 当前人物：从权威成员列表解析，缺失时明确为空。
       selectedMember,
-      selectedMemberId,
+      viewedMemberId,
       savingMemberId,
       // 当前人物任务：只保留尚未结束且与该人物真实相关的任务。
       selectedMemberTasks,
