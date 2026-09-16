@@ -188,6 +188,56 @@ test("新写入和打开 v6 人物实现短文时均保留失败位置，不能�
   }
 });
 
+test("打开 v7 人物协作说明时重算为失败位置，绝不回退审计原文", () => {
+  const fixture = createFixture("customer-display-v7-collaboration-prose");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  try {
+    const repository = new PersonaConversationRepository(initialized.database);
+    const conversation = repository.create("han-li");
+    const raw = [
+      "原始消息、内部事实和审计依据仅供协作核对。",
+      "保存结构、内容归类、恢复读取到时间线投影属于内部实现。",
+      "发送、新建会话、制造数据和恢复任务属于工作流处理。",
+    ].join("\n\n");
+    repository.save({
+      ...conversation,
+      updatedAt: "2026-09-16T06:00:00.000Z",
+      messages: [{
+        messageId: "legacy-collaboration-prose-message",
+        sequenceNumber: 0,
+        messageType: "customer-visible",
+        contentRole: "conversation",
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: raw,
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt: "2026-09-16T06:00:00.000Z",
+        completedAt: "2026-09-16T06:00:00.000Z",
+      }],
+    });
+    initialized.database?.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopPersonaCustomerDisplayMessage
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=7
+      WHERE sourceMessageId='legacy-collaboration-prose-message'
+    `).run({ $raw: raw }));
+
+    const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
+      content: "此消息暂时无法安全显示。", state: "failed",
+    }]);
+    assert.doesNotMatch(window.messages[0].content, /原始消息|内部事实|审计依据|保存结构|内容归类|恢复读取|时间线投影|制造数据|恢复任务/u);
+    const version = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-collaboration-prose-message'
+    `).get());
+    assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
+  } finally {
+    initialized.database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("打开旧 hanli-design 时按稳定身份重算为首段，设计说明和语料元数据只保留在审计原文", () => {
   const fixture = createFixture("customer-display-legacy-hanli-design");
   const initialized = initializeAiMemoryDatabase(fixture.options);

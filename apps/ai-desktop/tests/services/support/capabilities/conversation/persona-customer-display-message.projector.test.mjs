@@ -79,6 +79,27 @@ test("人物实现短文命中多个受控技术标记时保持失败位置", ()
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
 });
 
+test("人物协作说明命中多个稳定概念时保持失败位置，用户原话仍保持完整", () => {
+  const collaborationProse = [
+    "原始消息、内部事实和审计依据仅供协作核对。",
+    "保存结构、内容归类、恢复读取到时间线投影属于内部实现。",
+    "发送、新建会话、制造数据和恢复任务属于工作流处理。",
+  ].join("\n\n");
+  const persona = derivePersonaCustomerDisplayMessage({
+    messageType: "customer-visible",
+    speakerType: "persona",
+    content: collaborationProse,
+  });
+  assert.deepEqual(persona, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
+
+  const user = derivePersonaCustomerDisplayMessage({
+    messageType: "customer-visible",
+    speakerType: "user",
+    content: collaborationProse,
+  });
+  assert.deepEqual(user, { state: "ready", content: collaborationProse, failureReason: null });
+});
+
 test("内部字段位于正文开头时保持不可显示状态，不能把混合原文回退到客户页面", () => {
   const failed = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", content: "contentRole：technical-evidence\n用户目标：内部目标" });
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
