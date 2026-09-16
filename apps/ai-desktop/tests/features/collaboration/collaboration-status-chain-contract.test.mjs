@@ -167,12 +167,10 @@ test("任务协作群空状态在窄窗口保持单列、换行和容器边界",
   assert.match(developerStyles, /\.task-collaboration-empty-action \{[\s\S]*max-width: 100%/);
 });
 
-test("任务协作群窄窗口不截断专题与节点摘要", () => {
-  assert.match(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*\.task-group-header-content small, \.task-node-main > small \{[\s\S]*overflow-wrap: anywhere[\s\S]*white-space: normal/);
-});
-
-test("任务卡当前结论在全部窗口宽度都完整换行而不使用省略号", () => {
-  assert.match(developerStyles, /\.task-group-primary small \{[\s\S]*overflow: visible[\s\S]*overflow-wrap: anywhere[\s\S]*text-overflow: clip[\s\S]*white-space: normal/);
+test("任务协作群说明在全部窗口宽度都完整换行而不使用省略号", () => {
+  assert.match(developerStyles, /\.task-group-header-content > span:first-child, \.task-group-primary, \.task-node-main \{[\s\S]*min-width: 0/);
+  assert.match(developerStyles, /\.task-group-header-content small, \.task-node-main > small \{[\s\S]*overflow-wrap: anywhere[\s\S]*text-overflow: clip[\s\S]*white-space: normal/);
+  assert.doesNotMatch(developerStyles, /\.task-group-header-content small, \.task-node-main > small \{[^}]*text-overflow: ellipsis/);
 });
 
 test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {
