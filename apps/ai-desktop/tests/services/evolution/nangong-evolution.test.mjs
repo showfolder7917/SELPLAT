@@ -849,6 +849,52 @@ test("验收阻塞和暂停从同一提案继续，不重建任务且拒绝重�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("可恢复验收卡点不能被普通专题确认覆盖，明确退役后才允许新运行", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "blocked-run-overwrite-guard-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const originalRunId = store.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
+    const topicId = store.createTopic(topicRequest("保留原验收卡点")).activeTopicId;
+    const proposalId = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉").proposals.at(-1).proposalId;
+    store.updateOneShotRun("accepting", "han-li", "韩立", "验收", topicId, proposalId);
+    store.markProgress(proposalId, "pending-acceptance", "等待验收");
+    const blocked = store.blockOneShotRun("验收结果暂时无法处理");
+
+    assert.equal(blocked.oneShotRun.resumeMode, "standard");
+    assert.throws(
+      () => store.beginOneShotRun(workspaceState, "zh-CN", "unrelated-confirmation"),
+      /先从原任务继续.*不能覆盖原专题/,
+    );
+    assert.equal(store.state().oneShotRun.runId, originalRunId);
+    assert.equal(store.state().oneShotRun.proposalId, proposalId);
+
+    const retired = store.retireOneShotRunForTopicSwitch("客户明确切换到独立专题");
+    assert.equal(retired.oneShotRun.resumeMode, null);
+    const replacement = store.beginOneShotRun(workspaceState, "zh-CN", "confirmed-topic-switch");
+    assert.notEqual(replacement.oneShotRun.runId, originalRunId);
+    assert.equal(replacement.oneShotRun.sourceRequestId, "confirmed-topic-switch");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("一次性运行档案保留运行标识和关联，供覆盖事故恢复核对", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "one-shot-archive-linkage-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const runId = store.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
+    const topicId = store.createTopic(topicRequest("运行归档关联")).activeTopicId;
+    const proposalId = store.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉").proposals.at(-1).proposalId;
+    store.updateOneShotRun("accepting", "han-li", "韩立", "验收", topicId, proposalId);
+    const blocked = store.blockOneShotRun("保留恢复事实");
+    const record = blocked.archiveRecords.at(-1);
+
+    assert.equal(record.eventType, "one-shot.blocked");
+    assert.equal(record.payload.oneShotRun.runId, runId);
+    assert.equal(record.payload.oneShotRun.topicId, topicId);
+    assert.equal(record.payload.oneShotRun.proposalId, proposalId);
+    assert.equal(record.payload.oneShotRun.resumeMode, "standard");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立审批输出异常后从原审批卡点继续", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "approval-resume-"));
   try {

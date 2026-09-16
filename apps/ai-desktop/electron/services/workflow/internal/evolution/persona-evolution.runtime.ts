@@ -785,7 +785,12 @@ export class PersonaEvolutionRuntime {
         .some((item) => !["completed", "rejected"].includes(item.status))
         || state.topics.some((item) => !["completed", "rejected"].includes(item.status));
       const activeDeliberation = [...state.deliberations].reverse().find((item) => ["questioning", "ready-to-establish"].includes(item.status));
-      if (this.#deliberation && (activeDeliberation || (!hasActiveWork && state.automationSettings.automaticCustodyEnabled === true))) {
+      // 后台已在调查的问题可以在同一研讨中继续；但研讨一旦成熟并等待客户确认，
+      // 没有当前运行时只有明确开启持续托管才可接续。普通确认不得在托管关闭时把
+      // 尚未获客户确认的成熟研讨重新包装成新运行，更不能覆盖原验收卡点。
+      const mayContinueDeliberation = activeDeliberation?.status === "questioning"
+        || (state.automationSettings.automaticCustodyEnabled === true && (Boolean(activeDeliberation) || !hasActiveWork));
+      if (this.#deliberation && mayContinueDeliberation) {
         const result = await this.#deliberation.advance({ requireProblem: false });
         state = result.state;
         if (result.activity !== "idle") {

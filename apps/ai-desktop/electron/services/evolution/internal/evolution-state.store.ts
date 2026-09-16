@@ -104,6 +104,9 @@ export class EvolutionStateStore {
   beginOneShotRun(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"], sourceRequestId: string | null = null): EvolutionStateOutDto {
     if (!workspaceState?.roots?.length) throw new Error("一次性演化必须先登记实施工作区。");
     if (this.#state.oneShotRun?.status === "running") throw new Error("当前已有一次性演化正在运行，请勿重复启动。");
+    if (this.#state.oneShotRun?.status === "blocked" && this.#state.oneShotRun.resumeMode !== null) {
+      throw new Error("当前专题仍有可恢复卡点，请先从原任务继续；普通确认不能覆盖原专题、提案或冻结验收计划。");
+    }
     const now = new Date().toISOString();
     return this.#commit("one-shot.started", null, null, (state) => {
       state.automationContext = { workspaceState: structuredClone(workspaceState), locale };
@@ -201,6 +204,7 @@ export class EvolutionStateStore {
       run.actorName = "系统";
       run.action = "上一轮遗留运行状态已结束";
       run.blockingReason = required(reason, "遗留运行状态结束原因", 8_000);
+      run.resumeMode = null;
       run.updatedAt = now;
       run.completedAt = now;
     }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
@@ -913,7 +917,11 @@ export class EvolutionStateStore {
       eventType: reason,
       actor: archiveActor(reason, payloadExtra),
       title: archiveTitle(reason),
-      payload: { ...archivePayload(topic, proposal, deliberation), ...payloadExtra },
+      payload: {
+        ...archivePayload(topic, proposal, deliberation),
+        ...(reason.startsWith("one-shot.") ? { oneShotRun: next.oneShotRun ? structuredClone(next.oneShotRun) : null } : {}),
+        ...payloadExtra,
+      },
       occurredAt,
     });
     this.#write(next);
