@@ -145,7 +145,9 @@ export interface DesktopApi {
   /** 异步保存 Renderer 当前查看人物；不修改协作成员、任务或时间线。 */
   saveCollaborationNavigationPreference(memberId: string): Promise<void>;
   /** 记录不进入协作事实的页面性能原始样本。 */
-  recordCollaborationInteractionPerformance(sample: { operation: string; durationMs: number; datasetId: string; phase: "baseline" | "candidate"; details?: Record<string, string | number | boolean | null> }): Promise<void>;
+  recordCollaborationInteractionPerformance(sample: { operation: string; durationMs: number; datasetId: string; scenarioId: string; phase: "baseline" | "candidate"; details?: Record<string, string | number | boolean | null> }): Promise<void>;
+  /** 读取同一数据集与操作场景的原始样本统计，不读取或修改协作业务事实。 */
+  getCollaborationInteractionPerformanceComparison(datasetId: string, scenarioId: string): Promise<{ datasetId: string; scenarioId: string; comparable: boolean; longTaskCount: { baseline: number; candidate: number }; operations: Array<{ operation: string; baseline: { sampleCount: number; samples: number[]; averageMs: number | null; medianMs: number | null; maxMs: number | null }; candidate: { sampleCount: number; samples: number[]; averageMs: number | null; medianMs: number | null; maxMs: number | null } }> }>;
   /** 订阅 SQLite 成功提交后的时间线变更通知。 */
   onCollaborationTimelineChanged(listener: (event: CollaborationTimelineChangedEventOutDto) => void): () => void;
   /** 在单会话与协同模式之间切换并持久化状态。 */

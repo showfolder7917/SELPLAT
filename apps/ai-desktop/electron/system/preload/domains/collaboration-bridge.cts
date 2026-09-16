@@ -9,6 +9,7 @@ export function collaborationBridge() {
     getCollaborationNavigationPreference: () => invoke("desktop:get-collaboration-navigation-preference"),
     saveCollaborationNavigationPreference: (memberId: string) => invoke("desktop:save-collaboration-navigation-preference", memberId),
     recordCollaborationInteractionPerformance: (sample: unknown) => invoke("desktop:record-collaboration-interaction-performance", sample),
+    getCollaborationInteractionPerformanceComparison: (datasetId: string, scenarioId: string) => invoke("desktop:get-collaboration-interaction-performance-comparison", datasetId, scenarioId),
     onCollaborationTimelineChanged: (listener: (event: unknown) => void) => subscribe("desktop:collaboration-timeline-changed", listener),
     setDesktopOperatingMode: (mode: string) => invoke("desktop:set-operating-mode", mode),
     submitCollaborationTask: (request: unknown) => invoke("desktop:submit-collaboration-task", request),

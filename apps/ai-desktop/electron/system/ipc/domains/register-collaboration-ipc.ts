@@ -52,10 +52,14 @@ export function registerCollaborationIpc(
     if (typeof memberId !== "string") throw new Error("人物标识无效，无法保存查看位置。");
     navigationPreference.save(memberId, collaboration.state().members);
   });
-  handle("desktop:record-collaboration-interaction-performance", (_event, sample: { operation?: unknown; durationMs?: unknown; datasetId?: unknown; phase?: unknown; details?: unknown }) => {
-    if (typeof sample?.operation !== "string" || typeof sample.datasetId !== "string" || typeof sample.durationMs !== "number" || (sample.phase !== "baseline" && sample.phase !== "candidate")) return;
+  handle("desktop:record-collaboration-interaction-performance", (_event, sample: { operation?: unknown; durationMs?: unknown; datasetId?: unknown; scenarioId?: unknown; phase?: unknown; details?: unknown }) => {
+    if (typeof sample?.operation !== "string" || typeof sample.datasetId !== "string" || typeof sample.scenarioId !== "string" || typeof sample.durationMs !== "number" || (sample.phase !== "baseline" && sample.phase !== "candidate")) return;
     const details = sample.details && typeof sample.details === "object" && !Array.isArray(sample.details) ? sample.details as Record<string, string | number | boolean | null> : undefined;
-    interactionPerformance.record({ operation: sample.operation, durationMs: sample.durationMs, datasetId: sample.datasetId, phase: sample.phase, details });
+    interactionPerformance.record({ operation: sample.operation, durationMs: sample.durationMs, datasetId: sample.datasetId, scenarioId: sample.scenarioId, phase: sample.phase, details });
+  });
+  handle("desktop:get-collaboration-interaction-performance-comparison", (_event, datasetId: string, scenarioId: string) => {
+    if (typeof datasetId !== "string" || typeof scenarioId !== "string") throw new Error("性能比较请求缺少数据集或操作场景。 ");
+    return interactionPerformance.comparison(datasetId, scenarioId);
   });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingModeValue) => collaboration.setMode(mode));
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request).state);

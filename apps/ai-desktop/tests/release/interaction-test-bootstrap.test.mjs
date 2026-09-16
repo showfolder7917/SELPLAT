@@ -90,6 +90,8 @@ test("隔离 preload 覆盖正式系统桌面桥接并保留工作区订阅清�
 });
 
 test("隔离 preload 覆盖正式协同桌面桥接", () => {
+  // 交互测试依赖整个隔离 preload 可加载；仅检查方法名不能发现语法错误造成的全桥接缺失。
+  assert.doesNotThrow(() => new Function(isolatedPreload), "隔离 preload 必须能被 JavaScript 运行时解析");
   const declaration = collaborationDesktopApi.match(/COLLABORATION_DESKTOP_API_METHODS\s*=\s*\[([\s\S]*?)\]\s+as const/);
   assert.ok(declaration, "正式协同桥接必须声明方法集合");
   const methods = [...declaration[1].matchAll(/"([^" ]+)"/g)].map((match) => match[1]);
