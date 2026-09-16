@@ -46,6 +46,8 @@ let customerActionTimelineFixtureEnabled = false;
 let collaborationTimelineRevision = 0;
 // 隔离桥与正式导航偏好相同：只保存最后一次成功的人物标识，不修改协作快照。
 let collaborationNavigationPreferenceMemberId = "han-li";
+// 隔离测试桥保存与正式 JSONL 同口径的临时样本，供页面验证读取真实比较结构。
+const collaborationInteractionPerformanceSamples = [];
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
@@ -632,7 +634,25 @@ contextBridge.exposeInMainWorld("desktop", {
     if (!collaborationState.members.some((member) => member.memberId === memberId)) throw new Error("人物已不在当前协作成员列表中，无法保存查看位置。");
     collaborationNavigationPreferenceMemberId = memberId;
   },
-  recordCollaborationInteractionPerformance: async () => undefined,
+  recordCollaborationInteractionPerformance: async (sample) => {
+    if (!sample || typeof sample.operation !== "string" || typeof sample.datasetId !== "string" || typeof sample.scenarioId !== "string" || typeof sample.durationMs !== "number" || (sample.phase !== "baseline" && sample.phase !== "candidate")) return;
+    collaborationInteractionPerformanceSamples.push(structuredClone(sample));
+  },
+  getCollaborationInteractionPerformanceComparison: async (datasetId, scenarioId) => {
+    const samples = collaborationInteractionPerformanceSamples.filter((sample) => sample.datasetId === datasetId && sample.scenarioId === scenarioId);
+    const requiredOperations = ["member-page-feedback", "navigation-preference-ipc", "timeline-read-processing", "task-card-page-update"];
+    const viewports = (phase) => new Set(samples.filter((sample) => sample.phase === phase).map((sample) => sample.details?.viewport).filter((viewport) => typeof viewport === "string"));
+    const statistics = (phase, operation) => {
+      const values = samples.filter((sample) => sample.phase === phase && sample.operation === operation).map((sample) => sample.durationMs).sort((left, right) => left - right);
+      const middle = Math.floor(values.length / 2);
+      return { sampleCount: values.length, samples: values, averageMs: values.length ? values.reduce((total, value) => total + value, 0) / values.length : null, medianMs: values.length ? values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2 : null, maxMs: values.at(-1) || null };
+    };
+    const operations = [...new Set([...requiredOperations, ...samples.map((sample) => sample.operation)])].sort().map((operation) => ({ operation, baseline: statistics("baseline", operation), candidate: statistics("candidate", operation) }));
+    const baselineViewports = viewports("baseline");
+    const candidateViewports = viewports("candidate");
+    const sameViewport = baselineViewports.size === 1 && candidateViewports.size === 1 && [...baselineViewports][0] === [...candidateViewports][0];
+    return { datasetId, scenarioId, comparable: sameViewport && requiredOperations.every((operation) => { const summary = operations.find((item) => item.operation === operation); return Boolean(summary?.baseline.sampleCount && summary.candidate.sampleCount); }), longTaskCount: { baseline: statistics("baseline", "long-task-continuous-scroll").sampleCount, candidate: statistics("candidate", "long-task-continuous-scroll").sampleCount }, operations };
+  },
   createCollaborationMember: async ({ displayName }) => {
     collaborationState.members.push({ ...collaborationState.members[1], memberId: `isolated-member-${Date.now()}`, displayName, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     return publishCollaborationState("member.created");
