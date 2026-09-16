@@ -2,7 +2,7 @@ import { Worker } from "node:worker_threads";
 
 import type { BackgroundPersistencePort, BackgroundPersistenceRequest } from "./background-persistence.port.js";
 
-type WorkerOptions = { projectRoot: string; runtimeMarkerPath: string; migrationSqlRoot?: string };
+type WorkerOptions = { workerUrl: URL; projectRoot: string; runtimeMarkerPath: string; migrationSqlRoot?: string };
 type PendingRequest = { resolve: (value: unknown) => void; reject: (error: Error) => void };
 
 /** 主进程只维护请求关联；SQLite 连接、扫描和事务全部由 Worker 处理。 */
@@ -13,7 +13,11 @@ export class BackgroundPersistenceWorkerPort implements BackgroundPersistencePor
   #closed = false;
 
   constructor(options: WorkerOptions) {
-    this.#worker = new Worker(new URL("./internal/background-persistence.worker.js", import.meta.url), { workerData: options });
+    this.#worker = new Worker(options.workerUrl, { workerData: {
+      projectRoot: options.projectRoot,
+      runtimeMarkerPath: options.runtimeMarkerPath,
+      migrationSqlRoot: options.migrationSqlRoot,
+    } });
     this.#worker.on("message", (message: { id: number; result?: unknown; error?: string }) => {
       const pending = this.#pending.get(message.id);
       if (!pending) return;

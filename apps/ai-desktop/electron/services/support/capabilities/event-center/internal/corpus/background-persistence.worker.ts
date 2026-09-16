@@ -1,7 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-import { CodexConversationCorpusIngestion } from "../../../capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.js";
-import { initializeAiMemoryDatabase } from "./sqlite-database.js";
+import { initializeAiMemoryDatabase } from "../../../../platform/persistence/index.js";
+import { CodexConversationCorpusIngestion } from "./codex-conversation-corpus.ingestion.js";
 
 type WorkerRequest = { id: number; operation: string; payload: Record<string, unknown> };
 type WorkerOptions = { projectRoot: string; runtimeMarkerPath: string; migrationSqlRoot?: string };

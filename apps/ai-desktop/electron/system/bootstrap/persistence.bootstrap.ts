@@ -3,6 +3,7 @@ import type { CollaborationTimelineChangedEventOutDto, CollaborationTimelineProj
 import {
   createCollaborationMemory,
   createCollaborationTimeline,
+  createCodexCorpusPersistenceWorkerUrl,
   type EventCenterFacade,
   type EventCenterMemory,
   type EventCenterTimeline,
@@ -41,6 +42,7 @@ export function createPersistenceContext(options: CreatePersistenceContextOption
   });
   const database = initialization.database;
   const backgroundPersistence = database ? new BackgroundPersistenceWorkerPort({
+    workerUrl: createCodexCorpusPersistenceWorkerUrl(),
     projectRoot: options.projectRoot,
     runtimeMarkerPath: options.runtimeMarkerPath,
     migrationSqlRoot: options.migrationSqlRoot,
