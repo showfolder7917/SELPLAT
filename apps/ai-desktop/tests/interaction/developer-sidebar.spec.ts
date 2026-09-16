@@ -969,8 +969,11 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
     element.scrollTop = element.scrollHeight;
     return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop };
   });
+  expect(detailScroll.clientHeight, "窄窗口展开卡片的详情面板必须有可见高度").toBeGreaterThan(0);
   expect(detailScroll.scrollHeight, "长历史必须由任务卡详情面板承载内部滚动").toBeGreaterThan(detailScroll.clientHeight);
   expect(detailScroll.scrollTop, "详情面板必须实际滚动到底部").toBeGreaterThan(0);
+  const detailBox = await detailPane.boundingBox();
+  expect(detailBox?.height, "详情面板必须在正式窄窗口中具有可视边界").toBeGreaterThan(0);
   await expect(pageRoot.getByRole("heading", { name: "任务协作群", exact: true })).toBeInViewport();
   await expect(groupTrigger).toBeInViewport();
   await expect(group.locator(".task-timeline-next")).toBeInViewport();
