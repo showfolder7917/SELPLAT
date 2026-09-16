@@ -7,6 +7,7 @@ import {
   acquireManagedDependencyLease,
   releaseManagedDependencyLease,
   resolveVerifiedDeveloperExecutable,
+  stageVerifiedDeveloperExecutable,
   verifyAcceptancePlanCapabilities,
 } from "../../release/index.js";
 // 测试资源协调器串行管理 Electron、端口和构建目录，避免并行任务互相破坏。
@@ -243,6 +244,46 @@ export class FixedUnifiedTestRunner {
       // 成功、失败或异常都释放候选依赖租约，避免后续任务永久等待。
       releaseManagedDependencyLease(dependencyLease);
     });
+  }
+
+  /** 为改动预检运行器的候选单独准备已签名开发包；统一测试必须由新进程恢复后才开始。 */
+  async prepareRuntimeActivation(candidateProjectRoot: string, releaseBatchId: string, candidateSha: string): Promise<string> {
+    const resolvedProjectRoot = path.resolve(candidateProjectRoot);
+    const desktopRoot = path.join(resolvedProjectRoot, "apps", this.#applicationName);
+    const runId = `${this.#eventNamespace}-runtime-activation-${Date.now()}`;
+    const dependencyLease = resolvedProjectRoot === this.#sourceProjectRoot
+      ? null
+      : await acquireManagedDependencyLease(resolvedProjectRoot, this.#sourceProjectRoot, this.#applicationName, runId);
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...dependencyLease?.environment,
+      AI_DESKTOP_TEST_TASK_ID: runId,
+      SELPLAT_ROOT: this.#sourceProjectRoot,
+      GIT_TERMINAL_PROMPT: "0",
+    };
+    delete environment.ELECTRON_RUN_AS_NODE;
+    delete environment.NODE_OPTIONS;
+    delete environment.NODE_INSPECT_RESUME_ON_START;
+    delete environment.VSCODE_INSPECTOR_OPTIONS;
+    try {
+      return await this.#testResources.run({
+        runId,
+        taskId: null,
+        initiatorMemberId: this.#initiatorMemberId,
+        kind: "runtime-activation",
+        port: 4197,
+        buildRoot: this.#buildRoot,
+      }, async () => {
+        for (const script of FIXED_RELEASE_SCRIPTS) {
+          this.#recordEvent(`${this.#eventNamespace}.runtime_activation.started`, { script, candidateProjectRoot: resolvedProjectRoot, candidateSha });
+          await runNpmScript(desktopRoot, script, environment);
+          this.#recordEvent(`${this.#eventNamespace}.runtime_activation.completed`, { script, candidateProjectRoot: resolvedProjectRoot, candidateSha });
+        }
+        return stageVerifiedDeveloperExecutable(resolveVerifiedDeveloperExecutable(this.#buildRoot), this.#buildRoot, `${releaseBatchId}-runtime`, candidateSha);
+      });
+    } finally {
+      releaseManagedDependencyLease(dependencyLease);
+    }
   }
 }
 

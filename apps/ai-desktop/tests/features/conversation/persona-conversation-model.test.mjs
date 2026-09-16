@@ -10,6 +10,8 @@ const activeStableUserId = read("ruleengine/AGENTS.md").match(/当前稳定用�
 assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 
 const conversationContract = read("contracts/services/personas/conversation/dto/persona-conversation.out.dto.ts");
+const conversationContractIndex = read("contracts/services/personas/conversation/index.ts");
+const collaborationMemoryPort = read("contracts/services/support/capabilities/event-center/port/collaboration-memory.port.ts");
 const repository = read("electron/services/support/capabilities/conversation/internal/persona-conversation.repository.ts");
 const migration = read("db/sql/migration-1025-add-persona-conversation-model.sql");
 const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversation-message-type.sql");
@@ -45,6 +47,35 @@ test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID �
   assert.match(inquiry, /appendPersonaCustomerMessage/);
   assert.doesNotMatch(inquiry, /:assessment/);
   assert.doesNotMatch(read("electron/services/personas/hanli/internal/conversation/hanli-inquiry-checkpoint.ts"), /messageId\.startsWith/);
+});
+
+test("内部研讨正文与技术证据使用不同内容角色，且证据只在南宫婉页面折叠显示", () => {
+  const projector = read("src/features/conversation/model/realtime-conversation.ts");
+  const nangongController = read("src/features/nangong/components/useNangongConversationWorkspace.ts");
+  const nangongView = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
+  const memory = read("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts");
+  assert.match(conversationContract, /PersonaConversationContentRoleValue = "conversation" \| "technical-evidence"/);
+  assert.match(conversationContractIndex, /PersonaConversationContentRoleValue/);
+  assert.match(collaborationMemoryPort, /appendPersonaInternalMessage\(input: \{[\s\S]*?contentRole\?: PersonaConversationContentRoleValue[\s\S]*?\}\): PersonaConversationOutDto/);
+  assert.match(loadOrder, /migration-1028-add-persona-conversation-content-role\.sql/);
+  assert.match(nangongController, /\(message\.contentRole \|\| "conversation"\) === "conversation"/);
+  assert.match(nangongController, /item\.contentRole === "technical-evidence"/);
+  assert.match(nangongView, /SelUiDisclosure/);
+  assert.match(memory, /contentRole: "technical-evidence"/);
+  assert.match(projector, /message\.messageType === "internal-deliberation"/);
+});
+
+test("人物普通发送失败后保留稳定客户消息编号并提供同编号重试", () => {
+  const hanliController = read("src/features/hanli/components/useHanliConversationWorkspace.ts");
+  const nangongController = read("src/features/nangong/components/useNangongConversationWorkspace.ts");
+  const hanliView = read("src/features/hanli/components/HanliConversationWorkspace.tsx");
+  const nangongView = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
+  assert.match(hanliController, /async function retrySend\(\)/);
+  assert.match(hanliController, /await send\(pending\)/);
+  assert.match(nangongController, /async function retrySend\(\)/);
+  assert.match(nangongController, /await sendChat\(undefined, outgoingMessage\)/);
+  assert.match(hanliView, /重试发送/);
+  assert.match(nangongView, /重试发送/);
 });
 
 test("韩立和南宫婉各自从会话头读取模型并将实际模型传给 Harness", () => {

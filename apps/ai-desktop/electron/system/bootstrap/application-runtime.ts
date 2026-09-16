@@ -550,6 +550,16 @@ export async function startApplication(): Promise<void> {
       if (!linghuRuntime) throw new Error("令狐运行时尚未初始化，不能执行统一测试。");
       return linghuRuntime.runUnifiedTests(rootPath);
     },
+    prepareRuntimeActivation: (rootPath, releaseBatchId, candidateSha) => {
+      if (!linghuRuntime) throw new Error("令狐运行时尚未初始化，不能准备候选运行包。");
+      return linghuRuntime.prepareRuntimeActivation(rootPath, releaseBatchId, candidateSha);
+    },
+    activateRuntime: (executable, releaseBatchId, runtimeSourceSha) => {
+      eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_runtime_activation", executable, releaseBatchId, runtimeSourceSha });
+      app.relaunch({ execPath: executable, args: releaseRestartArguments(projectRoot, runtimeSourceSha, process.argv, releaseBatchId) });
+      prepareAiMemoryShutdown();
+      app.exit(0);
+    },
     publishRelease: (executable, releaseBatchId, runtimeSourceSha) => {
       eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId, runtimeSourceSha });
       app.relaunch({ execPath: executable, args: releaseRestartArguments(projectRoot, runtimeSourceSha, process.argv) });

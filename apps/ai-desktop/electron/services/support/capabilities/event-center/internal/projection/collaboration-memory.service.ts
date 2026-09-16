@@ -89,7 +89,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
   /** 把人物内部研讨追加到所属人物会话；发言人使用稳定 personaId，不再扩充角色枚举。 */
   appendPersonaInternalMessage(input: {
     ownerPersonaId: string; conversationId: string; messageId: string; speakerPersonaId: string; content: string;
-    attachmentIds?: string[]; replyToMessageId?: string | null; createdAt: string;
+    attachmentIds?: string[]; replyToMessageId?: string | null; contentRole?: "conversation" | "technical-evidence"; createdAt: string;
   }): PersonaConversationOutDto {
     const content = input.content.trim();
     if (!content) throw new Error("人物内部研讨消息不能为空。");
@@ -97,7 +97,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     const attachmentIds = [...new Set(input.attachmentIds || [])].filter((id) => id.trim()).slice(0, 20);
     this.#database.transaction((connection) => {
       writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.messageId, messageType: "internal-deliberation", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
+        messageId: input.messageId, messageType: "internal-deliberation", contentRole: input.contentRole || "conversation", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
         content, attachmentIds, replyToMessageId: input.replyToMessageId || null,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
       }, "append");
@@ -117,7 +117,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     if (!content) throw new Error("人物恢复检查点不能为空。");
     this.#database.transaction((connection) => {
       writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.messageId, messageType: "internal-recovery", speakerType: "system", speakerPersonaId: null,
+        messageId: input.messageId, messageType: "internal-recovery", contentRole: "technical-evidence", speakerType: "system", speakerPersonaId: null,
         content, attachmentIds: [], replyToMessageId: input.requestId,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
       }, "append");
@@ -138,7 +138,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     if (!content) throw new Error("客户可见人物消息不能为空。");
     this.#database.transaction((connection) => {
       writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.messageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
+        messageId: input.messageId, messageType: "customer-visible", contentRole: "conversation", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
         content, attachmentIds: [], replyToMessageId: input.replyToMessageId,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
       }, "append");
@@ -159,6 +159,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       messageId: `${REQUIREMENT_DISCUSSION_CONTEXT_PREFIX}${normalized.contextId}`,
       speakerPersonaId: normalized.ownerPersonaId,
       content: JSON.stringify(normalized),
+      contentRole: "technical-evidence",
       createdAt: normalized.createdAt,
     });
   }
@@ -187,12 +188,12 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       // Renderer 重试同一 clientMessageId 时整轮已经原子提交，不再分配新序号或复制语料。
       if (existing) return;
       const userSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.userMessageId, messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: input.userContent,
+        messageId: input.userMessageId, messageType: "customer-visible", contentRole: "conversation", speakerType: "user", speakerPersonaId: null, content: input.userContent,
         inferredIntent: input.decision.userIntent || undefined, attachmentIds: input.attachmentIds, replyToMessageId: null,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.completedAt,
       }, "append");
       const personaSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
-        messageId: input.personaMessageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: input.responderPersonaId,
+        messageId: input.personaMessageId, messageType: "customer-visible", contentRole: "conversation", speakerType: "persona", speakerPersonaId: input.responderPersonaId,
         content: input.personaContent, attachmentIds: [], replyToMessageId: input.userMessageId,
         deliveryStatus: "completed", createdAt: input.completedAt, completedAt: input.completedAt,
       }, "append");
