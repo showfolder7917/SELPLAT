@@ -10,7 +10,11 @@ export function projectCurrentTopicStage(
   evolution: EvolutionStateOutDto,
   collaboration: CollaborationStateOutDto,
 ): CurrentTopicStageOutDto {
-  const awaitingConfirmation = hasPendingConfirmation(evolution);
+  // 已经绑定专题和提案的当前运行拥有交付阶段；后来产生但尚未确立的研讨不能把它覆盖成
+  // 无专题的“等待确认”。独立专题切换必须先由状态机显式退役原运行，投影不在这里猜测切换。
+  const activeProposalRun = Boolean(evolution.oneShotRun?.topicId && evolution.oneShotRun?.proposalId
+    && evolution.oneShotRun.status !== "completed");
+  const awaitingConfirmation = !activeProposalRun && hasPendingConfirmation(evolution);
   const proposalId = evolution.oneShotRun?.proposalId || null;
   const proposal = proposalId ? evolution.proposals.find((item) => item.proposalId === proposalId) || null : null;
   const topic = proposal ? evolution.topics.find((item) => item.topicId === proposal.topicId) || null : null;

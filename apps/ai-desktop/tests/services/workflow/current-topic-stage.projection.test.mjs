@@ -89,6 +89,39 @@ test("完成态后的当前复核运行阻塞时优先显示原卡恢复状态",
   assert.equal(stage.resumeOneShotRunId, "completion-review");
 });
 
+test("未确立的新研讨不能覆盖已经绑定专题的验收卡点", () => {
+  const state = evolution("failed");
+  state.oneShotRun = {
+    runId: "blocked-acceptance", topicId: "topic-current", proposalId: "proposal-current",
+    status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  state.deliberations = [{
+    deliberationId: "later-unconfirmed-deliberation", status: "ready-to-establish",
+    rounds: [{ confirmation: { offeredAt: "2026-09-12T05:01:00.000Z", reply: null } }],
+  }];
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.topicId, "topic-current");
+  assert.equal(stage.proposalId, "proposal-current");
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeOneShotRunId, "blocked-acceptance");
+});
+
+test("没有已绑定专题运行时仍展示待确认研讨", () => {
+  const state = evolution("missing");
+  state.oneShotRun = null;
+  state.deliberations = [{
+    deliberationId: "pending-deliberation", status: "ready-to-establish",
+    rounds: [{ confirmation: { offeredAt: "2026-09-12T05:01:00.000Z", reply: null } }],
+  }];
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.status, "awaiting-confirmation");
+  assert.equal(stage.userAction, "confirmation");
+  assert.equal(stage.topicId, null);
+});
+
 test("真实验收进行中优先于已经完成的提案状态", () => {
   const state = evolution("passed");
   state.proposals[0].status = "completed";
