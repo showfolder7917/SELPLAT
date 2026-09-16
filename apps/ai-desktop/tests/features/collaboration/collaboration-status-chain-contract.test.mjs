@@ -212,6 +212,12 @@ test("长任务详情只在卡片内容区滚动并保留主操作", () => {
   assert.match(taskGroupSource, /timelineProjectionUnavailable[\s\S]*重试进度更新/);
 });
 
+test("内部研讨的流式投影失败保留页面重试，不能中断整场研讨", () => {
+  assert.match(applicationRuntimeSource, /const evolutionTimeline = collaborationTimeline/);
+  assert.match(applicationRuntimeSource, /recordDistributionTimelineStream\(\{ timeline: evolutionTimeline, eventCenter \}, taskId, memberId, event\)/);
+  assert.match(applicationRuntimeSource, /recordEvolutionTimelineEvent[\s\S]*?throw error/);
+});
+
 test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {
   // 任务主协议只负责组合当前状态，执行、集成和提交快照分别由独立文件解释。
   assert.doesNotMatch(contractDefinitionSource, /interface CollaborationExecutionRecordOutDto|interface CollaborationIntegrationFailureOutDto|interface CollaborationTaskSnapshotOutDto/);

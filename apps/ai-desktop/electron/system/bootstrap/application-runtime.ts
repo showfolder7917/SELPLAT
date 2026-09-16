@@ -123,6 +123,7 @@ import { createAtomicJsonPersistence, type DatabasePort as SqliteDatabase } from
 // 规则服务读取构建后的规则包，并合并用户允许的覆盖项。
 // 窗口工厂集中维护 BrowserWindow 安全配置和 Renderer 加载方式。
 import { createMainWindow } from "../window/create-main-window.js";
+import { recordDistributionTimelineStream } from "./distribution-timeline-stream-recorder.js";
 import { createStartupContext } from "./startup-context.js";
 import { createInquiryRuntimeFacts } from "./inquiry-runtime-facts.js";
 import { createPersistenceContext, type PersistenceContext } from "./persistence.bootstrap.js";
@@ -656,6 +657,8 @@ export async function startApplication(): Promise<void> {
   const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
   const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;
   const failEvolutionMutation = workflowRepository ? (idempotencyKey: string, error: unknown) => workflowRepository!.failEvolutionMutation(idempotencyKey, error) : undefined;
+  // 人物运行时在本次启动中持有稳定的时间线实例；不能在闭包中重新读取可被退出流程置空的模块变量。
+  const evolutionTimeline = collaborationTimeline;
   const recordEvolutionTimelineEvent = collaborationTimeline ? (event: CollaborationTimelineBusinessEventOutDto) => {
     // 时间线失败必须向上抛出，不能把“业务完成但审计丢失”当成成功。
     try { collaborationTimeline!.appendTimelineEvent(event); }
@@ -905,14 +908,9 @@ export async function startApplication(): Promise<void> {
     completeMutation: completeEvolutionMutation,
     failMutation: failEvolutionMutation,
     recordTimelineEvent: recordEvolutionTimelineEvent,
-    recordTimelineStream: collaborationTimeline ? (taskId, memberId, event) => {
-      // 分发流式文本也属于可审计时间线；写入失败时记录并阻断当前调用。
-      try { collaborationTimeline!.appendStream(taskId, memberId, event); }
-      catch (error) {
-        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_distribution_stream", error, correlationId: taskId });
-        throw error;
-      }
-    } : undefined,
+    recordTimelineStream: evolutionTimeline
+      ? (taskId, memberId, event) => recordDistributionTimelineStream({ timeline: evolutionTimeline, eventCenter }, taskId, memberId, event)
+      : undefined,
   });
   startHanliInternalDeliberation = async (request, sourceRequestId, options) => {
     if (options?.switchTopic) {
