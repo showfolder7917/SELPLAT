@@ -3,6 +3,8 @@
  * 一个专题对应一张任务卡，卡内按真实发生顺序展示申请、审批、分发、执行和验证节点。
  */
 
+import { useEffect, useState } from "react";
+
 import {
   // 专题任务卡：展示一个专题的摘要、完整人物时间线和操作入口。
   TaskGroupCard,
@@ -20,24 +22,65 @@ import {
   useTaskCollaborationGroup,
 } from "./useTaskCollaborationGroup";
 
+/** 读取受阻的页面投影只描述重读政策，不能从旧专题或时间线猜测当前任务。 */
+type ReadObstructionPresentation = {
+  /** 当前无法取得的权威对象。 */
+  waitingFor: string;
+  /** 后台是否正在执行一次安全的只读重试。 */
+  retryingAutomatically: boolean;
+  /** 重试仍失败后是否需要用户手动再次发起读取。 */
+  requiresUserAction: boolean;
+  /** 用户或后台下一步的可读说明。 */
+  nextAction: string;
+};
+
+/** 将两条权威读取状态和本次重试结果收敛为任务区唯一的读取受阻说明。 */
+function createReadObstructionPresentation(input: {
+  deliveryUnavailable: boolean;
+  timelineUnavailable: boolean;
+  automaticRetryPending: boolean;
+  automaticRetryFinished: boolean;
+}): ReadObstructionPresentation | null {
+  if (!input.deliveryUnavailable && !input.timelineUnavailable) return null;
+
+  const waitingFor = input.deliveryUnavailable && input.timelineUnavailable
+    ? "当前交付投影和专题历史证据"
+    : input.deliveryUnavailable ? "当前交付投影" : "专题历史证据";
+  const retryingAutomatically = input.automaticRetryPending || !input.automaticRetryFinished;
+  if (retryingAutomatically) {
+    return {
+      waitingFor,
+      retryingAutomatically: true,
+      requiresUserAction: false,
+      nextAction: "正在自动重新读取权威交付信息；读取成功后再显示当前结论。",
+    };
+  }
+  return {
+    waitingFor,
+    retryingAutomatically: false,
+    requiresUserAction: true,
+    nextAction: "自动重试仍未恢复；请重新读取权威交付信息，读取成功后再显示当前结论。",
+  };
+}
+
 /** 按专题展示完整协作历史的主页面。 */
 export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
+  const [retryingRead, setRetryingRead] = useState(false);
+  const [automaticReadRetryFinished, setAutomaticReadRetryFinished] = useState(false);
   // 页面模型（model）是任务群展示状态和业务操作的唯一输入。
   const { model } = props;
-  const {
-    evolution,
-  } = model;
   // 权威数据提供实时节点正文，显示状态提供当前界面语言。
   const { liveTextByNodeId } = model.data;
-  const { locale, stateReadStatus } = model.presentation;
+  const { locale, stateReadStatus, deliveryReadStatus, timelineReadStatus, readError } = model.presentation;
   // 页面只读取人工审批和需求入口操作，继续任务由页面控制器包装异步反馈。
-  const { onManualApproval, onOpenHanliConversation } = model.actions;
+  const { onManualApproval, onOpenHanliConversation, onRetryDeliveryRead } = model.actions;
   // 页面控制器只消费模型，不再依赖组件外层的包装参数。
   const controller = useTaskCollaborationGroup(model);
   const {
     groups,
     continuingTaskId,
     continueError,
+    continueFeedback,
     isGroupOpen,
     setGroupOpen,
     isNodeOpen,
@@ -55,6 +98,60 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const openHanliConversation = () => {
     void onOpenHanliConversation();
   };
+
+  const deliveryUnavailable = deliveryReadStatus === "unavailable";
+  const timelineUnavailable = timelineReadStatus === "unavailable";
+  const readObstruction = createReadObstructionPresentation({
+    deliveryUnavailable,
+    timelineUnavailable,
+    automaticRetryPending: retryingRead,
+    automaticRetryFinished: automaticReadRetryFinished,
+  });
+
+  /** 首次读取失败只自动重读一次；后续明确交给用户，避免后台循环掩盖持续故障。 */
+  useEffect(() => {
+    if (!readObstruction || automaticReadRetryFinished || retryingRead) return;
+    setRetryingRead(true);
+    void onRetryDeliveryRead()
+      .catch(() => undefined)
+      .finally(() => {
+        setAutomaticReadRetryFinished(true);
+        setRetryingRead(false);
+      });
+  }, [automaticReadRetryFinished, onRetryDeliveryRead, readObstruction, retryingRead]);
+
+  /** 权威读取恢复后，下一次独立故障仍可获得一次自动重读机会。 */
+  useEffect(() => {
+    if (!readObstruction && automaticReadRetryFinished) setAutomaticReadRetryFinished(false);
+  }, [automaticReadRetryFinished, readObstruction]);
+
+  /** 用户手动重读不推进协作任务，并在请求结束后继续展示最新权威读取结论。 */
+  const retryDeliveryRead = () => {
+    setRetryingRead(true);
+    void onRetryDeliveryRead()
+      .catch(() => undefined)
+      .finally(() => setRetryingRead(false));
+  };
+
+  // 首次读取任一权威来源失败时，旧时间线不能继续承担当前结论。
+  if (readObstruction) {
+    return (
+      <section className="task-collaboration-page">
+        <div className="task-collaboration-empty" role="alert">
+          <strong>当前无法读取</strong>
+          <span>正在等待：{readObstruction.waitingFor}</span>
+          <span>是否需要你操作：{readObstruction.requiresUserAction ? "需要重新读取，当前不会推进或恢复任务。" : "暂不需要，系统正在自动重试。"}</span>
+          <span>下一步：{readObstruction.nextAction}</span>
+          {readError && <small>{readError}</small>}
+          {readObstruction.requiresUserAction && (
+            <button type="button" className="task-recovery-continue" disabled={retryingRead} onClick={retryDeliveryRead}>
+              {retryingRead ? "重新读取中…" : "重新读取"}
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   if (groups.length === 0) {
     const statusMessage = stateReadStatus === "syncing"
@@ -120,11 +217,12 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               continuingTaskId,
               // 继续任务错误（continueError）用于在卡片底部显示失败原因。
               continueError,
+              // 恢复成功后的反馈独立于失败原因，避免用户误以为按钮消失后没有结果。
+              continueFeedback,
               // 实时节点正文（liveTextByNodeId）让当前执行节点立即显示流式内容。
               liveTextByNodeId,
+              currentTopicStage: model.data.currentTopicStage,
             },
-            // 演化控制器（evolution）供专题恢复入口判断并恢复原始运行。
-            evolution,
             // 卡片操作（actions）集中描述用户在卡片中可以触发的全部行为。
             actions: {
               // 节点展开查询（isNodeOpen）保留自动展开与用户选择的统一规则。

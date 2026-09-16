@@ -949,6 +949,12 @@ export async function startApplication(): Promise<void> {
   });
   // Evolution Facade 面向专题页面，Workflow Facade 面向跨人物调度。
   const evolutionRuntime = createEvolutionRuntime(personaEvolution);
+  // 协作事实变化由 Evolution Runtime 重算当前专题投影；组合根只负责把已生成快照送到窗口。
+  personaEvolution.subscribeCurrentTopicStage((state, reason) => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
+      window.webContents.send("desktop:evolution-state", { state, reason, topicId: null, proposalId: null });
+    }
+  });
   evolutionRuntime.facade.subscribe((state, reason, topicId, proposalId) => {
     // 状态变化先同步持久化投影和审计，再把完整状态发给现有人物会话。
     try { workflowRepository?.syncEvolutionState(state); }

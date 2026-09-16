@@ -12,24 +12,14 @@ import type {
   // 界面语言：选择中文或日文标签。
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
+import type { CurrentTopicStageOutDto } from "../../../../../contracts/services/evolution/index";
 import {
   // 统一折叠控件：专题卡、人物节点和技术详情都使用相同交互。
   SelUiDisclosure,
 } from "../../../../theme/SelUiDisclosure";
-import type {
-  // 演化控制器：专题顶部恢复原一次性运行时使用。
-  useEvolutionRuntime,
-} from "../../../evolution";
-import {
-  // 专题恢复入口：只在原运行真实暂停或阻塞时显示。
-  canResumeOneShotForGroup,
-  TaskGroupRecovery,
-} from "../TaskGroupRecovery";
 import {
   // 摘要压缩：节点头部保持一行可扫描文字。
   compactTimelineText,
-  // 当前专题投影：完成态复核等待继续时让原卡显示卡点，运行后立即恢复历史完成态。
-  currentTaskGroupPresentation,
   // 详情标签：按申请、审批、变更或验证证据选择名称。
   detailLabel,
   // 耗时转换：专题头部显示墙钟总耗时。
@@ -38,8 +28,6 @@ import {
   groupActivityPresentation,
   // 专题状态：把稳定状态码转换成中日文。
   groupStatusLabel,
-  // 当前恢复动作：统一放到专题当前流程区，恢复请求中保留禁用入口。
-  latestActiveRecoveryAction,
   // 节点耗时：正在执行或等待时随当前时间更新。
   nodeDurationLabel,
   // 节点状态：把完成、当前、等待和失败转换成中日文。
@@ -64,8 +52,12 @@ type TaskGroupCardPresentation = {
   continuingTaskId: string | null;
   /** 继续任务失败原因；空字符串表示当前没有错误。 */
   continueError: string;
+  /** 继续任务已受理后的可读反馈；空字符串表示当前没有反馈。 */
+  continueFeedback: string;
   /** 按时间线节点保存的实时可见正文。 */
   liveTextByNodeId: Record<string, string>;
+  /** 当前专题唯一交付结论；历史时间线不能覆盖它。 */
+  currentTopicStage: CurrentTopicStageOutDto | null;
 };
 
 /** 专题卡用户操作：集中声明卡片可以读取或触发的交互。 */
@@ -104,14 +96,17 @@ function RecoveryError({ message, locale }: { message: string; locale: LocaleVal
   );
 }
 
+/** 恢复请求已被主进程确认后，明确提示用户原任务已经继续。 */
+function RecoveryFeedback({ message }: { message: string }) {
+  return <p className="task-recovery-feedback" role="status">{message}</p>;
+}
+
 /** 专题卡模型：父页面只传入这一份完整、按职责归组的数据。 */
 export type TaskGroupCardModel = {
   /** 当前专题及其全部权威时间线节点。 */
   group: CollaborationTimelineGroupOutDto;
   /** 当前卡片的语言、时间、展开、错误和实时正文。 */
   presentation: TaskGroupCardPresentation;
-  /** 专题演化状态和原运行恢复操作。 */
-  evolution: ReturnType<typeof useEvolutionRuntime>;
   /** 当前卡片允许执行的展开、审批和恢复操作。 */
   actions: TaskGroupCardActions;
 };
@@ -150,20 +145,22 @@ function useTimelineNow(running: boolean): number {
 function TaskGroupHeader({
   group,
   presentation,
-  recoveryAction,
-  oneShotRecoveryRequired,
-}: Pick<TaskGroupCardModel, "group" | "presentation"> & {
-  recoveryAction: ReturnType<typeof latestActiveRecoveryAction>;
-  oneShotRecoveryRequired: boolean;
-}) {
+}: Pick<TaskGroupCardModel, "group" | "presentation">) {
   // 界面语言（locale）决定专题状态和耗时使用中文还是日文。
   const { locale, open } = presentation;
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
-  const groupStopped = group.status === "blocked" || group.status === "completed" || group.status === "cancelled";
+  const currentStage = presentation.currentTopicStage?.topicId === group.topicId && presentation.currentTopicStage?.proposalId === group.proposalId
+    ? presentation.currentTopicStage : null;
+  const groupStopped = currentStage?.status === "completed" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
   const activity = groupActivityPresentation(group, locale);
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。
-  const primary = taskGroupPrimaryPresentation(group, locale, recoveryAction, oneShotRecoveryRequired);
+  const primary = currentStage ? {
+    matter: currentStage.summary,
+    ownerAndStatus: currentStage.waitingFor,
+    customerAction: currentStage.userAction === "none" ? "当前无需你操作。" : "需要你完成一项操作。",
+    nextAction: currentStage.nextAction,
+  } : taskGroupPrimaryPresentation(group, locale);
   // 专题耗时（durationMs）在任务未结束时至少增长到当前墙钟时间。
 
   return (
@@ -178,14 +175,14 @@ function TaskGroupHeader({
       <span className="task-group-primary" aria-label={locale === "ja" ? "現在の状況" : "当前情况"}>
         <span className="task-group-primary-matter"><b>{locale === "ja" ? "内容" : "发生事项"}</b><small>{primary.matter}</small></span>
         <span className="task-group-primary-owner"><b>{locale === "ja" ? "担当" : "处理人和状态"}</b><small>{primary.ownerAndStatus}</small></span>
-        <span className={`task-group-primary-customer-action${recoveryAction?.customerAction ? " customer-action" : ""}`}><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
+        <span className="task-group-primary-customer-action"><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
         {/* 卡片展开后由时间线中的“下一流程”独占该状态，避免同一文案重复。 */}
         {!open && <span className="task-group-primary-next"><b>{locale === "ja" ? "次の対応" : "下一步"}</b><small>{primary.nextAction}</small></span>}
       </span>
       {/* 专题事实区：集中展示状态、并行人数和从开始到现在的总耗时。 */}
       <span className="task-group-facts">
         {/* 专题状态：把稳定状态码转换为当前语言的可读标签。 */}
-        <b>{activity.statusLabel}</b>
+        <b>{currentStage ? currentStage.title : activity.statusLabel}</b>
         {/* 并行人数：只有确实有人执行或验证时才显示，避免无意义的零值。 */}
         {!groupStopped && activity.activeOwnerLabels.length > 0 && (
           <em>{locale === "ja" ? `並行 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `并行处理中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
@@ -381,56 +378,51 @@ function NodeDuration({ node, locale }: { node: CollaborationTimelineNodeOutDto;
 
 /** 一张专题任务卡及其完整人物处理历史。 */
 export function TaskGroupCard({ model }: TaskGroupCardProps) {
-  // 专题数据和演化控制器属于卡片的业务输入。
-  const { group, evolution } = model;
-  // 当前专题（presentedGroup）只叠加运行中的卡点状态，不改写后端历史时间线。
-  const presentedGroup = currentTaskGroupPresentation(group, evolution.state?.oneShotRun);
+  // 专题数据属于卡片的业务输入。
+  const { group } = model;
   // 卡片显示状态统一提供语言、时间、展开选择和错误信息。
-  const { locale, open, continueError } = model.presentation;
+  const { locale, open, continueError, continueFeedback } = model.presentation;
   // 卡片操作这里只读取专题展开操作，节点操作继续由统一模型传给节点。
   const { onOpenChange } = model.actions;
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
-  // 当前恢复动作（recoveryAction）来自任务最新等待或恢复请求事实，历史节点不能重新获得按钮。
-  const recoveryAction = latestActiveRecoveryAction(visibleNodes);
-  // 恢复提交中（recoveryPending）仅禁用下一流程的唯一入口，避免重复请求。
-  const recoveryPending = recoveryAction?.taskId === model.presentation.continuingTaskId;
-  const recoverySubmitted = recoveryAction?.submitted === true;
-  // 一次性运行恢复与按钮共用同一选择器，卡头不会再把阻塞状态说成自动处理中。
-  const oneShotRecoveryRequired = evolution.state
-    ? canResumeOneShotForGroup(presentedGroup, evolution.state)
-    : false;
+  // 历史时间线不再决定当前恢复入口。
+  const currentStage = model.presentation.currentTopicStage?.topicId === group.topicId && model.presentation.currentTopicStage?.proposalId === group.proposalId
+    ? model.presentation.currentTopicStage : null;
+  // 当前投影明确要求客户恢复时，只使用有效任务链中的稳定标识，不读取时间线节点。
+  const projectedResumeTaskId = currentStage?.userAction === "resume"
+    ? currentStage.effectiveTaskIds.at(-1) || null
+    : null;
+  // 继续请求只适用于投影明确要求恢复的当前有效任务链。
+  const recoveryPending = projectedResumeTaskId === model.presentation.continuingTaskId;
 
   return (
     // 专题卡根折叠区统一承载卡片头部、恢复入口、人物时间线和下一流程。
     <SelUiDisclosure
       idPrefix="task-collaboration-group"
-      className={`task-collaboration-group ${presentedGroup.status}`}
+      className={`task-collaboration-group ${currentStage?.status || group.status}`}
       open={open}
       onOpenChange={onOpenChange}
-      trigger={<TaskGroupHeader group={presentedGroup} presentation={model.presentation} recoveryAction={recoveryAction} oneShotRecoveryRequired={oneShotRecoveryRequired} />}
+      trigger={<TaskGroupHeader group={group} presentation={model.presentation} />}
     >
-      {/* 专题恢复入口：只在原始演化运行确实暂停或阻塞时提供恢复操作。 */}
-      <TaskGroupRecovery group={presentedGroup} evolution={evolution} locale={locale} />
       {/* 下一流程统一显示当前专题的权威状态，并承载唯一恢复入口。 */}
       <div className="task-timeline-next">
         <i aria-hidden="true" />
         <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
         <span className="task-timeline-next-current">
-          <span>{presentedGroup.nextStep}</span>
-          {recoveryAction && (
+          <span>{currentStage?.nextAction || group.nextStep}</span>
+          {projectedResumeTaskId && (
             <button
               type="button"
               className="task-recovery-continue"
-              data-task-recovery-id={recoveryAction.taskId}
-              disabled={recoveryPending || recoverySubmitted}
-              onClick={() => model.actions.onContinueTask(recoveryAction.taskId)}
+              data-task-recovery-id={projectedResumeTaskId}
+              disabled={recoveryPending}
+              onClick={() => model.actions.onContinueTask(projectedResumeTaskId)}
             >
               <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
               {recoveryPending
                 ? locale === "ja" ? "復旧中…" : "恢复中…"
-                : recoverySubmitted ? locale === "ja" ? "送信済み・待機中" : "已提交，等待处理"
-                : recoveryAction.customerAction ? "从卡点继续" : locale === "ja" ? "実行を続ける" : "继续执行"}
+                : "从卡点继续"}
             </button>
           )}
         </span>
@@ -452,6 +444,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       </div>
       {/* 继续任务错误：恢复请求失败时显示短原因，并保留可展开的完整证据。 */}
       {continueError && <RecoveryError message={continueError} locale={locale} />}
+      {continueFeedback && <RecoveryFeedback message={continueFeedback} />}
 
 
     </SelUiDisclosure>

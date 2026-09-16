@@ -34,6 +34,22 @@ function evolution(acceptanceStatus) {
   };
 }
 
+function deliveredCollaboration({ published = true, restartHealthy = true, acceptanceStatus = "passed" } = {}) {
+  const currentTask = task("awaiting-restart");
+  currentTask.integrationGeneration = 7;
+  currentTask.unifiedTest = { status: "passed" };
+  currentTask.flowEvents = [
+    { type: "unified_test.passed", status: "completed" },
+    ...(published ? [{ type: "release.published", status: "completed" }] : []),
+    ...(restartHealthy ? [{ type: "release.restart_healthy", status: "completed" }] : []),
+  ];
+  return {
+    tasks: [currentTask],
+    integrationBatches: [{ generation: 7, state: restartHealthy ? "completed" : "verified", integrationSha: "final-candidate-sha" }],
+    acceptanceStatus,
+  };
+}
+
 test("最新真实验收失败覆盖已集成任务，投影保持失败待处理", () => {
   const stage = projectCurrentTopicStage(evolution("failed"), { tasks: [task()] });
   assert.equal(stage.status, "failed-pending-repair");
@@ -59,6 +75,18 @@ test("新一轮真实验收开始覆盖旧失败，结束后以新结果为准",
   assert.equal(stage.latestAcceptance.runId, "new-run");
 });
 
+test("完成态后的当前复核运行阻塞时优先显示原卡恢复状态", () => {
+  const state = evolution("passed");
+  state.proposals[0].status = "completed";
+  state.oneShotRun = {
+    runId: "completion-review", topicId: "topic-current", proposalId: "proposal-current",
+    status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.userAction, "resume");
+});
+
 test("真实验收进行中优先于已经完成的提案状态", () => {
   const state = evolution("passed");
   state.proposals[0].status = "completed";
@@ -73,4 +101,24 @@ test("验收结果按真实发生时间选择，保留历史顺序不修改输�
   const before = structuredClone(state);
   assert.equal(projectCurrentTopicStage(state, { tasks: [task()] }).status, "failed-pending-repair");
   assert.deepEqual(state, before);
+});
+
+test("完成必须绑定同一最终候选的测试、发布、重启健康与真实验收", () => {
+  const complete = deliveredCollaboration();
+  const completed = projectCurrentTopicStage(evolution(complete.acceptanceStatus), complete);
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.deliveryEvidence.candidate.integrationSha, "final-candidate-sha");
+
+  const missingRelease = deliveredCollaboration({ published: false });
+  assert.equal(projectCurrentTopicStage(evolution(missingRelease.acceptanceStatus), missingRelease).status, "awaiting-release");
+
+  const missingRestart = deliveredCollaboration({ restartHealthy: false });
+  assert.equal(projectCurrentTopicStage(evolution(missingRestart.acceptanceStatus), missingRestart).status, "awaiting-restart-health");
+});
+
+test("重启健康只将最终候选交给真实验收，不能单独完成", () => {
+  const delivered = deliveredCollaboration({ acceptanceStatus: "running" });
+  const stage = projectCurrentTopicStage(evolution(delivered.acceptanceStatus), delivered);
+  assert.equal(stage.status, "accepting");
+  assert.equal(stage.waitingFor, "韩立真实验收");
 });

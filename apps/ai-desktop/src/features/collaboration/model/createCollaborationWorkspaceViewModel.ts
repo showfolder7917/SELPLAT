@@ -49,20 +49,31 @@ export function createCollaborationWorkspaceViewModel({
     showsTaskGroup: controller.navigation.panel === "task-group",
     errorMessage: controller.feedback.error,
     taskGroup: {
-      evolution,
       data: {
         snapshot: controller.data.timeline,
+        currentTopicStage: evolution.state?.currentTopicStage || null,
         liveTextByNodeId,
       },
       presentation: {
         locale,
         stateReadStatus: controller.data.stateReadStatus,
+        deliveryReadStatus: evolution.readStatus,
+        timelineReadStatus: controller.data.timelineReadStatus,
+        readError: evolution.readError || controller.data.timelineReadError,
       },
       actions: {
         onManualApproval,
         onContinueTask,
         // 空状态入口复用成员导航，只选择韩立并打开其会话页面。
         onOpenHanliConversation: () => controller.actions.openMemberPage("han-li"),
+        onRetryDeliveryRead: async () => {
+          await evolution.retryRead();
+          try {
+            await controller.actions.refreshTimeline();
+          } catch {
+            // 读取失败已成为任务区的明确状态，重试操作不再向页面抛出未处理异常。
+          }
+        },
       },
     },
     memberPage: {

@@ -7,6 +7,8 @@ import { createEvolutionStateSynchronizer } from "./evolution-state-synchronizer
 /** Evolution Feature 统一拥有跨人物共享状态、订阅和写动作，人物会话只消费该公开模型。 */
 export function useEvolutionRuntime() {
   const [state, setState] = useState<EvolutionStateOutDto | null>(null);
+  const [readStatus, setReadStatus] = useState<"syncing" | "ready" | "unavailable">("syncing");
+  const [readError, setReadError] = useState("");
   const resumeLock = useRef(false);
   const [resumingRunId, setResumingRunId] = useState<string | null>(null);
   const [resumeFeedback, setResumeFeedback] = useState<{ runId: string; error: boolean; message: string } | null>(null);
@@ -18,16 +20,27 @@ export function useEvolutionRuntime() {
     let active = true;
     void desktop.getEvolutionState().then((initial) => {
       const next = synchronizer.acceptInitial(initial);
-      if (active && next) setState(next);
+      if (active && next) { setState(next); setReadStatus("ready"); setReadError(""); }
+    }).catch((error) => {
+      if (active) { setReadStatus("unavailable"); setReadError(error instanceof Error ? error.message : "无法读取当前交付信息。"); }
     });
     const unsubscribe = desktop.onEvolutionState((event: EvolutionStateEventOutDto) => {
-      if (active) setState(synchronizer.acceptLive(event.state));
+      if (active) { setState(synchronizer.acceptLive(event.state)); setReadStatus("ready"); setReadError(""); }
     });
     return () => {
       active = false;
       unsubscribe();
     };
   }, []);
+
+  /** 读取失败后只重取权威快照，不触发恢复或推进任何业务任务。 */
+  const retryRead = async () => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop) { setReadStatus("unavailable"); setReadError("桌面连接不可用，无法重新读取当前交付信息。"); return; }
+    setReadStatus("syncing");
+    try { setState(await desktop.getEvolutionState()); setReadStatus("ready"); setReadError(""); }
+    catch (error) { setReadStatus("unavailable"); setReadError(error instanceof Error ? error.message : "无法读取当前交付信息。"); }
+  };
 
   const decideProposal = async (proposalId: string, request: DecideHanliProposalInDto) => {
     const next = await getOptionalCollaborationDesktopApi()?.decideEvolutionProposal(proposalId, request);
@@ -58,5 +71,5 @@ export function useEvolutionRuntime() {
     }
   };
 
-  return { state, setState, decideProposal, resumeOneShot, resumingRunId, resumeFeedback };
+  return { state, setState, readStatus, readError, retryRead, decideProposal, resumeOneShot, resumingRunId, resumeFeedback };
 }

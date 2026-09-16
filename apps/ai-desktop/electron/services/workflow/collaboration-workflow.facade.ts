@@ -27,6 +27,7 @@ import type { ExecutorFacade } from "../personas/executor/index.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 const ORCHESTRATOR_MEMBER_IDS = new Set(["nangong-wan", LINGHU_MEMBER_ID]);
+type CollaborationStateListener = (state: CollaborationStateOutDto, reason: string, taskIds: string[]) => void;
 
 export interface CollaborationCoordinatorOptions {
   store: CollaborationStore;
@@ -84,6 +85,8 @@ export class CollaborationCoordinator {
   }
 
   state(): CollaborationStateOutDto { return this.#store.state(); }
+  /** 订阅协作事实提交；交付投影使用它刷新只读结论，不能反向写入协作状态。 */
+  subscribe(listener: CollaborationStateListener): () => void { return this.#store.subscribe(listener); }
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
   selectMember(memberId: string): CollaborationStateOutDto { return this.#store.selectMember(memberId); }
 

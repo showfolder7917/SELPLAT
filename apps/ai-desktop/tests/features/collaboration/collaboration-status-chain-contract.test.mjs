@@ -61,19 +61,16 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
 });
 
 test("任务级恢复入口在等待和恢复中都位于下一流程", () => {
-  assert.match(taskGroupSource, /latestActiveRecoveryAction[\s\S]*node\.eventType === "customer\.action_required"[\s\S]*node\.eventType === "task\.interrupted"/);
-  assert.match(taskGroupSource, /node\.status === "current" && node\.eventType === "task\.recovery_requested"[\s\S]*submitted: true/);
   assert.match(taskGroupSource, /continuingTaskIds = useRef\(new Set<string>\(\)\)/);
   assert.match(recoveryOperationSource, /RECOVERY_REQUEST_TIMEOUT_MS = 12_000[\s\S]*RECOVERY_RECHECK_TIMEOUT_MS = 4_000/);
   assert.match(recoveryOperationSource, /finally\(\(\) => globalThis\.clearTimeout\(timer\)\)\.catch\(\(\) => undefined\)/);
-  assert.match(taskGroupSource, /disabled=\{recoveryPending \|\| recoverySubmitted\}[\s\S]*"恢复中…"[\s\S]*"已提交，等待处理"/);
-  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(recoveryAction\.taskId\)/);
-  assert.match(taskGroupSource, /recoveryAction\.customerAction \? "从卡点继续"/);
-  assert.doesNotMatch(taskGroupSource, /task-node-recovery-action/);
+  assert.match(taskGroupSource, /disabled=\{recoveryPending\}[\s\S]*"恢复中…"[\s\S]*"从卡点继续"/);
+  assert.match(taskGroupSource, /task-timeline-next-current[\s\S]*onContinueTask\(projectedResumeTaskId\)/);
+  assert.doesNotMatch(taskGroupSource, /latestActiveRecoveryAction|TaskGroupRecovery|task-node-recovery-action/);
   const nextFlowBlock = taskGroupCardSource.slice(taskGroupCardSource.indexOf('<div className="task-timeline-next">'), taskGroupCardSource.indexOf('<div className="task-timeline-list">'));
   assert.doesNotMatch(nextFlowBlock, /failureNextStep/);
   assert.match(taskGroupSource, /!open && <span className="task-group-primary-next"/);
-  assert.doesNotMatch(taskGroupSource, /continueCurrentTask/);
+  assert.doesNotMatch(taskGroupSource, /continueCurrentTask|currentTaskGroupPresentation/);
   assert.match(taskGroupSource, /visibleTimelineNodes\(group\.nodes\)/);
   assert.match(taskGroupSource, /nextSameTask[\s\S]*nextIsSameWaitingState[\s\S]*return !nextIsSameWaitingState/);
   assert.match(developerSource, /continueTimelineTask[\s\S]*continueTaskWithRecovery\(taskId, controller\.actions\)[\s\S]*onContinueTask: continueTimelineTask[\s\S]*<TaskCollaborationGroup model=\{viewModel\.taskGroup\}/);
@@ -140,6 +137,13 @@ test("没有专题任务时可从空状态进入韩立会话，但不创建任�
 
 test("任务群在协作状态未返回或读取失败时不把空专题当作当前事实", () => {
   assert.match(collaborationViewModelSource, /taskGroup:[\s\S]*stateReadStatus: controller\.data\.stateReadStatus/);
+  assert.match(collaborationViewModelSource, /deliveryReadStatus: evolution\.readStatus[\s\S]*timelineReadStatus: controller\.data\.timelineReadStatus/);
+  assert.match(taskGroupSource, /const deliveryUnavailable = deliveryReadStatus === "unavailable"[\s\S]*const timelineUnavailable = timelineReadStatus === "unavailable"[\s\S]*if \(readObstruction\)[\s\S]*当前无法读取/);
+  assert.match(taskGroupSource, /function createReadObstructionPresentation[\s\S]*retryingAutomatically[\s\S]*requiresUserAction/);
+  assert.match(taskGroupSource, /正在自动重新读取权威交付信息/);
+  assert.match(taskGroupSource, /正在等待：[\s\S]*是否需要你操作：[\s\S]*下一步：\{readObstruction\.nextAction\}/);
+  assert.match(taskGroupSource, /首次读取失败只自动重读一次[\s\S]*onRetryDeliveryRead[\s\S]*setAutomaticReadRetryFinished\(true\)/);
+  assert.match(taskGroupSource, /readObstruction\.requiresUserAction[\s\S]*task-recovery-continue[\s\S]*disabled=\{retryingRead\}[\s\S]*重新读取中…/);
   assert.match(taskGroupSource, /stateReadStatus === "syncing"[\s\S]*正在同步/);
   assert.match(taskGroupSource, /stateReadStatus === "unavailable"[\s\S]*状态暂未更新/);
   assert.match(taskGroupSource, /statusMessage \? <strong role="status">\{statusMessage\}<\/strong> : <>/);

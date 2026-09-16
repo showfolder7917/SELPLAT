@@ -9,11 +9,8 @@ import type {
   // 界面语言：页面状态和操作文案选择中文或日文。
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
+import type { CurrentTopicStageOutDto } from "../../../../contracts/services/evolution/index";
 import type { CollaborationStateReadStatus } from "../model/collaboration-formatters";
-import type {
-  // 演化控制器：专题级恢复入口需要读取原运行并继续卡点。
-  useEvolutionRuntime,
-} from "../../evolution";
 
 /** Developer 右侧“任务协作群”页面使用的完整模型。 */
 export type TaskRecoveryResult = {
@@ -22,12 +19,12 @@ export type TaskRecoveryResult = {
 };
 
 export type TaskCollaborationGroupModel = {
-  /** 专题演化状态和原运行恢复操作。 */
-  evolution: ReturnType<typeof useEvolutionRuntime>;
   /** 任务群使用的权威时间线和实时正文。 */
   data: {
     /** 主进程从 SQLite 读取的权威任务时间线；首次加载前为 null。 */
     snapshot: CollaborationTimelineSnapshotOutDto | null;
+    /** 当前交付结论的唯一投影；时间线不再参与当前状态推断。 */
+    currentTopicStage: CurrentTopicStageOutDto | null;
     /** 按时间线节点保存的实时可见正文。 */
     liveTextByNodeId: Record<string, string>;
   };
@@ -37,6 +34,12 @@ export type TaskCollaborationGroupModel = {
     locale: LocaleValue;
     /** 状态尚未返回时，空专题不能被当作当前协作事实。 */
     stateReadStatus: CollaborationStateReadStatus;
+    /** 交付投影首次读取状态。 */
+    deliveryReadStatus: CollaborationStateReadStatus;
+    /** 时间线首次读取状态；失败时不能继续使用旧历史作为当前结论。 */
+    timelineReadStatus: CollaborationStateReadStatus;
+    /** 读取失败的可读原因。 */
+    readError: string;
   };
   /** 用户可以从任务群页面触发的业务操作。 */
   actions: {
@@ -46,6 +49,8 @@ export type TaskCollaborationGroupModel = {
     onContinueTask: (taskId: string) => Promise<TaskRecoveryResult>;
     /** 打开韩立人物会话，让用户从需求讨论开始，不提交协作任务。 */
     onOpenHanliConversation: () => Promise<void>;
+    /** 仅重新读取交付投影和时间线，不触发任务恢复。 */
+    onRetryDeliveryRead: () => Promise<void>;
   };
 };
 

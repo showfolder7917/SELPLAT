@@ -50,6 +50,8 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
   const [continuingTaskId, setContinuingTaskId] = useState<string | null>(null);
   // 继续任务失败原因：统一显示在对应专题卡列表下方。
   const [continueError, setContinueError] = useState("");
+  // 成功反馈与错误分开保存，避免把已受理恢复误报成页面告警。
+  const [continueFeedback, setContinueFeedback] = useState("");
   // React 状态会在下一轮渲染才生效；同步锁覆盖同一事件循环中的连续点击。
   const continuingTaskIds = useRef(new Set<string>());
   const groups = snapshot?.groups || [];
@@ -101,10 +103,12 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
     continuingTaskIds.current.add(taskId);
     setContinuingTaskId(taskId);
     setContinueError("");
+    setContinueFeedback("");
 
     try {
       const result = await onContinueTask(taskId);
-      if (result.kind !== "confirmed") setContinueError(result.message);
+      if (result.kind === "confirmed") setContinueFeedback("已从原卡点继续，请查看后续流程。");
+      else setContinueError(result.message);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setContinueError(message);
@@ -119,6 +123,7 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
     currentGroupId,
     continuingTaskId,
     continueError,
+    continueFeedback,
     isGroupOpen,
     setGroupOpen,
     isNodeOpen,

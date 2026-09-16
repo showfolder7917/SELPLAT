@@ -8,25 +8,9 @@ import type {
   CollaborationTimelineGroupOutDto,
   // 时间线节点：筛选恢复入口并生成节点显示信息。
   CollaborationTimelineNodeOutDto,
-  // 一次性运行：把当前卡点投影到原专题，而不改写历史时间线。
-  EvolutionOneShotRunOutDto,
   // 界面语言：选择中文或日文文案。
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
-
-/** 把当前一次性运行的卡点投影到所属专题卡，避免后台已停住而页面仍显示自动处理中。 */
-export function currentTaskGroupPresentation(
-  group: CollaborationTimelineGroupOutDto,
-  oneShotRun: EvolutionOneShotRunOutDto | null | undefined,
-): CollaborationTimelineGroupOutDto {
-  const belongsToCurrentRun = oneShotRun?.topicId === group.topicId
-    && oneShotRun.proposalId === group.proposalId;
-  if (!belongsToCurrentRun) return group;
-  if (oneShotRun.status === "blocked") {
-    return group.status === "blocked" ? group : { ...group, status: "blocked" };
-  }
-  return group;
-}
 
 /** 专题头部当前活动的显示事实，人数和姓名始终来自同一组当前节点。 */
 export type GroupActivityPresentation = {
@@ -61,20 +45,6 @@ export function groupActivityPresentation(
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
 }
 
-/** 当前等待节点可执行的恢复动作；历史节点只作审计展示，不再承载按钮。 */
-export type ActiveRecoveryAction = {
-  /** 当前仍等待客户确认的时间线节点；用于阻止同任务历史节点重复显示入口。 */
-  nodeId: string;
-  /** 继续接口需要的原任务标识。 */
-  taskId: string;
-  /** 客户卡点使用更明确的按钮文字。 */
-  customerAction: boolean;
-  /** 恢复请求已成为当前节点时，保留入口并禁用重复操作。 */
-  pending: boolean;
-  /** 主进程已记录请求时显示排队事实，不把它当作页面本地转圈。 */
-  submitted: boolean;
-};
-
 /** 任务卡主区域固定展示的四项用户信息。 */
 export type TaskGroupPrimaryPresentation = {
   /** 当前正在发生的事项。 */
@@ -94,82 +64,25 @@ export type TaskGroupPrimaryPresentation = {
 export function taskGroupPrimaryPresentation(
   group: CollaborationTimelineGroupOutDto,
   locale: LocaleValue,
-  recoveryAction: ActiveRecoveryAction | null,
-  oneShotRecoveryRequired = false,
 ): TaskGroupPrimaryPresentation {
   const activity = groupActivityPresentation(group, locale);
   const nextOwner = group.nextOwner?.displayName;
-  // 当前恢复请求仍占用原恢复入口，避免页面把受控恢复误说成普通自动处理。
-  const recoveryPending = recoveryAction?.pending === true;
-  const recoverySubmitted = recoveryAction?.submitted === true;
-  // 运行或验证中的专题没有客户卡点时，明确告知用户系统仍在自动处理。
-  const recoveryRequired = Boolean(recoveryAction) || oneShotRecoveryRequired;
-  const automaticallyProcessing = !recoveryRequired
-    && ["waiting-approval", "running", "verifying"].includes(group.status);
+  // 历史专题只陈述已保存的时间线事实；当前操作只能由当前专题投影提供。
+  const automaticallyProcessing = ["waiting-approval", "running", "verifying"].includes(group.status);
   if (locale === "ja") {
     return {
       matter: compactTimelineText(group.summary),
       ownerAndStatus: nextOwner ? `${nextOwner}：${activity.statusLabel}` : activity.statusLabel,
-      customerAction: recoveryPending
-        ? "復旧処理中です。繰り返し操作しないでください。"
-        : recoverySubmitted ? "復旧リクエストは送信され、順番待ちです。"
-        : recoveryAction?.customerAction || oneShotRecoveryRequired
-        ? "お客様の操作が必要です。"
-        : automaticallyProcessing ? "自動処理中です。お客様の操作は不要です。" : "お客様の操作は不要です。",
-      nextAction: recoveryPending
-        ? "現在の復旧処理が完了するまでお待ちください。"
-        : recoverySubmitted ? "主プロセスの処理開始を待機しています。"
-        : recoveryRequired ? "停止理由を確認してから「続行」を選んでください。" : group.nextStep,
+      customerAction: automaticallyProcessing ? "自動処理中です。お客様の操作は不要です。" : "お客様の操作は不要です。",
+      nextAction: group.nextStep,
     };
   }
   return {
     matter: compactTimelineText(group.summary),
     ownerAndStatus: nextOwner ? `${nextOwner} · ${activity.statusLabel}` : activity.statusLabel,
-    customerAction: recoveryPending
-      ? "正在恢复中，请勿重复操作。"
-      : recoverySubmitted ? "恢复请求已提交，正在排队。"
-      : recoveryAction?.customerAction || oneShotRecoveryRequired
-      ? "需要你完成一项操作。"
-      : automaticallyProcessing ? "正在自动处理中，暂不需要你操作。" : "当前无需你操作。",
-    nextAction: recoveryPending
-      ? "等待当前恢复处理完成。"
-      : recoverySubmitted ? "等待主进程开始处理。"
-      : recoveryRequired ? "查看卡点原因后点击“从卡点继续”。" : group.nextStep,
+    customerAction: automaticallyProcessing ? "正在自动处理中，暂不需要你操作。" : "当前无需你操作。",
+    nextAction: group.nextStep,
   };
-}
-
-/**
- * 从每个任务的最新权威节点选择唯一恢复入口。
- * 当前恢复请求保留禁用入口；后续执行、失败或完成节点出现后，旧等待节点才会失效。
- */
-export function latestActiveRecoveryAction(nodes: CollaborationTimelineNodeOutDto[]): ActiveRecoveryAction | null {
-  const visitedTaskIds = new Set<string>();
-  for (let index = nodes.length - 1; index >= 0; index -= 1) {
-    const node = nodes[index];
-    if (!node.taskId || visitedTaskIds.has(node.taskId)) continue;
-    visitedTaskIds.add(node.taskId);
-    // 已受理是权威排队事实，不等同于 Renderer 本地请求仍在等待。
-    if (node.status === "current" && node.eventType === "task.recovery_requested") {
-      return {
-        nodeId: node.nodeId,
-        taskId: node.taskId,
-        customerAction: false,
-        pending: false,
-        submitted: true,
-      };
-    }
-    const isRecoveryWait = node.status === "waiting"
-      && (node.eventType === "customer.action_required" || node.eventType === "task.interrupted");
-    if (!isRecoveryWait) continue;
-    return {
-      nodeId: node.nodeId,
-      taskId: node.taskId,
-      customerAction: node.eventType === "customer.action_required",
-      pending: false,
-      submitted: false,
-    };
-  }
-  return null;
 }
 
 /** 兼容旧重复恢复数据：同一恢复状态段只显示最后一条等待记录。 */

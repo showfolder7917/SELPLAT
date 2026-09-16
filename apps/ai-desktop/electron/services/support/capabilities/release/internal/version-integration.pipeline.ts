@@ -225,6 +225,11 @@ export class VersionIntegrationPipeline {
       document.state = "published";
       document.completedAt = new Date().toISOString();
       this.#releaseBatches.write(document);
+      this.#store.updateTask(taskIds[0], "release.published", (_first, mutable) => {
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          appendFlow(task, "release.published", "integration", "completed", "最终候选已发布，等待新版本重启健康检查", actor);
+        }
+      });
       publishedExecutable = verified.executable;
     } catch (error) {
       document.state = "failed";
@@ -460,6 +465,13 @@ export class VersionIntegrationPipeline {
       releaseDocument.state = "published";
       releaseDocument.completedAt = new Date().toISOString();
       this.#releaseBatches.write(releaseDocument);
+      this.#store.updateTask(taskIds[0], "release.published", (_first, mutable) => {
+        // 该回调独立提交发布事实，不能引用统一测试回调内部的局部执行人变量。
+        const currentActor = requireActor(mutable, this.#actorMemberId);
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          appendFlow(task, "release.published", "integration", "completed", "最终候选已发布，等待新版本重启健康检查", currentActor);
+        }
+      });
     } catch (error) {
       // 本地归属、Git 冲突与候选验证失败分别进入不同恢复路径，禁止统一伪装成测试失败。
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;

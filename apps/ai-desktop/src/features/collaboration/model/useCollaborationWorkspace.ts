@@ -238,6 +238,8 @@ export function useCollaborationWorkspace() {
   const [stateReadStatus, setStateReadStatus] = useState<CollaborationStateReadStatus>("syncing");
   // 权威时间线：任务群和人物页都从这份 SQLite 投影读取历史。
   const [timeline, setTimeline] = useState<CollaborationTimelineSnapshotOutDto | null>(null);
+  const [timelineReadStatus, setTimelineReadStatus] = useState<CollaborationStateReadStatus>("syncing");
+  const [timelineReadError, setTimelineReadError] = useState("");
   // 令狐自动化：令狐人物页显示并更新自动保障运行状态。
   const [linghuAutomation, setLinghuAutomation] = useState<LinghuAutomationStateOutDto | null>(null);
   // 按任务保存的实时输出：主会话中的协作任务状态链使用。
@@ -275,8 +277,8 @@ export function useCollaborationWorkspace() {
     const removeTimelineListener = connectAuthoritativeRefresh({
       read: () => desktop.getCollaborationTimeline(),
       subscribe: (refresh) => desktop.onCollaborationTimelineChanged(refresh),
-      apply: (snapshot) => setTimeline((current) => reconcileCollaborationTimeline(current, snapshot)),
-      unavailable: (reason) => setError(readableDesktopError(reason, "无法读取任务协作时间线。")),
+      apply: (snapshot) => { setTimeline((current) => reconcileCollaborationTimeline(current, snapshot)); setTimelineReadStatus("ready"); setTimelineReadError(""); },
+      unavailable: (reason) => { setTimelineReadStatus("unavailable"); setTimelineReadError(readableDesktopError(reason, "无法读取任务协作时间线。")); },
     });
     const removeLinghuListener = connectAuthoritativeSnapshot({
       read: () => desktop.getLinghuAutomationState(),
@@ -400,9 +402,12 @@ export function useCollaborationWorkspace() {
 
   /** 主动读取一次最新时间线，人工审批完成后使用。 */
   const refreshTimeline = async () => {
-    const nextTimeline = await getOptionalCollaborationDesktopApi()?.getCollaborationTimeline();
-    if (nextTimeline) setTimeline((current) => reconcileCollaborationTimeline(current, nextTimeline));
-    return nextTimeline;
+    setTimelineReadStatus("syncing");
+    try {
+      const nextTimeline = await getOptionalCollaborationDesktopApi()?.getCollaborationTimeline();
+      if (nextTimeline) { setTimeline((current) => reconcileCollaborationTimeline(current, nextTimeline)); setTimelineReadStatus("ready"); setTimelineReadError(""); }
+      return nextTimeline;
+    } catch (error) { setTimelineReadStatus("unavailable"); setTimelineReadError(readableDesktopError(error, "无法读取任务协作时间线。")); throw error; }
   };
 
   /** 恢复等待超时后同时重读主进程协作状态和已落库时间线。 */
@@ -429,6 +434,8 @@ export function useCollaborationWorkspace() {
       stateReadStatus,
       // 权威时间线：保存已经落库的专题和人物节点。
       timeline,
+      timelineReadStatus,
+      timelineReadError,
       // 令狐自动化：保存自动保障和会话显示边界。
       linghuAutomation,
       // 任务实时输出：供主 Codex 会话中的协作状态链读取。

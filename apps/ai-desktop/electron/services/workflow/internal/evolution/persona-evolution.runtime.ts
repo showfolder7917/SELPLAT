@@ -136,6 +136,10 @@ export class PersonaEvolutionRuntime {
   #resuming = false;
   /** Electron 窗口层注入的真实应用验收执行器。 */
   #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>) | null = null;
+  /** 当前专题投影订阅者只接收协作事实驱动的只读刷新。 */
+  readonly #currentTopicStageListeners = new Set<(state: EvolutionStateOutDto, reason: string) => void>();
+  /** 订阅协作事实的释放函数，应用退出时必须停止跨领域通知。 */
+  readonly #unsubscribeCollaboration: () => void;
 
   /**
    * 组装跨人物演化顺序以及南宫人物入口。
@@ -208,6 +212,8 @@ export class PersonaEvolutionRuntime {
       taskDistribution,
       newConversationRetryDelaysMs: options.newConversationRetryDelaysMs,
     });
+    // 交付投影依赖当前有效任务链；协作事实提交后只刷新派生结论，不改写 Evolution 档案。
+    this.#unsubscribeCollaboration = this.#collaboration.subscribe((_state, reason) => this.#notifyCurrentTopicStageChanged(reason));
     // 分发由 Workflow 创建，并把 AI 返回值先解析成确定的结构化计划。
   }
 
@@ -246,6 +252,18 @@ export class PersonaEvolutionRuntime {
     });
   }
 
+  /** 订阅由协作任务事实重新计算的当前专题结论；返回函数释放 Renderer 通知桥接。 */
+  subscribeCurrentTopicStage(listener: (state: EvolutionStateOutDto, reason: string) => void): () => void {
+    this.#currentTopicStageListeners.add(listener);
+    return () => this.#currentTopicStageListeners.delete(listener);
+  }
+
+  /** 向窗口桥接发送最新只读投影，专题档案本身不因任务事实而重复落库。 */
+  #notifyCurrentTopicStageChanged(reason: string): void {
+    const state = this.state();
+    for (const listener of this.#currentTopicStageListeners) listener(state, `collaboration.${reason}`);
+  }
+
   /** 启动一次立即检查和三十秒周期检查；重复调用不会创建第二个计时器。 */
   start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
 
@@ -255,6 +273,8 @@ export class PersonaEvolutionRuntime {
     if (this.#continuationTimer) clearTimeout(this.#continuationTimer);
     this.#timer = null;
     this.#continuationTimer = null;
+    this.#unsubscribeCollaboration();
+    this.#currentTopicStageListeners.clear();
   }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
   setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }

@@ -220,6 +220,66 @@ const publishCollaborationTimelineChanged = () => {
   const event = { committedAt: new Date().toISOString(), groupIds: ["topic:interaction-timeline"], groupVersions: { "topic:interaction-timeline": collaborationTimelineRevision } };
   for (const listener of collaborationTimelineListeners) listener(structuredClone(event));
 };
+// 每个交互夹具都是独立的权威场景；切换场景前清除上一次的运行态，避免失败用例污染后续断言。
+const resetInteractionTimelineVariants = () => {
+  acceptanceTimelineFixtureStatus = null;
+  interruptedTimelineFixtureStatus = null;
+  customerActionTimelineFixtureEnabled = false;
+  evolutionState.oneShotRun = null;
+};
+// 隔离夹具必须模拟正式 Evolution 运行时提供的当前专题投影；卡片不会从历史节点自行推断恢复入口。
+const synchronizeInteractionCurrentTopicStage = () => {
+  if (!taskTimelineFixtureEnabled) {
+    evolutionState.currentTopicStage = null;
+    return;
+  }
+  const now = new Date().toISOString();
+  const base = {
+    topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal",
+    status: "failed-pending-repair", title: "已阻塞", summary: "等待从原卡点继续。", repairContent: "", remaining: "等待恢复原任务。",
+    waitingFor: "原任务恢复处理", nextAction: "保留失败证据并从原恢复点处理。",
+    userAction: "resume", effectiveTaskIds: ["interaction-task"], missingTaskIds: [], latestAcceptance: null,
+    deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" }, updatedAt: now,
+  };
+  if (interruptedTimelineFixtureStatus === "waiting") {
+    evolutionState.currentTopicStage = { ...base, repairContent: "应用重建中断原连接。", remaining: "等待用户继续执行原任务。" };
+    return;
+  }
+  if (customerActionTimelineFixtureEnabled) {
+    evolutionState.currentTopicStage = { ...base, repairContent: "客户本地修改等待复查。", remaining: "等待客户完成本地操作后由令狐复查。", effectiveTaskIds: ["interaction-customer-action-task"] };
+    return;
+  }
+  const run = evolutionState.oneShotRun;
+  if (run?.topicId === base.topicId && run.proposalId === base.proposalId && run.status === "blocked") {
+    evolutionState.currentTopicStage = { ...base, summary: run.blockingReason || base.summary, remaining: run.blockingReason || base.remaining };
+    return;
+  }
+  if (acceptanceTimelineFixtureStatus) {
+    const accepting = acceptanceTimelineFixtureStatus === "accepting";
+    evolutionState.currentTopicStage = {
+      ...base, status: accepting ? "accepting" : "completed", title: accepting ? "韩立验收中" : "已完成",
+      summary: accepting ? "韩立正在执行真实界面验收。" : "韩立结果验收已经通过，专题已完成。",
+      remaining: "", waitingFor: accepting ? "韩立真实验收" : "", nextAction: accepting ? "等待韩立记录本轮真实验收结果。" : "本专题已完成",
+      userAction: "none", effectiveTaskIds: [], deliveryEvidence: { ...base.deliveryEvidence, acceptance: accepting ? "running" : "passed" },
+    };
+    return;
+  }
+  const proposal = evolutionState.proposals.find((item) => item.proposalId === "interaction-timeline-proposal");
+  if (proposal?.status === "supplement-required") {
+    evolutionState.currentTopicStage = {
+      ...base, status: "executing", title: "进行中", summary: "南宫婉正在补充审批材料。",
+      remaining: "等待补充后的方案重新提交审批。", waitingFor: "南宫婉", nextAction: "南宫婉 · 正在补充审批材料",
+      userAction: "none", effectiveTaskIds: [],
+    };
+    return;
+  }
+  // 待审批不是恢复场景；下一步直接说明正在等待的审批人，避免把历史失败文案带入新专题。
+  evolutionState.currentTopicStage = {
+    ...base, status: "executing", title: "等待审批", summary: "南宫婉已提交审批申请。",
+    remaining: "等待韩立完成审批。", waitingFor: "韩立审批", nextAction: "韩立审批 · 等待中",
+    userAction: "none", effectiveTaskIds: [],
+  };
+};
 const interactionTimelineSnapshot = () => {
   if (!taskTimelineFixtureEnabled) return { version: 1, groups: [], updatedAt: evolutionState.updatedAt };
   if (interruptedTimelineFixtureStatus) {
@@ -286,6 +346,28 @@ const interactionTimelineSnapshot = () => {
       nodes: [], executingCount: 0, verifyingCount: 0, waitingCount: 0, completedCount: 0,
       startedAt: proposal.createdAt, updatedAt: evolutionState.updatedAt, durationMs: 60_000,
       nextStep: "等待恢复原验收流程", failureNextStep: "从原卡点继续",
+    }], updatedAt: evolutionState.updatedAt };
+  }
+  const oneShotActive = evolutionState.oneShotRun?.topicId === "interaction-timeline"
+    && evolutionState.oneShotRun?.proposalId === proposal.proposalId
+    && ["running", "completed"].includes(evolutionState.oneShotRun.status);
+  if (oneShotActive) {
+    const running = evolutionState.oneShotRun.status === "running";
+    const startedAt = evolutionState.oneShotRun.startedAt;
+    return { version: 1, groups: [{
+      groupId: "topic:interaction-timeline", topicId: "interaction-timeline", proposalId: proposal.proposalId,
+      title: "专题任务 01 · 修订截图按钮可用态", status: running ? "running" : "completed",
+      summary: running ? "恢复请求已提交，原流程正在继续。" : "原流程已完成。",
+      nodes: [{
+        nodeId: "recovery:interaction-task:1:requested", taskId: "interaction-task", eventType: "task.recovery_requested", kind: "repair",
+        actor: { memberId: "nangong-wan", displayName: "南宫婉" }, recipients: [], status: running ? "current" : "completed",
+        action: running ? "恢复请求已提交" : "恢复完成", summary: running ? "恢复请求已提交" : "原流程已完成。",
+        content: running ? "恢复请求已提交" : "原流程已完成。", detail: "", contentRole: "repair-output", detailRole: "recovery-conditions",
+        startedAt, completedAt: running ? null : startedAt, durationMs: 1_000, automaticOpen: true, manualApprovalProposalId: null,
+      }],
+      executingCount: running ? 1 : 0, verifyingCount: 0, waitingCount: 0, completedCount: running ? 0 : 1,
+      startedAt, updatedAt: evolutionState.updatedAt, durationMs: 60_000,
+      nextStep: running ? "等待原流程更新结果" : "本专题已完成",
     }], updatedAt: evolutionState.updatedAt };
   }
   const pending = proposal.status === "pending-approval";
@@ -543,9 +625,20 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   submitCollaborationTask: async () => publishCollaborationState("task.submitted"),
   continueCollaborationTask: async () => {
+    const run = evolutionState.oneShotRun;
+    if (run?.topicId === "interaction-timeline" && run.proposalId === "interaction-timeline-proposal" && run.status === "blocked") {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (run.action === "failure") throw new Error("验收连接仍不可用");
+      if (run.action === "blocked") throw new Error(`已检查但仍未恢复：${run.blockingReason || "仍有阻塞"}`);
+      run.status = acceptanceTimelineFixtureStatus === "completed" ? "completed" : "running";
+      run.phase = acceptanceTimelineFixtureStatus === "completed" ? "completed" : "accepting";
+      run.blockingReason = null;
+    }
     customerActionTimelineFixtureEnabled = false;
     if (interruptedTimelineFixtureStatus === "waiting") interruptedTimelineFixtureStatus = "recovering";
+    synchronizeInteractionCurrentTopicStage();
     const state = publishCollaborationState("task.recovery_requested");
+    publishNangongEvolution("task.recovery_requested");
     publishCollaborationTimelineChanged();
     return state;
   },
@@ -562,6 +655,7 @@ contextBridge.exposeInMainWorld("desktop", {
       const proposal = evolutionState.proposals.find((item) => item.proposalId === run.proposalId);
       if (proposal) proposal.status = "completed";
     }
+    synchronizeInteractionCurrentTopicStage();
     return publishNangongEvolution("one-shot.activity");
   },
   // 隔离验收恢复夹具只改变测试内存，不连接生产任务或在线模型。
@@ -569,6 +663,7 @@ contextBridge.exposeInMainWorld("desktop", {
     const now = new Date().toISOString();
     evolutionState.oneShotRun = { runId: "resume-fixture", topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal", status: "blocked", phase: "blocked", actor: "system", actorName: "系统", action: mode, blockingReason: "验收连接中断", startedAt: now, updatedAt: now, completedAt: now };
     evolutionState.proposals[0].status = "pending-acceptance";
+    synchronizeInteractionCurrentTopicStage();
     const state = publishNangongEvolution("one-shot.blocked");
     publishCollaborationTimelineChanged();
     return state;
@@ -734,6 +829,7 @@ contextBridge.exposeInMainWorld("desktop", {
     proposal.approvals.push({ approvalId: `interaction-approval-${Date.now()}`, proposalId, decision: request.decision, source: "manual-user", stage: "direction", approverMemberId: "user", approverDisplayName: "用户", advice: request.advice || "", feedbackTarget: request.feedbackTarget || "proposal-content", capabilityScope: request.feedbackTarget === "submitter-capability" ? request.capabilityScope : null, referencedApprovalIds: [], preferenceSnapshotVersion: ++evolutionState.preferenceSnapshotVersion, createdAt: now });
     const topic = evolutionState.topics.find((item) => item.topicId === proposal.topicId);
     if (topic) { topic.status = request.decision; topic.recoveryPoint = request.decision === "approved" ? "approved-returned-to-nangong" : request.decision; topic.updatedAt = now; }
+    synchronizeInteractionCurrentTopicStage();
     return publishNangongEvolution("proposal.decided");
   },
   reviseEvolutionProposal: async (proposalId, request) => {
@@ -765,30 +861,39 @@ contextBridge.exposeInMainWorld("desktop", {
   onCollaborationStream: (listener) => { collaborationStreamListeners.add(listener); return () => collaborationStreamListeners.delete(listener); },
   setInteractionTaskTimelineFixture: async (active) => {
     taskTimelineFixtureEnabled = active === true;
-    acceptanceTimelineFixtureStatus = null;
-    interruptedTimelineFixtureStatus = null;
-    if (!active) customerActionTimelineFixtureEnabled = false;
+    resetInteractionTimelineVariants();
     evolutionState.topics = active ? [{ topicId: "interaction-timeline", title: "专题任务 01 · 修订截图按钮可用态", status: "pending-approval", currentProposalVersion: 1, createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.proposals = active ? [{ proposalId: "interaction-timeline-proposal", topicId: "interaction-timeline", version: 1, title: "修订截图按钮可用态", origin: "nangong", submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", content: "统一修正主会话与南宫婉会话截图按钮的可用态、悬停态、键盘焦点态和忙碌禁用态。", status: "pending-approval", approvals: [], distributedTaskIds: [], createdAt: "2026-08-29T00:12:00.000Z", updatedAt: "2026-08-29T00:12:00.000Z" }] : [];
     evolutionState.activeTopicId = active ? "interaction-timeline" : null;
+    synchronizeInteractionCurrentTopicStage();
     publishNangongEvolution(active ? "interaction.timeline_fixture" : "interaction.timeline_fixture_cleared");
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },
   setInteractionAcceptanceTimelineFixture: async (status) => {
+    resetInteractionTimelineVariants();
     acceptanceTimelineFixtureStatus = status === "accepting" || status === "completed" ? status : null;
     taskTimelineFixtureEnabled = acceptanceTimelineFixtureStatus !== null;
+    synchronizeInteractionCurrentTopicStage();
+    publishNangongEvolution("interaction.acceptance_timeline_fixture");
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },
   setInteractionInterruptedTimelineFixture: async (active) => {
+    resetInteractionTimelineVariants();
     interruptedTimelineFixtureStatus = active ? "waiting" : null;
     taskTimelineFixtureEnabled = active === true;
+    synchronizeInteractionCurrentTopicStage();
+    publishNangongEvolution("interaction.interrupted_timeline_fixture");
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },
   setInteractionCustomerActionTimelineFixture: async (active) => {
+    resetInteractionTimelineVariants();
     customerActionTimelineFixtureEnabled = active === true;
+    taskTimelineFixtureEnabled = active === true;
+    synchronizeInteractionCurrentTopicStage();
+    publishNangongEvolution("interaction.customer_action_timeline_fixture");
     publishCollaborationTimelineChanged();
     return structuredClone(interactionTimelineSnapshot());
   },
