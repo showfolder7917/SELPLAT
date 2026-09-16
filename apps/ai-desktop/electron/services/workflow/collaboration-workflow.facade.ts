@@ -141,9 +141,15 @@ export class CollaborationCoordinator {
     acceptanceCriteria: string[]; currentProposalId?: string;
   }, failure?: SubmitCollaborationTaskInDto): Promise<ActiveRepairScopeRevisionResult> {
     const instruction = request.instruction.trim().slice(0, 8_000);
-    // 新事实不是客户完成前置条件的证明；等待及其证据必须跨任务修订保存。
+    // 新事实通常不是客户完成前置条件的证明；但本地归属等待必须复查当前 Git 事实，
+    // 已经干净的工作区不能继续沿用历史脏文件快照阻塞同一修复任务。
+    const ownershipWaitActive = task.integrationFailure?.kind === "local-change-ownership";
+    const localUncommittedFiles = ownershipWaitActive
+      ? await this.#workspaces.readLocalUncommittedFiles().catch(() => null)
+      : null;
+    const ownershipWaitSatisfied = ownershipWaitActive && localUncommittedFiles?.length === 0;
     const preserveCustomerWait = task.repairRequiresUserConfirmation === true
-      || task.integrationFailure?.kind === "local-change-ownership";
+      || (ownershipWaitActive && !ownershipWaitSatisfied);
     const eventType = failure ? "task.failure_evidence_updated" : "task.scope_revised";
     const previousExecutorMemberId = task.executorMemberId;
     const previousAssignmentId = task.assignmentId;
@@ -207,9 +213,12 @@ export class CollaborationCoordinator {
         member.blockingReason = null;
         member.updatedAt = now;
       }
+      const revisionSummary = preserveCustomerWait
+        ? "仍需完成原等待事项"
+        : ownershipWaitSatisfied ? "本地修改归属等待已由干净工作区证据解除，正在重新调查" : "正在重新调查";
       current.flowEvents.push({
         eventId: randomUUID(), type: eventType, stage: "recovery", status: "completed",
-        actor: current.initiator, summary: `新证据已写入原任务，旧执行结果已失效（第 ${current.taskRevision} 版）；${preserveCustomerWait ? "仍需完成原等待事项" : "正在重新调查"}`,
+        actor: current.initiator, summary: `新证据已写入原任务，旧执行结果已失效（第 ${current.taskRevision} 版）；${revisionSummary}`,
         occurredAt: now, error: false,
         details: { previousRevision, taskRevision: current.taskRevision, assignmentId: previousAssignmentId || undefined, instruction },
       });

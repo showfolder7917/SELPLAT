@@ -3179,3 +3179,54 @@ test("新故障接续保留原任务与客户等待，缺少完成指导时拒�
     await assert.rejects(() => coordinator.refreshCheckpointRepair(seeded.taskId, { ...request, evolutionProposalId: "other" }), /归属/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("本地修改已经提交后新验收证据解除历史归属等待并继续原任务", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "ownership-wait-satisfied-"));
+  let coordinator;
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const seeded = store.submitTask({
+      title: "原修复", problemStatement: "旧故障", confirmedIntent: "旧调查",
+      constraints: ["卡点标识：run-1:proposal:proposal-1:round:1"], workspaceState, locale: "zh-CN",
+      initiatorMemberId: "han-li", preferredExecutorMemberId: "linghu-ancestor",
+      automationSource: "linghu-safeguard", evolutionProposalId: "proposal-1",
+    });
+    store.updateTask(seeded.taskId, "test.ownership_wait", (task, state) => {
+      for (const member of state.members) member.enabled = false;
+      task.state = "blocked";
+      task.blockingReason = "合并前无法确认本地修改归属";
+      task.customerActionGuidance = {
+        guidanceId: "ownership-guidance", sourceFingerprint: "ownership", title: "等待客户完成的事项",
+        problem: "存在未提交文件", reasonCustomerMustAct: "需要确认归属", steps: ["提交文件"], completionCriteria: ["工作区干净"],
+        generatedBy: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, createdAt: new Date().toISOString(),
+      };
+      task.integrationFailure = {
+        kind: "local-change-ownership", summary: "合并前无法确认本地修改归属", detail: "规则文件未登记",
+        conflictFiles: ["规则文件.md"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString(),
+      };
+    });
+    coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => {}, start: () => "span", instant: () => {}, interruptOpenSpans: () => {} },
+      workspaces: { readLocalUncommittedFiles: async () => [], commitTaskResult: async () => "new" },
+      executor: new ExecutorFacade({ createExecutor: async () => ({
+        isAlive: () => true,
+        analyze: async () => new Promise(() => {}),
+        dispose: async () => {},
+      }) }),
+      integrationPipeline: { finishWaitingTask: () => {}, trackWaitingTask: () => {}, invalidateTask: () => {}, schedule: () => {}, dispose: () => {} },
+      emitState: () => {}, emitStream: () => {},
+    });
+    await coordinator.refreshCheckpointRepair(seeded.taskId, {
+      title: "原修复", problemStatement: "最新验收故障", confirmedIntent: "按新增证据重新调查",
+      constraints: ["卡点标识：run-1:proposal:proposal-1:round:1", "卡点故障事实：failure-2"],
+      acceptanceCriteria: ["原条件保持不变"], workspaceState, locale: "zh-CN", evolutionProposalId: "proposal-1",
+    });
+    const revised = store.task(seeded.taskId);
+    assert.notEqual(revised.state, "blocked");
+    assert.equal(revised.integrationFailure, null);
+    assert.equal(revised.customerActionGuidance, null);
+    assert.equal(revised.blockingReason, "已收到新证据，正在重新调查同一任务");
+    assert.match(revised.flowEvents.at(-1).summary, /干净工作区证据解除/);
+  } finally { await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
+});

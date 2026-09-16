@@ -131,6 +131,11 @@ export class VersionWorkspaceManager {
     return this.#git(this.#repositoryRoot, ["rev-parse", "HEAD"]);
   }
 
+  /** 复查客户工作区当前尚未提交的真实文件；用于判断历史归属等待是否已经完成。 */
+  async readLocalUncommittedFiles(): Promise<string[]> {
+    return splitStatusPorcelain(await this.#gitRaw(this.#repositoryRoot, ["status", "--porcelain", "-z"]));
+  }
+
   async prepareTask(task: CollaborationTaskOutDto, memberId: string): Promise<CollaborationVersionWorkspaceOutDto> {
     const baseSha = await this.currentBaseSha();
     const safeTaskId = safeSegment(task.taskId);
