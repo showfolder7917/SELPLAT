@@ -226,7 +226,9 @@ test("人物训练语料通过主会话完成钩子和启动补录闭环且清�
   assert.match(semanticBackfill, /phase\) === "final_answer"/);
   assert.match(semanticBackfill, /task_complete/);
   assert.match(semanticBackfill, /preview-300/);
-  assert.match(semanticBackfill, /ON CONFLICT\(source, sourceMessageId\) DO NOTHING/);
+  assert.match(semanticBackfill, /operation: "write-semantic-summary"/);
+  assert.doesNotMatch(semanticBackfill, /withConnection\(|transaction\(/);
+  assert.match(corpusWorker, /ON CONFLICT\(source, sourceMessageId\) DO NOTHING/);
   assert.doesNotMatch(semanticBackfill, /AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
   assert.match(main, /ai-desktop-corpus-semantic-backfill/);
   assert.doesNotMatch(main, /Promise\.all\(\[(?:[^\]]*codex|[^\]]*nangongCodex)[^\]]*\]\.map\(\(service\) => service!\.newChat\(\)\)\)/);

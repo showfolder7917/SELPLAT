@@ -19,6 +19,25 @@ function conversationMessage(messageType, message) {
   return { ...message, messageType, contentRole: "conversation" };
 }
 
+/** 测试夹具模拟端口协议，而非向摘要补齐器重新暴露同步数据库。 */
+function semanticPersistence(database) {
+  return {
+    async request({ operation, payload }) {
+      if (operation === "semantic-message-exists") return database.withConnection((connection) => Boolean(connection.prepare(
+        "SELECT 1 FROM AiDesktopTrainingCorpusMessage WHERE source='codex' AND sourceMessageId=$sourceMessageId",
+      ).get({ $sourceMessageId: payload.sourceMessageId })));
+      if (operation !== "write-semantic-summary") throw new Error(`未知测试持久化操作：${operation}`);
+      const { candidate, metadata, retention } = payload;
+      const topicId = `corpus-topic:codex:${candidate.threadId}:${candidate.turnId}`;
+      return database.transaction((connection) => {
+        connection.prepare("INSERT INTO AiDesktopTrainingCorpusTopic (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt) VALUES ($topicId, 'codex', $threadId, $turnId, $title, $type, $intent, $tagsJson, 'ai-confirmed', $createdAt, $updatedAt) ON CONFLICT(corpusTopicId) DO UPDATE SET title=excluded.title, topicType=excluded.topicType, inferredIntent=excluded.inferredIntent, tagsJson=excluded.tagsJson, definitionSource='ai-confirmed', updatedAt=excluded.updatedAt").run({ $topicId: topicId, $threadId: candidate.threadId, $turnId: candidate.turnId, $title: metadata.title, $type: metadata.type, $intent: metadata.intent, $tagsJson: JSON.stringify(metadata.tags), $createdAt: candidate.createdAt, $updatedAt: candidate.createdAt });
+        const row = connection.prepare("SELECT COALESCE(MAX(sequenceNumber), -1) AS value FROM AiDesktopTrainingCorpusMessage WHERE source='codex' AND sourceConversationId=$threadId").get({ $threadId: candidate.threadId });
+        return Number(connection.prepare("INSERT INTO AiDesktopTrainingCorpusMessage (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId, sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt) VALUES ($corpusMessageId, $topicId, 'codex', $threadId, $turnId, $sourceMessageId, $sequenceNumber, 'codex', $content, $retention, 'supporting', $createdAt, $recordedAt) ON CONFLICT(source, sourceMessageId) DO NOTHING").run({ $corpusMessageId: `corpus:codex:${candidate.assistantMessageId}`, $topicId: topicId, $threadId: candidate.threadId, $turnId: candidate.turnId, $sourceMessageId: candidate.assistantMessageId, $sequenceNumber: Number(row.value) + 1, $content: metadata.summary, $retention: retention, $createdAt: candidate.createdAt, $recordedAt: candidate.createdAt }).changes);
+      });
+    },
+  };
+}
+
 mkdirSync(controlledTestRoot, { recursive: true });
 
 test("统一迁移建立事件、流程、任务、审批、对话记忆、专题档案和演化轮次表", () => {
@@ -261,8 +280,10 @@ test("Codex 历史最终回答由 AI 生成短摘要并按原始消息去重补�
     });
     await ingestion.ingestPendingRolloutsIncrementally();
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 1, "没有元数据标记时先只保留用户原话");
+    const persistence = semanticPersistence(fixture.database);
+    await assert.rejects(persistence.request({ operation: "unexpected", payload: {} }), /未知测试持久化操作/);
     const backfill = new CodexConversationSemanticBackfill({
-      database: fixture.database,
+      persistence,
       roots: [sessionsRoot],
       requiredWorkspaceRoot: fixture.root,
       analyzer: async (candidates) => candidates.map((candidate) => ({
@@ -321,7 +342,7 @@ test("Codex 历史摘要批次异常时隔离失败轮并继续写入合格轮",
   writeFileSync(path.join(sessionsRoot, "rollout-partial.jsonl"), `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
   try {
     const backfill = new CodexConversationSemanticBackfill({
-      database: fixture.database,
+      persistence: semanticPersistence(fixture.database),
       roots: [sessionsRoot],
       requiredWorkspaceRoot: fixture.root,
       analyzer: async (candidates) => {
