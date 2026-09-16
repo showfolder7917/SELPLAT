@@ -19,6 +19,8 @@ export interface EvolutionOneShotConfirmationOutDto {
 /** 一次性运行状态随专题状态共同持久化，并通过既有状态事件实时投影到人物界面。 */
 export interface EvolutionOneShotRunOutDto {
   runId: string;
+  /** 启动本轮研讨的韩立客户请求编号；恢复时只能用它读取对应内部事实包。 */
+  sourceRequestId?: string | null;
   topicId: string | null;
   proposalId: string | null;
   status: "running" | "completed" | "blocked";

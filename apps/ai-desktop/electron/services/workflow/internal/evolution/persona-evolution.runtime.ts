@@ -272,9 +272,9 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 用户在韩立会话输入 1 后启动统一自动流程；完成当前专题后继续发现有证据的新问题。 */
-  startHanliNangongDeliberation(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"]): EvolutionStateOutDto {
+  startHanliNangongDeliberation(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"], sourceRequestId: string): EvolutionStateOutDto {
     if (!this.#deliberation) throw new Error("韩立与南宫婉内部研讨能力尚未接入。");
-    let state = this.#store.beginOneShotRun(workspaceState, locale);
+    let state = this.#store.beginOneShotRun(workspaceState, locale, sourceRequestId);
     state = this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "正在围绕用户已确认需求向南宫婉提出第一项调查问题", null, null);
     this.#recordEvent("hanli.nangong.deliberation_confirmed", { runId: state.oneShotRun?.runId || null, continuous: true });
     this.#scheduleContinuation(0);

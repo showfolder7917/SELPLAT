@@ -307,7 +307,7 @@ export async function startApplication(): Promise<void> {
   let corpusIngestionRunning = false;
   let corpusIngestionRequested = false;
   let requestHanliSemanticRefresh: () => void = () => undefined;
-  let startHanliInternalDeliberation: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }> = async () => { throw new Error("韩立与南宫婉内部研讨运行时尚未就绪。"); };
+  let startHanliInternalDeliberation: (request: SendPersonaConversationMessageInDto, sourceRequestId: string) => Promise<{ continuous: boolean }> = async () => { throw new Error("韩立与南宫婉内部研讨运行时尚未就绪。"); };
   let replyHanliInternalDeliberation: (reply: string) => Promise<{ customerReply: string }> = async () => { throw new Error("韩立与南宫婉确认研讨运行时尚未就绪。"); };
   let latestCorpusTrigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled" = "startup";
   /** 按触发来源增量导入尚未处理的会话；本函数后台执行，不阻塞界面启动。 */
@@ -725,7 +725,8 @@ export async function startApplication(): Promise<void> {
       activeConversationId: () => hanLiCodex!.activeSession().threadId,
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
-    startInternalDeliberation: (request) => startHanliInternalDeliberation(request),
+    startInternalDeliberation: (request, sourceRequestId) =>
+      startHanliInternalDeliberation(request, sourceRequestId),
     reviseActiveRepairScope: async (request) => {
       if (!collaboration || !personaEvolution) throw new Error("协作流程尚未就绪，不能更新当前修复范围。");
       const collaborationState = collaboration.state();
@@ -896,8 +897,8 @@ export async function startApplication(): Promise<void> {
       }
     } : undefined,
   });
-  startHanliInternalDeliberation = async (request) => {
-    const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale);
+  startHanliInternalDeliberation = async (request, sourceRequestId) => {
+    const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale, sourceRequestId);
     return { continuous: state.automationRuntime.status === "running" };
   };
   replyHanliInternalDeliberation = (reply) => personaEvolution!.replyHanliNangongConfirmation(reply);

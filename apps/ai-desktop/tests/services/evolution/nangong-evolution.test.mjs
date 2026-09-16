@@ -220,6 +220,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
+    store.beginOneShotRun(workspaceState, "zh-CN", "inquiry-1");
     const internalMessages = [];
     const publishedConversations = [];
     const seenPrompts = [];
@@ -248,7 +249,7 @@ test("用户确认后韩立与南宫婉一问一答并在整理条件成熟时�
     const service = new HanliNangongDeliberationService({
       store, prompts,
       memory: {
-        readLatestRequirementDiscussionContext() { return discussionBasis; },
+        readRequirementDiscussionContext(_owner, _conversationId, sourceRequestId) { return sourceRequestId === "inquiry-1" ? discussionBasis : null; },
         readHanLiEvolutionCorpus(deliberationId) { return snapshots.map((item) => ({ ...item, deliberationId })); },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
@@ -311,7 +312,7 @@ test("自动托管由韩立把范围扩展重新判断为当前专题或后续�
     const service = new HanliNangongDeliberationService({
       store, prompts,
       memory: {
-        readLatestRequirementDiscussionContext() { return null; },
+        readRequirementDiscussionContext() { return null; },
         readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "customer-decision-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null, content: "先解决当前页面的问题。", originalCreatedAt: "2026-09-05T00:00:00.000Z", capturedAt: "2026-09-05T00:00:01.000Z" }]; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
@@ -347,7 +348,7 @@ test("自动托管关闭时范围扩展仍回到真实客户确认", async () =>
     const service = new HanliNangongDeliberationService({
       store, prompts,
       memory: {
-        readLatestRequirementDiscussionContext() { return null; },
+        readRequirementDiscussionContext() { return null; },
         readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "custody-off-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null, content: "修复当前页面。", originalCreatedAt: "2026-09-05T00:00:00.000Z", capturedAt: "2026-09-05T00:00:01.000Z" }]; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
@@ -384,7 +385,7 @@ test("等待真实客户确认时不重复改写一次性运行档案", async ()
       askHanliDeliberation: async () => { throw new Error("等待客户确认时不应再次询问韩立"); },
       askNangongDeliberation: async () => { throw new Error("确认说明已存在时不应再次询问南宫婉"); },
       memory: {
-        readLatestRequirementDiscussionContext() { return null; },
+        readRequirementDiscussionContext() { return null; },
         readHanLiEvolutionCorpus() { return []; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
@@ -537,7 +538,7 @@ test("韩立会话已有当前观点时收到独立1直接启动内部研讨", a
       messages.push(personaConversationMessage("customer-visible", { messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt }));
       return { ownerPersonaId: input.ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: input.completedAt };
     },
-    readLatestRequirementDiscussionContext() { return null; },
+    readRequirementDiscussionContext() { return null; },
     recordRequirementDiscussionContext(context) { recordedContexts.push(structuredClone(context)); },
   };
   const service = new HanliConversationService({

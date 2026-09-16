@@ -11,7 +11,7 @@ import type {
 // 读取韩立观点值对象，使研讨启动始终携带可追溯的观点快照。
 import type { HanliConversationViewpointValue } from "../../../../../../contracts/services/personas/hanli/index.js";
 // 读取训练主题决定契约，使普通会话仍按统一事件中心格式归档。
-import type { ConversationRoundTopicDecisionInDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { ConversationRoundTopicDecisionInDto, RequirementDiscussionContextOutDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 // 会话 Aggregate 是状态判断的唯一入口，Service 不再检查固定中文邀请文案。
 import { HanliConversationAggregate } from "../../domain/hanli-conversation.aggregate.js";
 // 应用装配端口提供模型、数据库、南宫婉调查和 Workflow 研讨能力。
@@ -138,16 +138,6 @@ export class HanliConversationService {
     // 同一托管请求已经返回启动回执时，重复发送只能读取原结果。
     if (request.clientMessageId && conversation.messages.some((item) =>
       item.messageId === `hanli-control:automatic:${request.clientMessageId}`)) return conversation;
-    const savedDesign = conversation.messages.find((item) =>
-      item.messageId === `hanli-design:${request.clientMessageId}`);
-    if (savedDesign && this.#options.store.state().automationSettings.automaticCustodyEnabled === true) {
-      // 启动前已有持久设计时复用它；不能再次调用模型改写已经交接的用户要求。
-      return this.#startDeliberation(request, conversation, {
-        sourceMessageId: savedDesign.messageId, sourceUserMessageId: request.clientMessageId!,
-        content: savedDesign.content, createdAt: savedDesign.createdAt,
-      }, { ...START_DELIBERATION_DECISION, title: "继续设计研讨", userIntent: request.message,
-        summary: "以已保存的韩立设计要求继续既有研讨流程。" });
-    }
     // 同一请求恢复已保存的失败阶段；避免重新理解、重新调查或再次登记用户消息。
     const resumedInquiry = this.#inquiry.resume(request, conversation);
     if (resumedInquiry) return resumedInquiry;
@@ -332,18 +322,11 @@ export class HanliConversationService {
     // 理解充分时由韩立真实调用南宫婉完成一次只读调查。
     if (parsed.inquiry?.status === "ready") {
       if (this.#options.store.state().automationSettings.automaticCustodyEnabled === true) {
-        // 韩立先保存完整设计方向，再交给既有流程；禁止在人物会话里另建托管排障链。
+        // 客户会话只保存自然答复；调查字段只写入独立事实包，再交给既有流程。
         const viewpoint: HanliConversationViewpointValue = {
-          sourceMessageId: `hanli-design:${request.clientMessageId || randomUUID()}`,
+          sourceMessageId: `hanli-reply:${request.clientMessageId || randomUUID()}`,
           sourceUserMessageId: request.clientMessageId || null,
-          content: [
-            parsed.reply,
-            `用户原话：${effectiveCustomerQuestion}`,
-            `用户目标：${parsed.inquiry.understoodGoal}`,
-            `调查对象：${parsed.inquiry.verificationTarget}`,
-            `期望结果：${parsed.inquiry.expectedAnswer}`,
-            `交给南宫婉核实：${parsed.inquiry.investigationQuestion}`,
-          ].join("\n\n"),
+          content: parsed.reply,
           createdAt,
         };
         // 已有运行中的客户纠正也必须进入同一个受控入口；入口负责修订当前
@@ -351,6 +334,12 @@ export class HanliConversationService {
         return this.#startDeliberation(request, conversation, viewpoint, parsed.topic, {
           confirmedIntent: parsed.inquiry.understoodGoal,
           acceptanceCriteria: [parsed.inquiry.expectedAnswer],
+        }, {
+          customerQuestion: effectiveCustomerQuestion,
+          understoodGoal: parsed.inquiry.understoodGoal,
+          verificationTarget: parsed.inquiry.verificationTarget,
+          expectedAnswer: parsed.inquiry.expectedAnswer,
+          investigationQuestion: parsed.inquiry.investigationQuestion!,
         });
       }
       // 非托管只读问答保留调查与解释，不自动产生工程写入。
@@ -530,6 +519,7 @@ export class HanliConversationService {
     viewpoint: HanliConversationViewpointValue,
     automaticDecision?: ConversationRoundTopicDecisionInDto,
     scopeDefinition?: { confirmedIntent: string; acceptanceCriteria: string[] },
+    discussion?: Pick<RequirementDiscussionContextOutDto, "customerQuestion" | "understoodGoal" | "verificationTarget" | "expectedAnswer" | "investigationQuestion">,
   ): Promise<PersonaConversationOutDto> {
     // startInternalDeliberation 是唯一允许创建一次性研讨流程的 Workflow 端口。
     const start = this.#options.startInternalDeliberation;
@@ -556,6 +546,7 @@ export class HanliConversationService {
       new Date().toISOString(),
       viewpoint,
       true,
+      discussion,
     );
     // Workflow 先持久化一次性运行态，再异步调度韩立向南宫婉提出第一问。
     const activeRun = this.#options.store.state().oneShotRun;
@@ -569,7 +560,9 @@ export class HanliConversationService {
         acceptanceCriteria: scopeDefinition?.acceptanceCriteria || [viewpoint.content],
       })
       : null;
-    const started = reusedRun ? { continuous: true } : await start(request);
+    const sourceRequestId = viewpoint.sourceUserMessageId || request.clientMessageId;
+    if (!sourceRequestId) throw new Error("韩立当前观点缺少稳定来源请求编号，不能启动不可恢复的研讨。");
+    const started = reusedRun ? { continuous: true } : await start(request, sourceRequestId);
     // 根据真实托管设置生成启动回执，不从模型自由文案推断流程状态。
     let reply = "已启动韩立与南宫婉的内部研讨。南宫婉查清事实后，我会把修复范围和影响带回来请你确认，再进入实施。";
     // 自动托管开启时，韩立可以在已授权范围内继续作业务范围判断。
@@ -659,13 +652,14 @@ export class HanliConversationService {
     createdAt: string,
     viewpoint?: HanliConversationViewpointValue,
     mustPersistBeforeDispatch = false,
+    discussion?: Pick<RequirementDiscussionContextOutDto, "customerQuestion" | "understoodGoal" | "verificationTarget" | "expectedAnswer" | "investigationQuestion">,
   ): void {
-    // memory 在 send 入口已经校验存在，这里读取同一会话的最近调查事实包。
+    // memory 在 send 入口已经校验存在，这里按稳定请求编号读取同一会话的调查事实包。
     const memory = this.#options.memory!;
-    // 旧事实包提供已经完成的调查依据；没有调查时允许为空。
-    const priorInvestigation = memory.readLatestRequirementDiscussionContext?.("han-li", conversationId) || null;
-    // 优先使用 Aggregate 找到的用户来源消息，否则使用本轮前端消息标识。
+    // 同一请求的既有事实包提供已经完成的调查依据；没有调查时允许为空。
     const sourceRequestId = viewpoint?.sourceUserMessageId || request.clientMessageId || viewpoint?.sourceMessageId || randomUUID();
+    const priorInvestigation = memory.readRequirementDiscussionContext?.("han-li", conversationId, sourceRequestId) || null;
+    // 优先使用 Aggregate 找到的用户来源消息，否则使用本轮前端消息标识。
     // 同一话题可以包含多轮不同纠正；只有同一来源请求才能继承已核实结论。
     const investigated = !decision.switchTopic && priorInvestigation?.sourceRequestId === sourceRequestId
       ? priorInvestigation : null;
@@ -701,18 +695,18 @@ export class HanliConversationService {
         // sourceRequestId 关联用户真实消息或已展示观点来源。
         sourceRequestId,
         // 已有调查时保留权威客户原问题，否则以当前观点作为研讨方向。
-        customerQuestion: investigated?.customerQuestion
+        customerQuestion: discussion?.customerQuestion || investigated?.customerQuestion
           || memory.readPersonaConversation("han-li", conversationId).messages.find((item) =>
             item.messageId === sourceRequestId && item.speakerType === "user")?.content
           || request.message,
         // 当前观点是用户独立 1 将要确认的最新业务目标。
-        understoodGoal: decision.userIntent || normalizedViewpoint,
+        understoodGoal: discussion?.understoodGoal || decision.userIntent || normalizedViewpoint,
         // 已有调查时保留原核实对象，否则围绕当前观点核实真实影响。
-        verificationTarget: investigated?.verificationTarget || normalizedViewpoint,
+        verificationTarget: discussion?.verificationTarget || investigated?.verificationTarget || normalizedViewpoint,
         // 已有调查时保留用户期望结论，否则要求形成可验证修正方案。
-        expectedAnswer: investigated?.expectedAnswer || "形成解决真实需求且可验证的修正方案",
+        expectedAnswer: discussion?.expectedAnswer || investigated?.expectedAnswer || "形成解决真实需求且可验证的修正方案",
         // 已有调查时保留原调查问题，否则允许内部研讨自由核实事实和影响。
-        investigationQuestion: investigated?.investigationQuestion || "围绕韩立当前观点调查事实、影响和可行修正",
+        investigationQuestion: discussion?.investigationQuestion || investigated?.investigationQuestion || "围绕韩立当前观点调查事实、影响和可行修正",
         // 已有调查状态继续作为事实依据，没有调查时明确标记未知。
         findingStatus: investigated?.findingStatus || "unknown",
         // 已有调查摘要继续保留，没有调查时不得伪造已核实结论。

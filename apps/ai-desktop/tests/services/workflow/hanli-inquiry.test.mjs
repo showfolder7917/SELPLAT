@@ -355,7 +355,7 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
   const memory = {
     readPersonaConversation: () => snapshot(), newPersonaConversation: () => snapshot(),
     readHanliSemanticContext: () => ({ concerns: [], trajectories: [], inspectionExperiences: [] }),
-    readLatestRequirementDiscussionContext: () => prior,
+    readRequirementDiscussionContext: (_owner, _conversationId, sourceRequestId) => sourceRequestId === "u1" ? prior : null,
     recordRequirementDiscussionContext: (context) => recorded.push(structuredClone(context)),
     registerPersonaRound: (round) => { messages.push(
       { messageId: round.userMessageId, messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: round.userContent },
@@ -398,7 +398,7 @@ test("排查恢复点不进入后续客户对话上下文，也不挤掉真实�
 });
 
 
-test("托管将韩立设计交给现有研讨指派链，不运行人物内部排障；重复请求幂等", async () => {
+test("托管只保存韩立自然答复并把调查字段交给内部事实包；重复请求幂等", async () => {
   const f = fixture(async () => { throw new Error("不得调用独立排查链"); });
   const contexts = [];
   let starts = 0, calls = 0, currentRun = null;
@@ -415,9 +415,10 @@ test("托管将韩立设计交给现有研讨指派链，不运行人物内部�
     },
     startInternalDeliberation: async () => {
       starts += 1;
-      assert.match(contexts.at(-1).customerConclusion, /输入区固定可见/);
+      assert.equal(contexts.at(-1).customerConclusion, "消息区独立滚动，输入区固定可见，加载和错误状态明确。");
       assert.equal(contexts.at(-1).customerQuestion, customerQuestion);
-      assert.ok(f.messages.some((item) => item.messageId === "hanli-design:u1"));
+      assert.ok(f.messages.some((item) => item.messageId === "hanli-reply:u1"));
+      assert.ok(!f.messages.some((item) => /用户原话：|调查对象：/.test(item.content)));
       currentRun = { runId: "run", status: "running" };
       return { continuous: true };
     },
