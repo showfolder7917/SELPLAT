@@ -16,6 +16,7 @@ const repository = read("electron/services/support/capabilities/conversation/int
 const migration = read("db/sql/migration-1025-add-persona-conversation-model.sql");
 const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversation-message-type.sql");
 const customerDisplayMigration = read("db/sql/migration-1029-add-persona-customer-display-message.sql");
+const customerDisplayVersionMigration = read("db/sql/migration-1030-version-persona-customer-display-message.sql");
 const loadOrder = read("db/sql/load-order.txt");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
@@ -57,11 +58,14 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.match(customerDisplayMigration, /CREATE TABLE AiDesktopPersonaCustomerDisplayMessage/);
   assert.match(customerDisplayMigration, /displayState TEXT NOT NULL CHECK \(displayState IN \('ready', 'excluded', 'missing', 'failed'\)\)/);
   assert.match(loadOrder, /migration-1029-add-persona-customer-display-message\.sql/);
+  assert.match(loadOrder, /migration-1030-version-persona-customer-display-message\.sql/);
+  assert.match(customerDisplayVersionMigration, /ADD COLUMN derivationVersion INTEGER NOT NULL DEFAULT 1/);
   assert.match(repository, /readCustomerDisplayWindow\(/);
   assert.match(repository, /readCustomerDisplay\(/);
   assert.match(repository, /retryCustomerDisplayMessage\(/);
   assert.doesNotMatch(repository, /readWindow\(/);
-  assert.match(repository, /derivePersonaCustomerDisplayMessage/);
+  assert.match(repository, /PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION/);
+  assert.match(repository, /writePersonaCustomerDisplayMessage/);
   assert.match(runtime, /readPersonaCustomerDisplayWindow\(personaId, request\)/);
   assert.match(hanliService, /readPersonaCustomerDisplayConversation\("han-li", conversation\.conversationId\)/);
   assert.match(hanliService, /buildHanliRecentConversation\(customerDisplayConversation\.messages\)/);
@@ -76,6 +80,10 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.doesNotMatch(hook, /setConversation\(value\)/);
   assert.match(hanli, /customerDisplayState === "missing"/);
   assert.match(hanli, /重新读取/);
+  assert.match(hook, /retryingCustomerDisplayMessageIds/);
+  assert.match(hook, /retryingCustomerDisplayMessageIdsRef\.current\.has\(sourceMessageId\)/);
+  assert.match(hanli, /disabled=\{controller\.retryingCustomerDisplayMessageIds\.has\(message\.messageId\)\}/);
+  assert.match(hanli, /aria-busy=\{controller\.retryingCustomerDisplayMessageIds\.has\(message\.messageId\)\}/);
 });
 
 test("内部研讨正文与技术证据使用不同内容角色，且证据只在南宫婉页面折叠显示", () => {

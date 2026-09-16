@@ -78,6 +78,9 @@ export function usePersonaConversation(personaId: string) {
   const [newConversationFeedback, setNewConversationFeedback] = useState("");
   const [error, setError] = useState("");
   const [hasEarlier, setHasEarlier] = useState(false);
+  // 每条原消息独立追踪重读，避免客户连续点击同一位置时并发写入同一派生记录。
+  const [retryingCustomerDisplayMessageIds, setRetryingCustomerDisplayMessageIds] = useState<ReadonlySet<string>>(() => new Set());
+  const retryingCustomerDisplayMessageIdsRef = useRef<Set<string>>(new Set());
   const requestGeneration = useRef(0);
   // 官方模型目录只从 Codex bridge 读取，人物页面不维护固定模型列表。
   const [modelCatalog, setModelCatalog] = useState<CodexModelOptionOutDto[]>([]);
@@ -145,7 +148,9 @@ export function usePersonaConversation(personaId: string) {
   const retryCustomerDisplayMessage = useCallback(async (sourceMessageId: string) => {
     const desktop = getOptionalCollaborationDesktopApi();
     const conversationId = conversation.conversationId;
-    if (!desktop || !conversationId) return;
+    if (!desktop || !conversationId || retryingCustomerDisplayMessageIdsRef.current.has(sourceMessageId)) return;
+    retryingCustomerDisplayMessageIdsRef.current.add(sourceMessageId);
+    setRetryingCustomerDisplayMessageIds((current) => new Set(current).add(sourceMessageId));
     try {
       const window = await desktop.retryPersonaCustomerDisplayMessage(personaId, conversationId, sourceMessageId);
       if (window.conversationId === conversationId) {
@@ -154,6 +159,13 @@ export function usePersonaConversation(personaId: string) {
       }
     } catch (reason) {
       setError(readableDesktopError(reason, "无法重新读取客户显示消息，请稍后重试。"));
+    } finally {
+      retryingCustomerDisplayMessageIdsRef.current.delete(sourceMessageId);
+      setRetryingCustomerDisplayMessageIds((current) => {
+        const next = new Set(current);
+        next.delete(sourceMessageId);
+        return next;
+      });
     }
   }, [conversation.conversationId, personaId]);
 
@@ -258,7 +270,7 @@ export function usePersonaConversation(personaId: string) {
   };
 
   return {
-    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage,
+    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage, retryingCustomerDisplayMessageIds,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,

@@ -29,3 +29,4 @@
 1027|migration-1027-add-persona-conversation-message-type.sql|为统一人物会话消息建立客户、恢复和内部研讨类型
 1028|migration-1028-add-persona-conversation-content-role.sql|区分人物研讨正文与折叠技术证据
 1029|migration-1029-add-persona-customer-display-message.sql|为客户显示正文建立可审计派生记录
+1030|migration-1030-version-persona-customer-display-message.sql|允许客户显示派生按净化规则版本安全重算

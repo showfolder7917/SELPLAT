@@ -7,6 +7,14 @@ export interface PersonaCustomerDisplayDerivation {
 }
 
 /**
+ * 客户显示派生规则的版本。
+ *
+ * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
+ * 已经安全的记录在每次打开页面时重复写入。
+ */
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 2;
+
+/**
  * 生成客户可见正文。
  *
  * 原始消息只在持久化边界短暂读取；调用方只能取得派生后的安全正文或不可显示状态。
@@ -27,17 +35,14 @@ export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConvers
   }
 }
 
-/** 兼容旧版“自然答复 + 固定内部字段”记录，只保留首段答复。 */
+/** 兼容旧版“自然答复 + 内部字段”记录，只保留内部字段出现前的自然答复。 */
 function extractLegacyReply(content: string): string {
-  const paragraphs = content.split(/\n\s*\n/u);
-  if (paragraphs.length < 2) return content;
-  const internalPrefixes = ["用户原话：", "用户目标：", "调查对象：", "期望结果：", "交给南宫婉核实："];
-  let internalFieldCount = 0;
-  for (const paragraph of paragraphs.slice(1)) {
-    if (internalPrefixes.some((prefix) => paragraph.startsWith(prefix))) internalFieldCount += 1;
-  }
-  if (internalFieldCount < 4) return content;
-  const reply = paragraphs[0].trim();
+  // 历史字段既可能以空行分段，也可能紧凑地逐行记录。只识别已知协作字段，
+  // 不用宽泛模式猜测正文，避免误删客户自然语言中的普通冒号。
+  const marker = /(?:^|\n)\s*(?:(?:用户原话|用户目标|调查对象|期望结果|交给南宫婉核实)\s*[：:]|contentRole\s*(?:[：:=]|标注))/u.exec(content);
+  if (!marker) return content;
+  if (marker.index === 0) throw new Error("legacy reply is missing");
+  const reply = content.slice(0, marker.index).trim();
   if (!reply) throw new Error("legacy reply is empty");
   return reply;
 }
