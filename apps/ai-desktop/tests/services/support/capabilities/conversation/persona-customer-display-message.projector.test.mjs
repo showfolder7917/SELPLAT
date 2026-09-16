@@ -74,3 +74,27 @@ test("内部字段位于正文开头时保持不可显示状态，不能把混�
   const failed = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", content: "contentRole：technical-evidence\n用户目标：内部目标" });
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
 });
+
+test("旧 hanli-design 按稳定来源身份只迁移首段，不把设计说明和语料元数据带回客户页面", () => {
+  const legacy = derivePersonaCustomerDisplayMessage({
+    messageId: "hanli-design:request-1",
+    messageType: "customer-visible",
+    speakerType: "persona",
+    content: [
+      "我会保持本轮只读：先加载工程约束，再整理明确说明。",
+      "完整路径需要讨论 contentRole、持久化、恢复和页面投影。",
+      '<!-- SELPLAT_CORPUS_META {"title":"内部语料"} -->',
+      "用户原话：内部原话",
+      "用户目标：内部目标",
+      "调查对象：内部对象",
+      "期望结果：内部结果",
+      "交给南宫婉核实：内部调查",
+    ].join("\n\n"),
+  });
+  assert.deepEqual(legacy, {
+    state: "ready",
+    content: "我会保持本轮只读：先加载工程约束，再整理明确说明。",
+    failureReason: null,
+  });
+  assert.doesNotMatch(legacy.content, /contentRole|持久化|SELPLAT_CORPUS_META|用户原话|交给南宫婉核实/u);
+});

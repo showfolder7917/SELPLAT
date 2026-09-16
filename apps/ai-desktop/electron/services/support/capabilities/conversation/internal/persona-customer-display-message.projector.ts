@@ -12,7 +12,10 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 5;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 6;
+
+/** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
+const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
 
 /**
  * 生成客户可见正文。
@@ -20,7 +23,7 @@ export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 5;
  * 原始消息只在持久化边界短暂读取；调用方只能取得派生后的安全正文或不可显示状态。
  */
 export function derivePersonaCustomerDisplayMessage(
-  message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "speakerType">>,
+  message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "messageId" | "speakerType">>,
 ): PersonaCustomerDisplayDerivation {
   if (message.messageType !== "customer-visible") {
     return { state: "excluded", content: null, failureReason: null };
@@ -32,7 +35,10 @@ export function derivePersonaCustomerDisplayMessage(
   // 用户输入是审计与客户显示共同的原文事实；内部整理只可能出现在人物历史回复中。
   if (message.speakerType === "user") return { state: "ready", content, failureReason: null };
   try {
-    const legacyReply = extractLegacyReply(content);
+    // 旧 hanli-design 身份是混合格式的权威来源；只迁移当时唯一经过客户确认的首段答复。
+    const legacyReply = message.messageId?.startsWith(LEGACY_HANLI_DESIGN_MESSAGE_PREFIX)
+      ? extractLegacyHanliDesignReply(content)
+      : extractLegacyReply(content);
     // 人物正文无论来自当前写入、历史补写还是客户重读，均使用同一安全边界。
     // 写入时机不能决定内部技术内容是否会进入客户页面。
     if (legacyReply === content && containsHistoricalInternalProse(content)) {
@@ -42,6 +48,14 @@ export function derivePersonaCustomerDisplayMessage(
   } catch {
     return { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" };
   }
+}
+
+/** 旧设计消息的后续段落同时包含设计说明、语料元数据和调查字段，不能再按正文词汇猜边界。 */
+function extractLegacyHanliDesignReply(content: string): string {
+  const [firstParagraph] = content.split(/\r?\n\s*\r?\n/u);
+  const reply = firstParagraph?.trim() || "";
+  if (!reply) throw new Error("legacy hanli design reply is empty");
+  return reply;
 }
 
 /** 兼容旧版“自然答复 + 内部字段组”记录，只保留字段组前的自然答复。 */

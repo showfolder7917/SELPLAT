@@ -192,6 +192,60 @@ test("新写入和打开 v4 人物技术长文时均保留失败位置，不能�
   }
 });
 
+test("打开旧 hanli-design 时按稳定身份重算为首段，设计说明和语料元数据只保留在审计原文", () => {
+  const fixture = createFixture("customer-display-legacy-hanli-design");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  try {
+    const repository = new PersonaConversationRepository(initialized.database);
+    const conversation = repository.create("han-li");
+    const firstParagraph = "我会保持本轮只读：先加载工程约束，再整理明确说明。";
+    const raw = [
+      firstParagraph,
+      "完整路径需要讨论 contentRole、持久化、恢复和页面投影。",
+      '<!-- SELPLAT_CORPUS_META {"title":"内部语料"} -->',
+      "用户原话：内部原话",
+      "用户目标：内部目标",
+      "调查对象：内部对象",
+      "期望结果：内部结果",
+      "交给南宫婉核实：内部调查",
+    ].join("\n\n");
+    repository.save({
+      ...conversation,
+      updatedAt: "2026-09-16T04:30:00.000Z",
+      messages: [{
+        messageId: "hanli-design:legacy-request",
+        sequenceNumber: 0,
+        messageType: "customer-visible",
+        contentRole: "conversation",
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: raw,
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt: "2026-09-16T04:30:00.000Z",
+        completedAt: "2026-09-16T04:30:00.000Z",
+      }],
+    });
+    initialized.database?.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopPersonaCustomerDisplayMessage
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=5
+      WHERE sourceMessageId='hanli-design:legacy-request'
+    `).run({ $raw: raw }));
+
+    const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(window.messages.map((message) => message.content), [firstParagraph]);
+    assert.doesNotMatch(window.messages[0].content, /contentRole|持久化|SELPLAT_CORPUS_META|用户原话|交给南宫婉核实/u);
+    const source = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT content FROM AiDesktopPersonaConversationMessage WHERE messageId='hanli-design:legacy-request'
+    `).get());
+    assert.equal(source?.content, raw);
+  } finally {
+    initialized.database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("1026 升级演化快照、1027 补齐消息类型、1028 补齐内容角色、1029 建立客户显示派生并由 1030 版本化后写回 v9", () => {
   const fixture = createFixture("evolution-state-v9");
   try {
