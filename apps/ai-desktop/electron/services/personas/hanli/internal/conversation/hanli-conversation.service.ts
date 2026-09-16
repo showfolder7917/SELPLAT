@@ -554,7 +554,11 @@ export class HanliConversationService {
     );
     // Workflow 先持久化一次性运行态，再异步调度韩立向南宫婉提出第一问。
     const activeRun = this.#options.store.state().oneShotRun;
-    const reusedRun = Boolean(automaticDecision && activeRun && ["running", "blocked"].includes(activeRun.status));
+    // 用户明确切换到独立专题时，旧运行即使还保留 running/blocked 投影也不能
+    // 吞掉新问题或把它写回已经完成的修复任务。组合根会先审计退役旧运行，
+    // 再建立新的 one-shot；普通纠偏仍原位修订当前任务。
+    const switchesTopic = automaticDecision?.switchTopic === true;
+    const reusedRun = Boolean(automaticDecision && !switchesTopic && activeRun && ["running", "blocked"].includes(activeRun.status));
     const scopeRevision = reusedRun && activeRun?.proposalId && this.#options.reviseActiveRepairScope
       ? await this.#options.reviseActiveRepairScope({
         runId: activeRun.runId,
@@ -566,7 +570,7 @@ export class HanliConversationService {
       : null;
     const sourceRequestId = viewpoint.sourceUserMessageId || request.clientMessageId;
     if (!sourceRequestId) throw new Error("韩立当前观点缺少稳定来源请求编号，不能启动不可恢复的研讨。");
-    const started = reusedRun ? { continuous: true } : await start(request, sourceRequestId);
+    const started = reusedRun ? { continuous: true } : await start(request, sourceRequestId, { switchTopic: switchesTopic });
     // 根据真实托管设置生成启动回执，不从模型自由文案推断流程状态。
     let reply = "我已开始核实这个问题。确认范围和影响后，我会向你说明下一步。";
     // 自动托管开启时，韩立可以在已授权范围内继续作业务范围判断。

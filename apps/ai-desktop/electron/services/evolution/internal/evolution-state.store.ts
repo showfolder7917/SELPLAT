@@ -206,6 +206,25 @@ export class EvolutionStateStore {
     }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
   }
 
+  /** 用户明确切换到独立专题时审计结束旧运行；不恢复或复用旧计划。 */
+  retireOneShotRunForTopicSwitch(reason: string): EvolutionStateOutDto {
+    const current = this.#state.oneShotRun;
+    if (!current || !["running", "blocked"].includes(current.status)) return this.state();
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.topic-switch-retired", current.topicId, current.proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.status = "blocked";
+      run.phase = "blocked";
+      run.actor = "user";
+      run.actorName = "用户";
+      run.action = "用户已明确切换到新的独立专题，旧运行不再接收新范围";
+      run.blockingReason = required(reason, "独立专题切换原因", 8_000);
+      run.resumeMode = null;
+      run.updatedAt = now;
+      run.completedAt = now;
+    }, { phase: "blocked", actor: "user", status: "blocked", blockingReason: reason, nextOwner: "han-li" });
+  }
+
   /**
    * 作用：从已持久化的一次性流程卡点原位恢复，并恢复统一自动运行，不新建专题或提案。
    * 真实传参示例：当前 run.status=blocked、proposalId 指向待补充提案，返回同一 runId 的 running 状态。
@@ -1082,6 +1101,7 @@ function archiveTitle(reason: string): string {
     "one-shot.completed": "一次性演化完整结束",
     "one-shot.blocked": "一次性演化遇到无法自动处理的阻塞",
     "one-shot.orphan-retired": "遗留的一次性演化运行状态已结束",
+    "one-shot.topic-switch-retired": "用户切换独立专题，旧运行停止接收新范围",
   };
   return titles[reason] || reason;
 }

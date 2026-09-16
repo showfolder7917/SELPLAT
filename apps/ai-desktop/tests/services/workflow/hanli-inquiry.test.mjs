@@ -508,6 +508,40 @@ test("托管中的客户纠正会更新原令狐任务并明确反馈当前状�
   assert.match(result.messages.at(-1).content, /需要你处理：暂时不需要/);
 });
 
+test("明确切换独立专题不会把新范围写回旧修复任务", async () => {
+  const f = fixture(async () => { throw new Error("不得启动旁路调查"); });
+  let revisions = 0;
+  const starts = [];
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  f.memory.recordRequirementDiscussionContext = () => undefined;
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({
+      deliberations: [],
+      automationSettings: { automaticCustodyEnabled: true },
+      automationRuntime: { status: "running" },
+      oneShotRun: { runId: "old-run", proposalId: "old-proposal", status: "running" },
+    }) },
+    prompts: { render: () => "建立新的独立专题" },
+    conversation: {
+      activeConversationId: () => "provider",
+      send: async () => ({ threadId: "provider", text:
+        `前一专题已经结束，现在独立调查一次完成能力。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, switchTopic: true, inquiry: understanding })}` }),
+    },
+    reviseActiveRepairScope: async () => { revisions += 1; throw new Error("不得修订旧任务"); },
+    startInternalDeliberation: async (_request, sourceRequestId, options) => {
+      starts.push({ sourceRequestId, options });
+      return { continuous: true };
+    },
+    recordEvent: () => {},
+  });
+
+  await service.send({ ...request, clientMessageId: "new-topic", message: "作为新的独立专题启动" });
+
+  assert.equal(revisions, 0);
+  assert.deepEqual(starts, [{ sourceRequestId: "new-topic", options: { switchTopic: true } }]);
+});
+
 test("删除韩立托管排障旁路，不保留后台恢复或旧状态兼容入口", () => {
   const inquirySource = readFileSync(new URL("../../../electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.ts", import.meta.url), "utf8");
   assert.doesNotMatch(inquirySource, /recoverAutomatic|waitForRecovery|#recoveryTimer|strategyReview/);
