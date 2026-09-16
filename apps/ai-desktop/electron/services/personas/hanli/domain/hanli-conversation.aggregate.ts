@@ -13,6 +13,8 @@ import type {
 export interface HanliConversationAggregateState {
   /** 数据库返回的当前韩立业务会话；Aggregate 只读取快照，不直接持久化。 */
   conversation: PersonaConversationOutDto;
+  /** 客户显示消息端口返回的正文投影；观点恢复只能使用这份消息。 */
+  customerDisplayMessages: PersonaConversationMessageOutDto[];
   /** 当前等待用户确认的内部研讨轮次；没有等待确认时为 null。 */
   pendingConfirmationRoundId: string | null;
   /** 当前仍在推进的内部研讨标识；没有活动研讨时为 null。 */
@@ -30,6 +32,8 @@ export class HanliConversationAggregate {
   readonly #conversationId: string | null;
   /** 当前会话的权威消息快照；只用于还原观点和用户确认上下文。 */
   readonly #messages: PersonaConversationMessageOutDto[];
+  /** 与审计原文分离的客户显示消息；禁止从原文恢复观点。 */
+  readonly #customerDisplayMessages: PersonaConversationMessageOutDto[];
   /** 已展示给用户的内部研讨范围确认轮次；存在时优先处理确认回复。 */
   readonly #pendingConfirmationRoundId: string | null;
   /** 已经启动且尚未结束的研讨标识；用于保证重复输入 1 不重复建任务。 */
@@ -45,6 +49,7 @@ export class HanliConversationAggregate {
     this.#conversationId = state.conversation.conversationId;
     // 复制消息数组，防止调用方在实体判断期间改变同一份会话快照。
     this.#messages = [...state.conversation.messages];
+    this.#customerDisplayMessages = [...state.customerDisplayMessages];
     // 保存当前范围确认轮次，使确认回复不会被误判成新研讨启动命令。
     this.#pendingConfirmationRoundId = state.pendingConfirmationRoundId;
     // 保存活动研讨标识，使重复命令可以幂等返回原流程。
@@ -127,12 +132,16 @@ export class HanliConversationAggregate {
   /** 从当前会话反向查找最近一条韩立可见回复，并关联它之前的用户消息。 */
   #findLatestViewpoint(): HanliConversationViewpointValue | null {
     // 从最新消息向前扫描，保证找到用户此刻在界面看到的最近观点。
-    for (let index = this.#messages.length - 1; index >= 0; index -= 1) {
+    for (let index = this.#customerDisplayMessages.length - 1; index >= 0; index -= 1) {
       // currentMessage 是当前扫描位置的权威持久消息。
-      const currentMessage = this.#messages[index];
+      const currentMessage = this.#customerDisplayMessages[index];
       // 内部研讨消息不属于韩立面向用户形成的当前观点。
       if (currentMessage.messageType !== "customer-visible") {
         // 跳过内部消息后继续寻找最近的直接韩立回复。
+        continue;
+      }
+      // 缺失或失败投影只保留原位置提示，不能成为当前观点或把原始正文带回客户链路。
+      if (currentMessage.customerDisplayState !== "ready") {
         continue;
       }
       // 程序生成的控制反馈只说明流程状态，不能成为下一次研讨的新观点。
@@ -183,7 +192,7 @@ export class HanliConversationAggregate {
     // 从观点前一项开始反向扫描，保持真实对话发生顺序。
     for (let index = viewpointIndex - 1; index >= 0; index -= 1) {
       // candidate 是可能与当前观点对应的上游消息。
-      const candidate = this.#messages[index];
+      const candidate = this.#customerDisplayMessages[index];
       // 只有真实用户消息才能成为观点来源。
       if (candidate.speakerType === "user") {
         // 返回数据库稳定消息标识，不以正文匹配推断来源。
@@ -200,25 +209,24 @@ export class HanliConversationAggregate {
     let latestDirect: PersonaConversationMessageOutDto | null = null;
     // marker 保存最近一条结构化澄清锚点，锚点正文不会直接展示给用户。
     let marker: PersonaConversationMessageOutDto | null = null;
-    // 从最新消息向前扫描，同时寻找最新可见消息和最新澄清锚点。
+    // 显示投影决定最后一条客户链路消息，原始正文不再参与这项判断。
+    for (let index = this.#customerDisplayMessages.length - 1; index >= 0; index -= 1) {
+      const candidate = this.#customerDisplayMessages[index];
+      if (candidate.messageType === "customer-visible") {
+        latestDirect = candidate;
+        break;
+      }
+    }
+    // 内部锚点属于审计事实，仍从原始消息读取，但不读取其客户可见正文。
     for (let index = this.#messages.length - 1; index >= 0; index -= 1) {
       // candidate 是本次扫描检查的持久消息。
       const candidate = this.#messages[index];
-      // 第一条非内部消息就是当前页面最后一条直接对话。
-      if (!latestDirect && candidate.messageType === "customer-visible") {
-        // 保存消息对象，后续必须确认锚点仍然指向它。
-        latestDirect = candidate;
-      }
       // 第一条澄清锚点就是当前会话最新的原问题记录。
       if (!marker && candidate.messageId.startsWith("internal:hanli-inquiry-anchor:")) {
         // 保存锚点，后续解析其结构化内容。
         marker = candidate;
       }
-      // 两项事实都已找到后停止扫描，避免继续读取无关历史。
-      if (latestDirect && marker) {
-        // 退出循环后统一校验两条消息之间的关联关系。
-        break;
-      }
+      if (marker) break;
     }
     // 任一事实缺失都表示当前没有可安全延续的澄清问题。
     if (!latestDirect || !marker) {

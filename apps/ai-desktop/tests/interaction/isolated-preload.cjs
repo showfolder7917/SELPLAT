@@ -101,6 +101,21 @@ let linghuAutomationState = {
 };
 let evolutionState = { version: 8, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { ownerPersonaId: "nangong-wan", conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
 let hanliConversation = { ownerPersonaId: "han-li", conversationId: "hanli-conversation-isolated", messages: [], updatedAt: "2026-09-02T00:00:00.000Z" };
+// 隔离测试沿用正式窗口边界：页面只能取得客户可见消息，内部研讨仍只通过专用投影读取。
+const toPersonaCustomerDisplayWindow = (conversation) => ({
+  ownerPersonaId: conversation.ownerPersonaId,
+  conversationId: conversation.conversationId,
+  selectedModel: conversation.selectedModel || null,
+  createdAt: conversation.createdAt,
+  updatedAt: conversation.updatedAt,
+  messages: conversation.messages.filter((message) => message.messageType === "customer-visible"),
+  hasEarlier: false,
+  activity: conversation.activity,
+});
+// 正式验收会话来自主进程夹具；常规交互测试只读取隔离内存中的同一会话事实。
+const readInteractionPersonaConversation = async (personaId) => process.env.AI_DESKTOP_INTERACTION_ACCEPTANCE_SESSION === "1"
+  ? ipcRenderer.invoke("interaction:acceptance-conversation", personaId)
+  : structuredClone(personaId === "nangong-wan" ? evolutionState.conversation : hanliConversation);
 const publishNangongEvolution = (reason) => {
   evolutionState.updatedAt = new Date().toISOString();
   const event = { state: structuredClone(evolutionState), reason, topicId: evolutionState.activeTopicId, proposalId: null };
@@ -622,9 +637,11 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   finishInteractionInquiryRetry: async () => { inquiryFixtureRelease?.(); },
   getInteractionInquiryRequest: async () => structuredClone(inquiryFixtureRequest),
-  getPersonaConversation: async (personaId) => process.env.AI_DESKTOP_INTERACTION_ACCEPTANCE_SESSION === "1"
-    ? ipcRenderer.invoke("interaction:acceptance-conversation", personaId)
-    : structuredClone(personaId === "nangong-wan" ? evolutionState.conversation : hanliConversation),
+  getPersonaConversation: async (personaId) => readInteractionPersonaConversation(personaId),
+  // 客户页刷新和初次加载都通过窗口契约，避免测试桥接回退暴露原始会话正文。
+  getPersonaConversationWindow: async (personaId) => toPersonaCustomerDisplayWindow(await readInteractionPersonaConversation(personaId)),
+  // 测试夹具不持久化失败派生，重试等价于按正式端口重新取得当前客户显示窗口。
+  retryPersonaCustomerDisplayMessage: async (personaId) => toPersonaCustomerDisplayWindow(await readInteractionPersonaConversation(personaId)),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },
   setInteractionCheckpointMessages: async () => {
     const now = new Date().toISOString();

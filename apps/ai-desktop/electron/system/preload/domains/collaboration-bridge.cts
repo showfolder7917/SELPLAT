@@ -22,6 +22,7 @@ export function collaborationBridge() {
     // 页面只传人物 ID；增加新人物时 preload 不需要再增加方法。
     getPersonaConversation: (personaId: string) => invoke("desktop:get-persona-conversation", personaId),
     getPersonaConversationWindow: (personaId: string, request?: unknown) => invoke("desktop:get-persona-conversation-window", personaId, request),
+    retryPersonaCustomerDisplayMessage: (personaId: string, conversationId: string, sourceMessageId: string) => invoke("desktop:retry-persona-customer-display-message", personaId, conversationId, sourceMessageId),
     onPersonaConversationChanged: (listener: (conversation: unknown) => void) => subscribe("desktop:persona-conversation-changed", listener),
     sendPersonaConversationMessage: (personaId: string, request: unknown) => invoke("desktop:send-persona-conversation-message", personaId, request),
     newPersonaConversation: (personaId: string) => invoke("desktop:new-persona-conversation", personaId),

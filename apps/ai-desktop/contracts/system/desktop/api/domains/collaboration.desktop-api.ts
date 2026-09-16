@@ -26,6 +26,7 @@ export const COLLABORATION_DESKTOP_API_METHODS = [
   "getEvolutionTopicDossier",
   "getPersonaConversation",
   "getPersonaConversationWindow",
+  "retryPersonaCustomerDisplayMessage",
   "onPersonaConversationChanged",
   "sendPersonaConversationMessage",
   "newPersonaConversation",

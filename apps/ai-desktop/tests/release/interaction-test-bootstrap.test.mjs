@@ -9,6 +9,7 @@ const paths = readFileSync(new URL("../../scripts/interaction-test-paths.mjs", i
 const packageJson = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
 const isolatedMain = readFileSync(new URL("../interaction/isolated-main.cjs", import.meta.url), "utf8");
 const isolatedPreload = readFileSync(new URL("../interaction/isolated-preload.cjs", import.meta.url), "utf8");
+const collaborationDesktopApi = readFileSync(new URL("../../contracts/system/desktop/api/domains/collaboration.desktop-api.ts", import.meta.url), "utf8");
 const systemDesktopApi = readFileSync(new URL("../../contracts/system/desktop/api/domains/system.desktop-api.ts", import.meta.url), "utf8");
 const sidebarSpec = readFileSync(new URL("../interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const viteConfig = readFileSync(new URL("../../vite.config.mjs", import.meta.url), "utf8");
@@ -86,4 +87,15 @@ test("隔离 preload 覆盖正式系统桌面桥接并保留工作区订阅清�
   assert.match(isolatedPreload, /workspaceStateListeners\.add\(listener\)/);
   assert.match(isolatedPreload, /workspaceStateListeners\.delete\(listener\)/);
   assert.match(isolatedPreload, /reportRendererException: \(report\)/);
+});
+
+test("隔离 preload 覆盖人物客户显示窗口桥接", () => {
+  const declaration = collaborationDesktopApi.match(/COLLABORATION_DESKTOP_API_METHODS\s*=\s*\[([\s\S]*?)\]\s+as const/);
+  assert.ok(declaration, "正式协同桥接必须声明方法集合");
+  const methods = [...declaration[1].matchAll(/"([^" ]+)"/g)].map((match) => match[1]);
+  for (const method of ["getPersonaConversationWindow", "retryPersonaCustomerDisplayMessage"]) {
+    assert.ok(methods.includes(method), `正式协同桥接必须声明 ${method}`);
+    assert.match(isolatedPreload, new RegExp(`\\b${method}\\s*:`), `隔离 preload 缺少 ${method}`);
+  }
+  assert.match(isolatedPreload, /message\.messageType === "customer-visible"/);
 });

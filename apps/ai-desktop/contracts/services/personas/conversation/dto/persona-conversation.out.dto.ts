@@ -9,6 +9,9 @@ export type PersonaConversationMessageTypeValue = "customer-visible" | "internal
 /** 内部消息的显示职责；技术证据保留在同一稳定消息链中，但不能混入人物正文。 */
 export type PersonaConversationContentRoleValue = "conversation" | "technical-evidence";
 
+/** 客户显示投影的读取状态；非 ready 状态绝不允许使用原始正文回退。 */
+export type PersonaCustomerDisplayStateValue = "ready" | "excluded" | "missing" | "failed";
+
 /** 所有人物页面共用的消息协议。 */
 export interface PersonaConversationMessageOutDto {
   messageId: string;
@@ -21,6 +24,10 @@ export interface PersonaConversationMessageOutDto {
   /** 用户和系统消息为 null；人物消息填写稳定 personaId。 */
   speakerPersonaId: string | null;
   content: string;
+  /** 仅由客户显示消息端口填写；失败或缺失时页面保留原位置并提供重新读取。 */
+  customerDisplayState?: PersonaCustomerDisplayStateValue;
+  /** 客户显示派生失败的可读原因；不包含原始消息正文。 */
+  customerDisplayFailureReason?: string | null;
   replyToMessageId: string | null;
   deliveryStatus: "sending" | "completed" | "failed";
   inferredIntent?: string;

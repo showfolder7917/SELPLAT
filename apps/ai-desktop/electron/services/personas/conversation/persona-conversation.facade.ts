@@ -17,10 +17,16 @@ export interface PersonaConversationHandler {
 export class PersonaConversationFacade {
   readonly #handlers = new Map<string, PersonaConversationHandler>();
   #windowReader: ((personaId: string, request: ReadPersonaConversationWindowInDto) => PersonaConversationWindowOutDto) | null = null;
+  #customerDisplayRetry: ((personaId: string, conversationId: string, sourceMessageId: string) => PersonaConversationWindowOutDto) | null = null;
 
   /** 组合根注册统一 SQLite 窗口读取器；人物 Facade 不自行持有数据库实现。 */
   registerWindowReader(reader: (personaId: string, request: ReadPersonaConversationWindowInDto) => PersonaConversationWindowOutDto): void {
     this.#windowReader = reader;
+  }
+
+  /** 组合根注册客户显示派生重读器；失败位置重试仍经过同一持久化端口。 */
+  registerCustomerDisplayRetry(reader: (personaId: string, conversationId: string, sourceMessageId: string) => PersonaConversationWindowOutDto): void {
+    this.#customerDisplayRetry = reader;
   }
 
   register(personaId: string, handler: PersonaConversationHandler): void {
@@ -38,6 +44,13 @@ export class PersonaConversationFacade {
     const reader = this.#windowReader;
     if (!reader) throw new Error("人物会话窗口读取器尚未就绪。");
     return reader(requiredPersonaId(personaId), request);
+  }
+
+  /** 重新派生指定原消息的客户显示正文，并返回该会话的新窗口。 */
+  retryCustomerDisplayMessage(personaId: string, conversationId: string, sourceMessageId: string): PersonaConversationWindowOutDto {
+    const retry = this.#customerDisplayRetry;
+    if (!retry) throw new Error("客户显示消息重读器尚未就绪。");
+    return retry(requiredPersonaId(personaId), conversationId, sourceMessageId);
   }
 
   send(personaId: string, request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> {

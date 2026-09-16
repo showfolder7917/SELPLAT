@@ -26,6 +26,7 @@ const [
   { HanliNangongDeliberationService },
   { createHanliRuntime },
   { HanliConversationService },
+  { HanliConversationAggregate },
   { buildHanliMethodContext, buildHanliRecentConversation, HANLI_METHOD_CONTEXT_CHARACTER_BUDGET, HANLI_RECENT_CONVERSATION_CHARACTER_BUDGET },
   { NangongConversationAggregate },
 ] = await Promise.all([
@@ -35,6 +36,7 @@ const [
   loadWorkflowSource("electron/services/workflow/internal/evolution/hanli-nangong-deliberation.service.ts"),
   loadWorkflowSource("electron/services/personas/hanli/index.ts"),
   loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts"),
+  loadWorkflowSource("electron/services/personas/hanli/domain/hanli-conversation.aggregate.ts"),
   loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-method-context.ts"),
   loadWorkflowSource("electron/services/personas/nangong/domain/nangong-conversation.aggregate.ts"),
 ]);
@@ -533,6 +535,7 @@ test("韩立会话已有当前观点时收到独立1直接启动内部研讨", a
   const messages = [personaConversationMessage("customer-visible", { messageId: "hanli-viewpoint", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "我的观点是：只保留右侧边框拖拽调宽，并移除左侧拖拽入口。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" })];
   const memory = {
     readPersonaConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
+    readPersonaCustomerDisplayConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "hanli-thread-1", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt }; },
     registerPersonaRound(input) {
       messages.push(personaConversationMessage("customer-visible", { messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt }));
       messages.push(personaConversationMessage("customer-visible", { messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt }));
@@ -566,6 +569,9 @@ test("韩立会话没有当前观点时输入1不创建空研讨", async () => {
     readPersonaConversation(ownerPersonaId) {
       return { ownerPersonaId, conversationId: "hanli-empty-viewpoint", messages: structuredClone(messages), updatedAt: "2026-09-02T00:00:00.000Z" };
     },
+    readPersonaCustomerDisplayConversation(ownerPersonaId) {
+      return { ownerPersonaId, conversationId: "hanli-empty-viewpoint", messages: structuredClone(messages), updatedAt: "2026-09-02T00:00:00.000Z" };
+    },
     registerPersonaRound(input) {
       messages.push(personaConversationMessage("customer-visible", { messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt }));
       messages.push(personaConversationMessage("customer-visible", { messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt }));
@@ -597,6 +603,9 @@ test("韩立会话已有活动研讨时重复输入1只返回原流程", async (
     readPersonaConversation(ownerPersonaId) {
       return { ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt };
     },
+    readPersonaCustomerDisplayConversation(ownerPersonaId) {
+      return { ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt };
+    },
     registerPersonaRound(input) {
       messages.push(personaConversationMessage("customer-visible", { messageId: input.userMessageId, sequenceNumber: messages.length, speakerType: "user", speakerPersonaId: null, content: input.userContent, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: input.createdAt, completedAt: input.completedAt }));
       messages.push(personaConversationMessage("customer-visible", { messageId: input.personaMessageId, sequenceNumber: messages.length, speakerType: "persona", speakerPersonaId: input.responderPersonaId, content: input.personaContent, replyToMessageId: input.userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: input.completedAt, completedAt: input.completedAt }));
@@ -619,6 +628,36 @@ test("韩立会话已有活动研讨时重复输入1只返回原流程", async (
   assert.equal(started, 0);
   assert.match(result.messages.at(-1).content, /正在内部研讨中，无需重复启动/);
   assert.match(result.messages.at(-1).content, /调查形成方案后，才会生成任务协作群/);
+});
+
+test("同一客户显示投影同时隔离近期对话与当前观点", () => {
+  const internalFields = ["用户原话：", "用户目标：", "调查对象：", "期望结果：", "交给南宫婉核实："];
+  const legacyMixed = ["安全的历史答复。", ...internalFields.map((field, index) => `${field}内部字段-${index}`)].join("\n\n");
+  const createdAt = "2026-09-16T00:00:00.000Z";
+  const rawMessages = [
+    personaConversationMessage("customer-visible", { messageId: "user", sequenceNumber: 1, speakerType: "user", speakerPersonaId: null, content: "客户问题", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt, completedAt: createdAt }),
+    personaConversationMessage("customer-visible", { messageId: "legacy", sequenceNumber: 2, speakerType: "persona", speakerPersonaId: "han-li", content: legacyMixed, replyToMessageId: "user", deliveryStatus: "completed", attachmentIds: [], createdAt, completedAt: createdAt }),
+  ];
+  const customerDisplayMessages = [
+    { ...rawMessages[0], customerDisplayState: "ready" },
+    { ...rawMessages[1], content: "安全的历史答复。", customerDisplayState: "ready" },
+    { ...rawMessages[1], messageId: "missing", sequenceNumber: 3, content: "此消息正在准备显示。", customerDisplayState: "missing" },
+    { ...rawMessages[1], messageId: "failed", sequenceNumber: 4, content: "此消息暂时无法安全显示。", customerDisplayState: "failed" },
+    { ...rawMessages[1], messageId: "internal", sequenceNumber: 5, messageType: "internal-deliberation", content: legacyMixed, customerDisplayState: "excluded" },
+  ];
+  const recentConversation = buildHanliRecentConversation(customerDisplayMessages);
+  assert.match(recentConversation, /客户问题/);
+  assert.match(recentConversation, /安全的历史答复/);
+  for (const field of internalFields) assert.doesNotMatch(recentConversation, new RegExp(field));
+
+  const aggregate = new HanliConversationAggregate({
+    conversation: { ownerPersonaId: "han-li", conversationId: "display-projection", messages: rawMessages, updatedAt: createdAt },
+    customerDisplayMessages,
+    pendingConfirmationRoundId: null,
+    activeDeliberationId: null,
+  });
+  assert.equal(aggregate.currentViewpoint()?.sourceMessageId, "legacy");
+  assert.equal(aggregate.currentViewpoint()?.content, "安全的历史答复。");
 });
 
 test("韩立只学习提问调查扩展方法并回显每轮真实读入字数", async () => {
@@ -656,6 +695,7 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
     store: evolutionStore(path.join(controlledTestRoot, "hanli-method-context-state")), prompts,
     memory: {
       readPersonaConversation() { return { ownerPersonaId: "han-li", conversationId: null, messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
+      readPersonaCustomerDisplayConversation() { return { ownerPersonaId: "han-li", conversationId: null, messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
       newPersonaConversation() { return { ownerPersonaId: "han-li", conversationId: "hanli-method-thread", messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
       readHanliSemanticContext() { return semanticContext; },
       registerPersonaRound(input) { return { ownerPersonaId: "han-li", conversationId: input.conversationId, messages: [], updatedAt: input.completedAt }; },
@@ -2643,6 +2683,9 @@ test("韩立独立1恢复阻塞中的当前研讨而不是只返回已有研讨"
   const messages = [personaConversationMessage("customer-visible", { messageId: "hanli-viewpoint", sequenceNumber: 0, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点应先核实运行窗口，再决定修改范围。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-09-02T00:00:00.000Z", completedAt: "2026-09-02T00:00:00.000Z" })];
   const memory = {
     readPersonaConversation(ownerPersonaId) {
+      return { ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt };
+    },
+    readPersonaCustomerDisplayConversation(ownerPersonaId) {
       return { ownerPersonaId, conversationId: "hanli-active-deliberation", messages: structuredClone(messages), updatedAt: messages.at(-1).createdAt };
     },
     registerPersonaRound(input) {

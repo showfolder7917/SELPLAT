@@ -1,6 +1,6 @@
 /** 事件中心向人物业务提供的最小记忆行为接口。 */
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../evolution/index.js";
-import type { PersonaConversationContentRoleValue, PersonaConversationOutDto } from "../../../../personas/conversation/index.js";
+import type { PersonaConversationContentRoleValue, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../personas/conversation/index.js";
 import type { ApprovalMemoryEvidenceOutDto, TrainingCorpusTopicSearchResultOutDto } from "../dto/collaboration-memory.out.dto.js";
 import type { ConversationRoundTopicDecisionInDto } from "../dto/conversation-round-topic-decision.in.dto.js";
 import type { HanliSemanticExtractionInDto } from "../dto/hanli-semantic-extraction.in.dto.js";
@@ -24,6 +24,10 @@ export interface CollaborationMemoryPort {
   readHanliSemanticContext(stableUserId: string, projectScope: string, query?: string, limit?: number): HanliSemanticContextOutDto;
   recordVerifiedInspectionExperience(stableUserId: string, projectScope: string, candidate: HanliAcceptanceExperienceCandidateOutDto): void;
   readPersonaConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
+  /** 客户正文读取只能经过该投影端口；原始会话仍只用于审计、提取和内部事实。 */
+  readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
+  readPersonaCustomerDisplayWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto;
+  retryPersonaCustomerDisplayMessage(ownerPersonaId: string, conversationId: string, sourceMessageId: string): void;
   newPersonaConversation(ownerPersonaId: string): PersonaConversationOutDto;
   selectPersonaConversationModel(ownerPersonaId: string, conversationId: string, selectedModel: string | null): PersonaConversationOutDto;
   appendPersonaInternalMessage(input: {

@@ -71,6 +71,8 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   const attachmentPreviewErrors = runtime.attachmentPreviewErrors;
   const hasEarlier = runtime.hasEarlier;
   const loadEarlier = runtime.loadEarlier;
+  // 客户显示派生失败时由统一会话端口在原消息位置重新读取。
+  const retryCustomerDisplayMessage = runtime.retryCustomerDisplayMessage;
 
   /** 用户按发送按钮或提交表单时，完成一整轮韩立对话。 */
   async function send(retrying = pending?.failed === true ? pending : null): Promise<void> {
@@ -290,6 +292,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     attachmentPreviewErrors,
     hasEarlier,
     loadEarlier,
+    retryCustomerDisplayMessage,
     // 是否允许发送（canSend）是发送按钮使用的统一判断结果。
     canSend,
     // 消息发送操作（send）执行一次完整的客户到韩立发送流程。
