@@ -79,6 +79,7 @@ export function createCollaborationWorkspaceViewModel({
             // 读取失败已成为任务区的明确状态，重试操作不再向页面抛出未处理异常。
           }
         },
+        onRetryTimelineRead: async () => { await controller.actions.refreshTimeline(); },
       },
     },
     memberPage: {

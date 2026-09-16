@@ -54,6 +54,15 @@ test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID �
   assert.doesNotMatch(read("electron/services/personas/hanli/internal/conversation/hanli-inquiry-checkpoint.ts"), /messageId\.startsWith/);
 });
 
+test("工作流重复进展只能原位更新既有内部消息", () => {
+  const memory = read("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts");
+  const writer = read("electron/services/support/capabilities/conversation/internal/persona-conversation-message.writer.ts");
+  assert.match(collaborationMemoryPort, /updatePersonaInternalProgress\(input: \{[\s\S]*?messageId: string;[\s\S]*?updatedAt: string;[\s\S]*?\}\): PersonaConversationOutDto/);
+  assert.match(memory, /updatePersonaInternalProgress\(input:[\s\S]*?existing\.messageType !== "internal-deliberation"[\s\S]*?不能原位更新/);
+  assert.match(memory, /writePersonaConversationMessage\([\s\S]*?"update"/);
+  assert.match(writer, /existing\?\.sequenceNumber \?\? Number\(maximum\.value\) \+ 1/);
+});
+
 test("客户显示正文由唯一派生端口供应，页面、后续上下文和当前观点不能回退原始混合正文", () => {
   assert.match(customerDisplayMigration, /CREATE TABLE AiDesktopPersonaCustomerDisplayMessage/);
   assert.match(customerDisplayMigration, /displayState TEXT NOT NULL CHECK \(displayState IN \('ready', 'excluded', 'missing', 'failed'\)\)/);
