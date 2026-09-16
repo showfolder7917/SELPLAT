@@ -119,6 +119,31 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
   }
 
+  /** 更新同一条工作流进展，稳定消息身份、创建时间和序号都保持不变。 */
+  updatePersonaInternalProgress(input: {
+    ownerPersonaId: string; conversationId: string; messageId: string; content: string; updatedAt: string;
+  }): PersonaConversationOutDto {
+    const content = input.content.trim();
+    if (!content) throw new Error("人物内部进展消息不能为空。");
+    const existing = this.readPersonaConversation(input.ownerPersonaId, input.conversationId).messages
+      .find((message) => message.messageId === input.messageId);
+    if (!existing || existing.messageType !== "internal-deliberation") {
+      throw new Error("工作流进展消息不存在或不属于内部研讨，不能原位更新。");
+    }
+    this.#database.transaction((connection) => {
+      writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
+        ...existing,
+        content,
+        completedAt: input.updatedAt,
+      }, "update");
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $updatedAt: input.updatedAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
+      });
+    });
+    return this.readPersonaConversation(input.ownerPersonaId, input.conversationId);
+  }
+
   /** 仅保存可恢复的韩立排查快照；该 JSON 不会被当作人物发言或客户结果投影。 */
   appendPersonaRecoveryCheckpoint(input: {
     ownerPersonaId: string; conversationId: string; messageId: string; requestId: string; content: string; createdAt: string;

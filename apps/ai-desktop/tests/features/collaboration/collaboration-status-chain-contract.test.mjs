@@ -30,6 +30,7 @@ const taskGroupCardSource = readFileSync(new URL("../../../src/features/collabor
 const collaborationModelSource = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
 const recoveryOperationSource = readFileSync(new URL("../../../src/features/collaboration/model/recovery-operation.ts", import.meta.url), "utf8");
 const collaborationViewModelSource = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
+const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const evolutionRuntimeSource = readFileSync(new URL("../../../src/features/evolution/model/useEvolutionRuntime.ts", import.meta.url), "utf8");
 const interactionPreloadSource = readFileSync(new URL("../../interaction/isolated-preload.cjs", import.meta.url), "utf8");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
@@ -154,6 +155,25 @@ test("任务群在协作状态未返回或读取失败时不把空专题当作�
   assert.match(taskGroupSource, /stateReadStatus === "syncing"[\s\S]*正在同步/);
   assert.match(taskGroupSource, /stateReadStatus === "unavailable"[\s\S]*状态暂未更新/);
   assert.match(taskGroupSource, /statusMessage \? <strong role="status">\{statusMessage\}<\/strong> : <>/);
+});
+
+test("一次性工作流按可见实质状态更新同一消息，任务事件仍按真实事件身份追加", () => {
+  const memory = readFileSync(new URL("../../../electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts", import.meta.url), "utf8");
+  assert.match(applicationRuntimeSource, /const progressIdentity = createHash\("sha256"\)\.update\(JSON\.stringify\(\{[\s\S]*?runId: run\.runId,[\s\S]*?blockingReason: run\.blockingReason,[\s\S]*?workflowStatus,[\s\S]*?\}\)\)\.digest\("hex"\)/);
+  assert.match(applicationRuntimeSource, /hanli-workflow-status:\$\{run\.runId\}:\$\{progressIdentity\}/);
+  assert.match(applicationRuntimeSource, /publishHanliInternalStatus\(messageId, workflowStatus, run\.updatedAt,[\s\S]*?, true\)/);
+  assert.doesNotMatch(applicationRuntimeSource, /publishedHanliWorkflowStatusKeys|statusKey = `\$\{run\.runId\}:\$\{run\.updatedAt\}`/);
+  assert.match(applicationRuntimeSource, /hanli-task-status:\$\{task\.taskId\}:\$\{latest\.eventId\}/);
+  assert.match(memory, /updatePersonaInternalProgress/);
+});
+
+test("任务时间线更新失败时保留最近快照并提供局部重读", () => {
+  const taskGroup = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+  const viewModel = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
+  assert.match(taskGroup, /timelineUnavailable: false/);
+  assert.match(taskGroup, /task-collaboration-refresh-status[\s\S]*?重新读取更新/);
+  assert.match(taskGroup, /onRetryTimelineRead\(\)[\s\S]*?finally\(\(\) => setRetryingRead\(false\)\)/);
+  assert.match(viewModel, /onRetryTimelineRead: async \(\) => \{ await controller\.actions\.refreshTimeline\(\); \}/);
 });
 
 test("空任务页先引导说明需求，再展示后续协作安排", () => {
