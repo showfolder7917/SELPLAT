@@ -97,6 +97,8 @@ export type { CollaborationTimelineGroupOutDto } from "./dto/collaboration-timel
 export type { CollaborationTimelineNodeOutDto } from "./dto/collaboration-timeline.out.dto.js";
 // CollaborationTimelineSnapshotOutDto 是主进程返回的完整专题时间线投影。
 export type { CollaborationTimelineSnapshotOutDto } from "./dto/collaboration-timeline.out.dto.js";
+// CollaborationTimelineProjectionStatusOutDto 描述时间线投影失败的局部技术状态。
+export type { CollaborationTimelineProjectionStatusOutDto } from "./dto/collaboration-timeline.out.dto.js";
 // CollaborationTimelineContentRoleValue 说明时间线正文应以哪种内容角色显示。
 export type { CollaborationTimelineContentRoleValue } from "./value/collaboration-timeline.value.js";
 // CollaborationTimelineDetailRoleValue 说明时间线详情承担的业务用途。

@@ -62,6 +62,7 @@ export function createCollaborationWorkspaceViewModel({
         stateReadStatus: controller.data.stateReadStatus,
         deliveryReadStatus: evolution.readStatus,
         timelineReadStatus: controller.data.timelineReadStatus,
+        timelineProjectionStatus: controller.data.timelineProjectionStatus,
         readError: evolution.readError || controller.data.timelineReadError,
         readRecovery: evolution.readRecovery,
       },
@@ -80,6 +81,7 @@ export function createCollaborationWorkspaceViewModel({
           }
         },
         onRetryTimelineRead: async () => { await controller.actions.refreshTimeline(); },
+        onRetryTimelineProjection: async () => { await controller.actions.retryTimelineProjection(); },
       },
     },
     memberPage: {

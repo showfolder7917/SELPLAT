@@ -1,5 +1,5 @@
 import type { AiMemoryDatabaseStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
-import type { CollaborationTimelineChangedEventOutDto } from "../../../contracts/services/workflow/index.js";
+import type { CollaborationTimelineChangedEventOutDto, CollaborationTimelineProjectionStatusOutDto } from "../../../contracts/services/workflow/index.js";
 import {
   createCollaborationMemory,
   createCollaborationTimeline,
@@ -26,6 +26,8 @@ export interface CreatePersistenceContextOptions {
   migrationSqlRoot?: string;
   eventCenter: EventCenterFacade;
   onTimelineChanged(event: CollaborationTimelineChangedEventOutDto): void;
+  /** 投影写入失败与恢复只驱动页面局部反馈，不改变业务时间线。 */
+  onTimelineProjectionStatus(status: CollaborationTimelineProjectionStatusOutDto): void;
 }
 
 /** 统一创建 AI Memory 连接及其 Repository 投影，应用层只接收稳定 Port。 */
@@ -40,6 +42,7 @@ export function createPersistenceContext(options: CreatePersistenceContextOption
   const collaborationTimeline = database ? createCollaborationTimeline(database) : null;
   const collaborationMemory = database ? createCollaborationMemory(database) : null;
   collaborationTimeline?.subscribeTimelineChanged(options.onTimelineChanged);
+  collaborationTimeline?.subscribeProjectionStatus(options.onTimelineProjectionStatus);
   options.eventCenter.attachRepository(workflowRepository);
 
   let closed = false;
