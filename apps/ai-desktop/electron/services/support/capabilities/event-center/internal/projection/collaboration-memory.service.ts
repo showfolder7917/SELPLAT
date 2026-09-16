@@ -164,13 +164,18 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
     });
   }
 
-  /** Workflow 只通过中立记忆端口读取最近事实包，不识别韩立调查服务或其内部调用。 */
-  readLatestRequirementDiscussionContext(ownerPersonaId: string, conversationId: string): RequirementDiscussionContextOutDto | null {
-    const message = [...this.readPersonaConversation(ownerPersonaId, conversationId).messages]
-      .reverse().find((item) => item.messageId.startsWith(REQUIREMENT_DISCUSSION_CONTEXT_PREFIX));
-    if (!message) return null;
-    try { return normalizeRequirementDiscussionContext(JSON.parse(message.content) as RequirementDiscussionContextOutDto); }
-    catch { return null; }
+  /** Workflow 按人物、会话和稳定请求编号读取唯一事实包，禁止从客户正文或最新消息猜测恢复来源。 */
+  readRequirementDiscussionContext(ownerPersonaId: string, conversationId: string, sourceRequestId: string): RequirementDiscussionContextOutDto | null {
+    for (const message of [...this.readPersonaConversation(ownerPersonaId, conversationId).messages].reverse()) {
+      if (!message.messageId.startsWith(REQUIREMENT_DISCUSSION_CONTEXT_PREFIX)) continue;
+      try {
+        const context = normalizeRequirementDiscussionContext(JSON.parse(message.content) as RequirementDiscussionContextOutDto);
+        if (context.sourceRequestId === sourceRequestId) return context;
+      } catch {
+        // 单条历史事实包损坏时跳过它，继续查找同一稳定请求的其他有效记录。
+      }
+    }
+    return null;
   }
 
   /** 原子保存任意人物的真实用户回合与统一训练语料；人物完整回复只留在人物会话。 */

@@ -101,7 +101,7 @@ export class EvolutionStateStore {
    * 真实返回示例：oneShotRun.actor=nangong-wan，界面显示“南宫婉正在整理演化课题”。
    * 异常或副作用示例：已有未结束的一次性运行时拒绝重复建立；成功后原子保存运行状态。
    */
-  beginOneShotRun(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"]): EvolutionStateOutDto {
+  beginOneShotRun(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"], sourceRequestId: string | null = null): EvolutionStateOutDto {
     if (!workspaceState?.roots?.length) throw new Error("一次性演化必须先登记实施工作区。");
     if (this.#state.oneShotRun?.status === "running") throw new Error("当前已有一次性演化正在运行，请勿重复启动。");
     const now = new Date().toISOString();
@@ -112,7 +112,7 @@ export class EvolutionStateStore {
       state.automationRuntime.pausedAt = null;
       state.automationRuntime.stopReason = null;
       state.oneShotConfirmation = null;
-      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, resumeMode: null, startedAt: now, updatedAt: now, completedAt: null };
+      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, sourceRequestId, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, resumeMode: null, startedAt: now, updatedAt: now, completedAt: null };
     });
   }
 

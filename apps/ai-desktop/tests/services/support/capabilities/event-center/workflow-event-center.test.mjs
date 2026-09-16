@@ -100,8 +100,9 @@ test("中立需求研讨上下文独立保存并按人物会话读取，不进�
       unknowns: ["当前安装版本"], customerConclusion: "需要修复消息区域并重新验证当前版本。", createdAt: "2026-09-05T00:00:01.000Z",
     };
     memory.recordRequirementDiscussionContext(context);
-    assert.deepEqual(memory.readLatestRequirementDiscussionContext("han-li", "hanli-requirement-thread"), context);
-    assert.equal(memory.readLatestRequirementDiscussionContext("han-li", "another-thread"), null);
+    assert.deepEqual(memory.readRequirementDiscussionContext("han-li", "hanli-requirement-thread", "request-1"), context);
+    assert.equal(memory.readRequirementDiscussionContext("han-li", "hanli-requirement-thread", "another-request"), null);
+    assert.equal(memory.readRequirementDiscussionContext("han-li", "another-thread", "request-1"), null);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
   } finally { fixture.close(); }
 });
