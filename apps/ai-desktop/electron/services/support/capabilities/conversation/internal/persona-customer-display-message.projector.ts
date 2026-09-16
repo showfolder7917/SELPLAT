@@ -41,7 +41,9 @@ export function derivePersonaCustomerDisplayMessage(
       : extractLegacyReply(content);
     // 人物正文无论来自当前写入、历史补写还是客户重读，均使用同一安全边界。
     // 写入时机不能决定内部技术内容是否会进入客户页面。
-    if (legacyReply === content && containsHistoricalInternalProse(content)) {
+    // 旧 hanli-design 只保留首段后，仍需审查该首段本身；否则过程性说明会因
+    // 后续内部字段被截断而绕过客户显示边界。
+    if (containsHistoricalInternalProse(legacyReply)) {
       throw new Error("legacy reply cannot be safely separated");
     }
     return { state: "ready", content: legacyReply, failureReason: null };
@@ -120,7 +122,17 @@ function containsHistoricalInternalProse(content: string): boolean {
     /制造数据/u,
     /恢复任务/u,
   ];
+  // 历史设计答复的首段也可能是完整的内部处理交代。三项以上流程标记共同
+  // 出现时没有客户答复边界；两项短语仍可用于简短状态说明，不能据此隐藏。
+  const processMarkers = [
+    /本轮只读/u,
+    /工程约束/u,
+    /产品目标/u,
+    /调查边界/u,
+    /验收路径/u,
+  ];
   return structuredMarkers.filter((marker) => marker.test(content)).length >= 3
     || implementationMarkers.filter((marker) => marker.test(content)).length >= 2
-    || collaborationMarkers.filter((marker) => marker.test(content)).length >= 3;
+    || collaborationMarkers.filter((marker) => marker.test(content)).length >= 3
+    || processMarkers.filter((marker) => marker.test(content)).length >= 3;
 }

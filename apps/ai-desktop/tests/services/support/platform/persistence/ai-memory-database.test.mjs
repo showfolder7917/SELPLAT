@@ -293,6 +293,53 @@ test("打开旧 hanli-design 时按稳定身份重算为首段客户结论，过
   }
 });
 
+test("打开 v8 hanli-design 内部处理首段时重算为失败位置，绝不显示截断后的内部说明", () => {
+  const fixture = createFixture("customer-display-v8-hanli-design-process-reply");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  try {
+    const repository = new PersonaConversationRepository(initialized.database);
+    const conversation = repository.create("han-li");
+    const firstParagraph = "本轮只读、工程约束、产品目标、调查边界和验收路径属于内部处理。";
+    const raw = [firstParagraph, "后续设计说明和审计字段只保留在原始记录。"].join("\n\n");
+    repository.save({
+      ...conversation,
+      updatedAt: "2026-09-16T06:20:00.000Z",
+      messages: [{
+        messageId: "hanli-design:internal-process-reply",
+        sequenceNumber: 0,
+        messageType: "customer-visible",
+        contentRole: "conversation",
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: raw,
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt: "2026-09-16T06:20:00.000Z",
+        completedAt: "2026-09-16T06:20:00.000Z",
+      }],
+    });
+    initialized.database?.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopPersonaCustomerDisplayMessage
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=8
+      WHERE sourceMessageId='hanli-design:internal-process-reply'
+    `).run({ $raw: raw }));
+
+    const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
+      content: "此消息暂时无法安全显示。", state: "failed",
+    }]);
+    assert.doesNotMatch(window.messages[0].content, /本轮只读|工程约束|产品目标|调查边界|验收路径/u);
+    const version = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='hanli-design:internal-process-reply'
+    `).get());
+    assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
+  } finally {
+    initialized.database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("1026 升级演化快照、1027 补齐消息类型、1028 补齐内容角色、1029 建立客户显示派生并由 1030 版本化后写回 v9", () => {
   const fixture = createFixture("evolution-state-v9");
   try {
