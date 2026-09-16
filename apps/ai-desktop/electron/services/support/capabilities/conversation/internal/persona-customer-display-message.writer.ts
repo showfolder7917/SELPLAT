@@ -14,8 +14,9 @@ export function writePersonaCustomerDisplayMessage(
   ownerPersonaId: string,
   conversationId: string,
   message: PersonaConversationMessageOutDto,
+  options: { historical?: boolean } = {},
 ): void {
-  const derived = derivePersonaCustomerDisplayMessage(message);
+  const derived = derivePersonaCustomerDisplayMessage(message, options);
   connection.prepare(`
     INSERT INTO AiDesktopPersonaCustomerDisplayMessage
       (sourceMessageId, ownerPersonaId, conversationId, displayState, displayContent, failureReason, derivationVersion, derivedAt)
