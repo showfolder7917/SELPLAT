@@ -959,6 +959,26 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
   const horizontalOverflow = await pageRoot.evaluate((element) => element.scrollWidth - element.clientWidth);
   expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  // 窄窗口将完整历史展开后，只有详情面板可滚动；页面标题、专题摘要、下一流程和定位操作必须留在视口。
+  for (let index = 0; index < await nodeDisclosures.count(); index += 1) {
+    const trigger = nodeDisclosures.nth(index).locator(":scope > .selui-disclosure-heading > .seldisclosure-trigger");
+    if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+  }
+  const detailPane = group.locator(".task-timeline-detail-pane");
+  const detailScroll = await detailPane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop };
+  });
+  expect(detailScroll.scrollHeight, "长历史必须由任务卡详情面板承载内部滚动").toBeGreaterThan(detailScroll.clientHeight);
+  expect(detailScroll.scrollTop, "详情面板必须实际滚动到底部").toBeGreaterThan(0);
+  await expect(pageRoot.getByRole("heading", { name: "任务协作群", exact: true })).toBeInViewport();
+  await expect(groupTrigger).toBeInViewport();
+  await expect(group.locator(".task-timeline-next")).toBeInViewport();
+  await expect(pageRoot.getByRole("button", { name: "定位当前步骤", exact: true })).toBeInViewport();
+  await groupTrigger.click();
+  await expect(group.locator(".task-timeline-node")).toHaveCount(0);
+  await groupTrigger.click();
+  await expect(group.locator(".task-timeline-node")).toHaveCount(13);
   await testInfo.attach("task-collaboration-group-1000x700", { body: await page.screenshot(), contentType: "image/png" });
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
 

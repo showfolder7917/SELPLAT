@@ -77,7 +77,7 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
     updateOpenOverride(setNodeOpenOverrides, nodeId, open);
   };
 
-  /** 展开当前专题和当前节点，并将它平滑滚动到页面中央。 */
+  /** 展开当前专题和当前节点，并只滚动所属详情面板以保留卡片主操作。 */
   const locateCurrentStep = () => {
     const currentGroup = groups.find((group) => group.groupId === currentGroupId);
     const currentNode = currentGroup
@@ -88,13 +88,19 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
     setGroupOpen(currentGroup.groupId, true);
     setNodeOpen(currentNode.nodeId, true);
 
-    window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       const selector = `[data-task-timeline-node-id="${CSS.escape(currentNode.nodeId)}"]`;
-      document.querySelector<HTMLElement>(selector)?.scrollIntoView({
+      const target = document.querySelector<HTMLElement>(selector);
+      const detailPane = target?.closest<HTMLElement>(".task-timeline-detail-pane");
+      if (!target || !detailPane) return;
+      const targetBounds = target.getBoundingClientRect();
+      const paneBounds = detailPane.getBoundingClientRect();
+      // 当前节点在详情面板中居中，不能使用全局 scrollIntoView 推动页面标题离开视口。
+      detailPane.scrollTo({
+        top: detailPane.scrollTop + targetBounds.top - paneBounds.top - (detailPane.clientHeight - targetBounds.height) / 2,
         behavior: "smooth",
-        block: "center",
       });
-    });
+    }));
   };
 
   /** 调用主进程继续任务，并把忙碌和失败状态完整反馈给页面。 */
