@@ -108,4 +108,8 @@ export interface CollaborationTimelineProjectionStatusOutDto {
   status: "ready" | "unavailable";
   /** 失败时给任务协作群显示的可读原因；正常时为空。 */
   message: string;
+  /** 失败投影关联的任务；提案级或无法关联任务的投影为 null。 */
+  taskId: string | null;
+  /** 失败写入的边界，页面据此只重试这一类进度投影。 */
+  operation: "stream" | "task-flow" | "business-event" | "none";
 }

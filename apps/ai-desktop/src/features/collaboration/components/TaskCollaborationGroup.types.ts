@@ -39,7 +39,7 @@ export type TaskCollaborationGroupModel = {
     /** 时间线首次读取状态；失败时不能继续使用旧历史作为当前结论。 */
     timelineReadStatus: CollaborationStateReadStatus;
     /** 主进程投影写入失败时的局部技术状态。 */
-    timelineProjectionStatus: { status: "ready" | "unavailable"; message: string };
+    timelineProjectionStatus: { status: "ready" | "unavailable"; message: string; taskId: string | null; operation: "stream" | "task-flow" | "business-event" | "none" };
     /** 读取失败的可读原因。 */
     readError: string;
     /** 当前专题投影签发的读取恢复政策；页面不得以本地次数覆盖它。 */

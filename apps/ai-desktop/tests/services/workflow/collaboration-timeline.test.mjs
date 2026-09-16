@@ -22,8 +22,22 @@ async function loadWorkflowSource(entryPoint) {
 const { CollaborationTimelineRepository } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts");
 const { CollaborationTimelineFacade } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.facade.ts");
 const { SqliteDatabase } = await loadWorkflowSource("electron/services/support/platform/persistence/internal/sqlite-database.ts");
+const { recordDistributionTimelineStream } = await loadWorkflowSource("electron/system/bootstrap/distribution-timeline-stream-recorder.ts");
 
 const member = (memberId, displayName) => ({ memberId, displayName });
+
+test("分发流式投影失败只记录局部异常，不中断分发调用", () => {
+  const failures = [];
+  assert.doesNotThrow(() => recordDistributionTimelineStream({
+    timeline: { appendStream() { throw new Error("SQLite busy"); } },
+    eventCenter: { recordException(input) { failures.push(input); } },
+  }, "proposal:1", "nangong-wan", { type: "message-delta", turnId: "turn-1", delta: "计划" }));
+  assert.deepEqual(failures, [{
+    kind: "technical", sourceType: "system", sourceId: "collaboration-timeline",
+    operation: "append_distribution_stream", error: failures[0].error, correlationId: "proposal:1",
+  }]);
+  assert.match(failures[0].error.message, /SQLite busy/);
+});
 
 test("每轮自测与自修独立收尾，完成后耗时不再增长且重复同步幂等", () => {
   const fixture = createFixture("self-repair-rounds");
@@ -172,12 +186,15 @@ test("流式进度投影失败保留现有内容并重试同一片段", () => {
 
     assert.throws(() => facade.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", text: "保留的进度正文" }), /确认失败/);
     assert.equal(facade.getProjectionStatus().status, "unavailable");
+    assert.equal(facade.getProjectionStatus().taskId, running.taskId);
+    assert.equal(facade.getProjectionStatus().operation, "stream");
     assert.equal(facade.getTimelineSnapshot(fixture.at(4)).groups[0].nodes.find((node) => node.status === "current").content, "保留的进度正文");
 
     failAfterCommit = false;
     facade.retryProjection();
     unsubscribe();
     assert.equal(facade.getProjectionStatus().status, "ready");
+    assert.deepEqual(facade.getProjectionStatus(), { status: "ready", message: "", taskId: null, operation: "none" });
     assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskTimelineStream").get().count)), 1);
     assert.deepEqual(statuses.map((status) => status.status), ["unavailable", "ready"]);
   } finally { fixture.close(); }

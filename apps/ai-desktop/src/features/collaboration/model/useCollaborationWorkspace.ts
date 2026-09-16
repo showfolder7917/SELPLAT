@@ -246,7 +246,7 @@ export function useCollaborationWorkspace() {
   const [timelineReadStatus, setTimelineReadStatus] = useState<CollaborationStateReadStatus>("syncing");
   const [timelineReadError, setTimelineReadError] = useState("");
   // 时间线投影写入失败独立于读取失败；只控制局部重试提示，不清空已显示快照。
-  const [timelineProjectionStatus, setTimelineProjectionStatus] = useState({ status: "ready" as "ready" | "unavailable", message: "" });
+  const [timelineProjectionStatus, setTimelineProjectionStatus] = useState({ status: "ready" as "ready" | "unavailable", message: "", taskId: null as string | null, operation: "none" as "stream" | "task-flow" | "business-event" | "none" });
   // 令狐自动化：令狐人物页显示并更新自动保障运行状态。
   const [linghuAutomation, setLinghuAutomation] = useState<LinghuAutomationStateOutDto | null>(null);
   // 按任务保存的实时输出：主会话中的协作任务状态链使用。
