@@ -29,7 +29,11 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(verifier, /readError:/);
   assert.match(pipeline, /candidateEvidence = inspectAcceptancePlanCandidateEvidence\(candidate\.rootPath, candidate\.candidateSha, this\.#loadedRuntimeSha\)/);
   assert.match(pipeline, /requiresRuntimeActivation/);
-  assert.match(pipeline, /必须先受控激活候选运行包/);
+  assert.match(pipeline, /releaseDocument\.state = "activating"/);
+  assert.match(pipeline, /await this\.#prepareRuntimeActivation\(candidate, releaseBatchId\)/);
+  assert.match(pipeline, /this\.#activateRuntime\(executable, releaseBatchId, candidate\.candidateSha\)/);
+  assert.match(pipeline, /resumeRuntimeActivation\(releaseBatchId: string\)/);
+  assert.doesNotMatch(pipeline, /throw new Error\(`候选修改统一测试运行器，必须先受控激活候选运行包/);
   assert.match(runtimeActivationPolicy, /RUNTIME_ACTIVATION_PATHS/);
   assert.match(runtimeActivationPolicy, /loadedRuntimeSha !== candidateSha/);
   assert.match(store, /candidateEvidence: null/);

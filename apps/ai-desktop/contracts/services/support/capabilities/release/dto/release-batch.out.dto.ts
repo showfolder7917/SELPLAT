@@ -16,15 +16,27 @@ export interface ReleaseBatchCandidateEvidenceOutDto {
   readError: string | null;
 }
 
+/** 候选改动预检运行器时的运行包准备与恢复事实。 */
+export interface ReleaseBatchRuntimeActivationOutDto {
+  state: "preparing" | "relaunch-scheduled" | "resumed" | "failed";
+  candidateRootPath: string;
+  candidateBaseSha: string;
+  candidateSha: string;
+  executable: string | null;
+  detail: string | null;
+  updatedAt: string;
+}
+
 export interface ReleaseBatchDocumentOutDto {
   releaseBatchId: string;
   version: string;
   generation: number;
-  state: "frozen" | "candidate-ready" | "testing" | "verified" | "integrated" | "published" | "failed";
+  state: "frozen" | "candidate-ready" | "activating" | "testing" | "verified" | "integrated" | "published" | "failed";
   initiatorMemberId: string;
   candidateBranch: string | null;
   candidateSha: string | null;
   candidateEvidence: ReleaseBatchCandidateEvidenceOutDto | null;
+  runtimeActivation: ReleaseBatchRuntimeActivationOutDto | null;
   localMergeSha: string | null;
   executable: string | null;
   tasks: ReleaseBatchTaskSnapshotOutDto[];

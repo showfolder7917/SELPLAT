@@ -45,6 +45,8 @@ export interface LinghuRuntime {
   facade: LinghuAutomationFacade;
   // 版本集成通过运行时执行候选统一测试，调用方看不到具体 Runner。
   runUnifiedTests(candidateProjectRoot?: string): Promise<FixedUnifiedTestRunResult>;
+  /** 为候选自身的预检逻辑准备受控运行包，不执行统一测试。 */
+  prepareRuntimeActivation(candidateProjectRoot: string, releaseBatchId: string, candidateSha: string): Promise<string>;
   // 清空测试数据是受控生命周期能力，不返回 Store。
   clearTestData(): number;
   // 清空后断言由内部 Store 执行，外部只接收成功或异常。
@@ -102,6 +104,7 @@ export function createLinghuRuntime(options: CreateLinghuRuntimeOptions): Linghu
     memberId: "linghu-ancestor",
     facade,
     runUnifiedTests: (candidateProjectRoot) => unifiedTests.run(candidateProjectRoot),
+    prepareRuntimeActivation: (candidateProjectRoot, releaseBatchId, candidateSha) => unifiedTests.prepareRuntimeActivation(candidateProjectRoot, releaseBatchId, candidateSha),
     clearTestData: () => store.clearTestData(),
     assertTestDataCleared: () => store.assertTestDataCleared(),
     start: () => facade.start(),

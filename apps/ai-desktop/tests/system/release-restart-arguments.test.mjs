@@ -11,6 +11,13 @@ test("正式实例重启不产生隔离参数", () => {
   assert.equal(releaseRestartArguments("/formal", "sha", []).length, 3);
 });
 
+test("候选运行器激活只额外携带待恢复批次", () => {
+  assert.deepEqual(
+    releaseRestartArguments("/formal", "candidate-sha", ["app", "--ai-desktop-resume-release=stale"], "release-0.1.1-g9"),
+    ["--selplat-root=/formal", "--ai-desktop-variant=developer", "--ai-desktop-runtime-sha=candidate-sha", "--ai-desktop-resume-release=release-0.1.1-g9"],
+  );
+});
+
 
 test("只有正确包真实就绪才结束任务并回收工作树", async () => {
   const { VersionIntegrationPipeline } = await import("../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-integration.pipeline.js");

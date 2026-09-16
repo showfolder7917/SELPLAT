@@ -36,7 +36,8 @@ export function writePersonaConversationMessage(
     $conversationId: conversationId,
     $sequenceNumber: sequenceNumber,
     $messageType: message.messageType,
-    $contentRole: message.contentRole,
+    // 历史会话快照没有 contentRole；迁移默认值与写边界共同把它收敛为普通正文，禁止把 undefined 传给 SQLite。
+    $contentRole: message.contentRole || "conversation",
     $speakerType: message.speakerType,
     $speakerPersonaId: message.speakerType === "persona" ? requiredSpeaker(message.speakerPersonaId) : null,
     $content: message.content,

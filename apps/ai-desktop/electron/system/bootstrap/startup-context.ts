@@ -20,6 +20,8 @@ export interface StartupContext {
   readonly healthCheckFile: string | null;
   /** 当前进程实际装载的候选源码提交；发布重启验收必须与批次集成提交一致。 */
   readonly runtimeSourceSha: string | null;
+  /** 候选运行包预激活后要恢复的发布批次。 */
+  readonly resumeReleaseBatchId: string | null;
   readonly workspaces: WorkspaceFacade;
   readonly eventCenter: EventCenterFacade;
   readonly ownsApplicationInstance: boolean;
@@ -67,6 +69,7 @@ export function createStartupContext(): StartupContext {
     ?.slice("--ai-desktop-runtime-sha=".length)
     || null;
   const runtimeSourceSha = resolvePublishedRuntimeSourceSha(process.resourcesPath, runtimeSourceShaArgument);
+  const resumeReleaseBatchId = readArgument("--ai-desktop-resume-release=");
 
   return {
     applicationName,
@@ -76,6 +79,7 @@ export function createStartupContext(): StartupContext {
     preloadPath: path.join(electronDirectory, "preload", "preload.cjs"),
     healthCheckFile,
     runtimeSourceSha,
+    resumeReleaseBatchId,
     workspaces,
     eventCenter,
     ownsApplicationInstance,
