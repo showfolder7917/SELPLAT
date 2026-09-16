@@ -12,7 +12,7 @@ acceptanceContextJson 中 acceptancePlan 为 null 时，才执行上述首次分
 - actual 用客户能理解的话给出结论；evidenceReferences 只列实际源码文件或具体结构位置，不能用测试日志、聊天记录或任务状态代替。
 - 无法读取相关源码时标为 blocked，不得猜测。
 
-每条代码 finding 使用 criterionCatalog 中的稳定编号；status 只能是 passed、failed、blocked；actual 说明实现是否符合客户条件；evidenceReferences 至少引用一个实际源码位置。不要重新执行测试或扩大成通用代码风格检查。
+每条代码 finding 使用 criterionCatalog 中的稳定编号；status 只能是 passed、failed、blocked；actual 说明实现是否符合客户条件；evidenceReferences 至少引用一个实际源码位置。必须在同一轮读完并判断全部 code-conformance 条件：发现一项失败后仍继续检查其余条件，最终一次返回完整 findings；不得只返回首个失败，也不得因为已有失败就把无依赖条件标为 blocked。只有后续条件客观依赖失败项、继续读取会越过授权边界或相关源码确实不可用时才允许 blocked，并在 actual 中明确阻断关系。不要重新执行测试或扩大成通用代码风格检查。
 
 页面相关任务返回：{"mode":"mixed","pageCriterionIds":["criterion-1"],"findings":[],"sourceReview":{"status":"passed|failed|blocked","actual":"结构与新手可读性结论","evidenceReferences":["实际源码位置"]}}
 

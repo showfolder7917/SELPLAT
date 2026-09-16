@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+const acceptancePrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
+const resultAcceptancePrompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
 const operationSource = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
 const goalSource = readFileSync("contracts/services/personas/hanli/dto/computer-acceptance.in.dto.ts", "utf8");
 const runtimeSource = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
@@ -32,4 +34,13 @@ test("任务协作群滚动只移动详情面板，并等待窄窗口布局回�
   assert.match(scrollSource, /detailSize[\s\S]*status: "not-ready"[\s\S]*detailConnected/);
   assert.match(acceptanceSource, /detailPaneConnected[\s\S]*detailPaneVisible[\s\S]*detailPaneSize/);
   assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary" && result\.status !== "not-ready"/);
+});
+
+test("韩立首项失败后仍须逐项取得本轮全部条件自己的证据", () => {
+  assert.match(acceptanceSource, /criterionEvidenceIds = new Map<string, Set<string>>/);
+  assert.match(acceptanceSource, /validateCriterionCoverage\(args\.criterionIds, criterionIds, true\)/);
+  assert.match(acceptanceSource, /criterionEvidenceIds\.get\(criterionId\)\?\.has\(String\(finding\.evidenceId\)\)/);
+  assert.match(acceptanceSource, /记录当前失败后继续执行其余可安全验收条件，再一次提交完整结果/);
+  assert.match(acceptancePrompt, /发现某条失败时先保存该条件证据，然后继续执行其余仍可安全检查的条件/);
+  assert.match(resultAcceptancePrompt, /发现一项失败后仍继续检查其余条件，最终一次返回完整 findings/);
 });

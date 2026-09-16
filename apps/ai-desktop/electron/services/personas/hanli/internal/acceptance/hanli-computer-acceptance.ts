@@ -91,6 +91,8 @@ export class HanliComputerAcceptance {
     const stepResults: HanliAcceptanceStepResultOutDto[] = [];
     const evidence: string[] = [];
     const postInputEvidence = new Set<string>();
+    // 把每张截图与本次动作真正核对的验收条件绑定；finish 不能再用首个失败后的同一张通用截图填满其余条件。
+    const criterionEvidenceIds = new Map<string, Set<string>>();
     const taskCollaborationEvidenceIds = new Set<string>();
     let snapshot = "";
     let busy = false;
@@ -165,7 +167,7 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许仅重载当前正式页面以检查持久化显示，禁止发送消息、修改设置或业务数据。每次动作返回新截图，禁止批量操作。",
+        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许仅重载当前正式页面以检查持久化显示，禁止发送消息、修改设置或业务数据。每次动作返回新截图，禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
@@ -189,6 +191,12 @@ export class HanliComputerAcceptance {
               enum: ["Tab", "Escape", "Home", "ArrowDown", "ArrowUp", "PageDown", "PageUp"],
             },
             reason: { type: "string" },
+            criterionIds: {
+              type: "array",
+              items: { type: "string", enum: criterionIds },
+              uniqueItems: true,
+              description: "本次观察或动作实际核对的原验收条件编号。除首次总览 observe 和 finish 外不能为空；只有同一动作后的画面能直接支持多个条件时才能同时填写多个编号。",
+            },
             findings: {
               type: "array",
               items: {
@@ -247,7 +255,12 @@ export class HanliComputerAcceptance {
             throw new Error("终态回合只允许提交 finish，不能继续操作应用。");
           }
           if (args.action === "observe") {
-            return await images();
+            const output = await images();
+            const observedCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, false);
+            for (const criterionId of observedCriterionIds) {
+              addCriterionEvidence(criterionEvidenceIds, criterionId, snapshot);
+            }
+            return output;
           }
           if (!snapshot || args.observationId !== snapshot) {
             // 拒绝旧画面动作，同时回传可恢复的观察身份；不执行输入，也不放宽新鲜度校验。
@@ -287,18 +300,22 @@ export class HanliComputerAcceptance {
               let hasValidEvidence = false;
               let hasValidLayoutEvidence = false;
               if (finding?.status === "blocked") {
-                hasValidEvidence = evidence.includes(String(finding.evidenceId));
+                hasValidEvidence = evidence.includes(String(finding.evidenceId))
+                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.evidenceId)) === true;
               } else if (finding) {
-                hasValidEvidence = postInputEvidence.has(String(finding.evidenceId));
+                hasValidEvidence = postInputEvidence.has(String(finding.evidenceId))
+                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.evidenceId)) === true;
               }
               if (finding?.layoutStatus === "blocked") {
-                hasValidLayoutEvidence = evidence.includes(String(finding.layoutEvidenceId));
+                hasValidLayoutEvidence = evidence.includes(String(finding.layoutEvidenceId))
+                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.layoutEvidenceId)) === true;
               } else if (finding) {
-                hasValidLayoutEvidence = postInputEvidence.has(String(finding.layoutEvidenceId));
+                hasValidLayoutEvidence = postInputEvidence.has(String(finding.layoutEvidenceId))
+                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.layoutEvidenceId)) === true;
               }
               if (!hasSingleFinding || !hasKnownStatus || !hasActualResult || !hasValidEvidence
                 || !hasKnownLayoutStatus || !hasLayoutResult || !hasValidLayoutEvidence) {
-                throw new Error(`${criterionId}缺少唯一功能判断、布局判断或操作后的真实截图依据`);
+                throw new Error(`${criterionId}缺少唯一功能判断、布局判断或该条件自己核对后的真实截图依据；记录当前失败后继续执行其余可安全验收条件，再一次提交完整结果`);
               }
               if (hasBlockedResult && !hasKnownBlockerKind) {
                 throw new Error(`${criterionId}受阻时必须说明材料、验收能力或运行环境原因；真实页面或安全不符合应填写 failed`);
@@ -357,6 +374,7 @@ export class HanliComputerAcceptance {
           if (interactionSteps.length >= 40) {
             throw new Error("本轮达到40步操作上限，需保留证据并说明未完成项。");
           }
+          const coveredCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, true);
           window.show();
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
@@ -477,6 +495,9 @@ export class HanliComputerAcceptance {
             ...(pageReloadEvidence ? { formalPage: pageReloadEvidence } : {}),
           };
           const output = await images(interactionEvidence);
+          for (const criterionId of coveredCriterionIds) {
+            addCriterionEvidence(criterionEvidenceIds, criterionId, snapshot);
+          }
           const previewActual = formatImagePreviewEvidence(previewEvidence, dragEvidence);
           let operation: HanliAcceptanceStepResultOutDto["operation"];
           if (args.action === "hover") {
@@ -609,6 +630,29 @@ export class HanliComputerAcceptance {
       completedAt: new Date().toISOString(),
     };
   }
+}
+
+/** 校验模型声明的本步验收覆盖范围；真实页面动作必须指向至少一条原条件。 */
+function validateCriterionCoverage(value: unknown, allowedCriterionIds: string[], required: boolean): string[] {
+  if (value === undefined && !required) return [];
+  if (!Array.isArray(value) || (required && value.length === 0)) {
+    throw new Error("本次页面动作必须声明实际核对的 criterionIds，不能在首个失败后用无归属截图填充其余条件。");
+  }
+  if (value.some((item) => typeof item !== "string" || !allowedCriterionIds.includes(item))) {
+    throw new Error("criterionIds 只能包含当前正式验收中的原条件编号。");
+  }
+  const criterionIds = value as string[];
+  if (new Set(criterionIds).size !== criterionIds.length) {
+    throw new Error("criterionIds 不能包含重复条件编号。");
+  }
+  return criterionIds;
+}
+
+/** 保存条件与真实截图的多对多关系，供 finish 阶段逐项阻止通用证据冒充完整验收。 */
+function addCriterionEvidence(index: Map<string, Set<string>>, criterionId: string, evidenceId: string): void {
+  const current = index.get(criterionId) || new Set<string>();
+  current.add(evidenceId);
+  index.set(criterionId, current);
 }
 
 /** 只滚动当前可见任务协作群的详情面板，不能推动页面标题与主要操作离开视口。 */
