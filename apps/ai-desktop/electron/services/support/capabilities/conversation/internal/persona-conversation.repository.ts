@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { writePersonaConversationMessage } from "./persona-conversation-message.writer.js";
-import { derivePersonaCustomerDisplayMessage } from "./persona-customer-display-message.projector.js";
+import { PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "./persona-customer-display-message.projector.js";
+import { writePersonaCustomerDisplayMessage } from "./persona-customer-display-message.writer.js";
 
 import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, PersonaCustomerDisplayStateValue, ReadPersonaConversationWindowInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
 import type { DatabasePort } from "../../../platform/persistence/index.js";
@@ -207,18 +208,10 @@ export class PersonaConversationRepository {
         ? statement.all({ $owner: ownerPersonaId, $conversation: conversationId, $sourceMessageId: sourceMessageId })
         : statement.all({ $owner: ownerPersonaId, $conversation: conversationId });
       for (const row of rows) {
-        const existing = connection.prepare("SELECT displayState FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId=$messageId")
-          .get({ $messageId: String(row.messageId) }) as { displayState: PersonaCustomerDisplayStateValue } | undefined;
-        if (existing && !force) continue;
-        const derived = derivePersonaCustomerDisplayMessage(mapMessage(row));
-        connection.prepare(`INSERT INTO AiDesktopPersonaCustomerDisplayMessage
-          (sourceMessageId, ownerPersonaId, conversationId, displayState, displayContent, failureReason, derivedAt)
-          VALUES ($messageId, $owner, $conversation, $state, $content, $reason, $now)
-          ON CONFLICT(sourceMessageId) DO UPDATE SET displayState=excluded.displayState, displayContent=excluded.displayContent,
-            failureReason=excluded.failureReason, derivedAt=excluded.derivedAt`).run({
-          $messageId: String(row.messageId), $owner: ownerPersonaId, $conversation: conversationId,
-          $state: derived.state, $content: derived.content, $reason: derived.failureReason, $now: new Date().toISOString(),
-        });
+        const existing = connection.prepare("SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId=$messageId")
+          .get({ $messageId: String(row.messageId) }) as { derivationVersion: number } | undefined;
+        if (!force && existing && Number(existing.derivationVersion) >= PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION) continue;
+        writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, mapMessage(row));
       }
     };
     if (existingConnection) write(existingConnection);

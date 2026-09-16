@@ -95,7 +95,13 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
             {/* 消息正文区：使用统一 Markdown 组件展示客户原文或韩立回复。 */}
             <MarkdownMessage text={message.content} />
             {/* 客户显示派生异常不展示审计原文，只在原消息位置提供受控重读入口。 */}
-            {(message.customerDisplayState === "missing" || message.customerDisplayState === "failed") && <button type="button" className="selconversation-action" onClick={() => void controller.retryCustomerDisplayMessage(message.messageId)}>重新读取</button>}
+            {(message.customerDisplayState === "missing" || message.customerDisplayState === "failed") && <button
+              type="button"
+              className="selconversation-action selconversation-display-retry"
+              disabled={controller.retryingCustomerDisplayMessageIds.has(message.messageId)}
+              aria-busy={controller.retryingCustomerDisplayMessageIds.has(message.messageId)}
+              onClick={() => void controller.retryCustomerDisplayMessage(message.messageId)}
+            >{controller.retryingCustomerDisplayMessageIds.has(message.messageId) ? "重新读取中" : "重新读取"}</button>}
             {/* 失败消息保留原文和附件，并只允许按原编号再次提交。 */}
             {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>重试发送</button>}
           </div>

@@ -19,7 +19,7 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   try {
     const first = initializeAiMemoryDatabase(fixture.options);
     assert.equal(first.status.state, "ready");
-    assert.equal(first.status.schemaVersion, "1029");
+    assert.equal(first.status.schemaVersion, "1030");
     assert.equal(existsSync(fixture.databasePath), true);
     assert.equal(existsSync(fixture.markerPath), true);
     assert.equal(first.database?.close(), true);
@@ -32,15 +32,16 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     const inspection = new DatabaseSync(fixture.databasePath, { readOnly: true });
     try {
       const row = inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopSchemaVersion").get();
-      assert.equal(Number(row.count), 30);
+      assert.equal(Number(row.count), 31);
       const version = inspection.prepare("SELECT versionCode, checksum, successFlag FROM AiDesktopSchemaVersion ORDER BY versionCode DESC LIMIT 1").get();
-      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1029", successFlag: 1 });
+      assert.deepEqual({ versionCode: version.versionCode, successFlag: Number(version.successFlag) }, { versionCode: "1030", successFlag: 1 });
       assert.match(String(version.checksum), /^[a-f0-9]{64}$/);
       assert.equal(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopEvolutionWorkbenchPreference'").get(), undefined);
       assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get());
       assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='messageType'").get());
       assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='contentRole'").get());
       assert.ok(inspection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaCustomerDisplayMessage'").get());
+      assert.ok(inspection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaCustomerDisplayMessage') WHERE name='derivationVersion'").get());
     } finally {
       inspection.close();
     }
@@ -63,7 +64,7 @@ test("候选包可用自身迁移清单升级仍停在旧版本的受控工程�
       migrationSqlRoot: candidateMigrationRoot,
     });
     assert.equal(upgraded.status.state, "ready");
-    assert.equal(upgraded.status.schemaVersion, "1029");
+    assert.equal(upgraded.status.schemaVersion, "1030");
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversation') WHERE name='selectedModel'").get(),
     ));
@@ -76,13 +77,60 @@ test("候选包可用自身迁移清单升级仍停在旧版本的受控工程�
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaCustomerDisplayMessage'").get(),
     ));
+    assert.ok(upgraded.database?.withConnection((connection) =>
+      connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaCustomerDisplayMessage') WHERE name='derivationVersion'").get(),
+    ));
     upgraded.database?.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
   }
 });
 
-test("1026 升级演化快照、1027 补齐消息类型、1028 补齐内容角色、1029 建立客户显示派生后由应用层写回 v9", () => {
+test("打开历史会话时按客户显示派生版本重算旧 ready 记录，绝不回退混合审计正文", () => {
+  const fixture = createFixture("customer-display-versioned-backfill");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  try {
+    const repository = new PersonaConversationRepository(initialized.database);
+    const conversation = repository.create("han-li");
+    const raw = "我会继续核实滚动问题。\ncontentRole：technical-evidence\n用户原话：内部原话\n用户目标：内部目标";
+    repository.save({
+      ...conversation,
+      updatedAt: "2026-09-16T03:00:00.000Z",
+      messages: [{
+        messageId: "legacy-mixed-message",
+        sequenceNumber: 0,
+        messageType: "customer-visible",
+        contentRole: "conversation",
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: raw,
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt: "2026-09-16T03:00:00.000Z",
+        completedAt: "2026-09-16T03:00:00.000Z",
+      }],
+    });
+    initialized.database?.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopPersonaCustomerDisplayMessage
+      SET displayContent=$raw, derivationVersion=1
+      WHERE sourceMessageId='legacy-mixed-message'
+    `).run({ $raw: raw }));
+
+    const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(window.messages.map((message) => message.content), ["我会继续核实滚动问题。"]);
+    assert.doesNotMatch(window.messages[0].content, /contentRole|用户原话|用户目标/u);
+    const version = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-mixed-message'
+    `).get());
+    assert.equal(version?.derivationVersion, 2);
+  } finally {
+    initialized.database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("1026 升级演化快照、1027 补齐消息类型、1028 补齐内容角色、1029 建立客户显示派生并由 1030 版本化后写回 v9", () => {
   const fixture = createFixture("evolution-state-v9");
   try {
     installSchemaUpTo(fixture, 1025);
@@ -113,12 +161,15 @@ test("1026 升级演化快照、1027 补齐消息类型、1028 补齐内容角�
 
     installSchemaUpTo(fixture, 1027);
     const upgraded = initializeAiMemoryDatabase({ ...fixture.options, migrationSqlRoot: path.join(appRoot, "db", "sql") });
-    assert.equal(upgraded.status.schemaVersion, "1029");
+    assert.equal(upgraded.status.schemaVersion, "1030");
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='contentRole'").get(),
     ));
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaCustomerDisplayMessage'").get(),
+    ));
+    assert.ok(upgraded.database?.withConnection((connection) =>
+      connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaCustomerDisplayMessage') WHERE name='derivationVersion'").get(),
     ));
     const state = new EvolutionStateStore(new EvolutionStateRepository(upgraded.database)).state();
     assert.equal(state.version, 9);
