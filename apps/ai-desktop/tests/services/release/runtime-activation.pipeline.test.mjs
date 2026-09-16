@@ -1,12 +1,35 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { registerHooks } from "node:module";
 import path from "node:path";
 import test from "node:test";
+import ts from "typescript";
 
 import { controlledTestRoot } from "#test-paths";
-import { ReleaseBatchStore } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/release-batch.store.js";
-import { VersionIntegrationPipeline } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/version-integration.pipeline.js";
+
+// 候选激活回归必须执行当前工作树源码，避免上一轮 build 产物掩盖发布恢复逻辑的变化。
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith(".") && specifier.endsWith(".js")) {
+      const sourceUrl = new URL(`${specifier.slice(0, -3)}.ts`, context.parentURL);
+      if (existsSync(sourceUrl)) return { url: sourceUrl.href, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url.endsWith(".ts")) {
+      const source = ts.transpileModule(readFileSync(new URL(url), "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+      }).outputText;
+      return { format: "module", source, shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+const { ReleaseBatchStore } = await import("../../../electron/services/support/capabilities/release/internal/release-batch.store.ts");
+const { VersionIntegrationPipeline } = await import("../../../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts");
 
 const git = (root, ...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
