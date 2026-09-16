@@ -70,6 +70,15 @@ test("无法可靠截取的人物技术长文保持失败位置，不能因当�
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
 });
 
+test("人物实现短文命中多个受控技术标记时保持失败位置", () => {
+  const failed = derivePersonaCustomerDisplayMessage({
+    messageType: "customer-visible",
+    speakerType: "persona",
+    content: "contentRole、持久化、恢复和页面投影仅供内部协作使用。",
+  });
+  assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
+});
+
 test("内部字段位于正文开头时保持不可显示状态，不能把混合原文回退到客户页面", () => {
   const failed = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", content: "contentRole：technical-evidence\n用户目标：内部目标" });
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
