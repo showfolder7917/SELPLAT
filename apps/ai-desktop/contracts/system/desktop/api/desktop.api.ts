@@ -15,7 +15,7 @@ import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, Collabor
 import type { AuditLogInfoOutDto, RendererExceptionInDto } from "../../../services/support/capabilities/event-center/index.js";
 import type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../../services/support/capabilities/conversation/index.js";
 import type { TestDataResetResultOutDto } from "../../../services/support/application/index.js";
-import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
+import type { AiMemoryDatabaseStatusOutDto, CorpusIngestionStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../services/support/platform/persistence/index.js";
 import type { LinghuAutomationStateEventOutDto, LinghuAutomationStateOutDto } from "../../../services/personas/linghu/index.js";
 import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionStateEventOutDto, EvolutionStateOutDto, EvolutionTopicDossierOutDto } from "../../../services/evolution/index.js";
 import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
@@ -42,6 +42,8 @@ export interface DesktopApi {
   clearTestData(): Promise<TestDataResetResultOutDto>;
   /** 读取 Codex 历史 AI 摘要补齐进度，不返回原始会话正文。 */
   getCorpusSemanticBackfillStatus(): Promise<CorpusSemanticBackfillStatusOutDto>;
+  /** 读取自动入库的后台状态；不返回会话文件、检查点或原始对话。 */
+  getCorpusIngestionStatus(): Promise<CorpusIngestionStatusOutDto>;
   /** 从最近完整 Codex 回合启动语义补齐；重复调用运行中的任务只返回当前进度。 */
   startCorpusSemanticBackfill(limit?: number): Promise<CorpusSemanticBackfillStatusOutDto>;
   /** 读取当前桌面设置快照。 */

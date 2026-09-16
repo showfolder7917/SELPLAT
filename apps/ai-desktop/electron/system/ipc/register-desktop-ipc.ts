@@ -12,7 +12,7 @@ import type {
 import type { RendererExceptionInDto } from "../../../contracts/services/support/capabilities/event-center/index.js";
 import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotSaveInDto } from "../../../contracts/services/support/platform/attachments/index.js";
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
-import type { AiMemoryDatabaseStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
+import type { AiMemoryDatabaseStatusOutDto, CorpusIngestionStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import type { HanliPageReviewGuard } from "./hanli-page-review-guard.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
@@ -72,6 +72,7 @@ interface DesktopIpcDependencies {
   prompts: PromptLibraryPort;
   clearTestData: () => Promise<TestDataResetResultOutDto>;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
+  corpusIngestionStatus: () => CorpusIngestionStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
   /** 正式页面检查期间禁止模型通过当前窗口写入业务数据。 */
   hanliPageReviewGuard: HanliPageReviewGuard;
@@ -283,6 +284,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     aiMemoryDatabaseStatus, projectRoot, variant, screenshots, eventCenter,
     clearTestData: dependencies.clearTestData,
     corpusSemanticBackfillStatus: dependencies.corpusSemanticBackfillStatus,
+    corpusIngestionStatus: dependencies.corpusIngestionStatus,
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
   registerSettingsIpc(settings, eventCenter);
