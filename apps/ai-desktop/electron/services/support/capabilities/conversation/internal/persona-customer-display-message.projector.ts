@@ -12,7 +12,7 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 11;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 12;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
@@ -44,9 +44,10 @@ export function derivePersonaCustomerDisplayMessage(
     return { state: "excluded", content: null, failureReason: null };
   }
   try {
+    const hasLegacyHanliDesignIdentity = message.messageId?.startsWith(LEGACY_HANLI_DESIGN_MESSAGE_PREFIX) === true;
     const hasLegacyHanliReplyIdentity = message.messageId?.startsWith(LEGACY_HANLI_REPLY_MESSAGE_PREFIX) === true;
     // 旧 hanli-design 身份是混合格式的权威来源；只迁移当时唯一经过客户确认的首段答复。
-    const legacyReply = message.messageId?.startsWith(LEGACY_HANLI_DESIGN_MESSAGE_PREFIX)
+    const legacyReply = hasLegacyHanliDesignIdentity
       ? extractLegacyHanliDesignReply(content)
       : hasLegacyHanliReplyIdentity
         ? extractLegacyHanliReply(content)
@@ -57,6 +58,9 @@ export function derivePersonaCustomerDisplayMessage(
     // 后续内部字段被截断而绕过客户显示边界。
     const migratedLegacyHanliReply = hasLegacyHanliReplyIdentity && legacyReply !== content;
     if (containsHistoricalInternalProse(legacyReply, migratedLegacyHanliReply)) {
+      // 该稳定历史身份的首段没有独立客户结论时，失败占位会继续占据客户
+      // 时间线；原文已留在审计记录，应从客户投影排除而非显示占位。
+      if (hasLegacyHanliDesignIdentity) return { state: "excluded", content: null, failureReason: null };
       throw new Error("legacy reply cannot be safely separated");
     }
     return { state: "ready", content: legacyReply, failureReason: null };
