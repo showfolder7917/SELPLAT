@@ -122,7 +122,7 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
     assert.doesNotMatch(window.messages[0].content, /contentRole|用户原话|用户目标/u);
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-mixed-message'
-    `).get()) as { derivationVersion: number } | undefined;
+    `).get());
     assert.equal(version?.derivationVersion, 2);
   } finally {
     initialized.database?.close();
