@@ -565,8 +565,8 @@ export async function startApplication(): Promise<void> {
     return current;
   };
   // 数据库存在时才创建补齐任务；analyzer 把候选对话交给隔离 Codex，再严格解析返回协议。
-  const corpusSemanticBackfill = aiMemoryDatabase && externalCorpusEnabled ? createCodexConversationSemanticBackfill({
-    database: aiMemoryDatabase,
+  const corpusSemanticBackfill = persistenceContext?.backgroundPersistence && externalCorpusEnabled ? createCodexConversationSemanticBackfill({
+    persistence: persistenceContext.backgroundPersistence,
     roots: externalCorpusRoots,
     requiredWorkspaceRoot: projectRoot,
     analyzer: async (candidates) => {

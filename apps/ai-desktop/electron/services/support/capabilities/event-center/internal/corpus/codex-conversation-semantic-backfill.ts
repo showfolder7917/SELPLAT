@@ -3,7 +3,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 
 import type { CorpusSemanticBackfillStatusOutDto } from "../../../../../../../contracts/services/support/platform/persistence/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
+import type { BackgroundPersistencePort } from "../../../../platform/persistence/index.js";
 import type { PromptLibraryPort } from "../../../prompts/index.js";
 
 type JsonObject = Record<string, unknown>;
@@ -29,7 +29,7 @@ export type CodexSemanticMetadata = {
 export type CodexSemanticAnalyzer = (candidates: readonly CodexSemanticCandidate[]) => Promise<readonly CodexSemanticMetadata[]>;
 
 type BackfillOptions = {
-  database: SqliteDatabase;
+  persistence: BackgroundPersistencePort;
   roots: readonly string[];
   requiredWorkspaceRoot: string;
   analyzer: CodexSemanticAnalyzer;
@@ -37,6 +37,8 @@ type BackfillOptions = {
 
 const MAX_LIMIT = 1_000;
 const ANALYSIS_BATCH_SIZE = 4;
+/** Worker 提交摘要时保持原有受控保留级别。 */
+const SEMANTIC_SUMMARY_RETENTION = "preview-300";
 
 /**
  * 从 Codex 原始 rollout 中找出已有用户原话、但尚无 AI 摘要的完整回合，并用独立语义分析器补齐。
@@ -46,7 +48,7 @@ const ANALYSIS_BATCH_SIZE = 4;
  * 异常或副作用示例：模型返回无效元数据时停止本轮并保留已成功提交的摘要，重新点击后从剩余回合继续。
  */
 export class CodexConversationSemanticBackfill {
-  readonly #database: SqliteDatabase;
+  readonly #persistence: BackgroundPersistencePort;
   readonly #roots: string[];
   readonly #requiredWorkspaceRoot: string;
   readonly #analyzer: CodexSemanticAnalyzer;
@@ -54,7 +56,7 @@ export class CodexConversationSemanticBackfill {
   #running: Promise<void> | null = null;
 
   constructor(options: BackfillOptions) {
-    this.#database = options.database;
+    this.#persistence = options.persistence;
     this.#roots = options.roots.map((root) => path.resolve(root));
     this.#requiredWorkspaceRoot = path.resolve(options.requiredWorkspaceRoot);
     this.#analyzer = options.analyzer;
@@ -84,7 +86,7 @@ export class CodexConversationSemanticBackfill {
 
   async #run(limit: number | null): Promise<void> {
     try {
-      const candidates = await collectRecentCandidates(this.#roots, this.#requiredWorkspaceRoot, limit, (candidate) => !this.#messageExists(candidate.assistantMessageId));
+      const candidates = await collectRecentCandidates(this.#roots, this.#requiredWorkspaceRoot, limit, async (candidate) => !(await this.#messageExists(candidate.assistantMessageId)));
       this.#status = { ...this.#status, discoveredCount: candidates.length, targetCount: candidates.length, message: candidates.length ? "正在生成 AI 回答摘要与主题…" : "没有需要补齐的完整回合。" };
       for (let index = 0; index < candidates.length; index += ANALYSIS_BATCH_SIZE) {
         const batch = candidates.slice(index, index + ANALYSIS_BATCH_SIZE);
@@ -125,7 +127,7 @@ export class CodexConversationSemanticBackfill {
         try {
           const metadata = await this.#analyzer([candidate]);
           const metadataByTurn = validateMetadataBatch([candidate], metadata);
-          this.#commitCandidate(candidate, metadataByTurn.get(candidate.turnId)!, targetCount);
+          await this.#commitCandidate(candidate, metadataByTurn.get(candidate.turnId)!, targetCount);
         } catch (candidateError) {
           this.#recordCandidateFailure(targetCount, candidateError);
         }
@@ -133,11 +135,11 @@ export class CodexConversationSemanticBackfill {
       return;
     }
     // 数据库写入异常仍由外层终止任务，避免把存储故障误判成可跳过的模型字段问题。
-    for (const candidate of batch) this.#commitCandidate(candidate, metadataByTurn.get(candidate.turnId)!, targetCount);
+    for (const candidate of batch) await this.#commitCandidate(candidate, metadataByTurn.get(candidate.turnId)!, targetCount);
   }
 
-  #commitCandidate(candidate: CodexSemanticCandidate, metadata: CodexSemanticMetadata, targetCount: number): void {
-    const inserted = this.#writeSummary(candidate, metadata);
+  async #commitCandidate(candidate: CodexSemanticCandidate, metadata: CodexSemanticMetadata, targetCount: number): Promise<void> {
+    const inserted = await this.#writeSummary(candidate, metadata);
     const processedCount = this.#status.processedCount + 1;
     this.#status = {
       ...this.#status,
@@ -157,64 +159,14 @@ export class CodexConversationSemanticBackfill {
     };
   }
 
-  #messageExists(sourceMessageId: string): boolean {
-    return this.#database.withConnection((connection) => Boolean(connection.prepare(`
-      SELECT 1 FROM AiDesktopTrainingCorpusMessage
-      WHERE source = 'codex' AND sourceMessageId = $sourceMessageId
-    `).get({ $sourceMessageId: sourceMessageId })));
+  async #messageExists(sourceMessageId: string): Promise<boolean> {
+    return this.#persistence.request<boolean>({ operation: "semantic-message-exists", payload: { sourceMessageId } });
   }
 
-  #writeSummary(candidate: CodexSemanticCandidate, metadata: CodexSemanticMetadata): number {
-    const now = new Date().toISOString();
-    const topicId = `corpus-topic:codex:${candidate.threadId}:${candidate.turnId}`;
-    return this.#database.transaction((connection) => {
-      let changes = 0;
-      connection.prepare(`
-          INSERT INTO AiDesktopTrainingCorpusTopic
-            (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent,
-             tagsJson, definitionSource, createdAt, updatedAt)
-          VALUES ($topicId, 'codex', $threadId, $turnId, $title, $type, $intent, $tagsJson,
-            'ai-confirmed', $createdAt, $updatedAt)
-          ON CONFLICT(corpusTopicId) DO UPDATE SET
-            title=excluded.title, topicType=excluded.topicType, inferredIntent=excluded.inferredIntent,
-            tagsJson=excluded.tagsJson, definitionSource='ai-confirmed', updatedAt=excluded.updatedAt
-        `).run({
-          $topicId: topicId,
-          $threadId: candidate.threadId,
-          $turnId: candidate.turnId,
-          $title: metadata.title,
-          $type: metadata.type,
-          $intent: metadata.intent,
-          $tagsJson: JSON.stringify(metadata.tags),
-          $createdAt: candidate.createdAt,
-          $updatedAt: now,
-        });
-        const maximumSequence = connection.prepare(`
-          SELECT COALESCE(MAX(sequenceNumber), -1) AS value FROM AiDesktopTrainingCorpusMessage
-          WHERE source='codex' AND sourceConversationId=$threadId
-        `).get({ $threadId: candidate.threadId }) as { value: number | bigint };
-        const result = connection.prepare(`
-          INSERT INTO AiDesktopTrainingCorpusMessage
-            (corpusMessageId, corpusTopicId, source, sourceConversationId, sourceTurnId, sourceMessageId,
-             sequenceNumber, speakerRole, content, contentRetention, evidenceTier, createdAt, recordedAt)
-          VALUES ($corpusMessageId, $topicId, 'codex', $threadId, $turnId, $sourceMessageId,
-            $sequenceNumber, 'codex', $content, 'preview-300', 'supporting', $createdAt, $recordedAt)
-          ON CONFLICT(source, sourceMessageId) DO NOTHING
-        `).run({
-          $corpusMessageId: `corpus:codex:${candidate.assistantMessageId}`,
-          $topicId: topicId,
-          $threadId: candidate.threadId,
-          $turnId: candidate.turnId,
-          $sourceMessageId: candidate.assistantMessageId,
-          $sequenceNumber: Number(maximumSequence.value) + 1,
-          $content: metadata.summary,
-          $createdAt: candidate.createdAt,
-          $recordedAt: now,
-        });
-        changes = Number(result.changes);
-      return changes;
-    });
+  async #writeSummary(candidate: CodexSemanticCandidate, metadata: CodexSemanticMetadata): Promise<number> {
+    return this.#persistence.request<number>({ operation: "write-semantic-summary", payload: { candidate, metadata, retention: SEMANTIC_SUMMARY_RETENTION } });
   }
+
 }
 
 /** 构造受长度约束的语义分析输入；原始 AI 回答只进入模型上下文，不直接写入数据库。 */
@@ -250,13 +202,13 @@ async function collectRecentCandidates(
   roots: readonly string[],
   workspaceRoot: string,
   limit: number | null,
-  isMissing: (candidate: CodexSemanticCandidate) => boolean,
+  isMissing: (candidate: CodexSemanticCandidate) => boolean | Promise<boolean>,
 ): Promise<CodexSemanticCandidate[]> {
   const files = listRolloutFilesNewestFirst(roots);
   const candidates: CodexSemanticCandidate[] = [];
   for (const filePath of files) {
     const parsed = await parseEligibleRollout(filePath, workspaceRoot);
-    for (const candidate of parsed) if (isMissing(candidate)) candidates.push(candidate);
+    for (const candidate of parsed) if (await isMissing(candidate)) candidates.push(candidate);
     // 归档文件的修改时间可能晚于其中的真实会话时间；每读完一个文件都只保留全局最新 N 轮，既保证近期优先也限制内存。
     candidates.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     if (limit !== null && candidates.length > limit) candidates.splice(limit);
