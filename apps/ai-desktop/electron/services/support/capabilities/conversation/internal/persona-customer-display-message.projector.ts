@@ -12,10 +12,12 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 9;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 10;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
+/** 旧自动托管把流程启动回执误存成客户回复；稳定身份用于只修正投影而不改写原始记录。 */
+const LEGACY_HANLI_AUTOMATIC_CONTROL_PREFIX = "hanli-control:automatic:";
 
 /**
  * 生成客户可见正文。
@@ -34,6 +36,11 @@ export function derivePersonaCustomerDisplayMessage(
   }
   // 用户输入是审计与客户显示共同的原文事实；内部整理只可能出现在人物历史回复中。
   if (message.speakerType === "user") return { state: "ready", content, failureReason: null };
+  // 自动托管回执描述的是内部流程状态，不是韩立对客户问题的直接回答。
+  // 历史原文继续留在审计表，客户时间线、近期上下文和当前观点统一排除该稳定身份。
+  if (message.messageId?.startsWith(LEGACY_HANLI_AUTOMATIC_CONTROL_PREFIX)) {
+    return { state: "excluded", content: null, failureReason: null };
+  }
   try {
     // 旧 hanli-design 身份是混合格式的权威来源；只迁移当时唯一经过客户确认的首段答复。
     const legacyReply = message.messageId?.startsWith(LEGACY_HANLI_DESIGN_MESSAGE_PREFIX)

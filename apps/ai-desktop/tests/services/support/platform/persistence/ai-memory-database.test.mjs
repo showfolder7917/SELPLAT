@@ -293,6 +293,55 @@ test("打开旧 hanli-design 时按稳定身份重算为首段客户结论，过
   }
 });
 
+test("打开 v9 自动托管启动回执时从客户时间线排除，原始协作记录仍可审计", () => {
+  const fixture = createFixture("customer-display-v9-automatic-control");
+  const initialized = initializeAiMemoryDatabase(fixture.options);
+  try {
+    const repository = new PersonaConversationRepository(initialized.database);
+    const conversation = repository.create("han-li");
+    const raw = "已启动韩立与南宫婉的内部研讨。自动托管已开启，我会持续推进。";
+    repository.save({
+      ...conversation,
+      updatedAt: "2026-09-16T06:30:00.000Z",
+      messages: [{
+        messageId: "hanli-control:automatic:legacy-request",
+        sequenceNumber: 0,
+        messageType: "customer-visible",
+        contentRole: "conversation",
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: raw,
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt: "2026-09-16T06:30:00.000Z",
+        completedAt: "2026-09-16T06:30:00.000Z",
+      }],
+    });
+    initialized.database?.withConnection((connection) => connection.prepare(`
+      UPDATE AiDesktopPersonaCustomerDisplayMessage
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=9
+      WHERE sourceMessageId='hanli-control:automatic:legacy-request'
+    `).run({ $raw: raw }));
+
+    const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(window.messages, []);
+    const source = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT content FROM AiDesktopPersonaConversationMessage WHERE messageId='hanli-control:automatic:legacy-request'
+    `).get());
+    assert.equal(source?.content, raw);
+    const display = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT displayState, derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage
+      WHERE sourceMessageId='hanli-control:automatic:legacy-request'
+    `).get());
+    assert.equal(display?.displayState, "excluded");
+    assert.equal(display?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
+  } finally {
+    initialized.database?.close();
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("打开 v8 hanli-design 内部处理首段时重算为失败位置，绝不显示截断后的内部说明", () => {
   const fixture = createFixture("customer-display-v8-hanli-design-process-reply");
   const initialized = initializeAiMemoryDatabase(fixture.options);

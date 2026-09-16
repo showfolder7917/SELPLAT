@@ -583,9 +583,9 @@ export class HanliConversationService {
           ? "原流程处于暂停状态，设计要求已经保存，等待恢复原流程。"
           : "原流程正在推进，继续沿现有调查、审批和指派链处理。";
     }
-    // 保存真实用户输入和启动回执，界面立即离开发送中状态。
+    // 自动托管启动回执属于内部流程事实；人工控制回合仍保存客户可读反馈。
     const nextConversation = automaticDecision
-      ? this.#options.memory!.appendPersonaCustomerMessage({
+      ? this.#options.memory!.appendPersonaInternalMessage({
         ownerPersonaId: "han-li", conversationId: conversation.conversationId!,
         messageId: `hanli-control:automatic:${request.clientMessageId}`, speakerPersonaId: "han-li",
         content: reply, replyToMessageId: viewpoint.sourceMessageId, createdAt: new Date().toISOString(),
