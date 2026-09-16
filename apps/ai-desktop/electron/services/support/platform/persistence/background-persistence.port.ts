@@ -2,7 +2,10 @@
 export type BackgroundPersistenceOperation =
   | "ingest-rollouts"
   | "read-corpus-ingestion-status"
-  | "set-corpus-ingestion-status";
+  | "set-corpus-ingestion-status"
+  | "collaboration-memory"
+  | "semantic-message-exists"
+  | "write-semantic-summary";
 
 export type BackgroundPersistenceRequest = {
   operation: BackgroundPersistenceOperation;
