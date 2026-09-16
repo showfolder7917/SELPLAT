@@ -28,7 +28,8 @@ export interface EvolutionAcceptanceRoundOutDto {
 }
 
 export interface EvolutionAcceptancePlanOutDto {
-  version: 1;
+  /** v2 明确把需要发送消息、创建数据或恢复任务的条件归入令狐工程证据，不再交给正式页面验收器执行。 */
+  version: 1 | 2;
   planId: string;
   topicId: string;
   proposalId: string;

@@ -42,6 +42,12 @@ test("旧页面容器和文件授权协议已完整退役", () => {
   assert.match(computer, /resize-formal-window/);
 });
 
+test("需要发送或创建数据的条件归令狐证据而不是韩立正式页面操作", () => {
+  assert.match(prompt, /必须发送消息、新建或重建会话、创建样本或测试数据/);
+  assert.match(prompt, /必须进入 code-conformance/);
+  assert.match(prompt, /不得因为条件描述了页面结果，就要求韩立在正式软件中制造该结果/);
+});
+
 test("客户未通过摘要与技术详情保持分离", () => {
   const handoff = readFileSync("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts", "utf8");
   assert.match(handoff, /export interface AcceptanceHandoffContent/);

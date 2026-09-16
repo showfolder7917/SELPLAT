@@ -95,7 +95,9 @@ export class HanliDecisionService {
     }
     const frozenPlan = proposal.acceptancePlan;
     const allCriterionIds = frozenPlan?.conditions.map((item) => item.conditionId) || proposal.acceptanceCriteria.map((_, index) => `criterion-${index + 1}`);
-    const pageCriterionIdsValue = frozenPlan
+    // v1 计划允许把需要写业务数据的条件误冻为页面条件；升级前必须重新读取模型的安全分区。
+    // v2 已按正式页面只读边界冻结，后续复验继续消费同一分区，避免普通重试改写验收语义。
+    const pageCriterionIdsValue = frozenPlan?.version === 2
       ? frozenPlan.conditions.filter((item) => item.evidenceType === "page-experience").map((item) => item.conditionId)
       : value.mode === "mixed" ? value.pageCriterionIds : [];
     const pageCriterionIdsResult = pageCriterionIdsValidationResult(pageCriterionIdsValue, allCriterionIds);

@@ -2110,6 +2110,84 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("旧计划把发送消息误列为页面条件时原位升级为令狐工程证据", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-v2-upgrade-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({
+      ...topicRequest("正式页面验收不发送消息"),
+      acceptanceCriteria: ["新建韩立对话并发送消息后，客户正文不出现内部事实"],
+    });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const openedAt = new Date().toISOString();
+    store.saveAcceptancePlan(proposalId, {
+      version: 1,
+      planId: "legacy-plan",
+      topicId: state.activeTopicId,
+      proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: [{
+        conditionId: "criterion-1",
+        criterion: "新建韩立对话并发送消息后，客户正文不出现内部事实",
+        evidenceType: "page-experience",
+        completionRequirement: "旧版要求韩立发送后截图",
+      }],
+      rounds: [{ roundId: "legacy-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt }],
+      currentRoundId: "legacy-round",
+      createdAt: openedAt,
+    });
+    const response = JSON.stringify({
+      mode: "code-conformance",
+      findings: [{ criterionId: "criterion-1", status: "passed", actual: "发送与恢复由令狐门禁负责，韩立只读核对正文和事实包边界。", evidenceReferences: ["electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts"] }],
+      sourceReview: passedSourceReview,
+    });
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanliResultAcceptance: async () => response,
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "令狐门禁已经完成" });
+    assert.equal(result.plan.version, 2);
+    assert.equal(result.plan.planId, "legacy-plan");
+    assert.equal(result.plan.currentRoundId, "legacy-round");
+    assert.equal(result.plan.conditions[0].evidenceType, "code-conformance");
+    assert.equal(result.review.mode, "code-conformance");
+    assert.ok(store.state().archiveRecords.some((record) => record.eventType === "acceptance.plan_capability_upgraded"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("已有验收结果的旧计划禁止事后改写证据分区", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-recorded-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("保留既有验收结果"), acceptanceCriteria: ["正式页面结果可见"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const openedAt = new Date().toISOString();
+    const legacyPlan = {
+      version: 1,
+      planId: "recorded-plan",
+      topicId: state.activeTopicId,
+      proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: [{ conditionId: "criterion-1", criterion: "正式页面结果可见", evidenceType: "page-experience", completionRequirement: "截图通过" }],
+      rounds: [{ roundId: "recorded-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt }],
+      currentRoundId: "recorded-round",
+      createdAt: openedAt,
+    };
+    store.saveAcceptancePlan(proposalId, legacyPlan);
+    store.recordAcceptanceRun(computerRun("recorded-run", state.activeTopicId, proposalId, "passed", "recorded-shot", legacyPlan));
+    assert.throws(() => store.upgradePendingAcceptancePlan(proposalId, {
+      ...legacyPlan,
+      version: 2,
+      conditions: [{ ...legacyPlan.conditions[0], evidenceType: "code-conformance", completionRequirement: "源码审查" }],
+    }), /已有验收结果的计划不得重新分区/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立把未知结果验收类型纠正为代码符合性审查后继续冻结计划", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-mode-retry-"));
   try {

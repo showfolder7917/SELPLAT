@@ -2,9 +2,6 @@
 export function releaseRestartArguments(projectRoot: string, runtimeSourceSha: string, currentArguments: readonly string[], resumeReleaseBatchId: string | null = null): string[] {
   const preservedPrefixes = [
     "--ai-desktop-user-data-dir=",
-    "--ai-desktop-acceptance-isolation-root=",
-    "--ai-desktop-acceptance-protected-project-root=",
-    "--ai-desktop-acceptance-protected-user-data-root=",
   ];
   const preserved = currentArguments.filter((argument) => preservedPrefixes.some((prefix) => argument.startsWith(prefix)));
   return [`--selplat-root=${projectRoot}`, "--ai-desktop-variant=developer", `--ai-desktop-runtime-sha=${runtimeSourceSha}`, ...(resumeReleaseBatchId ? [`--ai-desktop-resume-release=${resumeReleaseBatchId}`] : []), ...preserved];

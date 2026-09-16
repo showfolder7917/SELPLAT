@@ -129,8 +129,15 @@ export class HanliApplicationService implements HanliApplicationPort {
     const proposal = requireProposal(this.#store.state(), proposalId);
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
     const routingReview = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
-    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
-    this.#store.saveAcceptancePlan(proposalId, plan);
+    const plan = proposal.acceptancePlan?.version === 1
+      ? upgradeAcceptancePlan(proposal, routingReview)
+      : proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
+    if (proposal.acceptancePlan?.version === 1) {
+      // 旧计划尚未形成验收结果时，原位升级证据分区；计划、条件和轮次身份保持不变。
+      this.#store.upgradePendingAcceptancePlan(proposalId, plan);
+    } else {
+      this.#store.saveAcceptancePlan(proposalId, plan);
+    }
     // 代码结论可能要求核对计划本身，必须在计划落盘后重新读取权威提案再审查。
     const frozenProposal = requireProposal(this.#store.state(), proposalId);
     const review = await this.#decision.reviewResultAcceptance(frozenProposal, implementationEvidence);
@@ -305,20 +312,37 @@ function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAc
   const now = new Date().toISOString();
   const roundId = `acceptance-round-${crypto.randomUUID()}`;
   return {
-    version: 1,
+    version: 2,
     planId: `acceptance-plan-${crypto.randomUUID()}`,
     topicId: proposal.topicId,
     proposalId: proposal.proposalId,
     proposalVersion: proposal.version,
-    conditions: proposal.acceptanceCriteria.map((criterion, index) => {
-      const conditionId = `criterion-${index + 1}`;
-      const evidenceType = pageConditionIds.includes(conditionId) ? "page-experience" as const : "code-conformance" as const;
-      return { conditionId, criterion, evidenceType, completionRequirement: evidenceType === "page-experience" ? "真实页面截图、功能结果和布局判断均通过" : "代码或测试证据引用并确认实际符合条件" };
-    }),
+    conditions: acceptancePlanConditions(proposal, pageConditionIds),
     rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
     currentRoundId: roundId,
     createdAt: now,
   };
+}
+
+/** 把尚无验收结果的 v1 计划升级为正式页面只读语义；不更换计划或轮次身份。 */
+function upgradeAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAcceptanceRunOutDto): EvolutionAcceptancePlanOutDto {
+  const previous = proposal.acceptancePlan;
+  if (!previous || previous.version !== 1) throw new Error("只有旧版待验收计划可以升级证据分区。");
+  const pageConditionIds = review.mode === "mixed" ? review.pageCriterionIds || [] : [];
+  return {
+    ...previous,
+    version: 2,
+    conditions: acceptancePlanConditions(proposal, pageConditionIds),
+  };
+}
+
+/** 使用稳定条件编号生成唯一证据分区；韩立页面只消费可安全观察的正式页面条件。 */
+function acceptancePlanConditions(proposal: EvolutionProposalOutDto, pageConditionIds: string[]): EvolutionAcceptancePlanOutDto["conditions"] {
+  return proposal.acceptanceCriteria.map((criterion, index) => {
+    const conditionId = `criterion-${index + 1}`;
+    const evidenceType = pageConditionIds.includes(conditionId) ? "page-experience" as const : "code-conformance" as const;
+    return { conditionId, criterion, evidenceType, completionRequirement: evidenceType === "page-experience" ? "正式页面只读截图、功能结果和布局判断均通过" : "源码结构符合条件；发送、恢复与工程验证由令狐门禁负责" };
+  });
 }
 
 function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto {
