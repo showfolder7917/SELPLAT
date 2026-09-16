@@ -14,6 +14,7 @@ export const COLLABORATION_DESKTOP_API_METHODS = [
   "getCollaborationNavigationPreference",
   "saveCollaborationNavigationPreference",
   "recordCollaborationInteractionPerformance",
+  "getCollaborationInteractionPerformanceComparison",
   "onCollaborationTimelineChanged",
   "setDesktopOperatingMode",
   "submitCollaborationTask",

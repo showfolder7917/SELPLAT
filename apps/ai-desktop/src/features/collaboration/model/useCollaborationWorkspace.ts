@@ -54,6 +54,7 @@ import {
   reconcileCollaborationTimeline,
   reconcileInitialCollaborationTimeline,
 } from "./reconcileCollaborationTimeline";
+import { recordCollaborationInteractionPerformance } from "./collaboration-interaction-performance";
 
 /** 右侧协作区只有“人物会话”和“任务协作群”两个一级页面。 */
 export type CollaborationPanel = "member" | "task-group";
@@ -234,21 +235,6 @@ function connectAuthoritativeRefresh<Snapshot>(input: {
   };
 }
 
-/** 受控性能 fixture 通过根元素数据属性指定相同数据集及对比阶段；普通页面沿用候选阶段默认值。 */
-function interactionPerformanceContext(): { datasetId: string; phase: "baseline" | "candidate" } {
-  const datasetId = document.documentElement.dataset.collaborationPerformanceDataset?.trim() || "retained-history";
-  const phase = document.documentElement.dataset.collaborationPerformancePhase;
-  return { datasetId, phase: phase === "baseline" ? "baseline" : "candidate" };
-}
-
-/** 交互样本只在性能 API 可用时异步落入临时目录，不影响页面和协作事实。 */
-function recordInteractionPerformance(operation: string, startedAt: number, details: Record<string, string | number | boolean | null>): void {
-  const desktop = getOptionalCollaborationDesktopApi();
-  if (!desktop) return;
-  const context = interactionPerformanceContext();
-  void desktop.recordCollaborationInteractionPerformance({ operation, durationMs: Math.max(0, performance.now() - startedAt), datasetId: context.datasetId, phase: context.phase, details });
-}
-
 /** 协作工作区的主进程订阅、页面状态、派生数据和业务操作统一入口。 */
 export function useCollaborationWorkspace() {
   // 协作总状态：控制当前模式、成员列表、任务列表和已选人物。
@@ -339,7 +325,7 @@ export function useCollaborationWorkspace() {
           setTimeline((current) => reconcileChangedCollaborationTimeline(current, snapshot, changedGroupIds));
           setTimelineReadStatus("ready");
           setTimelineReadError("");
-          recordInteractionPerformance("timeline-read-processing", startedAt, { groupCount: changedGroupIds.length });
+          recordCollaborationInteractionPerformance("timeline-read-processing", startedAt, { groupCount: changedGroupIds.length });
         })
         .catch((reason) => {
           // 同一版本的读取失败不能被视为已消费；保留最近成功内容并允许该专题的下一次通知或人工重读再次请求。
@@ -437,7 +423,7 @@ export function useCollaborationWorkspace() {
     const startedAt = performance.now();
     setViewedMemberId(memberId);
     setSavingMemberId(memberId);
-    requestAnimationFrame(() => requestAnimationFrame(() => recordInteractionPerformance("member-page-feedback", startedAt, { memberId })));
+    requestAnimationFrame(() => requestAnimationFrame(() => recordCollaborationInteractionPerformance("member-page-feedback", startedAt, { memberId })));
     const desktop = getOptionalCollaborationDesktopApi();
     if (!desktop) {
       setSavingMemberId(null);
@@ -446,7 +432,7 @@ export function useCollaborationWorkspace() {
     }
     const ipcStartedAt = performance.now();
     void desktop.saveCollaborationNavigationPreference(memberId)
-      .then(() => recordInteractionPerformance("navigation-preference-ipc", ipcStartedAt, { memberId }))
+      .then(() => recordCollaborationInteractionPerformance("navigation-preference-ipc", ipcStartedAt, { memberId }))
       .catch((reason) => { if (navigationIntent.current === intent) setError(readableDesktopError(reason, "无法保存查看位置，请重试。")); })
       .finally(() => { if (navigationIntent.current === intent) setSavingMemberId(null); });
   };

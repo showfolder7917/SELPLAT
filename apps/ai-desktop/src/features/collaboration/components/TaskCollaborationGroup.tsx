@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
+import { recordCollaborationInteractionPerformance } from "../model/collaboration-interaction-performance";
 
 import {
   // 专题任务卡：展示一个专题的摘要、完整人物时间线和操作入口。
@@ -66,8 +66,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   /** 已提交状态只对应同一份档案政策；政策变化后不能继续禁用新的人工读取机会。 */
   const [submittedReadPolicyId, setSubmittedReadPolicyId] = useState<string | null>(null);
   const automaticRetryPolicyId = useRef<string | null>(null);
-  const scrollingStartedAt = useRef<number | null>(null);
-  const scrollingIdleTimer = useRef<number | null>(null);
+  const detailScrollStarts = useRef(new Map<string, number>());
+  const detailScrollIdleTimers = useRef(new Map<string, number>());
   // 页面模型（model）是任务群展示状态和业务操作的唯一输入。
   const { model } = props;
   // 权威数据提供实时节点正文，显示状态提供当前界面语言。
@@ -91,13 +91,17 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     resumeAcceptance,
   } = controller;
 
-  /** 统一把渲染侧样本异步写到临时性能记录，不触碰专题和任务事实。 */
-  const recordPerformance = (operation: string, startedAt: number, details: Record<string, string | number | boolean | null>) => {
-    const desktop = getOptionalCollaborationDesktopApi();
-    if (!desktop) return;
-    const datasetId = document.documentElement.dataset.collaborationPerformanceDataset?.trim() || "retained-history";
-    const phase = document.documentElement.dataset.collaborationPerformancePhase === "baseline" ? "baseline" : "candidate";
-    void desktop.recordCollaborationInteractionPerformance({ operation, durationMs: Math.max(0, performance.now() - startedAt), datasetId, phase, details });
+  /** 只记录详情面板的连续滚动，防止页面外层滚动被误当成长任务。 */
+  const recordDetailScroll = (groupId: string) => {
+    detailScrollStarts.current.set(groupId, detailScrollStarts.current.get(groupId) || performance.now());
+    const previousTimer = detailScrollIdleTimers.current.get(groupId);
+    if (previousTimer) window.clearTimeout(previousTimer);
+    detailScrollIdleTimers.current.set(groupId, window.setTimeout(() => {
+      const startedAt = detailScrollStarts.current.get(groupId);
+      if (startedAt !== undefined) recordCollaborationInteractionPerformance("long-task-continuous-scroll", startedAt, { groupId });
+      detailScrollStarts.current.delete(groupId);
+      detailScrollIdleTimers.current.delete(groupId);
+    }, 120));
   };
 
   /** 任务卡只发出任务标识；页面控制器负责完整的异步状态和异常处理。 */
@@ -218,18 +222,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         <span>{groups.length}</span>
       </header>
       {/* 专题列表：保持后端时间线已经确定的稳定顺序。 */}
-      <div
-        className="task-collaboration-groups"
-        onScroll={() => {
-          scrollingStartedAt.current ||= performance.now();
-          if (scrollingIdleTimer.current) window.clearTimeout(scrollingIdleTimer.current);
-          scrollingIdleTimer.current = window.setTimeout(() => {
-            if (scrollingStartedAt.current !== null) recordPerformance("long-task-continuous-scroll", scrollingStartedAt.current, { groupCount: groups.length });
-            scrollingStartedAt.current = null;
-            scrollingIdleTimer.current = null;
-          }, 120);
-        }}
-      >
+      <div className="task-collaboration-groups">
         {groups.map((group) => {
           // 卡片模型（cardModel）把原来散落在 JSX 上的十多个参数按业务职责归组。
           const cardModel: TaskGroupCardModel = {
@@ -259,8 +252,10 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               onOpenChange: (open) => {
                 const startedAt = performance.now();
                 setGroupOpen(group.groupId, open);
-                if (open) requestAnimationFrame(() => requestAnimationFrame(() => recordPerformance("task-card-expand-page-update", startedAt, { groupId: group.groupId })));
+                requestAnimationFrame(() => requestAnimationFrame(() => recordCollaborationInteractionPerformance("task-card-page-update", startedAt, { groupId: group.groupId, action: open ? "expand" : "collapse" })));
               },
+              // 详情面板滚动由卡片上报，性能记录仍由页面集中处理。
+              onDetailScroll: () => recordDetailScroll(group.groupId),
               // 节点展开操作（onNodeOpenChange）把节点选择交回页面控制器保存。
               onNodeOpenChange: setNodeOpen,
               // 人工审批操作（onManualApproval）打开当前提案的正式审批窗口。
