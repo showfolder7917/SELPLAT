@@ -74,7 +74,7 @@ export interface HanliApplicationServiceOptions {
   /** 以当前观点创建一次性韩立—南宫婉内部研讨流程。 */
   /** 用户明确继续时，恢复原有未完成研讨。 */
   resumeInternalDeliberation?: (deliberationId: string) => Promise<void>;
-  startInternalDeliberation?: (request: SendPersonaConversationMessageInDto) => Promise<{ continuous: boolean }>;
+  startInternalDeliberation?: (request: SendPersonaConversationMessageInDto, sourceRequestId: string) => Promise<{ continuous: boolean }>;
   /** 自动托管已有修复任务时，把客户最新纠正写回原任务并废止旧执行代次。 */
   reviseActiveRepairScope?: (request: {
     runId: string;

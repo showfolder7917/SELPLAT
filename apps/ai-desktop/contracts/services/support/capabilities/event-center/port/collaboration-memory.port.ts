@@ -16,7 +16,7 @@ export interface CollaborationMemoryPort {
   searchTrainingCorpusTopics(query: string, limit?: number): TrainingCorpusTopicSearchResultOutDto[];
   readHanLiEvolutionCorpus(deliberationId: string, anchorHanliConversationId?: string | null): EvolutionSourceMessageSnapshotOutDto[];
   recordRequirementDiscussionContext(context: RequirementDiscussionContextOutDto): void;
-  readLatestRequirementDiscussionContext(ownerPersonaId: string, conversationId: string): RequirementDiscussionContextOutDto | null;
+  readRequirementDiscussionContext(ownerPersonaId: string, conversationId: string, sourceRequestId: string): RequirementDiscussionContextOutDto | null;
   registerNangongRound(conversation: PersonaConversationOutDto, userMessageId: string, nangongMessageId: string, decision: ConversationRoundTopicDecisionInDto): void;
   claimHanliCorpusExtractions(stableUserId: string, projectScope: string, extractorVersion: string, limit?: number): HanliCorpusExtractionCandidateOutDto[];
   completeHanliCorpusExtraction(candidate: HanliCorpusExtractionCandidateOutDto, result: HanliSemanticExtractionInDto): void;

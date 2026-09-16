@@ -102,7 +102,10 @@ export class HanliNangongDeliberationService {
       if (!memory) throw new Error("AI Memory 数据库不可用，韩立无法读取用户确认的需求资料。");
       const deliberationId = `hanli-nangong-deliberation-${randomUUID()}`;
       const conversationId = this.dependencies.readHanliConversationId();
-      const basis = conversationId ? memory.readLatestRequirementDiscussionContext?.("han-li", conversationId) || null : null;
+      const sourceRequestId = state.oneShotRun?.sourceRequestId || null;
+      const basis = conversationId && sourceRequestId
+        ? memory.readRequirementDiscussionContext?.("han-li", conversationId, sourceRequestId) || null
+        : null;
       // 本次调查事实与广泛语料在 Workflow 才汇合：事实包提供方向，历史资料只提供自由探索线索。
       const snapshots = [
         ...(basis ? [requirementContextSnapshot(deliberationId, basis)] : []),
