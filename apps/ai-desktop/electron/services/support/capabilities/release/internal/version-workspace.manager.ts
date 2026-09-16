@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -270,13 +271,20 @@ export class VersionWorkspaceManager {
     await this.#git(this.#repositoryRoot, ["stash", "push", "--include-untracked", "--message", `AI Desktop 转交 ${owner.taskId}`]);
     const recoveryStashSha = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
     if (!recoveryStashSha || recoveryStashSha === previousStash) throw new LocalChangeOwnershipError("本地修改恢复快照创建失败，未执行转交。", changedFiles, this.#repositoryRoot);
+    const beforeSha = await this.#git(taskRoot, ["rev-parse", "HEAD"]);
+    const transferBranch = `codex/collab/transfer/${safeSegment(owner.taskId)}/${randomUUID()}`;
+    const transferRoot = this.#managedPath("transfer", `${safeSegment(owner.taskId)}-${randomUUID()}`);
+    let transferred = false;
     try {
-      await this.#git(taskRoot, ["stash", "apply", "--index", recoveryStashSha]);
-      await this.#git(taskRoot, ["add", "-A"]);
-      const beforeSha = await this.#git(taskRoot, ["rev-parse", "HEAD"]);
-      await this.#git(taskRoot, ["commit", "-m", `协同任务 ${owner.taskId}：接收本地归属修改（${owner.memberName}）`]);
-      const resultSha = await this.#git(taskRoot, ["rev-parse", "HEAD"]);
+      // 冲突只能发生在一次性工作树；活任务工作树始终保持可继续修复的干净状态。
+      await this.#git(this.#repositoryRoot, ["worktree", "add", "-b", transferBranch, transferRoot, beforeSha]);
+      await this.#git(transferRoot, ["stash", "apply", "--index", recoveryStashSha]);
+      await this.#git(transferRoot, ["add", "-A"]);
+      await this.#git(transferRoot, ["commit", "-m", `协同任务 ${owner.taskId}：接收本地归属修改（${owner.memberName}）`]);
+      const resultSha = await this.#git(transferRoot, ["rev-parse", "HEAD"]);
       if (await this.#git(taskRoot, ["rev-list", "--count", `${beforeSha}..${resultSha}`]) !== "1") throw new Error("本地归属修改转交必须且只能生成一个提交。");
+      await this.#git(taskRoot, ["merge", "--ff-only", resultSha]);
+      transferred = true;
       if (await this.#git(taskRoot, ["status", "--porcelain"])) throw new Error("任务分支接收本地修改后仍不干净。");
       if (await this.#git(this.#repositoryRoot, ["status", "--porcelain"])) throw new Error("本地修改转交后目标分支仍不干净。");
       const topStash = await this.#git(this.#repositoryRoot, ["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
@@ -284,6 +292,11 @@ export class VersionWorkspaceManager {
       return { taskId: owner.taskId, resultSha, changedFiles, recoveryStashSha };
     } catch (error) {
       throw new LocalChangeOwnershipError(`本地修改已保存为恢复快照 ${recoveryStashSha}，但转交任务分支失败：${errorMessage(error)}`, changedFiles, this.#repositoryRoot);
+    } finally {
+      await this.#git(this.#repositoryRoot, ["worktree", "remove", "--force", transferRoot]).catch(() => undefined);
+      await this.#git(this.#repositoryRoot, ["branch", "-D", transferBranch]).catch(() => undefined);
+      // 转交前已确认任务工作树干净；失败时只恢复该冻结提交，绝不处理任务之外的文件。
+      if (!transferred) await this.#git(taskRoot, ["reset", "--hard", beforeSha]).catch(() => undefined);
     }
   }
 

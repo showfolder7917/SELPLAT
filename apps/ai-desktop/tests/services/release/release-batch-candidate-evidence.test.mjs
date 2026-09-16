@@ -38,3 +38,13 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(runtimeActivationPolicy, /loadedRuntimeSha !== candidateSha/);
   assert.match(store, /candidateEvidence: null/);
 });
+
+test("本地修改转交只在一次性工作树应用恢复快照，冲突不会污染任务工作树", () => {
+  const manager = read("electron/services/support/capabilities/release/internal/version-workspace.manager.ts");
+  const transfer = manager.slice(manager.indexOf("async transferOwnedLocalChanges"), manager.indexOf("async createIntegrationCandidate"));
+  assert.match(transfer, /worktree", "add", "-b", transferBranch, transferRoot, beforeSha/);
+  assert.match(transfer, /this\.\#git\(transferRoot, \["stash", "apply", "--index", recoveryStashSha\]\)/);
+  assert.doesNotMatch(transfer, /this\.\#git\(taskRoot, \["stash", "apply", "--index", recoveryStashSha\]\)/);
+  assert.match(transfer, /worktree", "remove", "--force", transferRoot/);
+  assert.match(transfer, /if \(!transferred\) await this\.\#git\(taskRoot, \["reset", "--hard", beforeSha\]\)/);
+});
