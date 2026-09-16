@@ -316,8 +316,10 @@ export async function startApplication(): Promise<void> {
     retryable: false,
   };
   const persistCorpusIngestionStatus = async (next: CorpusIngestionStatusOutDto): Promise<void> => {
-    corpusIngestionStatus = next;
-    if (!backgroundPersistence) return;
+    if (!backgroundPersistence) {
+      corpusIngestionStatus = next;
+      return;
+    }
     await backgroundPersistence.request({
       operation: "set-corpus-ingestion-status",
       // DTO 没有通用索引签名；在跨线程边界逐字段投影，避免把类型断言当成运行时协议。
@@ -328,6 +330,8 @@ export async function startApplication(): Promise<void> {
         retryable: next.retryable,
       },
     });
+    // 只有 Worker 事务成功后才更新 IPC 缓存，不能把未提交批次显示为已完成。
+    corpusIngestionStatus = next;
   };
   const restoreCorpusIngestionStatus = backgroundPersistence
     ? backgroundPersistence.request<Partial<CorpusIngestionStatusOutDto> | null>({ operation: "read-corpus-ingestion-status", payload: {} })
