@@ -159,7 +159,9 @@ test("任务群在协作状态未返回或读取失败时不把空专题当作�
 
 test("一次性工作流按可见实质状态更新同一消息，任务事件仍按真实事件身份追加", () => {
   const memory = readFileSync(new URL("../../../electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts", import.meta.url), "utf8");
-  assert.match(applicationRuntimeSource, /const progressIdentity = createHash\("sha256"\)\.update\(JSON\.stringify\(\{[\s\S]*?runId: run\.runId,[\s\S]*?blockingReason: run\.blockingReason,[\s\S]*?workflowStatus,[\s\S]*?\}\)\)\.digest\("hex"\)/);
+  assert.match(applicationRuntimeSource, /const progressIdentity = createHash\("sha256"\)\.update\(JSON\.stringify\(\{[\s\S]*?runId: run\.runId,[\s\S]*?workflowStatus,[\s\S]*?\}\)\)\.digest\("hex"\)/);
+  const progressIdentityBlock = applicationRuntimeSource.slice(applicationRuntimeSource.indexOf("const progressIdentity"), applicationRuntimeSource.indexOf("const messageId", applicationRuntimeSource.indexOf("const progressIdentity")));
+  assert.doesNotMatch(progressIdentityBlock, /action: run\.action/);
   assert.match(applicationRuntimeSource, /hanli-workflow-status:\$\{run\.runId\}:\$\{progressIdentity\}/);
   assert.match(applicationRuntimeSource, /publishHanliInternalStatus\(messageId, workflowStatus, run\.updatedAt,[\s\S]*?, true\)/);
   assert.doesNotMatch(applicationRuntimeSource, /publishedHanliWorkflowStatusKeys|statusKey = `\$\{run\.runId\}:\$\{run\.updatedAt\}`/);
@@ -210,6 +212,13 @@ test("长任务详情只在卡片内容区滚动并保留主操作", () => {
   assert.match(taskGroupSource, /closest<HTMLElement>\("\.task-timeline-detail-pane"\)[\s\S]*detailPane\.scrollTo/);
   assert.doesNotMatch(taskGroupSource, /scrollIntoView\(/);
   assert.match(taskGroupSource, /timelineProjectionUnavailable[\s\S]*重试进度更新/);
+  assert.match(taskGroupSource, /data-task-id=\{model\.presentation\.timelineProjectionStatus\.taskId \|\| undefined\}/);
+});
+
+test("内部研讨的流式投影失败保留页面重试，不能中断整场研讨", () => {
+  assert.match(applicationRuntimeSource, /const evolutionTimeline = collaborationTimeline/);
+  assert.match(applicationRuntimeSource, /recordDistributionTimelineStream\(\{ timeline: evolutionTimeline, eventCenter \}, taskId, memberId, event\)/);
+  assert.match(applicationRuntimeSource, /recordEvolutionTimelineEvent[\s\S]*?throw error/);
 });
 
 test("Workflow 任务协议按业务对象拆分并使用具名子结构", () => {
