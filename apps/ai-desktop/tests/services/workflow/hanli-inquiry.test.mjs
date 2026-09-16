@@ -462,6 +462,9 @@ test("托管只保存韩立自然答复并把调查字段交给内部事实包�
   assert.equal(calls, 1);
   assert.equal(f.messages.filter((item) => item.speakerType === "user").length, 1);
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-control:automatic:u1").length, 1);
+  const receipt = f.messages.find((item) => item.messageId === "hanli-control:automatic:u1");
+  assert.match(receipt.content, /持续推进已确认范围内的工作/);
+  assert.doesNotMatch(receipt.content, /内部研讨|自动托管/u);
 });
 
 test("托管中的客户纠正会更新原令狐任务并明确反馈当前状态", async () => {

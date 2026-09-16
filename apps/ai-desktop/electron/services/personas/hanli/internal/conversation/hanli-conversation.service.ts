@@ -568,11 +568,11 @@ export class HanliConversationService {
     if (!sourceRequestId) throw new Error("韩立当前观点缺少稳定来源请求编号，不能启动不可恢复的研讨。");
     const started = reusedRun ? { continuous: true } : await start(request, sourceRequestId);
     // 根据真实托管设置生成启动回执，不从模型自由文案推断流程状态。
-    let reply = "已启动韩立与南宫婉的内部研讨。南宫婉查清事实后，我会把修复范围和影响带回来请你确认，再进入实施。";
+    let reply = "我已开始核实这个问题。确认范围和影响后，我会向你说明下一步。";
     // 自动托管开启时，韩立可以在已授权范围内继续作业务范围判断。
     if (this.#options.store.state().automationSettings.automaticCustodyEnabled === true) {
       // 回执明确说明后续会持续推进，但不提前声称代码已经修改。
-      reply = "已启动韩立与南宫婉的内部研讨。自动托管已开启，我会代表你判断新发现应并入当前专题还是留到后续专题，并持续推进。";
+      reply = "我已开始核实这个问题，并会持续推进已确认范围内的工作；有需要你决定的事项会明确说明。";
     }
     if (reusedRun) {
       reply = scopeRevision?.updated
