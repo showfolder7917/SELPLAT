@@ -197,6 +197,13 @@ test("任务卡明确显示韩立验收归属，并在专题完成后隐藏处�
     });
     await expect(card).toContainText("已完成");
     await expect(card).not.toContainText("并行处理中");
+    const primaryDetails = card.locator(".task-group-primary small");
+    // 当前卡片处于展开态，“下一步”由下方流程区独占，主区域固定核验其余三项。
+    await expect(primaryDetails).toHaveCount(3);
+    expect(await primaryDetails.evaluateAll((elements) => elements.every((element) => {
+      const style = window.getComputedStyle(element);
+      return style.whiteSpace === "normal" && style.textOverflow === "clip" && element.scrollWidth <= element.clientWidth;
+    }))).toBe(true);
     await page.evaluate(async () => {
       await (window as any).desktop.setInteractionAcceptanceTimelineFixture(null);
     });

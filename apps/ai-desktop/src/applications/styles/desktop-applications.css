@@ -502,6 +502,11 @@ button { color: inherit; }
 .task-group-header-content > span:first-child, .task-node-main { display: grid; min-width: 0; gap: 5px; }
 .task-group-header-content strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-body); }
 .task-group-header-content small, .task-node-main > small { overflow: hidden; color: var(--sel-theme-workbench-text-muted); text-overflow: ellipsis; white-space: nowrap; }
+/* 当前结论是任务卡的主信息，任何窗口宽度都必须完整换行；单行省略只允许保留给历史节点摘要。 */
+.task-group-primary { min-width: 0; display: grid; flex: 1; gap: 4px; }
+.task-group-primary > span { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.task-group-primary b { flex: none; color: var(--sel-theme-workbench-text); }
+.task-group-primary small { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 .task-group-facts { display: flex; align-items: center; gap: 12px; flex: none; }
 .task-group-facts b { color: var(--sel-theme-accent); }
 .task-group-facts em { color: var(--sel-theme-workbench-text); font-style: normal; }
