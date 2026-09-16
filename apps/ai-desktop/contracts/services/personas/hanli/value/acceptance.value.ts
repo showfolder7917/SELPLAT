@@ -5,6 +5,7 @@ export type HanliAcceptanceOperationValue =
   | { type: "scroll-task-collaboration"; deltaY: number; reason: string }
   | { type: "scroll-settings-panel"; deltaY: number; reason: string }
   | { type: "resize-formal-window"; preset: "narrow" | "restore"; reason: string }
+  | { type: "reload-formal-page"; reason: string }
   | { type: "key"; key: string; reason: string }
   | { type: "hover"; x: number; y: number; reason: string }
   | { type: "judgement"; criterionId: string };

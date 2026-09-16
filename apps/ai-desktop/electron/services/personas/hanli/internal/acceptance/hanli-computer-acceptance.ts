@@ -10,6 +10,41 @@ export interface PageReviewInteractionPort {
   allows(action: AcceptancePrivateAction): boolean;
 }
 
+/** 重载同一正式 renderer，并等到主文档完成加载；该动作不切换地址也不触发业务写入。 */
+async function reloadFormalPage(window: BrowserWindow): Promise<void> {
+  if (window.isDestroyed()) throw new Error("正式应用窗口已关闭，不能重开页面。");
+  const webContents = window.webContents;
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timeout);
+      webContents.removeListener("did-finish-load", onLoaded);
+      webContents.removeListener("did-fail-load", onFailed);
+      webContents.removeListener("render-process-gone", onRendererGone);
+      window.removeListener("closed", onClosed);
+    };
+    const complete = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    };
+    const onLoaded = () => complete();
+    const onFailed = () => complete(new Error("正式页面重开失败。"));
+    const onRendererGone = () => complete(new Error("正式页面重开时 renderer 已退出。"));
+    const onClosed = () => complete(new Error("正式页面重开时窗口已关闭。"));
+    const timeout = setTimeout(() => complete(new Error("正式页面重开等待超时。")), 15_000);
+    webContents.once("did-finish-load", onLoaded);
+    webContents.once("did-fail-load", onFailed);
+    webContents.once("render-process-gone", onRendererGone);
+    window.once("closed", onClosed);
+    webContents.reload();
+  });
+  // did-finish-load 后给正式页面一次稳定渲染窗口，再由统一截图链取证。
+  await new Promise((resolve) => setTimeout(resolve, 350));
+}
+
 /** 仅提供当前应用窗口的单步输入和真实截图，下一动作由模型看到结果后选择。 */
 export class HanliComputerAcceptance {
   /** 当前是否已有一轮窗口验收在执行；同一窗口不允许并发控制。 */
@@ -119,13 +154,13 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。禁止发送消息、修改设置或业务数据。每次动作返回新截图，禁止批量操作。",
+        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许仅重载当前正式页面以检查持久化显示，禁止发送消息、修改设置或业务数据。每次动作返回新截图，禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "scroll-settings-panel", "resize-formal-window", "key", "hover", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "key", "hover", "finish"],
             },
             observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
@@ -309,6 +344,7 @@ export class HanliComputerAcceptance {
           let settingsPanelEvidence: Record<string, unknown> | null = null;
           let taskCollaborationEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
+          let pageReloadEvidence: Record<string, unknown> | null = null;
           if (args.action === "scroll-task-collaboration") {
             const deltaY = Number(args.deltaY);
             if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
@@ -346,6 +382,10 @@ export class HanliComputerAcceptance {
             } else {
               throw new Error("窗口尺寸只允许 narrow 或 restore 预设。");
             }
+          } else if (args.action === "reload-formal-page") {
+            // 只刷新当前正式 renderer；不关闭窗口、不切换地址，也不调用任何业务 IPC。
+            await reloadFormalPage(window);
+            pageReloadEvidence = { status: "reloaded" };
           } else if (args.action === "hover") {
             const { width, height } = window.getContentBounds();
             assertPointInsideWindow(args.x, args.y, coordinateSpace.screenshot.width, coordinateSpace.screenshot.height, "悬停坐标必须位于当前截图内。");
@@ -406,6 +446,7 @@ export class HanliComputerAcceptance {
             ...(settingsPanelEvidence ? { settingsPanel: settingsPanelEvidence } : {}),
             ...(taskCollaborationEvidence ? { taskCollaboration: taskCollaborationEvidence } : {}),
             ...(windowResizeEvidence ? { formalWindow: windowResizeEvidence } : {}),
+            ...(pageReloadEvidence ? { formalPage: pageReloadEvidence } : {}),
           };
           const output = await images(interactionEvidence);
           const previewActual = formatImagePreviewEvidence(previewEvidence, dragEvidence);
@@ -422,6 +463,8 @@ export class HanliComputerAcceptance {
             operation = { type: "scroll-settings-panel", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "resize-formal-window") {
             operation = { type: "resize-formal-window", preset: args.resizePreset as "narrow" | "restore", reason: String(args.reason) };
+          } else if (args.action === "reload-formal-page") {
+            operation = { type: "reload-formal-page", reason: String(args.reason) };
           } else if (args.action === "drag") {
             operation = { type: "drag", x: Number(args.x), y: Number(args.y), endX: Number(args.endX), endY: Number(args.endY), reason: String(args.reason) };
           } else {

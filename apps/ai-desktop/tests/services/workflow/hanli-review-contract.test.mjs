@@ -42,6 +42,15 @@ test("旧页面容器和文件授权协议已完整退役", () => {
   assert.match(computer, /resize-formal-window/);
 });
 
+test("正式页面允许安全重开并等待加载后返回新截图", () => {
+  const operationValues = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
+  assert.match(computer, /"reload-formal-page"/);
+  assert.match(computer, /await reloadFormalPage\(window\)/);
+  assert.match(computer, /formalPage: pageReloadEvidence/);
+  assert.match(operationValues, /type: "reload-formal-page"/);
+  assert.doesNotMatch(computer, /reloadIgnoringCache/);
+});
+
 test("需要发送或创建数据的条件归令狐证据而不是韩立正式页面操作", () => {
   assert.match(prompt, /必须发送消息、新建或重建会话、创建样本或测试数据/);
   assert.match(prompt, /必须进入 code-conformance/);
