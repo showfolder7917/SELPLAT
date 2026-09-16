@@ -12,10 +12,12 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 10;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 11;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
+/** 旧 hanli-reply 写入者可能把客户首段与后续存量治理说明保存在同一条客户消息中。 */
+const LEGACY_HANLI_REPLY_MESSAGE_PREFIX = "hanli-reply:";
 /** 旧自动托管把流程启动回执误存成客户回复；稳定身份用于只修正投影而不改写原始记录。 */
 const LEGACY_HANLI_AUTOMATIC_CONTROL_PREFIX = "hanli-control:automatic:";
 
@@ -42,15 +44,19 @@ export function derivePersonaCustomerDisplayMessage(
     return { state: "excluded", content: null, failureReason: null };
   }
   try {
+    const hasLegacyHanliReplyIdentity = message.messageId?.startsWith(LEGACY_HANLI_REPLY_MESSAGE_PREFIX) === true;
     // 旧 hanli-design 身份是混合格式的权威来源；只迁移当时唯一经过客户确认的首段答复。
     const legacyReply = message.messageId?.startsWith(LEGACY_HANLI_DESIGN_MESSAGE_PREFIX)
       ? extractLegacyHanliDesignReply(content)
-      : extractLegacyReply(content);
+      : hasLegacyHanliReplyIdentity
+        ? extractLegacyHanliReply(content)
+        : extractLegacyReply(content);
     // 人物正文无论来自当前写入、历史补写还是客户重读，均使用同一安全边界。
     // 写入时机不能决定内部技术内容是否会进入客户页面。
     // 旧 hanli-design 只保留首段后，仍需审查该首段本身；否则过程性说明会因
     // 后续内部字段被截断而绕过客户显示边界。
-    if (containsHistoricalInternalProse(legacyReply)) {
+    const migratedLegacyHanliReply = hasLegacyHanliReplyIdentity && legacyReply !== content;
+    if (containsHistoricalInternalProse(legacyReply, migratedLegacyHanliReply)) {
       throw new Error("legacy reply cannot be safely separated");
     }
     return { state: "ready", content: legacyReply, failureReason: null };
@@ -68,6 +74,31 @@ function extractLegacyHanliDesignReply(content: string): string {
   const reply = firstParagraph?.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean).at(-1) || "";
   if (!reply) throw new Error("legacy hanli design reply is empty");
   return reply;
+}
+
+/**
+ * 旧 hanli-reply 的混合格式没有字段标题，但后续段落会同时出现多项稳定的
+ * 存量治理实现概念。只有检测到这种后续边界时才迁移首段；普通多段答复保持完整。
+ */
+function extractLegacyHanliReply(content: string): string {
+  const paragraphs = content.split(/\r?\n\s*\r?\n/u).map((paragraph) => paragraph.trim()).filter(Boolean);
+  const firstInternalContinuation = paragraphs.findIndex((paragraph, index) => index > 0 && containsLegacyInternalContinuation(paragraph));
+  if (firstInternalContinuation < 0) return content;
+  const reply = paragraphs.slice(0, firstInternalContinuation).join("\n\n").trim();
+  if (!reply) throw new Error("legacy hanli reply is empty");
+  return reply;
+}
+
+function containsLegacyInternalContinuation(content: string): boolean {
+  const markers = [
+    /保存结构/u,
+    /内容归类/u,
+    /恢复读取/u,
+    /时间线投影/u,
+    /制造数据/u,
+    /恢复任务/u,
+  ];
+  return markers.filter((marker) => marker.test(content)).length >= 3;
 }
 
 /** 兼容旧版“自然答复 + 内部字段组”记录，只保留字段组前的自然答复。 */
@@ -99,7 +130,7 @@ function legacyFieldLabel(line: string): string | null {
  * 历史技术长文可能没有可截取的字段行。命中多项受控概念时，无法证明其中
  * 哪一段属于客户答复，必须失败而不是显示原文。
  */
-function containsHistoricalInternalProse(content: string): boolean {
+function containsHistoricalInternalProse(content: string, allowMigratedCustomerBoundary = false): boolean {
   const structuredMarkers = [
     /用户原话/u,
     /用户目标|(?:^|[、，,；;：:\s])目标(?:$|[、，,；;：:\s])/u,
@@ -140,6 +171,6 @@ function containsHistoricalInternalProse(content: string): boolean {
   ];
   return structuredMarkers.filter((marker) => marker.test(content)).length >= 3
     || implementationMarkers.filter((marker) => marker.test(content)).length >= 2
-    || collaborationMarkers.filter((marker) => marker.test(content)).length >= 3
+    || (!allowMigratedCustomerBoundary && collaborationMarkers.filter((marker) => marker.test(content)).length >= 3)
     || processMarkers.filter((marker) => marker.test(content)).length >= 3;
 }
