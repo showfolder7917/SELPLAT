@@ -86,6 +86,7 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
     const workspaces = {
       transferOwnedLocalChanges: async () => null,
       createReleaseCandidate: async () => candidate,
+      assertCandidateContainsTaskResults: async () => { events.push("candidate-complete"); },
       promoteIntegrationCandidate: async () => { events.push("promote"); return candidateSha; },
       mergeIntoLocalBranch: async () => { events.push("merge"); return "local-merge-sha"; },
       retireCandidate: async () => { events.push("retire"); },
