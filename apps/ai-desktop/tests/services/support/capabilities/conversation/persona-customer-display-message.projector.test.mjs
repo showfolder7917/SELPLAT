@@ -24,3 +24,17 @@ test("空白或无法安全派生的客户正文保持失败位置，不能回�
   assert.equal(failed.content, null);
   assert.match(failed.failureReason || "", /无法安全读取/);
 });
+
+test("紧凑历史字段和 contentRole 标注也只保留字段前的自然答复", () => {
+  const compact = derivePersonaCustomerDisplayMessage({
+    messageType: "customer-visible",
+    content: "我会继续核实滚动问题。\n用户原话：内部原话\n用户目标：内部目标\n调查对象：内部对象\ncontentRole 标注：technical-evidence",
+  });
+  assert.deepEqual(compact, { state: "ready", content: "我会继续核实滚动问题。", failureReason: null });
+  assert.doesNotMatch(compact.content, /用户原话|用户目标|调查对象|contentRole/u);
+});
+
+test("内部字段位于正文开头时保持不可显示状态，不能把混合原文回退到客户页面", () => {
+  const failed = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", content: "contentRole：technical-evidence\n用户目标：内部目标" });
+  assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
+});

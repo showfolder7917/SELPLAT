@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { PersonaConversationMessageOutDto } from "../../../../../../contracts/services/personas/conversation/index.js";
-import { derivePersonaCustomerDisplayMessage } from "./persona-customer-display-message.projector.js";
+import { writePersonaCustomerDisplayMessage } from "./persona-customer-display-message.writer.js";
 
 /** 统一人物消息写入：调用方持有事务；新消息只追加，既有身份保留序号，禁止跨会话覆盖。 */
 export function writePersonaConversationMessage(
@@ -50,34 +50,8 @@ export function writePersonaConversationMessage(
     $completedAt: message.completedAt,
     $recordedAt: new Date().toISOString(),
   });
-  writeCustomerDisplayMessage(connection, ownerPersonaId, conversationId, { ...message, sequenceNumber });
+  writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, { ...message, sequenceNumber });
   return sequenceNumber;
-}
-
-/** 原始正文写入成功后，在同一事务留下唯一客户显示派生记录。 */
-function writeCustomerDisplayMessage(
-  connection: DatabaseSync,
-  ownerPersonaId: string,
-  conversationId: string,
-  message: PersonaConversationMessageOutDto,
-): void {
-  const derived = derivePersonaCustomerDisplayMessage(message);
-  connection.prepare(`
-    INSERT INTO AiDesktopPersonaCustomerDisplayMessage
-      (sourceMessageId, ownerPersonaId, conversationId, displayState, displayContent, failureReason, derivedAt)
-    VALUES ($sourceMessageId, $ownerPersonaId, $conversationId, $displayState, $displayContent, $failureReason, $derivedAt)
-    ON CONFLICT(sourceMessageId) DO UPDATE SET
-      displayState=excluded.displayState, displayContent=excluded.displayContent,
-      failureReason=excluded.failureReason, derivedAt=excluded.derivedAt
-  `).run({
-    $sourceMessageId: message.messageId,
-    $ownerPersonaId: ownerPersonaId,
-    $conversationId: conversationId,
-    $displayState: derived.state,
-    $displayContent: derived.content,
-    $failureReason: derived.failureReason,
-    $derivedAt: new Date().toISOString(),
-  });
 }
 
 function requiredSpeaker(value: string | null): string {
