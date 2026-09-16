@@ -18,7 +18,7 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /resize-formal-window[\s\S]*width: 1000, height: 700/);
 });
 
-test("任务协作群滚动只移动详情面板", () => {
+test("任务协作群滚动只移动详情面板，并等待窄窗口布局回显", () => {
   const scrollStart = acceptanceSource.indexOf("function scrollTaskCollaboration");
   const scrollEnd = acceptanceSource.indexOf("function readTaskCollaborationSurface", scrollStart);
   const scrollSource = acceptanceSource.slice(scrollStart, scrollEnd);
@@ -28,5 +28,8 @@ test("任务协作群滚动只移动详情面板", () => {
   assert.match(scrollSource, /getBoundingClientRect/);
   assert.doesNotMatch(scrollSource, /offsetParent/);
   assert.doesNotMatch(scrollSource, /page\.scrollTop\s*=/);
-  assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary"/);
+  assert.match(scrollSource, /attempt < 3[\s\S]*requestAnimationFrame/);
+  assert.match(scrollSource, /detailSize[\s\S]*status: "not-ready"[\s\S]*detailConnected/);
+  assert.match(acceptanceSource, /detailPaneConnected[\s\S]*detailPaneVisible[\s\S]*detailPaneSize/);
+  assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary" && result\.status !== "not-ready"/);
 });
