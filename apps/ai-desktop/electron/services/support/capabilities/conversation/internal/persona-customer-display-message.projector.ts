@@ -12,7 +12,7 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 12;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 13;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
@@ -102,7 +102,18 @@ function containsLegacyInternalContinuation(content: string): boolean {
     /制造数据/u,
     /恢复任务/u,
   ];
-  return markers.filter((marker) => marker.test(content)).length >= 3;
+  const governanceMarkers = [
+    /原始消息/u,
+    /内部事实/u,
+    /审计依据/u,
+    /内部记录/u,
+    /供追溯/u,
+    /既有协作/u,
+  ];
+  // 续段同时出现多项审计治理概念时属于旧内部说明。此处只确定截断边界，
+  // 截断前的客户答复仍由统一投影规则审查。
+  return markers.filter((marker) => marker.test(content)).length >= 3
+    || governanceMarkers.filter((marker) => marker.test(content)).length >= 3;
 }
 
 /** 兼容旧版“自然答复 + 内部字段组”记录，只保留字段组前的自然答复。 */

@@ -150,19 +150,19 @@ test("旧 hanli-design 按稳定来源身份只迁移首段的客户结论", () 
   assert.doesNotMatch(legacy.content, /本轮只读|工程约束|调查边界|contentRole|持久化|SELPLAT_CORPUS_META|用户原话|交给南宫婉核实/u);
 });
 
-test("旧 hanli-reply 只在后续段落命中稳定治理边界时迁移客户首段", () => {
-  const customerReply = "这次要治理的是旧消息留下的内部内容，不是重新验证新回复是否还会混入。客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留在内部记录中，供追溯和既有协作使用。";
+test("旧 hanli-reply 在后续审计治理续段开始时只迁移客户首段", () => {
+  const customerReply = "我会把这条历史回复整理成可继续确认的结论。";
   const mixed = derivePersonaCustomerDisplayMessage({
     messageId: "hanli-reply:legacy-request",
     messageType: "customer-visible",
     speakerType: "persona",
     content: [
       customerReply,
-      "页面实现需要核对保存结构、内容归类、恢复读取和时间线投影。",
-      "发送、新建会话、制造数据和恢复任务属于工程验证范围。",
+      "客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留在内部记录中，供追溯和既有协作使用。",
     ].join("\n\n"),
   });
   assert.deepEqual(mixed, { state: "ready", content: customerReply, failureReason: null });
+  assert.doesNotMatch(mixed.content, /客户时间线|原始消息|内部事实|审计依据|内部记录|追溯|既有协作/u);
 
   const ordinary = "第一段是客户说明。\n\n第二段继续解释使用方式。";
   assert.deepEqual(derivePersonaCustomerDisplayMessage({
