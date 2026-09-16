@@ -12,7 +12,7 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 8;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 9;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
@@ -50,10 +50,13 @@ export function derivePersonaCustomerDisplayMessage(
   }
 }
 
-/** 旧设计消息的后续段落同时包含设计说明、语料元数据和调查字段，不能再按正文词汇猜边界。 */
+/**
+ * 旧 hanli-design 写入者把“过程前言 + 客户结论”放在首段，再追加设计说明和调查字段。
+ * 该稳定身份的首段若是多行，最后一行才是当时面向客户的结论；原文仍完整保留在审计记录。
+ */
 function extractLegacyHanliDesignReply(content: string): string {
   const [firstParagraph] = content.split(/\r?\n\s*\r?\n/u);
-  const reply = firstParagraph?.trim() || "";
+  const reply = firstParagraph?.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean).at(-1) || "";
   if (!reply) throw new Error("legacy hanli design reply is empty");
   return reply;
 }

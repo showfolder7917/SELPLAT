@@ -238,15 +238,16 @@ test("打开 v7 人物协作说明时重算为失败位置，绝不回退审计�
   }
 });
 
-test("打开旧 hanli-design 时按稳定身份重算为首段，设计说明和语料元数据只保留在审计原文", () => {
+test("打开旧 hanli-design 时按稳定身份重算为首段客户结论，过程前言只保留在审计原文", () => {
   const fixture = createFixture("customer-display-legacy-hanli-design");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
     const repository = new PersonaConversationRepository(initialized.database);
     const conversation = repository.create("han-li");
-    const firstParagraph = "我会保持本轮只读：先加载工程约束，再整理明确说明。";
+    const processPreface = "我会保持本轮只读：先加载工程约束，再整理调查边界。";
+    const customerConclusion = "要解决的是客户正文与内部事实混流，不是历史残留显示。";
     const raw = [
-      firstParagraph,
+      `${processPreface}\n${customerConclusion}`,
       "完整路径需要讨论 contentRole、持久化、恢复和页面投影。",
       '<!-- SELPLAT_CORPUS_META {"title":"内部语料"} -->',
       "用户原话：内部原话",
@@ -280,8 +281,8 @@ test("打开旧 hanli-design 时按稳定身份重算为首段，设计说明和
     `).run({ $raw: raw }));
 
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
-    assert.deepEqual(window.messages.map((message) => message.content), [firstParagraph]);
-    assert.doesNotMatch(window.messages[0].content, /contentRole|持久化|SELPLAT_CORPUS_META|用户原话|交给南宫婉核实/u);
+    assert.deepEqual(window.messages.map((message) => message.content), [customerConclusion]);
+    assert.doesNotMatch(window.messages[0].content, /本轮只读|工程约束|调查边界|contentRole|持久化|SELPLAT_CORPUS_META|用户原话|交给南宫婉核实/u);
     const source = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT content FROM AiDesktopPersonaConversationMessage WHERE messageId='hanli-design:legacy-request'
     `).get());
