@@ -56,7 +56,7 @@ test("Markdown 字段组从人物旧回复中剥离，用户原话包含相同�
   assert.deepEqual(user, { state: "ready", content: userContent, failureReason: null });
 });
 
-test("无法可靠截取的历史技术长文保持失败位置，不能显示整段内部说明", () => {
+test("无法可靠截取的人物技术长文保持失败位置，不能因当前写入或历史读取显示整段内部说明", () => {
   const legacyTechnicalProse = [
     "我会先按既有流程核对历史记录。",
     "用户原话、目标、调查对象和期望结果已经整理，交给南宫婉核实。",
@@ -66,7 +66,7 @@ test("无法可靠截取的历史技术长文保持失败位置，不能显示�
     messageType: "customer-visible",
     speakerType: "persona",
     content: legacyTechnicalProse,
-  }, { historical: true });
+  });
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
 });
 

@@ -638,7 +638,9 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(hanliConversation.getByText("直接描述你看到的情况，或附上截图；先说最在意的地方。", { exact: true })).toBeVisible();
   await expect(hanliConversation.getByText("必要时韩立会交由南宫婉核实；是否实施仍遵循原有确认规则。", { exact: true })).toBeVisible();
   const hanliComposer = page.locator(".hanli-person-composer");
-  await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("结合整理后的资料，告诉我现在最关键的目标。");
+  // 用真实可见长消息建立内部滚动距离，覆盖正式窗口末条被固定输入区遮挡的回归。
+  const hanliQuestion = "结合整理后的资料，告诉我现在最关键的目标。".repeat(50);
+  await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill(hanliQuestion);
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(taskList.getByRole("button", { name: /韩立/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
@@ -646,7 +648,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.locator(".developer-tab-page:visible"), "返回韩立时应恢复原页面并保持单页可见").toHaveCount(1);
-  await expect(hanliConversation.getByText("结合整理后的资料，告诉我现在最关键的目标。", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText(hanliQuestion, { exact: true })).toBeVisible();
   await expect(hanliConversation.getByText("我 · 发送中", { exact: true })).toBeVisible();
   await expect(hanliComposer.getByRole("button", { name: "思考中" })).toBeDisabled();
   await expect(hanliConversation.getByText("我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", { exact: true })).toBeVisible();
@@ -654,25 +656,32 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("1");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(hanliComposer.getByRole("button", { name: "发送给韩立" })).toBeVisible();
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
-  const hanliTimelineGeometry = await hanliConversation.evaluate((timeline) => {
-    const composer = document.querySelector<HTMLElement>(".hanli-person-composer");
-    const lastMessage = timeline.querySelector<HTMLElement>(".selconversation-message:last-of-type");
-    if (!composer || !lastMessage) throw new Error("韩立会话缺少输入区或消息卡。");
-    timeline.scrollTo({ top: timeline.scrollHeight });
-    const timelineBounds = timeline.getBoundingClientRect();
-    const composerBounds = composer.getBoundingClientRect();
-    const lastMessageBounds = lastMessage.getBoundingClientRect();
-    return { timelineBottom: timelineBounds.bottom, composerTop: composerBounds.top, lastMessageBottom: lastMessageBounds.bottom };
-  });
-  expect(hanliTimelineGeometry.timelineBottom, "韩立消息时间线的可视范围必须止于固定输入区上方").toBeLessThanOrEqual(hanliTimelineGeometry.composerTop);
-  expect(hanliTimelineGeometry.lastMessageBottom, "滚动到末尾后最后一条韩立消息必须完整位于时间线可视范围内").toBeLessThanOrEqual(hanliTimelineGeometry.timelineBottom);
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+  for (const [width, height] of [[1000, 700], [1560, 980]]) {
+    // BrowserWindow 由 Electron 主进程提供；测试进程只传递可序列化的窗口尺寸。
+    await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), { width, height });
+    const hanliTimelineGeometry = await hanliConversation.evaluate((timeline) => {
+      const composer = document.querySelector<HTMLElement>(".hanli-person-composer");
+      const lastMessage = timeline.querySelector<HTMLElement>(".selconversation-message:last-of-type");
+      if (!composer || !lastMessage) throw new Error("韩立会话缺少输入区或消息卡。");
+      const maximumScrollTop = timeline.scrollHeight - timeline.clientHeight;
+      // 必须实际抵达末尾，不能用当前可见位置冒充末条未被固定输入区遮挡。
+      timeline.scrollTo({ top: timeline.scrollHeight });
+      const composerBounds = composer.getBoundingClientRect();
+      const lastMessageBounds = lastMessage.getBoundingClientRect();
+      // 输入区是时间线上的固定浮层；消息内容依靠动态留白滚到浮层上方，而不是缩短时间线盒子。
+      const composerReserve = Number.parseFloat(window.getComputedStyle(timeline).getPropertyValue("--selconversation-composer-reserve"));
+      return { maximumScrollTop, scrollTop: timeline.scrollTop, composerHeight: composerBounds.height, composerReserve, composerTop: composerBounds.top, lastMessageBottom: lastMessageBounds.bottom };
+    });
+    expect(hanliTimelineGeometry.maximumScrollTop, "韩立会话必须产生可验证的内部滚动距离").toBeGreaterThan(0);
+    expect(hanliTimelineGeometry.scrollTop, "消息时间线必须实际滚动到末尾").toBeGreaterThanOrEqual(hanliTimelineGeometry.maximumScrollTop - 1);
+    expect(hanliTimelineGeometry.composerReserve, "动态底部留白必须覆盖固定输入区的真实高度和安全间距").toBeGreaterThanOrEqual(Math.ceil(hanliTimelineGeometry.composerHeight) + 48);
+    expect(hanliTimelineGeometry.lastMessageBottom, "滚动到末尾后最后一条韩立消息必须完整位于固定输入区上方").toBeLessThanOrEqual(hanliTimelineGeometry.composerTop);
+  }
   await expect(hanliConversation.getByText("韩立 · 内部研讨", { exact: true })).toHaveCount(0);
   await expect(hanliConversation.getByText("南宫婉 · 内部研讨", { exact: true })).toHaveCount(0);
   await expect(hanliConversation.getByText("当前需求最关键的验收边界是什么？", { exact: true })).toHaveCount(0);
   await expect(hanliConversation.getByText("验收时需确认内部一问一答可见，且不写入用户语义资料。", { exact: true })).toHaveCount(0);
-  await expect(hanliConversation.getByText("结合整理后的资料，告诉我现在最关键的目标。", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText(hanliQuestion, { exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("hanli-direct-conversation-only.png"), fullPage: true });
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   const nangongConversation = page.locator(".nangong-person-chat");
