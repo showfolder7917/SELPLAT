@@ -379,7 +379,7 @@ export class HanliComputerAcceptance {
               throw new Error("当前正式验收未获任务面板导航授权。");
             }
             const result = await window.webContents.executeJavaScript(`(${navigateTaskCollaboration.toString()})(${JSON.stringify(args.action)})`) as Record<string, unknown>;
-            if (result.status !== "opened" && result.status !== "closed" && result.status !== "already-open" && result.status !== "already-closed" && result.status !== "navigated" && result.status !== "already-visible") {
+            if (result.status !== "opened" && result.status !== "closed" && result.status !== "already-open" && result.status !== "already-closed" && result.status !== "navigated" && result.status !== "already-visible" && result.status !== "task-panel-not-open" && result.status !== "task-panel-not-closed" && result.status !== "task-group-not-visible") {
               throw new Error(`任务协作群导航未完成：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
@@ -644,29 +644,60 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
 }
 
 /** 精确操作既有任务面板和任务协作群入口，不暴露任何业务写入控件。 */
-function navigateTaskCollaboration(action: string): Record<string, unknown> {
+async function navigateTaskCollaboration(action: string): Promise<Record<string, unknown>> {
   const toggle = document.querySelector<HTMLButtonElement>('button.section-toggle[aria-controls="developer-task-list"]');
   const panel = document.querySelector<HTMLElement>("#developer-task-list");
   if (!toggle || !panel) return { status: "task-panel-unavailable" };
+  const taskCollaborationVisible = (): boolean => {
+    const page = document.querySelector<HTMLElement>(".task-collaboration-page");
+    const rect = page?.getBoundingClientRect();
+    return Boolean(page && rect && rect.width > 0 && rect.height > 0 && getComputedStyle(page).display !== "none" && getComputedStyle(page).visibility !== "hidden");
+  };
+  const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  // 点击任务面板后等待有限帧数，只把浏览器已回显的状态作为正式验收事实。
+  const waitForPanel = async (expectedExpanded: boolean): Promise<boolean> => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if ((toggle.getAttribute("aria-expanded") === "true") === expectedExpanded) return true;
+      await nextFrame();
+    }
+    return (toggle.getAttribute("aria-expanded") === "true") === expectedExpanded;
+  };
   const expanded = toggle.getAttribute("aria-expanded") === "true";
   if (action === "open-task-panel") {
-    if (expanded) return { status: "already-open", taskPanelExpanded: true };
+    if (expanded) return { status: "already-open", taskPanelExpanded: true, taskCollaborationVisible: taskCollaborationVisible() };
     toggle.click();
-    return { status: "opened", taskPanelExpanded: true };
+    const opened = await waitForPanel(true);
+    return {
+      status: opened ? "opened" : "task-panel-not-open",
+      taskPanelExpanded: toggle.getAttribute("aria-expanded") === "true",
+      taskCollaborationVisible: taskCollaborationVisible(),
+    };
   }
   if (action === "close-task-panel") {
-    if (!expanded) return { status: "already-closed", taskPanelExpanded: false };
+    if (!expanded) return { status: "already-closed", taskPanelExpanded: false, taskCollaborationVisible: taskCollaborationVisible() };
     toggle.click();
-    return { status: "closed", taskPanelExpanded: false };
+    const closed = await waitForPanel(false);
+    return {
+      status: closed ? "closed" : "task-panel-not-closed",
+      taskPanelExpanded: toggle.getAttribute("aria-expanded") === "true",
+      taskCollaborationVisible: taskCollaborationVisible(),
+    };
   }
   if (action !== "open-task-collaboration") return { status: "unsupported" };
-  if (!expanded) return { status: "task-panel-collapsed" };
+  if (!expanded) return { status: "task-panel-collapsed", taskPanelExpanded: false, taskCollaborationVisible: taskCollaborationVisible() };
   const entry = panel.querySelector<HTMLButtonElement>("button.collaboration-task-group-entry");
   if (!entry) return { status: "task-group-entry-unavailable" };
-  const page = document.querySelector<HTMLElement>(".task-collaboration-page");
-  if (page && page.getBoundingClientRect().width > 0 && page.getBoundingClientRect().height > 0) return { status: "already-visible" };
+  if (taskCollaborationVisible()) return { status: "already-visible", taskPanelExpanded: true, taskCollaborationVisible: true };
   entry.click();
-  return { status: "navigated" };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await nextFrame();
+    if (taskCollaborationVisible()) return { status: "navigated", taskPanelExpanded: true, taskCollaborationVisible: true };
+  }
+  return {
+    status: "task-group-not-visible",
+    taskPanelExpanded: toggle.getAttribute("aria-expanded") === "true",
+    taskCollaborationVisible: false,
+  };
 }
 
 /** 只滚动当前可见设置浮层的固定内容容器，并回执位置，不读取或修改设置内容。 */
