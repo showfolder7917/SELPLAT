@@ -3,6 +3,7 @@ export type BackgroundPersistenceOperation =
   | "ingest-rollouts"
   | "read-corpus-ingestion-status"
   | "set-corpus-ingestion-status"
+  /** 人物记忆操作由 Worker 白名单校验，主进程只能传递可复制 DTO。 */
   | "collaboration-memory"
   | "semantic-message-exists"
   | "write-semantic-summary";
