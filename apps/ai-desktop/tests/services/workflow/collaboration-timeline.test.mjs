@@ -832,7 +832,7 @@ test("三次测试两次修复保留顺序且通过后等待健康检查而不�
 });
 
 function flow(eventId, type, stage, status, actor, summary, occurredAt, error = false) { return { eventId, type, stage, status, actor, summary, occurredAt, error }; }
-function collaboration(updatedAt, tasks) { return { version: 1, mode: "collaboration", selectedMemberId: "han-li", members: [], tasks, integrationBatches: [], nextIntegrationGeneration: 1, updatedAt }; }
+function collaboration(updatedAt, tasks) { return { version: 1, mode: "collaboration", members: [], tasks, integrationBatches: [], nextIntegrationGeneration: 1, updatedAt }; }
 function createFixture(suffix) {
   const root = mkdtempSync(path.join(controlledTestRoot, `collaboration-timeline-${suffix}-`));
   const sqlRoot = path.join(root, "sql");

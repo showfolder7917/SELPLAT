@@ -5,6 +5,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
+
 import {
   // 专题任务卡：展示一个专题的摘要、完整人物时间线和操作入口。
   TaskGroupCard,
@@ -64,6 +66,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   /** 已提交状态只对应同一份档案政策；政策变化后不能继续禁用新的人工读取机会。 */
   const [submittedReadPolicyId, setSubmittedReadPolicyId] = useState<string | null>(null);
   const automaticRetryPolicyId = useRef<string | null>(null);
+  const scrollingStartedAt = useRef<number | null>(null);
+  const scrollingIdleTimer = useRef<number | null>(null);
   // 页面模型（model）是任务群展示状态和业务操作的唯一输入。
   const { model } = props;
   // 权威数据提供实时节点正文，显示状态提供当前界面语言。
@@ -86,6 +90,15 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     continueTask,
     resumeAcceptance,
   } = controller;
+
+  /** 统一把渲染侧样本异步写到临时性能记录，不触碰专题和任务事实。 */
+  const recordPerformance = (operation: string, startedAt: number, details: Record<string, string | number | boolean | null>) => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop) return;
+    const datasetId = document.documentElement.dataset.collaborationPerformanceDataset?.trim() || "retained-history";
+    const phase = document.documentElement.dataset.collaborationPerformancePhase === "baseline" ? "baseline" : "candidate";
+    void desktop.recordCollaborationInteractionPerformance({ operation, durationMs: Math.max(0, performance.now() - startedAt), datasetId, phase, details });
+  };
 
   /** 任务卡只发出任务标识；页面控制器负责完整的异步状态和异常处理。 */
   const requestContinueTask = (taskId: string) => {
@@ -137,7 +150,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
       .finally(() => setRetryingRead(false));
   };
 
-  // 首次读取任一权威来源失败时，旧时间线不能继续承担当前结论。
+  // 任一权威读取受阻时，旧时间线不能继续承担当前结论。
+  // 固定返回读取说明，避免旧卡片和恢复入口与当前受阻事实并列。
   if (readObstruction) {
     return (
       <section className="task-collaboration-page">
@@ -203,9 +217,19 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         </button>
         <span>{groups.length}</span>
       </header>
-
       {/* 专题列表：保持后端时间线已经确定的稳定顺序。 */}
-      <div className="task-collaboration-groups">
+      <div
+        className="task-collaboration-groups"
+        onScroll={() => {
+          scrollingStartedAt.current ||= performance.now();
+          if (scrollingIdleTimer.current) window.clearTimeout(scrollingIdleTimer.current);
+          scrollingIdleTimer.current = window.setTimeout(() => {
+            if (scrollingStartedAt.current !== null) recordPerformance("long-task-continuous-scroll", scrollingStartedAt.current, { groupCount: groups.length });
+            scrollingStartedAt.current = null;
+            scrollingIdleTimer.current = null;
+          }, 120);
+        }}
+      >
         {groups.map((group) => {
           // 卡片模型（cardModel）把原来散落在 JSX 上的十多个参数按业务职责归组。
           const cardModel: TaskGroupCardModel = {
@@ -232,7 +256,11 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               // 节点展开查询（isNodeOpen）保留自动展开与用户选择的统一规则。
               isNodeOpen,
               // 卡片展开操作（onOpenChange）只更新当前专题的展开状态。
-              onOpenChange: (open) => setGroupOpen(group.groupId, open),
+              onOpenChange: (open) => {
+                const startedAt = performance.now();
+                setGroupOpen(group.groupId, open);
+                if (open) requestAnimationFrame(() => requestAnimationFrame(() => recordPerformance("task-card-expand-page-update", startedAt, { groupId: group.groupId })));
+              },
               // 节点展开操作（onNodeOpenChange）把节点选择交回页面控制器保存。
               onNodeOpenChange: setNodeOpen,
               // 人工审批操作（onManualApproval）打开当前提案的正式审批窗口。

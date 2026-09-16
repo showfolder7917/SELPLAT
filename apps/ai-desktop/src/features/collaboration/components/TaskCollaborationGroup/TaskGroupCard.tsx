@@ -433,24 +433,14 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
           )}
         </span>
       </div>
-      {/* 人物时间线：按后端确定的稳定顺序展示过滤后的真实节点。 */}
-      <div
-        className="task-timeline-list"
-        data-task-timeline-topic-id={group.topicId || ""}
-        data-task-timeline-proposal-id={group.proposalId || ""}
-      >
-        {visibleNodes.map((node, index) => (
-          <TaskTimelineNode
-            key={node.nodeId}
-            model={model}
-            node={node}
-            index={index}
-          />
-        ))}
-      </div>
-      {/* 继续任务错误：恢复请求失败时显示短原因，并保留可展开的完整证据。 */}
-      {continueError && <RecoveryError message={continueError} locale={locale} />}
-      {continueFeedback && <RecoveryFeedback message={continueFeedback} />}
+      {open && <>
+        {/* 展开后才装载人物节点正文和技术详情，长历史收起时不占用 React 树。 */}
+        <div className="task-timeline-list" data-task-timeline-topic-id={group.topicId || ""} data-task-timeline-proposal-id={group.proposalId || ""}>
+          {visibleNodes.map((node, index) => <TaskTimelineNode key={node.nodeId} model={model} node={node} index={index} />)}
+        </div>
+        {continueError && <RecoveryError message={continueError} locale={locale} />}
+        {continueFeedback && <RecoveryFeedback message={continueFeedback} />}
+      </>}
 
 
     </SelUiDisclosure>

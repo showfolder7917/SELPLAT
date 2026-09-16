@@ -25,7 +25,7 @@ import { installDesktopIpcAuthorizationPolicy, registerEventCenterIpcHandler } f
 import { CodexFacade as CodexService } from "../../services/support/platform/codex/index.js";
 import { ConversationFacade as ConversationDispatchStore } from "../../services/support/capabilities/conversation/index.js";
 import { CollaborationCodexRegistry } from "../../services/support/capabilities/conversation/index.js";
-import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowRepositoryPort as WorkflowRepository } from "../../services/workflow/index.js";
+import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowRepositoryPort as WorkflowRepository, type CollaborationNavigationPreferencePort, type CollaborationInteractionPerformancePort } from "../../services/workflow/index.js";
 import { LinghuAutomationFacade } from "../../services/personas/linghu/index.js";
 import type { HanliFacade } from "../../services/personas/hanli/index.js";
 import type { NangongFacade } from "../../services/personas/nangong/index.js";
@@ -49,6 +49,8 @@ interface DesktopIpcDependencies {
   trustedCommands: TrustedCommandStore;
   dispatch: ConversationDispatchStore;
   collaboration: CollaborationCoordinator;
+  collaborationNavigationPreference: CollaborationNavigationPreferencePort;
+  collaborationInteractionPerformance: CollaborationInteractionPerformancePort;
   linghuAutomation: LinghuAutomationFacade;
   nangong: NangongFacade;
   hanli: HanliFacade;
@@ -117,7 +119,7 @@ async function waitForScreenCaptureStage<T>(operation: Promise<T>, timeoutMs: nu
 }
 
 export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
-  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, hanliPageReviewGuard } = dependencies;
+  const { aiMemoryDatabaseStatus, codex, screenshots, settings, workspaces, trustedCommands, dispatch, collaboration, collaborationNavigationPreference, collaborationInteractionPerformance, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, collaborationRegistry, eventCenter, workflowRepository, collaborationTimeline, refreshWorkflowCheckpoints, projectRoot, appRoot, variant, preloadPath, prepareForApplicationExit, rendererRoot, rules, prompts, hanliPageReviewGuard } = dependencies;
   const audit = eventCenter;
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto"): void => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   const activeAuditTasks = new Map<number, string>();
@@ -285,7 +287,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter, hanliPageReviewGuard);
-  registerCollaborationIpc(collaboration, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
+  registerCollaborationIpc(collaboration, collaborationNavigationPreference, collaborationInteractionPerformance, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {

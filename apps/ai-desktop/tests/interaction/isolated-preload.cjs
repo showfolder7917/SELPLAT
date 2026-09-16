@@ -44,11 +44,12 @@ let acceptanceTimelineFixtureStatus = null;
 let interruptedTimelineFixtureStatus = null;
 let customerActionTimelineFixtureEnabled = false;
 let collaborationTimelineRevision = 0;
+// 隔离桥与正式导航偏好相同：只保存最后一次成功的人物标识，不修改协作快照。
+let collaborationNavigationPreferenceMemberId = "han-li";
 const collaborationNames = ["韩立", "南宫婉", "令狐老祖", "紫灵", "元瑶", "宋玉", "冰魄仙子", "墨彩环", "墨大夫", "厉飞雨", "张铁", "李化元"];
 let collaborationState = {
   version: 1,
   mode: "single-conversation",
-  selectedMemberId: "han-li",
   members: collaborationNames.map((displayName, index) => ({
     memberId: index === 0 ? "han-li" : displayName === "南宫婉" ? "nangong-wan" : displayName === "令狐老祖" ? "linghu-ancestor" : `isolated-member-${index}`,
     displayName,
@@ -616,9 +617,22 @@ contextBridge.exposeInMainWorld("desktop", {
     delayedCollaborationTimelineRead = null;
     return staleSnapshot;
   },
+  // 变更通知只刷新指定专题，隔离桥必须保留正式 IPC 的分组读取边界。
+  getCollaborationTimelineGroups: async (groupIds) => {
+    const requestedGroupIds = new Set(Array.isArray(groupIds) ? groupIds.filter((groupId) => typeof groupId === "string") : []);
+    const snapshot = structuredClone(interactionTimelineSnapshot());
+    return { ...snapshot, groups: snapshot.groups.filter((group) => requestedGroupIds.has(group.groupId)) };
+  },
   onCollaborationTimelineChanged: (listener) => { collaborationTimelineListeners.add(listener); return () => collaborationTimelineListeners.delete(listener); },
   setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },
-  selectCollaborationMember: async (memberId) => { collaborationState.selectedMemberId = memberId; return publishCollaborationState("member.selected"); },
+  getCollaborationNavigationPreference: async () => collaborationState.members.some((member) => member.memberId === collaborationNavigationPreferenceMemberId)
+    ? collaborationNavigationPreferenceMemberId
+    : collaborationState.members.find((member) => member.kind === "conversation-owner")?.memberId || null,
+  saveCollaborationNavigationPreference: async (memberId) => {
+    if (!collaborationState.members.some((member) => member.memberId === memberId)) throw new Error("人物已不在当前协作成员列表中，无法保存查看位置。");
+    collaborationNavigationPreferenceMemberId = memberId;
+  },
+  recordCollaborationInteractionPerformance: async () => undefined,
   createCollaborationMember: async ({ displayName }) => {
     collaborationState.members.push({ ...collaborationState.members[1], memberId: `isolated-member-${Date.now()}`, displayName, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     return publishCollaborationState("member.created");
@@ -745,6 +759,15 @@ contextBridge.exposeInMainWorld("desktop", {
   // 测试夹具不持久化失败派生，重试等价于按正式端口重新取得当前客户显示窗口。
   retryPersonaCustomerDisplayMessage: async (personaId) => toPersonaCustomerDisplayWindow(await readInteractionPersonaConversation(personaId)),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },
+  // 模型选择写入当前人物会话，并向订阅页面回传与正式桥相同的会话快照。
+  selectPersonaConversationModel: async (personaId, selectedModel) => {
+    const now = new Date().toISOString();
+    if (personaId === "nangong-wan") evolutionState.conversation = { ...evolutionState.conversation, selectedModel, updatedAt: now };
+    else hanliConversation = { ...hanliConversation, selectedModel, updatedAt: now };
+    const conversation = await readInteractionPersonaConversation(personaId);
+    for (const listener of personaConversationListeners) listener(structuredClone(conversation));
+    return conversation;
+  },
   setInteractionCheckpointMessages: async () => {
     const now = new Date().toISOString();
     const messages = [

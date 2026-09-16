@@ -10,9 +10,12 @@ import type { DesktopApi } from "../desktop.api.js";
 export const COLLABORATION_DESKTOP_API_METHODS = [
   "getCollaborationState",
   "getCollaborationTimeline",
+  "getCollaborationTimelineGroups",
+  "getCollaborationNavigationPreference",
+  "saveCollaborationNavigationPreference",
+  "recordCollaborationInteractionPerformance",
   "onCollaborationTimelineChanged",
   "setDesktopOperatingMode",
-  "selectCollaborationMember",
   "submitCollaborationTask",
   "continueCollaborationTask",
   "cancelCollaborationTask",

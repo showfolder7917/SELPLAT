@@ -763,7 +763,7 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
 function collaborationState(heartbeat) {
   const updatedAt = heartbeat;
   return {
-    version: 1, mode: "collaboration", selectedMemberId: "han-li", integrationBatches: [], nextIntegrationGeneration: 1, updatedAt,
+    version: 1, mode: "collaboration", integrationBatches: [], nextIntegrationGeneration: 1, updatedAt,
     members: [{ memberId: "zi-ling", displayName: "紫灵", kind: "worker", protected: false, enabled: true, state: "working", role: "executor", phase: "implementing", generation: 1, currentTaskId: "task-1", blockingReason: null, lastHeartbeatAt: heartbeat, lastProtocolProgressAt: heartbeat, lastAssignedAt: heartbeat, createdAt: heartbeat, updatedAt }],
     tasks: [{
       taskId: "task-1", taskRevision: 1, assignmentId: "assignment-1", workerGeneration: 1, state: "executing", phase: "implementing",

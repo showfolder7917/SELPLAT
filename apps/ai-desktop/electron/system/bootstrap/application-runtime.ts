@@ -596,8 +596,8 @@ export async function startApplication(): Promise<void> {
         if (window.isDestroyed()) continue;
         window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
       }
-      // 人物页签和桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
-      if (reason !== "member.selected" && reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
+      // 桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
+      if (reason !== "mode.changed") personaEvolution?.notifyWorkflowChanged();
     },
     onStream: (taskId, memberId, event) => {
       // 原始逐字增量已保存在时间线流表；全局事件中心只记录阶段事实，避免同一内容重复膨胀数据库。
@@ -612,7 +612,7 @@ export async function startApplication(): Promise<void> {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, timelineNodeId, event });
     },
   });
-  const { collaborationStore, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
+  const { collaborationStore, collaborationNavigationPreference, collaborationInteractionPerformance, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
   collaboration = collaborationContext.collaboration;
   // 人物长期线程和临时执行线程共用同一全局授权路由；否则人物请求会停在主进程内存中，Renderer 永远看不到弹窗。
   collaborationRegistry.registerPersona({
@@ -1098,6 +1098,8 @@ export async function startApplication(): Promise<void> {
     dispatch,
     // 协作与人物能力。
     collaboration,
+    collaborationNavigationPreference,
+    collaborationInteractionPerformance,
     linghuAutomation,
     nangong: nangongRuntime.facade,
     hanli: hanliRuntime.facade,
