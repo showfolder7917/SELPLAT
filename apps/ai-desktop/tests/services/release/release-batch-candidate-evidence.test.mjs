@@ -44,6 +44,7 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(pipeline, /await this\.\#workspaces\.assertCandidateContainsTaskResults\(candidate, tasks\)/);
   assert.match(pipeline, /candidateIncomplete \? "candidate-branch-conflict"/);
   assert.match(pipeline, /缺少冻结任务结果，统一测试尚未启动/);
+  assert.match(pipeline, /appendFlow\(task, "integration\.candidate_ready"/);
 });
 
 test("本地修改转交只在一次性工作树应用恢复快照，冲突不会污染任务工作树", () => {

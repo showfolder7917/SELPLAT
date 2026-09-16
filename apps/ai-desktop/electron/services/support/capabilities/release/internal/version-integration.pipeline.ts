@@ -375,6 +375,8 @@ export class VersionIntegrationPipeline {
       }
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
       reconcileSpan = null;
+      // updateTask 的回调会跨越当前控制流；先冻结已校验候选 SHA，避免回调重新读取可空运行态。
+      const verifiedCandidateSha = candidate.candidateSha;
 
       // 组合验证期间由真实操作者持有当前处理权，页面和审计记录使用同一人物快照。
       this.#store.updateTask(taskIds[0], "integration.started", (_first, mutable) => {
@@ -382,6 +384,7 @@ export class VersionIntegrationPipeline {
         if (batch) batch.state = "integrating";
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          appendFlow(task, "integration.candidate_ready", "integration", "completed", `候选已校验：${verifiedCandidateSha.slice(0, 12)} 包含冻结任务结果`, currentActor);
           task.state = "unified-testing";
           task.currentHandler = participantSnapshot(currentActor);
           task.unifiedTest = { status: "running", owner: participantSnapshot(currentActor), failureReason: null, startedAt: new Date().toISOString(), completedAt: null };
