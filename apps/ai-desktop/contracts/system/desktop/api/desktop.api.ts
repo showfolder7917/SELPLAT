@@ -11,7 +11,7 @@ import type { DesktopEnvironmentOutDto } from "../dto/desktop-environment.out.dt
 import type { CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexLoginResponseOutDto, CodexModelCatalogOutDto, CodexStreamEventOutDto, CodexUserInputRequestOutDto, ResolveCodexApprovalOutDto, ResolveCodexUserInputInDto } from "../../../services/support/platform/codex/index.js";
 import type { TrustedCommandInfoOutDto } from "../../../services/support/platform/security/index.js";
 import type { AutomaticTestPreflightResultOutDto } from "../../../services/support/capabilities/testing/index.js";
-import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto, SubmitCollaborationTaskInDto } from "../../../services/workflow/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationStateEventOutDto, CollaborationStreamEventOutDto, CollaborationTimelineChangedEventOutDto, CollaborationTimelineProjectionStatusOutDto, CollaborationTimelineSnapshotOutDto, ConfigurePersonaWorkflowInDto, DesktopOperatingModeValue, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto, SubmitCollaborationTaskInDto } from "../../../services/workflow/index.js";
 import type { AuditLogInfoOutDto, RendererExceptionInDto } from "../../../services/support/capabilities/event-center/index.js";
 import type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../../services/support/capabilities/conversation/index.js";
 import type { TestDataResetResultOutDto } from "../../../services/support/application/index.js";
@@ -140,6 +140,12 @@ export interface DesktopApi {
   getCollaborationTimeline(): Promise<CollaborationTimelineSnapshotOutDto>;
   /** 按已提交的专题标识读取变化卡片，不返回未受影响的历史。 */
   getCollaborationTimelineGroups(groupIds: string[]): Promise<CollaborationTimelineSnapshotOutDto>;
+  /** 读取失败但尚可重试的时间线投影技术状态，不返回业务事实。 */
+  getCollaborationTimelineProjectionStatus(): Promise<CollaborationTimelineProjectionStatusOutDto>;
+  /** 重试最近一次未提交的幂等时间线投影，不恢复或推进协作任务。 */
+  retryCollaborationTimelineProjection(): Promise<void>;
+  /** 订阅时间线投影技术状态，供页面保留已显示的成功快照。 */
+  onCollaborationTimelineProjectionStatus(listener: (status: CollaborationTimelineProjectionStatusOutDto) => void): () => void;
   /** 读取经当前成员清单校验后的最后查看人物。 */
   getCollaborationNavigationPreference(): Promise<string | null>;
   /** 异步保存 Renderer 当前查看人物；不修改协作成员、任务或时间线。 */

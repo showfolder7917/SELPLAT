@@ -38,6 +38,8 @@ export type TaskCollaborationGroupModel = {
     deliveryReadStatus: CollaborationStateReadStatus;
     /** 时间线首次读取状态；失败时不能继续使用旧历史作为当前结论。 */
     timelineReadStatus: CollaborationStateReadStatus;
+    /** 主进程投影写入失败时的局部技术状态。 */
+    timelineProjectionStatus: { status: "ready" | "unavailable"; message: string };
     /** 读取失败的可读原因。 */
     readError: string;
     /** 当前专题投影签发的读取恢复政策；页面不得以本地次数覆盖它。 */
@@ -57,6 +59,8 @@ export type TaskCollaborationGroupModel = {
     onRetryDeliveryRead: () => Promise<void>;
     /** 仅重新读取失败的专题时间线，保留已经显示的最后成功快照。 */
     onRetryTimelineRead: () => Promise<void>;
+    /** 仅重试最近失败的时间线投影写入，不重启协作任务。 */
+    onRetryTimelineProjection: () => Promise<void>;
   };
 };
 

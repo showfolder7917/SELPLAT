@@ -101,3 +101,11 @@ export interface CollaborationTimelineSnapshotOutDto {
   /** 整份时间线投影最后更新时间。 */
   updatedAt: string;
 }
+
+/** 时间线投影写入的技术状态；它不属于任务事实，也不会写入专题历史。 */
+export interface CollaborationTimelineProjectionStatusOutDto {
+  /** ready 表示最近一次投影已提交；unavailable 表示保留了可重试的失败投影。 */
+  status: "ready" | "unavailable";
+  /** 失败时给任务协作群显示的可读原因；正常时为空。 */
+  message: string;
+}

@@ -230,6 +230,11 @@ export async function startApplication(): Promise<void> {
         window.webContents.send("desktop:collaboration-timeline-changed", event);
       }
     },
+    onTimelineProjectionStatus: (status) => {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
+        window.webContents.send("desktop:collaboration-timeline-projection-status", status);
+      }
+    },
   });
   aiMemoryDatabase = persistenceContext.database;
   aiMemoryDatabaseStatus = persistenceContext.status;
@@ -576,9 +581,15 @@ export async function startApplication(): Promise<void> {
     onStateChanged: (state, reason, taskIds) => {
       try {
         workflowRepository?.syncCollaborationState(state);
+      } catch (error) {
+        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-state", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
+      }
+      try {
         collaborationTimeline?.appendTaskFlowEvents(state, taskIds);
       } catch (error) {
-        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "sync_collaboration_state", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
+        // 只有 SQLite 时间线投影失败才向页面开放重试；状态仓储失败不能被错误重放为时间线写入。
+        collaborationTimeline?.recordProjectionFailure(state, taskIds, error);
+        eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_task_flow_events", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
       }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
       if (collaborationMemory) {

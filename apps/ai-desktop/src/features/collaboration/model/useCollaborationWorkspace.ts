@@ -245,6 +245,8 @@ export function useCollaborationWorkspace() {
   const [timeline, setTimeline] = useState<CollaborationTimelineSnapshotOutDto | null>(null);
   const [timelineReadStatus, setTimelineReadStatus] = useState<CollaborationStateReadStatus>("syncing");
   const [timelineReadError, setTimelineReadError] = useState("");
+  // 时间线投影写入失败独立于读取失败；只控制局部重试提示，不清空已显示快照。
+  const [timelineProjectionStatus, setTimelineProjectionStatus] = useState({ status: "ready" as "ready" | "unavailable", message: "" });
   // 令狐自动化：令狐人物页显示并更新自动保障运行状态。
   const [linghuAutomation, setLinghuAutomation] = useState<LinghuAutomationStateOutDto | null>(null);
   // 按任务保存的实时输出：主会话中的协作任务状态链使用。
@@ -370,6 +372,13 @@ export function useCollaborationWorkspace() {
       removeLinghuListener();
       removeStreamListener();
     };
+  }, []);
+
+  useEffect(() => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop) return;
+    void desktop.getCollaborationTimelineProjectionStatus().then(setTimelineProjectionStatus).catch(() => undefined);
+    return desktop.onCollaborationTimelineProjectionStatus((status) => setTimelineProjectionStatus(status));
   }, []);
 
   /** 切换协作子页面，并通知外层页签聚焦本次导航。 */
@@ -524,6 +533,7 @@ export function useCollaborationWorkspace() {
       timeline,
       timelineReadStatus,
       timelineReadError,
+      timelineProjectionStatus,
       // 令狐自动化：保存自动保障和会话显示边界。
       linghuAutomation,
       // 任务实时输出：供主 Codex 会话中的协作状态链读取。
@@ -581,6 +591,9 @@ export function useCollaborationWorkspace() {
       cancelTask,
       // 时间线刷新：人工审批后重新读取已经落库的历史。
       refreshTimeline,
+      retryTimelineProjection: async () => {
+        await getOptionalCollaborationDesktopApi()?.retryCollaborationTimelineProjection();
+      },
       // 恢复复查：一次读取协作状态和时间线，供页面结束本地等待。
       refreshRecoveryState,
     },
