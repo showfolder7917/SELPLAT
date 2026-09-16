@@ -14,9 +14,9 @@ export function writePersonaCustomerDisplayMessage(
   ownerPersonaId: string,
   conversationId: string,
   message: PersonaConversationMessageOutDto,
-  options: { historical?: boolean } = {},
 ): void {
-  const derived = derivePersonaCustomerDisplayMessage(message, options);
+  // 当前消息与历史消息必须得到相同的客户显示分类，避免同一内部正文因写入时机泄露。
+  const derived = derivePersonaCustomerDisplayMessage(message);
   connection.prepare(`
     INSERT INTO AiDesktopPersonaCustomerDisplayMessage
       (sourceMessageId, ownerPersonaId, conversationId, displayState, displayContent, failureReason, derivationVersion, derivedAt)
