@@ -138,7 +138,7 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
   }
 });
 
-test("打开 v3 历史技术长文时保留失败位置，不能重新显示未能安全分离的内部正文", () => {
+test("新写入和打开 v4 人物技术长文时均保留失败位置，不能重新显示未能安全分离的内部正文", () => {
   const fixture = createFixture("customer-display-v4-safe-failure");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
@@ -167,9 +167,13 @@ test("打开 v3 历史技术长文时保留失败位置，不能重新显示未�
         completedAt: "2026-09-16T04:00:00.000Z",
       }],
     });
+    const initialWindow = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    assert.deepEqual(initialWindow.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
+      content: "此消息暂时无法安全显示。", state: "failed",
+    }]);
     initialized.database?.withConnection((connection) => connection.prepare(`
       UPDATE AiDesktopPersonaCustomerDisplayMessage
-      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=3
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=4
       WHERE sourceMessageId='legacy-technical-message'
     `).run({ $raw: raw }));
 

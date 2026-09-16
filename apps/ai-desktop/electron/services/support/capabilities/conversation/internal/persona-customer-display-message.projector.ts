@@ -6,18 +6,13 @@ export interface PersonaCustomerDisplayDerivation {
   readonly failureReason: string | null;
 }
 
-/** 历史补写比新消息更保守：无法证明正文安全时保留失败位置。 */
-export interface PersonaCustomerDisplayDerivationOptions {
-  readonly historical?: boolean;
-}
-
 /**
  * 客户显示派生规则的版本。
  *
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 4;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 5;
 
 /**
  * 生成客户可见正文。
@@ -26,7 +21,6 @@ export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 4;
  */
 export function derivePersonaCustomerDisplayMessage(
   message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "speakerType">>,
-  options: PersonaCustomerDisplayDerivationOptions = {},
 ): PersonaCustomerDisplayDerivation {
   if (message.messageType !== "customer-visible") {
     return { state: "excluded", content: null, failureReason: null };
@@ -39,7 +33,9 @@ export function derivePersonaCustomerDisplayMessage(
   if (message.speakerType === "user") return { state: "ready", content, failureReason: null };
   try {
     const legacyReply = extractLegacyReply(content);
-    if (options.historical && legacyReply === content && containsHistoricalInternalProse(content)) {
+    // 人物正文无论来自当前写入、历史补写还是客户重读，均使用同一安全边界。
+    // 写入时机不能决定内部技术内容是否会进入客户页面。
+    if (legacyReply === content && containsHistoricalInternalProse(content)) {
       throw new Error("legacy reply cannot be safely separated");
     }
     return { state: "ready", content: legacyReply, failureReason: null };

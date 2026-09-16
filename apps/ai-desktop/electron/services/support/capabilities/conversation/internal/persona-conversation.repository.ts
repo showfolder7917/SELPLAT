@@ -211,10 +211,8 @@ export class PersonaConversationRepository {
         const existing = connection.prepare("SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId=$messageId")
           .get({ $messageId: String(row.messageId) }) as { derivationVersion: number } | undefined;
         if (!force && existing && Number(existing.derivationVersion) >= PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION) continue;
-        // 补写、旧版本重算和客户重读都不能把无法辨别的旧技术正文重新标为可见。
-        writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, mapMessage(row), {
-          historical: force || !existing || Number(existing.derivationVersion) < PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
-        });
+        // 版本落后的记录只负责触发重算；正文安全分类由唯一派生器统一决定。
+        writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, mapMessage(row));
       }
     };
     if (existingConnection) write(existingConnection);
