@@ -134,15 +134,17 @@ test("韩立范围内验收失败建立令狐新修复任务并明确完整测�
   assert.ok(repair.acceptanceCriteria.some((item) => item.includes("自动返回同一提案")));
 });
 
-test("韩立验收能力受阻保留可恢复事实，不交令狐或创建修复任务", async () => {
+test("韩立验收能力受阻进入令狐修复链并保留故障分类边界", async () => {
   const f = fixture();
   f.event.payload.operation = "run_hanli_result_acceptance";
   f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
   await f.run(); await f.run();
-  assert.equal(f.effects.submitted.length, 0);
-  assert.deepEqual(f.effects.phases, []);
-  assert.equal(f.event.payload.checkpoint.phase, "waiting");
-  assert.equal(f.event.payload.checkpoint.repairTaskId, null);
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.effects.submitted[0].preferredExecutorMemberId, "linghu-ancestor");
+  assert.match(f.effects.submitted[0].confirmedIntent, /故障分类：acceptance-capability-blocked/);
+  assert.ok(f.effects.submitted[0].constraints.some((item) => item.includes("只能在已批准范围内修复现有验收能力")));
+  assert.equal(f.event.payload.checkpoint.phase, "repairing");
+  assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
 });
 
 test("缺少验收失败分类时不猜测产品缺陷或交令狐", async () => {
@@ -436,11 +438,11 @@ test("自动托管原点复验超过三轮仍交令狐调查，不关闭流程�
 });
 
 
-test("复验出现新产品失败时沿原卡点派发最新证据，重启不重复派发", async () => {
+test("验收能力修复中出现新产品失败时沿原任务刷新最新证据", async () => {
   const f = fixture();
   Object.assign(f.event.payload, { operation: "run_hanli_result_acceptance", acceptanceRunId: "old-run", acceptanceFailureKind: "acceptance-capability-blocked", evidenceAttachmentIds: ["old-shot"] });
   await f.run();
-  assert.equal(f.effects.submitted.length, 0);
+  assert.equal(f.effects.submitted.length, 1);
   f.events.push({ ...f.event, eventId: "issue-2", occurredAt: "2026-09-05T01:00:00Z", message: "已完成与验收中冲突", payload: {
     runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "repair_failed_hanli_acceptance",
     acceptanceRunId: "new-run", acceptanceFailureKind: "product-defect", evidenceAttachmentIds: ["new-shot"],
@@ -448,7 +450,8 @@ test("复验出现新产品失败时沿原卡点派发最新证据，重启不�
   } });
   await f.run(); await f.run();
   assert.equal(f.effects.submitted.length, 1);
-  const repair = f.effects.submitted[0];
+  assert.equal(f.effects.refreshed.length, 1);
+  const repair = f.effects.refreshed[0].request;
   assert.match(repair.problemStatement, /已完成与验收中冲突/);
   assert.match(repair.confirmedIntent, /故障分类：product-defect/);
   assert.match(repair.confirmedIntent, /new-run/);
@@ -469,15 +472,17 @@ test("最新验收范围待确认时旧技术卡点不得派发修复", async ()
   assert.equal(f.event.payload.checkpoint.phase, "waiting");
 });
 
-test("验收能力受阻保留既有授权排除项且不创建修复任务", async () => {
+test("验收能力受阻交令狐时保留既有授权排除项", async () => {
   const f = fixture();
   f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
   f.evolution.topics[0].exclusions = ["不改变全窗口截图", "不开自动托管"];
   f.evolution.proposals[0].exclusions = ["不开自动托管", "不扩展验收工具"];
   await f.run();
-  assert.equal(f.effects.submitted.length, 0);
-  assert.equal(f.event.payload.checkpoint.phase, "waiting");
-  assert.equal(f.event.payload.checkpoint.repairTaskId, null);
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.event.payload.checkpoint.phase, "repairing");
+  assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
+  assert.ok(f.effects.submitted[0].constraints.includes("原确认范围排除项：不改变全窗口截图"));
+  assert.ok(f.effects.submitted[0].constraints.includes("原确认范围排除项：不扩展验收工具"));
 });
 
 test("客户范围修订后旧卡点只按当前提案版本创建修复任务", async () => {
@@ -523,17 +528,17 @@ test("同一运行新确认提案不被旧提案卡点拦截，也不复用旧�
     } };
   f.events.push(current);
   await f.run(); await f.run();
-  assert.equal(f.effects.submitted.length, 1);
-  assert.equal(current.payload.checkpoint.phase, "waiting");
-  assert.equal(current.payload.checkpoint.repairTaskId, null);
+  assert.equal(f.effects.submitted.length, 2);
+  assert.equal(current.payload.checkpoint.phase, "repairing");
+  assert.equal(current.payload.checkpoint.repairTaskId, "repair-2");
   assert.equal(f.event.payload.checkpoint.repairTaskId, originalCheckpoint.repairTaskId);
   assert.equal(f.event.payload.checkpoint.round, originalCheckpoint.round);
   assert.deepEqual(f.effects.resumed, []);
-  // 新提案的能力受阻重放仍不应创建或关联令狐修复任务。
+  // 新提案的能力受阻重放应复用本提案已有修复任务，不能重复创建。
   delete current.payload.checkpoint;
   await f.run();
-  assert.equal(f.effects.submitted.length, 1);
-  assert.equal(current.payload.checkpoint.repairTaskId, null);
+  assert.equal(f.effects.submitted.length, 2);
+  assert.equal(current.payload.checkpoint.repairTaskId, "repair-2");
   assert.deepEqual(f.effects.resolved, []);
   // 完成新提案不能冒充旧提案的真实复验通过。
   f.evolution.oneShotRun.status = "completed";
@@ -573,11 +578,12 @@ test("旧技术主卡点把最新验收证据写回原任务，重启与重复�
   f.events.push(latest);
   await f.run();
   assert.equal(f.effects.submitted.length, 1);
-  assert.equal(f.effects.refreshed, undefined);
+  assert.equal(f.effects.refreshed.length, 1);
+  assert.match(f.effects.refreshed[0].request.confirmedIntent, /acceptance-capability-blocked/);
   assert.equal(latest.payload.checkpoint.phase, "waiting");
   assert.equal(latest.payload.checkpoint.repairTaskId, null);
   await f.run(); await f.run();
-  assert.equal(f.effects.refreshed, undefined);
+  assert.equal(f.effects.refreshed.length, 1);
   assert.equal(f.collaboration.tasks.length, 1);
 });
 

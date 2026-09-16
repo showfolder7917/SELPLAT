@@ -370,7 +370,7 @@ export class HanliComputerAcceptance {
               throw new Error("任务协作页滚动距离必须为非零整数且不超过1000。");
             }
             const result = await window.webContents.executeJavaScript(`(${scrollTaskCollaboration.toString()})(${deltaY})`) as Record<string, unknown>;
-            if (result.status !== "scrolled") {
+            if (result.status !== "scrolled" && result.status !== "at-boundary") {
               throw new Error(`任务协作页未滚动：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
@@ -615,7 +615,15 @@ export class HanliComputerAcceptance {
 function scrollTaskCollaboration(deltaY: number): Record<string, unknown> {
   const page = document.querySelector<HTMLElement>(".task-collaboration-page");
   const detail = page?.querySelector<HTMLElement>(".task-timeline-detail-pane");
-  if (!page || !detail || page.offsetParent === null || detail.clientHeight <= 0) return { status: "hidden" };
+  const pageRect = page?.getBoundingClientRect();
+  const pageStyle = page ? getComputedStyle(page) : null;
+  const detailRect = detail?.getBoundingClientRect();
+  const detailStyle = detail ? getComputedStyle(detail) : null;
+  const pageVisible = Boolean(page && pageRect && pageRect.width > 0 && pageRect.height > 0
+    && pageStyle?.display !== "none" && pageStyle?.visibility !== "hidden");
+  const detailVisible = Boolean(detail && detailRect && detailRect.width > 0 && detailRect.height > 0
+    && detailStyle?.display !== "none" && detailStyle?.visibility !== "hidden");
+  if (!page || !detail || !pageVisible || !detailVisible) return { status: "hidden" };
   const pageScrollTop = page.scrollTop;
   const before = detail.scrollTop;
   const maxScrollTop = Math.max(0, detail.scrollHeight - detail.clientHeight);

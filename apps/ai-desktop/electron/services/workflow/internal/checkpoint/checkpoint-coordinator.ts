@@ -160,13 +160,13 @@ export class CheckpointCoordinator {
     event.payload.checkpoint = structuredClone(state);
   }
 
-  /** 验收能力受阻只保留可恢复事实，不创建令狐交接或修复任务。 */
+  /** 未分类的验收受阻只保留可恢复事实，不能猜测为产品或验收能力缺陷。 */
   #holdAcceptanceWithoutLinghu(
     event: WorkflowExceptionRecordOutDto,
     state: WorkflowCheckpointState,
     failureEvent: WorkflowExceptionRecordOutDto,
   ): void {
-    // 受阻结论已由韩立验收交接记录；此处只保存恢复状态，不能额外伪造令狐参与。
+    // 缺少结构化分类时只保存恢复状态，不能额外伪造令狐参与。
     const aggregate = new WorkflowCheckpointAggregate(state);
     aggregate.moveTo("waiting", `验收能力或运行环境受阻：${failureEvent.message}。保留原条件，等待可恢复重跑。`);
     Object.assign(state, aggregate.snapshot());
@@ -216,12 +216,15 @@ export class CheckpointCoordinator {
     const isAcceptanceCheckpoint = isAcceptanceFailureOperation(failureEvent.payload.operation) || (state.sourcePhase === "accepting" && !directlyTargetsTask);
     // 一次性原流程明确 completed，才是验收卡点已经通过复验的权威事实。
     const originalRunCompleted = Boolean(state.runId && run?.runId === state.runId && run.proposalId === state.proposalId && run.status === "completed");
-    // 验收分类是唯一的令狐派发依据：缺少分类也不能猜测为产品或安全缺陷。
-    if (isAcceptanceCheckpoint && failureEvent.payload.acceptanceFailureKind !== "product-defect") {
-      if (originalRunCompleted) {
-        // 验收通过事实已由原验收链发布，不再补写含令狐的卡点完成节点。
-        this.options.resolve(event.eventId, "非产品验收受阻已由原流程完成事实解除");
-      } else this.#holdAcceptanceWithoutLinghu(event, state, failureEvent);
+    // 原流程已经产生真实完成事实时直接解除，不再补写令狐接收或修复节点。
+    if (isAcceptanceCheckpoint && originalRunCompleted) {
+      this.options.resolve(event.eventId, "验收受阻已由原流程完成事实解除");
+      return;
+    }
+    // 验收分类是唯一的令狐派发依据：产品缺陷和既有验收能力故障都进入真实修复链；缺少分类不能猜测。
+    if (isAcceptanceCheckpoint && failureEvent.payload.acceptanceFailureKind !== "product-defect"
+      && failureEvent.payload.acceptanceFailureKind !== "acceptance-capability-blocked") {
+      this.#holdAcceptanceWithoutLinghu(event, state, failureEvent);
       return;
     }
     if (!state.phase) {

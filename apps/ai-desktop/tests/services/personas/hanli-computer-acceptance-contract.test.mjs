@@ -25,5 +25,8 @@ test("任务协作群滚动只移动详情面板", () => {
   assert.match(scrollSource, /querySelector<HTMLElement>\("\.task-timeline-detail-pane"\)/);
   assert.match(scrollSource, /detail\.scrollTop/);
   assert.match(scrollSource, /pageScrollTop/);
+  assert.match(scrollSource, /getBoundingClientRect/);
+  assert.doesNotMatch(scrollSource, /offsetParent/);
   assert.doesNotMatch(scrollSource, /page\.scrollTop\s*=/);
+  assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary"/);
 });
