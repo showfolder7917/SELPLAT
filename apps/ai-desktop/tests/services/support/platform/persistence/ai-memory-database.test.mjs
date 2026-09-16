@@ -92,7 +92,14 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
   try {
     const repository = new PersonaConversationRepository(initialized.database);
     const conversation = repository.create("han-li");
-    const raw = "我会继续核实滚动问题。\ncontentRole：technical-evidence\n用户原话：内部原话\n用户目标：内部目标";
+    const raw = [
+      "我会继续核实滚动问题。",
+      "### **用户原话**",
+      "内部原话",
+      "- **用户目标**：内部目标",
+      "- 调查对象：内部对象",
+      "contentRole 标注：technical-evidence；持久化、恢复、页面投影仅供内部使用。",
+    ].join("\n");
     repository.save({
       ...conversation,
       updatedAt: "2026-09-16T03:00:00.000Z",
@@ -113,17 +120,17 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
     });
     initialized.database?.withConnection((connection) => connection.prepare(`
       UPDATE AiDesktopPersonaCustomerDisplayMessage
-      SET displayContent=$raw, derivationVersion=1
+      SET displayContent=$raw, derivationVersion=2
       WHERE sourceMessageId='legacy-mixed-message'
     `).run({ $raw: raw }));
 
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => message.content), ["我会继续核实滚动问题。"]);
-    assert.doesNotMatch(window.messages[0].content, /contentRole|用户原话|用户目标/u);
+    assert.doesNotMatch(window.messages[0].content, /contentRole|用户原话|用户目标|调查对象|持久化|恢复|页面投影/u);
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-mixed-message'
     `).get());
-    assert.equal(version?.derivationVersion, 2);
+    assert.equal(version?.derivationVersion, 3);
   } finally {
     initialized.database?.close();
     rmSync(fixture.projectRoot, { recursive: true, force: true });

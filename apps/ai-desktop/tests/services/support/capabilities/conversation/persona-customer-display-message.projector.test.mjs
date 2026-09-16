@@ -34,6 +34,28 @@ test("紧凑历史字段和 contentRole 标注也只保留字段前的自然答�
   assert.doesNotMatch(compact.content, /用户原话|用户目标|调查对象|contentRole/u);
 });
 
+test("Markdown 字段组从人物旧回复中剥离，用户原话包含相同字段时保持完整", () => {
+  const legacy = derivePersonaCustomerDisplayMessage({
+    messageType: "customer-visible",
+    speakerType: "persona",
+    content: [
+      "我会继续核实消息显示。",
+      "### **用户原话**",
+      "内部原话",
+      "- **用户目标**：内部目标",
+      "- 调查对象：内部对象",
+      "【期望结果】内部结果",
+      "contentRole 标注：technical-evidence；持久化、恢复、页面投影仅供内部使用。",
+    ].join("\n"),
+  });
+  assert.deepEqual(legacy, { state: "ready", content: "我会继续核实消息显示。", failureReason: null });
+  assert.doesNotMatch(legacy.content, /用户原话|用户目标|调查对象|期望结果|contentRole|持久化|恢复|页面投影/u);
+
+  const userContent = "我想确认用户原话、用户目标和调查对象在页面投影中的显示方式。";
+  const user = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", speakerType: "user", content: userContent });
+  assert.deepEqual(user, { state: "ready", content: userContent, failureReason: null });
+});
+
 test("内部字段位于正文开头时保持不可显示状态，不能把混合原文回退到客户页面", () => {
   const failed = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", content: "contentRole：technical-evidence\n用户目标：内部目标" });
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
