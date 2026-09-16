@@ -124,7 +124,7 @@ export class CollaborationTimelineRepository {
     return changedGroupIds.size ? this.#commit([...changedGroupIds], committedAt) : null;
   }
 
-  appendStream(taskId: string, memberId: string, event: CodexStreamEventOutDto, occurredAt = new Date().toISOString()): CollaborationTimelineStreamCommit | null {
+  appendStream(taskId: string, memberId: string, event: CodexStreamEventOutDto, occurredAt = new Date().toISOString(), chunkId = `timeline-stream-${randomUUID()}`): CollaborationTimelineStreamCommit | null {
     const committedAt = new Date().toISOString();
     const stored = this.#database.transaction((connection) => {
       const active = connection.prepare(`
@@ -136,14 +136,16 @@ export class CollaborationTimelineRepository {
       `).get({ $taskId: taskId, $memberId: memberId }) as { groupId: string; nodeId: string } | undefined;
       if (!active) return null;
       const sequence = Number((connection.prepare("SELECT COALESCE(MAX(sequenceNumber), 0) + 1 AS value FROM AiDesktopTaskTimelineStream WHERE taskId=$taskId").get({ $taskId: taskId }) as { value: number | bigint }).value);
-      connection.prepare(`INSERT INTO AiDesktopTaskTimelineStream
+      const inserted = connection.prepare(`INSERT OR IGNORE INTO AiDesktopTaskTimelineStream
         (chunkId, groupId, taskId, nodeId, memberId, turnId, segmentId, itemId, eventType, sequenceNumber, deltaText, snapshotText, occurredAt, committedAt)
         VALUES ($chunkId, $groupId, $taskId, $nodeId, $memberId, $turnId, $segmentId, $itemId, $eventType, $sequenceNumber, $deltaText, $snapshotText, $occurredAt, $committedAt)`).run({
-        $chunkId: `timeline-stream-${randomUUID()}`, $groupId: active.groupId, $taskId: taskId, $nodeId: active.nodeId,
+        $chunkId: chunkId, $groupId: active.groupId, $taskId: taskId, $nodeId: active.nodeId,
         $memberId: memberId, $turnId: event.turnId, $segmentId: event.segmentId || null, $itemId: event.itemId || null,
         $eventType: event.type, $sequenceNumber: sequence, $deltaText: event.delta || null,
         $snapshotText: event.text || event.managedExecution?.message || event.error || null, $occurredAt: occurredAt, $committedAt: committedAt,
       });
+      // 重试沿用首次片段标识；已提交的片段不再增加序号或改写专题版本。
+      if (Number(inserted.changes) === 0) return null;
       if (!TIMELINE_CONTENT_EVENT_TYPES.has(event.type)) return null;
       connection.prepare(`UPDATE AiDesktopTaskTimelineTopic SET revision=revision+1,
         updatedAt=CASE WHEN updatedAt < $occurredAt THEN $occurredAt ELSE updatedAt END WHERE groupId=$groupId`)
