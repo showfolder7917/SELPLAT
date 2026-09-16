@@ -75,7 +75,6 @@ import type {
 import {
   // 来源：index.ts → internal/corpus/codex-conversation-corpus.ingestion.ts。
   // 作用：创建“会话增量入库器”，扫描 sessions 里的 rollout 文件，去重后写入训练语料 SQLite 表。
-  createCodexConversationCorpusIngestion,
   // 来源：同一个 corpus ingestion 文件中的 CodexConversationCorpusWatcher。
   // 作用：监听 Codex sessions/archived_sessions 目录变化；它只发出“需要扫描”信号，不直接解析或写数据库。
   createCodexConversationCorpusWatcher,
@@ -90,7 +89,6 @@ import {
   parseCodexSemanticBackfillResponse,
   // 下面都是 type-only 类型别名：只帮助编辑器和编译器理解对象能力，运行时不会导入任何值。
   // CorpusIngestion 对应 CodexConversationCorpusIngestion；当前 main.ts 未直接标注这个别名。
-  type CorpusIngestion,
   // CorpusSemanticBackfill 对应 CodexConversationSemanticBackfill；当前 main.ts 未直接标注这个别名。
   type CorpusSemanticBackfill,
   // CorpusWatcher 对应目录监听器；外层变量 codexAppCorpusWatcher 用它声明“可 start/stop 的 watcher”。
@@ -280,9 +278,7 @@ export async function startApplication(): Promise<void> {
     }
   };
   // AI Desktop 自己的会话只有在数据库可用时才进入训练语料库。
-  const corpusIngestion = aiMemoryDatabase
-    ? createCodexConversationCorpusIngestion(aiMemoryDatabase, path.join(codexHome, "sessions"))
-    : null;
+  const backgroundPersistence = persistenceContext.backgroundPersistence;
   // 页面检查线程不初始化外部 Codex 语料链路，避免读取正式用户目录或创建无意义的轮询器。
   // 正式启动仍按设置读取用户默认 CODEX_HOME。
   const externalCorpusEnabled = true;
@@ -293,32 +289,63 @@ export async function startApplication(): Promise<void> {
     ? [path.join(externalCodexHome, "sessions"), path.join(externalCodexHome, "archived_sessions")]
     : [];
   // 活跃与已归档会话分别登记来源前缀，方便追踪语料来自哪个物理目录。
-  const externalCorpusIngestions = aiMemoryDatabase && externalCorpusEnabled ? [
-    createCodexConversationCorpusIngestion(aiMemoryDatabase, externalCorpusRoots[0]!, {
+  const corpusIngestionRequests = backgroundPersistence ? [
+    { sessionsRoot: path.join(codexHome, "sessions"), policy: {} },
+    ...(externalCorpusEnabled ? [{ sessionsRoot: externalCorpusRoots[0]!, policy: {
       sourceKeyPrefix: "codex-app/active",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: projectRoot,
       requiredOriginator: "codex_work_desktop",
       requireCompletedTurns: true,
-    }),
-    createCodexConversationCorpusIngestion(aiMemoryDatabase, externalCorpusRoots[1]!, {
+    } }, { sessionsRoot: externalCorpusRoots[1]!, policy: {
       sourceKeyPrefix: "codex-app/archived",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: projectRoot,
       requiredOriginator: "codex_work_desktop",
       requireCompletedTurns: true,
-    }),
+    } }] : []),
   ] : [];
   /** rollout 本身是持久重试源；只有完整入库后才更新检查点，失败会在下一回合或启动时重试。 */
   // running 防止并发扫描；requested 表示扫描期间又收到了一次触发，需要结束后再补跑。
   let corpusIngestionRunning = false;
   let corpusIngestionRequested = false;
   let corpusIngestionStatus: CorpusIngestionStatusOutDto = {
-    state: settings.read().codexAppCorpusIngestionEnabled ? "completed" : "stopped",
-    message: settings.read().codexAppCorpusIngestionEnabled ? "等待下一次自动入库。" : "自动入库已停止。",
+    state: "stopped",
+    message: settings.read().codexAppCorpusIngestionEnabled ? "正在恢复自动入库状态…" : "自动入库已停止。",
     lastSucceededAt: null,
     retryable: false,
   };
+  const persistCorpusIngestionStatus = async (next: CorpusIngestionStatusOutDto): Promise<void> => {
+    corpusIngestionStatus = next;
+    if (!backgroundPersistence) return;
+    await backgroundPersistence.request({
+      operation: "set-corpus-ingestion-status",
+      // DTO 没有通用索引签名；在跨线程边界逐字段投影，避免把类型断言当成运行时协议。
+      payload: {
+        state: next.state,
+        message: next.message || "自动入库状态已更新。",
+        lastSucceededAt: next.lastSucceededAt,
+        retryable: next.retryable,
+      },
+    });
+  };
+  const restoreCorpusIngestionStatus = backgroundPersistence
+    ? backgroundPersistence.request<Partial<CorpusIngestionStatusOutDto> | null>({ operation: "read-corpus-ingestion-status", payload: {} })
+    .then((stored) => {
+      if (!stored) return;
+      const restored: CorpusIngestionStatusOutDto = {
+        state: stored.state === "running" || stored.state === "completed" || stored.state === "failed" || stored.state === "stopped" ? stored.state : "stopped",
+        message: typeof stored.message === "string" ? stored.message : "自动入库已停止。",
+        lastSucceededAt: typeof stored.lastSucceededAt === "string" ? stored.lastSucceededAt : null,
+        retryable: stored.retryable === true,
+      };
+      corpusIngestionStatus = restored.state === "running"
+        ? { ...restored, state: "failed", message: "上次自动入库未完成，可重试。", retryable: true }
+        : restored;
+      if (stored.state === "running") void persistCorpusIngestionStatus(corpusIngestionStatus);
+    })
+    .catch((error) => { corpusIngestionStatus = { state: "failed", message: `无法恢复自动入库状态：${error instanceof Error ? error.message : String(error)}`, lastSucceededAt: null, retryable: true }; })
+    : Promise.resolve();
   /** 设置卡片只控制外部 Codex 自动入库；应用自身会话仍按既有完成回合语义补录，不能反向把“已停止”伪装成成功。 */
   const isExternalCorpusIngestionEnabled = () => externalCorpusEnabled && settings.read().codexAppCorpusIngestionEnabled;
   let requestHanliSemanticRefresh: () => void = () => undefined;
@@ -332,7 +359,7 @@ export async function startApplication(): Promise<void> {
   /** 按触发来源增量导入尚未处理的会话；本函数后台执行，不阻塞界面启动。 */
   const ingestTrainingCorpus = (trigger: "startup" | "turn-completed" | "codex-app-changed" | "codex-app-enabled"): void => {
     // 没有数据库就没有可写入的语料仓库，直接保持降级运行。
-    if (!corpusIngestion) return;
+    if (!backgroundPersistence) return;
     latestCorpusTrigger = trigger;
     if (corpusIngestionRunning) {
       // 不并行启动第二个扫描，只记住“结束后还要再扫一次”。
@@ -342,14 +369,14 @@ export async function startApplication(): Promise<void> {
     corpusIngestionRunning = true;
     const exposeStatusForThisRun = isExternalCorpusIngestionEnabled();
     if (exposeStatusForThisRun) {
-      corpusIngestionStatus = { ...corpusIngestionStatus, state: "running", message: "正在处理 Codex 会话入库…", retryable: false };
+      void persistCorpusIngestionStatus({ ...corpusIngestionStatus, state: "running", message: "正在处理 Codex 会话入库…", retryable: false });
     }
     void (async () => {
       try {
         // AI Desktop 自身会话始终导入；外部 Codex App 会话受用户设置控制。
-        const summaries = [await corpusIngestion.ingestPendingRolloutsIncrementally()];
+        const summaries = [await backgroundPersistence.request<{ scannedFileCount: number; changedFileCount: number; ingestedMessageCount: number; skippedInternalFileCount: number }>({ operation: "ingest-rollouts", payload: corpusIngestionRequests[0]! })];
         if (isExternalCorpusIngestionEnabled()) {
-          for (const ingestion of externalCorpusIngestions) summaries.push(await ingestion.ingestPendingRolloutsIncrementally());
+          for (const request of corpusIngestionRequests.slice(1)) summaries.push(await backgroundPersistence.request({ operation: "ingest-rollouts", payload: request }));
         }
         const summary = summaries.reduce((total, current) => ({
           // 合并多个来源的计数，审计中只记录一次完整导入结果。
@@ -360,24 +387,24 @@ export async function startApplication(): Promise<void> {
         }), { scannedFileCount: 0, changedFileCount: 0, ingestedMessageCount: 0, skippedInternalFileCount: 0 });
         eventCenter.recordEvent("training_corpus.ingested", { trigger, ...summary });
         if (exposeStatusForThisRun && isExternalCorpusIngestionEnabled()) {
-          corpusIngestionStatus = {
+          await persistCorpusIngestionStatus({
             state: "completed",
             message: `最近成功：新增 ${summary.ingestedMessageCount} 条训练语料。`,
             lastSucceededAt: new Date().toISOString(),
             retryable: false,
-          };
+          });
         }
         requestHanliSemanticRefresh();
       } catch (error) {
         // 数据库或尾行暂不可用时保留 rollout 与旧水位；事件登记失败也不能覆盖原始会话。
         try { eventCenter.recordEvent("training_corpus.ingestion_failed", { trigger, message: error instanceof Error ? error.message : String(error) }); } catch { /* AI Memory 故障由启动状态统一回显。 */ }
         if (exposeStatusForThisRun && isExternalCorpusIngestionEnabled()) {
-          corpusIngestionStatus = {
+          await persistCorpusIngestionStatus({
             state: "failed",
             message: `自动入库失败：${error instanceof Error ? error.message : String(error)}`,
             lastSucceededAt: corpusIngestionStatus.lastSucceededAt,
             retryable: true,
-          };
+          });
         }
       } finally {
         // 无论成功失败都释放运行锁；若期间收到新触发，则立刻按最新来源补扫。
@@ -389,12 +416,12 @@ export async function startApplication(): Promise<void> {
       }
     })();
   };
-  // 启动时先补录应用关闭期间新增或未完成的持久会话。
-  ingestTrainingCorpus("startup");
+  // 必须先恢复持久状态；否则启动扫描可能把上次失败或处理中记录覆盖为新的默认状态。
+  void restoreCorpusIngestionStatus.then(() => ingestTrainingCorpus("startup"));
   // 用户刚打开外部语料开关时立即导入，不必等待目录下一次变化。
   settings.subscribe((next) => {
     if (!next.codexAppCorpusIngestionEnabled) {
-      corpusIngestionStatus = { ...corpusIngestionStatus, state: "stopped", message: "自动入库已停止。", retryable: false };
+      void persistCorpusIngestionStatus({ ...corpusIngestionStatus, state: "stopped", message: "自动入库已停止。", retryable: false });
       return;
     }
     if (externalCorpusEnabled) ingestTrainingCorpus("codex-app-enabled");

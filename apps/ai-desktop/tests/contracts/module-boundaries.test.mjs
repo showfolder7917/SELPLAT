@@ -194,6 +194,7 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
 
 test("人物训练语料通过主会话完成钩子和启动补录闭环且清空只重置内部线程", () => {
   const main = source("electron/system/bootstrap/application-runtime.ts");
+  const corpusWorker = source("electron/services/support/capabilities/event-center/internal/corpus/background-persistence.worker.ts");
   const codexService = source("electron/services/support/platform/codex/codex.facade.ts");
   const ingestion = source("electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.ts");
   const repository = source("electron/services/workflow/internal/collaboration/workflow.repository.ts");
@@ -210,7 +211,12 @@ test("人物训练语料通过主会话完成钩子和启动补录闭环且清�
   assert.match(main, /requiredOriginator:\s*"codex_work_desktop"/);
   assert.match(main, /requireCompletedTurns:\s*true/);
   assert.match(main, /codexAppCorpusIngestionEnabled/);
-  assert.match(main, /ingestPendingRolloutsIncrementally/);
+  // 扫描、检查点读取和 SQLite 事务只能在 Worker 内执行；主进程只提交结构化请求。
+  assert.match(main, /backgroundPersistence\.request/);
+  assert.match(main, /operation:\s*"ingest-rollouts"/);
+  assert.doesNotMatch(main, /createCodexConversationCorpusIngestion/);
+  assert.doesNotMatch(main, /ingestPendingRolloutsIncrementally/);
+  assert.match(corpusWorker, /ingestPendingRolloutsIncrementally/);
   assert.match(main, /corpusIngestionRunning/);
   assert.match(ingestion, /task_complete/);
   assert.match(ingestion, /setImmediate/);
