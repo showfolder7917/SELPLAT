@@ -100,6 +100,27 @@ test("人物协作说明命中多个稳定概念时保持失败位置，用户�
   assert.deepEqual(user, { state: "ready", content: collaborationProse, failureReason: null });
 });
 
+test("hanli-design 首段含多项内部处理标记时保持失败位置，不能因截断后续段落而泄露", () => {
+  const internalProcessReply = "本轮只读、工程约束、产品目标、调查边界和验收路径属于内部处理。";
+  const persona = derivePersonaCustomerDisplayMessage({
+    messageId: "hanli-design:internal-process-reply",
+    messageType: "customer-visible",
+    speakerType: "persona",
+    content: [
+      internalProcessReply,
+      "后续设计说明和审计字段只保留在原始记录。",
+    ].join("\n\n"),
+  });
+  assert.deepEqual(persona, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
+
+  const user = derivePersonaCustomerDisplayMessage({
+    messageType: "customer-visible",
+    speakerType: "user",
+    content: internalProcessReply,
+  });
+  assert.deepEqual(user, { state: "ready", content: internalProcessReply, failureReason: null });
+});
+
 test("内部字段位于正文开头时保持不可显示状态，不能把混合原文回退到客户页面", () => {
   const failed = derivePersonaCustomerDisplayMessage({ messageType: "customer-visible", content: "contentRole：technical-evidence\n用户目标：内部目标" });
   assert.deepEqual(failed, { state: "failed", content: null, failureReason: "客户显示正文派生失败，请重新读取。" });
