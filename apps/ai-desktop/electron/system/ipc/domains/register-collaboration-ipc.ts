@@ -54,6 +54,7 @@ export function registerCollaborationIpc(
   // 人物会话统一通过读取、发送、新建和模型选择四类入口访问；新人物只需注册处理器。
   handle("desktop:get-persona-conversation", (_event, personaId: string) => personaConversations.conversation(personaId));
   handle("desktop:get-persona-conversation-window", (_event, personaId: string, request?: ReadPersonaConversationWindowInDto) => personaConversations.conversationWindow(personaId, request || {}));
+  handle("desktop:retry-persona-customer-display-message", (_event, personaId: string, conversationId: string, sourceMessageId: string) => personaConversations.retryCustomerDisplayMessage(personaId, conversationId, sourceMessageId));
   handle("desktop:send-persona-conversation-message", (_event, personaId: string, request: SendPersonaConversationMessageInDto) => personaConversations.send(personaId, request));
   handle("desktop:new-persona-conversation", (_event, personaId: string) => personaConversations.newConversation(personaId));
   handle("desktop:select-persona-conversation-model", (_event, personaId: string, selectedModel: string | null) => personaConversations.selectModel(personaId, selectedModel));

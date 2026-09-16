@@ -144,9 +144,12 @@ export class HanliConversationService {
     // Workflow 快照提供待确认轮次和活动研讨事实。
     const workflowState = this.#options.store.state();
     // 创建纯 Domain Aggregate，集中解释本轮消息应该触发的动作。
+    const customerDisplayConversation = memory.readPersonaCustomerDisplayConversation("han-li", conversation.conversationId);
     const aggregate = new HanliConversationAggregate({
       // 传入当前稳定会话，Aggregate 从真实消息恢复观点与澄清锚点。
       conversation,
+      // 当前观点只从统一客户显示端口恢复，原始正文保留给内部锚点和审计。
+      customerDisplayMessages: customerDisplayConversation.messages,
       // 传入界面已经展示的待确认轮次，优先完成当前研讨。
       pendingConfirmationRoundId: this.#pendingConfirmationRoundId(workflowState, conversation),
       // 传入活动研讨标识，保证重复输入 1 不会创建第二条流程。
@@ -272,7 +275,8 @@ export class HanliConversationService {
     // 把语义资料压缩成受预算约束的方法上下文。
     const methodContext = buildHanliMethodContext(semanticContext);
     // 当前会话上下文保留用户原文，并限制历史 AI 长回答的预览长度。
-    const recentConversation = buildHanliRecentConversation(conversation.messages);
+    const customerDisplayConversation = memory.readPersonaCustomerDisplayConversation("han-li", conversationId);
+    const recentConversation = buildHanliRecentConversation(customerDisplayConversation.messages);
     // 澄清锚点存在时继续围绕原问题处理用户补充。
     const pendingCustomerQuestion = aggregate.pendingCustomerQuestion();
     // 没有澄清锚点时，本轮用户原话就是当前问题。

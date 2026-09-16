@@ -29,7 +29,7 @@ function windowConversation(window: PersonaConversationWindowOutDto): PersonaCon
 }
 
 /**
- * 正式桥接按窗口读取，隔离或旧版桥接尚未暴露新能力时保留完整会话可见，避免只读升级中断整页渲染。
+ * 正式桥接只按客户显示窗口读取；能力缺失时保留错误，禁止回退原始混合正文。
  */
 async function readPersonaConversationWindow(
   desktop: ReturnType<typeof getOptionalCollaborationDesktopApi>,
@@ -37,11 +37,10 @@ async function readPersonaConversationWindow(
   request?: ReadPersonaConversationWindowInDto,
 ): Promise<PersonaConversationWindowOutDto | undefined> {
   if (!desktop) return undefined;
-  if (typeof desktop.getPersonaConversationWindow === "function") {
-    return desktop.getPersonaConversationWindow(personaId, request);
+  if (typeof desktop.getPersonaConversationWindow !== "function") {
+    throw new Error("客户显示消息窗口读取能力尚未就绪，可在服务恢复后重试。");
   }
-  const conversation = await desktop.getPersonaConversation(personaId);
-  return conversation ? { ...conversation, hasEarlier: false } : undefined;
+  return desktop.getPersonaConversationWindow(personaId, request);
 }
 
 export interface PersonaPendingMessage {
@@ -142,6 +141,22 @@ export function usePersonaConversation(personaId: string) {
     } catch (reason) { setError(readableDesktopError(reason, "无法读取更早消息，请重试。")); }
   }, [conversation.conversationId, conversation.messages, hasEarlier, personaId]);
 
+  /** 在同一气泡位置重试客户显示派生；成功后只刷新窗口投影，绝不读取原始正文。 */
+  const retryCustomerDisplayMessage = useCallback(async (sourceMessageId: string) => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    const conversationId = conversation.conversationId;
+    if (!desktop || !conversationId) return;
+    try {
+      const window = await desktop.retryPersonaCustomerDisplayMessage(personaId, conversationId, sourceMessageId);
+      if (window.conversationId === conversationId) {
+        setConversation(windowConversation(window));
+        setHasEarlier(window.hasEarlier);
+      }
+    } catch (reason) {
+      setError(readableDesktopError(reason, "无法重新读取客户显示消息，请稍后重试。"));
+    }
+  }, [conversation.conversationId, personaId]);
+
   useEffect(() => {
     let active = true;
     setModelCatalogLoading(true);
@@ -203,9 +218,14 @@ export function usePersonaConversation(personaId: string) {
     setNewConversationFeedback("");
     setError("");
     try {
-      const value = await getOptionalCollaborationDesktopApi()?.newPersonaConversation(personaId);
+      const desktop = getOptionalCollaborationDesktopApi();
+      const value = await desktop?.newPersonaConversation(personaId);
       if (!value) throw new Error("新建人物会话服务没有返回结果。");
-      setConversation(value);
+      // 新建动作只提供会话标识；页面正文必须重新从客户显示窗口读取。
+      const customerDisplay = await readPersonaConversationWindow(desktop, personaId, { conversationId: value.conversationId });
+      if (!customerDisplay) throw new Error("新建人物会话后无法读取客户显示消息。");
+      setConversation(windowConversation(customerDisplay));
+      setHasEarlier(customerDisplay.hasEarlier);
       setDraftText("");
       setAttachments([]);
       setPendingMessage(null);
@@ -224,16 +244,21 @@ export function usePersonaConversation(personaId: string) {
     if (sending || newConversationBusy) return;
     setError("");
     try {
-      const value = await getOptionalCollaborationDesktopApi()?.selectPersonaConversationModel(personaId, selectedModel);
+      const desktop = getOptionalCollaborationDesktopApi();
+      const value = await desktop?.selectPersonaConversationModel(personaId, selectedModel);
       if (!value) throw new Error("人物会话模型服务没有返回结果。");
-      setConversation(value);
+      // 模型选择的全量回执不参与页面投影，避免旧混合正文借设置操作回流。
+      const customerDisplay = await readPersonaConversationWindow(desktop, personaId, { conversationId: value.conversationId });
+      if (!customerDisplay) throw new Error("保存人物对话模型后无法读取客户显示消息。");
+      setConversation(windowConversation(customerDisplay));
+      setHasEarlier(customerDisplay.hasEarlier);
     } catch (reason) {
       setError(readableDesktopError(reason, "无法保存人物对话模型。"));
     }
   };
 
   return {
-    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier,
+    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,

@@ -909,7 +909,12 @@ export async function startApplication(): Promise<void> {
   personaConversations.register("han-li", hanliRuntime.facade);
   personaConversations.registerWindowReader((personaId, request) => {
     if (!collaborationMemory) throw new Error("人物会话数据库当前不可用，无法读取历史窗口。");
-    return collaborationMemory.readPersonaConversationWindow(personaId, request);
+    return collaborationMemory.readPersonaCustomerDisplayWindow(personaId, request);
+  });
+  personaConversations.registerCustomerDisplayRetry((personaId, conversationId, sourceMessageId) => {
+    if (!collaborationMemory) throw new Error("人物会话数据库当前不可用，无法重新读取客户显示消息。");
+    collaborationMemory.retryPersonaCustomerDisplayMessage(personaId, conversationId, sourceMessageId);
+    return collaborationMemory.readPersonaCustomerDisplayWindow(personaId, { conversationId });
   });
   // 南宫婉正文和流程仍由 Evolution 管理；会话头只为这一个会话补充持久化模型选择。
   const nangongConversationWithSelectedModel = (conversation: PersonaConversationOutDto): PersonaConversationOutDto => ({

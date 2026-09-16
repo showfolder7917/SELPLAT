@@ -47,6 +47,20 @@ test("正式任务建立前的审批卡点也由韩立用客户语言反馈", ()
 });
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+// 测试内存按正式客户显示端口返回消息：内部事实不进入客户链路，旧夹具消息默认是可安全显示的已派生正文。
+function customerDisplaySnapshot(conversation) {
+  return {
+    ...conversation,
+    messages: conversation.messages
+      .filter((message) => message.messageType === "customer-visible")
+      .map((message) => ({
+        ...message,
+        customerDisplayState: message.customerDisplayState || "ready",
+        customerDisplayFailureReason: message.customerDisplayFailureReason || null,
+      })),
+  };
+}
+
 function fixture(investigate, explain = async () => ({ text: "源码已经修改，但当前运行版本尚未确认。建议先确认运行版本再复验。" }), assess = async () => conclude) {
   const messages = [], order = [], discussionContexts = [], events = [], activities = [];
   const snapshot = (id = "original") => ({ ownerPersonaId: "han-li", selectedModel: "selected-model", conversationId: id, messages: structuredClone(messages), updatedAt: new Date().toISOString() });
@@ -58,6 +72,7 @@ function fixture(investigate, explain = async () => ({ text: "源码已经修改
   };
   const memory = {
     readPersonaConversation: (_owner, id) => snapshot(id),
+    readPersonaCustomerDisplayConversation: (_owner, id) => customerDisplaySnapshot(snapshot(id)),
     registerPersonaRound: (round) => {
       append({ messageId: round.userMessageId, speakerType: "user", content: round.userContent, attachmentIds: round.attachmentIds });
       append({ messageId: round.personaMessageId, speakerPersonaId: "han-li", content: round.personaContent });
@@ -90,6 +105,20 @@ function fixture(investigate, explain = async () => ({ text: "源码已经修改
   return { service: new HanliInquiryService(options), createService: () => new HanliInquiryService(options),
     messages, memory, order, discussionContexts, events, activities };
 }
+
+test("韩立测试内存通过客户显示端口隔离内部消息并保留派生状态", () => {
+  const f = fixture(async () => findings);
+  f.messages.push(
+    { messageId: "display-user", messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: "请继续核实", customerDisplayState: "ready" },
+    { messageId: "display-failed", messageType: "customer-visible", speakerType: "persona", speakerPersonaId: "han-li", content: "此消息暂时无法安全显示。", customerDisplayState: "failed" },
+    { messageId: "display-internal", messageType: "internal-deliberation", speakerType: "persona", speakerPersonaId: "nangong-wan", content: "内部事实" },
+  );
+  const display = f.memory.readPersonaCustomerDisplayConversation("han-li", "original");
+  assert.deepEqual(display.messages.map((message) => [message.messageId, message.customerDisplayState]), [
+    ["display-user", "ready"],
+    ["display-failed", "failed"],
+  ]);
+});
 
 test("真实调查、独立判断、解释依次推进；并发和完成重试保持同一消息", async () => {
   let resolve, acquire;
@@ -298,6 +327,7 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
   const snapshot = (updatedAt = "2026-09-05T00:00:00.000Z") => ({ ownerPersonaId: "han-li", conversationId: "clarification-thread", messages: [...messages], updatedAt });
   const memory = {
     readPersonaConversation: () => snapshot(),
+    readPersonaCustomerDisplayConversation: () => customerDisplaySnapshot(snapshot()),
     newPersonaConversation: () => snapshot(),
     readHanliSemanticContext: () => ({ concerns: [], trajectories: [], inspectionExperiences: [] }),
     registerPersonaRound: (round) => {
@@ -354,6 +384,7 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
   const snapshot = () => ({ ownerPersonaId: "han-li", conversationId: "discussion-thread", messages: [...messages], updatedAt: "2026-09-05T00:00:01.000Z" });
   const memory = {
     readPersonaConversation: () => snapshot(), newPersonaConversation: () => snapshot(),
+    readPersonaCustomerDisplayConversation: () => customerDisplaySnapshot(snapshot()),
     readHanliSemanticContext: () => ({ concerns: [], trajectories: [], inspectionExperiences: [] }),
     readRequirementDiscussionContext: (_owner, _conversationId, sourceRequestId) => sourceRequestId === "u1" ? prior : null,
     recordRequirementDiscussionContext: (context) => recorded.push(structuredClone(context)),
@@ -387,7 +418,7 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
 });
 
 test("排查恢复点不进入后续客户对话上下文，也不挤掉真实问答", () => {
-  const messages = [{ messageId: "user-1", messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: "滚动条为何跳动" }];
+  const messages = [{ messageId: "user-1", messageType: "customer-visible", customerDisplayState: "ready", speakerType: "user", speakerPersonaId: null, content: "滚动条为何跳动" }];
   for (let index = 0; index < 30; index += 1) messages.push({
     messageId: `inquiry-checkpoint:u1:${index}`, messageType: "internal-recovery", speakerType: "system",
     speakerPersonaId: null, content: "内部恢复记录不应进入对话",

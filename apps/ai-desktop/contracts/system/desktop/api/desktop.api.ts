@@ -176,6 +176,8 @@ export interface DesktopApi {
   getPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
   /** 按稳定序号读取有限窗口；不会截断或迁移数据库历史。 */
   getPersonaConversationWindow(personaId: string, request?: ReadPersonaConversationWindowInDto): Promise<PersonaConversationWindowOutDto>;
+  /** 在原消息位置重新派生客户显示正文；失败时不得读取原始 content 作为回退。 */
+  retryPersonaCustomerDisplayMessage(personaId: string, conversationId: string, sourceMessageId: string): Promise<PersonaConversationWindowOutDto>;
   /** 订阅人物会话持久消息变化；内部研讨每新增一条消息都会返回同一权威会话快照。 */
   onPersonaConversationChanged(listener: (conversation: PersonaConversationOutDto) => void): () => void;
   /** 向韩立发送自由讨论消息；韩立只读取语义记忆并进行只读分析。 */

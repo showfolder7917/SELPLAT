@@ -71,9 +71,19 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
       : this.#conversations.readActive(ownerPersonaId);
   }
 
-  /** 为页面返回有限消息窗口；人物业务仍可通过完整读取保持既有上下文策略。 */
-  readPersonaConversationWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto {
-    return this.#conversations.readWindow(ownerPersonaId, request);
+  /** 客户页面、近期上下文和当前观点唯一消费的安全显示投影。 */
+  readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto {
+    return this.#conversations.readCustomerDisplay(ownerPersonaId, conversationId);
+  }
+
+  /** 客户页面历史补载使用的有限显示窗口，绝不回传原始 customer-visible content。 */
+  readPersonaCustomerDisplayWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto {
+    return this.#conversations.readCustomerDisplayWindow(ownerPersonaId, request);
+  }
+
+  /** 仅重算一条失败的客户显示派生；原始消息与内部事实均不改写。 */
+  retryPersonaCustomerDisplayMessage(ownerPersonaId: string, conversationId: string, sourceMessageId: string): void {
+    this.#conversations.retryCustomerDisplayMessage(ownerPersonaId, conversationId, sourceMessageId);
   }
 
   /** 建立新的活动业务会话；旧会话只归档，不删除原始消息。 */
