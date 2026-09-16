@@ -397,7 +397,7 @@ test("打开 v11 旧 hanli-reply 混合记录时迁移自然结论并保留原�
   }
 });
 
-test("打开 v8 hanli-design 内部处理首段时重算为失败位置，绝不显示截断后的内部说明", () => {
+test("打开 v8 hanli-design 内部处理首段时排除记录，绝不显示内部说明或失败占位", () => {
   const fixture = createFixture("customer-display-v8-hanli-design-process-reply");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
@@ -430,13 +430,11 @@ test("打开 v8 hanli-design 内部处理首段时重算为失败位置，绝不
     `).run({ $raw: raw }));
 
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
-    assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
-      content: "此消息暂时无法安全显示。", state: "failed",
-    }]);
-    assert.doesNotMatch(window.messages[0].content, /本轮只读|工程约束|产品目标|调查边界|验收路径/u);
+    assert.deepEqual(window.messages, []);
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
-      SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='hanli-design:internal-process-reply'
+      SELECT displayState, derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='hanli-design:internal-process-reply'
     `).get());
+    assert.equal(version?.displayState, "excluded");
     assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
   } finally {
     initialized.database?.close();
