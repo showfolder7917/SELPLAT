@@ -121,6 +121,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
 
   const deliveryUnavailable = deliveryReadStatus === "unavailable";
   const timelineUnavailable = timelineReadStatus === "unavailable";
+  const timelineRefreshing = timelineReadStatus === "syncing" && groups.length > 0;
   const readObstruction = createReadObstructionPresentation({
     deliveryUnavailable,
     // 最近成功的时间线仍可供阅读；失败只作为局部刷新状态，不能替换整页内容。
@@ -230,6 +231,9 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         </button>
         <span>{groups.length}</span>
       </header>
+      {timelineRefreshing && <div className="task-collaboration-refresh-status" role="status" aria-live="polite">
+        <span>正在更新任务进度，当前内容和操作保持可用。</span>
+      </div>}
       {timelineUnavailable && <div className="task-collaboration-refresh-status" role="status">
         <span>{readError || "任务进度更新失败，正在保留上次成功内容。"}</span>
         <button type="button" disabled={retryingRead} onClick={retryTimelineRead}>{retryingRead ? "重新读取中…" : "重新读取更新"}</button>

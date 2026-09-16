@@ -170,10 +170,14 @@ test("一次性工作流按可见实质状态更新同一消息，任务事件�
 test("任务时间线更新失败时保留最近快照并提供局部重读", () => {
   const taskGroup = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
   const viewModel = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
+  const workspace = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
   assert.match(taskGroup, /timelineUnavailable: false/);
+  assert.match(taskGroup, /timelineRefreshing = timelineReadStatus === "syncing" && groups\.length > 0[\s\S]*?正在更新任务进度，当前内容和操作保持可用/);
   assert.match(taskGroup, /task-collaboration-refresh-status[\s\S]*?重新读取更新/);
   assert.match(taskGroup, /onRetryTimelineRead\(\)[\s\S]*?finally\(\(\) => setRetryingRead\(false\)\)/);
   assert.match(viewModel, /onRetryTimelineRead: async \(\) => \{ await controller\.actions\.refreshTimeline\(\); \}/);
+  assert.match(workspace, /getCollaborationTimelineGroups\(changedGroupIds\)[\s\S]*?setTimelineReadStatus\("ready"\)/);
+  assert.match(workspace, /const startedAt = performance\.now\(\);[\s\S]*?setTimelineReadStatus\("syncing"\)[\s\S]*?getCollaborationTimelineGroups/);
 });
 
 test("空任务页先引导说明需求，再展示后续协作安排", () => {
