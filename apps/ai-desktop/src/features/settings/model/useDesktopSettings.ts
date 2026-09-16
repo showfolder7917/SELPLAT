@@ -28,6 +28,8 @@ export function useDesktopSettings(settingsOpen: boolean) {
   const [codexAppCorpusIngestionEnabled, setCodexAppCorpusIngestionEnabled] = useState(false);
   const [corpusSemanticBackfill, setCorpusSemanticBackfill] = useState<CorpusSemanticBackfillStatusOutDto | null>(null);
   const [corpusIngestion, setCorpusIngestion] = useState<CorpusIngestionStatusOutDto | null>(null);
+  // 卡片只在本次用户点击补齐后显示该任务回执；重新打开设置时回到持久的自动入库状态。
+  const [corpusStatusFocus, setCorpusStatusFocus] = useState<"ingestion" | "semantic-backfill">("ingestion");
   const [modelCatalog, setModelCatalog] = useState<CodexModelCatalogOutDto>({ models: [] });
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
@@ -47,7 +49,10 @@ export function useDesktopSettings(settingsOpen: boolean) {
   }, []);
 
   useEffect(() => {
-    if (corpusSemanticBackfill?.state !== "running" && corpusIngestion?.state !== "running") return;
+    // 设置面板打开时持续读取持久任务状态，使停止、失败和重启恢复不依赖某个任务仍处于运行中。
+    if (!settingsOpen) return;
+    // 新打开的卡片没有待回显的补齐操作，必须先展示 Worker 记录的自动入库状态。
+    setCorpusStatusFocus("ingestion");
     const timer = window.setInterval(() => {
       void getOptionalSystemDesktopApi()?.getCorpusSemanticBackfillStatus().then(setCorpusSemanticBackfill);
       const desktop = getOptionalSystemDesktopApi();
@@ -56,7 +61,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
       }
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [corpusSemanticBackfill?.state, corpusIngestion?.state]);
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -99,6 +104,8 @@ export function useDesktopSettings(settingsOpen: boolean) {
   };
 
   const startCorpusSemanticBackfill = async () => {
+    // 用户主动补齐时，补齐任务成为本次卡片操作的即时状态来源。
+    setCorpusStatusFocus("semantic-backfill");
     const state = await getOptionalSystemDesktopApi()?.startCorpusSemanticBackfill();
     if (state) setCorpusSemanticBackfill(state);
   };
@@ -119,6 +126,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
     codexAppCorpusIngestionEnabled,
     corpusSemanticBackfill,
     corpusIngestion,
+    corpusStatusFocus,
     modelCatalog,
     modelCatalogLoaded,
     modelCatalogLoading,
@@ -128,7 +136,11 @@ export function useDesktopSettings(settingsOpen: boolean) {
     supportedEfforts,
     fastServiceTierSupported,
     configuredSpeedUnavailable,
-    updateSettings,
+    updateSettings: (patch: Partial<DesktopSettingsOutDto>) => {
+      // 入库开关直接驱动持久任务，用户再次操作开关后立即切回该任务的状态回显。
+      if (Object.hasOwn(patch, "codexAppCorpusIngestionEnabled")) setCorpusStatusFocus("ingestion");
+      updateSettings(patch);
+    },
     selectDefaultModel,
     startCorpusSemanticBackfill,
   };
