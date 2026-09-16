@@ -12,7 +12,7 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 7;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 8;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
@@ -104,6 +104,20 @@ function containsHistoricalInternalProse(content: string): boolean {
     /恢复/u,
     /页面投影/u,
   ];
+  // 历史协作说明常以完整句子保存，不含旧字段标题或实现标记；三个以上
+  // 稳定协作概念同时出现时没有可靠的客户答复边界，必须安全失败。
+  const collaborationMarkers = [
+    /原始消息/u,
+    /内部事实/u,
+    /审计依据/u,
+    /保存结构/u,
+    /内容归类/u,
+    /恢复读取/u,
+    /时间线投影/u,
+    /制造数据/u,
+    /恢复任务/u,
+  ];
   return structuredMarkers.filter((marker) => marker.test(content)).length >= 3
-    || implementationMarkers.filter((marker) => marker.test(content)).length >= 2;
+    || implementationMarkers.filter((marker) => marker.test(content)).length >= 2
+    || collaborationMarkers.filter((marker) => marker.test(content)).length >= 3;
 }
