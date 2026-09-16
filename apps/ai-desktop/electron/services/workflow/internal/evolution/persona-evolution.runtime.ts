@@ -577,12 +577,17 @@ export class PersonaEvolutionRuntime {
               if (!criterion) throw new Error(`正式页面检查条件不存在：${criterionId}`);
               return criterion;
             });
+            // 任务卡条件只能由任务协作群页面截图裁决，不能把自由讨论页的缺席当成产品失败。
+            const taskCollaborationCriterionIds = plan.conditions
+              .filter((item) => item.evidenceType === "page-experience" && requiresTaskCollaborationSurface(item.criterion))
+              .map((item) => item.conditionId);
             const goal: HanliComputerAcceptanceInDto = {
               topicId: topic.topicId,
               proposalId: proposal.proposalId,
               title: proposal.title,
               criteria: pageCriteria,
               criterionIds: pageCriterionIds,
+              taskCollaborationCriterionIds,
             };
             const pageRun = await this.#computerAcceptanceSession(goal, () => {
               publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");
@@ -824,6 +829,11 @@ export class PersonaEvolutionRuntime {
       else this.#recordFailure({ kind: "technical", sourceType: "system", sourceId: "nangong-evolution", operation: "nangong_evolution_tick", error, correlationId: state.activeTopicId, fingerprint: `nangong-evolution-tick:${state.activeTopicId || "no-topic"}` });
     } finally { this.#running = false; }
   }
+}
+
+/** 只识别冻结条件中明确指向任务协作群可见内容的词，不替韩立推断其他页面验收路径。 */
+function requiresTaskCollaborationSurface(criterion: string): boolean {
+  return /任务协作群|专题卡|任务卡|节点详情|下一流程|定位当前步骤|展开收起|详情滚动/u.test(criterion);
 }
 
 function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }

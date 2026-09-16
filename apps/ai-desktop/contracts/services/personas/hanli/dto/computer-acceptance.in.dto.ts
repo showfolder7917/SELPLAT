@@ -11,4 +11,6 @@ export interface HanliComputerAcceptanceInDto {
   criteria: string[];
   /** mixed 验收保留原提案编号，不能因筛选页面条件而重新编号。 */
   criterionIds?: string[];
+  /** 仅这些冻结条件必须在任务协作群页面取证，不能由自由讨论页裁决。 */
+  taskCollaborationCriterionIds?: string[];
 }
