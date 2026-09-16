@@ -194,7 +194,7 @@ export class HanliConversationAggregate {
       // candidate 是可能与当前观点对应的上游消息。
       const candidate = this.#customerDisplayMessages[index];
       // 只有真实用户消息才能成为观点来源。
-      if (candidate.speakerType === "user") {
+      if (candidate.messageType === "customer-visible" && candidate.customerDisplayState === "ready" && candidate.speakerType === "user") {
         // 返回数据库稳定消息标识，不以正文匹配推断来源。
         return candidate.messageId;
       }
@@ -212,7 +212,7 @@ export class HanliConversationAggregate {
     // 显示投影决定最后一条客户链路消息，原始正文不再参与这项判断。
     for (let index = this.#customerDisplayMessages.length - 1; index >= 0; index -= 1) {
       const candidate = this.#customerDisplayMessages[index];
-      if (candidate.messageType === "customer-visible") {
+      if (candidate.messageType === "customer-visible" && candidate.customerDisplayState === "ready") {
         latestDirect = candidate;
         break;
       }
