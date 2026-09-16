@@ -95,13 +95,6 @@ export class CollaborationStore {
     return this.#commit("mode.changed", (state) => { state.mode = mode; });
   }
 
-  selectMember(memberId: string): CollaborationStateOutDto {
-    this.#member(memberId);
-    // 重复点击当前人物只是界面选择，不产生新的协作业务事实或磁盘写入。
-    if (this.#state.selectedMemberId === memberId) return this.state();
-    return this.#commit("member.selected", (state) => { state.selectedMemberId = memberId; });
-  }
-
   submitTask(request: SubmitCollaborationTaskInDto & { ruleContext?: CollaborationTaskRuleContextOutDto }): CollaborationTaskOutDto {
     if (!request || typeof request.confirmedIntent !== "string" || !request.confirmedIntent.trim()) {
       throw new Error("必须提供韩立已经确认的完整任务意图。");
@@ -363,7 +356,6 @@ function createInitialState(): CollaborationStateOutDto {
   return {
     version: 1,
     mode: "collaboration",
-    selectedMemberId: "han-li",
     members: DEFAULT_MEMBERS.map((member) => createDefaultMember(member, now)),
     tasks: [],
     integrationBatches: [],
@@ -458,7 +450,6 @@ function mergeDefaultMembers(state: CollaborationStateOutDto): void {
     }
     migrateTaskHistory(task, state);
   }
-  if (!state.members.some((member) => member.memberId === state.selectedMemberId)) state.selectedMemberId = "han-li";
 }
 
 function recoverInterruptedState(state: CollaborationStateOutDto): void {

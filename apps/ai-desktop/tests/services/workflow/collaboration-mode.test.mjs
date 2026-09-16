@@ -13,6 +13,7 @@ import { createCollaborationResultSummary } from "../../../../../build/ai-deskto
 import { inspectManagedDependencyRecovery, acquireManagedDependencyLease, cleanupIntegrationDependencyLinks, ensureIntegrationDependencies, releaseManagedDependencyLease, verifyCandidateDelta } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/integration.verifier.js";
 import { stageVerifiedDeveloperExecutable } from "../../../../../build/ai-desktop/electron/electron/services/support/capabilities/release/internal/verified-package.release.js";
 import { CollaborationStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/collaboration.store.js";
+import { CollaborationNavigationPreferenceStore } from "../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/collaboration-navigation-preference.store.js";
 import { LinghuAutomationFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/index.js";
 import { ExecutorFacade } from "../../../../../build/ai-desktop/electron/electron/services/personas/executor/index.js";
 import { LinghuAutomationStore } from "../../../../../build/ai-desktop/electron/electron/services/personas/linghu/internal/linghu-automation.store.js";
@@ -211,24 +212,42 @@ test("默认人物稳定列出，新增、重命名和删除入口退役，存�
   }
 });
 
-test("重复选择当前人物或当前桌面模式不产生协作状态事件", () => {
+test("人物查看位置不写入协作状态，重复桌面模式不产生协作状态事件", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-selection-idempotent-"));
   try {
     const store = new CollaborationStore(path.join(directory, "state.json"));
     const reasons = [];
     store.subscribe((_state, reason) => reasons.push(reason));
     const before = store.state();
-    store.selectMember("han-li");
+    assert.equal(store.selectMember, undefined);
+    assert.equal("selectedMemberId" in store.state(), false);
     store.setMode("collaboration");
     assert.deepEqual(reasons, []);
     assert.equal(store.state().updatedAt, before.updatedAt);
-    store.selectMember("nangong-wan");
-    assert.deepEqual(reasons, ["member.selected"]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("人物和模式显示选择不会唤醒演化状态机", () => {
-  assert.match(applicationRuntimeSource, /reason !== "member\.selected" && reason !== "mode\.changed"/);
+test("人物导航偏好独立保存、重启恢复且不修改协作事实", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "collaboration-navigation-preference-"));
+  try {
+    const statePath = path.join(directory, "state.json");
+    const preferencePath = path.join(directory, "navigation.json");
+    const store = new CollaborationStore(statePath);
+    const before = store.state();
+    const preferences = new CollaborationNavigationPreferenceStore(preferencePath);
+    preferences.save("nangong-wan", store.state().members);
+
+    assert.equal(new CollaborationNavigationPreferenceStore(preferencePath).restore(store.state().members), "nangong-wan");
+    assert.deepEqual(store.state(), before);
+    writeFileSync(preferencePath, JSON.stringify({ memberId: "removed-member" }));
+    assert.equal(preferences.restore(store.state().members), "han-li");
+    assert.deepEqual(store.state(), before);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("退役的人物选择原因不再影响演化状态机", () => {
+  assert.match(applicationRuntimeSource, /reason !== "mode\.changed"/);
+  assert.doesNotMatch(applicationRuntimeSource, /member\.selected/);
 });
 
 test("旧令狐卡点修复结果从返回南宫婉迁回集成队列", () => {

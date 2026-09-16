@@ -18,6 +18,8 @@ import { createExecutorRuntime } from "../../services/personas/executor/index.js
 import {
   CollaborationWorkflowFacade,
   createCollaborationDurationLog,
+  createCollaborationInteractionPerformanceLog,
+  createCollaborationNavigationPreference,
   createCollaborationState,
 } from "../../services/workflow/index.js";
 
@@ -44,6 +46,8 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
   const { collaborationRoot, codexHome, trustedCommands, screenshots, settings, prompts, rules } = options.capabilities;
   const collaborationStore = createCollaborationState(path.join(collaborationRoot, "collaboration-state.json"));
   const collaborationDurations = createCollaborationDurationLog(projectPaths.collaborationArchiveRoot);
+  const collaborationNavigationPreference = createCollaborationNavigationPreference(path.join(collaborationRoot, "navigation-preference.json"));
+  const collaborationInteractionPerformance = createCollaborationInteractionPerformanceLog(projectPaths.temporaryMaterialsRoot);
   const collaborationRegistry = new CollaborationCodexRegistry(collaborationDurations);
   const versionWorkspaces = createVersionWorkspaceManager(projectRoot, path.join(collaborationRoot, "worktrees"));
   const testResources = new TestResourceCoordinatorFacade({
@@ -137,6 +141,8 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     collaboration,
     collaborationStore,
     collaborationRegistry,
+    collaborationNavigationPreference,
+    collaborationInteractionPerformance,
     versionWorkspaces,
     testResources,
     releaseBatches,

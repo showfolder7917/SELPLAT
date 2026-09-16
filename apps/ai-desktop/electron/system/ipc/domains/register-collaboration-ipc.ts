@@ -11,7 +11,7 @@ import type {
   UpdateNangongTopicInDto,
 } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto, RequestSupplementalAcceptanceInDto } from "../../../../contracts/services/workflow/index.js";
-import type { CollaborationWorkflowFacade as CollaborationCoordinator } from "../../../services/workflow/index.js";
+import type { CollaborationWorkflowFacade as CollaborationCoordinator, CollaborationInteractionPerformancePort, CollaborationNavigationPreferencePort } from "../../../services/workflow/index.js";
 import type { LinghuAutomationFacade } from "../../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../../services/personas/nangong/index.js";
 import type { HanliFacade } from "../../../services/personas/hanli/index.js";
@@ -24,6 +24,8 @@ import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(
   collaboration: CollaborationCoordinator,
+  navigationPreference: CollaborationNavigationPreferencePort,
+  interactionPerformance: CollaborationInteractionPerformancePort,
   linghuAutomation: LinghuAutomationFacade,
   nangong: NangongFacade,
   hanli: HanliFacade,
@@ -41,8 +43,21 @@ export function registerCollaborationIpc(
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineSnapshot();
   });
+  handle("desktop:get-collaboration-timeline-groups", (_event, groupIds: string[]) => {
+    if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
+    return collaborationTimeline.getTimelineGroups(Array.isArray(groupIds) ? groupIds.filter((value): value is string => typeof value === "string") : []);
+  });
+  handle("desktop:get-collaboration-navigation-preference", () => navigationPreference.restore(collaboration.state().members));
+  handle("desktop:save-collaboration-navigation-preference", (_event, memberId: string) => {
+    if (typeof memberId !== "string") throw new Error("人物标识无效，无法保存查看位置。");
+    navigationPreference.save(memberId, collaboration.state().members);
+  });
+  handle("desktop:record-collaboration-interaction-performance", (_event, sample: { operation?: unknown; durationMs?: unknown; datasetId?: unknown; phase?: unknown; details?: unknown }) => {
+    if (typeof sample?.operation !== "string" || typeof sample.datasetId !== "string" || typeof sample.durationMs !== "number" || (sample.phase !== "baseline" && sample.phase !== "candidate")) return;
+    const details = sample.details && typeof sample.details === "object" && !Array.isArray(sample.details) ? sample.details as Record<string, string | number | boolean | null> : undefined;
+    interactionPerformance.record({ operation: sample.operation, durationMs: sample.durationMs, datasetId: sample.datasetId, phase: sample.phase, details });
+  });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingModeValue) => collaboration.setMode(mode));
-  handle("desktop:select-collaboration-member", (_event, memberId: string) => collaboration.selectMember(memberId));
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request).state);
   handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
   handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));

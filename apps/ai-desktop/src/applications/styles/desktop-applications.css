@@ -414,6 +414,7 @@ button { color: inherit; }
 .collaboration-member-list { display: grid; gap: 4px; }
 .collaboration-member { min-width: 0; min-height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; color: var(--sel-theme-workbench-text-muted); background: transparent; cursor: pointer; text-align: left; }
 .collaboration-member:hover { border-color: var(--sel-theme-line); background: var(--sel-theme-workbench-surface); }
+.collaboration-member:disabled { cursor: progress; opacity: 0.78; }
 .collaboration-member.selected { border-color: color-mix(in srgb, var(--sel-theme-workbench-accent) 46.67%, transparent); color: var(--sel-theme-workbench-text-strong); background: var(--sel-theme-workbench-surface); }
 .collaboration-member > span { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .collaboration-member > span > i, .member-presence { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--sel-theme-line-soft); }
@@ -558,7 +559,7 @@ button { color: inherit; }
 .task-live-caret { display: inline-block; width: 3px; height: 18px; margin-left: 5px; vertical-align: -3px; background: var(--sel-theme-accent); animation: task-live-caret 0.8s steps(1) infinite; }
 @keyframes task-live-caret { 50% { opacity: 0; } }
 .task-node-detail { margin: 2px 12px 10px; }
-.task-node-detail pre { margin: 0; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; }
+.task-node-detail pre { max-height: 320px; margin: 0; overflow: auto; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; }
 .task-timeline-next { display: grid; grid-template-columns: 12px max-content minmax(0, 1fr); align-items: start; column-gap: 10px; row-gap: 6px; margin: 12px 0 0 38px; padding: 12px 4px; color: var(--sel-theme-workbench-text-muted); }
 .task-timeline-next > i { width: 12px; height: 12px; border: 2px solid var(--sel-theme-control-line-soft); border-radius: 50%; }
 .task-timeline-next strong { color: var(--sel-theme-workbench-text); white-space: nowrap; }

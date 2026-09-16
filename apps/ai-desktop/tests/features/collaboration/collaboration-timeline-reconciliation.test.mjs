@@ -9,7 +9,7 @@ const compiled = await transform(source, {
   format: "esm",
   target: "node22",
 });
-const { reconcileCollaborationTimeline } = await import(`data:text/javascript;base64,${Buffer.from(compiled.code).toString("base64")}`);
+const { reconcileCollaborationTimeline, reconcileInitialCollaborationTimeline } = await import(`data:text/javascript;base64,${Buffer.from(compiled.code).toString("base64")}`);
 
 const participant = { memberId: "zi-ling", displayName: "紫灵" };
 const node = (overrides = {}) => ({
@@ -68,4 +68,14 @@ test("旧快照未保存下一负责人时可以安全合并", () => {
   incoming.groups[0].nextOwner = null;
 
   assert.equal(reconcileCollaborationTimeline(previous, incoming), previous);
+});
+
+test("迟到的启动快照不会覆盖读取期间已更新的专题", () => {
+  const freshGroup = group([node({ content: "已收到新的专题状态" })], { groupId: "group-fresh", topicId: "topic-fresh", title: "新专题" });
+  const previous = snapshot([freshGroup], "2026-09-14T00:00:02.000Z");
+  const staleInitialSnapshot = snapshot([], "2026-09-14T00:00:01.000Z");
+
+  const result = reconcileInitialCollaborationTimeline(previous, staleInitialSnapshot, new Set(["group-fresh"]));
+
+  assert.deepEqual(result.groups, [freshGroup]);
 });

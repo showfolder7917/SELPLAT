@@ -4,6 +4,8 @@ export { CollaborationCoordinator as CollaborationWorkflowFacade } from "./colla
 import type { DatabasePort } from "../support/platform/persistence/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration/collaboration.store.js";
+import { CollaborationNavigationPreferenceStore } from "./internal/collaboration/collaboration-navigation-preference.store.js";
+import { CollaborationInteractionPerformanceLog } from "./internal/collaboration/collaboration-interaction-performance.log.js";
 import { EvolutionFlowPolicy } from "./domain/evolution-flow.policy.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
 import { WorkflowRepository } from "./internal/collaboration/workflow.repository.js";
@@ -15,6 +17,8 @@ import { PersonaCapabilityRegistry } from "./domain/persona-capability.registry.
 // 以下 Port 只用于组合根和 IPC 的类型约束，不公开 internal 构造器或文件路径。
 export type CollaborationStatePort = CollaborationStore;
 export type CollaborationDurationPort = CollaborationDurationLog;
+export type CollaborationNavigationPreferencePort = CollaborationNavigationPreferenceStore;
+export type CollaborationInteractionPerformancePort = CollaborationInteractionPerformanceLog;
 export type WorkflowRepositoryPort = WorkflowRepository;
 export type WorkflowSupervisorPort = WorkflowSupervisor;
 // 演化流程端口只判断下一步，不持有提案业务数据。
@@ -31,6 +35,16 @@ export function createCollaborationState(...arguments_: ConstructorParameters<ty
 export function createCollaborationDurationLog(...arguments_: ConstructorParameters<typeof CollaborationDurationLog>): CollaborationDurationPort {
   // 返回独立时长端口，业务聚合不直接写运行日志。
   return new CollaborationDurationLog(...arguments_);
+}
+
+/** 人物查看位置独立持久化，禁止接入协作事实 Store。 */
+export function createCollaborationNavigationPreference(...arguments_: ConstructorParameters<typeof CollaborationNavigationPreferenceStore>): CollaborationNavigationPreferencePort {
+  return new CollaborationNavigationPreferenceStore(...arguments_);
+}
+
+/** 页面交互性能记录在临时材料目录，不能复用协作阶段耗时归档。 */
+export function createCollaborationInteractionPerformanceLog(...arguments_: ConstructorParameters<typeof CollaborationInteractionPerformanceLog>): CollaborationInteractionPerformancePort {
+  return new CollaborationInteractionPerformanceLog(...arguments_);
 }
 
 // SQLite Repository 是 Workflow 事实的唯一持久化入口，IPC 只能调用受控查询方法。

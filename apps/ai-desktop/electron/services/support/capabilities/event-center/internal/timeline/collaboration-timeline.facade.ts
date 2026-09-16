@@ -69,6 +69,10 @@ export class CollaborationTimelineFacade {
     return this.#repository.snapshot(now);
   }
 
+  getTimelineGroups(groupIds: string[], now = new Date().toISOString()): CollaborationTimelineSnapshotOutDto {
+    return this.#repository.snapshotGroups(groupIds, now);
+  }
+
   subscribeTimelineChanged(listener: TimelineChangedListener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);

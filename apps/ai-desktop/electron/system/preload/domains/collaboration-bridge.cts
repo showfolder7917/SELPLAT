@@ -5,9 +5,12 @@ export function collaborationBridge() {
   return {
     getCollaborationState: () => invoke("desktop:get-collaboration-state"),
     getCollaborationTimeline: () => invoke("desktop:get-collaboration-timeline"),
+    getCollaborationTimelineGroups: (groupIds: string[]) => invoke("desktop:get-collaboration-timeline-groups", groupIds),
+    getCollaborationNavigationPreference: () => invoke("desktop:get-collaboration-navigation-preference"),
+    saveCollaborationNavigationPreference: (memberId: string) => invoke("desktop:save-collaboration-navigation-preference", memberId),
+    recordCollaborationInteractionPerformance: (sample: unknown) => invoke("desktop:record-collaboration-interaction-performance", sample),
     onCollaborationTimelineChanged: (listener: (event: unknown) => void) => subscribe("desktop:collaboration-timeline-changed", listener),
     setDesktopOperatingMode: (mode: string) => invoke("desktop:set-operating-mode", mode),
-    selectCollaborationMember: (memberId: string) => invoke("desktop:select-collaboration-member", memberId),
     submitCollaborationTask: (request: unknown) => invoke("desktop:submit-collaboration-task", request),
     continueCollaborationTask: (taskId: string) => invoke("desktop:continue-collaboration-task", taskId),
     cancelCollaborationTask: (taskId: string) => invoke("desktop:cancel-collaboration-task", taskId),

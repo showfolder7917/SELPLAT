@@ -138,12 +138,18 @@ export interface DesktopApi {
   getCollaborationState(): Promise<CollaborationStateOutDto>;
   /** 读取主进程生成的追加式专题任务卡时间线；旧四阶段页面不得反向写入该投影。 */
   getCollaborationTimeline(): Promise<CollaborationTimelineSnapshotOutDto>;
+  /** 按已提交的专题标识读取变化卡片，不返回未受影响的历史。 */
+  getCollaborationTimelineGroups(groupIds: string[]): Promise<CollaborationTimelineSnapshotOutDto>;
+  /** 读取经当前成员清单校验后的最后查看人物。 */
+  getCollaborationNavigationPreference(): Promise<string | null>;
+  /** 异步保存 Renderer 当前查看人物；不修改协作成员、任务或时间线。 */
+  saveCollaborationNavigationPreference(memberId: string): Promise<void>;
+  /** 记录不进入协作事实的页面性能原始样本。 */
+  recordCollaborationInteractionPerformance(sample: { operation: string; durationMs: number; datasetId: string; phase: "baseline" | "candidate"; details?: Record<string, string | number | boolean | null> }): Promise<void>;
   /** 订阅 SQLite 成功提交后的时间线变更通知。 */
   onCollaborationTimelineChanged(listener: (event: CollaborationTimelineChangedEventOutDto) => void): () => void;
   /** 在单会话与协同模式之间切换并持久化状态。 */
   setDesktopOperatingMode(mode: DesktopOperatingModeValue): Promise<CollaborationStateOutDto>;
-  /** 切换 Renderer 当前查看的协同成员。 */
-  selectCollaborationMember(memberId: string): Promise<CollaborationStateOutDto>;
   /** 创建一个通过主进程校验的协同成员。 */
   /** 更新指定成员的可修改身份配置。 */
   /** 删除可移除成员；运行中或系统成员会被主进程拒绝。 */
