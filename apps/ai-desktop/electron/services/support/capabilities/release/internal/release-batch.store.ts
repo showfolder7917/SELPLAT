@@ -19,7 +19,7 @@ export class ReleaseBatchStore {
   create(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTaskOutDto[], initiatorMemberId: string): ReleaseBatchDocumentOutDto {
     const document: ReleaseBatchDocumentOutDto = {
       releaseBatchId, version, generation, state: "frozen", initiatorMemberId,
-      candidateBranch: null, candidateSha: null, localMergeSha: null, executable: null,
+      candidateBranch: null, candidateSha: null, candidateEvidence: null, runtimeActivation: null, localMergeSha: null, executable: null,
       tasks: tasks.map((task) => ({ taskId: task.taskId, title: task.snapshot.title, branchName: task.versionWorkspace?.branchName || null, resultSha: task.versionWorkspace?.resultSha || null })),
       startedAt: new Date().toISOString(), completedAt: null, failureReason: null,
     };
@@ -38,6 +38,14 @@ export class ReleaseBatchStore {
     writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, "utf8");
     renameSync(temporary, target);
     if (document.completedAt) rmSync(runningRoot, { recursive: true, force: true });
+  }
+
+  /** 只恢复当前运行目录中已准备、但尚未完成候选运行包重启的批次。 */
+  pendingRuntimeActivation(releaseBatchId: string): ReleaseBatchDocumentOutDto | null {
+    const documentPath = path.join(this.#runningRoot, releaseBatchId, "发布批次文档.json");
+    if (!existsSync(documentPath)) return null;
+    const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto;
+    return document.state === "activating" && document.runtimeActivation?.state === "relaunch-scheduled" ? document : null;
   }
 
   /**

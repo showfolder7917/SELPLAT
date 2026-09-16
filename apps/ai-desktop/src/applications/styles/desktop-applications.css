@@ -476,6 +476,9 @@ button { color: inherit; }
 .nangong-conversation-activity code { overflow-wrap: anywhere; white-space: pre-wrap; }
 .nangong-conversation-activity.waiting { border-color: color-mix(in srgb, var(--sel-theme-semantic-warning) 70%, transparent); }
 .nangong-conversation-activity.blocked { border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 70%, transparent); }
+.nangong-technical-evidence { min-width: 0; margin-top: 10px; border: 1px solid var(--sel-theme-line); border-radius: 7px; overflow: hidden; }
+.nangong-technical-evidence .seldisclosure-trigger { width: 100%; min-width: 0; padding: 8px 10px; text-align: left; overflow-wrap: anywhere; }
+.nangong-technical-evidence .seldisclosure-content { min-width: 0; padding: 10px; overflow-wrap: anywhere; }
 .nangong-person-composer button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* 任务协作群只定义业务排版，展开行为和基础控件状态由 SELUI Disclosure 统一提供。 */

@@ -25,7 +25,7 @@ export function createTaskWorktreeTestRunner(
 }
 
 // 固定统一测试端口只公开运行行为，人物看不到子进程和脚本清单。
-export type FixedUnifiedTestPort = Pick<FixedUnifiedTestRunner, "run">;
+export type FixedUnifiedTestPort = Pick<FixedUnifiedTestRunner, "run" | "prepareRuntimeActivation">;
 
 // 人物通过公开工厂申请固定统一测试能力，并显式登记发起人和事件命名空间。
 export function createFixedUnifiedTestRunner(options: FixedUnifiedTestRunnerOptions): FixedUnifiedTestPort {

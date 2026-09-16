@@ -5,8 +5,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
-import { readAcceptancePlanCandidateSources } from "./acceptance-plan-candidate-source.ts";
+import { readAcceptancePlanCandidateSources, readAcceptancePlanCandidateSourceRecords } from "./acceptance-plan-candidate-source.ts";
 import { executeGit } from "./git-process.ts";
+import type { ReleaseBatchCandidateEvidenceOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -228,12 +229,43 @@ export async function verifyCollaborationIntegration(
  * 由固定统一测试运行器检查冲突解决后的候选源码；任何能力缺失都会使统一测试失败。
  */
 export function verifyAcceptancePlanCapabilities(candidateProjectRoot: string): void {
-  const root = path.resolve(candidateProjectRoot, "apps", "ai-desktop");
-  const sources = readAcceptancePlanCandidateSources(root);
-  const missing = acceptancePlanCapabilityChecks(sources)
-    .filter(([, present]) => !present)
-    .map(([name]) => name);
+  const evidence = inspectAcceptancePlanCandidateEvidence(candidateProjectRoot, null, null);
+  if (evidence.readError) throw new Error(evidence.readError);
+  const missing = evidence.acceptancePlanChecks
+    .filter((check) => !check.passed)
+    .map((check) => check.capability);
   if (missing.length) throw new Error(`最终候选缺少验收计划能力：${missing.join("、")}`);
+}
+
+/** 在预检前冻结候选来源与逐项结果；读取失败也必须进入发布归档。 */
+export function inspectAcceptancePlanCandidateEvidence(
+  candidateProjectRoot: string,
+  candidateSha: string | null,
+  loadedRuntimeSha: string | null,
+): ReleaseBatchCandidateEvidenceOutDto {
+  const projectRoot = path.resolve(candidateProjectRoot);
+  const desktopRoot = path.join(projectRoot, "apps", "ai-desktop");
+  try {
+    const records = readAcceptancePlanCandidateSourceRecords(desktopRoot);
+    const sources = Object.fromEntries(records.map(({ source, content }) => [source, content])) as ReturnType<typeof readAcceptancePlanCandidateSources>;
+    return {
+      candidateProjectRoot: projectRoot,
+      candidateSha,
+      loadedRuntimeSha,
+      sourceBlobs: records.map(({ source, relativePath, content }) => ({ source, relativePath, sha256: createHash("sha256").update(content).digest("hex") })),
+      acceptancePlanChecks: acceptancePlanCapabilityChecks(sources).map(([capability, passed]) => ({ capability, passed })),
+      readError: null,
+    };
+  } catch (error) {
+    return {
+      candidateProjectRoot: projectRoot,
+      candidateSha,
+      loadedRuntimeSha,
+      sourceBlobs: [],
+      acceptancePlanChecks: [],
+      readError: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**
@@ -244,10 +276,21 @@ function acceptancePlanCapabilityChecks(sources: ReturnType<typeof readAcceptanc
   return [
     ["验收计划持久化", sources.state.includes("saveAcceptancePlan") && sources.state.includes("acceptance.plan_frozen")],
     ["同专题重开", sources.state.includes("reopenCompletedAcceptance") && sources.state.includes("acceptance.reopened") && sources.projection.includes("acceptanceRoundId") && sources.projection.includes("currentRoundId") && !sources.state.includes("reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {\n    return this.resumeOneShotRun")],
-    ["混合证据汇总", sources.runtime.includes("plan.conditions.filter") && sources.runtime.includes("mode: \"mixed\"")],
+    ["混合证据汇总", hasMixedEvidenceAggregation(sources.runtime)],
     ["自动与人工共用完成门禁", sources.state.includes("decideResult(proposalId") && sources.runtime.includes("completeAutomaticAcceptance")],
     ["失败归因", sources.state.includes("plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
   ];
+}
+
+/**
+ * 混合验收必须进入 mixed 分支，将页面条件从源码审查条件中分流，并在页面结果返回后统一汇总。
+ * 候选预检只能读取源码，故按这三个不可替代的结构事实校验，不能依赖实现中恰好出现的对象字面量文本。
+ */
+function hasMixedEvidenceAggregation(runtime: string): boolean {
+  const entersMixedReview = /if\s*\(\s*review\.mode\s*===\s*["']mixed["']\s*\)/.test(runtime);
+  const separatesPageConditions = /plan\.conditions\.filter\s*\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.evidenceType\s*===\s*["']page-experience["']\s*\)/.test(runtime);
+  const mergesSourceAndPageReview = /composeHanliResultReview\s*\(\s*plan\s*,\s*review\s*,\s*pageRun\s*\)/.test(runtime);
+  return entersMixedReview && separatesPageConditions && mergesSourceAndPageReview;
 }
 
 /** 只核对本批候选相对冻结基线引入的差异，禁止历史提交中的旧问题阻断当前批次。 */

@@ -73,9 +73,9 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   const loadEarlier = runtime.loadEarlier;
 
   /** 用户按发送按钮或提交表单时，完成一整轮韩立对话。 */
-  async function send(): Promise<void> {
+  async function send(retrying = pending?.failed === true ? pending : null): Promise<void> {
     // 优先发送用户输入的原文；只有截图时补充一条不冒充用户细节的说明。
-    const message = text.trim() || (attachments.length ? "请结合这些截图和你掌握的客户语义资料，与我讨论这个问题。" : "");
+    const message = retrying?.content || text.trim() || (attachments.length ? "请结合这些截图和你掌握的客户语义资料，与我讨论这个问题。" : "");
     // 空消息、工作区未就绪或已有请求执行时，不重复调用后端。
     if (!message || !workspaces || busy) {
       // 当前条件不允许发送时直接结束，并保留用户尚未发送的内容。
@@ -83,21 +83,21 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     }
 
     // 本条消息编号（clientMessageId）让前端临时消息、后端持久消息和附件预览使用同一个身份。
-    const clientMessageId = `hanli-message-${crypto.randomUUID()}`;
+    const clientMessageId = retrying?.messageId || `hanli-message-${crypto.randomUUID()}`;
     // 本轮已发送截图（sentAttachments）冻结点击发送瞬间的附件，避免清空输入区后丢失引用。
-    const sentAttachments = [...attachments];
+    const sentAttachments = retrying ? retrying.attachments : [...attachments];
 
     // 锁定发送按钮，阻止相同内容在等待期间被重复提交。
     setBusy(true);
     // 清空输入框，让用户明确看到本轮文字已经进入发送流程。
-    setText("");
+    if (!retrying) setText("");
     // 清空待发送附件区，附件随后显示在本轮临时消息中。
-    onAttachments([]);
+    if (!retrying) onAttachments([]);
     // 清除上一轮错误，避免旧提示干扰当前请求。
     onError("");
 
     // 在后端回答前立即显示用户原文和截图，让页面对点击产生即时反馈。
-    setPending({ messageId: clientMessageId, content: message, attachments: sentAttachments, failed: false, createdAt: new Date().toISOString() });
+    setPending(retrying ? { ...retrying, failed: false } : { messageId: clientMessageId, content: message, attachments: sentAttachments, failed: false, createdAt: new Date().toISOString() });
 
     // 消息发送处理从这里开始，统一覆盖桌面调用、会话更新和附件预览绑定。
     try {
@@ -148,6 +148,12 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     }
   }
 
+  /** 普通发送失败后复用原客户消息编号、原文和附件，不创建第二条本地消息。 */
+  async function retrySend(): Promise<void> {
+    if (!pending?.failed || busy) return;
+    await send(pending);
+  }
+
   /** 恢复同一排查请求，保留输入框草稿和原消息身份。 */
   async function retryInquiry(): Promise<void> {
     if (!canRetryInquiry || !activity || !workspaces) return;
@@ -190,6 +196,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     // 临时消息编号（messageId）沿用发送前生成的编号，后端返回后可以替换临时消息。
     messageId: pending.messageId,
     messageType: "customer-visible" as const,
+    contentRole: "conversation" as const,
     // 页面顺序号（sequenceNumber）暂放在当前历史末尾，正式顺序以后端结果为准。
     sequenceNumber: conversation.messages.length,
     // 发言方类型（speakerType）使用 user 表示这条临时消息来自当前客户。
@@ -287,6 +294,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     canSend,
     // 消息发送操作（send）执行一次完整的客户到韩立发送流程。
     send,
+    retrySend,
     // 消息截图读取操作（previewsForMessage）为每条问答消息返回对应图片。
     previewsForMessage,
     // 截图移除操作（removeAttachment）从发送前附件区移除指定图片。

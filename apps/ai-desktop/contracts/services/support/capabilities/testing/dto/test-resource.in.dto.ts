@@ -3,7 +3,7 @@ export interface TestResourceInDto {
   runId: string;
   taskId: string | null;
   initiatorMemberId: string;
-  kind: "task-validation" | "integration-validation" | "linghu-unified-test";
+  kind: "task-validation" | "integration-validation" | "linghu-unified-test" | "runtime-activation";
   port: number | null;
   buildRoot: string;
 }

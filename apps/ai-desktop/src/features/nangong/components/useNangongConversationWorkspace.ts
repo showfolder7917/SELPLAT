@@ -158,26 +158,26 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
   }
 
   /** 发送一轮客户与南宫婉的问答。 */
-  async function sendChat(confirmedMessage?: string): Promise<void> {
+  async function sendChat(confirmedMessage?: string, retrying = outgoingMessage?.failed === true ? outgoingMessage : null): Promise<void> {
     // 明确确认文字优先，其次使用输入原文，只有截图时补充安全说明。
-    const message = confirmedMessage?.trim() || chatText.trim() || (attachments.length ? "请调查并分析这些截图中的问题。" : "");
+    const message = retrying?.content || confirmedMessage?.trim() || chatText.trim() || (attachments.length ? "请调查并分析这些截图中的问题。" : "");
     // 无内容、工作区未就绪或已有请求时不重复发送。
     if (!message || !workspaces || chatBusy) return;
     // 本轮已发送截图（sentAttachments）冻结点击发送时的图片，避免清空输入区后丢失引用。
-    const sentAttachments = [...attachments];
+    const sentAttachments = retrying ? retrying.attachments : [...attachments];
     // 本条消息编号（clientMessageId）用于对齐临时消息、数据库消息和附件预览。
-    const clientMessageId = `nangong-message-${crypto.randomUUID()}`;
+    const clientMessageId = retrying?.messageId || `nangong-message-${crypto.randomUUID()}`;
     // 消息创建时间（createdAt）保存客户真实点击发送的时间。
-    const createdAt = new Date().toISOString();
+    const createdAt = retrying?.createdAt || new Date().toISOString();
 
     // 锁定发送按钮，阻止等待期间重复提交。
     setChatBusy(true);
     // 清空已经进入发送流程的文字。
-    setChatText("");
+    if (!retrying) setChatText("");
     // 清空待发送附件区，截图随后进入临时消息。
-    onAttachments([]);
+    if (!retrying) onAttachments([]);
     // 立即显示客户原文和截图，让页面产生真实反馈。
-    setOutgoingMessage({ messageId: clientMessageId, sequenceNumber: conversation.messages.length, content: message, attachments: sentAttachments, failed: false, createdAt });
+    setOutgoingMessage(retrying ? { ...retrying, failed: false } : { messageId: clientMessageId, sequenceNumber: conversation.messages.length, content: message, attachments: sentAttachments, failed: false, createdAt });
     // 清除上一轮发送错误。
     onError("");
 
@@ -225,6 +225,12 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
       // 允许客户继续发送或重试。
       setChatBusy(false);
     }
+  }
+
+  /** 普通发送失败只重新提交原消息，不重置其稳定身份或附件。 */
+  async function retrySend(): Promise<void> {
+    if (!outgoingMessage?.failed || chatBusy) return;
+    await sendChat(undefined, outgoingMessage);
   }
 
   /** 把客户确认完整的草稿保存为演化课题。 */
@@ -289,7 +295,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
   }
 
   // 输入草稿不会改变历史事实；全部人物消息投影只在会话、内部消息或附件事实变化时重建。
-  const { internalIds, visibleMessages } = useMemo(() => {
+  const { internalIds, visibleMessages, technicalEvidenceByReply } = useMemo(() => {
     const projected = projectPersonaConversation(conversation.messages);
     const directMessages = projected.direct.map((message, sequenceNumber) => ({
       ...message,
@@ -300,6 +306,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     const pendingMessages = outgoingMessage ? [{
       messageId: outgoingMessage.messageId,
       messageType: "customer-visible" as const,
+      contentRole: "conversation" as const,
       sequenceNumber: outgoingMessage.sequenceNumber ?? conversation.messages.length,
       speakerType: "user" as const,
       speakerPersonaId: null,
@@ -317,15 +324,23 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     const internalEntries = [...sharedMessages, ...projected.internal].map((message) => [message.messageId, message] as const);
     const currentInternal = [...new Map(internalEntries).values()]
       .filter((message) => !conversation.createdAt || message.createdAt >= conversation.createdAt);
-    const nextInternalIds = new Set(currentInternal.map((message) => message.messageId));
-    const visibleInternalMessages = currentInternal.map((message) => ({
+    // 内容角色新增前保存的研讨消息没有该字段；它们与数据库读取器一样默认视为可读研讨正文。
+    const readableInternal = currentInternal.filter((message) => (message.contentRole || "conversation") === "conversation");
+    const technicalEvidenceByReply = new Map<string, typeof currentInternal>();
+    for (const message of currentInternal.filter((item) => item.contentRole === "technical-evidence")) {
+      const parentId = message.replyToMessageId;
+      if (!parentId) continue;
+      technicalEvidenceByReply.set(parentId, [...(technicalEvidenceByReply.get(parentId) || []), message]);
+    }
+    const nextInternalIds = new Set(readableInternal.map((message) => message.messageId));
+    const visibleInternalMessages = readableInternal.map((message) => ({
       ...message,
       status: message.deliveryStatus,
       attachments: attachmentPreviews[message.messageId] || [],
     }));
     const nextVisibleMessages = [...timelineMessages, ...visibleInternalMessages]
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.sequenceNumber - right.sequenceNumber || left.messageId.localeCompare(right.messageId));
-    return { internalIds: nextInternalIds, visibleMessages: nextVisibleMessages };
+    return { internalIds: nextInternalIds, visibleMessages: nextVisibleMessages, technicalEvidenceByReply };
   }, [attachmentPreviews, conversation.createdAt, conversation.messages, outgoingMessage, sharedInternalMessages]);
   // 只读取最后一条消息的变化；历史正文不会在每次输入或状态变化时重新扫描。
   const latestVisibleMessage = visibleMessages.at(-1);
@@ -385,6 +400,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     updateTopicDraft,
     // 消息发送操作（sendChat）发送一轮人物问答。
     sendChat,
+    retrySend,
     // 课题保存操作（convertChat）保存客户确认过的完整课题。
     convertChat,
     // 草稿生成操作（generateTopicDraft）根据对话生成可编辑课题。
@@ -393,6 +409,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     visibleMessages,
     // 内部消息编号集合（internalIds）让页面识别内部研讨消息。
     internalIds,
+    technicalEvidenceByReply,
     // 会话区引用（timelineRef）绑定可以滚动的消息区域。
     timelineRef,
     // 截图恢复错误（attachmentPreviewErrors）提供附件无法恢复的原因。

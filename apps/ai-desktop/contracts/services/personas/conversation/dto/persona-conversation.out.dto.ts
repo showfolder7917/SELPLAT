@@ -6,11 +6,16 @@ export type PersonaConversationSpeakerTypeValue = "user" | "persona" | "system";
 /** 消息的持久化业务类别；页面投影只能使用此字段，不能猜测 messageId 的命名含义。 */
 export type PersonaConversationMessageTypeValue = "customer-visible" | "internal-recovery" | "internal-deliberation";
 
+/** 内部消息的显示职责；技术证据保留在同一稳定消息链中，但不能混入人物正文。 */
+export type PersonaConversationContentRoleValue = "conversation" | "technical-evidence";
+
 /** 所有人物页面共用的消息协议。 */
 export interface PersonaConversationMessageOutDto {
   messageId: string;
   /** 写入方声明的可见性类别；恢复 JSON 不得伪装成客户或内部研讨正文。 */
   messageType: PersonaConversationMessageTypeValue;
+  /** 正文直接显示；技术证据由南宫婉页面关联到对应研讨消息并折叠展示。 */
+  contentRole: PersonaConversationContentRoleValue;
   sequenceNumber: number;
   speakerType: PersonaConversationSpeakerTypeValue;
   /** 用户和系统消息为 null；人物消息填写稳定 personaId。 */

@@ -2,6 +2,7 @@
 export type { PersonaConversationActivityOutDto } from "./dto/persona-conversation-activity.out.dto.js";
 /** 人物会话公共契约唯一出口；具体人物契约不得重复定义消息结构。 */
 export type {
+  PersonaConversationContentRoleValue,
   PersonaConversationMessageOutDto,
   PersonaConversationOutDto,
   PersonaConversationSpeakerTypeValue,

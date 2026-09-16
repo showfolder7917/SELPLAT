@@ -16,6 +16,9 @@ import {
   type IntegrationCandidate,
   VersionWorkspaceManager,
 } from "./version-workspace.manager.js";
+import { inspectAcceptancePlanCandidateEvidence } from "./integration.verifier.js";
+import { executeGit } from "./git-process.js";
+import { requiresRuntimeActivation } from "./runtime-activation.policy.js";
 
 export interface VersionIntegrationPipelineOptions {
   store: CollaborationStatePort;
@@ -27,6 +30,8 @@ export interface VersionIntegrationPipelineOptions {
   releaseVersion: string;
   releaseBatches: ReleaseBatchStore;
   loadedRuntimeSha: string | null;
+  prepareRuntimeActivation(candidate: IntegrationCandidate, releaseBatchId: string): Promise<string>;
+  activateRuntime(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
 }
 
@@ -49,6 +54,8 @@ export class VersionIntegrationPipeline {
   readonly #releaseVersion: string;
   readonly #releaseBatches: ReleaseBatchStore;
   readonly #loadedRuntimeSha: string | null;
+  readonly #prepareRuntimeActivation: VersionIntegrationPipelineOptions["prepareRuntimeActivation"];
+  readonly #activateRuntime: VersionIntegrationPipelineOptions["activateRuntime"];
   readonly #publishRelease: VersionIntegrationPipelineOptions["publishRelease"];
   readonly #waitSpans = new Map<string, string>();
   readonly #runningTaskIds = new Set<string>();
@@ -66,6 +73,8 @@ export class VersionIntegrationPipeline {
     this.#releaseVersion = options.releaseVersion;
     this.#releaseBatches = options.releaseBatches;
     this.#loadedRuntimeSha = options.loadedRuntimeSha;
+    this.#prepareRuntimeActivation = options.prepareRuntimeActivation;
+    this.#activateRuntime = options.activateRuntime;
     this.#publishRelease = options.publishRelease;
   }
 
@@ -155,6 +164,102 @@ export class VersionIntegrationPipeline {
     return generations;
   }
 
+  /** 候选运行包重启后只恢复已归档的原候选，禁止重新组装出另一个 SHA。 */
+  async resumeRuntimeActivation(releaseBatchId: string): Promise<void> {
+    const document = this.#releaseBatches.pendingRuntimeActivation(releaseBatchId);
+    if (!document) return;
+    const activation = document.runtimeActivation;
+    if (!activation) return;
+    if (this.#loadedRuntimeSha !== activation.candidateSha) {
+      throw new Error(`候选运行包激活版本不一致：已加载 ${this.#loadedRuntimeSha || "未登记"}，期望 ${activation.candidateSha}。`);
+    }
+    const taskIds = document.tasks.map((task) => task.taskId);
+    const candidate: IntegrationCandidate = {
+      generation: document.generation,
+      releaseBatchId: document.releaseBatchId,
+      version: document.version,
+      branchName: document.candidateBranch || "",
+      rootPath: activation.candidateRootPath,
+      baseSha: activation.candidateBaseSha,
+      candidateSha: activation.candidateSha,
+      taskIds,
+    };
+    if (!candidate.branchName) throw new Error("待恢复批次缺少候选分支。");
+    const actor = requireActor(this.#store.state(), this.#actorMemberId);
+    const releaseLease = await this.#acquireRelease({ releaseBatchId, version: document.version, generation: document.generation, taskIds, initiatorMemberId: actor.memberId });
+    let publishedExecutable: string | null = null;
+    try {
+      document.state = "testing";
+      document.runtimeActivation = { ...activation, state: "resumed", detail: null, updatedAt: new Date().toISOString() };
+      this.#releaseBatches.write(document);
+      this.#store.updateTask(taskIds[0], "integration.runtime_activation_resumed", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === document.generation);
+        if (batch) batch.state = "integrating";
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "unified-testing";
+          task.currentHandler = participantSnapshot(requireActor(mutable, this.#actorMemberId));
+          task.unifiedTest = { status: "running", owner: participantSnapshot(requireActor(mutable, this.#actorMemberId)), failureReason: null, startedAt: new Date().toISOString(), completedAt: null };
+          appendFlow(task, "unified_test.started", "integration", "started", `${actor.displayName}已加载候选运行包，恢复原候选统一测试`, actor);
+        }
+      });
+      const verified = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
+      document.state = "verified";
+      document.executable = verified.executable;
+      this.#releaseBatches.write(document);
+      const integrationSha = await this.#workspaces.promoteIntegrationCandidate(candidate);
+      const localMergeSha = await this.#workspaces.mergeIntoLocalBranch(integrationSha);
+      document.state = "integrated";
+      document.localMergeSha = localMergeSha;
+      this.#releaseBatches.write(document);
+      this.#store.updateTask(taskIds[0], "release.awaiting_restart", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === document.generation);
+        if (batch) { batch.state = "verified"; batch.integrationSha = integrationSha; }
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "awaiting-restart";
+          task.currentHandler = participantSnapshot(requireActor(mutable, this.#actorMemberId));
+          if (task.unifiedTest) { task.unifiedTest.status = "passed"; task.unifiedTest.completedAt = new Date().toISOString(); task.unifiedTest.failureReason = null; }
+          appendFlow(task, "unified_test.passed", "integration", "completed", `${actor.displayName}统一测试通过，等待打包版本重启健康检查`, actor);
+        }
+      });
+      document.state = "published";
+      document.completedAt = new Date().toISOString();
+      this.#releaseBatches.write(document);
+      publishedExecutable = verified.executable;
+    } catch (error) {
+      document.state = "failed";
+      document.failureReason = errorMessage(error);
+      document.completedAt = new Date().toISOString();
+      if (document.runtimeActivation) document.runtimeActivation = { ...document.runtimeActivation, state: "failed", detail: errorMessage(error), updatedAt: new Date().toISOString() };
+      this.#releaseBatches.write(document);
+      this.#store.updateTask(taskIds[0], "integration.runtime_activation_failed", (_first, mutable) => {
+        const batch = mutable.integrationBatches.find((item) => item.generation === document.generation);
+        if (batch) {
+          batch.state = "failed";
+          batch.failureReason = errorMessage(error);
+          batch.failureKind = "verification";
+          batch.completedAt = new Date().toISOString();
+        }
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          task.state = "test-failed";
+          task.phase = null;
+          task.blockingReason = "候选运行包已激活，但恢复统一测试失败";
+          task.recoveryTargetState = "ready-for-integration";
+          task.currentHandler = participantSnapshot(requireActor(mutable, this.#actorMemberId));
+          task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+          appendFlow(task, "unified_test.failed", "integration", "failed", errorMessage(error), actor, true);
+        }
+      });
+      throw error;
+    } finally {
+      await this.#workspaces.retireCandidate(candidate).catch((error) => {
+        this.#durations.instant(taskIds[0], "integration.candidate_retirement_failed", { generation: document.generation, error: errorMessage(error) });
+      });
+      releaseLease();
+    }
+    // 发布重启必须发生在候选清理和跨进程发布租约释放之后，避免新进程等待旧进程留下的活跃锁。
+    if (publishedExecutable) this.#publishRelease(publishedExecutable, releaseBatchId, candidate.candidateSha);
+  }
+
   async #runNextBatch(): Promise<void> {
     if (this.#disposed || this.#running) return;
     // 只冻结当前已经满足依赖和原子组屏障的任务，后到结果自然进入下一代。
@@ -176,6 +281,7 @@ export class VersionIntegrationPipeline {
     let candidate: IntegrationCandidate | null = null;
     let verifySpan: string | null = null;
     let reconcileSpan: string | null = null;
+    let activationScheduled = false;
     const integrationSpan = this.#durations.start(taskIds[0], "integration", { generation, taskCount: taskIds.length });
 
     try {
@@ -229,7 +335,41 @@ export class VersionIntegrationPipeline {
       releaseDocument.state = "candidate-ready";
       releaseDocument.candidateBranch = candidate.branchName;
       releaseDocument.candidateSha = candidate.candidateSha;
+      // 门禁前先冻结候选来源、运行器身份和逐项结果；失败后候选工作树会回收，归档仍可复核实际材料。
+      releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
       this.#releaseBatches.write(releaseDocument);
+      if (requiresRuntimeActivation(
+        await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha),
+        this.#loadedRuntimeSha,
+        candidate.candidateSha,
+      )) {
+        releaseDocument.state = "activating";
+        releaseDocument.runtimeActivation = {
+          state: "preparing",
+          candidateRootPath: candidate.rootPath,
+          candidateBaseSha: candidate.baseSha,
+          candidateSha: candidate.candidateSha,
+          executable: null,
+          detail: `候选修改统一测试运行器：已加载 ${this.#loadedRuntimeSha || "未登记"}，候选 ${candidate.candidateSha}。`,
+          updatedAt: new Date().toISOString(),
+        };
+        this.#releaseBatches.write(releaseDocument);
+        const executable = await this.#prepareRuntimeActivation(candidate, releaseBatchId);
+        releaseDocument.runtimeActivation = {
+          ...releaseDocument.runtimeActivation,
+          state: "relaunch-scheduled",
+          executable,
+          detail: null,
+          updatedAt: new Date().toISOString(),
+        };
+        this.#releaseBatches.write(releaseDocument);
+        activationScheduled = true;
+        // app.exit 可能在当前调用栈完成前终止进程；先显式释放跨进程租约，候选工作树则保留给新进程恢复。
+        releaseLease?.();
+        releaseLease = null;
+        this.#activateRuntime(executable, releaseBatchId, candidate.candidateSha);
+        return;
+      }
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
       reconcileSpan = null;
 
@@ -387,7 +527,7 @@ export class VersionIntegrationPipeline {
       }
     } finally {
       // 无论成功失败都回收临时候选并释放发布租约；流水线随后继续检查下一代就绪任务。
-      if (candidate) await this.#workspaces.retireCandidate(candidate).catch((error) => {
+      if (candidate && !activationScheduled) await this.#workspaces.retireCandidate(candidate).catch((error) => {
         this.#durations.instant(taskIds[0], "integration.candidate_retirement_failed", { generation, error: errorMessage(error) });
       });
       releaseLease?.();
@@ -403,6 +543,12 @@ export class VersionIntegrationPipeline {
       this.#publishRelease(publishedExecutable, releaseBatchId, candidate.candidateSha);
     }
   }
+}
+
+/** 运行器、候选读取器或门禁自身变更时，旧进程不得继续验证该候选。 */
+async function candidateChangedFiles(rootPath: string, baseSha: string, candidateSha: string): Promise<string[]> {
+  const { stdout } = await executeGit(["diff", "--name-only", `${baseSha}..${candidateSha}`], rootPath);
+  return stdout.split(/\r?\n/).filter(Boolean);
 }
 
 function integrationFailurePresentation(

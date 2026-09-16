@@ -588,7 +588,7 @@ export class HanliConversationService {
     }
     // 保存真实用户输入和启动回执，界面立即离开发送中状态。
     const nextConversation = automaticDecision
-      ? this.#options.memory!.appendPersonaInternalMessage({
+      ? this.#options.memory!.appendPersonaCustomerMessage({
         ownerPersonaId: "han-li", conversationId: conversation.conversationId!,
         messageId: `hanli-control:automatic:${request.clientMessageId}`, speakerPersonaId: "han-li",
         content: reply, replyToMessageId: viewpoint.sourceMessageId, createdAt: new Date().toISOString(),

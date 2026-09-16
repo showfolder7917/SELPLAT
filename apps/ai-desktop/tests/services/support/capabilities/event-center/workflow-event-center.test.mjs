@@ -16,7 +16,7 @@ import { appRoot, controlledTestRoot } from "#test-paths";
 
 /** 手工会话快照也必须声明持久化类别，避免绕过 TypeScript 后把可见性事实遗漏给仓储。 */
 function conversationMessage(messageType, message) {
-  return { ...message, messageType };
+  return { ...message, messageType, contentRole: "conversation" };
 }
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -27,13 +27,14 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
     for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopPersonaConversation", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1027");
+    assert.equal(fixture.database.latestSchemaVersion, "1028");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream", "AiDesktopEvolutionWorkbenchPreference"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);
       }
       assert.ok(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopPersonaSession'").get());
-      assert.ok(connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='messageType'").get());
+    assert.ok(connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='messageType'").get());
+    assert.ok(connection.prepare("SELECT 1 FROM pragma_table_info('AiDesktopPersonaConversationMessage') WHERE name='contentRole'").get());
     });
   } finally {
     fixture.close();

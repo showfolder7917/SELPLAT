@@ -25,12 +25,14 @@ type CapabilityContext = ReturnType<typeof createCapabilityContext>;
 type CoordinatorOptions = ConstructorParameters<typeof CollaborationWorkflowFacade>[0];
 
 export interface CollaborationBootstrapOptions {
-  startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha">;
+  startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha" | "resumeReleaseBatchId">;
   capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts" | "rules">;
   linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
   releaseVersion: string;
   readRuleInstructions(memberId: string, task: import("../../../contracts/services/workflow/index.js").CollaborationTaskOutDto): string;
   runUnifiedTests(rootPath: string): Promise<FixedUnifiedTestRunResult>;
+  prepareRuntimeActivation(rootPath: string, releaseBatchId: string, candidateSha: string): Promise<string>;
+  activateRuntime(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   publishRelease(executable: string, releaseBatchId: string, runtimeSourceSha: string): void;
   onStateChanged: CoordinatorOptions["emitState"];
   onStream: CoordinatorOptions["emitStream"];
@@ -111,8 +113,15 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     releaseVersion: options.releaseVersion,
     releaseBatches,
     loadedRuntimeSha: options.startup.runtimeSourceSha,
+    prepareRuntimeActivation: (candidate, releaseBatchId) => options.prepareRuntimeActivation(candidate.rootPath, releaseBatchId, candidate.candidateSha),
+    activateRuntime: options.activateRuntime,
     publishRelease: options.publishRelease,
   });
+  if (options.startup.resumeReleaseBatchId) {
+    void versionIntegration.resumeRuntimeActivation(options.startup.resumeReleaseBatchId).catch((error) => {
+      eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "runtime-activation", operation: "resume_release_candidate", error });
+    });
+  }
   const collaboration = new CollaborationWorkflowFacade({
     store: collaborationStore,
     durations: collaborationDurations,
