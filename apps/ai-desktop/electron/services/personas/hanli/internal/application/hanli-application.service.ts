@@ -126,18 +126,16 @@ export class HanliApplicationService implements HanliApplicationPort {
 
   /** 页面型组合正式页面检查与源码审查；非页面型只执行源码审查。 */
   async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview> {
-    const proposal = requireProposal(this.#store.state(), proposalId);
+    let proposal = requireProposal(this.#store.state(), proposalId);
+    if (proposal.acceptancePlan?.version === 1) {
+      // 冻结的旧计划属于已退役能力，不能恢复、升级或继续消费；先审计退役，再按当前正式能力新建计划。
+      this.#store.retireLegacyAcceptancePlan(proposalId);
+      proposal = requireProposal(this.#store.state(), proposalId);
+    }
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
     const routingReview = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
-    const plan = proposal.acceptancePlan?.version === 1
-      ? upgradeAcceptancePlan(proposal, routingReview)
-      : proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
-    if (proposal.acceptancePlan?.version === 1) {
-      // 旧计划尚未形成验收结果时，原位升级证据分区；计划、条件和轮次身份保持不变。
-      this.#store.upgradePendingAcceptancePlan(proposalId, plan);
-    } else {
-      this.#store.saveAcceptancePlan(proposalId, plan);
-    }
+    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
+    this.#store.saveAcceptancePlan(proposalId, plan);
     // 代码结论可能要求核对计划本身，必须在计划落盘后重新读取权威提案再审查。
     const frozenProposal = requireProposal(this.#store.state(), proposalId);
     const review = await this.#decision.reviewResultAcceptance(frozenProposal, implementationEvidence);
@@ -321,18 +319,6 @@ function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAc
     rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
     currentRoundId: roundId,
     createdAt: now,
-  };
-}
-
-/** 把尚无验收结果的 v1 计划升级为正式页面只读语义；不更换计划或轮次身份。 */
-function upgradeAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAcceptanceRunOutDto): EvolutionAcceptancePlanOutDto {
-  const previous = proposal.acceptancePlan;
-  if (!previous || previous.version !== 1) throw new Error("只有旧版待验收计划可以升级证据分区。");
-  const pageConditionIds = review.mode === "mixed" ? review.pageCriterionIds || [] : [];
-  return {
-    ...previous,
-    version: 2,
-    conditions: acceptancePlanConditions(proposal, pageConditionIds),
   };
 }
 

@@ -46,6 +46,7 @@ test("需要发送或创建数据的条件归令狐证据而不是韩立正式�
   assert.match(prompt, /必须发送消息、新建或重建会话、创建样本或测试数据/);
   assert.match(prompt, /必须进入 code-conformance/);
   assert.match(prompt, /不得因为条件描述了页面结果，就要求韩立在正式软件中制造该结果/);
+  assert.match(prompt, /不得创建、重建或恢复任何已退役的隔离验收环境/);
 });
 
 test("客户未通过摘要与技术详情保持分离", () => {

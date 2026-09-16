@@ -579,21 +579,16 @@ export class EvolutionStateStore {
     }, { planId: plan.planId, acceptanceRoundId: plan.currentRoundId, nextOwner: "han-li" });
   }
 
-  /** 仅升级尚无验收结果的 v1 证据分区；已完成、失败或重开记录都不得被事后改写。 */
-  upgradePendingAcceptancePlan(proposalId: string, plan: EvolutionAcceptancePlanOutDto): EvolutionStateOutDto {
+  /** 冻结的旧计划只可审计退役，禁止恢复、升级或覆盖；当前能力必须重新冻结全新计划。 */
+  retireLegacyAcceptancePlan(proposalId: string): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
     const previous = requireAcceptancePlan(proposal);
-    if (proposal.status !== "pending-acceptance" || previous.version !== 1 || plan.version !== 2) throw new Error("当前验收计划不允许升级证据分区。 ");
-    if (previous.planId !== plan.planId || previous.currentRoundId !== plan.currentRoundId
-      || previous.proposalVersion !== plan.proposalVersion || previous.conditions.length !== plan.conditions.length
-      || previous.conditions.some((condition, index) => condition.conditionId !== plan.conditions[index]?.conditionId || condition.criterion !== plan.conditions[index]?.criterion)) {
-      throw new Error("验收计划升级改变了原条件、计划或轮次身份。 ");
-    }
+    if (proposal.status !== "pending-acceptance" || previous.version !== 1) throw new Error("当前验收计划不是可退役的旧版待验收计划。 ");
     const hasRecordedResult = this.#state.archiveRecords.some((record) => record.proposalId === proposalId && record.eventType === "acceptance.result_checked");
-    if (hasRecordedResult) throw new Error("已有验收结果的计划不得重新分区。 ");
-    return this.#commit("acceptance.plan_capability_upgraded", proposal.topicId, proposalId, (state) => {
-      requireProposal(state, proposalId).acceptancePlan = structuredClone(plan);
-    }, { planId: plan.planId, acceptanceRoundId: plan.currentRoundId, fromVersion: 1, toVersion: 2, nextOwner: "han-li" });
+    if (hasRecordedResult) throw new Error("已有验收结果的旧计划只能保留历史，禁止恢复或重建。 ");
+    return this.#commit("acceptance.legacy_plan_retired", proposal.topicId, proposalId, (state) => {
+      requireProposal(state, proposalId).acceptancePlan = null;
+    }, { retiredPlanId: previous.planId, retiredAcceptanceRoundId: previous.currentRoundId, retiredVersion: previous.version, nextOwner: "han-li" });
   }
 
   /** 已完成专题只可显式建立新的验收轮次；不复用阻塞运行的 resumeOneShotRun。 */
@@ -1080,7 +1075,7 @@ function archiveTitle(reason: string): string {
     "proposal.distributed": "南宫婉分发实施任务",
     "proposal.progress_reconciled": "专题执行状态更新",
     "proposal.result_decided": "韩立完成实施结果验收",
-    "acceptance.plan_capability_upgraded": "韩立按正式页面能力边界升级验收计划",
+    "acceptance.legacy_plan_retired": "韩立退役冻结的旧验收计划并按当前能力重新规划",
     "acceptance.result_checked": "韩立完成适用的结果验收",
     "conversation.topic_group_replied": "专题群收到用户消息与南宫婉回复",
     "one-shot.activity": "一次性演化当前动作更新",

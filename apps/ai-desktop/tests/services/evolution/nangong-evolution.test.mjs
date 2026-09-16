@@ -2110,8 +2110,8 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("旧计划把发送消息误列为页面条件时原位升级为令狐工程证据", async () => {
-  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-v2-upgrade-"));
+test("旧计划把发送消息误列为页面条件时退役旧计划并重新冻结当前计划", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-v2-retire-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     let state = store.createTopic({
@@ -2150,15 +2150,17 @@ test("旧计划把发送消息误列为页面条件时原位升级为令狐工�
     }).facade;
     const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "令狐门禁已经完成" });
     assert.equal(result.plan.version, 2);
-    assert.equal(result.plan.planId, "legacy-plan");
-    assert.equal(result.plan.currentRoundId, "legacy-round");
+    assert.notEqual(result.plan.planId, "legacy-plan");
+    assert.notEqual(result.plan.currentRoundId, "legacy-round");
     assert.equal(result.plan.conditions[0].evidenceType, "code-conformance");
     assert.equal(result.review.mode, "code-conformance");
-    assert.ok(store.state().archiveRecords.some((record) => record.eventType === "acceptance.plan_capability_upgraded"));
+    const records = store.state().archiveRecords;
+    assert.ok(records.some((record) => record.eventType === "acceptance.legacy_plan_retired" && record.payload.retiredPlanId === "legacy-plan"));
+    assert.ok(records.some((record) => record.eventType === "acceptance.plan_frozen" && record.payload.planId === result.plan.planId));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("已有验收结果的旧计划禁止事后改写证据分区", () => {
+test("已有验收结果的旧计划只能保留历史且禁止恢复或重建", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-recorded-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
@@ -2180,11 +2182,8 @@ test("已有验收结果的旧计划禁止事后改写证据分区", () => {
     };
     store.saveAcceptancePlan(proposalId, legacyPlan);
     store.recordAcceptanceRun(computerRun("recorded-run", state.activeTopicId, proposalId, "passed", "recorded-shot", legacyPlan));
-    assert.throws(() => store.upgradePendingAcceptancePlan(proposalId, {
-      ...legacyPlan,
-      version: 2,
-      conditions: [{ ...legacyPlan.conditions[0], evidenceType: "code-conformance", completionRequirement: "源码审查" }],
-    }), /已有验收结果的计划不得重新分区/);
+    assert.throws(() => store.retireLegacyAcceptancePlan(proposalId), /禁止恢复或重建/);
+    assert.equal(store.state().proposals.find((proposal) => proposal.proposalId === proposalId).acceptancePlan.planId, "recorded-plan");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

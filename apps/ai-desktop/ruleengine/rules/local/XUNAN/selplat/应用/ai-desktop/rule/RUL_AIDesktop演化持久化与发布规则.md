@@ -1,7 +1,7 @@
 # AI Desktop 演化、持久化与发布规则
 
 <!-- 本规则是原聚合规则的独立职责分片；当前有效 DSL 原值保持不变。 -->
-rule_version = 5.118.0
+rule_version = 5.119.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -39,7 +39,7 @@ nangong_one_shot_conflict_contract = no_EvolutionLiveActivity_renderer + collabo
 <!-- 三个审批领域统一使用可查询审计信封，但不得丢失各自决策词、审批人、事实与关联工作流。 -->
 approval_governance_envelope_contract = evolution_plus_collaboration_review_plus_codex_command + one_queryable_main_process_SQLite_projection + domain_native_decision_vocabulary + real_initiator_approver_reason_evidence_time_and_correlation + no_cross_domain_state_machine_merge
 <!-- 执行任务全部完成只形成待验收事实；韩立结果审批通过后才完成本轮并允许继续演化。 -->
-evolution_result_acceptance_contract = all_distributed_tasks_complete_to_pending_acceptance + han_li_selects_exactly_one_page_experience_or_code_conformance_mode + page_uses_current_formal_application_without_isolation + non_page_uses_readonly_code_requirement_review_without_page_layout_or_screenshot + approved_completes_round + rejected_or_supplement_returns_correction + engineering_gate_or_task_completion_never_impersonates_customer_requirement_acceptance
+evolution_result_acceptance_contract = all_distributed_tasks_complete_to_pending_acceptance + han_li_selects_exactly_one_page_experience_or_code_conformance_mode + page_uses_current_formal_application_without_isolation + retired_isolation_never_rebuilt_or_restored_by_future_repair + frozen_legacy_acceptance_plan_never_restored_upgraded_or_consumed + current_capability_freezes_new_plan + non_page_uses_readonly_code_requirement_review_without_page_layout_or_screenshot + approved_completes_round + rejected_or_supplement_returns_correction + engineering_gate_or_task_completion_never_impersonates_customer_requirement_acceptance
 <!-- 统一自动演化在运行态持续研讨并保留纠偏预算；只有真实阻塞、人工暂停、停止或接管才中止，开放价值判断不得退化为固定评分器。 -->
 evolution_round_control_contract = continuous_deliberation_while_running + bounded_correction_rounds + explicit_pause_resume_stop_and_handover + persisted_runtime_and_stop_reason + evidence_based_AI_judgment_not_fixed_benefit_or_user_fit_score
 <!-- 专题只能由韩立综合完整会话并逐轮发问后确立；南宫婉负责登记专题池和执行编排。 -->
