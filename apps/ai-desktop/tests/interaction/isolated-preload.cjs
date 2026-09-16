@@ -625,6 +625,9 @@ contextBridge.exposeInMainWorld("desktop", {
     const snapshot = structuredClone(interactionTimelineSnapshot());
     return { ...snapshot, groups: snapshot.groups.filter((group) => requestedGroupIds.has(group.groupId)) };
   },
+  getCollaborationTimelineProjectionStatus: async () => ({ status: "ready", message: "" }),
+  retryCollaborationTimelineProjection: async () => undefined,
+  onCollaborationTimelineProjectionStatus: () => () => undefined,
   onCollaborationTimelineChanged: (listener) => { collaborationTimelineListeners.add(listener); return () => collaborationTimelineListeners.delete(listener); },
   setDesktopOperatingMode: async (mode) => { collaborationState.mode = mode; return publishCollaborationState("mode.changed"); },
   getCollaborationNavigationPreference: async () => collaborationState.members.some((member) => member.memberId === collaborationNavigationPreferenceMemberId)

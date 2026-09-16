@@ -63,6 +63,7 @@ function createReadObstructionPresentation(input: {
 /** 按专题展示完整协作历史的主页面。 */
 export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const [retryingRead, setRetryingRead] = useState(false);
+  const [retryingProjection, setRetryingProjection] = useState(false);
   /** 已提交状态只对应同一份档案政策；政策变化后不能继续禁用新的人工读取机会。 */
   const [submittedReadPolicyId, setSubmittedReadPolicyId] = useState<string | null>(null);
   const automaticRetryPolicyId = useRef<string | null>(null);
@@ -122,6 +123,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const deliveryUnavailable = deliveryReadStatus === "unavailable";
   const timelineUnavailable = timelineReadStatus === "unavailable";
   const timelineRefreshing = timelineReadStatus === "syncing" && groups.length > 0;
+  const timelineProjectionUnavailable = model.presentation.timelineProjectionStatus.status === "unavailable";
   const readObstruction = createReadObstructionPresentation({
     deliveryUnavailable,
     // 最近成功的时间线仍可供阅读；失败只作为局部刷新状态，不能替换整页内容。
@@ -162,6 +164,12 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     void onRetryTimelineRead()
       .catch(() => undefined)
       .finally(() => setRetryingRead(false));
+  };
+
+  /** 只重试已失败的时间线投影，旧卡片、展开状态和详情滚动不参与该忙碌锁。 */
+  const retryTimelineProjection = () => {
+    setRetryingProjection(true);
+    void model.actions.onRetryTimelineProjection().catch(() => undefined).finally(() => setRetryingProjection(false));
   };
 
   // 任一权威读取受阻时，旧时间线不能继续承担当前结论。
@@ -237,6 +245,10 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
       {timelineUnavailable && <div className="task-collaboration-refresh-status" role="status">
         <span>{readError || "任务进度更新失败，正在保留上次成功内容。"}</span>
         <button type="button" disabled={retryingRead} onClick={retryTimelineRead}>{retryingRead ? "重新读取中…" : "重新读取更新"}</button>
+      </div>}
+      {timelineProjectionUnavailable && <div className="task-collaboration-refresh-status" role="alert">
+        <span>{model.presentation.timelineProjectionStatus.message || "任务进度更新失败，正在保留上次成功内容。"}</span>
+        <button type="button" disabled={retryingProjection} onClick={retryTimelineProjection}>{retryingProjection ? "重试更新中…" : "重试进度更新"}</button>
       </div>}
       {/* 专题列表：保持后端时间线已经确定的稳定顺序。 */}
       <div className="task-collaboration-groups">

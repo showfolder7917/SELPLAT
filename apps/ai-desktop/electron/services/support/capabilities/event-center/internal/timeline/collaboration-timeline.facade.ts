@@ -2,6 +2,7 @@
 import type {
   CollaborationStateOutDto,
   CollaborationTimelineChangedEventOutDto,
+  CollaborationTimelineProjectionStatusOutDto,
   CollaborationTimelineSnapshotOutDto,
 } from "../../../../../../../contracts/services/workflow/index.js";
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../../../contracts/services/workflow/index.js";
@@ -10,6 +11,7 @@ import { createHash } from "node:crypto";
 import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
 
 type TimelineChangedListener = (event: CollaborationTimelineChangedEventOutDto) => void;
+type ProjectionStatusListener = (status: CollaborationTimelineProjectionStatusOutDto) => void;
 
 /**
  * 任务时间线唯一业务门面：所有写入先提交 SQLite，再向订阅者发布变更。
@@ -18,6 +20,8 @@ type TimelineChangedListener = (event: CollaborationTimelineChangedEventOutDto) 
 export class CollaborationTimelineFacade {
   readonly #repository: CollaborationTimelineRepository;
   readonly #listeners = new Set<TimelineChangedListener>();
+  readonly #projectionStatusListeners = new Set<ProjectionStatusListener>();
+  #projectionFailure: { state: CollaborationStateOutDto; taskIds: string[]; message: string } | null = null;
 
   constructor(database: SqliteDatabase) {
     this.#repository = new CollaborationTimelineRepository(database);
@@ -30,7 +34,27 @@ export class CollaborationTimelineFacade {
 
   appendTaskFlowEvents(state: CollaborationStateOutDto, taskIds: string[]): void {
     const commit = this.#repository.appendTaskFlowEvents(state, taskIds);
+    this.#projectionFailure = null;
+    this.#publishProjectionStatus();
     if (commit) this.#publish(commit);
+  }
+
+  /** 保存未提交投影的重试上下文；技术状态不进入不可变业务时间线。 */
+  recordProjectionFailure(state: CollaborationStateOutDto, taskIds: string[], error: unknown): void {
+    this.#projectionFailure = { state, taskIds: [...taskIds], message: error instanceof Error ? error.message : String(error) };
+    this.#publishProjectionStatus();
+  }
+
+  /** 只重放最近失败的幂等投影，成功后会通过正常提交事件通知页面刷新。 */
+  retryProjection(): void {
+    const failed = this.#projectionFailure;
+    if (!failed) return;
+    try { this.appendTaskFlowEvents(failed.state, failed.taskIds); }
+    catch (error) { this.recordProjectionFailure(failed.state, failed.taskIds, error); throw error; }
+  }
+
+  getProjectionStatus(): CollaborationTimelineProjectionStatusOutDto {
+    return this.#projectionFailure ? { status: "unavailable", message: this.#projectionFailure.message } : { status: "ready", message: "" };
   }
 
   /** 只投影明确问题与实际动作，正常且无变化的巡检不产生会话消息。 */
@@ -78,7 +102,17 @@ export class CollaborationTimelineFacade {
     return () => this.#listeners.delete(listener);
   }
 
+  subscribeProjectionStatus(listener: ProjectionStatusListener): () => void {
+    this.#projectionStatusListeners.add(listener);
+    return () => this.#projectionStatusListeners.delete(listener);
+  }
+
   #publish(event: CollaborationTimelineChangedEventOutDto): void {
     for (const listener of this.#listeners) listener(event);
+  }
+
+  #publishProjectionStatus(): void {
+    const status = this.getProjectionStatus();
+    for (const listener of this.#projectionStatusListeners) listener(status);
   }
 }

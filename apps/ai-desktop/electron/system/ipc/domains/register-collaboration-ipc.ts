@@ -47,6 +47,11 @@ export function registerCollaborationIpc(
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
     return collaborationTimeline.getTimelineGroups(Array.isArray(groupIds) ? groupIds.filter((value): value is string => typeof value === "string") : []);
   });
+  handle("desktop:get-collaboration-timeline-projection-status", () => collaborationTimeline?.getProjectionStatus() || { status: "ready", message: "" });
+  handle("desktop:retry-collaboration-timeline-projection", () => {
+    if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，无法重试进度更新。");
+    collaborationTimeline.retryProjection();
+  });
   handle("desktop:get-collaboration-navigation-preference", () => navigationPreference.restore(collaboration.state().members));
   handle("desktop:save-collaboration-navigation-preference", (_event, memberId: string) => {
     if (typeof memberId !== "string") throw new Error("人物标识无效，无法保存查看位置。");
