@@ -12,14 +12,14 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 2;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 3;
 
 /**
  * 生成客户可见正文。
  *
  * 原始消息只在持久化边界短暂读取；调用方只能取得派生后的安全正文或不可显示状态。
  */
-export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConversationMessageOutDto, "messageType" | "content">): PersonaCustomerDisplayDerivation {
+export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "speakerType">>): PersonaCustomerDisplayDerivation {
   if (message.messageType !== "customer-visible") {
     return { state: "excluded", content: null, failureReason: null };
   }
@@ -27,6 +27,8 @@ export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConvers
   if (!content) {
     return { state: "failed", content: null, failureReason: "客户显示正文为空，无法安全读取。" };
   }
+  // 用户输入是审计与客户显示共同的原文事实；内部整理只可能出现在人物历史回复中。
+  if (message.speakerType === "user") return { state: "ready", content, failureReason: null };
   try {
     const legacyReply = extractLegacyReply(content);
     return { state: "ready", content: legacyReply, failureReason: null };
@@ -35,14 +37,27 @@ export function derivePersonaCustomerDisplayMessage(message: Pick<PersonaConvers
   }
 }
 
-/** 兼容旧版“自然答复 + 内部字段”记录，只保留内部字段出现前的自然答复。 */
+/** 兼容旧版“自然答复 + 内部字段组”记录，只保留字段组前的自然答复。 */
 function extractLegacyReply(content: string): string {
-  // 历史字段既可能以空行分段，也可能紧凑地逐行记录。只识别已知协作字段，
-  // 不用宽泛模式猜测正文，避免误删客户自然语言中的普通冒号。
-  const marker = /(?:^|\n)\s*(?:(?:用户原话|用户目标|调查对象|期望结果|交给南宫婉核实)\s*[：:]|contentRole\s*(?:[：:=]|标注))/u.exec(content);
-  if (!marker) return content;
-  if (marker.index === 0) throw new Error("legacy reply is missing");
-  const reply = content.slice(0, marker.index).trim();
+  const lines = content.split(/\r?\n/u);
+  const labeledLines = lines.map((line, index) => ({ index, label: legacyFieldLabel(line) })).filter((line): line is { index: number; label: string } => line.label !== null);
+  const distinctLabels = new Set(labeledLines.map((line) => line.label));
+  if (labeledLines[0]?.index === 0) throw new Error("legacy reply is missing");
+  // 三个以上字段同时出现才是旧整理块，避免把人物在正常答复中偶然提及单个词语误判为内部正文。
+  const firstLine = distinctLabels.size >= 3 ? labeledLines[0]?.index : undefined;
+  if (firstLine === undefined) return content;
+  const reply = lines.slice(0, firstLine).join("\n").trim();
   if (!reply) throw new Error("legacy reply is empty");
   return reply;
+}
+
+/** 识别旧整理块的字段标题，兼容列表、标题和加粗等 Markdown 形态。 */
+function legacyFieldLabel(line: string): string | null {
+  const plain = line.trim()
+    .replace(/^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/u, "")
+    .replace(/^\*\*([^*]+)\*\*/u, "$1")
+    .replace(/^【([^】]+)】/u, "$1")
+    .trim();
+  const match = /^(用户原话|用户目标|调查对象|期望结果|交给南宫婉核实|contentRole)(?:\s*(?:[：:=]|标注)|\s*$)/u.exec(plain);
+  return match?.[1] || null;
 }
