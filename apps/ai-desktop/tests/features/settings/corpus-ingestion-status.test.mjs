@@ -13,6 +13,7 @@ function source(relativePath) {
 test("自动入库状态默认优先，当前补齐操作可回显完成结果并在设置打开期间持续刷新", () => {
   const viewModel = source("src/features/settings/model/createDeveloperSettingsViewModel.ts");
   const settings = source("src/features/settings/model/useDesktopSettings.ts");
+  const view = source("src/features/settings/components/DeveloperSettingsView.tsx");
 
   assert.match(
     viewModel,
@@ -26,4 +27,6 @@ test("自动入库状态默认优先，当前补齐操作可回显完成结果�
   assert.match(settings, /setCorpusStatusFocus\("ingestion"\)/u);
   assert.match(settings, /if \(!settingsOpen\) return;[\s\S]*getCorpusIngestionStatus\(\)\.then\(setCorpusIngestion\)/u);
   assert.doesNotMatch(settings, /corpusSemanticBackfill\?\.state !== "running" && corpusIngestion\?\.state !== "running"/u);
+  assert.match(viewModel, /ingestionStatusMessage: settings\.corpusIngestion\?\.message/u);
+  assert.match(view, /corpus\.ingestionStatusMessage && <small>\{corpus\.ingestionStatusMessage\}<\/small>/u);
 });

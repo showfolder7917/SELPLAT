@@ -117,6 +117,10 @@ export function createDeveloperSettingsViewModel(
       statusProgress: settings.corpusStatusFocus === "semantic-backfill" && settings.corpusSemanticBackfill?.state === "running"
         ? `${settings.corpusSemanticBackfill.processedCount}/${settings.corpusSemanticBackfill.targetCount}`
         : "",
+      // 自动入库与历史补齐是独立任务；无论当前按钮回显什么，都持续展示 Worker 的已提交状态。
+      ingestionStatusMessage: settings.corpusIngestion?.message
+        ? `${locale === "ja" ? "自動登録" : "自动入库"}：${settings.corpusIngestion.message}`
+        : "",
       ingestionEnabled: settings.codexAppCorpusIngestionEnabled,
       toggleLabel: settings.codexAppCorpusIngestionEnabled ? (locale === "ja" ? "登録を停止" : "停止入库") : (locale === "ja" ? "登録を開始" : "开启入库"),
       backfillLabel: settings.corpusSemanticBackfill?.state === "running" ? (locale === "ja" ? "補完中…" : "正在补齐…") : (locale === "ja" ? "履歴を一括補完" : "补齐历史摘要"),
