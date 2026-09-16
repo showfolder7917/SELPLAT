@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import type { DatabaseSync } from "node:sqlite";
 import { writePersonaConversationMessage } from "./persona-conversation-message.writer.js";
+import { derivePersonaCustomerDisplayMessage } from "./persona-customer-display-message.projector.js";
 
-import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, PersonaCustomerDisplayStateValue, ReadPersonaConversationWindowInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
 import type { DatabasePort } from "../../../platform/persistence/index.js";
 
 /**
@@ -60,37 +62,58 @@ export class PersonaConversationRepository {
     });
   }
 
-  /**
-   * 按稳定序号读取一个有限窗口。
-   * 真实传参示例：beforeSequenceNumber=null、limit=60 返回最新六十条；补载时传当前最早序号。
-   * 真实返回示例：messages 保持升序，hasEarlier 表示页面是否还能继续向上读取。
-   * 异常或副作用示例：不存在的会话返回空窗口，不修改历史消息或会话头。
-   */
-  readWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto = {}): PersonaConversationWindowOutDto {
+  /** 读取客户显示投影；返回值不携带任何原始 customer-visible content。 */
+  readCustomerDisplay(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto {
+    if (!this.database) return emptyConversation(ownerPersonaId);
+    const owner = requiredPersonaId(ownerPersonaId);
+    const conversation = conversationId?.trim() || this.activeConversationId(owner);
+    if (!conversation) return emptyConversation(owner);
+    this.ensureCustomerDisplayRecords(owner, conversation);
+    return this.database.withConnection((connection) => {
+      const header = connection.prepare(`SELECT conversationId, selectedModel, createdAt, updatedAt FROM AiDesktopPersonaConversation
+        WHERE ownerPersonaId=$owner AND conversationId=$conversation`).get({ $owner: owner, $conversation: conversation }) as HeaderRow | undefined;
+      if (!header) return emptyConversation(owner);
+      const rows = connection.prepare(customerDisplayRowsSql("ORDER BY source.sequenceNumber"))
+        .all({ $owner: owner, $conversation: conversation }) as unknown as Array<Record<string, unknown>>;
+      return { ownerPersonaId: owner, conversationId: header.conversationId, selectedModel: header.selectedModel, createdAt: header.createdAt,
+        messages: rows.map(mapCustomerDisplayMessage), updatedAt: header.updatedAt };
+    });
+  }
+
+  /** 页面与历史补载唯一使用的客户显示窗口；内部和审计正文不能经此端口返回。 */
+  readCustomerDisplayWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto = {}): PersonaConversationWindowOutDto {
     if (!this.database) return emptyWindow(ownerPersonaId);
     const owner = requiredPersonaId(ownerPersonaId);
     const limit = normalizedWindowLimit(request.limit);
-    const conversationId = request.conversationId?.trim() || this.database.withConnection((connection) => {
-      const row = connection.prepare("SELECT conversationId FROM AiDesktopPersonaConversation WHERE ownerPersonaId=$owner AND status='active' LIMIT 1")
-        .get({ $owner: owner }) as { conversationId: string } | undefined;
-      return row?.conversationId || null;
-    });
-    if (!conversationId) return emptyWindow(owner);
+    const conversation = request.conversationId?.trim() || this.activeConversationId(owner);
+    if (!conversation) return emptyWindow(owner);
+    this.ensureCustomerDisplayRecords(owner, conversation);
     return this.database.withConnection((connection) => {
       const header = connection.prepare("SELECT conversationId, selectedModel, createdAt, updatedAt FROM AiDesktopPersonaConversation WHERE ownerPersonaId=$owner AND conversationId=$conversation")
-        .get({ $owner: owner, $conversation: conversationId }) as { conversationId: string; selectedModel: string | null; createdAt: string; updatedAt: string } | undefined;
+        .get({ $owner: owner, $conversation: conversation }) as HeaderRow | undefined;
       if (!header) return emptyWindow(owner);
       const before = Number.isInteger(request.beforeSequenceNumber) ? Number(request.beforeSequenceNumber) : Number.MAX_SAFE_INTEGER;
-      const rows = connection.prepare(`SELECT messageId, sequenceNumber, messageType, contentRole, speakerType, speakerPersonaId, content, inferredIntent,
-        attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt
-        FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$owner AND conversationId=$conversation AND sequenceNumber<$before
-        ORDER BY sequenceNumber DESC LIMIT $limit`).all({ $owner: owner, $conversation: conversationId, $before: before, $limit: limit }) as unknown as Array<Record<string, unknown>>;
-      const messages = rows.reverse().map(mapMessage);
+      const rows = connection.prepare(customerDisplayRowsSql("AND source.sequenceNumber<$before ORDER BY source.sequenceNumber DESC LIMIT $limit"))
+        .all({ $owner: owner, $conversation: conversation, $before: before, $limit: limit }) as unknown as Array<Record<string, unknown>>;
+      const messages = rows.reverse().map(mapCustomerDisplayMessage);
       const earliest = messages[0]?.sequenceNumber;
-      const hasEarlier = earliest === undefined ? false : Boolean(connection.prepare("SELECT 1 FROM AiDesktopPersonaConversationMessage WHERE ownerPersonaId=$owner AND conversationId=$conversation AND sequenceNumber<$earliest LIMIT 1")
-        .get({ $owner: owner, $conversation: conversationId, $earliest: earliest }));
-      return { ownerPersonaId: owner, conversationId: header.conversationId, selectedModel: header.selectedModel, createdAt: header.createdAt, updatedAt: header.updatedAt, messages, hasEarlier };
+      const hasEarlier = earliest === undefined ? false : Boolean(connection.prepare(`
+        SELECT 1 FROM AiDesktopPersonaConversationMessage AS source
+        LEFT JOIN AiDesktopPersonaCustomerDisplayMessage AS display ON display.sourceMessageId=source.messageId
+        WHERE source.ownerPersonaId=$owner AND source.conversationId=$conversation
+          AND (display.displayState IS NULL OR display.displayState<>'excluded') AND source.sequenceNumber<$earliest LIMIT 1
+      `).get({ $owner: owner, $conversation: conversation, $earliest: earliest }));
+      return { ownerPersonaId: owner, conversationId: header.conversationId, selectedModel: header.selectedModel, createdAt: header.createdAt,
+        updatedAt: header.updatedAt, messages, hasEarlier };
     });
+  }
+
+  /** 客户主动重新读取失败位置，只重算对应派生记录且绝不展示原始正文。 */
+  retryCustomerDisplayMessage(ownerPersonaId: string, conversationId: string, sourceMessageId: string): void {
+    if (!this.database) throw new Error("AI Memory 数据库当前不可用，无法重新读取客户消息。");
+    const owner = requiredPersonaId(ownerPersonaId);
+    const conversation = requiredConversationId(conversationId);
+    this.database.transaction((connection) => this.ensureCustomerDisplayRecords(owner, conversation, sourceMessageId, connection, true));
   }
 
   /**
@@ -161,7 +184,49 @@ export class PersonaConversationRepository {
     });
     return this.read(owner, conversation);
   }
+
+  private activeConversationId(ownerPersonaId: string): string | null {
+    if (!this.database) return null;
+    return this.database.withConnection((connection) => {
+      const row = connection.prepare("SELECT conversationId FROM AiDesktopPersonaConversation WHERE ownerPersonaId=$owner AND status='active' LIMIT 1")
+        .get({ $owner: ownerPersonaId }) as { conversationId: string } | undefined;
+      return row?.conversationId || null;
+    });
+  }
+
+  /** 为旧记录补写可审计投影；失败状态可由指定的重试请求重新生成。 */
+  private ensureCustomerDisplayRecords(ownerPersonaId: string, conversationId: string, sourceMessageId?: string, existingConnection?: DatabaseSync, force = false): void {
+    if (!this.database) return;
+    const write = (connection: DatabaseSync) => {
+      const sourceMessageFilter = sourceMessageId ? "AND messageId=$sourceMessageId" : "";
+      const statement = connection.prepare(`SELECT messageId, sequenceNumber, messageType, contentRole, speakerType, speakerPersonaId, content,
+        attachmentIdsJson, replyToMessageId, deliveryStatus, createdAt, completedAt FROM AiDesktopPersonaConversationMessage
+        WHERE ownerPersonaId=$owner AND conversationId=$conversation ${sourceMessageFilter}`);
+      // 分支分别调用 SQLite，避免条件对象被推断为含 undefined 可选字段的联合类型。
+      const rows = sourceMessageId
+        ? statement.all({ $owner: ownerPersonaId, $conversation: conversationId, $sourceMessageId: sourceMessageId })
+        : statement.all({ $owner: ownerPersonaId, $conversation: conversationId });
+      for (const row of rows) {
+        const existing = connection.prepare("SELECT displayState FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId=$messageId")
+          .get({ $messageId: String(row.messageId) }) as { displayState: PersonaCustomerDisplayStateValue } | undefined;
+        if (existing && !force) continue;
+        const derived = derivePersonaCustomerDisplayMessage(mapMessage(row));
+        connection.prepare(`INSERT INTO AiDesktopPersonaCustomerDisplayMessage
+          (sourceMessageId, ownerPersonaId, conversationId, displayState, displayContent, failureReason, derivedAt)
+          VALUES ($messageId, $owner, $conversation, $state, $content, $reason, $now)
+          ON CONFLICT(sourceMessageId) DO UPDATE SET displayState=excluded.displayState, displayContent=excluded.displayContent,
+            failureReason=excluded.failureReason, derivedAt=excluded.derivedAt`).run({
+          $messageId: String(row.messageId), $owner: ownerPersonaId, $conversation: conversationId,
+          $state: derived.state, $content: derived.content, $reason: derived.failureReason, $now: new Date().toISOString(),
+        });
+      }
+    };
+    if (existingConnection) write(existingConnection);
+    else this.database.transaction(write);
+  }
 }
+
+interface HeaderRow { conversationId: string; selectedModel: string | null; createdAt: string; updatedAt: string; }
 
 /** 数据库行只在这里转换成公共 DTO，人物页面不需要理解 JSON 字段。 */
 function mapMessage(row: Record<string, unknown>): PersonaConversationMessageOutDto {
@@ -180,6 +245,25 @@ function mapMessage(row: Record<string, unknown>): PersonaConversationMessageOut
     createdAt: String(row.createdAt),
     completedAt: row.completedAt ? String(row.completedAt) : null,
   };
+}
+
+/** 客户显示 DTO 只从派生字段读取 content；缺失或失败消息保留位置但没有原始正文。 */
+function mapCustomerDisplayMessage(row: Record<string, unknown>): PersonaConversationMessageOutDto {
+  const state = String(row.displayState || "missing") as PersonaCustomerDisplayStateValue;
+  const content = state === "ready" ? String(row.displayContent || "") : state === "failed"
+    ? "此消息暂时无法安全显示。" : "此消息正在准备显示。";
+  return { ...mapMessage(row), content, customerDisplayState: state,
+    customerDisplayFailureReason: row.failureReason ? String(row.failureReason) : null };
+}
+
+function customerDisplayRowsSql(suffix: string): string {
+  return `SELECT source.messageId, source.sequenceNumber, source.messageType, source.contentRole, source.speakerType, source.speakerPersonaId,
+    source.inferredIntent, source.attachmentIdsJson, source.replyToMessageId, source.deliveryStatus, source.createdAt, source.completedAt,
+    display.displayState, display.displayContent, display.failureReason
+    FROM AiDesktopPersonaConversationMessage AS source
+    LEFT JOIN AiDesktopPersonaCustomerDisplayMessage AS display ON display.sourceMessageId=source.messageId
+    WHERE source.ownerPersonaId=$owner AND source.conversationId=$conversation
+      AND (display.displayState IS NULL OR display.displayState<>'excluded') ${suffix}`;
 }
 
 

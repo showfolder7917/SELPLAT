@@ -15,12 +15,16 @@ const collaborationMemoryPort = read("contracts/services/support/capabilities/ev
 const repository = read("electron/services/support/capabilities/conversation/internal/persona-conversation.repository.ts");
 const migration = read("db/sql/migration-1025-add-persona-conversation-model.sql");
 const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversation-message-type.sql");
+const customerDisplayMigration = read("db/sql/migration-1029-add-persona-customer-display-message.sql");
 const loadOrder = read("db/sql/load-order.txt");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
 const hook = read("src/features/conversation/model/usePersonaConversation.ts");
 const modelCatalog = read("src/foundation/model-catalog.ts");
 const hanli = read("src/features/hanli/components/HanliConversationWorkspace.tsx");
+const hanliService = read("electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts");
+const hanliAggregate = read("electron/services/personas/hanli/domain/hanli-conversation.aggregate.ts");
+const hanliMethodContext = read("electron/services/personas/hanli/internal/conversation/hanli-method-context.ts");
 const nangong = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
 const linghu = read("src/features/linghu/components/LinghuAutomationPanel.tsx");
 const harnessRule = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md`);
@@ -47,6 +51,31 @@ test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID �
   assert.match(inquiry, /appendPersonaCustomerMessage/);
   assert.doesNotMatch(inquiry, /:assessment/);
   assert.doesNotMatch(read("electron/services/personas/hanli/internal/conversation/hanli-inquiry-checkpoint.ts"), /messageId\.startsWith/);
+});
+
+test("客户显示正文由唯一派生端口供应，页面、后续上下文和当前观点不能回退原始混合正文", () => {
+  assert.match(customerDisplayMigration, /CREATE TABLE AiDesktopPersonaCustomerDisplayMessage/);
+  assert.match(customerDisplayMigration, /displayState TEXT NOT NULL CHECK \(displayState IN \('ready', 'excluded', 'missing', 'failed'\)\)/);
+  assert.match(loadOrder, /migration-1029-add-persona-customer-display-message\.sql/);
+  assert.match(repository, /readCustomerDisplayWindow\(/);
+  assert.match(repository, /readCustomerDisplay\(/);
+  assert.match(repository, /retryCustomerDisplayMessage\(/);
+  assert.doesNotMatch(repository, /readWindow\(/);
+  assert.match(repository, /derivePersonaCustomerDisplayMessage/);
+  assert.match(runtime, /readPersonaCustomerDisplayWindow\(personaId, request\)/);
+  assert.match(hanliService, /readPersonaCustomerDisplayConversation\("han-li", conversation\.conversationId\)/);
+  assert.match(hanliService, /buildHanliRecentConversation\(customerDisplayConversation\.messages\)/);
+  assert.match(hanliAggregate, /customerDisplayMessages: PersonaConversationMessageOutDto\[\]/);
+  assert.match(hanliAggregate, /this\.#customerDisplayMessages/);
+  assert.match(hanliAggregate, /currentMessage\.customerDisplayState !== "ready"/);
+  assert.match(hanliMethodContext, /message\.customerDisplayState === "ready"/);
+  assert.match(hook, /客户显示消息窗口读取能力尚未就绪/);
+  assert.doesNotMatch(hook, /const conversation = await desktop\.getPersonaConversation\(personaId\)/);
+  assert.match(hook, /新建人物会话后无法读取客户显示消息/);
+  assert.match(hook, /保存人物对话模型后无法读取客户显示消息/);
+  assert.doesNotMatch(hook, /setConversation\(value\)/);
+  assert.match(hanli, /customerDisplayState === "missing"/);
+  assert.match(hanli, /重新读取/);
 });
 
 test("内部研讨正文与技术证据使用不同内容角色，且证据只在南宫婉页面折叠显示", () => {
