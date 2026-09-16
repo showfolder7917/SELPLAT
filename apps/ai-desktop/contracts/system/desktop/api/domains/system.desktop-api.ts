@@ -12,6 +12,7 @@ export const SYSTEM_DESKTOP_API_METHODS = [
   "getAiMemoryDatabaseStatus",
   "clearTestData",
   "getCorpusSemanticBackfillStatus",
+  "getCorpusIngestionStatus",
   "startCorpusSemanticBackfill",
   "getSettings",
   "updateSettings",

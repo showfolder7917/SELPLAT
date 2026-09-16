@@ -110,7 +110,8 @@ export function createDeveloperSettingsViewModel(
       detail: locale === "ja"
         ? "現在の SELPLAT ワークスペースに属する完了済みの各ターンだけを登録し、システム指示・ツール出力・ファイル注入は除外します。"
         : "只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库，排除系统指令、工具输出和文件注入内容。",
-      statusMessage: settings.corpusSemanticBackfill?.message || "",
+      // 用户刚触发的历史摘要补齐拥有当前反馈优先级；自动入库只在没有补齐反馈时补充状态，不能覆盖完成或失败结果。
+      statusMessage: settings.corpusSemanticBackfill?.message || settings.corpusIngestion?.message || "",
       statusProgress: settings.corpusSemanticBackfill?.state === "running"
         ? `${settings.corpusSemanticBackfill.processedCount}/${settings.corpusSemanticBackfill.targetCount}`
         : "",
