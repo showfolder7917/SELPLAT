@@ -517,16 +517,21 @@ export async function startApplication(): Promise<void> {
   }) : null;
   const hanliPageReviewGuard = new HanliPageReviewGuard();
   /** 把一条去重后的流程状态写入韩立会话，并立即推送给现有窗口。 */
-  const publishHanliInternalStatus = (messageId: string, content: string, createdAt: string, correlationId: string): boolean => {
+  const publishHanliInternalStatus = (messageId: string, content: string, createdAt: string, correlationId: string, updateExisting = false): boolean => {
     if (!collaborationMemory) return false;
     try {
       const activeConversation = collaborationMemory.readPersonaConversation("han-li");
       if (!activeConversation.conversationId) return false;
-      if (activeConversation.messages.some((message) => message.messageId === messageId)) return true;
-      const conversation = collaborationMemory.appendPersonaInternalMessage({
-        ownerPersonaId: "han-li", conversationId: activeConversation.conversationId,
-        messageId, speakerPersonaId: "han-li", content, createdAt,
-      });
+      const exists = activeConversation.messages.some((message) => message.messageId === messageId);
+      if (exists && !updateExisting) return true;
+      const conversation = exists
+        ? collaborationMemory.updatePersonaInternalProgress({
+          ownerPersonaId: "han-li", conversationId: activeConversation.conversationId, messageId, content, updatedAt: createdAt,
+        })
+        : collaborationMemory.appendPersonaInternalMessage({
+          ownerPersonaId: "han-li", conversationId: activeConversation.conversationId,
+          messageId, speakerPersonaId: "han-li", content, createdAt,
+        });
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", conversation);
       return true;
     } catch (error) {
@@ -536,8 +541,6 @@ export async function startApplication(): Promise<void> {
   };
   // 同一业务事件只向韩立客户会话反馈一次；心跳和普通状态刷新不制造重复消息。
   const publishedHanliTaskStatusEventIds = new Set<string>();
-  // 一次性流程在正式任务建立前和最终验收阶段也只反馈一次。
-  const publishedHanliWorkflowStatusKeys = new Set<string>();
   let linghuRuntime: LinghuRuntime | undefined;
   const collaborationContext = createCollaborationContext({
     startup,
@@ -965,13 +968,16 @@ export async function startApplication(): Promise<void> {
     const run = state.oneShotRun;
     const workflowStatus = presentHanliWorkflowStatus(state);
     if (run && workflowStatus) {
-      const statusKey = `${run.runId}:${run.updatedAt}`;
-      if (!publishedHanliWorkflowStatusKeys.has(statusKey)) {
-        const messageId = `hanli-workflow-status:${statusKey}`;
-        if (publishHanliInternalStatus(messageId, workflowStatus, run.updatedAt, proposalId || topicId || run.runId)) {
-          publishedHanliWorkflowStatusKeys.add(statusKey);
-        }
-      }
+      const progressIdentity = createHash("sha256").update(JSON.stringify({
+        runId: run.runId,
+        status: run.status,
+        phase: run.phase,
+        action: run.action,
+        blockingReason: run.blockingReason,
+        workflowStatus,
+      })).digest("hex");
+      const messageId = `hanli-workflow-status:${run.runId}:${progressIdentity}`;
+      publishHanliInternalStatus(messageId, workflowStatus, run.updatedAt, proposalId || topicId || run.runId, true);
     }
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:evolution-state", { state, reason, topicId, proposalId });

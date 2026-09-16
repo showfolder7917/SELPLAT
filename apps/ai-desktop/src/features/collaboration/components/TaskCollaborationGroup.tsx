@@ -74,7 +74,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const { liveTextByNodeId } = model.data;
   const { locale, stateReadStatus, deliveryReadStatus, timelineReadStatus, readError, readRecovery } = model.presentation;
   // 页面只读取人工审批和需求入口操作，继续任务由页面控制器包装异步反馈。
-  const { onManualApproval, onOpenHanliConversation, onRetryDeliveryRead } = model.actions;
+  const { onManualApproval, onOpenHanliConversation, onRetryDeliveryRead, onRetryTimelineRead } = model.actions;
   // 页面控制器只消费模型，不再依赖组件外层的包装参数。
   const controller = useTaskCollaborationGroup(model);
   const {
@@ -121,9 +121,11 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
 
   const deliveryUnavailable = deliveryReadStatus === "unavailable";
   const timelineUnavailable = timelineReadStatus === "unavailable";
+  const timelineRefreshing = timelineReadStatus === "syncing" && groups.length > 0;
   const readObstruction = createReadObstructionPresentation({
     deliveryUnavailable,
-    timelineUnavailable,
+    // 最近成功的时间线仍可供阅读；失败只作为局部刷新状态，不能替换整页内容。
+    timelineUnavailable: false,
     recovery: readRecovery,
   });
 
@@ -150,6 +152,14 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     setSubmittedReadPolicyId(readObstruction?.policyId || null);
     setRetryingRead(true);
     void onRetryDeliveryRead()
+      .catch(() => undefined)
+      .finally(() => setRetryingRead(false));
+  };
+
+  /** 时间线更新失败时只重读当前权威快照，卡片、展开状态和详情滚动位置保持不变。 */
+  const retryTimelineRead = () => {
+    setRetryingRead(true);
+    void onRetryTimelineRead()
       .catch(() => undefined)
       .finally(() => setRetryingRead(false));
   };
@@ -221,6 +231,13 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         </button>
         <span>{groups.length}</span>
       </header>
+      {timelineRefreshing && <div className="task-collaboration-refresh-status" role="status" aria-live="polite">
+        <span>正在更新任务进度，当前内容和操作保持可用。</span>
+      </div>}
+      {timelineUnavailable && <div className="task-collaboration-refresh-status" role="status">
+        <span>{readError || "任务进度更新失败，正在保留上次成功内容。"}</span>
+        <button type="button" disabled={retryingRead} onClick={retryTimelineRead}>{retryingRead ? "重新读取中…" : "重新读取更新"}</button>
+      </div>}
       {/* 专题列表：保持后端时间线已经确定的稳定顺序。 */}
       <div className="task-collaboration-groups">
         {groups.map((group) => {

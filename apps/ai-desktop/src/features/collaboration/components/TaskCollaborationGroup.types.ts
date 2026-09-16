@@ -55,6 +55,8 @@ export type TaskCollaborationGroupModel = {
     onOpenHanliConversation: () => Promise<void>;
     /** 仅重新读取交付投影和时间线，不触发任务恢复。 */
     onRetryDeliveryRead: () => Promise<void>;
+    /** 仅重新读取失败的专题时间线，保留已经显示的最后成功快照。 */
+    onRetryTimelineRead: () => Promise<void>;
   };
 };
 

@@ -319,6 +319,8 @@ export function useCollaborationWorkspace() {
       if (!changedGroupIds.length) return;
       const requestedVersions = new Map(changedGroupIds.map((groupId) => [groupId, timelineGroupVersions.current.get(groupId)!]));
       const startedAt = performance.now();
+      // 增量读取期间保留最近成功快照；页面只显示局部更新状态，不锁定卡片操作或清空历史内容。
+      setTimelineReadStatus("syncing");
       void desktop.getCollaborationTimelineGroups(changedGroupIds)
         .then((snapshot) => {
           if (timelineDisposed || changedGroupIds.some((groupId) => timelineGroupVersions.current.get(groupId) !== requestedVersions.get(groupId))) return;

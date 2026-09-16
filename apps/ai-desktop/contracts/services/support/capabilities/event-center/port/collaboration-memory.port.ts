@@ -43,6 +43,14 @@ export interface CollaborationMemoryPort {
     contentRole?: PersonaConversationContentRoleValue;
     createdAt: string;
   }): PersonaConversationOutDto;
+  /** 已发布进展只能在原消息位置更新，不能创建新消息或改变历史顺序。 */
+  updatePersonaInternalProgress(input: {
+    ownerPersonaId: string;
+    conversationId: string;
+    messageId: string;
+    content: string;
+    updatedAt: string;
+  }): PersonaConversationOutDto;
   appendPersonaRecoveryCheckpoint(input: {
     ownerPersonaId: string;
     conversationId: string;
