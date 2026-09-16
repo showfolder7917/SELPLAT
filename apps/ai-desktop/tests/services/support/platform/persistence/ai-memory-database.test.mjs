@@ -138,13 +138,17 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
   }
 });
 
-test("新写入和打开 v6 人物实现短文时均保留失败位置，不能重新显示未能安全分离的内部正文", () => {
-  const fixture = createFixture("customer-display-v6-safe-failure");
+test("新写入和打开 v4 人物技术长文时均保留失败位置，不能重新显示未能安全分离的内部正文", () => {
+  const fixture = createFixture("customer-display-v4-safe-failure");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
     const repository = new PersonaConversationRepository(initialized.database);
     const conversation = repository.create("han-li");
-    const raw = "contentRole、持久化、恢复和页面投影仅供内部协作使用。";
+    const raw = [
+      "我会先按既有流程核对历史记录。",
+      "用户原话、目标、调查对象和期望结果已经整理，交给南宫婉核实。",
+      "contentRole、持久化、恢复和页面投影仅供内部协作使用。",
+    ].join("\n\n");
     repository.save({
       ...conversation,
       updatedAt: "2026-09-16T04:00:00.000Z",
@@ -169,7 +173,7 @@ test("新写入和打开 v6 人物实现短文时均保留失败位置，不能�
     }]);
     initialized.database?.withConnection((connection) => connection.prepare(`
       UPDATE AiDesktopPersonaCustomerDisplayMessage
-      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=6
+      SET displayState='ready', displayContent=$raw, failureReason=NULL, derivationVersion=4
       WHERE sourceMessageId='legacy-technical-message'
     `).run({ $raw: raw }));
 
@@ -177,7 +181,7 @@ test("新写入和打开 v6 人物实现短文时均保留失败位置，不能�
     assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
       content: "此消息暂时无法安全显示。", state: "failed",
     }]);
-    assert.doesNotMatch(window.messages[0].content, /contentRole|持久化|恢复|页面投影/u);
+    assert.doesNotMatch(window.messages[0].content, /用户原话|目标|调查对象|期望结果|contentRole|持久化|恢复|页面投影/u);
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-technical-message'
     `).get());

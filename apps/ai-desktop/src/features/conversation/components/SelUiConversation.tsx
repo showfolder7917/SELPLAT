@@ -44,11 +44,8 @@ export function SelUiConversation({ id, timeline, composer, onSubmit }: {
     if (!root || !timeline || !composerElement) return;
     const observed = new Set<Element>();
     const notifyGeometry = () => {
-      // 浮层输入区要按真实高度为时间线留白；参与布局流的输入区已占用独立行，
-      // 只保留时间线自身的收尾间距，避免重复留白并使末条始终位于输入区上方。
-      const isOverlay = window.getComputedStyle(composerElement).position === "absolute";
-      const reserve = isOverlay ? Math.ceil(composerElement.getBoundingClientRect().height) + 48 : 38;
-      timeline.style.setProperty("--selconversation-composer-reserve", `${reserve}px`);
+      // 输入框可因附件、错误或人物专属表单增高；时间线必须按真实高度留白，不能依赖固定像素猜测。
+      timeline.style.setProperty("--selconversation-composer-reserve", `${Math.ceil(composerElement.getBoundingClientRect().height) + 48}px`);
       timeline.dispatchEvent(new Event("selConversation:geometry"));
     };
     const resizeObserver = new ResizeObserver(notifyGeometry);

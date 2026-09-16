@@ -12,7 +12,7 @@ export interface PersonaCustomerDisplayDerivation {
  * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
  * 已经安全的记录在每次打开页面时重复写入。
  */
-export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 7;
+export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 6;
 
 /** 旧自动托管写入者使用该稳定前缀保存“首段答复 + 设计说明 + 内部调查字段”。 */
 const LEGACY_HANLI_DESIGN_MESSAGE_PREFIX = "hanli-design:";
@@ -88,7 +88,7 @@ function legacyFieldLabel(line: string): string | null {
  * 哪一段属于客户答复，必须失败而不是显示原文。
  */
 function containsHistoricalInternalProse(content: string): boolean {
-  const structuredMarkers = [
+  const markers = [
     /用户原话/u,
     /用户目标|(?:^|[、，,；;：:\s])目标(?:$|[、，,；;：:\s])/u,
     /调查对象/u,
@@ -96,14 +96,5 @@ function containsHistoricalInternalProse(content: string): boolean {
     /contentRole/u,
     /交给南宫婉核实/u,
   ];
-  // 人物回复中的实现说明也可能不采用旧字段组。两个以上实现标记同时出现时，
-  // 无法可靠分离客户答复，必须保持失败位置，不能把整段技术正文标为 ready。
-  const implementationMarkers = [
-    /contentRole/u,
-    /持久化/u,
-    /恢复/u,
-    /页面投影/u,
-  ];
-  return structuredMarkers.filter((marker) => marker.test(content)).length >= 3
-    || implementationMarkers.filter((marker) => marker.test(content)).length >= 2;
+  return markers.filter((marker) => marker.test(content)).length >= 3;
 }
