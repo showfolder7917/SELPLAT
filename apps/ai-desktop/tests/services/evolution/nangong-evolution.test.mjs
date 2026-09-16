@@ -895,6 +895,53 @@ test("一次性运行档案保留运行标识和关联，供覆盖事故恢复�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("启动时只按归档阻塞和统一异常事实恢复被覆盖的原验收运行", () => {
+  const key = "overwritten-acceptance-pointer-recovery";
+  const base = evolutionStore(key);
+  const originalRunId = base.beginOneShotRun(workspaceState, "zh-CN").oneShotRun.runId;
+  const topicId = base.createTopic(topicRequest("恢复被覆盖的验收")).activeTopicId;
+  const proposalId = base.createProposal(topicId, proposalRequest(), "nangong-wan", "南宫婉").proposals.at(-1).proposalId;
+  base.updateOneShotRun("accepting", "han-li", "韩立", "验收", topicId, proposalId);
+  base.markProgress(proposalId, "pending-acceptance", "等待验收");
+  const openedAt = new Date().toISOString();
+  base.saveAcceptancePlan(proposalId, {
+    version: 2,
+    planId: "pointer-recovery-plan",
+    topicId,
+    proposalId,
+    proposalVersion: 1,
+    conditions: [{ conditionId: "criterion-1", criterion: "完成恢复", evidenceType: "code-conformance", completionRequirement: "源码审查" }],
+    rounds: [{ roundId: "pointer-recovery-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt }],
+    currentRoundId: "pointer-recovery-round",
+    createdAt: openedAt,
+  });
+  const blocked = base.blockOneShotRun("原验收结构化结果受阻");
+  const overwritten = structuredClone(blocked);
+  overwritten.oneShotRun = {
+    runId: "later-unconfirmed-run", sourceRequestId: "mistaken-confirmation", topicId: null, proposalId: null,
+    status: "running", phase: "preparing-topic", actor: "han-li", actorName: "韩立", action: "准备未确认研讨",
+    blockingReason: null, resumeMode: null, startedAt: "2099-01-01T00:00:00.000Z", updatedAt: "2099-01-01T00:00:00.000Z", completedAt: null,
+  };
+  writePersistedState(key, overwritten);
+  const persistence = evolutionPersistence(key);
+  persistence.loadLatestBlockedOneShotRecovery = () => ({
+    runId: originalRunId,
+    startedAt: blocked.oneShotRun.startedAt,
+    blockedAt: blocked.oneShotRun.updatedAt,
+    reason: blocked.oneShotRun.blockingReason,
+  });
+
+  const recovered = new EvolutionStateStore(persistence).state();
+
+  assert.equal(recovered.oneShotRun.runId, originalRunId);
+  assert.equal(recovered.oneShotRun.topicId, topicId);
+  assert.equal(recovered.oneShotRun.proposalId, proposalId);
+  assert.equal(recovered.oneShotRun.status, "blocked");
+  assert.equal(recovered.oneShotRun.resumeMode, "standard");
+  assert.equal(recovered.archiveRecords.at(-1).eventType, "one-shot.pointer-restored");
+  assert.equal(recovered.archiveRecords.at(-1).payload.overwrittenRunId, "later-unconfirmed-run");
+});
+
 test("韩立审批输出异常后从原审批卡点继续", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "approval-resume-"));
   try {

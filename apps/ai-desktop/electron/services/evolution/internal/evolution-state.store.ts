@@ -937,14 +937,81 @@ export class EvolutionStateStore {
       if (raw && ((raw as { version?: number }).version === 8 || raw.version === 9) && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
         && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext) {
         const migrated = migrateEvolutionState(raw as EvolutionStateOutDto & Partial<RetiredAutomationSwitches>);
-        if (migrated.changed) this.#repository.save(migrated.state);
-        return migrated.state;
+        const recovered = this.#recoverOverwrittenAcceptanceRun(migrated.state);
+        if (migrated.changed || recovered !== migrated.state) this.#repository.save(recovered);
+        return recovered;
       }
     } catch { /* 损坏状态安全关闭；禁止扫描或恢复旧 JSON 文件。 */ }
     const initial = createInitialState();
     const conversation = this.#repository.loadLatestConversation();
     if (conversation) initial.conversation = conversation;
     return initial;
+  }
+
+  /**
+   * 旧版本允许普通确认覆盖 blocked 的原验收运行。这里只在专题、提案、归档阻塞和统一异常事实
+   * 四者完全相符，且当前指针确实是更晚的无专题准备运行时恢复；不重建专题、提案或验收计划。
+   */
+  #recoverOverwrittenAcceptanceRun(state: EvolutionStateOutDto): EvolutionStateOutDto {
+    const current = state.oneShotRun;
+    if (!current || current.status !== "running" || current.phase !== "preparing-topic" || current.topicId || current.proposalId) return state;
+    const topic = state.topics.find((item) => item.topicId === state.activeTopicId && item.status === "pending-acceptance");
+    if (!topic) return state;
+    const proposal = state.proposals.find((item) => item.topicId === topic.topicId
+      && item.version === topic.currentProposalVersion
+      && item.status === "pending-acceptance"
+      && item.acceptancePlan?.version === 2);
+    if (!proposal) return state;
+    const archivedBlock = [...state.archiveRecords].reverse().find((record) => record.eventType === "one-shot.blocked"
+      && record.topicId === topic.topicId
+      && record.proposalId === proposal.proposalId
+      && Date.parse(record.occurredAt) < Date.parse(current.startedAt));
+    if (!archivedBlock) return state;
+    const archivedRun = (archivedBlock.payload as { oneShotRun?: EvolutionStateOutDto["oneShotRun"] }).oneShotRun;
+    const fallback = this.#repository.loadLatestBlockedOneShotRecovery?.(topic.topicId, proposal.proposalId) || null;
+    const runId = archivedRun?.runId || fallback?.runId;
+    const startedAt = archivedRun?.startedAt || fallback?.startedAt;
+    const blockedAt = archivedRun?.updatedAt || fallback?.blockedAt || archivedBlock.occurredAt;
+    const reason = archivedRun?.blockingReason || fallback?.reason;
+    if (!runId || !startedAt || !reason || runId === current.runId || Date.parse(blockedAt) >= Date.parse(current.startedAt)) return state;
+
+    const next = structuredClone(state);
+    next.oneShotRun = {
+      runId,
+      sourceRequestId: archivedRun?.sourceRequestId || null,
+      topicId: topic.topicId,
+      proposalId: proposal.proposalId,
+      status: "blocked",
+      phase: "blocked",
+      actor: "system",
+      actorName: "系统",
+      action: "已从统一异常事实恢复原验收卡点，等待从原任务继续",
+      blockingReason: reason,
+      resumeMode: "standard",
+      startedAt,
+      updatedAt: blockedAt,
+      completedAt: blockedAt,
+    };
+    next.automationRuntime.status = "blocked";
+    next.automationRuntime.pausedAt = null;
+    next.automationRuntime.stopReason = reason;
+    const occurredAt = new Date().toISOString();
+    next.updatedAt = occurredAt;
+    next.archiveRecords.push({
+      recordId: `evolution-archive-${randomUUID()}`,
+      deliberationId: topic.deliberationId,
+      topicId: topic.topicId,
+      proposalId: proposal.proposalId,
+      taskId: null,
+      sequenceNumber: next.archiveRecords.length + 1,
+      category: "recovery",
+      eventType: "one-shot.pointer-restored",
+      actor: "system",
+      title: "原验收运行指针已从统一异常事实恢复",
+      payload: { ...archivePayload(topic, proposal, topic.deliberationId ? next.deliberations.find((item) => item.deliberationId === topic.deliberationId) || null : null), oneShotRun: structuredClone(next.oneShotRun), overwrittenRunId: current.runId, source: archivedRun ? "evolution-archive" : "event-center" },
+      occurredAt,
+    });
+    return next;
   }
 
   #write(state: EvolutionStateOutDto): void {

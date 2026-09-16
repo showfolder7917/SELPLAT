@@ -11,6 +11,12 @@ import type { DatabasePort as SqliteDatabase } from "../../support/platform/pers
 export interface EvolutionStatePersistence {
   load(): EvolutionStateOutDto | null;
   loadLatestConversation(): EvolutionStateOutDto["conversation"] | null;
+  loadLatestBlockedOneShotRecovery?(topicId: string, proposalId: string): {
+    runId: string;
+    startedAt: string;
+    blockedAt: string;
+    reason: string;
+  } | null;
   save(state: EvolutionStateOutDto): void;
 }
 
@@ -41,6 +47,34 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
     if (!this.#database) return null;
     const conversation = this.#conversations.readActive("nangong-wan");
     return conversation.conversationId ? conversation : null;
+  }
+
+  /** 只读查找统一异常中心已经落库的原验收运行事实，用于修复旧版本覆盖唯一运行指针的事故。 */
+  loadLatestBlockedOneShotRecovery(topicId: string, proposalId: string): { runId: string; startedAt: string; blockedAt: string; reason: string } | null {
+    if (!this.#database) return null;
+    return this.#database.withConnection((connection) => connection.prepare(`
+      SELECT
+        json_extract(blocked.payloadJson, '$.runId') AS runId,
+        COALESCE((
+          SELECT confirmed.occurredAt
+          FROM AiDesktopEvent confirmed
+          WHERE confirmed.eventType = 'hanli.nangong.deliberation_confirmed'
+            AND json_extract(confirmed.payloadJson, '$.runId') = json_extract(blocked.payloadJson, '$.runId')
+          ORDER BY confirmed.occurredAt ASC
+          LIMIT 1
+        ), blocked.occurredAt) AS startedAt,
+        blocked.occurredAt AS blockedAt,
+        json_extract(blocked.payloadJson, '$.message') AS reason
+      FROM AiDesktopEvent blocked
+      WHERE blocked.eventType = 'technical.exception'
+        AND json_extract(blocked.payloadJson, '$.operation') = 'run_hanli_result_acceptance'
+        AND json_extract(blocked.payloadJson, '$.flowImpact') = 'blocked'
+        AND json_extract(blocked.payloadJson, '$.topicId') = $topicId
+        AND json_extract(blocked.payloadJson, '$.proposalId') = $proposalId
+        AND length(trim(json_extract(blocked.payloadJson, '$.runId'))) > 0
+      ORDER BY blocked.occurredAt DESC
+      LIMIT 1
+    `).get({ $topicId: topicId, $proposalId: proposalId }) as { runId: string; startedAt: string; blockedAt: string; reason: string } | undefined) || null;
   }
 
   save(state: EvolutionStateOutDto): void {

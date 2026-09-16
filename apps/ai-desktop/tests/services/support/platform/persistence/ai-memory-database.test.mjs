@@ -616,6 +616,57 @@ test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", 
   }
 });
 
+test("演化仓储只按同专题同提案读取已阻塞的原验收运行事实", () => {
+  const fixture = createFixture("blocked-acceptance-recovery-fact");
+  try {
+    const initialized = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(initialized.status.state, "ready");
+    initialized.database?.withConnection((connection) => {
+      const insert = connection.prepare(`
+        INSERT INTO AiDesktopEvent (
+          eventId, correlationId, sourceType, sourceId, eventType, category, severity, status,
+          message, payloadJson, fingerprint, occurredAt, recordedAt, resolvedAt, handlingOwnerId,
+          handlingStartedAt, resolutionSummary
+        ) VALUES (
+          $eventId, $correlationId, 'system', 'nangong-evolution', $eventType, 'technical-error',
+          $severity, 'open', $message, $payloadJson, NULL, $occurredAt, $occurredAt, NULL, NULL, NULL, NULL
+        )
+      `);
+      insert.run({
+        $eventId: "confirmed-run-event",
+        $correlationId: "topic-recovery",
+        $eventType: "hanli.nangong.deliberation_confirmed",
+        $severity: "info",
+        $message: "confirmed",
+        $payloadJson: JSON.stringify({ runId: "run-recovery", flowImpact: "none" }),
+        $occurredAt: "2026-09-16T10:00:00.000Z",
+      });
+      insert.run({
+        $eventId: "blocked-run-event",
+        $correlationId: "proposal-recovery",
+        $eventType: "technical.exception",
+        $severity: "error",
+        $message: "原验收格式受阻",
+        $payloadJson: JSON.stringify({ operation: "run_hanli_result_acceptance", flowImpact: "blocked", runId: "run-recovery", topicId: "topic-recovery", proposalId: "proposal-recovery", message: "原验收格式受阻" }),
+        $occurredAt: "2026-09-16T10:30:00.000Z",
+      });
+    });
+
+    const fact = new EvolutionStateRepository(initialized.database).loadLatestBlockedOneShotRecovery("topic-recovery", "proposal-recovery");
+
+    assert.deepEqual({ ...fact }, {
+      runId: "run-recovery",
+      startedAt: "2026-09-16T10:00:00.000Z",
+      blockedAt: "2026-09-16T10:30:00.000Z",
+      reason: "原验收格式受阻",
+    });
+    assert.equal(new EvolutionStateRepository(initialized.database).loadLatestBlockedOneShotRecovery("topic-other", "proposal-recovery"), null);
+    initialized.database?.close();
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("旧协作三表为空时整批物理删除并升级到 1007", () => {
   const fixture = createFixture("legacy-empty-retirement");
   try {
