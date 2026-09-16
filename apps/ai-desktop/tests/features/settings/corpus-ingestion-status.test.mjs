@@ -20,7 +20,7 @@ test("自动入库状态默认优先，当前补齐操作可回显完成结果�
   );
   assert.match(
     viewModel,
-    /statusMessage: settings\.corpusSemanticBackfill\?\.message \|\| settings\.corpusIngestion\?\.message/u,
+    /settings\.corpusStatusFocus === "semantic-backfill"\s*\?\s*settings\.corpusSemanticBackfill\?\.message \|\| settings\.corpusIngestion\?\.message \|\| ""\s*:\s*settings\.corpusIngestion\?\.message \|\| settings\.corpusSemanticBackfill\?\.message \|\| ""/u,
   );
   assert.match(settings, /setCorpusStatusFocus\("semantic-backfill"\)/u);
   assert.match(settings, /setCorpusStatusFocus\("ingestion"\)/u);
