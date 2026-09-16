@@ -153,6 +153,36 @@ test("流式增量不触发全量时间线刷新，正文完成后只刷新一�
   } finally { fixture.close(); }
 });
 
+test("流式进度投影失败保留现有内容并重试同一片段", () => {
+  const fixture = createFixture("stream-projection-retry");
+  try {
+    const running = task(fixture, 1, false);
+    running.evolutionProposalId = null;
+    const facade = new CollaborationTimelineFacade(fixture.database);
+    facade.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
+    const originalTransaction = fixture.database.transaction.bind(fixture.database);
+    let failAfterCommit = true;
+    fixture.database.transaction = (work) => {
+      const result = originalTransaction(work);
+      if (failAfterCommit) throw new Error("模拟进度投影确认失败");
+      return result;
+    };
+    const statuses = [];
+    const unsubscribe = facade.subscribeProjectionStatus((status) => statuses.push(status));
+
+    assert.throws(() => facade.appendStream(running.taskId, "worker-1", { type: "message-completed", turnId: "turn-1", text: "保留的进度正文" }), /确认失败/);
+    assert.equal(facade.getProjectionStatus().status, "unavailable");
+    assert.equal(facade.getTimelineSnapshot(fixture.at(4)).groups[0].nodes.find((node) => node.status === "current").content, "保留的进度正文");
+
+    failAfterCommit = false;
+    facade.retryProjection();
+    unsubscribe();
+    assert.equal(facade.getProjectionStatus().status, "ready");
+    assert.equal(fixture.database.withConnection((connection) => Number(connection.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskTimelineStream").get().count)), 1);
+    assert.deepEqual(statuses.map((status) => status.status), ["unavailable", "ready"]);
+  } finally { fixture.close(); }
+});
+
 test("十人并行只消费 flowEvents，执行和自检分开统计", () => {
   const fixture = createFixture("parallel");
   try {

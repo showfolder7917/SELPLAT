@@ -54,7 +54,11 @@ function runCommand(dependencyRoot, appRoot, nodeCompileCache) {
     : isNpx
       ? "npm"
     : path.join(dependencyRoot, ".bin", process.platform === "win32" ? `${command}.cmd` : command);
-  const commandArguments = isNpx ? ["exec", "--", ...args] : args;
+  // 源码直载检查没有编译后的 .js 文件；只在显式 strip-types 检查中登记解析器，生产命令保持原参数。
+  const usesSourceTypeScriptLoader = command === "node" && args.includes("--experimental-strip-types") && !args.some((argument) => argument.startsWith("--experimental-loader="));
+  const sourceTypeScriptLoader = new URL("./source-typescript-loader.mjs", import.meta.url).href;
+  const nodeArguments = usesSourceTypeScriptLoader ? [`--experimental-loader=${sourceTypeScriptLoader}`, ...args] : args;
+  const commandArguments = isNpx ? ["exec", "--", ...args] : nodeArguments;
   const usesWindowsCommandInterpreter = process.platform === "win32" && command !== "node";
   const quoteWindowsArgument = (value) => `"${String(value).replaceAll('"', '""')}"`;
   const windowsCommandLine = `"${[quoteWindowsArgument(executable), ...commandArguments.map(quoteWindowsArgument)].join(" ")}"`;

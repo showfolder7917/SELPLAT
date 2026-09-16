@@ -587,8 +587,7 @@ export async function startApplication(): Promise<void> {
       try {
         collaborationTimeline?.appendTaskFlowEvents(state, taskIds);
       } catch (error) {
-        // 只有 SQLite 时间线投影失败才向页面开放重试；状态仓储失败不能被错误重放为时间线写入。
-        collaborationTimeline?.recordProjectionFailure(state, taskIds, error);
+        // 时间线门面已保存准确的重试上下文；这里仅保留技术审计，不能重放状态仓储失败。
         eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-timeline", operation: "append_task_flow_events", error, correlationId: taskIds.length === 1 ? taskIds[0] : undefined, details: { reason, taskIds } });
       }
       eventCenter.recordEvent("collaboration.state.changed", { reason, mode: state.mode, taskIds }, taskIds.length === 1 ? taskIds[0] : undefined);
