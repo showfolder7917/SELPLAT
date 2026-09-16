@@ -12,6 +12,7 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   const releaseContractIndex = read("contracts/services/support/capabilities/release/index.ts");
   const verifier = read("electron/services/support/capabilities/release/internal/integration.verifier.ts");
   const pipeline = read("electron/services/support/capabilities/release/internal/version-integration.pipeline.ts");
+  const workspaceManager = read("electron/services/support/capabilities/release/internal/version-workspace.manager.ts");
   const runtimeActivationPolicy = read("electron/services/support/capabilities/release/internal/runtime-activation.policy.ts");
   const store = read("electron/services/support/capabilities/release/internal/release-batch.store.ts");
   assert.match(contract, /candidateEvidence: ReleaseBatchCandidateEvidenceOutDto \| null/);
@@ -37,4 +38,21 @@ test("发布批次在统一测试前归档候选来源、运行器身份和门�
   assert.match(runtimeActivationPolicy, /RUNTIME_ACTIVATION_PATHS/);
   assert.match(runtimeActivationPolicy, /loadedRuntimeSha !== candidateSha/);
   assert.match(store, /candidateEvidence: null/);
+  assert.match(workspaceManager, /class CandidateCompletenessError/);
+  assert.match(workspaceManager, /assertCandidateContainsTaskResults/);
+  assert.match(workspaceManager, /merge-base", "--is-ancestor", resultSha, candidate\.candidateSha/);
+  assert.match(pipeline, /await this\.\#workspaces\.assertCandidateContainsTaskResults\(candidate, tasks\)/);
+  assert.match(pipeline, /candidateIncomplete \? "candidate-branch-conflict"/);
+  assert.match(pipeline, /缺少冻结任务结果，统一测试尚未启动/);
+  assert.match(pipeline, /appendFlow\(task, "integration\.candidate_ready"/);
+});
+
+test("本地修改转交只在一次性工作树应用恢复快照，冲突不会污染任务工作树", () => {
+  const manager = read("electron/services/support/capabilities/release/internal/version-workspace.manager.ts");
+  const transfer = manager.slice(manager.indexOf("async transferOwnedLocalChanges"), manager.indexOf("async createIntegrationCandidate"));
+  assert.match(transfer, /worktree", "add", "-b", transferBranch, transferRoot, beforeSha/);
+  assert.match(transfer, /this\.\#git\(transferRoot, \["stash", "apply", "--index", recoveryStashSha\]\)/);
+  assert.doesNotMatch(transfer, /this\.\#git\(taskRoot, \["stash", "apply", "--index", recoveryStashSha\]\)/);
+  assert.match(transfer, /worktree", "remove", "--force", transferRoot/);
+  assert.match(transfer, /if \(!transferred\) await this\.\#git\(taskRoot, \["reset", "--hard", beforeSha\]\)/);
 });

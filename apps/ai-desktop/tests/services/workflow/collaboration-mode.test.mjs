@@ -1460,6 +1460,39 @@ test("目标分支修改唯一属于待集成任务时转入任务分支并只�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("本地修改转交冲突时保留恢复快照且不污染活任务工作区", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "owned-local-change-conflict-"));
+  const repositoryRoot = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed-worktrees");
+  const taskRoot = path.join(managedRoot, "task-1");
+  try {
+    mkdirSync(path.join(repositoryRoot, "apps", "ai-desktop"), { recursive: true });
+    writeFileSync(path.join(repositoryRoot, "apps", "ai-desktop", "owned.ts"), "export const value = 1;\n");
+    git(repositoryRoot, "init");
+    git(repositoryRoot, "config", "user.name", "AI Desktop Test");
+    git(repositoryRoot, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repositoryRoot, "add", "-A");
+    git(repositoryRoot, "commit", "-m", "base");
+    mkdirSync(managedRoot, { recursive: true });
+    git(repositoryRoot, "worktree", "add", "-b", "codex/collab/task-1/worker/r1", taskRoot, "HEAD");
+    writeFileSync(path.join(taskRoot, "apps", "ai-desktop", "owned.ts"), "export const value = 3;\n");
+    git(taskRoot, "add", "-A");
+    git(taskRoot, "commit", "-m", "task result");
+    const resultSha = git(taskRoot, "rev-parse", "HEAD");
+    writeFileSync(path.join(repositoryRoot, "apps", "ai-desktop", "owned.ts"), "export const value = 2;\n");
+    const manager = new VersionWorkspaceManager(repositoryRoot, managedRoot);
+    await assert.rejects(() => manager.transferOwnedLocalChanges([{
+      taskId: "TASK-1", memberName: "紫灵",
+      workspace: { workspaceId: "worktree:TASK-1:r1", rootPath: taskRoot, branchName: "codex/collab/task-1/worker/r1", baseSha: "base", resultSha, createdAt: new Date().toISOString(), retiredAt: null },
+      changedFiles: ["apps/ai-desktop/owned.ts"],
+    }]), LocalChangeOwnershipError);
+    assert.equal(git(taskRoot, "status", "--porcelain"), "");
+    assert.equal(git(taskRoot, "rev-parse", "HEAD"), resultSha);
+    assert.equal(readFileSync(path.join(taskRoot, "apps", "ai-desktop", "owned.ts"), "utf8"), "export const value = 3;\n");
+    assert.ok(git(repositoryRoot, "rev-parse", "-q", "--verify", "refs/stash"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("目标分支修改无归属或多任务重叠时保持原状并阻止合并", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "unknown-local-change-"));
   const repositoryRoot = path.join(directory, "repository");
