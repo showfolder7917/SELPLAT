@@ -86,6 +86,7 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
     const workspaces = {
       transferOwnedLocalChanges: async () => null,
       createReleaseCandidate: async () => candidate,
+      assertCandidateContainsTaskResults: async () => { events.push("candidate-complete"); },
       promoteIntegrationCandidate: async () => { events.push("promote"); return candidateSha; },
       mergeIntoLocalBranch: async () => { events.push("merge"); return "local-merge-sha"; },
       retireCandidate: async () => { events.push("retire"); },
@@ -113,7 +114,17 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
       },
     });
     oldRuntime.schedule();
-    await activated;
+    let activationTimeout;
+    try {
+      await Promise.race([
+        activated,
+        new Promise((_, reject) => { activationTimeout = setTimeout(() => {
+        const checkpointPath = path.join(running, candidate.releaseBatchId, "发布批次文档.json");
+        const checkpoint = existsSync(checkpointPath) ? readFileSync(checkpointPath, "utf8") : "<missing>";
+        reject(new Error(`候选运行包激活未在 5 秒内发出：events=${JSON.stringify(events)}；checkpoint=${checkpoint}`));
+        }, 5_000); }),
+      ]);
+    } finally { clearTimeout(activationTimeout); }
     await new Promise((resolve) => setImmediate(resolve));
 
     const runningDocumentPath = path.join(running, candidate.releaseBatchId, "发布批次文档.json");
