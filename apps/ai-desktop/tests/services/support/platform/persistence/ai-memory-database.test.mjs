@@ -10,6 +10,7 @@ import { EvolutionStateStore } from "../../../../../../../build/ai-desktop/elect
 import { runSqliteTransaction } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-transaction.js";
 import { PersonaConversationRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation.repository.js";
 import { writePersonaConversationMessage } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation-message.writer.js";
+import { PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });
@@ -130,7 +131,7 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-mixed-message'
     `).get());
-    assert.equal(version?.derivationVersion, 3);
+    assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
   } finally {
     initialized.database?.close();
     rmSync(fixture.projectRoot, { recursive: true, force: true });
@@ -180,7 +181,7 @@ test("打开 v3 历史技术长文时保留失败位置，不能重新显示未�
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
       SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-technical-message'
     `).get());
-    assert.equal(version?.derivationVersion, 4);
+    assert.equal(version?.derivationVersion, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION);
   } finally {
     initialized.database?.close();
     rmSync(fixture.projectRoot, { recursive: true, force: true });
