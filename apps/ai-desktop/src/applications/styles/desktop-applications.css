@@ -497,11 +497,17 @@ button { color: inherit; }
 .task-collaboration-history { display: grid; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--sel-theme-control-line-soft); }
 .task-collaboration-history h2 { margin: 0; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-body); }
 .task-collaboration-history-cards { display: grid; gap: 10px; }
-.task-collaboration-cancelled-history-card { display: grid; min-width: 0; min-height: 112px; gap: 8px; padding: 16px; border: 1px solid var(--sel-theme-control-line-soft); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text-muted); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 82%, transparent); }
+.task-collaboration-cancelled-history-card { min-width: 0; color: var(--sel-theme-workbench-text-muted); }
+.task-cancelled-history-disclosure { border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 82%, transparent); }
+.task-cancelled-history-disclosure > .selui-disclosure-heading > .seldisclosure-trigger { min-width: 0; min-height: 72px; padding: 14px 16px; }
+.task-cancelled-history-header { display: grid; min-width: 0; gap: 8px; text-align: left; }
 .task-cancelled-history-status { display: flex; flex-wrap: wrap; gap: 8px; color: var(--sel-theme-workbench-text); }
 .task-cancelled-history-status strong { color: var(--sel-theme-semantic-warning); }
-.task-collaboration-cancelled-history-card h3, .task-collaboration-cancelled-history-card p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.task-collaboration-cancelled-history-card h3 { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-body); }
+.task-cancelled-history-header > strong { min-width: 0; color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-body); overflow-wrap: anywhere; }
+.task-cancelled-history-disclosure > .seldisclosure-content { padding: 0 16px 16px; }
+.task-cancelled-history-detail { display: grid; min-width: 0; gap: 8px; padding-top: 2px; border-top: 1px solid var(--sel-theme-control-line-soft); }
+.task-cancelled-history-detail p, .task-cancelled-history-detail small { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.task-cancelled-history-detail small { color: var(--sel-theme-workbench-text-muted); }
 .task-collaboration-group { min-height: 0; border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 72%, transparent); }
 /* 展开卡片占用任务列表的可用高度，保证下一流程后的详情行有真实高度可供内部滚动。 */
 .task-collaboration-group[data-sel-disclosure-open="true"] { display: grid; flex: 0 0 min(100%, 560px); grid-template-rows: auto minmax(0, 1fr); min-height: 280px; }
@@ -589,6 +595,7 @@ button { color: inherit; }
 @media (max-width: 1120px) {
   .task-group-header-content, .task-node-header-content { align-items: flex-start; flex-direction: column; gap: 8px; }
   .task-group-facts, .task-node-meta { flex-wrap: wrap; }
+  .task-cancelled-history-disclosure > .selui-disclosure-heading > .seldisclosure-trigger { align-items: flex-start; }
 }
 
 /* The shared tabs own their controls; only the application page layout lives here. */

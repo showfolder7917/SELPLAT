@@ -59,7 +59,8 @@ export function useTaskCollaborationGroup(model: TaskCollaborationGroupModel) {
 
   /** 读取专题卡当前是否展开。 */
   const isGroupOpen = (group: CollaborationTimelineGroupOutDto): boolean => {
-    return groupOpenOverrides.get(group.groupId) ?? group.groupId === currentGroupId;
+    // 已取消专题仅作为审计历史；首次显示和刷新后固定收起，用户本次页面内的选择仍优先。
+    return groupOpenOverrides.get(group.groupId) ?? (group.status !== "cancelled" && group.groupId === currentGroupId);
   };
 
   /** 记录用户对专题卡的展开或收起选择。 */
