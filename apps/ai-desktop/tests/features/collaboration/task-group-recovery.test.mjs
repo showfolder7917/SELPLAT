@@ -26,10 +26,9 @@ test("已取消专题独立归入历史区且不渲染操作入口", () => {
   const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
   assert.match(taskGroupSource, /const cancelledHistoryGroups = groups\.filter\(\(group\) => group\.status === "cancelled"\)/);
   assert.match(taskGroupSource, /task-collaboration-history[\s\S]*已取消专题历史/);
-  assert.match(taskCardSource, /group\.status === "cancelled"[\s\S]*task-group-cancelled-notice[\s\S]*本专题已取消/);
   const cancelledBranch = taskCardSource.slice(taskCardSource.indexOf('if (group.status === "cancelled")'), taskCardSource.indexOf("// 可见节点"));
-  assert.match(cancelledBranch, /已取消[\s\S]*本专题已取消/);
-  assert.doesNotMatch(cancelledBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance/);
+  assert.match(cancelledBranch, /<article className="task-collaboration-cancelled-history-card"[\s\S]*data-cancelled-history-card[\s\S]*已取消[\s\S]*本专题已取消/);
+  assert.doesNotMatch(cancelledBranch, /SelUiDisclosure|task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance/);
 });
 
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
