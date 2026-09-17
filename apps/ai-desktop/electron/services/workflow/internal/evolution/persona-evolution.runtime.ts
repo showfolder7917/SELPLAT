@@ -131,6 +131,8 @@ export class PersonaEvolutionRuntime {
   #timer: ReturnType<typeof setInterval> | null = null;
   /** 当前一次性流程的短间隔继续计时器。 */
   #continuationTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 主推进仍忙碌时收到的最近继续请求；本轮结束后必须补跑，不能静默丢弃。 */
+  #queuedContinuationDelayMs: number | null = null;
   /** 当前是否正在执行主推进循环，防止重入。 */
   #running = false;
   /** 当前是否正在执行人工恢复，防止重复继续。 */
@@ -284,13 +286,14 @@ export class PersonaEvolutionRuntime {
     if (this.#continuationTimer) clearTimeout(this.#continuationTimer);
     this.#timer = null;
     this.#continuationTimer = null;
+    this.#queuedContinuationDelayMs = null;
     this.#unsubscribeCollaboration();
     this.#currentTopicStageListeners.clear();
   }
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
   setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
-  /** 协作任务状态变化时立即核对一次性流程，避免等待固定轮询间隔。 */
-  notifyWorkflowChanged(): void { void this.#tick(); }
+  /** 协作任务状态变化时立即核对一次性流程；忙碌时排队，不能丢失本次唤醒。 */
+  notifyWorkflowChanged(): void { this.#scheduleContinuation(0); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto { return this.#store.createTopic(request); }
   /** 页面兜底退役非当前旧卡；状态约束和原子提交仍由唯一 Evolution Store 执行。 */
@@ -337,6 +340,12 @@ export class PersonaEvolutionRuntime {
   }
 
   #scheduleContinuation(delayMs = 1_000): void {
+    if (this.#running) {
+      this.#queuedContinuationDelayMs = this.#queuedContinuationDelayMs === null
+        ? delayMs
+        : Math.min(this.#queuedContinuationDelayMs, delayMs);
+      return;
+    }
     if (this.#continuationTimer) return;
     this.#continuationTimer = setTimeout(() => {
       this.#continuationTimer = null;
@@ -874,7 +883,12 @@ export class PersonaEvolutionRuntime {
           details: { tickRunId, currentRunId: state.oneShotRun?.runId || null, staleRunResult: state.oneShotRun?.runId !== tickRunId },
         });
       }
-    } finally { this.#running = false; }
+    } finally {
+      this.#running = false;
+      const queuedDelayMs = this.#queuedContinuationDelayMs;
+      this.#queuedContinuationDelayMs = null;
+      if (queuedDelayMs !== null) this.#scheduleContinuation(queuedDelayMs);
+    }
   }
 }
 

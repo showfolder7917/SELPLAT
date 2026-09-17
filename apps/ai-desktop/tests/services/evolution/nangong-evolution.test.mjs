@@ -461,6 +461,38 @@ test("成熟判断不能绕过可见确认；确认持久化且非1重新讨论"
   assert.equal(store.establishDeliberationTopic("confirm").topics.length, 1);
 });
 
+test("专题确立与当前运行原子关联，重启恢复不重复建立专题", () => {
+  const key = `atomic-topic-run-link-${Date.now()}`;
+  let store = evolutionStore(key);
+  store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, workspaceState, locale: "zh-CN" });
+  store.beginOneShotRun(workspaceState, "zh-CN", "atomic-link-request");
+  store.beginDeliberation("atomic-link", [{ sourceMessageId: "atomic-user", content: "修复执行链条" }], "执行链在哪一步断开？", "核对专题与运行关联");
+  const roundId = store.state().deliberations[0].rounds[0].roundId;
+  const candidate = { title: "执行链原子关联", goal: "专题建立后立即推进", scope: ["AI Desktop"], exclusions: ["不改变人物流程"], evidence: ["专题与运行曾分两次提交"], acceptanceCriteria: ["专题和运行一次提交完成关联"], establishmentReason: "调用链已经明确" };
+  store.recordDeliberationAnswer("atomic-link", roundId, "专题建立和运行关联需要一次提交。");
+  store.assessDeliberation("atomic-link", roundId, "范围与证据完整", null, candidate);
+  store.offerDeliberationConfirmation("atomic-link", "只收敛专题和运行关联，请确认。");
+  store.replyDeliberationConfirmation("atomic-link", "1");
+
+  let state = store.establishDeliberationTopic("atomic-link");
+  assert.equal(state.topics.length, 1);
+  assert.equal(state.activeTopicId, state.topics[0].topicId);
+  assert.equal(state.oneShotRun.topicId, state.activeTopicId);
+  assert.equal(state.oneShotRun.phase, "forming-proposal");
+  assert.equal(state.oneShotRun.actor, "nangong-wan");
+
+  // 模拟旧版本在专题落库后、运行关联前退出；恢复必须绑定同一专题，不能生成同名副本。
+  const persisted = readPersistedState(key);
+  persisted.oneShotRun.topicId = null;
+  persisted.oneShotRun.phase = "preparing-topic";
+  writePersistedState(key, persisted);
+  store = evolutionStore(key);
+  state = store.establishDeliberationTopic("atomic-link");
+  assert.equal(state.topics.length, 1);
+  assert.equal(state.oneShotRun.topicId, state.activeTopicId);
+  assert.equal(state.oneShotRun.phase, "forming-proposal");
+});
+
 test("客户纠正先由韩立理解并补齐内部问题关系后再交南宫婉", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "customer-correction-deliberation-"));
   try {
@@ -2912,6 +2944,48 @@ test("旧专题迟到的返修调查失败不会阻塞刚切换的新运行", as
     assert.equal(state.oneShotRun.phase, "preparing-topic");
     assert.equal(state.oneShotRun.blockingReason, null);
     assert.equal(failures.some((item) => item.details?.staleRunResult === true), true);
+  } finally { facade.stop(); }
+});
+
+test("主推进忙碌时收到的工作流唤醒会在本轮结束后补跑", async () => {
+  const key = `queued-workflow-wakeup-${Date.now()}`;
+  const store = evolutionStore(key);
+  const members = [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }];
+  let releaseFirstInvestigation;
+  let firstInvestigationStarted;
+  let investigationCount = 0;
+  const started = new Promise((resolve) => { firstInvestigationStarted = resolve; });
+  const facade = new PersonaEvolutionRuntime({
+    store,
+    collaboration: { state: () => ({ members, tasks: [] }) },
+    conversation,
+    recordEvent() {},
+    investigateRevision: async () => {
+      investigationCount += 1;
+      if (investigationCount === 1) {
+        firstInvestigationStarted();
+        await new Promise((resolve) => { releaseFirstInvestigation = resolve; });
+      }
+      return JSON.stringify({
+        content: "当前没有新增事实，保留原卡继续调查。",
+        evidence: [], impactScope: ["原专题"], exclusions: ["不扩大范围"], risks: ["无新增事实"],
+        rollbackPlan: "没有修改，无需回退。", acceptanceCriteria: ["取得新增事实后再修订"],
+      });
+    },
+  });
+  try {
+    store.configureAutomation({ maxRoundsPerTopic: 5, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
+    store.controlAutomation("start");
+    let state = facade.createTopic(topicRequest("忙碌期间继续通知"));
+    state = facade.createProposal(state.activeTopicId, proposalRequest());
+    facade.decideProposal(state.proposals.at(-1).proposalId, { mutation: mutation(facade), decision: "supplement-required", advice: "补充真实证据。" });
+
+    facade.start();
+    await started;
+    facade.notifyWorkflowChanged();
+    releaseFirstInvestigation();
+    for (let attempt = 0; attempt < 40 && investigationCount < 2; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(investigationCount, 2, "忙碌时的即时通知不得丢失或只能等待三十秒巡检");
   } finally { facade.stop(); }
 });
 

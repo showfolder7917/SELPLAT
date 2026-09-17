@@ -555,25 +555,45 @@ export class EvolutionStateStore {
     if (["paused", "stopped", "blocked"].includes(this.#state.automationRuntime.status)) throw new Error("自动流程已暂停、停止或阻塞，不能开始执行。");
     const current = requireDeliberation(this.#state, deliberationId);
     if (current.rounds.at(-1)?.confirmation?.reply !== "1") throw new Error("尚未收到韩立对修复说明的确认 1。");
-    if (current.status !== "ready-to-establish" || !current.candidate) throw new Error("韩立尚未完成专题确立判断。 ");
+    const recoveringUnboundRun = Boolean(current.topicId
+      && current.status === "established"
+      && this.#state.oneShotRun?.status === "running"
+      && !this.#state.oneShotRun.topicId
+      && Date.parse(current.createdAt) >= Date.parse(this.#state.oneShotRun.startedAt));
+    if (!recoveringUnboundRun && (current.status !== "ready-to-establish" || !current.candidate)) throw new Error("韩立尚未完成专题确立判断。 ");
     if (!this.#state.automationContext.workspaceState?.roots?.length) throw new Error("自动演化尚未登记实施工作区。 ");
-    const topicId = `evolution-topic-${randomUUID()}`;
+    // 旧版本可能已经登记专题、却在绑定 oneShot 前退出；重试必须复用同一专题，不能再建同名副本。
+    const topicId = current.topicId || `evolution-topic-${randomUUID()}`;
     const now = new Date().toISOString();
     return this.#commit("topic.established_from_deliberation", topicId, null, (state) => {
       const deliberation = requireDeliberation(state, deliberationId);
-      if (deliberation.topicId) return;
-      const candidate = deliberation.candidate!;
-      state.topics.push({
-        topicId, title: candidate.title, goal: candidate.goal, scope: [...candidate.scope], exclusions: [...candidate.exclusions],
-        evidence: [...candidate.evidence], acceptanceCriteria: [...candidate.acceptanceCriteria], workspaceState: structuredClone(state.automationContext.workspaceState!),
-        locale: state.automationContext.locale, origin: "nangong", sourceConversationMessageIds: deliberation.sourceSnapshots.map((item) => item.sourceMessageId),
-        deliberationId, continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "registered", topicRevision: 1,
-        currentProposalVersion: 0, recoveryPoint: "han-li-established-nangong-topic-pool", createdAt: now, updatedAt: now,
-      });
-      deliberation.topicId = topicId;
-      deliberation.status = "established";
-      deliberation.updatedAt = now;
+      if (!deliberation.topicId) {
+        const candidate = deliberation.candidate!;
+        state.topics.push({
+          topicId, title: candidate.title, goal: candidate.goal, scope: [...candidate.scope], exclusions: [...candidate.exclusions],
+          evidence: [...candidate.evidence], acceptanceCriteria: [...candidate.acceptanceCriteria], workspaceState: structuredClone(state.automationContext.workspaceState!),
+          locale: state.automationContext.locale, origin: "nangong", sourceConversationMessageIds: deliberation.sourceSnapshots.map((item) => item.sourceMessageId),
+          deliberationId, continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "registered", topicRevision: 1,
+          currentProposalVersion: 0, recoveryPoint: "han-li-established-nangong-topic-pool", createdAt: now, updatedAt: now,
+        });
+        deliberation.topicId = topicId;
+        deliberation.status = "established";
+        deliberation.updatedAt = now;
+      }
       state.activeTopicId = topicId;
+      // 正式专题、活动指针和当前运行必须在同一状态提交内关联；否则重启窗口会留下
+      // activeTopicId 已存在、oneShot.topicId 仍为空的悬空运行，只能依靠下次轮询碰运气恢复。
+      const run = state.oneShotRun;
+      if (run?.status === "running" && !run.topicId) {
+        run.topicId = topicId;
+        run.proposalId = null;
+        run.phase = "forming-proposal";
+        run.actor = "nangong-wan";
+        run.actorName = "南宫婉";
+        run.action = "内部研讨条件已满足，正在把结论整理为实施提案";
+        run.blockingReason = null;
+        run.updatedAt = now;
+      }
     });
   }
 
