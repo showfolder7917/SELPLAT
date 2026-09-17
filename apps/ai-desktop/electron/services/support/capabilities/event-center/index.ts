@@ -13,6 +13,7 @@ import {
   type CodexSemanticAnalyzer,
 } from "./internal/corpus/codex-conversation-semantic-backfill.js";
 import { CollaborationMemoryService } from "./internal/projection/collaboration-memory.service.js";
+import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import { CollaborationTimelineFacade } from "./internal/timeline/collaboration-timeline.facade.js";
 import type { DatabasePort } from "../../platform/persistence/index.js";
 
@@ -27,7 +28,7 @@ export function createCollaborationTimeline(database: DatabasePort): Collaborati
 }
 
 // 记忆投影服务保存人物原文和可查询证据，但不成为人物状态所有者。
-export function createCollaborationMemory(database: DatabasePort): CollaborationMemoryService {
+export function createCollaborationMemory(database: DatabasePort): CollaborationMemoryPort {
   return new CollaborationMemoryService(database);
 }
 
@@ -61,7 +62,7 @@ export function createCodexConversationSemanticBackfill(
 
 // 组合根需要的只读类型不会暴露 Repository 或 SQLite 连接实现。
 export type EventCenterTimeline = CollaborationTimelineFacade;
-export type EventCenterMemory = CollaborationMemoryService;
+export type EventCenterMemory = CollaborationMemoryPort;
 export type CorpusIngestion = CodexConversationCorpusIngestion;
 export type CorpusWatcher = CodexConversationCorpusWatcher;
 export type CorpusSemanticBackfill = CodexConversationSemanticBackfill;
