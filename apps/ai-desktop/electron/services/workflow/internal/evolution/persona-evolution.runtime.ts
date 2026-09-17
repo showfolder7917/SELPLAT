@@ -719,6 +719,9 @@ export class PersonaEvolutionRuntime {
   async #tick(): Promise<void> {
     if (this.#running) return;
     this.#running = true;
+    // 异步推进可能跨越一次明确的专题切换。catch 只能阻塞启动本轮 tick 的运行代际；
+    // 否则旧专题迟到的调查错误会把刚建立、尚未关联 topicId 的新运行误伤为卡点。
+    const tickRunId = this.state().oneShotRun?.runId || null;
     try {
       let state = this.state();
       if (state.automationRuntime.status === "running") {
@@ -857,8 +860,20 @@ export class PersonaEvolutionRuntime {
       if (decided.status === "approved") await this.#dispatch(proposal.proposalId);
     } catch (error) {
       const state = this.state();
-      if (state.oneShotRun?.status === "running") this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);
-      else this.#recordFailure({ kind: "technical", sourceType: "system", sourceId: "nangong-evolution", operation: "nangong_evolution_tick", error, correlationId: state.activeTopicId, fingerprint: `nangong-evolution-tick:${state.activeTopicId || "no-topic"}` });
+      if (state.oneShotRun?.status === "running" && state.oneShotRun.runId === tickRunId) {
+        this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        this.#recordFailure({
+          kind: "technical",
+          sourceType: "system",
+          sourceId: "nangong-evolution",
+          operation: "nangong_evolution_tick",
+          error,
+          correlationId: tickRunId || state.activeTopicId,
+          fingerprint: `nangong-evolution-tick:${tickRunId || state.activeTopicId || "no-topic"}`,
+          details: { tickRunId, currentRunId: state.oneShotRun?.runId || null, staleRunResult: state.oneShotRun?.runId !== tickRunId },
+        });
+      }
     } finally { this.#running = false; }
   }
 }

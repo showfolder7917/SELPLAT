@@ -2837,6 +2837,61 @@ test("自动演化开启后原人物依据退回意见只重新提交一个自�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("旧专题迟到的返修调查失败不会阻塞刚切换的新运行", async () => {
+  const key = "stale-revision-does-not-block-new-run";
+  const store = evolutionStore(key);
+  const members = [{ memberId: "nangong-wan", displayName: "南宫婉", enabled: true, kind: "worker" }];
+  let releaseInvestigation;
+  let investigationStarted;
+  const started = new Promise((resolve) => { investigationStarted = resolve; });
+  const failures = [];
+  const facade = new PersonaEvolutionRuntime({
+    store,
+    collaboration: { state: () => ({ members, tasks: [] }) },
+    conversation,
+    recordEvent() {},
+    recordFailure(input) { failures.push(input); },
+    investigateRevision: async () => {
+      investigationStarted();
+      await new Promise((resolve) => { releaseInvestigation = resolve; });
+      return JSON.stringify({
+        content: "迟到的旧专题调查结果不得写入新运行。",
+        evidence: ["旧专题调查在明确切换后才返回"],
+        impactScope: ["旧专题"],
+        exclusions: ["不影响新专题"],
+        risks: ["迟到结果可能误伤新运行"],
+        rollbackPlan: "丢弃迟到结果并保留审计。",
+        acceptanceCriteria: ["新运行保持运行态"],
+      });
+    },
+  });
+  try {
+    store.configureAutomation({ maxRoundsPerTopic: 5, maxCorrectionRounds: 5, automaticCustodyEnabled: true, workspaceState, locale: "zh-CN" });
+    store.beginOneShotRun(workspaceState, "zh-CN", "old-run");
+    let state = facade.createTopic(topicRequest("即将退役的旧专题"));
+    state = facade.createProposal(state.activeTopicId, proposalRequest());
+    const oldTopicId = state.activeTopicId;
+    const oldProposalId = state.proposals.at(-1).proposalId;
+    facade.decideProposal(oldProposalId, { mutation: mutation(facade), decision: "supplement-required", advice: "补充真实结构证据。" });
+    store.updateOneShotRun("forming-proposal", "nangong-wan", "南宫婉", "正在补充旧专题", oldTopicId, oldProposalId);
+
+    facade.start();
+    await started;
+    store.retireOneShotRunForTopicSwitch("用户明确切换到新的独立专题");
+    const replacement = store.beginOneShotRun(workspaceState, "zh-CN", "new-run");
+    const replacementRunId = replacement.oneShotRun.runId;
+    releaseInvestigation();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    state = facade.state();
+    assert.equal(state.oneShotRun.runId, replacementRunId);
+    assert.equal(state.oneShotRun.status, "running");
+    assert.equal(state.oneShotRun.phase, "preparing-topic");
+    assert.equal(state.oneShotRun.blockingReason, null);
+    assert.equal(failures.some((item) => item.details?.staleRunResult === true), true);
+  } finally { facade.stop(); }
+});
+
 test("返修调查没有新增可核验事实时不创建提案版本", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "revision-without-evidence-"));
   try {
