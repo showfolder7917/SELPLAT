@@ -27,6 +27,7 @@ import {
   // 页面状态控制器：管理展开选择、定位、动态耗时和继续任务反馈。
   useTaskCollaborationGroup,
 } from "./useTaskCollaborationGroup";
+import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
 
 /** 读取受阻的页面投影只描述重读政策，不能从旧专题或时间线猜测当前任务。 */
 type ReadObstructionPresentation = {
@@ -64,6 +65,7 @@ function createReadObstructionPresentation(input: {
 export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const [retryingRead, setRetryingRead] = useState(false);
   const [retryingProjection, setRetryingProjection] = useState(false);
+  const [auditHistoryOpen, setAuditHistoryOpen] = useState(false);
   /** 已提交状态只对应同一份档案政策；政策变化后不能继续禁用新的人工读取机会。 */
   const [submittedReadPolicyId, setSubmittedReadPolicyId] = useState<string | null>(null);
   const automaticRetryPolicyId = useRef<string | null>(null);
@@ -92,10 +94,17 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     resumeAcceptance,
     retireStaleTopic,
   } = controller;
-  // 已取消专题只作为审计历史显示；活动专题继续占用页面上方的可操作区域。
-  const activeGroups = groups.filter((group) => group.status !== "cancelled");
-  // 历史卡按后端已确定的顺序显示，不从节点重新推断取消事实。
-  const cancelledHistoryGroups = groups.filter((group) => group.status === "cancelled");
+  const currentTopicStage = model.data.currentTopicStage;
+  const establishingTopic = currentTopicStage && ["establishing-topic", "topic-establishment-failed"].includes(currentTopicStage.status)
+    ? currentTopicStage : null;
+  // 当前区只接受当前投影明确关联的专题；建立阶段没有专题标识时保持为空，避免旧卡占用主区域。
+  const activeGroups = establishingTopic
+    ? []
+    : currentTopicStage?.topicId
+      ? groups.filter((group) => group.topicId === currentTopicStage.topicId)
+      : groups.filter((group) => group.status !== "cancelled");
+  // 其余时间线组包括已取消、旧阻塞和无关联卡点，统一作为只读审计历史。
+  const auditHistoryGroups = groups.filter((group) => !activeGroups.includes(group));
 
   /** 只记录详情面板的连续滚动，防止页面外层滚动被误当成长任务。 */
   const recordDetailScroll = (groupId: string) => {
@@ -121,17 +130,18 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   };
 
   /** 将每张卡的显示状态和操作统一装配，历史卡由卡片内部按终态关闭操作区域。 */
-  const createCardModel = (group: typeof groups[number]): TaskGroupCardModel => {
+  const createCardModel = (group: typeof groups[number], auditReadOnly = false): TaskGroupCardModel => {
     const cardModel: TaskGroupCardModel = {
       group,
       presentation: {
         locale,
-        open: isGroupOpen(group),
+        open: isGroupOpen(group, auditReadOnly),
         continuingTaskId,
         continueError,
         continueFeedback,
         liveTextByNodeId,
         currentTopicStage: model.data.currentTopicStage,
+        auditReadOnly,
       },
       actions: {
         isNodeOpen,
@@ -155,6 +165,22 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const openHanliConversation = () => {
     void onOpenHanliConversation();
   };
+
+  const auditHistory = auditHistoryGroups.length > 0 && (
+    <section className="task-collaboration-audit-history" aria-label={locale === "ja" ? "監査履歴" : "专题审计历史"}>
+      <SelUiDisclosure
+        idPrefix="task-collaboration-audit-history"
+        className="task-collaboration-audit-disclosure"
+        open={auditHistoryOpen}
+        onOpenChange={setAuditHistoryOpen}
+        trigger={<span className="task-collaboration-audit-history-header"><strong>{locale === "ja" ? "監査履歴" : "历史审计"}</strong><span>{locale === "ja" ? `${auditHistoryGroups.length} 件の旧記録` : `${auditHistoryGroups.length} 条旧专题或历史记录`}</span></span>}
+      >
+        <div className="task-collaboration-history-cards">
+          {auditHistoryGroups.map((group) => <TaskGroupCard key={group.groupId} model={createCardModel(group, true)} />)}
+        </div>
+      </SelUiDisclosure>
+    </section>
+  );
 
   const deliveryUnavailable = deliveryReadStatus === "unavailable";
   const timelineUnavailable = timelineReadStatus === "unavailable";
@@ -247,11 +273,10 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     );
   }
 
-  if (groups.length === 0) {
-    const establishingTopic = model.data.currentTopicStage;
-    if (establishingTopic && ["establishing-topic", "topic-establishment-failed"].includes(establishingTopic.status)) {
-      return (
-        <section className="task-collaboration-page">
+  if (establishingTopic) {
+    return (
+      <section className="task-collaboration-page">
+        <div className="task-collaboration-groups">
           <div className="task-topic-establishment" role={establishingTopic.status === "topic-establishment-failed" ? "alert" : "status"}>
             <strong>{establishingTopic.title}</strong>
             <span>发生事项：{establishingTopic.summary}</span>
@@ -260,9 +285,13 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
             <span>下一步：{establishingTopic.nextAction}</span>
             {establishingTopic.remaining && <small>{establishingTopic.remaining}</small>}
           </div>
-        </section>
-      );
-    }
+          {auditHistory}
+        </div>
+      </section>
+    );
+  }
+
+  if (groups.length === 0) {
     const statusMessage = stateReadStatus === "syncing"
       ? (locale === "ja" ? "共同状態を同期しています" : "正在同步")
       : stateReadStatus === "unavailable"
@@ -326,19 +355,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
           const cardModel = createCardModel(group);
           return <TaskGroupCard key={group.groupId} model={cardModel} />;
         })}
-        {cancelledHistoryGroups.length > 0 && (
-          // 历史区放在同一滚动容器末尾，用户滚动详情时始终可以抵达已取消旧卡。
-          <section className="task-collaboration-history" aria-label={locale === "ja" ? "取消済みの履歴" : "已取消专题历史"}>
-            <h2>{locale === "ja" ? "取消済みの履歴" : "已取消专题历史"}</h2>
-            <div className="task-collaboration-history-cards">
-              {cancelledHistoryGroups.map((group) => {
-                // 历史区沿用同一具名模型；取消终态由卡片内部阻断所有操作控件。
-                const cardModel = createCardModel(group);
-                return <TaskGroupCard key={group.groupId} model={cardModel} />;
-              })}
-            </div>
-          </section>
-        )}
+        {auditHistory}
       </div>
     </section>
   );
