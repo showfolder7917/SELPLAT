@@ -8,6 +8,17 @@ import type { EvolutionStatePersistence } from "./evolution-state.repository.js"
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
+/** 监控者已经完成正式交付后，用一条状态提交建立独立验收归档。 */
+export interface CompleteMonitorAcceptanceInput {
+  title: string;
+  goal: string;
+  evidence: string[];
+  acceptanceCriteria: string[];
+  resultSummary: string;
+  sourceRequestId?: string | null;
+  retiredReason: string;
+}
+
 /**
  * Evolution 共同状态的唯一写入者。
  *
@@ -227,6 +238,77 @@ export class EvolutionStateStore {
       run.updatedAt = now;
       run.completedAt = now;
     }, { phase: "blocked", actor: "user", status: "blocked", blockingReason: reason, nextOwner: "han-li" });
+  }
+
+  /**
+   * 监控者接管完成后，在同一次 SQLite 状态提交中退役旧运行并建立已通过的独立验收卡。
+   * 该入口不创建分发计划、执行任务或恢复旧提案，避免验收归档重新进入常规修复链。
+   */
+  completeMonitorAcceptance(input: CompleteMonitorAcceptanceInput): EvolutionStateOutDto {
+    const workspaceState = this.#state.automationContext.workspaceState;
+    if (!workspaceState?.roots?.length) throw new Error("监控者验收归档缺少已登记工作区。");
+    const title = required(input.title, "监控者验收标题", 160);
+    const goal = required(input.goal, "监控者验收目标", 8_000);
+    const evidence = normalizedList(input.evidence, "监控者验收证据");
+    const acceptanceCriteria = normalizedList(input.acceptanceCriteria, "监控者验收条件");
+    const resultSummary = required(input.resultSummary, "监控者验收结论", 8_000);
+    const retiredReason = required(input.retiredReason, "旧运行退役原因", 8_000);
+    const previousRun = this.#state.oneShotRun ? structuredClone(this.#state.oneShotRun) : null;
+    const now = new Date().toISOString();
+    const topicId = `evolution-topic-${randomUUID()}`;
+    const proposalId = `evolution-proposal-${randomUUID()}`;
+    const runId = `evolution-one-shot-${randomUUID()}`;
+    return this.#commit("one-shot.monitor-acceptance-completed", topicId, proposalId, (state) => {
+      // 旧误投影专题保留审计但退出活动状态，不能继续触发审批、分发或恢复。
+      if (previousRun?.topicId) {
+        const oldTopic = state.topics.find((item) => item.topicId === previousRun.topicId);
+        if (oldTopic && oldTopic.status !== "completed") {
+          oldTopic.status = "rejected";
+          oldTopic.recoveryPoint = "monitor-takeover-archived";
+          oldTopic.updatedAt = now;
+        }
+      }
+      if (previousRun?.proposalId) {
+        const oldProposal = state.proposals.find((item) => item.proposalId === previousRun.proposalId);
+        if (oldProposal && oldProposal.status !== "completed") {
+          oldProposal.status = "rejected";
+          oldProposal.resultSummary = retiredReason;
+          oldProposal.updatedAt = now;
+        }
+      }
+      state.topics.push({
+        topicId, title, goal, scope: ["正式 AI Desktop 页面交互验收"], exclusions: ["不恢复旧任务、旧工作树或旧计划", "不派发修复人物"],
+        evidence, acceptanceCriteria, workspaceState: structuredClone(workspaceState), locale: state.automationContext.locale,
+        origin: "nangong", sourceConversationMessageIds: input.sourceRequestId ? [input.sourceRequestId] : [], deliberationId: null,
+        continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "completed",
+        topicRevision: 1, currentProposalVersion: 1, recoveryPoint: "monitor-formal-acceptance-passed", createdAt: now, updatedAt: now,
+      });
+      state.proposals.push({
+        proposalId, topicId, version: 1, title, type: "Bug修复", origin: "nangong",
+        submitterMemberId: "nangong-wan", submitterDisplayName: "南宫婉", purpose: "work-proposal",
+        targetMemberId: null, targetMemberDisplayName: null, capabilityScope: null, supersedesProposalId: null,
+        revisionFeedbackApprovalId: null, content: resultSummary, evidence: [...evidence], impactScope: ["正式 AI Desktop 页面交互验收"],
+        exclusions: ["不恢复旧任务、旧工作树或旧计划", "不派发修复人物"], risks: ["仅归档已经完成的正式页面验收事实，不执行代码修改。"],
+        rollbackPlan: "如发现新的真实失败，另建独立修复卡，不恢复本次已退役运行。", acceptanceCriteria: [...acceptanceCriteria],
+        acceptancePlan: null, distributionPlan: null, status: "completed", distributedTaskIds: [], resultSummary,
+        approvals: [{ approvalId: `evolution-approval-${randomUUID()}`, proposalId, decision: "approved", source: "automatic-han-li", stage: "result",
+          approverMemberId: "han-li", approverDisplayName: "韩立", advice: resultSummary, feedbackTarget: "proposal-content",
+          capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: state.preferenceSnapshotVersion, createdAt: now }],
+        createdAt: now, updatedAt: now,
+      });
+      state.activeTopicId = topicId;
+      state.oneShotConfirmation = null;
+      state.oneShotRun = {
+        runId, sourceRequestId: input.sourceRequestId || null, topicId, proposalId, status: "completed", phase: "completed",
+        actor: "han-li", actorName: "韩立", action: "正式版本交互验收通过并归档", blockingReason: null, resumeMode: null,
+        startedAt: now, updatedAt: now, completedAt: now,
+      };
+      state.automationRuntime.status = "idle";
+      state.automationRuntime.stopReason = null;
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.completedRounds += 1;
+    }, { retiredRunId: previousRun?.runId || null, retiredTopicId: previousRun?.topicId || null, retiredProposalId: previousRun?.proposalId || null,
+      retiredReason, resultSummary, nextOwner: "user" });
   }
 
   /**

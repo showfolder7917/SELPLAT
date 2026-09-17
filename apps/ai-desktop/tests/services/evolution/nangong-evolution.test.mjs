@@ -876,6 +876,45 @@ test("可恢复验收卡点不能被普通专题确认覆盖，明确退役后�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("监控者正式验收以一次状态提交退役旧运行并建立已完成独立卡", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "monitor-acceptance-archive-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const originalRunId = store.beginOneShotRun(workspaceState, "zh-CN", "malformed-card").oneShotRun.runId;
+    const malformedTopicId = store.createTopic(topicRequest("第 1 轮卡点处理")).activeTopicId;
+    const malformedProposalId = store.createProposal(malformedTopicId, proposalRequest()).proposals.at(-1).proposalId;
+    store.updateOneShotRun("revising", "nangong-wan", "南宫婉", "正在重新调查误投影提案", malformedTopicId, malformedProposalId);
+
+    const completed = store.completeMonitorAcceptance({
+      title: "g321 交互卡顿正式验收",
+      goal: "只记录监控者已经完成的正式页面验收并归档。",
+      evidence: ["人物切换、长卡展开收起和滚动条拖动均连续响应。"],
+      acceptanceCriteria: ["没有持续转圈、卡断、无响应或内容丢失。"],
+      resultSummary: "正式页面验收通过。",
+      sourceRequestId: "monitor-acceptance",
+      retiredReason: "误投影运行没有活动工作，已由监控者封存。",
+    });
+
+    assert.notEqual(completed.oneShotRun.runId, originalRunId);
+    assert.equal(completed.oneShotRun.status, "completed");
+    assert.equal(completed.oneShotRun.phase, "completed");
+    assert.equal(completed.oneShotRun.sourceRequestId, "monitor-acceptance");
+    assert.equal(completed.automationRuntime.status, "idle");
+    assert.equal(completed.topics.find((item) => item.topicId === malformedTopicId).status, "rejected");
+    assert.equal(completed.proposals.find((item) => item.proposalId === malformedProposalId).status, "rejected");
+    const topic = completed.topics.find((item) => item.topicId === completed.oneShotRun.topicId);
+    const proposal = completed.proposals.find((item) => item.proposalId === completed.oneShotRun.proposalId);
+    assert.equal(topic.title, "g321 交互卡顿正式验收");
+    assert.equal(topic.status, "completed");
+    assert.equal(topic.recoveryPoint, "monitor-formal-acceptance-passed");
+    assert.equal(proposal.status, "completed");
+    assert.equal(proposal.distributionPlan, null);
+    assert.deepEqual(proposal.distributedTaskIds, []);
+    assert.equal(proposal.approvals.at(-1).decision, "approved");
+    assert.equal(completed.archiveRecords.at(-1).payload.retiredRunId, originalRunId);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("一次性运行档案保留运行标识和关联，供覆盖事故恢复核对", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "one-shot-archive-linkage-"));
   try {
