@@ -12,6 +12,11 @@ const collaborationMemoryMethods = new Set<keyof CollaborationMemoryPort>([
   "appendPersonaRecoveryCheckpoint", "appendPersonaCustomerMessage", "registerPersonaRound",
 ]);
 
+/** 将动态代理属性收敛为 Worker 已白名单的人物记忆命令。 */
+export function isCollaborationMemoryMethod(value: PropertyKey): value is keyof CollaborationMemoryPort {
+  return typeof value === "string" && collaborationMemoryMethods.has(value as keyof CollaborationMemoryPort);
+}
+
 /** 主进程必须等待 Worker 回包，不能把跨线程调用伪装为同步数据库访问。 */
 export type AsyncCollaborationMemoryPort = {
   [Method in keyof CollaborationMemoryPort]: CollaborationMemoryPort[Method] extends (...args: infer Args) => infer Result
@@ -24,7 +29,7 @@ export function createBackgroundCollaborationMemory(persistence: BackgroundPersi
   return new Proxy({}, {
     get: (_target, property) => {
       // Promise 同化会读取 then；它不是人物记忆命令，必须返回 undefined。
-      if (property === "then" || typeof property !== "string" || !collaborationMemoryMethods.has(property as keyof CollaborationMemoryPort)) {
+      if (property === "then" || !isCollaborationMemoryMethod(property)) {
         return undefined;
       }
       return (...args: unknown[]) => persistence.request({
