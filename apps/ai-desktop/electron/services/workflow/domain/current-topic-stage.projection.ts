@@ -40,6 +40,31 @@ export function projectCurrentTopicStage(
     };
   }
 
+  // 监控者验收归档记录的是“已经发布并在正式页面完成操作”的独立事实，不是新的代码交付任务。
+  // 它明确没有分发计划或任务链，因此不能再套用普通交付的候选、测试、发布门禁，否则完成卡会被误投影成缺少候选。
+  const run = evolution.oneShotRun;
+  const monitorAcceptanceCompleted = topic?.status === "completed"
+    && topic.recoveryPoint === "monitor-formal-acceptance-passed"
+    && proposal.status === "completed"
+    && proposal.distributionPlan === null
+    && proposal.distributedTaskIds.length === 0
+    && run?.topicId === topic.topicId
+    && run.proposalId === proposal.proposalId
+    && run.status === "completed";
+  if (monitorAcceptanceCompleted) {
+    const occurredAt = run.completedAt || run.updatedAt;
+    const latestAcceptance: CurrentTopicAcceptanceOutDto = { runId: run.runId, status: "passed", occurredAt };
+    return {
+      topicId: topic.topicId, proposalId: proposal.proposalId, status: "completed", title: topic.title,
+      summary: proposal.resultSummary || "正式页面验收通过，专题已完成。", repairContent: proposal.content,
+      remaining: "", waitingFor: "当前无需操作", nextAction: "可开始下一专题。", userAction: "none",
+      resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", "当前无需操作", "可开始下一专题。", occurredAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance,
+      deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: "passed" }, updatedAt: occurredAt,
+    };
+  }
+
   const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
@@ -47,7 +72,6 @@ export function projectCurrentTopicStage(
   const deliveryGate = readDeliveryGate(deliveryEvidence);
   const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
   // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
-  const run = evolution.oneShotRun;
   const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
     && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt);
   // 完成态后的真实复核仍属于当前专题；运行明确阻塞时不得让旧完成事实覆盖恢复入口。

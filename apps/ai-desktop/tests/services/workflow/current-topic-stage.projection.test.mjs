@@ -156,6 +156,31 @@ test("完成必须绑定同一最终候选的测试、发布、重启健康与�
   assert.equal(projectCurrentTopicStage(evolution(missingRestart.acceptanceStatus), missingRestart).status, "awaiting-restart-health");
 });
 
+test("监控者已完成的独立正式验收卡不要求重新生成交付候选", () => {
+  const state = evolution("missing");
+  state.topics[0].status = "completed";
+  state.topics[0].recoveryPoint = "monitor-formal-acceptance-passed";
+  state.proposals[0].status = "completed";
+  state.proposals[0].distributionPlan = null;
+  state.proposals[0].distributedTaskIds = [];
+  state.proposals[0].resultSummary = "人物切换、任务卡展开收起和滚动条拖动均通过。";
+  state.oneShotRun = {
+    runId: "monitor-acceptance-run", topicId: "topic-current", proposalId: "proposal-current",
+    status: "completed", phase: "completed", updatedAt: "2026-09-12T05:00:00.000Z", completedAt: "2026-09-12T05:00:00.000Z",
+  };
+  state.archiveRecords = [];
+
+  const stage = projectCurrentTopicStage(state, { tasks: [], integrationBatches: [] });
+  assert.equal(stage.status, "completed");
+  assert.equal(stage.summary, "人物切换、任务卡展开收起和滚动条拖动均通过。");
+  assert.equal(stage.waitingFor, "当前无需操作");
+  assert.equal(stage.nextAction, "可开始下一专题。");
+  assert.equal(stage.latestAcceptance.status, "passed");
+  assert.deepEqual(stage.effectiveTaskIds, []);
+  assert.equal(stage.deliveryEvidence.candidate, null);
+  assert.equal(stage.deliveryEvidence.acceptance, "passed");
+});
+
 test("重启健康只将最终候选交给真实验收，不能单独完成", () => {
   const delivered = deliveredCollaboration({ acceptanceStatus: "running" });
   const stage = projectCurrentTopicStage(evolution(delivered.acceptanceStatus), delivered);
