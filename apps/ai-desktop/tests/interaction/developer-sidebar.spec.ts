@@ -1020,6 +1020,36 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await taskList.getByRole("button", { name: "单会话" }).click();
 });
 
+test("任务卡数量超过视口时保留完整标题高度并由列表滚动", async () => {
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(true));
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式" }).click();
+  await taskList.getByRole("button", { name: /任务协作群/ }).click();
+  const pageRoot = page.getByRole("region", { name: "任务协作群" });
+  const list = pageRoot.locator(".task-collaboration-groups");
+  const original = list.locator(".task-collaboration-group").first();
+  await expect(original).toBeVisible();
+  await list.evaluate((root) => {
+    const card = root.querySelector<HTMLElement>(".task-collaboration-group");
+    if (!card) throw new Error("任务卡夹具未渲染。");
+    for (let index = 0; index < 12; index += 1) {
+      const clone = card.cloneNode(true) as HTMLElement;
+      clone.setAttribute("data-sel-disclosure-open", "false");
+      clone.querySelector(".seldisclosure-trigger")?.setAttribute("aria-expanded", "false");
+      const content = clone.querySelector<HTMLElement>(".seldisclosure-content");
+      if (content) content.hidden = true;
+      root.append(clone);
+    }
+  });
+  const collapsedTrigger = list.locator(".task-collaboration-group > .selui-disclosure-heading > .seldisclosure-trigger").last();
+  const triggerBounds = await collapsedTrigger.boundingBox();
+  if (!triggerBounds) throw new Error("任务卡标题缺少可视边界。");
+  expect(triggerBounds.height).toBeGreaterThanOrEqual(72);
+  expect(await list.evaluate((root) => root.scrollHeight > root.clientHeight)).toBe(true);
+  await page.evaluate(() => (window as unknown as { desktop: { setInteractionTaskTimelineFixture(active: boolean): Promise<void> } }).desktop.setInteractionTaskTimelineFixture(false));
+  await taskList.getByRole("button", { name: "单会话" }).click();
+});
+
 test("自动测试默认关闭，预检成功后才进入开启态", async () => {
   const composer = page.locator(".selconversation-composer:visible");
   const automaticTest = page.getByRole("switch", { name: "自动测试" });
