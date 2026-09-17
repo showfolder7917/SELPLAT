@@ -394,7 +394,12 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   if (group.status === "cancelled") {
     return (
       // 静态历史卡不接收展开状态或操作回调，保证取消结论与摘要始终可见。
-      <article className="task-collaboration-cancelled-history-card" data-cancelled-history-card data-task-timeline-topic-id={group.topicId || ""}>
+      <article
+        className="task-collaboration-cancelled-history-card"
+        aria-label={locale === "ja" ? "取消済みの案件履歴" : "已取消专题历史卡"}
+        data-cancelled-history-card
+        data-task-timeline-topic-id={group.topicId || ""}
+      >
         <div className="task-cancelled-history-status">
           <strong>{locale === "ja" ? "取消済み" : "已取消"}</strong>
           <span>{locale === "ja" ? "この案件は取消済みです" : "本专题已取消"}</span>
