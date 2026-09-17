@@ -87,6 +87,34 @@ test("独立验证一次收齐全部失败且不进入发布链", async () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("固定测试超时保留脚本、时限和最后输出，不再误报为普通 SIGTERM", async () => {
+  const root = mkdtempSync(path.join(controlledTestRoot, "unified-test-timeout-"));
+  const appRoot = path.join(root, "apps", "ai-desktop");
+  mkdirSync(appRoot, { recursive: true });
+  writeFileSync(path.join(appRoot, "package.json"), JSON.stringify({ scripts: {
+    test: "node -e \"console.error('still-running');setInterval(() => {}, 1000)\"",
+    "test:interaction": "node -e \"process.exit(0)\"",
+    "test:collaboration": "node -e \"process.exit(0)\"",
+    "test:managed": "node -e \"process.exit(0)\"",
+  }}));
+  writeAcceptancePlanCandidate(root);
+  const runner = new FixedUnifiedTestRunner({
+    sourceProjectRoot: root, applicationName: "ai-desktop", buildRoot: path.join(root, "build"),
+    initiatorMemberId: "linghu-ancestor", eventNamespace: "gate", scriptTimeoutMs: 500,
+    recordEvent: () => undefined,
+    testResources: { run: async (_request, execute) => execute() },
+  });
+  try {
+    await assert.rejects(runner.run(), (error) => {
+      assert.equal(error.name, "UnifiedTestAggregateError");
+      assert.equal(error.failures[0].script, "test");
+      assert.match(error.failures[0].detail, /超过 500ms/);
+      assert.match(error.failures[0].detail, /still-running/);
+      return true;
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("候选分别缺少每项验收计划能力时固定流程不执行全量测试", async () => {
   const root = mkdtempSync(path.join(controlledTestRoot, "missing-acceptance-capability-"));
   const appRoot = path.join(root, "apps", "ai-desktop");

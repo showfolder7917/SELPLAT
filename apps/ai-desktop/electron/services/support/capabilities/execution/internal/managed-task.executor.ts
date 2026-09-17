@@ -7,8 +7,8 @@ import type { ManagedExecutionModeValue } from "../../../../../../contracts/foun
 import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { PromptLibraryPort, PromptVariables } from "../../prompts/index.js";
 // 范围聚合负责冻结文件集合，结构化错误负责把范围确认从普通测试失败中分离。
-import { isReadOnlyInspectionCommand } from "./command-evidence.classifier.ts";
 import { TaskRepairScopeAggregate, TaskRepairScopeViolationError } from "../domain/task-repair-scope.aggregate.js";
+import type { ExecutorFailureRoutingOutDto } from "../../../../../../contracts/services/personas/executor/index.js";
 
 type RunTurn = (
   message: string,
@@ -27,6 +27,8 @@ export interface ManagedExecutionRequest {
   readChangedFiles?: () => Promise<string[]>;
   /** 令狐可以依据真实技术故障，把同一签发工程内的新文件纳入修复范围。 */
   allowProjectTechnicalRepair?: boolean;
+  /** 协作会话已经核对的工作区、规则入口和任务关联事实。 */
+  failureRoutingContext?: { diagnosticContext: string; verifiedFacts: string[]; taskRelation: "diagnostic-only" | "gate" | "direct"; stepPurpose?: "diagnostic" | "implementation" | "validation" };
   emit(event: CodexStreamEventOutDto): void;
 }
 
@@ -45,6 +47,7 @@ export interface ManagedExecutionResult extends SendMessageOutDto {
   successfulCommands: string[];
   /** 范围确认类失败必须等待重新确认，不能进入普通自动自修。 */
   failureKind?: "scope-confirmation";
+  failureRouting?: ExecutorFailureRoutingOutDto;
 }
 
 const TASK_ROUNDS = 3;
@@ -105,6 +108,7 @@ export class ManagedTaskExecutor {
     // 执行命令失败或真实工作区没有修改时，任务尚不能进入验证。
     if (evidence.roundFailed || changedFiles.length === 0) {
       emitManaged(request, "task-execution", "blocked", taskRound - 1, TASK_ROUNDS, "修改过程仍有未解决错误，已停止自动续跑");
+      const failureRouting = classifyFailureRouting(evidence, request.failureRoutingContext);
       return {
         ...response,
         managedStatus: "incomplete",
@@ -113,6 +117,7 @@ export class ManagedTaskExecutor {
         changedFiles,
         authorizedFiles: [],
         successfulCommands: evidence.successfulCommands(),
+        failureRouting,
       };
     }
     emitManaged(request, "task-execution", "completed", Math.min(taskRound, TASK_ROUNDS), TASK_ROUNDS, "源码任务阶段完成");
@@ -225,6 +230,7 @@ export class ManagedTaskExecutor {
             successfulCommands: evidence.successfulCommands(),
             // 结构化分类让 Workflow 不再从中文错误文字猜测处理方式。
             failureKind: "scope-confirmation",
+            failureRouting: classifyFailureRouting(evidence, { ...request.failureRoutingContext, taskRelation: "gate", stepPurpose: "validation" }),
           };
         }
         if (!request.allowProjectTechnicalRepair && round === VALIDATION_ROUNDS) break;
@@ -268,7 +274,7 @@ export class ManagedTaskExecutor {
     const displayedTotal = request.allowProjectTechnicalRepair ? round : VALIDATION_ROUNDS;
     emitManaged(request, "code-validation", "blocked", round, displayedTotal, lastFailure || "当前任务分支验证失败");
     emitManaged(request, "interaction-validation", "blocked", round, displayedTotal, "Playwright 未通过，未进入集成队列");
-    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false, changedFiles: repairScope.authorizedFiles(), authorizedFiles: repairScope.authorizedFiles(), successfulCommands: evidence.successfulCommands() };
+    return { ...response, managedStatus: "incomplete", pendingActions: [lastFailure || "当前任务分支验证失败"], restartRequired: false, changedFiles: repairScope.authorizedFiles(), authorizedFiles: repairScope.authorizedFiles(), successfulCommands: evidence.successfulCommands(), failureRouting: classifyFailureRouting(evidence, { ...request.failureRoutingContext, stepPurpose: "validation" }) };
   }
 
   async #runBuildValidation(request: ManagedExecutionRequest): Promise<ManagedExecutionResult> {
@@ -346,9 +352,12 @@ class ExecutionEvidence {
     const command = activity.summary || "(unknown command)";
     const succeeded = commandSucceeded(activity);
     if (!succeeded) {
-      // 只读检查的缺文件或无匹配是现场事实，活动流已保留该错误；不能把它伪装成测试或构建失败。
-      if (isReadOnlyInspectionCommand(command)) return;
-      this.#roundFailures.push(command);
+      // 原始命令、退出码和受控流详情一并保留，分类不再依赖命令文本模式。
+      this.#roundFailures.push([
+        `命令：${command}`,
+        activity.exitCode === undefined ? null : `退出码：${activity.exitCode}`,
+        activity.detail ? `输出：${activity.detail}` : null,
+      ].filter((value): value is string => Boolean(value)).join("\n"));
       return;
     }
     this.#successfulCommands.add(command);
@@ -384,6 +393,28 @@ class ExecutionEvidence {
     if (this.roundFailed) missing.push("当前构建验证轮次仍有失败命令");
     return { passed: missing.length === 0, missing };
   }
+}
+
+/** 失败分类只使用步骤声明、上游核对事实和原始结果；命令名称只作为可审计证据。 */
+function classifyFailureRouting(
+  evidence: ExecutionEvidence,
+  // 调用方可在特定失败分支只覆盖用途或关联；缺失项由分类器的稳定默认值补齐。
+  context: Partial<NonNullable<ManagedExecutionRequest["failureRoutingContext"]>> | undefined,
+): ExecutorFailureRoutingOutDto {
+  const stepPurpose = context?.stepPurpose || "implementation";
+  const taskRelation = context?.taskRelation || "direct";
+  const rawCommandResults = evidence.failedCommandSummaries();
+  const kind = taskRelation === "diagnostic-only" && stepPurpose === "diagnostic"
+    ? "diagnostic-correction"
+    : taskRelation === "gate" ? "gate-failure" : "technical-failure";
+  return {
+    kind, stepPurpose, taskRelation, rawCommandResults,
+    diagnosticContext: context?.diagnosticContext || "未声明诊断上下文；按任务直接关联处理。",
+    verifiedFacts: context?.verifiedFacts || [],
+    nextRetryAction: kind === "diagnostic-correction" ? "保留原执行上下文，核对诊断对象后重试原步骤。"
+      : kind === "gate-failure" ? "先满足当前门禁条件，再从原任务继续。"
+        : "保留已核实失败证据，交由令狐调查并修复。",
+  };
 }
 
 /** 共享测试文档、归档和 Playwright 临时证据属于验证产物，不得冒充源码修改或让刚通过的验证失效。 */

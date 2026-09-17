@@ -402,6 +402,13 @@ class CodexExecutorSession implements ExecutorSessionPort {
       readChangedFiles: () => this.#readTaskChangedFiles(task),
       // 令狐负责技术兜底，可以沿真实根因扩展当前签发工程内的文件范围；其他人物仍保持首次范围。
       allowProjectTechnicalRepair: this.#connection.memberId === "linghu-ancestor",
+      failureRoutingContext: {
+        ...failureRoutingContext(task),
+        verifiedFacts: [
+          `工作区：${task.versionWorkspace?.workspaceId || task.snapshot.workspaceState.primaryId}`,
+          `规则入口：${task.snapshot.ruleContext ? "已冻结并已核对" : "旧任务缺少规则快照"}`,
+        ],
+      },
       runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
     let status: ExecutorExecutionResultOutDto["status"] = "incomplete";
@@ -417,6 +424,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
       successfulCommands: result.successfulCommands,
       // 把结构化范围失败传给 Workflow，避免下游重新解析错误文字。
       failureKind: result.failureKind,
+      failureRouting: result.failureRouting,
     };
   }
 
@@ -451,6 +459,21 @@ class CodexExecutorSession implements ExecutorSessionPort {
     return result.text.trim();
   }
 
+}
+
+/** 从已审核计划和冻结任务事实提取分流输入；不检查命令名称，也不从页面状态反推。 */
+function failureRoutingContext(task: CollaborationTaskOutDto): {
+  diagnosticContext: string;
+  taskRelation: "diagnostic-only" | "gate" | "direct";
+  stepPurpose?: "diagnostic" | "implementation" | "validation";
+} {
+  const planText = task.plans.find((plan) => plan.version === task.currentPlanVersion)?.text || "";
+  const diagnosticContext = planText.match(/诊断上下文\s*[:：]\s*([^\n]+)/)?.[1]?.trim()
+    || "受管执行步骤；仅声明为诊断用途且与原任务无直接关联时允许保留原执行上下文。";
+  const stepPurpose = /步骤用途\s*[:：]\s*诊断/.test(planText) ? "diagnostic" : undefined;
+  const taskRelation = stepPurpose === "diagnostic" && /任务关联\s*[:：]\s*仅诊断/.test(planText)
+    ? "diagnostic-only" : /任务关联\s*[:：]\s*门禁/.test(planText) ? "gate" : "direct";
+  return { diagnosticContext, stepPurpose, taskRelation };
 }
 
 export function collaborationWorkspaceState(task: CollaborationTaskOutDto, configured?: WorkspaceStateOutDto): WorkspaceStateOutDto {

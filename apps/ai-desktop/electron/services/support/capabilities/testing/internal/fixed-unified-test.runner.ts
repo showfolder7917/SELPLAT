@@ -23,6 +23,7 @@ const FIXED_RELEASE_SCRIPTS = ["package:mac:developer", "verify:package-content"
 // 仅接受开发包预检写出的固定记录，避免把任意命令中的 ENOSPC 文本误判为等待授权。
 const DEVELOPER_PACKAGE_CAPACITY_BLOCKED_MARKER = "AI_DESKTOP_PACKAGE_CAPACITY_BLOCKED:";
 const UNIFIED_TEST_CAPACITY_BLOCKED_ERROR_CODE = "unified-test-capacity-blocked";
+const DEFAULT_SCRIPT_TIMEOUT_MS = 20 * 60_000;
 
 type DeveloperPackageCapacity = {
   fileBytes: number;
@@ -68,6 +69,20 @@ export class UnifiedTestCapacityBlockedError extends Error {
   }
 }
 
+/** 表示固定测试脚本超过受控时限；保留脚本和输出尾部，避免把宿主终止误报为断言失败。 */
+export class UnifiedTestTimeoutError extends Error {
+  readonly code = "unified-test-timeout";
+
+  constructor(
+    readonly script: string,
+    readonly timeoutMs: number,
+    readonly outputTail: string,
+  ) {
+    super(`${script} 超过 ${timeoutMs}ms 未结束，已由统一测试门禁终止。最后输出：${outputTail || "（无输出）"}`);
+    this.name = "UnifiedTestTimeoutError";
+  }
+}
+
 export interface UnifiedTestScriptFailure {
   script: string;
   detail: string;
@@ -108,6 +123,8 @@ export interface FixedUnifiedTestRunnerOptions {
   testResources: TestResourceCoordinatorFacade;
   initiatorMemberId: string;
   eventNamespace: string;
+  /** 测试专用短时限；生产组合根不传入时固定使用二十分钟。 */
+  scriptTimeoutMs?: number;
 }
 
 /** 固定统一测试完成后交给集成流水线的受控产物与逐脚本验证事实。 */
@@ -130,6 +147,7 @@ export class FixedUnifiedTestRunner {
   // 发起人物和事件命名空间由业务组合根注入，公共能力不写死具体人物。
   readonly #initiatorMemberId: string;
   readonly #eventNamespace: string;
+  readonly #scriptTimeoutMs: number;
 
   /** 保存经过组合根解析的工程信息和外部端口。 */
   constructor(options: FixedUnifiedTestRunnerOptions) {
@@ -141,6 +159,7 @@ export class FixedUnifiedTestRunner {
     this.#testResources = options.testResources;
     this.#initiatorMemberId = options.initiatorMemberId;
     this.#eventNamespace = options.eventNamespace;
+    this.#scriptTimeoutMs = positiveTimeout(options.scriptTimeoutMs, DEFAULT_SCRIPT_TIMEOUT_MS);
   }
 
   async run(candidateProjectRoot = this.#sourceProjectRoot): Promise<FixedUnifiedTestRunResult> {
@@ -191,7 +210,7 @@ export class FixedUnifiedTestRunner {
         this.#recordEvent(`${this.#eventNamespace}.unified_test.started`, { script, candidateProjectRoot: resolvedProjectRoot });
         try {
           // 子进程只接收固定脚本名和受控环境。
-          await runNpmScript(desktopRoot, script, environment);
+          await runNpmScript(desktopRoot, script, environment, this.#scriptTimeoutMs);
           // 退出码为零后才记录完成。
           this.#recordEvent(`${this.#eventNamespace}.unified_test.completed`, { script, candidateProjectRoot: resolvedProjectRoot });
           verificationEvidence.push({
@@ -213,7 +232,7 @@ export class FixedUnifiedTestRunner {
       for (const script of FIXED_RELEASE_SCRIPTS) {
         this.#recordEvent(`${this.#eventNamespace}.unified_test.started`, { script, candidateProjectRoot: resolvedProjectRoot });
         try {
-          await runNpmScript(desktopRoot, script, environment);
+          await runNpmScript(desktopRoot, script, environment, this.#scriptTimeoutMs);
           this.#recordEvent(`${this.#eventNamespace}.unified_test.completed`, { script, candidateProjectRoot: resolvedProjectRoot });
           verificationEvidence.push({
             scenario: script,
@@ -276,7 +295,7 @@ export class FixedUnifiedTestRunner {
       }, async () => {
         for (const script of FIXED_RELEASE_SCRIPTS) {
           this.#recordEvent(`${this.#eventNamespace}.runtime_activation.started`, { script, candidateProjectRoot: resolvedProjectRoot, candidateSha });
-          await runNpmScript(desktopRoot, script, environment);
+          await runNpmScript(desktopRoot, script, environment, this.#scriptTimeoutMs);
           this.#recordEvent(`${this.#eventNamespace}.runtime_activation.completed`, { script, candidateProjectRoot: resolvedProjectRoot, candidateSha });
         }
         return stageVerifiedDeveloperExecutable(resolveVerifiedDeveloperExecutable(this.#buildRoot), this.#buildRoot, `${releaseBatchId}-runtime`, candidateSha);
@@ -287,7 +306,7 @@ export class FixedUnifiedTestRunner {
   }
 }
 
-function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEnv): Promise<void> {
+function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEnv, timeoutMs: number): Promise<void> {
   // Promise 把子进程事件转换为上层可等待的成功或失败结果。
   return new Promise((resolve, reject) => {
     // Windows 使用 npm.cmd，其他平台使用 npm；shell=false 阻止额外字符串解释。
@@ -304,14 +323,16 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
     const append = (chunk: Buffer) => { output = `${output}${chunk.toString("utf8")}`.slice(-16_000); };
     child.stdout.on("data", append);
     child.stderr.on("data", append);
-    // 单个脚本超过二十分钟时终止进程，交给令狐失败恢复链处理。
-    const timer = setTimeout(() => child.kill(), 20 * 60_000);
+    // 超时由本门禁记录为独立事实，不能混同为脚本自身返回的 SIGTERM。
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMs);
     // 进程创建失败时先清理计时器，再返回原始异常。
     child.once("error", (error) => { clearTimeout(timer); reject(error); });
     // 退出事件统一解释退出码或信号，并附带最后 4,000 字符证据。
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
-      if (code === 0) resolve();
+      if (timedOut) reject(new UnifiedTestTimeoutError(script, timeoutMs, output.trim().slice(-4_000)));
+      else if (code === 0) resolve();
       else {
         const capacity = parseDeveloperPackageCapacityBlocked(output);
         if (capacity) reject(new UnifiedTestCapacityBlockedError(script, capacity));
@@ -319,6 +340,10 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
       }
     });
   });
+}
+
+function positiveTimeout(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
 /** 只解析预检输出的最后一条固定标记，避免构建日志中的任意文本改变故障恢复路线。 */
