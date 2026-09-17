@@ -292,6 +292,8 @@ export class PersonaEvolutionRuntime {
   notifyWorkflowChanged(): void { void this.#tick(); }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto { return this.#store.createTopic(request); }
+  /** 页面兜底退役非当前旧卡；状态约束和原子提交仍由唯一 Evolution Store 执行。 */
+  retireStaleTopic(topicId: string, proposalId: string, reason: string): EvolutionStateOutDto { return this.#store.retireStaleTopic(topicId, proposalId, reason); }
   /** 保存轮询间隔、最大轮数等受控参数，不立即推进业务状态。 */
   configureAutomation(request: ConfigurePersonaWorkflowInDto): EvolutionStateOutDto { return this.#store.configureAutomation(request); }
   /** 启动、暂停、恢复或停止自动流程，并保留可恢复的当前卡点。 */
@@ -705,7 +707,9 @@ export class PersonaEvolutionRuntime {
     try {
       let state = this.state();
       if (state.automationRuntime.status === "running") {
-        for (const proposal of state.proposals.filter((item) => ["supplement-required", "rejected"].includes(item.status))) {
+        // 自动返修只消费当前活动专题。历史 rejected 提案是审计事实，不是待办队列；
+        // 扫描所有历史版本会在新专题运行时把已封存卡重新激活。
+        for (const proposal of state.proposals.filter((item) => item.topicId === state.activeTopicId && ["supplement-required", "rejected"].includes(item.status))) {
           if (state.proposals.some((item) => item.supersedesProposalId === proposal.proposalId)) continue;
           if (!proposal.approvals.at(-1)?.advice.trim()) continue;
           state = await this.nangongRuntime.facade.investigateAndReviseReturnedProposal(proposal.proposalId);

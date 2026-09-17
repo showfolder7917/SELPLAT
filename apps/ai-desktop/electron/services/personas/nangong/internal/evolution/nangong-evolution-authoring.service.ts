@@ -67,6 +67,9 @@ export class NangongEvolutionAuthoringService {
     const feedback = proposal.approvals.at(-1);
     const topic = state.topics.find((item) => item.topicId === proposal.topicId);
     if (!feedback?.advice.trim() || !topic) throw new Error("返修调查缺少课题或明确审批意见。");
+    if (state.activeTopicId !== topic.topicId || (state.oneShotRun?.status === "running" && state.oneShotRun.topicId !== topic.topicId)) {
+      throw new Error("该提案所属专题已经退出当前运行，禁止调查或恢复旧计划。");
+    }
     const response = await this.#investigateRevision(this.#prompts.render("nangong.revision-investigation", {
       feedbackTarget: `${feedback.feedbackTarget}${feedback.capabilityScope ? `；能力范围：${feedback.capabilityScope}` : ""}`,
       approvalAdvice: feedback.advice,
@@ -74,6 +77,18 @@ export class NangongEvolutionAuthoringService {
       proposalJson: JSON.stringify({ version: proposal.version, content: proposal.content, evidence: proposal.evidence, impactScope: proposal.impactScope, exclusions: proposal.exclusions, risks: proposal.risks, rollbackPlan: proposal.rollbackPlan, acceptanceCriteria: proposal.acceptanceCriteria }),
     }), topic.workspaceState, topic.locale);
     const investigation = parseRevisionInvestigation(response);
+    // 模型调查是异步边界。返回时必须重新核对当前专题、运行和修订链，防止专题切换后
+    // 旧请求迟到写回，把已经退役的卡片重新变成待审批。
+    const current = this.#store.state();
+    const currentProposal = current.proposals.find((item) => item.proposalId === proposal.proposalId);
+    const currentTopic = current.topics.find((item) => item.topicId === proposal.topicId);
+    if (!currentProposal || !currentTopic
+      || current.activeTopicId !== topic.topicId
+      || !["supplement-required", "rejected"].includes(currentProposal.status)
+      || current.proposals.some((item) => item.supersedesProposalId === currentProposal.proposalId)
+      || (current.oneShotRun?.status === "running" && current.oneShotRun.topicId !== topic.topicId)) {
+      throw new Error("返修调查返回时专题或运行代际已经变化，已丢弃旧结果且不恢复旧计划。");
+    }
     if (!hasMaterialRevisionEvidence(proposal, investigation, feedback.advice)) {
       const reason = `南宫婉只读调查没有产生可核验的新事实，未创建提案 v${proposal.version + 1}；请补充实际组件、状态或复现证据后从当前卡点继续。`;
       if (state.oneShotRun?.status === "running") return this.#oneShotWorkflow.blockFailure("business", "revise_proposal_without_new_evidence", new Error(reason), reason, { feedbackApprovalId: feedback.approvalId });
@@ -81,7 +96,7 @@ export class NangongEvolutionAuthoringService {
       return this.#store.state();
     }
     const revised = this.reviseProposal(proposal.proposalId, {
-      mutation: { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-revise:${proposal.proposalId}:${state.updatedAt}` },
+      mutation: { expectedStateVersion: current.updatedAt, idempotencyKey: `automatic-revise:${proposal.proposalId}:${current.updatedAt}` },
       submitterMemberId: proposal.submitterMemberId,
       content: investigation.content,
       evidence: investigation.evidence,

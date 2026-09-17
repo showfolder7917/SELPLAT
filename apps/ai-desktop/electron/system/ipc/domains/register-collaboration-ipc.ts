@@ -98,6 +98,22 @@ export function registerCollaborationIpc(
     await refreshWorkflowCheckpoints?.();
     return resumed;
   });
+  handle("desktop:retire-stale-evolution-topic", async (_event, request: { topicId?: unknown; proposalId?: unknown }) => {
+    if (!request || typeof request.topicId !== "string" || typeof request.proposalId !== "string") {
+      throw new Error("退役旧任务卡缺少专题或提案标识，请刷新后重试。");
+    }
+    const before = evolution.state();
+    if (before.activeTopicId === request.topicId || before.oneShotRun?.topicId === request.topicId) {
+      throw new Error("当前专题不能作为旧卡退役，请继续既定人物流程。");
+    }
+    const proposalIds = before.proposals.filter((item) => item.topicId === request.topicId).map((item) => item.proposalId);
+    for (const proposalId of proposalIds) {
+      while (await collaboration.archiveStaleTopicTask(proposalId, "用户已通过任务卡退役旧任务链；旧执行和工作树仅保留审计。")) {
+        // 同一提案可能留下多个人物任务；逐一封存直到没有活动任务。
+      }
+    }
+    return evolution.retireStaleTopic(request.topicId, request.proposalId, "旧任务卡已退出当前专题；旧提案、旧执行与工作树仅保留审计，不得恢复。 ");
+  });
   handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateNangongProposalInDto) => nangong.createProposal(topicId, request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideHanliProposalInDto) => hanli.decideProposal(proposalId, request));
   handle("desktop:decide-evolution-result", (_event, proposalId: string, request: DecideHanliResultInDto) => hanli.decideResult(proposalId, request));

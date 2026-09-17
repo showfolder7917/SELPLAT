@@ -84,6 +84,13 @@ export function CollaborationWorkspaceFeature({
     return { kind: "confirmed", message: run?.status === "completed" ? "本轮已完成。" : "已恢复原专题验收，请查看后续流程。" };
   }
 
+  /** 退役入口只处理已经退出当前运行的旧卡，成功后刷新 SQLite 权威时间线。 */
+  async function retireStaleTimelineTopic(request: { topicId: string; proposalId: string }): Promise<TaskRecoveryResult> {
+    await evolution.retireStaleTopic(request);
+    await controller.actions.refreshTimeline();
+    return { kind: "confirmed", message: "旧任务卡、旧执行和工作树已退役，仅保留审计记录。" };
+  }
+
   // ViewModel 只把 Controller 状态映射成任务群和人物页面输入。
   const viewModel = createCollaborationWorkspaceViewModel({
     locale,
@@ -92,6 +99,7 @@ export function CollaborationWorkspaceFeature({
     onManualApproval: requestManualApproval,
     onContinueTask: continueTimelineTask,
     onResumeAcceptance: resumeTimelineAcceptance,
+    onRetireStaleTopic: retireStaleTimelineTopic,
   });
 
   return (

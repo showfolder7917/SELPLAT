@@ -729,6 +729,23 @@ contextBridge.exposeInMainWorld("desktop", {
     evolutionState.oneShotRun.blockingReason = null;
     return publishNangongEvolution("one-shot.resumed");
   },
+  retireStaleEvolutionTopic: async (request) => {
+    if (!request?.topicId || !request?.proposalId || evolutionState.activeTopicId === request.topicId || evolutionState.oneShotRun?.topicId === request.topicId) {
+      throw new Error("当前专题不能作为旧卡退役");
+    }
+    const now = new Date().toISOString();
+    const topic = evolutionState.topics.find((item) => item.topicId === request.topicId);
+    const proposal = evolutionState.proposals.find((item) => item.proposalId === request.proposalId && item.topicId === request.topicId);
+    if (!topic || !proposal) throw new Error("旧任务卡的专题与提案不一致");
+    topic.status = "rejected";
+    topic.recoveryPoint = "stale-topic-retired";
+    topic.updatedAt = now;
+    for (const item of evolutionState.proposals.filter((candidate) => candidate.topicId === request.topicId && candidate.status !== "completed")) {
+      item.status = "rejected";
+      item.updatedAt = now;
+    }
+    return publishNangongEvolution("topic.stale-retired");
+  },
   setInteractionOneShotConfirmation: async (confirmation) => { evolutionState.oneShotConfirmation = confirmation ? structuredClone(confirmation) : null; return publishNangongEvolution("conversation.one-shot-confirmation-changed"); },
   getEvolutionTopicDossier: async (topicId) => {
     const topic = evolutionState.topics.find((item) => item.topicId === topicId);

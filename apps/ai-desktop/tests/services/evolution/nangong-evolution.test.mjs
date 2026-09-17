@@ -870,9 +870,36 @@ test("可恢复验收卡点不能被普通专题确认覆盖，明确退役后�
 
     const retired = store.retireOneShotRunForTopicSwitch("客户明确切换到独立专题");
     assert.equal(retired.oneShotRun.resumeMode, null);
+    assert.equal(retired.topics.find((item) => item.topicId === topicId).status, "rejected");
+    assert.equal(retired.topics.find((item) => item.topicId === topicId).recoveryPoint, "topic-switch-retired");
+    assert.equal(retired.proposals.find((item) => item.proposalId === proposalId).status, "rejected");
     const replacement = store.beginOneShotRun(workspaceState, "zh-CN", "confirmed-topic-switch");
     assert.notEqual(replacement.oneShotRun.runId, originalRunId);
     assert.equal(replacement.oneShotRun.sourceRequestId, "confirmed-topic-switch");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("历史退役提案不能被返修结果重新激活", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "retired-proposal-revision-guard-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.beginOneShotRun(workspaceState, "zh-CN", "old-topic");
+    const oldTopicId = store.createTopic(topicRequest("已退役旧专题")).activeTopicId;
+    const oldProposalId = store.createProposal(oldTopicId, proposalRequest()).proposals.at(-1).proposalId;
+    store.decide(oldProposalId, "rejected", "需要补充调查", "automatic-han-li", []);
+    store.retireOneShotRunForTopicSwitch("用户开始新的独立专题");
+    store.beginOneShotRun(workspaceState, "zh-CN", "new-topic");
+    store.createTopic(topicRequest("当前新专题"));
+
+    assert.throws(() => store.revise(oldProposalId, {
+      submitterMemberId: "nangong-wan",
+      content: "这是迟到的旧专题调查结果，不能重新进入审批链。",
+      evidence: ["旧调查结果"], impactScope: ["旧专题"], risks: ["恢复旧计划"],
+      rollbackPlan: "保持旧专题退役", acceptanceCriteria: ["旧专题不再激活"],
+    }, "南宫婉"), /历史专题已经退出当前运行/);
+    const state = store.state();
+    assert.equal(state.topics.find((item) => item.topicId === oldTopicId).status, "rejected");
+    assert.equal(state.proposals.some((item) => item.supersedesProposalId === oldProposalId), false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

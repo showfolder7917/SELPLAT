@@ -76,6 +76,8 @@ type TaskGroupCardActions = {
   onContinueTask: (taskId: string) => void;
   /** 从验收卡点恢复原一次性专题运行。 */
   onResumeAcceptance: (request: { topicId: string; proposalId: string; runId: string }) => void;
+  /** 退役已退出当前运行的旧专题卡。 */
+  onRetireStaleTopic: (request: { topicId: string; proposalId: string }) => void;
 };
 
 /** 恢复失败先显示简短警告，完整错误证据仍由用户按需展开查看。 */
@@ -391,8 +393,9 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
   // 历史时间线不再决定当前恢复入口。
-  const currentStage = model.presentation.currentTopicStage?.topicId === group.topicId && model.presentation.currentTopicStage?.proposalId === group.proposalId
-    ? model.presentation.currentTopicStage : null;
+  const activeStage = model.presentation.currentTopicStage;
+  const currentStage = activeStage?.topicId === group.topicId && activeStage?.proposalId === group.proposalId
+    ? activeStage : null;
   // 当前投影明确要求客户恢复时，优先使用它签发的原一次性运行标识；普通任务卡点才读取有效任务链。
   const projectedResumeRunId = currentStage?.userAction === "resume" ? currentStage.resumeOneShotRunId : null;
   const projectedResumeTaskId = currentStage?.userAction === "resume"
@@ -401,6 +404,11 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 两类恢复共用一个页面忙碌锁，但分别调用各自已有的权威业务入口。
   const projectedRecoveryId = projectedResumeRunId || projectedResumeTaskId;
   const recoveryPending = projectedRecoveryId === model.presentation.continuingTaskId;
+  const staleActiveTopic = Boolean(group.topicId && group.proposalId
+    && activeStage?.topicId && activeStage.topicId !== group.topicId
+    && !["completed", "cancelled"].includes(group.status));
+  const staleRetirementId = group.topicId ? `retire:${group.topicId}` : null;
+  const staleRetirementPending = staleRetirementId === model.presentation.continuingTaskId;
 
   return (
     // 专题卡根折叠区统一承载卡片头部、恢复入口、人物时间线和下一流程。
@@ -431,6 +439,17 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
               {recoveryPending
                 ? locale === "ja" ? "復旧中…" : "恢复中…"
                 : "从卡点继续"}
+            </button>
+          )}
+          {staleActiveTopic && group.topicId && group.proposalId && (
+            <button
+              type="button"
+              className="task-stale-retire"
+              disabled={staleRetirementPending}
+              onClick={() => model.actions.onRetireStaleTopic({ topicId: group.topicId!, proposalId: group.proposalId! })}
+            >
+              <i className={staleRetirementPending ? "ri-loader-4-line" : "ri-archive-line"} aria-hidden="true" />
+              {staleRetirementPending ? "正在退役…" : "退役旧卡"}
             </button>
           )}
         </span>

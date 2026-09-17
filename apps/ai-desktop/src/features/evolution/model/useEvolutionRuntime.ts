@@ -127,5 +127,14 @@ export function useEvolutionRuntime() {
     }
   };
 
-  return { state, setState, readStatus, readError, readRecovery, retryRead, decideProposal, resumeOneShot, resumingRunId, resumeFeedback };
+  /** 页面兜底退役非当前旧卡；主进程仍负责核对当前专题并封存旧执行树。 */
+  const retireStaleTopic = async (request: { topicId: string; proposalId: string }) => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop) throw new Error("桌面连接不可用，未退役旧任务卡。");
+    const next = await desktop.retireStaleEvolutionTopic(request);
+    setState(next);
+    return next;
+  };
+
+  return { state, setState, readStatus, readError, readRecovery, retryRead, decideProposal, resumeOneShot, retireStaleTopic, resumingRunId, resumeFeedback };
 }

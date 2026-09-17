@@ -90,6 +90,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     locateCurrentStep,
     continueTask,
     resumeAcceptance,
+    retireStaleTopic,
   } = controller;
 
   /** 只记录详情面板的连续滚动，防止页面外层滚动被误当成长任务。 */
@@ -293,6 +294,8 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               onContinueTask: requestContinueTask,
               // 验收恢复操作（onResumeAcceptance）使用交付投影签发的原专题、提案和运行标识。
               onResumeAcceptance: requestResumeAcceptance,
+              // 历史卡被错误保留为活动态时，按钮只调用主进程的一次受控退役入口。
+              onRetireStaleTopic: retireStaleTopic,
             },
           };
 

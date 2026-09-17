@@ -551,6 +551,11 @@ button { color: inherit; }
 .task-recovery-continue:focus-visible { outline: 3px solid color-mix(in srgb, var(--sel-theme-workbench-accent) 40%, transparent); outline-offset: 2px; }
 .task-recovery-continue:disabled { opacity: .65; cursor: wait; transform: none; }
 .task-recovery-continue:disabled i { animation: task-recovery-spin .8s linear infinite; }
+.task-stale-retire { min-height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 5px 13px; border: 1px solid var(--sel-theme-border); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-text-primary); background: var(--sel-theme-surface-raised); font: inherit; font-weight: 700; cursor: pointer; }
+.task-stale-retire:hover { border-color: var(--sel-theme-workbench-accent-line); color: var(--sel-theme-workbench-accent); }
+.task-stale-retire:focus-visible { outline: 3px solid color-mix(in srgb, var(--sel-theme-workbench-accent) 40%, transparent); outline-offset: 2px; }
+.task-stale-retire:disabled { opacity: .65; cursor: wait; }
+.task-stale-retire:disabled i { animation: task-recovery-spin .8s linear infinite; }
 .task-recovery-error { margin: 8px 0 0 38px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--sel-theme-semantic-error) 45%, transparent); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-semantic-error); background: var(--sel-theme-workbench-error-surface); }
 @keyframes task-recovery-spin { to { transform: rotate(360deg); } }
 /* 人工审批仍使用正式 SELUI Window；这里只为该业务实例分配更长的只读正文视口，窗口拖动和八向缩放继续由 SELUI 接管。 */

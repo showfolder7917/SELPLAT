@@ -99,6 +99,20 @@ export class CollaborationCoordinator {
       && candidate.automationSource === "linghu-safeguard"
       && !["integrated", "cancelled"].includes(candidate.state));
     if (!task) return null;
+    return this.#archiveRetiredTask(task, takeoverSha, reason);
+  }
+
+  /** 旧卡兜底退役覆盖该专题的任意非终态执行，不把普通人物任务遗留在历史活动链。 */
+  async archiveStaleTopicTask(proposalId: string, reason: string): Promise<string | null> {
+    const task = [...this.state().tasks].reverse().find((candidate) =>
+      candidate.evolutionProposalId === proposalId
+      && !["integrated", "cancelled"].includes(candidate.state));
+    if (!task) return null;
+    return this.#archiveRetiredTask(task, null, reason);
+  }
+
+  /** 完成外部执行与工作树退役后，统一写入任务取消和人物释放事实。 */
+  async #archiveRetiredTask(task: CollaborationTaskOutDto, takeoverSha: string | null, reason: string): Promise<string> {
     const changedFiles = task.versionWorkspace ? await this.#workspaces.readTaskUncommittedFiles(task) : [];
     if (changedFiles.length) throw new Error(`旧任务工作树仍有未提交证据，禁止封存：${changedFiles.join("、")}`);
     await this.#executor.close(task.taskId);

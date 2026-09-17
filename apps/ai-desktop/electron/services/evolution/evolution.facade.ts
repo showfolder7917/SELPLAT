@@ -33,6 +33,8 @@ export interface EvolutionApplicationPort {
   readRecovery(): CurrentTopicReadRecoveryOutDto;
   dossier(topicId: string): EvolutionTopicDossierOutDto;
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto;
+  /** 退役已退出当前运行、却仍被错误显示为活动态的历史专题。 */
+  retireStaleTopic(topicId: string, proposalId: string, reason: string): EvolutionStateOutDto;
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]): () => void;
 }
 
@@ -49,6 +51,8 @@ export class EvolutionFacade {
   dossier(topicId: string) { return this.#application.dossier(topicId); }
   /** 创建共同专题；来源人物由请求事实记录，不改变状态所有权。 */
   createTopic(request: CreateNangongTopicInDto) { return this.#application.createTopic(request); }
+  /** 只允许任务卡兜底清理非当前专题，当前流程不能从这里跳过门禁。 */
+  retireStaleTopic(topicId: string, proposalId: string, reason: string) { return this.#application.retireStaleTopic(topicId, proposalId, reason); }
   /** 订阅共同状态原子提交；返回函数用于取消订阅。 */
   subscribe(listener: Parameters<EvolutionStatePort["subscribe"]>[0]) { return this.#application.subscribe(listener); }
 }

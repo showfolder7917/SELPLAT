@@ -228,6 +228,21 @@ export class EvolutionStateStore {
     const now = new Date().toISOString();
     return this.#commit("one-shot.topic-switch-retired", current.topicId, current.proposalId, (state) => {
       const run = state.oneShotRun!;
+      // 独立专题切换退役的是整条旧运行，而不只是 oneShot 指针。否则后台返修扫描仍会
+      // 把旧 rejected/supplement-required 提案识别成可修订对象，并重新激活已经封存的专题。
+      if (run.topicId) {
+        const topic = state.topics.find((item) => item.topicId === run.topicId);
+        if (topic && topic.status !== "completed") {
+          topic.status = "rejected";
+          topic.recoveryPoint = "topic-switch-retired";
+          topic.updatedAt = now;
+        }
+        for (const proposal of state.proposals.filter((item) => item.topicId === run.topicId && item.status !== "completed")) {
+          proposal.status = "rejected";
+          proposal.resultSummary = required(reason, "独立专题切换原因", 8_000);
+          proposal.updatedAt = now;
+        }
+      }
       run.status = "blocked";
       run.phase = "blocked";
       run.actor = "user";
@@ -238,6 +253,33 @@ export class EvolutionStateStore {
       run.updatedAt = now;
       run.completedAt = now;
     }, { phase: "blocked", actor: "user", status: "blocked", blockingReason: reason, nextOwner: "han-li" });
+  }
+
+  /**
+   * 任务卡兜底入口只允许退役非当前专题；旧卡及其全部提案版本在一次状态提交中退出活动链。
+   * 当前专题必须继续走既定人物流程，不能借此按钮绕过审批、测试或验收。
+   */
+  retireStaleTopic(topicId: string, proposalId: string, reason: string): EvolutionStateOutDto {
+    const topic = requireTopic(this.#state, topicId);
+    const proposal = requireProposal(this.#state, proposalId);
+    if (proposal.topicId !== topic.topicId) throw new Error("旧任务卡的专题与提案不一致，请刷新后重试。");
+    if (this.#state.activeTopicId === topic.topicId || this.#state.oneShotRun?.topicId === topic.topicId) {
+      throw new Error("当前专题不能作为旧卡退役，请继续既定人物流程。");
+    }
+    if (["completed", "rejected"].includes(topic.status)) return this.state();
+    const retiredReason = required(reason, "旧任务卡退役原因", 8_000);
+    const now = new Date().toISOString();
+    return this.#commit("topic.stale-retired", topic.topicId, proposal.proposalId, (state) => {
+      const mutableTopic = requireTopic(state, topic.topicId);
+      mutableTopic.status = "rejected";
+      mutableTopic.recoveryPoint = "stale-topic-retired";
+      mutableTopic.updatedAt = now;
+      for (const item of state.proposals.filter((candidate) => candidate.topicId === topic.topicId && candidate.status !== "completed")) {
+        item.status = "rejected";
+        item.resultSummary = retiredReason;
+        item.updatedAt = now;
+      }
+    }, { retiredReason, retiredProposalIds: this.#state.proposals.filter((item) => item.topicId === topic.topicId).map((item) => item.proposalId), nextOwner: "user" });
   }
 
   /**
@@ -877,6 +919,11 @@ export class EvolutionStateStore {
     const feedback = previous.approvals.at(-1);
     if (!feedback) throw new Error("重新提交缺少可追溯的审批意见。");
     const topic = requireTopic(this.#state, previous.topicId);
+    if (this.#state.activeTopicId !== topic.topicId) throw new Error("历史专题已经退出当前运行，禁止重新提交或恢复旧计划。");
+    const activeRun = this.#state.oneShotRun;
+    if (activeRun?.status === "running" && activeRun.topicId && activeRun.topicId !== topic.topicId) {
+      throw new Error("当前一次性运行属于其他专题，禁止异步返修结果重新激活旧专题。");
+    }
     const now = new Date().toISOString();
     const nextProposalId = `evolution-proposal-${randomUUID()}`;
     const version = topic.currentProposalVersion + 1;

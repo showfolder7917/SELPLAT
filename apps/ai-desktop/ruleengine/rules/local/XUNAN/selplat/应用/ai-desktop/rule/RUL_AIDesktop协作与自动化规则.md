@@ -1,7 +1,7 @@
 # AI Desktop 协作与自动化规则
 
-<!-- 5.164.0 新增监控者接管后的原子封存、旧树退役与独立验收任务卡直接归档边界。 -->
-rule_version = 5.164.0
+<!-- 5.165.0 固化退役专题不可复活、异步返修代际核对与旧卡受控退役按钮边界。 -->
+rule_version = 5.165.0
 <!-- 规则所有者始终从工程根稳定用户声明解析。 -->
 rule_owner_source = AGENTS.md.current_stable_user_id
 <!-- 本职责分片处于生产启用状态。 -->
@@ -62,6 +62,8 @@ collaboration_mode_architecture_contract = orchestration_isolated_from_single_co
 <!-- 监控者接管且正式版本交付后，旧修复卡、执行租约、人物占用和签发工作树必须通过一个应用边界原子封存；新范围只能建独立验收卡，不得恢复退役树或冻结旧计划。 -->
 <!-- 独立验收已经取得正式页面通过证据时，必须在同一次状态提交中退役误投影运行、建立已完成验收卡并记录通过事实；禁止再次进入研讨、提案、分发或令狐返修链。 -->
 monitor_takeover_atomic_archive_contract = formal_release_and_restart_health_confirmed_before_takeover_archive + one_application_call_archives_old_repair_task_releases_executor_and_persona_lease_and_retires_signed_worktree + uncommitted_evidence_blocks_archive_without_false_success + already_retired_tree_is_idempotent_and_never_recreated + unrelated_existing_directory_blocks_deletion + old_topic_and_frozen_plan_audit_only + independent_new_acceptance_task_card_for_formal_page_validation + no_old_task_resume_or_cross_topic_scope_reuse
+<!-- 自动返修只能消费当前活动专题；异步调查返回后必须复核当前专题、运行代际和修订链。非当前却仍处于活动态的旧卡仅可经受控按钮封存旧执行与工作树并整体退役，当前卡不得从该入口绕过门禁。 -->
+retired_topic_non_revival_contract = automatic_revision_scoped_to_active_topic_only + async_revision_result_rechecks_active_topic_one_shot_generation_and_revision_leaf_before_write + topic_switch_retires_run_topic_and_all_noncompleted_proposal_versions_together + retired_topic_and_proposal_audit_only_never_revision_approval_dispatch_or_resume + stale_active_card_has_explicit_retire_old_card_action + one_main_process_action_archives_old_execution_and_signed_worktree_before_atomic_topic_retirement + current_topic_rejected_by_stale_retirement_entry + no_test_approval_acceptance_or_authorization_bypass
 <!-- 执行列表与完整任务详情入口、页面、路由及专属实现不兼容删除；真实任务、结果与交接历史继续用于协作群和人物会话。 -->
 collaboration_execution_archive_contract = startup_always_collaboration + execution_list_and_full_task_detail_navigation_page_tab_route_exclusive_code_deleted + no_redirect_or_hidden_compatibility + persisted_tasks_results_and_audit_preserved + task_group_and_persona_conversations_read_authoritative_timeline + real_sender_recipient_assignments_and_changed_file_evidence + no_inferred_participants
 <!-- Codex 启动路径只属于主进程内部执行参数，渲染状态、生命周期日志和界面不得保留可被重新展示的路径副本。 -->

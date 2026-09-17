@@ -212,6 +212,8 @@ export interface DesktopApi {
   controlEvolutionAutomation(action: PersonaWorkflowActionInDto): Promise<EvolutionStateOutDto>;
   /** 校验原专题、当前提案和原运行后恢复同一条补验链。 */
   resumeEvolutionOneShot(request: RequestSupplementalAcceptanceInDto): Promise<EvolutionStateOutDto>;
+  /** 退役已经退出当前运行却仍显示活动态的旧专题卡。 */
+  retireStaleEvolutionTopic(request: { topicId: string; proposalId: string }): Promise<EvolutionStateOutDto>;
   /** 向南宫调查会话发送消息并记录来源。 */
   /** 清空当前南宫会话并创建新会话。 */
   /** 根据冻结对话生成专题草案，不直接创建专题。 */

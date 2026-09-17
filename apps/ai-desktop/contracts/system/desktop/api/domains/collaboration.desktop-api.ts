@@ -43,6 +43,7 @@ export const COLLABORATION_DESKTOP_API_METHODS = [
   "configureEvolutionAutomation",
   "controlEvolutionAutomation",
   "resumeEvolutionOneShot",
+  "retireStaleEvolutionTopic",
   "generateNangongTopicDraft",
   "convertNangongConversationToTopic",
   "createEvolutionProposal",

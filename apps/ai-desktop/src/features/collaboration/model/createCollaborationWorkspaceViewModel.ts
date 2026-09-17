@@ -20,6 +20,8 @@ type CreateCollaborationWorkspaceViewModelOptions = {
   onContinueTask: TaskCollaborationGroupModel["actions"]["onContinueTask"];
   /** 恢复验收动作由 Evolution 控制器沿原专题运行执行。 */
   onResumeAcceptance: TaskCollaborationGroupModel["actions"]["onResumeAcceptance"];
+  /** 旧卡兜底退役由 Section 串起 Evolution 与时间线刷新。 */
+  onRetireStaleTopic: TaskCollaborationGroupModel["actions"]["onRetireStaleTopic"];
 };
 
 /** 协作工作区的显示模型只描述页面选择和两个子页面输入。 */
@@ -42,6 +44,7 @@ export function createCollaborationWorkspaceViewModel({
   onManualApproval,
   onContinueTask,
   onResumeAcceptance,
+  onRetireStaleTopic,
 }: CreateCollaborationWorkspaceViewModelOptions): CollaborationWorkspaceViewModel {
   // 实时协议对象只向 UI 暴露当前可见正文。
   const liveTextByNodeId = Object.fromEntries(
@@ -70,6 +73,7 @@ export function createCollaborationWorkspaceViewModel({
         onManualApproval,
         onContinueTask,
         onResumeAcceptance,
+        onRetireStaleTopic,
         // 空状态入口复用成员导航，只选择韩立并打开其会话页面。
         onOpenHanliConversation: () => controller.actions.openMemberPage("han-li"),
         onRetryDeliveryRead: async () => {
