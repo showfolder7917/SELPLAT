@@ -37,6 +37,11 @@ function loadState() {
 
 const before = loadState();
 const previousRun = before.oneShotRun ? structuredClone(before.oneShotRun) : null;
+const retiredRunIds = new Set(before.archiveRecords
+  .filter((record) => record.eventType === "one-shot.topic-switch-retired")
+  .map((record) => record.payload?.oneShotRun?.runId)
+  .filter((runId) => typeof runId === "string"));
+if (previousRun?.runId) retiredRunIds.add(previousRun.runId);
 const repository = {
   load: () => structuredClone(before),
   loadLatestConversation: () => before.conversation,
@@ -54,6 +59,25 @@ const repository = {
       if (oldGroupId) {
         database.prepare(`UPDATE AiDesktopTaskTimelineTopic SET status='cancelled', summary=$summary, updatedAt=$updatedAt WHERE groupId=$groupId`).run({
           $summary: retiredReason, $updatedAt: next.updatedAt, $groupId: oldGroupId,
+        });
+      }
+      // 没有专题、提案或任务身份的卡点树只能依靠“原运行”归属。若原运行已明确退役，
+      // 它必须和旧专题在同一事务中退出活动状态，既保留审计，也不能继续显示为待处理。
+      const orphanGroups = database.prepare(`SELECT groupId FROM AiDesktopTaskTimelineTopic
+        WHERE groupId LIKE 'checkpoint:%' AND status IN ('running','blocked','waiting')`).all();
+      const readCheckpointFacts = database.prepare(`SELECT taskId,proposalId,detail FROM AiDesktopTaskTimelineEvent
+        WHERE groupId=$groupId ORDER BY sequenceNumber`);
+      const retireCheckpointGroup = database.prepare(`UPDATE AiDesktopTaskTimelineTopic
+        SET status='cancelled',summary=$summary,revision=revision+1,updatedAt=$updatedAt WHERE groupId=$groupId`);
+      for (const group of orphanGroups) {
+        const facts = readCheckpointFacts.all({ $groupId: group.groupId });
+        if (!facts.length || facts.some((fact) => fact.taskId || fact.proposalId)) continue;
+        const belongsToRetiredRun = facts.some((fact) => retiredRunIds.has(String(fact.detail || "").match(/原运行：([^\s]+)/)?.[1] || ""));
+        if (!belongsToRetiredRun) continue;
+        retireCheckpointGroup.run({
+          $summary: "原运行已由监控者封存；孤立卡点树仅保留审计，不再等待处理。",
+          $updatedAt: next.updatedAt,
+          $groupId: group.groupId,
         });
       }
       const groupId = `topic:${newTopic.topicId}`;
