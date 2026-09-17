@@ -390,22 +390,34 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { locale, open, continueError, continueFeedback } = model.presentation;
   // 卡片操作这里只读取专题展开操作，节点操作继续由统一模型传给节点。
   const { onOpenChange } = model.actions;
-  // 已取消专题必须始终可见；不能复用会隐藏内容的折叠卡或任何当前专题操作入口。
+  // 已取消专题只保留审计阅读；展开状态仍由专题卡的统一 groupId 状态管理。
   if (group.status === "cancelled") {
     return (
-      // 静态历史卡不接收展开状态或操作回调，保证取消结论与摘要始终可见。
+      // 历史卡只提供标题和审计摘要的阅读折叠，不装配当前专题的任何业务操作。
       <article
         className="task-collaboration-cancelled-history-card"
         aria-label={locale === "ja" ? "取消済みの案件履歴" : "已取消专题历史卡"}
         data-cancelled-history-card
         data-task-timeline-topic-id={group.topicId || ""}
       >
-        <div className="task-cancelled-history-status">
-          <strong>{locale === "ja" ? "取消済み" : "已取消"}</strong>
-          <span>{locale === "ja" ? "この案件は取消済みです" : "本专题已取消"}</span>
-        </div>
-        <h3>{group.title}</h3>
-        <p>{group.summary}</p>
+        <SelUiDisclosure
+          idPrefix="task-collaboration-cancelled-history"
+          className="task-cancelled-history-disclosure"
+          open={open}
+          onOpenChange={onOpenChange}
+          trigger={<span className="task-cancelled-history-header">
+            <span className="task-cancelled-history-status">
+              <strong>{locale === "ja" ? "取消済み" : "已取消"}</strong>
+              <span>{locale === "ja" ? "この案件は取消済みです" : "本专题已取消"}</span>
+            </span>
+            <strong>{group.title}</strong>
+          </span>}
+        >
+          <div className="task-cancelled-history-detail">
+            <p>{group.summary}</p>
+            <small>{locale === "ja" ? "このカードは監査履歴としてのみ閲覧できます。" : "此卡仅供查看审计历史，不能执行任何操作。"}</small>
+          </div>
+        </SelUiDisclosure>
       </article>
     );
   }
