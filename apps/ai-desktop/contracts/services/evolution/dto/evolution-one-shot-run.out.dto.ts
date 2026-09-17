@@ -25,6 +25,8 @@ export interface EvolutionOneShotRunOutDto {
   proposalId: string | null;
   status: "running" | "completed" | "blocked";
   phase: EvolutionOneShotPhaseValue;
+  /** 未关联专题时的建立来源；独立切换必须显式标记，页面不得从动作文字或历史记录猜测。 */
+  topicEstablishmentMode?: "ordinary-deliberation" | "independent-switch";
   actor: EvolutionArchiveActorValue;
   actorName: string;
   action: string;

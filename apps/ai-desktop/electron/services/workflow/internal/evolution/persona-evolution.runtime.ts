@@ -317,6 +317,30 @@ export class PersonaEvolutionRuntime {
     return state;
   }
 
+  /** 将旧专题执行链封存后，建立独立专题运行；旧链不会作为新运行的恢复来源。 */
+  async switchTopic(workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"], locale: EvolutionStateOutDto["automationContext"]["locale"], sourceRequestId: string): Promise<EvolutionStateOutDto> {
+    if (!this.#deliberation) throw new Error("韩立与南宫婉内部研讨能力尚未接入。");
+    const before = this.#store.state();
+    const oldTopicId = before.oneShotRun?.topicId || before.activeTopicId;
+    const retiredTaskIds: string[] = [];
+    const reason = "用户已明确切换到新的独立专题；旧专题、旧提案、旧执行树和无关联卡点仅保留审计，不得承接新范围。";
+    if (oldTopicId) {
+      const proposalIds = before.proposals.filter((item) => item.topicId === oldTopicId).map((item) => item.proposalId);
+      for (const proposalId of proposalIds) {
+        let retiredTaskId: string | null;
+        while ((retiredTaskId = await this.#collaboration.archiveStaleTopicTask(proposalId, reason))) retiredTaskIds.push(retiredTaskId);
+      }
+    }
+    const state = this.#store.switchToIndependentTopic(workspaceState, locale, sourceRequestId, reason, retiredTaskIds);
+    this.#recordEvent("evolution.independent_topic_switched", {
+      runId: state.oneShotRun?.runId || null,
+      retiredTopicId: oldTopicId || null,
+      retiredTaskIds,
+    });
+    this.#scheduleContinuation(0);
+    return state;
+  }
+
   /** 客户确认继续后恢复同一研讨，不重新建立运行或覆盖已保存调查轮次。 */
   resumePendingDeliberation(deliberationId: string): EvolutionStateOutDto {
     if (this.#running || this.#resuming) throw new Error("流程正在处理中，请等待本轮结束。");

@@ -5,6 +5,8 @@
  * 本文件不保存任务、验收或历史记录，也不从页面反推专题状态。
  */
 export type CurrentTopicStageStatusValue =
+  | "establishing-topic"
+  | "topic-establishment-failed"
   | "awaiting-confirmation"
   | "executing"
   | "verifying"

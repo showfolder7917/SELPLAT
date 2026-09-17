@@ -1017,22 +1017,10 @@ export async function startApplication(): Promise<void> {
     const operation = decideCurrentTopicOperation(evolutionStateStore.state(), collaborationState, { proposalId });
     return { allowed: operation.kind === "operable", message: operation.message };
   });
-  const archiveCurrentTopicForIndependentStart = async (): Promise<void> => {
-    const current = evolutionStateStore.state().oneShotRun;
-    if (current?.proposalId) {
-      await collaboration!.archiveMonitorTakeover(
-        current.proposalId,
-        startup.runtimeSourceSha,
-        "监控者已完成正式版本交付；旧修复任务与执行工作树已封存，新专题使用独立任务卡验收。",
-      );
-    }
-    evolutionStateStore.retireOneShotRunForTopicSwitch(
-      "已明确切换到新的独立验收专题；旧专题、旧提案与冻结验收计划仅保留审计，不得承接新范围。",
-    );
-  };
   startHanliInternalDeliberation = async (request, sourceRequestId, options) => {
-    if (options?.switchTopic) await archiveCurrentTopicForIndependentStart();
-    const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale, sourceRequestId);
+    const state = options?.switchTopic
+      ? await personaEvolution!.switchTopic(request.workspaceState, request.locale, sourceRequestId)
+      : personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale, sourceRequestId);
     return { continuous: state.automationRuntime.status === "running" };
   };
   replyHanliInternalDeliberation = (reply) => personaEvolution!.replyHanliNangongConfirmation(reply);
