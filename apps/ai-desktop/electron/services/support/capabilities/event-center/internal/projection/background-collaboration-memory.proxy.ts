@@ -20,7 +20,7 @@ export function isCollaborationMemoryMethod(value: PropertyKey): value is keyof 
 /** 主进程必须等待 Worker 回包，不能把跨线程调用伪装为同步数据库访问。 */
 export type AsyncCollaborationMemoryPort = {
   [Method in keyof CollaborationMemoryPort]: CollaborationMemoryPort[Method] extends (...args: infer Args) => infer Result
-    ? (...args: Args) => Promise<Result>
+    ? (...args: Args) => Promise<Awaited<Result>>
     : never;
 };
 
