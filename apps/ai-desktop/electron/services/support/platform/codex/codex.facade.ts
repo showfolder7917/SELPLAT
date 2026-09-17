@@ -53,6 +53,10 @@ interface BufferedNotification {
 
 export interface CodexServiceOptions {
   dynamicTools?: CodexDynamicToolsPort;
+  /** 专用短会话可拒绝全部审批请求，避免页面验收退回通用命令或文件修改通道。 */
+  approvalRequestPolicy?: "interactive" | "reject";
+  /** 专用会话的审批策略事实由业务调用方写入既有事件中心。 */
+  onCommandPolicy?: (details: Record<string, unknown>) => void;
   codexHome: string | null;
   serviceName: string;
   threadSource: string;
@@ -661,6 +665,12 @@ export class CodexService {
     const isCommand = method === "item/commandExecution/requestApproval";
     const command = displayValue(params.command || item.command);
     const cwd = stringValue(params.cwd || item.cwd);
+    if (this.#options.approvalRequestPolicy === "reject") {
+      // 正式页面验收只能使用已注入的 hanli_computer，不能经通用审批回退到外部进程或文件修改。
+      this.#respond(id, { decision: "decline" });
+      this.#emitCommandPolicy(id, command || displayValue(item.changes), "当前正式页面验收会话只允许内置页面动作；外部命令和文件修改请求已拒绝。");
+      return;
+    }
     const analysisOnly = this.#activeExecutionMode === "conversation-managed" || this.#activeExecutionMode === "requirement-managed";
     if (analysisOnly) {
       this.#respond(id, { decision: "decline" });
@@ -700,6 +710,8 @@ export class CodexService {
   }
 
   #emitCommandPolicy(id: number, detail: string | null, summary: string, status = "blocked"): void {
+    // 业务调用方据此把专用会话的拒绝事实归档；普通会话未配置回调，不改变既有审批投影。
+    this.#options.onCommandPolicy?.({ requestId: id, detail, summary, status });
     const turnId = this.#activeTurnId;
     const waiter = turnId ? this.#turnWaiters.get(turnId) : undefined;
     waiter?.emit({

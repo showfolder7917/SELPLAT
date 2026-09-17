@@ -922,7 +922,10 @@ export async function startApplication(): Promise<void> {
       const service = new CodexService(projectRoot, trustedCommands, { read: () => null, clear: () => undefined, write: (threadId, workspaceSignature) => ({ version: 2, storageDomain: "ai-desktop", threadId, workspaceSignature }) }, {
         codexHome, serviceName: "selplat_hanli_computer_acceptance", threadSource: "ai-desktop-hanli-acceptance", migrateLegacySession: false,
         sessionStorage: "ai-desktop", validationOwner: "desktop", readSettings: () => settings.read(), readRuleInstructions: readHanliRuleInstructions, dynamicTools,
-      }, (details) => eventCenter.recordEvent("hanli.acceptance.tool_policy", details), (details) => eventCenter.recordEvent("hanli.acceptance.thread", details));
+        // 页面验收只有当前窗口工具；通用命令或文件请求立即受阻，不创建用户审批等待。
+        approvalRequestPolicy: "reject",
+        onCommandPolicy: (details) => eventCenter.recordEvent("hanli.acceptance.tool_policy", details),
+      }, undefined, (details) => eventCenter.recordEvent("hanli.acceptance.thread", details));
       // 逐屏验收最多可执行 40 步；超时时先向流程返回可诊断的受阻事实，再回收隔离 harness。
       let timer: ReturnType<typeof setTimeout> | null = null;
       const acceptanceTimeout = new Promise<never>((_resolve, reject) => {

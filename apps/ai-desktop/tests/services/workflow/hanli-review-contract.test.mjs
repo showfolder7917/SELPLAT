@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const prompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
+const computerPrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
 const computer = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
 const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
 const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
@@ -26,6 +27,27 @@ test("正式页面检查不读取任务时间线或工作区源码", () => {
   assert.match(guard, /不能浏览工作区文件/);
   assert.match(computer, /不读取任务时间线或测试记录/);
   assert.doesNotMatch(computer, /inspect-task-collaboration-state|currentAcceptanceWindow|historicalAudit/);
+});
+
+test("正式页面验收会话拒绝通用审批，普通会话仍保留交互审批", () => {
+  const appRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  const codexFacade = readFileSync("electron/services/support/platform/codex/codex.facade.ts", "utf8");
+  const acceptanceStart = appRuntime.indexOf('serviceName: "selplat_hanli_computer_acceptance"');
+  const acceptanceEnd = appRuntime.indexOf("const acceptanceTimeout", acceptanceStart);
+  const acceptanceSession = appRuntime.slice(acceptanceStart, acceptanceEnd);
+  const approvalStart = codexFacade.indexOf('method !== "item/commandExecution/requestApproval"');
+  const approvalEnd = codexFacade.indexOf("\n  #emitCommandPolicy(", approvalStart);
+  const approvalHandler = codexFacade.slice(approvalStart, approvalEnd);
+
+  assert.match(acceptanceSession, /approvalRequestPolicy: "reject"/);
+  assert.match(acceptanceSession, /onCommandPolicy: \(details\) => eventCenter\.recordEvent\("hanli\.acceptance\.tool_policy", details\)/);
+  assert.match(codexFacade, /approvalRequestPolicy\?: "interactive" \| "reject"/);
+  assert.match(approvalHandler, /this\.#options\.approvalRequestPolicy === "reject"[\s\S]*decision: "decline"/);
+  assert.ok(approvalHandler.indexOf('this.#options.approvalRequestPolicy === "reject"') < approvalHandler.indexOf("this.#trustedCommands.isTrusted"));
+  assert.ok(approvalHandler.indexOf('this.#options.approvalRequestPolicy === "reject"') < approvalHandler.indexOf("this.#approvals.set"));
+  assert.match(computerPrompt, /只能使用 hanli_computer_step/);
+  assert.match(computerPrompt, /禁止调用 shell、exec、osascript、System Events、外部窗口枚举或文件修改工具/);
+  assert.match(computerPrompt, /不得降级到外部桌面自动化或申请用户审批/);
 });
 
 test("旧页面容器和文件授权协议已完整退役", () => {
