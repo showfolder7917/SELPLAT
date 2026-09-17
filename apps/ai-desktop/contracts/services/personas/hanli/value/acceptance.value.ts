@@ -3,6 +3,7 @@ export type HanliAcceptanceOperationValue =
   | { type: "drag"; x: number; y: number; endX: number; endY: number; reason: string }
   | { type: "scroll"; x: number; y: number; deltaY: number; reason: string }
   | { type: "scroll-task-collaboration"; deltaY: number; reason: string }
+  | { type: "toggle-task-audit-card"; auditCardIndex: number; reason: string }
   | { type: "open-task-panel"; reason: string }
   | { type: "close-task-panel"; reason: string }
   | { type: "open-task-collaboration"; reason: string }
