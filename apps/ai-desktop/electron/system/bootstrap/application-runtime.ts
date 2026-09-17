@@ -609,18 +609,18 @@ export async function startApplication(): Promise<void> {
   }) : null;
   const hanliPageReviewGuard = new HanliPageReviewGuard();
   /** 把一条去重后的流程状态写入韩立会话，并立即推送给现有窗口。 */
-  const publishHanliInternalStatus = (messageId: string, content: string, createdAt: string, correlationId: string, updateExisting = false): boolean => {
+  const publishHanliInternalStatus = async (messageId: string, content: string, createdAt: string, correlationId: string, updateExisting = false): Promise<boolean> => {
     if (!collaborationMemory) return false;
     try {
-      const activeConversation = collaborationMemory.readPersonaConversation("han-li");
+      const activeConversation = await collaborationMemory.readPersonaConversation("han-li");
       if (!activeConversation.conversationId) return false;
       const exists = activeConversation.messages.some((message) => message.messageId === messageId);
       if (exists && !updateExisting) return true;
       const conversation = exists
-        ? collaborationMemory.updatePersonaInternalProgress({
+        ? await collaborationMemory.updatePersonaInternalProgress({
           ownerPersonaId: "han-li", conversationId: activeConversation.conversationId, messageId, content, updatedAt: createdAt,
         })
-        : collaborationMemory.appendPersonaInternalMessage({
+        : await collaborationMemory.appendPersonaInternalMessage({
           ownerPersonaId: "han-li", conversationId: activeConversation.conversationId,
           messageId, speakerPersonaId: "han-li", content, createdAt,
         });
@@ -687,9 +687,9 @@ export async function startApplication(): Promise<void> {
           const content = presentHanliTaskStatus(task, latest);
           if (!content) continue;
           const messageId = `hanli-task-status:${task.taskId}:${latest.eventId}`;
-          if (publishHanliInternalStatus(messageId, content, latest.occurredAt, task.taskId)) {
-            publishedHanliTaskStatusEventIds.add(latest.eventId);
-          }
+          void publishHanliInternalStatus(messageId, content, latest.occurredAt, task.taskId).then((published) => {
+            if (published) publishedHanliTaskStatusEventIds.add(latest.eventId);
+          });
         }
       }
       for (const window of BrowserWindow.getAllWindows()) {
@@ -957,8 +957,8 @@ export async function startApplication(): Promise<void> {
       send: async (request, context) => {
         // Workflow 的既有南宫会话端口只声明两个参数；模型仍从当前统一会话头读取，避免另建 Evolution 状态副本。
         const conversationId = personaEvolution?.state().conversation.conversationId || null;
-        const selectedModel = conversationId
-          ? collaborationMemory?.readPersonaConversation("nangong-wan", conversationId).selectedModel || null
+        const selectedModel = conversationId && collaborationMemory
+          ? (await collaborationMemory.readPersonaConversation("nangong-wan", conversationId)).selectedModel || null
           : null;
         return nangongCodex!.send(prompts.render("nangong.conversation", {
           recentConversation: context,
@@ -980,7 +980,9 @@ export async function startApplication(): Promise<void> {
       return current.roots.find((root) => root.id === current.primaryId)?.path || projectRoot;
     },
     // 内部研讨关联统一业务会话 ID；Codex threadId 只属于平台会话，不再兼作人物会话主键。
-    readHanliConversationId: () => collaborationMemory?.readPersonaConversation("han-li").conversationId || null,
+    readHanliConversationId: async () => collaborationMemory
+      ? (await collaborationMemory.readPersonaConversation("han-li")).conversationId || null
+      : null,
     onPersonaConversationChanged: (conversation: PersonaConversationOutDto) => {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
         window.webContents.send("desktop:persona-conversation-changed", conversation);
@@ -1017,29 +1019,30 @@ export async function startApplication(): Promise<void> {
     if (!collaborationMemory) throw new Error("人物会话数据库当前不可用，无法读取历史窗口。");
     return collaborationMemory.readPersonaCustomerDisplayWindow(personaId, request);
   });
-  personaConversations.registerCustomerDisplayRetry((personaId, conversationId, sourceMessageId) => {
+  personaConversations.registerCustomerDisplayRetry(async (personaId, conversationId, sourceMessageId) => {
     if (!collaborationMemory) throw new Error("人物会话数据库当前不可用，无法重新读取客户显示消息。");
-    collaborationMemory.retryPersonaCustomerDisplayMessage(personaId, conversationId, sourceMessageId);
-    return collaborationMemory.readPersonaCustomerDisplayWindow(personaId, { conversationId });
+    await collaborationMemory.retryPersonaCustomerDisplayMessage(personaId, conversationId, sourceMessageId);
+    return await collaborationMemory.readPersonaCustomerDisplayWindow(personaId, { conversationId });
   });
   // 南宫婉正文和流程仍由 Evolution 管理；会话头只为这一个会话补充持久化模型选择。
-  const nangongConversationWithSelectedModel = (conversation: PersonaConversationOutDto): PersonaConversationOutDto => ({
+  const nangongConversationWithSelectedModel = async (conversation: PersonaConversationOutDto): Promise<PersonaConversationOutDto> => ({
     ...conversation,
-    selectedModel: conversation.conversationId
-      ? collaborationMemory?.readPersonaConversation("nangong-wan", conversation.conversationId).selectedModel || null
+    selectedModel: conversation.conversationId && collaborationMemory
+      ? (await collaborationMemory.readPersonaConversation("nangong-wan", conversation.conversationId)).selectedModel || null
       : null,
   });
   personaConversations.register("nangong-wan", {
     // 南宫婉页面状态还包含专题信息，这里只抽取统一会话 DTO 交给通用 IPC。
     conversation: () => nangongConversationWithSelectedModel(personaEvolution!.state().conversation),
-    sendConversationMessage: async (request) => nangongConversationWithSelectedModel((await nangongRuntime.facade.sendConversationMessage(request)).conversation),
-    newConversation: async () => nangongConversationWithSelectedModel((await nangongRuntime.facade.newConversation()).conversation),
+    sendConversationMessage: async (request) => await nangongConversationWithSelectedModel((await nangongRuntime.facade.sendConversationMessage(request)).conversation),
+    newConversation: async () => await nangongConversationWithSelectedModel((await nangongRuntime.facade.newConversation()).conversation),
     selectConversationModel: async (selectedModel) => {
       const conversation = personaEvolution!.state().conversation;
       if (!conversation.conversationId) throw new Error("南宫婉当前对话尚未建立，不能保存模型选择。");
       // 新对话第一次选择前先将 Evolution 正文投影为会话头；投影不会覆盖既有模型选择。
-      collaborationMemory?.syncEvolutionState(personaEvolution!.state());
-      const saved = collaborationMemory?.selectPersonaConversationModel("nangong-wan", conversation.conversationId, selectedModel);
+      if (!collaborationMemory) throw new Error("AI Memory 尚未接入，无法保存南宫婉对话模型。");
+      await collaborationMemory.syncEvolutionState(personaEvolution!.state());
+      const saved = await collaborationMemory.selectPersonaConversationModel("nangong-wan", conversation.conversationId, selectedModel);
       if (!saved) throw new Error("AI Memory 尚未接入，无法保存南宫婉对话模型。");
       return { ...conversation, selectedModel: saved.selectedModel };
     },
@@ -1067,14 +1070,14 @@ export async function startApplication(): Promise<void> {
         workflowStatus,
       })).digest("hex");
       const messageId = `hanli-workflow-status:${run.runId}:${progressIdentity}`;
-      publishHanliInternalStatus(messageId, workflowStatus, run.updatedAt, proposalId || topicId || run.runId, true);
+      void publishHanliInternalStatus(messageId, workflowStatus, run.updatedAt, proposalId || topicId || run.runId, true);
     }
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:evolution-state", { state, reason, topicId, proposalId });
     }
   });
   // 启动时把当前专题快照投影到对话记忆，后续人物才能查到已批准事实。
-  collaborationMemory?.syncEvolutionState(evolutionRuntime.facade.state());
+  void collaborationMemory?.syncEvolutionState(evolutionRuntime.facade.state());
   // 令狐内部的 Store、Facade 和状态订阅由功能模块一次性装配，main 只提供跨领域端口。
   linghuRuntime = createLinghuRuntime({
     // Platform 绑定真实状态路径，令狐人物只接收不含路径信息的 JSON 持久化 Port。

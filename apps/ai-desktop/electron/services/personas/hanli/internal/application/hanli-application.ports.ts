@@ -1,4 +1,4 @@
-﻿import type { CollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+﻿import type { AsyncCollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../../evolution/index.js";
@@ -48,7 +48,7 @@ export interface HanliApplicationServiceOptions {
   /** 受版本管理的提示词渲染端口。 */
   prompts: PromptLibraryPort;
   /** 人物会话、调查事实和客户语义的统一数据库端口。 */
-  memory?: CollaborationMemoryPort | null;
+  memory?: AsyncCollaborationMemoryPort | null;
   /** 韩立内部判断模型端口，只用于提案判断等非普通会话场景。 */
   askHanli?: (prompt: string, state: EvolutionStateOutDto) => Promise<string>;
   /** 结果验收使用独立短会话，避免客户对话上下文影响固定 JSON 契约。 */

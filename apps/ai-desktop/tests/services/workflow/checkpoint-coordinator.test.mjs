@@ -300,11 +300,12 @@ function memoryFixture() {
   return { messages, events, memory };
 }
 
-test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南宫婉", () => {
+test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南宫婉", async () => {
   const f = memoryFixture();
   const service = new CheckpointHandoffService({ ...f, publish: event => f.events.set(event.eventId, event), changed: () => {}, name: id => id, topic: () => ({ title: "原任务", createdAt: "2026-09-05T00:00:00Z", completed: false }) });
   const state = { round: 1, sourceMemberId: "han-li", conversations: {}, topicId: "topic-1" };
   for (let repeat = 0; repeat < 2; repeat++) service.publish(fixture().event, state, "received", "接收事实");
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(f.messages.size, 1); assert.equal(f.events.size, 1);
   assert.deepEqual([...f.messages.values()].map((message) => message.ownerPersonaId), ["han-li"]);
   assert.equal([...f.events.values()][0].group.title, "原任务");
@@ -314,6 +315,7 @@ test("卡点只在原处理人与令狐之间幂等留痕，不固定经过南�
   assert.match([...f.events.values()][0].fact.detail, /当前进展：接收事实/);
   assert.match([...f.events.values()][0].fact.detail, /原提案：proposal-1/);
   state.round = 2; service.publish(fixture().event, state, "received", "第二轮");
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(f.messages.size, 2); assert.equal(f.events.size, 2);
 });
 
@@ -405,7 +407,7 @@ test("协调器把同轮多异常收口为一个完成事实，重放稳定且�
   }
 });
 
-test("验收每轮独立身份，结果留在专题时间线而不写入客户会话", () => {
+test("验收每轮独立身份，结果留在专题时间线而不写入客户会话", async () => {
   const f = memoryFixture();
   const service = new AcceptanceHandoffService({ memory: f.memory, store: { state: () => ({ topics: [{ topicId: "topic-1", title: "原任务" }] }) }, readHanliConversationId: () => "han-li-conversation", recordTimelineEvent: event => f.events.set(event.eventId, event) });
   const proposal = { topicId: "topic-1", proposalId: "proposal-1" };
@@ -413,6 +415,7 @@ test("验收每轮独立身份，结果留在专题时间线而不写入客户�
     service.publish(proposal, "received", "南宫婉提交", attempt);
     service.publish(proposal, "failed", "实际受阻", attempt);
   }
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(f.events.size, 4);
   assert.equal([...f.messages.values()].filter(message => message.ownerPersonaId === "nangong-wan").length, 4);
   assert.equal([...f.messages.values()].filter(message => message.messageId.startsWith("hanli-result:")).length, 0);

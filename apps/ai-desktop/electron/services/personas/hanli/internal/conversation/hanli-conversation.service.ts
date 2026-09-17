@@ -73,13 +73,13 @@ export class HanliConversationService {
   }
 
   /** 读取当前韩立业务会话；数据库不可用时返回结构稳定的空快照。 */
-  conversation(): PersonaConversationOutDto {
+  async conversation(): Promise<PersonaConversationOutDto> {
     // memory 是统一人物会话的权威数据库端口。
     const memory = this.#options.memory;
     // 已接入数据库时直接读取 ownerPersonaId=han-li 的当前会话。
     if (memory) {
       // 返回数据库快照，不在读取方法中创建新会话或写入状态。
-      return this.#inquiry.project(memory.readPersonaConversation("han-li"));
+      return this.#inquiry.project(await memory.readPersonaConversation("han-li"));
     }
     // 没有数据库时返回空结构，让界面能够显示明确的未就绪状态。
     return {
@@ -121,13 +121,13 @@ export class HanliConversationService {
       throw new Error("韩立自由对话或 AI Memory 尚未就绪。");
     }
     // 当前快照可能还是未建会话的空结构。
-    const currentConversation = this.conversation();
+    const currentConversation = await this.conversation();
     // 第一条消息到来时由统一 memory 端口建立业务会话头。
     let conversation = currentConversation;
     // conversationId 为空表示需要为本轮创建新的稳定业务会话。
     if (!conversation.conversationId) {
       // 新会话只由统一人物记忆创建，禁止使用 Codex threadId 代替业务标识。
-      conversation = memory.newPersonaConversation("han-li");
+      conversation = await memory.newPersonaConversation("han-li");
     }
     const originalUser = conversation.messages.find((item) =>
       item.messageId === request.clientMessageId && item.speakerType === "user");
@@ -144,7 +144,7 @@ export class HanliConversationService {
     // Workflow 快照提供待确认轮次和活动研讨事实。
     const workflowState = this.#options.store.state();
     // 创建纯 Domain Aggregate，集中解释本轮消息应该触发的动作。
-    const customerDisplayConversation = memory.readPersonaCustomerDisplayConversation("han-li", conversation.conversationId);
+    const customerDisplayConversation = await memory.readPersonaCustomerDisplayConversation("han-li", conversation.conversationId);
     const aggregate = new HanliConversationAggregate({
       // 传入当前稳定会话，Aggregate 从真实消息恢复观点与澄清锚点。
       conversation,
@@ -170,7 +170,7 @@ export class HanliConversationService {
         && !item.rounds.at(-1)?.confirmation?.reply);
       const round = pending?.rounds.at(-1);
       if (round?.confirmation && conversation.conversationId) {
-        const restored = memory.appendPersonaInternalMessage({
+        const restored = await memory.appendPersonaInternalMessage({
           ownerPersonaId: "han-li", conversationId: conversation.conversationId,
           messageId: `hanli-confirmation:${round.roundId}:restored:${conversation.conversationId}`, speakerPersonaId: "han-li",
           content: `之前的研讨仍在等待范围确认，本次 1 尚未批准该方案。请先核对或纠正原范围：\n\n${round.confirmation.offer}\n\n如需调整目标，请直接说明；只有再次输入 1 才确认这份范围。`,
@@ -245,11 +245,11 @@ export class HanliConversationService {
   async selectModel(selectedModel: string | null): Promise<PersonaConversationOutDto> {
     const memory = this.#options.memory;
     if (!memory) throw new Error("AI Memory 尚未接入，无法保存韩立对话模型。");
-    let conversation = this.conversation();
-    if (!conversation.conversationId) conversation = memory.newPersonaConversation("han-li");
+    let conversation = await this.conversation();
+    if (!conversation.conversationId) conversation = await memory.newPersonaConversation("han-li");
     const conversationId = conversation.conversationId;
     if (!conversationId) throw new Error("韩立当前对话尚未建立，不能保存模型选择。");
-    const saved = memory.selectPersonaConversationModel("han-li", conversationId, selectedModel);
+    const saved = await memory.selectPersonaConversationModel("han-li", conversationId, selectedModel);
     this.#options.onPersonaConversationChanged?.(saved);
     return saved;
   }
@@ -271,11 +271,11 @@ export class HanliConversationService {
     // 当前工程范围决定韩立只能读取哪一组客户语义资料。
     const projectScope = this.#options.readProjectScope?.() || "global";
     // 方法资料只包含提问与调查方法，不复制历史客户答案。
-    const semanticContext = memory.readHanliSemanticContext(stableUserId, projectScope, "", 20);
+    const semanticContext = await memory.readHanliSemanticContext(stableUserId, projectScope, "", 20);
     // 把语义资料压缩成受预算约束的方法上下文。
     const methodContext = buildHanliMethodContext(semanticContext);
     // 当前会话上下文保留用户原文，并限制历史 AI 长回答的预览长度。
-    const customerDisplayConversation = memory.readPersonaCustomerDisplayConversation("han-li", conversationId);
+    const customerDisplayConversation = await memory.readPersonaCustomerDisplayConversation("han-li", conversationId);
     const recentConversation = buildHanliRecentConversation(customerDisplayConversation.messages);
     // 澄清锚点存在时继续围绕原问题处理用户补充。
     const pendingCustomerQuestion = aggregate.pendingCustomerQuestion();
@@ -386,7 +386,7 @@ export class HanliConversationService {
       personaMessageId = `hanli-clarification:${randomUUID()}`;
     }
     // 将用户原话和韩立完整回复作为一个原子人物回合保存。
-    let nextConversation = memory.registerPersonaRound({
+    let nextConversation = await memory.registerPersonaRound({
       // ownerPersonaId 固定表示消息属于韩立业务会话。
       ownerPersonaId: "han-li",
       // responderPersonaId 记录本轮可见回复由韩立产生。
@@ -415,7 +415,7 @@ export class HanliConversationService {
     // 澄清问题需要保存原问题锚点，后续简短回答才能继续原目标。
     if (parsed.inquiry?.status === "clarification-required") {
       // 把锚点作为内部消息追加，不在韩立可见对话中展示 JSON。
-      nextConversation = memory.appendPersonaInternalMessage({
+      nextConversation = await memory.appendPersonaInternalMessage({
         // 锚点属于韩立业务会话。
         ownerPersonaId: "han-li",
         // conversationId 保证新会话不会读取旧会话的澄清锚点。
@@ -440,7 +440,7 @@ export class HanliConversationService {
       });
     } else {
       // 非澄清回复就是韩立当前观点，保存为后续独立 1 的研讨依据。
-      this.#recordViewpointContext(
+      await this.#recordViewpointContext(
         conversationId,
         request,
         parsed.reply,
@@ -533,7 +533,7 @@ export class HanliConversationService {
       throw new Error("韩立与南宫婉内部研讨能力尚未就绪。");
     }
     if (automaticDecision) {
-      conversation = this.#options.memory!.registerPersonaRound({
+      conversation = await this.#options.memory!.registerPersonaRound({
         ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli",
         conversationId: conversation.conversationId!, userMessageId: request.clientMessageId!,
         userContent: request.message, attachmentIds: request.attachmentIds || [],
@@ -542,7 +542,7 @@ export class HanliConversationService {
       });
     }
     // 在异步调度前保存观点事实包，保证 Workflow 总能读取本次确认方向。
-    this.#recordViewpointContext(
+    await this.#recordViewpointContext(
       conversation.conversationId!,
       request,
       viewpoint.content,
@@ -589,12 +589,12 @@ export class HanliConversationService {
     }
     // 自动托管启动回执属于内部流程事实；人工控制回合仍保存客户可读反馈。
     const nextConversation = automaticDecision
-      ? this.#options.memory!.appendPersonaInternalMessage({
+      ? await this.#options.memory!.appendPersonaInternalMessage({
         ownerPersonaId: "han-li", conversationId: conversation.conversationId!,
         messageId: `hanli-control:automatic:${request.clientMessageId}`, speakerPersonaId: "han-li",
         content: reply, replyToMessageId: viewpoint.sourceMessageId, createdAt: new Date().toISOString(),
       })
-      : this.#recordControlReply(request, conversation, reply, START_DELIBERATION_DECISION);
+      : await this.#recordControlReply(request, conversation, reply, START_DELIBERATION_DECISION);
     this.#options.onPersonaConversationChanged?.(nextConversation);
     // 记录真实 Workflow 启动事件，供任务协作群和异常中心关联。
     this.#options.recordEvent(reusedRun
@@ -614,12 +614,12 @@ export class HanliConversationService {
   }
 
   /** 保存不需要再次调用模型的确定性流程反馈。 */
-  #recordControlReply(
+  async #recordControlReply(
     request: SendPersonaConversationMessageInDto,
     conversation: PersonaConversationOutDto,
     reply: string,
     decision: ConversationRoundTopicDecisionInDto,
-  ): PersonaConversationOutDto {
+  ): Promise<PersonaConversationOutDto> {
     // 使用同一时间保存用户控制消息和程序确定性回复。
     const completedAt = new Date().toISOString();
     // 通过统一人物记忆原子登记完整回合。
@@ -652,7 +652,7 @@ export class HanliConversationService {
   }
 
   /** 保存韩立当前观点及其已有调查事实，供输入 1 后的 Workflow 读取。 */
-  #recordViewpointContext(
+  async #recordViewpointContext(
     conversationId: string,
     request: SendPersonaConversationMessageInDto,
     viewpointContent: string,
@@ -661,12 +661,15 @@ export class HanliConversationService {
     viewpoint?: HanliConversationViewpointValue,
     mustPersistBeforeDispatch = false,
     discussion?: Pick<RequirementDiscussionContextOutDto, "customerQuestion" | "understoodGoal" | "verificationTarget" | "expectedAnswer" | "investigationQuestion">,
-  ): void {
+  ): Promise<void> {
     // memory 在 send 入口已经校验存在，这里按稳定请求编号读取同一会话的调查事实包。
     const memory = this.#options.memory!;
     // 同一请求的既有事实包提供已经完成的调查依据；没有调查时允许为空。
     const sourceRequestId = viewpoint?.sourceUserMessageId || request.clientMessageId || viewpoint?.sourceMessageId || randomUUID();
-    const priorInvestigation = memory.readRequirementDiscussionContext?.("han-li", conversationId, sourceRequestId) || null;
+    const readContext = memory.readRequirementDiscussionContext;
+    const priorInvestigation = readContext
+      ? await readContext.call(memory, "han-li", conversationId, sourceRequestId)
+      : null;
     // 优先使用 Aggregate 找到的用户来源消息，否则使用本轮前端消息标识。
     // 同一话题可以包含多轮不同纠正；只有同一来源请求才能继承已核实结论。
     const investigated = !decision.switchTopic && priorInvestigation?.sourceRequestId === sourceRequestId
@@ -680,6 +683,7 @@ export class HanliConversationService {
     }
     // 事实包写入失败不能伪装成功，但普通聊天仍应保留可见回复并记录异常。
     try {
+      const sourceConversation = await memory.readPersonaConversation("han-li", conversationId);
       // 通过统一 memory 端口保存当前观点和可复用调查事实。
       const recordContext = memory.recordRequirementDiscussionContext;
       // 启动研讨前必须确认持久化能力真实存在，不能以可选调用伪装已经保存。
@@ -693,7 +697,7 @@ export class HanliConversationService {
         return;
       }
       // 调用真实持久化端口后，方法正常返回才允许启动后续异步研讨。
-      recordContext.call(memory, {
+      await recordContext.call(memory, {
         // contextId 使用观点消息或请求标识，确保同一轮可以稳定追溯。
         contextId: `viewpoint-${viewpoint?.sourceMessageId || request.clientMessageId || randomUUID()}`,
         // ownerPersonaId 固定表示事实包由韩立会话发布。
@@ -704,7 +708,7 @@ export class HanliConversationService {
         sourceRequestId,
         // 已有调查时保留权威客户原问题，否则以当前观点作为研讨方向。
         customerQuestion: discussion?.customerQuestion || investigated?.customerQuestion
-          || memory.readPersonaConversation("han-li", conversationId).messages.find((item) =>
+          || sourceConversation.messages.find((item) =>
             item.messageId === sourceRequestId && item.speakerType === "user")?.content
           || request.message,
         // 当前观点是用户独立 1 将要确认的最新业务目标。

@@ -16,7 +16,7 @@ import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semanti
 /** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */
 export interface HanliApplicationPort {
   /** 读取韩立当前业务会话。 */
-  conversation(): PersonaConversationOutDto;
+  conversation(): Promise<PersonaConversationOutDto>;
   /** 向韩立当前业务会话发送一条用户消息。 */
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 归档当前业务会话并创建新会话。 */
@@ -31,7 +31,7 @@ export interface HanliApplicationPort {
   /** 判断结果应走真实页面验收还是只读代码符合性审查。 */
   reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview>;
   /** 根据已经沉淀的人工偏好尝试自动审批。 */
-  autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
+  autoApprove(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto>;
   /** 保存真实应用验收过程产生的证据。 */
   recordAcceptanceRun(run: HanliAcceptanceRunOutDto): EvolutionStateOutDto;
   /** 根据真实应用验收结果形成自动验收决定。 */
@@ -49,7 +49,7 @@ export interface HanliWorkflowPort {
   reviewAndDecideProposal(proposalId: string): Promise<EvolutionStateOutDto>;
   reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview>;
   /** Workflow 根据历史偏好请求自动审批的入口。 */
-  autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto;
+  autoApprove(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto>;
   /** Workflow 提交真实验收结果的入口。 */
   completeAutomaticAcceptance(run: HanliAcceptanceRunOutDto, idempotencyKey: string): EvolutionStateOutDto;
   /** 首次通过后的只读复核补充真实完成态截图，不触发第二次审批。 */
@@ -88,7 +88,7 @@ export class HanliFacade {
     this.#options = options;
   }
   /** 读取 ownerPersonaId=han-li 的当前业务会话；底层 Codex threadId 不对页面暴露。 */
-  conversation(): PersonaConversationOutDto {
+  conversation(): Promise<PersonaConversationOutDto> {
     return this.#application.conversation();
   }
   /** 与韩立自由讨论；人物使用语义记忆精准追问，但不执行工程写入。 */
@@ -119,7 +119,7 @@ export class HanliFacade {
     return this.#application.reviewResultAcceptance(proposalId, implementationEvidence);
   }
   /** 根据已登记偏好执行受控自动审批；缺少事实时退回补充。 */
-  autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto {
+  autoApprove(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
     return this.#application.autoApprove(proposalId, request);
   }
   /** 保存真实应用验收运行证据；计划与提案不一致时阻断写入。 */

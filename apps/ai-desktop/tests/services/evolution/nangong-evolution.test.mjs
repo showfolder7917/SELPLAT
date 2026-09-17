@@ -1128,18 +1128,18 @@ test("演进会话把客户消息和完成后的南宫婉答复标记为客户�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("自动审批无人工偏好时退回补充，人工决定形成版本化偏好", () => {
+test("自动审批无人工偏好时退回补充，人工决定形成版本化偏好", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-approval-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation, recordEvent: () => undefined });
     let state = facade.createTopic(topicRequest()); state = facade.createProposal(state.topics[0].topicId, proposalRequest());
-    const proposal = state.proposals[0]; state = facade.autoApprove(proposal.proposalId);
+    const proposal = state.proposals[0]; state = await facade.autoApprove(proposal.proposalId);
     assert.equal(state.proposals[0].status, "supplement-required");
     state = facade.decideProposal(proposal.proposalId, { mutation: mutation(facade), decision: "approved", advice: "人工确认方向正确" });
     assert.equal(state.preferenceSnapshotVersion, 1);
     state = facade.createTopic(topicRequest("相同类型第二课题")); state = facade.createProposal(state.topics.at(-1).topicId, proposalRequest());
-    state = facade.autoApprove(state.proposals.at(-1).proposalId);
+    state = await facade.autoApprove(state.proposals.at(-1).proposalId);
     assert.equal(state.proposals.at(-1).status, "approved"); assert.equal(state.proposals.at(-1).approvals.at(-1).referencedApprovalIds.length, 1);
     state = facade.decideProposal(state.proposals.at(-1).proposalId, { mutation: mutation(facade), decision: "rejected", advice: "用户纠正自动结论" });
     assert.equal(state.proposals.at(-1).status, "rejected"); assert.equal(state.preferenceSnapshotVersion, 2);
@@ -1733,7 +1733,7 @@ test("训练归档失败进入统一异常旁路且不把已完成聊天标记�
     const memory = {
       buildNangongContext() { return "当前运行态上下文"; },
       readPersonaConversation() { return null; },
-      syncConversation() { throw new Error("training database unavailable"); },
+      savePersonaConversation() { throw new Error("training database unavailable"); },
     };
     const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: plainConversation, memory, recordEvent: () => undefined, recordFailure: (failure) => failures.push(failure) });
     const state = await facade.sendConversationMessage({ clientMessageId: "client-training-failure", message: "先完成聊天", workspaceState, locale: "zh-CN" });
@@ -1751,7 +1751,7 @@ test("人物回复失败只原位标记用户消息且不产生训练归档", as
     let archiveCount = 0;
     const store = evolutionStore(path.join(directory, "state.json"));
     const failedConversation = { async send() { throw new Error("conversation unavailable"); }, async newChat() {} };
-    const memory = { buildNangongContext() { return ""; }, readPersonaConversation() { return null; }, syncConversation() { archiveCount += 1; } };
+    const memory = { buildNangongContext() { return ""; }, readPersonaConversation() { return null; }, savePersonaConversation() { archiveCount += 1; } };
     const facade = new PersonaEvolutionRuntime({ store, collaboration: {}, conversation: failedConversation, memory, recordEvent: () => undefined });
     await assert.rejects(() => facade.sendConversationMessage({ clientMessageId: "client-send-failure", message: "不要丢失原文", workspaceState, locale: "zh-CN" }), /conversation unavailable/);
     const state = facade.state();

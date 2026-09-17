@@ -19,6 +19,16 @@ function conversationMessage(messageType, message) {
   return { ...message, messageType, contentRole: "conversation" };
 }
 
+/** 等待后台投影真正落库；断言仍读取真实 SQLite，不以固定延时掩盖失败。 */
+async function waitForProjection(read, expectedCount) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const value = read();
+    if (value.length === expectedCount) return value;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return read();
+}
+
 /** 测试夹具模拟端口协议，而非向摘要补齐器重新暴露同步数据库。 */
 function semanticPersistence(database) {
   return {
@@ -694,7 +704,7 @@ test("非正常退出在下一次启动被识别并留下恢复事件", () => {
   }
 });
 
-test("真实SQLite的全局消息主键不吞掉另一人物的交接", () => {
+test("真实SQLite的全局消息主键不吞掉另一人物的交接", async () => {
   const fixture = createFixture("checkpoint-messages");
   try {
     const memory = new CollaborationMemoryService(fixture.database);
@@ -703,19 +713,27 @@ test("真实SQLite的全局消息主键不吞掉另一人物的交接", () => {
     const checkpoint = new CheckpointHandoffService({ memory, publish: () => {}, changed: () => {}, name: id => id, topic: () => null });
     const state = { round: 1, sourceMemberId: "han-li", conversations: {} };
     checkpoint.publish({ eventId: "issue", message: "受阻", occurredAt: new Date().toISOString() }, state, "returned", "修复返回");
-    const acceptance = new AcceptanceHandoffService({ memory, store: { state: () => ({ topics: [{ topicId: "topic", title: "原任务" }] }) }, readHanliConversationId: () => hanli.conversationId });
+    const acceptance = new AcceptanceHandoffService({ memory, store: { state: () => ({ topics: [{ topicId: "topic", title: "原任务" }] }) }, readHanliConversationId: async () => hanli.conversationId });
     for (let repeat = 0; repeat < 2; repeat++) {
       acceptance.publish({ proposalId: "proposal", topicId: "topic" }, "received", "提交验收", "attempt");
       acceptance.publish({ proposalId: "proposal", topicId: "topic" }, "passed", "验收通过", "attempt");
     }
     // 一条卡点返回加两条验收交接；同一 attempt 重放不能增加消息。
-    assert.deepEqual(memory.readPersonaConversation("han-li", hanli.conversationId).messages.map((message) => message.messageId), [
+    const hanliMessages = await waitForProjection(
+      () => memory.readPersonaConversation("han-li", hanli.conversationId).messages,
+      3,
+    );
+    assert.deepEqual(hanliMessages.map((message) => message.messageId), [
       "checkpoint:issue:1:returned:han-li",
       "internal:acceptance:proposal:attempt:received:han-li:question",
       "internal:acceptance:proposal:attempt:passed:han-li:answer",
     ]);
     // 卡点只在原处理人与令狐之间流转；南宫婉这里只接收两条验收交接，且不得因全局 messageId 冲突被吞掉。
-    assert.equal(memory.readPersonaConversation("nangong-wan", nangong.conversationId).messages.length, 2);
+    const nangongMessages = await waitForProjection(
+      () => memory.readPersonaConversation("nangong-wan", nangong.conversationId).messages,
+      2,
+    );
+    assert.equal(nangongMessages.length, 2);
     assert.equal(fixture.repository.tableCount("AiDesktopTrainingCorpusMessage"), 0);
   } finally { fixture.close(); }
 });

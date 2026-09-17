@@ -1,12 +1,12 @@
 import type { CollaborationTimelineBusinessEventOutDto, WorkflowExceptionRecordOutDto } from "../../../../../contracts/services/workflow/index.js";
-import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { AsyncCollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
 // 卡点交接只接收领域聚合输出的稳定快照，不维护第二套内部状态接口。
 import type { WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
 import { checkpointResolutionIdentity, type CheckpointResolvedRoundEvent } from "./checkpoint-resolution-identity.js";
 
 export interface CheckpointHandoffOptions {
-  memory: CollaborationMemoryPort | null;
+  memory: AsyncCollaborationMemoryPort | null;
   publish(event: CollaborationTimelineBusinessEventOutDto): void;
   changed(conversation: PersonaConversationOutDto): void;
   name(memberId: string): string;
@@ -90,11 +90,29 @@ export class CheckpointHandoffService {
       fact: { nodeId: id, sourceFactKey: id, taskId: checkpoint.repairTaskId || checkpoint.taskId, proposalId, kind: "repair", actor, recipients, status: "completed", action: progressSummary, summary: content, contentRole: phase === "resolved" || phase === "returned" ? "result-output" : "analysis-output", content: progressSummary, detailRole: phase === "resolved" || phase === "returned" ? "result-evidence" : "recovery-conditions", detail: recoveryDetail, startedAt: now, completedAt: now, occurredAt: now, automaticOpen: false, manualApprovalProposalId: null },
     });
     if (!this.options.memory) return;
+    void this.#publishMemory(participants, checkpoint, id, actorId, actor.displayName, recipients, title, action, content, now);
+  }
+
+  /** 卡点会话写入串行进入后台端口，时间线发布不等待 SQLite。 */
+  async #publishMemory(
+    participants: string[],
+    checkpoint: WorkflowCheckpointState,
+    id: string,
+    actorId: string,
+    actorDisplayName: string,
+    recipients: Array<{ memberId: string; displayName: string }>,
+    title: string,
+    action: string,
+    content: string,
+    now: string,
+  ): Promise<void> {
+    const memory = this.options.memory;
+    if (!memory) return;
     for (const owner of participants.filter((id) => id === "han-li" || id === "nangong-wan")) {
-      const conversationId = checkpoint.conversations[owner] || this.options.memory.readPersonaConversation(owner).conversationId;
+      const conversationId = checkpoint.conversations[owner] || (await memory.readPersonaConversation(owner)).conversationId;
       if (!conversationId) throw new Error(`缺少${owner}会话，卡点交接尚未完成`);
       checkpoint.conversations[owner] = conversationId;
-      const conversation = this.options.memory.appendPersonaInternalMessage({ ownerPersonaId: owner, conversationId, messageId: `${id}:${owner}`, speakerPersonaId: actorId, content: `${actor.displayName} → ${recipients.map((item) => item.displayName).join("、")}\n${title} · ${action}\n\n${content}`, createdAt: now });
+      const conversation = await memory.appendPersonaInternalMessage({ ownerPersonaId: owner, conversationId, messageId: `${id}:${owner}`, speakerPersonaId: actorId, content: `${actorDisplayName} → ${recipients.map((item) => item.displayName).join("、")}\n${title} · ${action}\n\n${content}`, createdAt: now });
       this.options.changed(conversation);
     }
   }

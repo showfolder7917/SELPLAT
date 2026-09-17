@@ -3,6 +3,7 @@ import { parentPort, workerData, type MessagePort } from "node:worker_threads";
 import { initializeAiMemoryDatabase } from "../../../../platform/persistence/index.js";
 import { CodexConversationCorpusIngestion } from "./codex-conversation-corpus.ingestion.js";
 import { CollaborationMemoryService } from "../projection/collaboration-memory.service.js";
+import { collaborationMemoryMethodNames } from "../projection/collaboration-memory-methods.js";
 
 type WorkerRequest = { id: number; operation: string; payload: Record<string, unknown> };
 type WorkerOptions = { projectRoot: string; runtimeMarkerPath: string; migrationSqlRoot?: string };
@@ -12,16 +13,7 @@ const initialization = initializeAiMemoryDatabase(workerData as WorkerOptions);
 if (!initialization.database) throw new Error(initialization.status.message || "AI Memory 数据库不可用。");
 const database = initialization.database;
 const collaborationMemory = new CollaborationMemoryService(database);
-const collaborationMemoryMethods = new Set([
-  "savePersonaConversation", "syncEvolutionState", "buildNangongContext", "approvalEvidence",
-  "searchTrainingCorpusTopics", "readHanLiEvolutionCorpus", "recordRequirementDiscussionContext",
-  "readRequirementDiscussionContext", "registerNangongRound", "claimHanliCorpusExtractions",
-  "completeHanliCorpusExtraction", "failHanliCorpusExtraction", "readHanliSemanticContext",
-  "recordVerifiedInspectionExperience", "readPersonaConversation", "readPersonaCustomerDisplayConversation",
-  "readPersonaCustomerDisplayWindow", "retryPersonaCustomerDisplayMessage", "newPersonaConversation",
-  "selectPersonaConversationModel", "appendPersonaInternalMessage", "updatePersonaInternalProgress",
-  "appendPersonaRecoveryCheckpoint", "appendPersonaCustomerMessage", "registerPersonaRound",
-]);
+const collaborationMemoryMethods = new Set<string>(collaborationMemoryMethodNames);
 let queue: Promise<void> = Promise.resolve();
 
 workerPort.on("message", (request: WorkerRequest) => {

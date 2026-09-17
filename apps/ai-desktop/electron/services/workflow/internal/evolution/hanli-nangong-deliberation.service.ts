@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { HanliEvolutionDeliberationOutDto, HanliTopicCandidateOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
-import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { AsyncCollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { RequirementDiscoveryOutDto, RequirementDiscussionContextOutDto } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionStatePort } from "../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../support/capabilities/prompts/index.js";
@@ -16,7 +16,7 @@ export interface HanliNangongDeliberationDependencies {
   /** 韩立和南宫婉提示词读取端口。 */
   prompts: PromptLibraryPort;
   /** 需求语料和人物会话记忆端口；数据库不可用时允许为空。 */
-  memory: CollaborationMemoryPort | null;
+  memory: AsyncCollaborationMemoryPort | null;
   /** 调用韩立完成提问、判断和客户纠正解释。 */
   askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
   /** 调用南宫婉完成事实调查和范围说明。 */
@@ -28,7 +28,7 @@ export interface HanliNangongDeliberationDependencies {
   /** 读取本次研讨所属项目范围。 */
   readProjectScope(state: EvolutionStateOutDto): string;
   /** 读取当前韩立展示会话标识。 */
-  readHanliConversationId(): string | null;
+  readHanliConversationId(): Promise<string | null>;
   /** 内部消息提交后通知人物界面刷新。 */
   onPersonaConversationChanged?(conversation: PersonaConversationOutDto): void;
 }
@@ -80,12 +80,15 @@ export class HanliNangongDeliberationService {
       return { customerReply: "已确认这份调查范围，将交南宫婉继续推进。" };
     }
     const memory = this.dependencies.memory;
+    const semanticContext = memory
+      ? await memory.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), customerCorrection, 12)
+      : null;
     const interpretation = parseCustomerCorrection(await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.customer-correction", {
       customerCorrection: decision.customerReply,
       previousOffer: aggregate.currentRound().confirmation!.offer,
       deliberationContext: formatDeliberationContext(deliberation),
       discussionBasisJson: discussionBasisJson(deliberation),
-      semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), customerCorrection, 12) || null),
+      semanticContextJson: JSON.stringify(semanticContext),
     }), state));
     if (interpretation.action === "clarify-with-customer") return { customerReply: interpretation.customerReply };
     this.#recordConfirmationReply(deliberation, decision.customerReply, { question: interpretation.question!, reason: interpretation.reason! });
@@ -101,15 +104,15 @@ export class HanliNangongDeliberationService {
     if (!deliberation) {
       if (!memory) throw new Error("AI Memory 数据库不可用，韩立无法读取用户确认的需求资料。");
       const deliberationId = `hanli-nangong-deliberation-${randomUUID()}`;
-      const conversationId = this.dependencies.readHanliConversationId();
+      const conversationId = await this.dependencies.readHanliConversationId();
       const sourceRequestId = state.oneShotRun?.sourceRequestId || null;
       const basis = conversationId && sourceRequestId
-        ? memory.readRequirementDiscussionContext?.("han-li", conversationId, sourceRequestId) || null
+        ? await memory.readRequirementDiscussionContext("han-li", conversationId, sourceRequestId)
         : null;
       // 本次调查事实与广泛语料在 Workflow 才汇合：事实包提供方向，历史资料只提供自由探索线索。
       const snapshots = [
         ...(basis ? [requirementContextSnapshot(deliberationId, basis)] : []),
-        ...memory.readHanLiEvolutionCorpus(deliberationId, conversationId),
+        ...await memory.readHanLiEvolutionCorpus(deliberationId, conversationId),
       ];
       if (!snapshots.length) {
         if (!options.requireProblem) return { state, activity: "idle" };
@@ -119,7 +122,7 @@ export class HanliNangongDeliberationService {
         discoveryMode: options.requireProblem ? "用户已经输入 1，必须围绕本次确认需求提出第一问。" : "持续自动模式：只有发现尚未处理且有用户证据的问题才发问；没有新问题时返回 wait。",
         corpus: formatEvolutionCorpus(snapshots),
         discussionBasisJson: JSON.stringify(basis),
-        semanticContextJson: JSON.stringify(memory.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), "", 20)),
+        semanticContextJson: JSON.stringify(await memory.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), "", 20)),
         establishedTopicsJson: JSON.stringify(state.topics.map((topic) => ({
           title: topic.title, goal: topic.goal, status: topic.status,
           followUpDiscoveries: state.deliberations.find((item) => item.deliberationId === topic.deliberationId)?.candidate?.discoveries
@@ -169,6 +172,9 @@ export class HanliNangongDeliberationService {
       // 用户确认后的统一自动流程持续追问，只有人工暂停或阻塞才停止，不再依赖独立开关。
       const maximum = state.automationRuntime.status === "running" ? null : state.automationSettings.maxRoundsPerTopic;
       const mustConclude = maximum !== null && answeredRound.roundNumber >= maximum;
+      const semanticContext = memory
+        ? await memory.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), answeredRound.question, 12)
+        : null;
       const judgment = parseJudgment(await this.dependencies.askHanli(this.dependencies.prompts.render("hanli.internal-assessment", {
         roundConstraint: mustConclude
           ? `当前已到第 ${maximum} 轮；证据仍不足时必须阻断，不能虚构专题。`
@@ -178,7 +184,7 @@ export class HanliNangongDeliberationService {
           : "自动托管未开启：会改变产品目标或扩大范围且无法从客户现有表达判断的事项，归为 customer-decision-required 并交回客户确认。",
         deliberationContext: formatDeliberationContext(refreshed),
         discussionBasisJson: discussionBasisJson(refreshed),
-        semanticContextJson: JSON.stringify(memory?.readHanliSemanticContext(this.dependencies.readStableUserId(), this.dependencies.readProjectScope(state), answeredRound.question, 12) || null),
+        semanticContextJson: JSON.stringify(semanticContext),
       }), state));
       if (["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status)) return { state: store.state(), activity: "idle" };
       if (mustConclude && !judgment.candidate) {
@@ -213,7 +219,8 @@ export class HanliNangongDeliberationService {
     const { store, prompts } = this.dependencies;
     const interrupted = () => ["paused", "stopped", "blocked"].includes(store.state().automationRuntime.status);
     if (interrupted()) return { state: store.state(), activity: "idle" };
-    if (!this.dependencies.memory || !this.dependencies.readHanliConversationId()) throw new Error("无法保存内部确认消息，已阻止开始执行。请先恢复会话数据库。");
+    const hanliConversationId = await this.dependencies.readHanliConversationId();
+    if (!this.dependencies.memory || !hanliConversationId) throw new Error("无法保存内部确认消息，已阻止开始执行。请先恢复会话数据库。");
     // 建立阶段仍通过聚合取得冻结的最后一轮事实。
     const aggregate = new HanliNangongDeliberationAggregate(deliberation);
     // 稳定轮次标识用于内部消息幂等键。
@@ -234,8 +241,8 @@ export class HanliNangongDeliberationService {
     if (!confirmation.reply) {
       // 托管关闭时由真实用户确认；托管开启时韩立在内部完成当前专题或后续专题判断。
       if (store.state().automationSettings.automaticCustodyEnabled !== true) {
-        const conversation = this.dependencies.memory.appendPersonaInternalMessage({
-          ownerPersonaId: "han-li", conversationId: this.dependencies.readHanliConversationId()!,
+        const conversation = await this.dependencies.memory.appendPersonaInternalMessage({
+          ownerPersonaId: "han-li", conversationId: hanliConversationId,
           messageId: `hanli-confirmation:${roundId}`, speakerPersonaId: "han-li",
           content: `南宫婉已完成调查，以下是她核实后的范围说明：\n\n${confirmation.offer}\n\n请确认这些范围是否符合你的真实目标；回复 1 仅确认本轮说明，有需保留的能力请直接纠正。`, createdAt: confirmation.offeredAt,
         });
@@ -279,22 +286,30 @@ export class HanliNangongDeliberationService {
   }
 
   #appendInternalMessage(roundId: string, phase: "question" | "answer" | "reply" | "offer" | "confirm" | "started", role: "hanli" | "nangong", content: string, replyToMessageId: string | null, createdAt: string): void {
-    const conversationId = this.dependencies.readHanliConversationId();
-    if (!conversationId || !this.dependencies.memory) return;
+    const memory = this.dependencies.memory;
+    if (!memory) return;
     const messageId = `internal:${roundId}:${phase}`;
     if (this.#publishedMessageIds.has(messageId)) return;
-    const conversation = this.dependencies.memory.appendPersonaInternalMessage({
-      ownerPersonaId: "han-li",
-      conversationId,
-      messageId,
-      speakerPersonaId: role === "nangong" ? "nangong-wan" : "han-li",
-      content,
-      replyToMessageId,
-      createdAt,
-    });
     this.#publishedMessageIds.add(messageId);
-    // 内部研讨仍只保存一份权威消息；南宫婉页面展示内部对话，韩立页面过滤内部消息。
-    this.dependencies.onPersonaConversationChanged?.(conversation);
+    // Worker FIFO 保证消息顺序；会话标识和写入都在后台完成，主流程不等待页面投影。
+    void Promise.resolve(this.dependencies.readHanliConversationId()).then(async (conversationId) => {
+      if (!conversationId) {
+        this.#publishedMessageIds.delete(messageId);
+        return;
+      }
+      const conversation = await memory.appendPersonaInternalMessage({
+        ownerPersonaId: "han-li",
+        conversationId,
+        messageId,
+        speakerPersonaId: role === "nangong" ? "nangong-wan" : "han-li",
+        content,
+        replyToMessageId,
+        createdAt,
+      });
+      this.dependencies.onPersonaConversationChanged?.(conversation);
+    }).catch(() => {
+      this.#publishedMessageIds.delete(messageId);
+    });
   }
 }
 

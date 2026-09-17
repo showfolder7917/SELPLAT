@@ -27,6 +27,7 @@ const hanliService = read("electron/services/personas/hanli/internal/conversatio
 const hanliAggregate = read("electron/services/personas/hanli/domain/hanli-conversation.aggregate.ts");
 const hanliMethodContext = read("electron/services/personas/hanli/internal/conversation/hanli-method-context.ts");
 const nangong = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
+const nangongService = read("electron/services/personas/nangong/internal/conversation/nangong-conversation.service.ts");
 const linghu = read("src/features/linghu/components/LinghuAutomationPanel.tsx");
 const harnessRule = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md`);
 
@@ -127,7 +128,8 @@ test("人物普通发送失败后保留稳定客户消息编号并提供同编�
 test("韩立和南宫婉各自从会话头读取模型并将实际模型传给 Harness", () => {
   assert.match(runtime, /hanLiCodex!\.send\([\s\S]*?, selectedModel\)/);
   assert.match(runtime, /nangongCodex!\.send\([\s\S]*?, selectedModel\)/);
-  assert.match(runtime, /readPersonaConversation\("nangong-wan", conversationId\)\.selectedModel/);
+  assert.match(nangongService, /await this\.#memory\.readPersonaConversation\("nangong-wan", state\.conversation\.conversationId\)/);
+  assert.match(nangongService, /memoryConversation\?\.selectedModel \|\| null/);
   assert.match(runtime, /nangongConversationWithSelectedModel/);
   assert.match(codex, /const effectiveModel = await this\.#assertModelSettingsSupported\(modelSettings, selectedModel\)/);
   assert.match(codex, /selectedModel\?\.trim\(\) \|\| settings\.defaultModel/);

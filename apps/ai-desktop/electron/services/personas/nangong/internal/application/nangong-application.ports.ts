@@ -1,4 +1,4 @@
-import type { CollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { AsyncCollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
@@ -37,7 +37,7 @@ export interface NangongApplicationServiceOptions {
     send(request: SendPersonaConversationMessageInDto, context: string, selectedModel?: string | null): Promise<SendMessageOutDto>;
     newChat(): Promise<void>;
   };
-  memory?: CollaborationMemoryPort | null;
+  memory?: AsyncCollaborationMemoryPort | null;
   refreshSemanticMemory?: () => void;
   investigateRevision?: (prompt: string, workspaceState: EvolutionStateOutDto["topics"][number]["workspaceState"], locale: EvolutionStateOutDto["topics"][number]["locale"]) => Promise<string>;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;

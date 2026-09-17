@@ -83,3 +83,10 @@ export interface CollaborationMemoryPort {
     decision: ConversationRoundTopicDecisionInDto;
   }): PersonaConversationOutDto;
 }
+
+/** 主进程只持有异步人物记忆端口；同步实现被限制在后台持久化 Worker 内。 */
+export type AsyncCollaborationMemoryPort = {
+  [Method in keyof CollaborationMemoryPort]: CollaborationMemoryPort[Method] extends (...args: infer Args) => infer Result
+    ? (...args: Args) => Promise<Awaited<Result>>
+    : never;
+};

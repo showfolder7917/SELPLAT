@@ -1,5 +1,5 @@
 // 从事件中心读取人物会话与记忆端口，验收交接不依赖具体数据库实现。
-import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { AsyncCollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 // 从人物会话契约读取回显对象。
 import type { PersonaConversationOutDto } from "../../../../../contracts/services/personas/conversation/index.js";
 // 从 Workflow 契约读取类型化时间线事实。
@@ -15,9 +15,9 @@ export interface AcceptanceHandoffOptions {
   /** 类型化时间线发布端口；未配置时只保存人物会话事实。 */
   recordTimelineEvent?: (event: CollaborationTimelineBusinessEventOutDto) => void;
   /** 人物会话记忆端口；数据库不可用时允许为空。 */
-  memory?: CollaborationMemoryPort | null;
+  memory?: AsyncCollaborationMemoryPort | null;
   /** 读取当前韩立会话标识，验收消息必须回到同一用户会话。 */
-  readHanliConversationId?: () => string | null;
+  readHanliConversationId?: () => Promise<string | null>;
   /** 人物会话变化通知端口，用于刷新已提交的界面消息。 */
   onPersonaConversationChanged?: (conversation: PersonaConversationOutDto) => void;
 }
@@ -52,14 +52,29 @@ export class AcceptanceHandoffService {
       group: { groupId: `topic:${topic.topicId}`, topicId: topic.topicId, proposalId: proposal.proposalId, title: topic.title, status: completed ? "completed" : failed ? "blocked" : "verifying", summary: handoff.summary, startedAt: topic.createdAt, updatedAt: now },
       fact: { nodeId: `acceptance:${proposal.proposalId}:${attemptId}:${received ? "received" : "run"}`, taskId: null, proposalId: proposal.proposalId, sourceFactKey: id, kind: "verification", actor, recipients: [recipient], status: current ? "current" : phase === "failed" ? "failed" : "completed", action: received ? "已接收令狐结果，提交韩立验收" : current ? "正在真实操作验收" : completed ? "验收通过，结果已返回" : "验收未通过或未验证", summary: handoff.summary, contentRole: "analysis-output", content: handoff.content, detailRole: "result-evidence", detail: handoff.detail, startedAt: now, completedAt: current ? null : now, automaticOpen: current, manualApprovalProposalId: null, occurredAt: now },
     });
+    void this.#publishMemory(proposal, phase, handoff.content, attemptId, actor.memberId, now);
+  }
+
+  /** 人物会话投影在后台顺序完成，不把 SQLite 等待重新带回主流程。 */
+  async #publishMemory(
+    proposal: EvolutionProposalOutDto,
+    phase: "received" | "started" | "passed" | "failed",
+    content: string,
+    attemptId: string,
+    actorId: string,
+    now: string,
+  ): Promise<void> {
     const memory = this.options.memory;
     if (!memory) return;
+    const received = phase === "received";
     for (const owner of ["han-li", "nangong-wan"]) {
-      const conversationId = owner === "han-li" ? this.options.readHanliConversationId?.() : memory.readPersonaConversation(owner).conversationId;
+      const conversationId = owner === "han-li"
+        ? await this.options.readHanliConversationId?.()
+        : (await memory.readPersonaConversation(owner)).conversationId;
       if (!conversationId) continue;
       // 数据库消息主键全局唯一，同一交接事件必须显式区分收件人物。
-      const messageId = `internal:${id}:${owner}:${received ? "question" : "answer"}`;
-      const conversation = memory.appendPersonaInternalMessage({ ownerPersonaId: owner, conversationId, messageId, speakerPersonaId: actor.memberId, content: handoff.content, replyToMessageId: received ? null : `internal:acceptance:${proposal.proposalId}:${attemptId}:received:${owner}:question`, createdAt: now });
+      const messageId = `internal:acceptance:${proposal.proposalId}:${attemptId}:${phase}:${owner}:${received ? "question" : "answer"}`;
+      const conversation = await memory.appendPersonaInternalMessage({ ownerPersonaId: owner, conversationId, messageId, speakerPersonaId: actorId, content, replyToMessageId: received ? null : `internal:acceptance:${proposal.proposalId}:${attemptId}:received:${owner}:question`, createdAt: now });
       this.options.onPersonaConversationChanged?.(conversation);
     }
   }

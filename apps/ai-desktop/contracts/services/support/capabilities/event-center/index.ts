@@ -20,4 +20,4 @@ export type {
 } from "./dto/hanli-semantic-memory.out.dto.js";
 export type { EventCenterExceptionInDto } from "./dto/event-center-exception.in.dto.js";
 export type { RendererExceptionInDto } from "./dto/renderer-exception.in.dto.js";
-export type { CollaborationMemoryPort } from "./port/collaboration-memory.port.js";
+export type { AsyncCollaborationMemoryPort, CollaborationMemoryPort } from "./port/collaboration-memory.port.js";

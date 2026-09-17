@@ -74,7 +74,7 @@ export class HanliApplicationService implements HanliApplicationPort {
     });
   }
 
-  conversation(): PersonaConversationOutDto {
+  conversation(): Promise<PersonaConversationOutDto> {
     return this.#conversation.conversation();
   }
 
@@ -143,9 +143,10 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 根据已保存人工偏好执行受控自动审批；缺少完整事实或历史依据时退回补充。 */
-  autoApprove(proposalId: string, request?: EvolutionMutationInDto): EvolutionStateOutDto {
+  async autoApprove(proposalId: string, request?: EvolutionMutationInDto): Promise<EvolutionStateOutDto> {
     const state = this.#store.state();
     const proposal = requireProposal(state, proposalId);
+    const databaseHistory = this.#memory ? await this.#memory.approvalEvidence(proposal.type, proposal.origin) : [];
     const mutation = request || { expectedStateVersion: state.updatedAt, idempotencyKey: `automatic-approve:${proposalId}:${state.updatedAt}` };
     return this.#mutations.run(
       proposal.topicId,
@@ -153,7 +154,7 @@ export class HanliApplicationService implements HanliApplicationPort {
       mutation,
       () => this.#store.state().updatedAt,
       () => this.#store.state(),
-      () => this.#autoApproveOnce(proposal),
+      () => this.#autoApproveOnce(proposal, databaseHistory),
     );
   }
 
@@ -226,17 +227,19 @@ export class HanliApplicationService implements HanliApplicationPort {
     });
     const experienceCandidate = decidedRecord?.payload.experienceCandidate;
     if (this.#memory && experienceCandidate && typeof experienceCandidate === "object") {
-      this.#memory.recordVerifiedInspectionExperience(
+      void this.#memory.recordVerifiedInspectionExperience(
         this.#readStableUserId(),
         this.#readProjectScope(),
         experienceCandidate as import("../../../../../../contracts/services/personas/hanli/index.js").HanliAcceptanceExperienceCandidateOutDto,
-      );
-      this.#recordEvent("acceptance.experience_promoted", { proposalId, experienceCandidate });
+      ).then(() => this.#recordEvent("acceptance.experience_promoted", { proposalId, experienceCandidate }));
     }
     return next;
   }
 
-  #autoApproveOnce(proposal: EvolutionProposalOutDto): EvolutionStateOutDto {
+  #autoApproveOnce(
+    proposal: EvolutionProposalOutDto,
+    databaseHistory: Awaited<ReturnType<NonNullable<HanliApplicationServiceOptions["memory"]>["approvalEvidence"]>>,
+  ): EvolutionStateOutDto {
     const state = this.#store.state();
     const manualHistory: Array<{
       item: EvolutionProposalOutDto;
@@ -259,7 +262,6 @@ export class HanliApplicationService implements HanliApplicationPort {
     if (!hasCompleteFacts) {
       return this.#approvals.decide(proposal.proposalId, "supplement-required", `事实、范围、风险、回退或验收条件不完整，请${proposal.submitterDisplayName}补充调查。`, "automatic-han-li", []);
     }
-    const databaseHistory = this.#memory?.approvalEvidence(proposal.type, proposal.origin) || [];
     if (!manualHistory.length && !databaseHistory.length) {
       return this.#approvals.decide(
         proposal.proposalId,

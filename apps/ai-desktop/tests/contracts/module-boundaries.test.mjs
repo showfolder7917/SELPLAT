@@ -235,6 +235,22 @@ test("人物训练语料通过主会话完成钩子和启动补录闭环且清�
   assert.doesNotMatch(repository.match(/const tables = \[([\s\S]*?)\] as const/)?.[1] || "", /Conversation|CorpusIngestionCheckpoint/);
 });
 
+test("人物记忆只通过后台 Worker 单通道访问 SQLite", () => {
+  const bootstrap = source("electron/system/bootstrap/persistence.bootstrap.ts");
+  const eventCenter = source("electron/services/support/capabilities/event-center/index.ts");
+  const proxy = source("electron/services/support/capabilities/event-center/internal/projection/background-collaboration-memory.proxy.ts");
+  const worker = source("electron/services/support/capabilities/event-center/internal/corpus/background-persistence.worker.ts");
+  const methods = source("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory-methods.ts");
+  assert.match(bootstrap, /createCollaborationMemory\(backgroundPersistence\)/);
+  assert.doesNotMatch(bootstrap, /createCollaborationMemory\(database\)/);
+  assert.doesNotMatch(eventCenter, /new CollaborationMemoryService/);
+  assert.match(proxy, /operation:\s*"collaboration-memory"/);
+  assert.match(proxy, /from "\.\/collaboration-memory-methods\.js"/);
+  assert.match(worker, /from "\.\.\/projection\/collaboration-memory-methods\.js"/);
+  assert.match(worker, /new CollaborationMemoryService\(database\)/);
+  assert.match(methods, /satisfies readonly \(keyof CollaborationMemoryPort\)\[\]/);
+});
+
 test("统一对话语料不吸收专题审批任务测试与异常业务投影", () => {
   const packageJson = source("package.json");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");

@@ -12,10 +12,10 @@ import {
   parseCodexSemanticBackfillResponse,
   type CodexSemanticAnalyzer,
 } from "./internal/corpus/codex-conversation-semantic-backfill.js";
-import { CollaborationMemoryService } from "./internal/projection/collaboration-memory.service.js";
-import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+import { createBackgroundCollaborationMemory } from "./internal/projection/background-collaboration-memory.proxy.js";
+import type { AsyncCollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import { CollaborationTimelineFacade } from "./internal/timeline/collaboration-timeline.facade.js";
-import type { DatabasePort } from "../../platform/persistence/index.js";
+import type { BackgroundPersistencePort, DatabasePort } from "../../platform/persistence/index.js";
 
 // 审计归档由事件中心自己创建；调用方只提供三个已治理的数据根。
 export function createBusinessAuditArchive(...arguments_: ConstructorParameters<typeof BusinessAuditLog>): BusinessAuditLog {
@@ -27,9 +27,9 @@ export function createCollaborationTimeline(database: DatabasePort): Collaborati
   return new CollaborationTimelineFacade(database);
 }
 
-// 记忆投影服务保存人物原文和可查询证据，但不成为人物状态所有者。
-export function createCollaborationMemory(database: DatabasePort): CollaborationMemoryPort {
-  return new CollaborationMemoryService(database);
+// 主进程人物记忆只经 Worker 端口访问，禁止重新建立同步数据库回退。
+export function createCollaborationMemory(persistence: BackgroundPersistencePort): AsyncCollaborationMemoryPort {
+  return createBackgroundCollaborationMemory(persistence);
 }
 
 // 语料入口只读取已完成回合，并通过来源策略阻断内部自动化内容。
@@ -62,7 +62,7 @@ export function createCodexConversationSemanticBackfill(
 
 // 组合根需要的只读类型不会暴露 Repository 或 SQLite 连接实现。
 export type EventCenterTimeline = CollaborationTimelineFacade;
-export type EventCenterMemory = CollaborationMemoryPort;
+export type EventCenterMemory = AsyncCollaborationMemoryPort;
 export type CorpusIngestion = CodexConversationCorpusIngestion;
 export type CorpusWatcher = CodexConversationCorpusWatcher;
 export type CorpusSemanticBackfill = CodexConversationSemanticBackfill;

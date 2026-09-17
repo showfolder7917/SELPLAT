@@ -49,7 +49,7 @@ export function createPersistenceContext(options: CreatePersistenceContextOption
   }) : null;
   const workflowRepository = database ? createWorkflowRepository(database) : null;
   const collaborationTimeline = database ? createCollaborationTimeline(database) : null;
-  const collaborationMemory = database ? createCollaborationMemory(database) : null;
+  const collaborationMemory = backgroundPersistence ? createCollaborationMemory(backgroundPersistence) : null;
   collaborationTimeline?.subscribeTimelineChanged(options.onTimelineChanged);
   collaborationTimeline?.subscribeProjectionStatus(options.onTimelineProjectionStatus);
   options.eventCenter.attachRepository(workflowRepository);

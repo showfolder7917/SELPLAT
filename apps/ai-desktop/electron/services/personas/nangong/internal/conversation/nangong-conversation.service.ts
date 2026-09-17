@@ -56,9 +56,15 @@ export class NangongConversationService {
     const userMessage = state.conversation.messages.at(-1)!;
     let turnCompleted = false;
     try {
-      const context = this.#memory?.buildNangongContext(state.conversation)
-        || state.conversation.messages.slice(-12).map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
-      const selectedModel = this.#memory?.readPersonaConversation("nangong-wan", state.conversation.conversationId)?.selectedModel || null;
+      const fallbackContext = state.conversation.messages.slice(-12)
+        .map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+      const context = this.#memory
+        ? (await this.#memory.buildNangongContext(state.conversation)) || fallbackContext
+        : fallbackContext;
+      const memoryConversation = this.#memory
+        ? await this.#memory.readPersonaConversation("nangong-wan", state.conversation.conversationId)
+        : null;
+      const selectedModel = memoryConversation?.selectedModel || null;
       const response = await this.#conversation.send(request, context, selectedModel);
       const parsed = parseNangongConversationResponse(response.text);
       state = this.#store.completeConversationTurn(userMessage.messageId, parsed.reply);
@@ -103,8 +109,10 @@ export class NangongConversationService {
     const conversation = NangongConversationAggregate.restore(current);
     if (conversation.messageCount() === 0) throw new Error("当前没有可整理为课题的南宫婉对话。");
     const messages = current.conversation.messages.slice(-20);
-    const context = this.#memory?.buildNangongContext(current.conversation)
-      || messages.map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+    const fallbackContext = messages.map((item) => `${item.speakerType === "user" ? "用户" : "南宫婉"}：${item.content}`).join("\n\n");
+    const context = this.#memory
+      ? (await this.#memory.buildNangongContext(current.conversation)) || fallbackContext
+      : fallbackContext;
     const response = await this.#conversation.send({
       message: this.#prompts.render("nangong.topic-draft"),
       workspaceState: request.workspaceState,
@@ -171,10 +179,10 @@ export class NangongConversationService {
     const nangongMessage = state.conversation.messages.find((message) => message.messageId === nangongMessageId);
     // 人物内部交流不代表客户意图；缺少真实用户参与时既不写语义语料，也不触发韩立整理。
     if (userMessage?.speakerType !== "user" || nangongMessage?.speakerPersonaId !== "nangong-wan") return;
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       try {
-        if (decision) this.#memory?.registerNangongRound(state.conversation, userMessageId, nangongMessageId, decision);
-        else this.#memory?.savePersonaConversation(state.conversation);
+        if (decision) await this.#memory?.registerNangongRound(state.conversation, userMessageId, nangongMessageId, decision);
+        else await this.#memory?.savePersonaConversation(state.conversation);
         this.#recordEvent("training_corpus.conversation_round_archived", { conversationId: state.conversation.conversationId, userMessageId, nangongMessageId, source: "nangong" });
         this.#refreshSemanticMemory();
       } catch (error) {

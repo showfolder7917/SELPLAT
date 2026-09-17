@@ -1,7 +1,7 @@
 
 import { reviewDesignCoverage } from "../../domain/hanli-design-review.policy.js";
 import { randomUUID } from "node:crypto";
-import type { CollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { AsyncCollaborationMemoryPort } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
@@ -13,7 +13,7 @@ export interface HanliDecisionDependencies {
   /** 受版本管理的提示词渲染端口。 */
   prompts: PromptLibraryPort;
   /** 韩立客户语义记忆；尚未接入时允许为空。 */
-  memory: CollaborationMemoryPort | null;
+  memory: AsyncCollaborationMemoryPort | null;
   /** 调用韩立模型完成结构化提案判断。 */
   askHanli(prompt: string, state: EvolutionStateOutDto): Promise<string>;
   /** 调用隔离短会话完成结果验收，避免复用客户对话线程。 */
@@ -37,7 +37,7 @@ export class HanliDecisionService {
     const state = this.#dependencies.store.state();
     let semanticContext: unknown = null;
     if (this.#dependencies.memory) {
-      semanticContext = this.#dependencies.memory.readHanliSemanticContext(
+      semanticContext = await this.#dependencies.memory.readHanliSemanticContext(
         this.#dependencies.readStableUserId(),
         this.#dependencies.readProjectScope(state),
         proposal.title,

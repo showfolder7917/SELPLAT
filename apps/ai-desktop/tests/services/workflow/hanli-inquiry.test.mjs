@@ -134,6 +134,7 @@ test("真实调查、独立判断、解释依次推进；并发和完成重试�
   await tick();
   assert.equal(f.activities.at(-1).phase, "queued");
   acquire();
+  await tick();
   assert.equal(f.activities.at(-1).phase, "investigating");
   assert.equal(f.activities.at(-1).status, "running");
   resolve(findings);

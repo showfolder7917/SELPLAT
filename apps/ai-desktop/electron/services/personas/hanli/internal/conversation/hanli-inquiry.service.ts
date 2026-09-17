@@ -56,15 +56,36 @@ export class HanliInquiryService {
   run(request: SendPersonaConversationMessageInDto, conversationId: string, customerQuestion: string,
     understanding: HanliInquiryUnderstanding, decision: ConversationRoundTopicDecisionInDto): Promise<PersonaConversationOutDto> {
     const stableRequest = { ...request, clientMessageId: request.clientMessageId || randomUUID() };
-    const prior = this.#options.memory!.readPersonaConversation("han-li", conversationId);
-    const resumed = this.resume(stableRequest, prior);
-    if (resumed) return resumed;
+    const key = `${conversationId}:${stableRequest.clientMessageId}`;
+    const active = this.#pending.get(key);
+    if (active) return active;
+    if (this.#pending.size) throw new Error("韩立正在处理已有排查，请等待本轮结束。");
+    // 读取会话现在也经过 Worker；必须在读取前登记 Promise，避免两个同时点击穿过异步读取形成重复调查。
+    const next = this.#prepare(stableRequest, conversationId, customerQuestion, understanding, decision)
+      .finally(() => this.#pending.delete(key));
+    this.#pending.set(key, next);
+    return next;
+  }
+
+  /** 在已登记运行身份后读取持久状态并开始调查，保证相同请求始终返回同一 Promise。 */
+  async #prepare(request: SendPersonaConversationMessageInDto, conversationId: string, customerQuestion: string,
+    understanding: HanliInquiryUnderstanding, decision: ConversationRoundTopicDecisionInDto): Promise<PersonaConversationOutDto> {
+    const prior = await this.#options.memory!.readPersonaConversation("han-li", conversationId);
+    const recovered = request.clientMessageId ? readInquiryCheckpoint(prior, request.clientMessageId) : null;
+    if (recovered) {
+      if (request.message !== recovered.request.message
+        || JSON.stringify(request.workspaceState) !== JSON.stringify(recovered.request.workspaceState)
+        || JSON.stringify(request.attachmentIds || []) !== JSON.stringify(recovered.request.attachmentIds || [])) {
+        throw new Error("重试必须使用原问题、原截图和原工作区；需要改变范围时请发送新问题。");
+      }
+      return this.#execute(new HanliInquiryAggregate(recovered));
+    }
     if (understanding.status !== "ready" || !understanding.investigationQuestion) {
       throw new Error("韩立尚未形成可派发的核实范围。");
     }
     const state: InquirySnapshot = {
-      version: 1, conversationId, requestId: stableRequest.clientMessageId,
-      request: structuredClone(stableRequest), selectedModel: prior.selectedModel || null,
+      version: 1, conversationId, requestId: request.clientMessageId!,
+      request: structuredClone(request), selectedModel: prior.selectedModel || null,
       goal: { customerQuestion: customerQuestion.trim(), understoodGoal: understanding.understoodGoal,
         verificationTarget: understanding.verificationTarget, expectedAnswer: understanding.expectedAnswer,
         investigationQuestion: understanding.investigationQuestion },
@@ -72,7 +93,7 @@ export class HanliInquiryService {
       summary: "韩立已明确核实范围，等待南宫婉接收只读调查。",
       updatedAt: new Date().toISOString(), rounds: [{ question: understanding.investigationQuestion }],
     };
-    return this.#start(state);
+    return this.#execute(new HanliInquiryAggregate(state));
   }
 
   #key(state: InquirySnapshot): string {
@@ -91,9 +112,9 @@ export class HanliInquiryService {
     return next;
   }
 
-  #publishInternalDeliberation(state: InquirySnapshot, messageId: string, speakerPersonaId: "han-li" | "nangong-wan",
-    content: string, replyToMessageId?: string, attachmentIds: string[] = [], contentRole: "conversation" | "technical-evidence" = "conversation"): PersonaConversationOutDto {
-    const next = this.#options.memory!.appendPersonaInternalMessage({
+  async #publishInternalDeliberation(state: InquirySnapshot, messageId: string, speakerPersonaId: "han-li" | "nangong-wan",
+    content: string, replyToMessageId?: string, attachmentIds: string[] = [], contentRole: "conversation" | "technical-evidence" = "conversation"): Promise<PersonaConversationOutDto> {
+    const next = await this.#options.memory!.appendPersonaInternalMessage({
       ownerPersonaId: "han-li", conversationId: state.conversationId, messageId, speakerPersonaId,
       content, replyToMessageId, attachmentIds, contentRole, createdAt: new Date().toISOString(),
     });
@@ -102,8 +123,8 @@ export class HanliInquiryService {
     return projected;
   }
 
-  #save(state: InquirySnapshot): PersonaConversationOutDto {
-    const saved = this.#options.memory!.appendPersonaRecoveryCheckpoint({
+  async #save(state: InquirySnapshot): Promise<PersonaConversationOutDto> {
+    const saved = await this.#options.memory!.appendPersonaRecoveryCheckpoint({
       ownerPersonaId: "han-li", conversationId: state.conversationId,
       messageId: `${INQUIRY_CHECKPOINT_PREFIX}${state.requestId}:${randomUUID()}`,
       requestId: state.requestId, content: JSON.stringify(state), createdAt: new Date().toISOString(),
@@ -117,7 +138,7 @@ export class HanliInquiryService {
     const state = aggregate.state;
     const memory = this.#options.memory!;
     const resultId = `inquiry:${state.requestId}:result`;
-    const prior = memory.readPersonaConversation("han-li", state.conversationId);
+    const prior = await memory.readPersonaConversation("han-li", state.conversationId);
     // 最终消息已持久化而终态保存中断时，只补终态，不重复解释或调查。
     if (prior.messages.some((message) => message.messageId === resultId)) {
       if (state.status !== "completed" && state.status !== "blocked") {
@@ -127,7 +148,7 @@ export class HanliInquiryService {
       return this.project(prior);
     }
     if (!prior.messages.some((message) => message.messageId === state.requestId)) {
-      memory.registerPersonaRound({
+      await memory.registerPersonaRound({
         ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli",
         conversationId: state.conversationId, userMessageId: state.requestId,
         userContent: state.request.message, attachmentIds: state.request.attachmentIds || [],
@@ -138,7 +159,7 @@ export class HanliInquiryService {
     }
     // 技术失败保留 phase；恢复不重置已有 findings 或 assessment。
     state.status = "running";
-    this.#save(state);
+    await this.#save(state);
     try {
       while (state.phase !== "completed" && state.phase !== "blocked") {
         if (state.phase === "queued" || state.phase === "investigating") {
@@ -147,10 +168,10 @@ export class HanliInquiryService {
           await this.#assess(aggregate);
         } else if (state.phase === "explaining") {
           const reply = await this.#explain(aggregate);
-          this.#recordDiscussion(state, aggregate.findings(), reply);
-          this.#publishCustomerConclusion(state, resultId, reply, `inquiry:${state.requestId}:progress`);
+          await this.#recordDiscussion(state, aggregate.findings(), reply);
+          await this.#publishCustomerConclusion(state, resultId, reply, `inquiry:${state.requestId}:progress`);
           aggregate.finish();
-          const result = this.#save(state);
+          const result = await this.#save(state);
           const completed = result.activity?.status === "completed";
           this.#options.recordEvent(completed ? "hanli.inquiry.completed" : "hanli.inquiry.blocked", {
             correlationId: state.conversationId, conversationId: state.conversationId,
@@ -160,7 +181,7 @@ export class HanliInquiryService {
           return result;
         }
       }
-      return this.project(memory.readPersonaConversation("han-li", state.conversationId));
+      return this.project(await memory.readPersonaConversation("han-li", state.conversationId));
     } catch (error) {
       const reason = error instanceof Error ? error.message : "排查服务没有返回有效结果";
       this.#options.recordEvent("hanli.inquiry.failed", {
@@ -184,20 +205,20 @@ export class HanliInquiryService {
       ...state.goal, investigationQuestion: aggregate.current.question,
       previousFindings: state.rounds.flatMap((item) => item.findings ? [item.findings] : []),
     };
-    this.#publishInternalDeliberation(state, questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, state.request.attachmentIds || []);
+    await this.#publishInternalDeliberation(state, questionId, "han-li", buildInvestigationHandoff(inquiry), undefined, state.request.attachmentIds || []);
     if (!this.#options.investigateWithNangong) throw new Error("南宫婉只读核实服务尚未接入");
     aggregate.transition("queued", `第 ${round} 轮调查等待南宫婉接收。`);
-    this.#save(state);
+    await this.#save(state);
     const findings = await this.#options.investigateWithNangong(inquiry, state.request, () => {
       aggregate.transition("investigating", `南宫婉正在进行第 ${round} 轮只读核实：${aggregate.current.question}`);
-      this.#save(state);
+      void this.#save(state);
     });
     aggregate.receive(findings);
     // 先保留结构化证据，后续显示、评估或解释失败均可恢复。
-    this.#save(state);
-    this.#publishInternalDeliberation(state, answerId, "nangong-wan", buildInvestigationReport(findings), questionId);
+    await this.#save(state);
+    await this.#publishInternalDeliberation(state, answerId, "nangong-wan", buildInvestigationReport(findings), questionId);
     const evidence = buildInvestigationEvidence(findings);
-    if (evidence) this.#publishInternalDeliberation(state, `${answerId}:evidence`, "nangong-wan", evidence, answerId, [], "technical-evidence");
+    if (evidence) await this.#publishInternalDeliberation(state, `${answerId}:evidence`, "nangong-wan", evidence, answerId, [], "technical-evidence");
   }
 
   async #assess(aggregate: HanliInquiryAggregate): Promise<void> {
@@ -212,7 +233,7 @@ export class HanliInquiryService {
     });
     const response = await chat.send({ ...state.request, attachmentIds: [] }, prompt, state.selectedModel, { workspacePolicy: "request-snapshot" });
     aggregate.assess(parseInquiryAssessment(response, state.goal.customerQuestion));
-    this.#save(state);
+    await this.#save(state);
   }
 
   async #explain(aggregate: HanliInquiryAggregate): Promise<string> {
@@ -232,13 +253,13 @@ export class HanliInquiryService {
   }
 
   /** 只登记稳定身份的客户最终结论，通过专用客户写入入口避免与恢复 JSON 混写。 */
-  #publishCustomerConclusion(state: InquirySnapshot, messageId: string, content: string, replyToMessageId: string): PersonaConversationOutDto {
+  async #publishCustomerConclusion(state: InquirySnapshot, messageId: string, content: string, replyToMessageId: string): Promise<PersonaConversationOutDto> {
     const memory = this.#options.memory!;
-    const prior = memory.readPersonaConversation("han-li", state.conversationId);
+    const prior = await memory.readPersonaConversation("han-li", state.conversationId);
     const customerMessage = prior.messages.find((message) => message.messageId === state.requestId);
     if (!customerMessage) throw new Error("客户原问题尚未提交，不能保存排查结论。");
     if (prior.messages.some((message) => message.messageId === messageId)) return this.project(prior);
-    const saved = memory.appendPersonaCustomerMessage({
+    const saved = await memory.appendPersonaCustomerMessage({
       ownerPersonaId: "han-li", conversationId: state.conversationId, messageId,
       speakerPersonaId: "han-li", content, replyToMessageId, createdAt: new Date().toISOString(),
     });
@@ -247,9 +268,9 @@ export class HanliInquiryService {
     return projected;
   }
 
-  #recordDiscussion(state: InquirySnapshot, findings: NangongInquiryResultOutDto, customerReply: string): void {
+  async #recordDiscussion(state: InquirySnapshot, findings: NangongInquiryResultOutDto, customerReply: string): Promise<void> {
     try {
-      this.#options.memory!.recordRequirementDiscussionContext?.({
+      await this.#options.memory!.recordRequirementDiscussionContext({
         contextId: state.requestId, ownerPersonaId: "han-li", conversationId: state.conversationId,
         sourceRequestId: state.requestId, ...state.goal,
         findingStatus: findings.status, findingSummary: findings.summary,

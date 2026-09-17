@@ -1,4 +1,4 @@
-﻿import type { CollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
+﻿import type { AsyncCollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
 import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
@@ -64,7 +64,7 @@ export interface PersonaEvolutionRuntimeOptions {
   /** 发布任务流式进度到确定时间线节点的可选端口。 */
   recordTimelineStream?: (taskId: string, memberId: string, event: CodexStreamEventOutDto) => void;
   /** 人物共享记忆端口；数据库不可用时允许为空。 */
-  memory?: CollaborationMemoryPort | null;
+  memory?: AsyncCollaborationMemoryPort | null;
   /** 人物消息变化后刷新语义记忆的可选通知。 */
   refreshSemanticMemory?: () => void;
   /** 韩立内部研讨模型调用端口。 */
@@ -76,7 +76,7 @@ export interface PersonaEvolutionRuntimeOptions {
   /** 根据 Evolution 工作区读取项目作用域。 */
   readProjectScope?: (state: EvolutionStateOutDto) => string;
   /** 读取当前韩立展示会话标识。 */
-  readHanliConversationId?: () => string | null;
+  readHanliConversationId?: () => Promise<string | null>;
   /** 人物会话提交后通知界面刷新。 */
   onPersonaConversationChanged?: (conversation: PersonaConversationOutDto) => void;
   /** 从统一数据库读取专题完整档案的可选端口。 */
@@ -113,7 +113,7 @@ export class PersonaEvolutionRuntime {
   /** 技术和业务阻塞事件记录入口。 */
   readonly #recordFailure: NonNullable<PersonaEvolutionRuntimeOptions["recordFailure"]>;
   /** 可选共享人物记忆端口。 */
-  readonly #memory: CollaborationMemoryPort | null;
+  readonly #memory: AsyncCollaborationMemoryPort | null;
   /** 可选专题完整档案读取端口。 */
   readonly #readDossier: PersonaEvolutionRuntimeOptions["readDossier"];
   /** Evolution 写动作幂等协调端口。 */
@@ -172,7 +172,7 @@ export class PersonaEvolutionRuntime {
         recordEvent: this.#recordEvent,
         readStableUserId: options.readStableUserId || (() => ""),
         readProjectScope: options.readProjectScope || (() => "global"),
-        readHanliConversationId: options.readHanliConversationId || (() => null),
+        readHanliConversationId: options.readHanliConversationId || (async () => null),
         onPersonaConversationChanged: options.onPersonaConversationChanged,
       })
       : null;
@@ -784,7 +784,7 @@ export class PersonaEvolutionRuntime {
       }
       // 运行态代表用户已经确认统一托管；审批与分发固定自动，不再读取人物专用开关。
       if (state.automationRuntime.status !== "running") return;
-      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "await-approval")) state = this.#hanli.autoApprove(proposal.proposalId);
+      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "await-approval")) state = await this.#hanli.autoApprove(proposal.proposalId);
       for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "dispatch")) state = await this.#dispatch(proposal.proposalId);
       const hasActiveWork = new ProposalRevisionChain(state.proposals).currentProposals()
         .some((item) => !["completed", "rejected"].includes(item.status))
@@ -820,7 +820,7 @@ export class PersonaEvolutionRuntime {
       const content = `课题：${topic.title}\n\n目标：${topic.goal}\n\n调查事实：\n${topic.evidence.map((item) => `- ${item}`).join("\n")}\n\n推荐方向：在已登记范围内实施，并保持排除项不变。`;
       let next = this.nangongRuntime.facade.createProposal(topic.topicId, { type: "代码修正", content, risks: ["实施结果可能与既有调用方产生兼容影响"], rollbackPlan: "保留提案版本和关联任务，失败时撤销任务分支且不覆盖历史提案。" });
       const proposal = next.proposals.at(-1)!;
-      next = this.#hanli.autoApprove(proposal.proposalId);
+      next = await this.#hanli.autoApprove(proposal.proposalId);
       const decided = requireProposal(next, proposal.proposalId);
       if (decided.status === "approved") await this.#dispatch(proposal.proposalId);
     } catch (error) {

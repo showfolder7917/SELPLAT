@@ -1,5 +1,5 @@
 import type { EventCenterTimeline } from "../../services/support/capabilities/event-center/index.js";
-import type { CollaborationMemoryPort } from "../../../contracts/services/support/capabilities/event-center/index.js";
+import type { AsyncCollaborationMemoryPort } from "../../../contracts/services/support/capabilities/event-center/index.js";
 import type { PersonaConversationOutDto } from "../../../contracts/services/personas/conversation/index.js";
 import type { createHanliRuntime } from "../../services/personas/hanli/index.js";
 import type { LinghuRuntime } from "../../services/personas/linghu/index.js";
@@ -21,7 +21,7 @@ export interface PersonaBootstrapOptions {
   workflowRepository: WorkflowRepositoryPort | null;
   linghuRuntime: LinghuRuntime;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
-  memory?: CollaborationMemoryPort | null;
+  memory?: AsyncCollaborationMemoryPort | null;
   onConversationChanged?(conversation: PersonaConversationOutDto): void;
 }
 

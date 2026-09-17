@@ -1,5 +1,5 @@
 import type {
-  CollaborationMemoryPort,
+  AsyncCollaborationMemoryPort,
   HanliCorpusExtractionCandidateOutDto,
   HanliSemanticExtractionInDto,
 } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
@@ -10,7 +10,7 @@ const PERIODIC_REFRESH_MILLISECONDS = 5 * 60_000;
 
 export interface HanliSemanticExtractionRunnerOptions {
   /** 领取语料并保存派生语义的统一记忆端口。 */
-  memory: CollaborationMemoryPort | null;
+  memory: AsyncCollaborationMemoryPort | null;
   /** 受版本管理的语义提取提示词。 */
   prompts: PromptLibraryPort;
   /** 调用模型分析单批语料。 */
@@ -103,7 +103,7 @@ export class HanliSemanticExtractionRunner {
       });
       return;
     }
-    const candidates = memory.claimHanliCorpusExtractions(stableUserId, projectScope, EXTRACTOR_VERSION, 4);
+    const candidates = await memory.claimHanliCorpusExtractions(stableUserId, projectScope, EXTRACTOR_VERSION, 4);
     this.#claimedCandidates = candidates;
     for (const candidate of candidates) {
       if (this.#stopped) {
@@ -118,7 +118,7 @@ export class HanliSemanticExtractionRunner {
           return;
         }
         const result = parseHanliSemanticExtraction(analyzed, candidate);
-        memory.completeHanliCorpusExtraction(candidate, result);
+        await memory.completeHanliCorpusExtraction(candidate, result);
         this.#forgetClaim(candidate.extractionId);
         this.#options.recordEvent("hanli.semantic_extraction.completed", {
           reason,
@@ -131,7 +131,7 @@ export class HanliSemanticExtractionRunner {
         if (this.#stopped) {
           return;
         }
-        memory.failHanliCorpusExtraction(candidate, error);
+        await memory.failHanliCorpusExtraction(candidate, error);
         this.#forgetClaim(candidate.extractionId);
         this.#options.recordEvent("hanli.semantic_extraction.failed", {
           reason,
@@ -156,7 +156,7 @@ export class HanliSemanticExtractionRunner {
     }
     for (const candidate of candidates) {
       try {
-        memory.failHanliCorpusExtraction(candidate, error);
+        void memory.failHanliCorpusExtraction(candidate, error);
       } catch {
         // SQLite 已关闭时不再写入；数据库租约会在下次应用启动时自动恢复。
       }
