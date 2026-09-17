@@ -126,7 +126,7 @@ export class EvolutionStateStore {
       state.automationRuntime.pausedAt = null;
       state.automationRuntime.stopReason = null;
       state.oneShotConfirmation = null;
-      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, sourceRequestId, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, resumeMode: null, startedAt: now, updatedAt: now, completedAt: null };
+      state.oneShotRun = { runId: `evolution-one-shot-${randomUUID()}`, sourceRequestId, topicId: null, proposalId: null, status: "running", phase: "preparing-topic", topicEstablishmentMode: "ordinary-deliberation", actor: "nangong-wan", actorName: "南宫婉", action: "正在根据当前对话整理演化课题", blockingReason: null, resumeMode: null, startedAt: now, updatedAt: now, completedAt: null };
     });
   }
 
@@ -279,6 +279,74 @@ export class EvolutionStateStore {
       run.updatedAt = now;
       run.completedAt = now;
     }, { phase: "blocked", actor: "user", status: "blocked", blockingReason: reason, nextOwner: "han-li" });
+  }
+
+  /**
+   * 作用：在旧专题已经完成工作树审计退役后，原子撤销旧活动资格并建立独立专题运行。
+   * 真实传参示例：sourceRequestId=新用户请求，返回 topicId=null、topicEstablishmentMode=independent-switch 的建立中运行。
+   * 真实返回示例：旧专题和未完成提案进入审计状态，新运行显示“正在建立新专题”。
+   * 异常或副作用示例：缺少工作区时抛错；不会恢复旧专题、旧提案或旧恢复入口。
+   */
+  switchToIndependentTopic(
+    workspaceState: EvolutionStateOutDto["automationContext"]["workspaceState"],
+    locale: EvolutionStateOutDto["automationContext"]["locale"],
+    sourceRequestId: string,
+    reason: string,
+    retiredTaskIds: string[],
+  ): EvolutionStateOutDto {
+    if (!workspaceState?.roots?.length) throw new Error("独立专题切换必须先登记实施工作区。");
+    const previousRun = this.#state.oneShotRun ? structuredClone(this.#state.oneShotRun) : null;
+    const previousTopicId = previousRun?.topicId || this.#state.activeTopicId;
+    const previousProposalIds = previousTopicId
+      ? this.#state.proposals.filter((item) => item.topicId === previousTopicId).map((item) => item.proposalId)
+      : [];
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.independent-topic-switched", previousTopicId, previousRun?.proposalId || previousProposalIds.at(-1) || null, (state) => {
+      if (previousTopicId) {
+        const topic = state.topics.find((item) => item.topicId === previousTopicId);
+        if (topic && topic.status !== "completed") {
+          topic.status = "rejected";
+          topic.recoveryPoint = "topic-switch-retired";
+          topic.updatedAt = now;
+        }
+        for (const proposal of state.proposals.filter((item) => item.topicId === previousTopicId && item.status !== "completed")) {
+          proposal.status = "rejected";
+          proposal.resultSummary = required(reason, "独立专题切换原因", 8_000);
+          proposal.updatedAt = now;
+        }
+      }
+      state.activeTopicId = null;
+      state.automationContext = { workspaceState: structuredClone(workspaceState), locale };
+      state.automationRuntime.status = "running";
+      state.automationRuntime.startedAt ??= now;
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.stopReason = null;
+      state.oneShotConfirmation = null;
+      state.oneShotRun = {
+        runId: `evolution-one-shot-${randomUUID()}`,
+        sourceRequestId,
+        topicId: null,
+        proposalId: null,
+        status: "running",
+        phase: "preparing-topic",
+        topicEstablishmentMode: "independent-switch",
+        actor: "han-li",
+        actorName: "韩立",
+        action: "正在建立新的独立专题",
+        blockingReason: null,
+        resumeMode: null,
+        startedAt: now,
+        updatedAt: now,
+        completedAt: null,
+      };
+    }, {
+      retiredRun: previousRun,
+      retiredTopicId: previousTopicId || null,
+      retiredProposalIds: previousProposalIds,
+      retiredTaskIds: [...retiredTaskIds],
+      retiredReason: reason,
+      nextOwner: "han-li",
+    });
   }
 
   /**
@@ -1352,6 +1420,7 @@ function archiveTitle(reason: string): string {
     "one-shot.blocked": "一次性演化遇到无法自动处理的阻塞",
     "one-shot.orphan-retired": "遗留的一次性演化运行状态已结束",
     "one-shot.topic-switch-retired": "用户切换独立专题，旧运行停止接收新范围",
+    "one-shot.independent-topic-switched": "用户切换独立专题，旧链已退役并开始建立新专题",
   };
   return titles[reason] || reason;
 }

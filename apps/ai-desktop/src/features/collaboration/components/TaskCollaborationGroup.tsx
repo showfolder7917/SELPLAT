@@ -248,6 +248,21 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   }
 
   if (groups.length === 0) {
+    const establishingTopic = model.data.currentTopicStage;
+    if (establishingTopic && ["establishing-topic", "topic-establishment-failed"].includes(establishingTopic.status)) {
+      return (
+        <section className="task-collaboration-page">
+          <div className="task-topic-establishment" role={establishingTopic.status === "topic-establishment-failed" ? "alert" : "status"}>
+            <strong>{establishingTopic.title}</strong>
+            <span>发生事项：{establishingTopic.summary}</span>
+            <span>处理人和状态：{establishingTopic.waitingFor}</span>
+            <span>是否需要你操作：当前无需操作。</span>
+            <span>下一步：{establishingTopic.nextAction}</span>
+            {establishingTopic.remaining && <small>{establishingTopic.remaining}</small>}
+          </div>
+        </section>
+      );
+    }
     const statusMessage = stateReadStatus === "syncing"
       ? (locale === "ja" ? "共同状態を同期しています" : "正在同步")
       : stateReadStatus === "unavailable"
