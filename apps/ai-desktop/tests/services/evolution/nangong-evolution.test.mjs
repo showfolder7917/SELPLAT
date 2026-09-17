@@ -956,7 +956,12 @@ test("独立专题切换在同一状态提交中退役旧链并建立可投影�
   assert.equal(state.oneShotRun.topicEstablishmentMode, "independent-switch");
   assert.equal(state.oneShotRun.sourceRequestId, "new-independent-topic");
   assert.equal(state.archiveRecords.length, archiveCount + 1);
-  assert.deepEqual(state.archiveRecords.at(-1).payload.retiredTaskIds, ["old-task-1"]);
+  const archive = state.archiveRecords.at(-1);
+  assert.equal(archive.eventType, "one-shot.independent-topic-switched");
+  assert.equal(archive.title, "用户切换独立专题，旧链已退役并开始建立新专题");
+  assert.equal(archive.topicId, oldTopicId);
+  assert.equal(archive.proposalId, oldProposalId);
+  assert.deepEqual(archive.payload.retiredTaskIds, ["old-task-1"]);
 });
 
 test("历史退役提案不能被返修结果重新激活", () => {

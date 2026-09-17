@@ -301,7 +301,7 @@ export class EvolutionStateStore {
       ? this.#state.proposals.filter((item) => item.topicId === previousTopicId).map((item) => item.proposalId)
       : [];
     const now = new Date().toISOString();
-    return this.#commit("one-shot.independent-topic-switched", null, null, (state) => {
+    return this.#commit("one-shot.independent-topic-switched", previousTopicId, previousRun?.proposalId || previousProposalIds.at(-1) || null, (state) => {
       if (previousTopicId) {
         const topic = state.topics.find((item) => item.topicId === previousTopicId);
         if (topic && topic.status !== "completed") {
@@ -1420,6 +1420,7 @@ function archiveTitle(reason: string): string {
     "one-shot.blocked": "一次性演化遇到无法自动处理的阻塞",
     "one-shot.orphan-retired": "遗留的一次性演化运行状态已结束",
     "one-shot.topic-switch-retired": "用户切换独立专题，旧运行停止接收新范围",
+    "one-shot.independent-topic-switched": "用户切换独立专题，旧链已退役并开始建立新专题",
   };
   return titles[reason] || reason;
 }
