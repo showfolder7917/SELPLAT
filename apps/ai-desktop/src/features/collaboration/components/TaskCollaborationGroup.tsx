@@ -92,6 +92,10 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     resumeAcceptance,
     retireStaleTopic,
   } = controller;
+  // 已取消专题只作为审计历史显示；活动专题继续占用页面上方的可操作区域。
+  const activeGroups = groups.filter((group) => group.status !== "cancelled");
+  // 历史卡按后端已确定的顺序显示，不从节点重新推断取消事实。
+  const cancelledHistoryGroups = groups.filter((group) => group.status === "cancelled");
 
   /** 只记录详情面板的连续滚动，防止页面外层滚动被误当成长任务。 */
   const recordDetailScroll = (groupId: string) => {
@@ -114,6 +118,37 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   /** 验收卡点恢复原一次性运行，不再把已集成任务误交给任务级恢复接口。 */
   const requestResumeAcceptance = (request: { topicId: string; proposalId: string; runId: string }) => {
     void resumeAcceptance(request);
+  };
+
+  /** 将每张卡的显示状态和操作统一装配，历史卡由卡片内部按终态关闭操作区域。 */
+  const createCardModel = (group: typeof groups[number]): TaskGroupCardModel => {
+    const cardModel: TaskGroupCardModel = {
+      group,
+      presentation: {
+        locale,
+        open: isGroupOpen(group),
+        continuingTaskId,
+        continueError,
+        continueFeedback,
+        liveTextByNodeId,
+        currentTopicStage: model.data.currentTopicStage,
+      },
+      actions: {
+        isNodeOpen,
+        onOpenChange: (open) => {
+          const startedAt = performance.now();
+          setGroupOpen(group.groupId, open);
+          requestAnimationFrame(() => requestAnimationFrame(() => recordCollaborationInteractionPerformance("task-card-page-update", startedAt, { groupId: group.groupId, action: open ? "expand" : "collapse" })));
+        },
+        onDetailScroll: () => recordDetailScroll(group.groupId),
+        onNodeOpenChange: setNodeOpen,
+        onManualApproval,
+        onContinueTask: requestContinueTask,
+        onResumeAcceptance: requestResumeAcceptance,
+        onRetireStaleTopic: retireStaleTopic,
+      },
+    };
+    return cardModel;
   };
 
   /** 空状态入口只打开韩立会话，不把用户带入任务提交流程。 */
@@ -251,57 +286,26 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         <span>{model.presentation.timelineProjectionStatus.message || "任务进度更新失败，正在保留上次成功内容。"}</span>
         <button type="button" disabled={retryingProjection} onClick={retryTimelineProjection}>{retryingProjection ? "重试更新中…" : "重试进度更新"}</button>
       </div>}
-      {/* 专题列表：保持后端时间线已经确定的稳定顺序。 */}
+      {/* 当前专题列表保持后端已确定的稳定顺序，且只承载仍可能存在的操作。 */}
       <div className="task-collaboration-groups">
-        {groups.map((group) => {
-          // 卡片模型（cardModel）把原来散落在 JSX 上的十多个参数按业务职责归组。
-          const cardModel: TaskGroupCardModel = {
-            // 专题数据（group）是当前卡片需要展示的唯一后端时间线专题。
-            group,
-            // 显示数据（presentation）只决定卡片此刻如何呈现，不执行任何业务操作。
-            presentation: {
-              // 界面语言（locale）决定卡片显示中文还是日文标签。
-              locale,
-              // 卡片展开状态（open）来自页面控制器保存的用户选择。
-              open: isGroupOpen(group),
-              // 继续任务标识（continuingTaskId）用于锁定正在恢复的按钮。
-              continuingTaskId,
-              // 继续任务错误（continueError）用于在卡片底部显示失败原因。
-              continueError,
-              // 恢复成功后的反馈独立于失败原因，避免用户误以为按钮消失后没有结果。
-              continueFeedback,
-              // 实时节点正文（liveTextByNodeId）让当前执行节点立即显示流式内容。
-              liveTextByNodeId,
-              currentTopicStage: model.data.currentTopicStage,
-            },
-            // 卡片操作（actions）集中描述用户在卡片中可以触发的全部行为。
-            actions: {
-              // 节点展开查询（isNodeOpen）保留自动展开与用户选择的统一规则。
-              isNodeOpen,
-              // 卡片展开操作（onOpenChange）只更新当前专题的展开状态。
-              onOpenChange: (open) => {
-                const startedAt = performance.now();
-                setGroupOpen(group.groupId, open);
-                requestAnimationFrame(() => requestAnimationFrame(() => recordCollaborationInteractionPerformance("task-card-page-update", startedAt, { groupId: group.groupId, action: open ? "expand" : "collapse" })));
-              },
-              // 详情面板滚动由卡片上报，性能记录仍由页面集中处理。
-              onDetailScroll: () => recordDetailScroll(group.groupId),
-              // 节点展开操作（onNodeOpenChange）把节点选择交回页面控制器保存。
-              onNodeOpenChange: setNodeOpen,
-              // 人工审批操作（onManualApproval）打开当前提案的正式审批窗口。
-              onManualApproval,
-              // 继续任务操作（onContinueTask）从时间线保存的恢复点继续原任务。
-              onContinueTask: requestContinueTask,
-              // 验收恢复操作（onResumeAcceptance）使用交付投影签发的原专题、提案和运行标识。
-              onResumeAcceptance: requestResumeAcceptance,
-              // 历史卡被错误保留为活动态时，按钮只调用主进程的一次受控退役入口。
-              onRetireStaleTopic: retireStaleTopic,
-            },
-          };
-
-          // 每张专题卡只接收一个具名模型，调用处无需理解内部组件的参数透传链。
+        {activeGroups.map((group) => {
+          // 当前专题仍使用具名卡片模型，保持调用点能直接辨别展示与操作边界。
+          const cardModel = createCardModel(group);
           return <TaskGroupCard key={group.groupId} model={cardModel} />;
         })}
+        {cancelledHistoryGroups.length > 0 && (
+          // 历史区放在同一滚动容器末尾，用户滚动详情时始终可以抵达已取消旧卡。
+          <section className="task-collaboration-history" aria-label={locale === "ja" ? "取消済みの履歴" : "已取消专题历史"}>
+            <h2>{locale === "ja" ? "取消済みの履歴" : "已取消专题历史"}</h2>
+            <div className="task-collaboration-history-cards">
+              {cancelledHistoryGroups.map((group) => {
+                // 历史区沿用同一具名模型；取消终态由卡片内部阻断所有操作控件。
+                const cardModel = createCardModel(group);
+                return <TaskGroupCard key={group.groupId} model={cardModel} />;
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </section>
   );
