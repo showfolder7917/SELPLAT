@@ -57,7 +57,17 @@ for (const complete of [true, false, "invalid"]) test(`修复后按完成证据�
           ? complete === "invalid" ? "没有结构化证据" : `REPAIR_COMPLETION=${JSON.stringify({ complete, remaining: complete ? "" : "补充边界用例", evidence: "目标源码已检查，主路径验证通过" })}`
           : "只修复已定位错误",
         executeRepair: async () => verified,
-        execute: async (_task, plan) => { plans.push(plan.text); return ++executionCount === 1 ? { status: "incomplete", text: "失败", pendingActions: ["目标错误"] } : verified; },
+        execute: async (_task, plan) => {
+          plans.push(plan.text);
+          return ++executionCount === 1 ? {
+            status: "incomplete", text: "失败", pendingActions: ["目标错误"], changedFiles: [], authorizedFiles: [], successfulCommands: [],
+            failureRouting: {
+              kind: "technical-failure", stepPurpose: "implementation", diagnosticContext: "目标实现错误与原任务直接相关",
+              verifiedFacts: ["工作区、规则入口与原任务范围均已核对"], rawCommandResults: ["目标错误"],
+              taskRelation: "direct", nextRetryAction: "沿原任务进入令狐修复并依据完成证据续接",
+            },
+          } : verified;
+        },
       }) }),
       integrationPipeline: { finishWaitingTask() {}, trackWaitingTask() {}, schedule() {}, dispose() {} },
       emitState() {}, emitStream() {},

@@ -89,6 +89,18 @@ export function projectCollaborationFlowEvent(
     })]);
   }
 
+  // 分流结果已声明为诊断纠正时，页面只投影原执行人的核对对象、原始失败和重试动作；不生成恢复或返修入口。
+  if (event.type === "execution.diagnostic_correction") {
+    const routing = event.details?.failureRouting;
+    return projection("running", [fact({
+      nodeId: `diagnostic-correction:${task.taskId}:${event.eventId}`, kind: "execution", actor, recipients: [initiator], status: "current",
+      action: "正在核对诊断对象", summary: event.summary,
+      content: routing ? `核对对象：${routing.diagnosticContext}\n保留的原始失败：${routing.rawCommandResults.join("\n") || "无"}\n下一步：${routing.nextRetryAction}` : event.summary,
+      detail: routing ? [...routing.verifiedFacts, ...routing.rawCommandResults].join("\n") : "",
+      startedAt: event.occurredAt, completedAt: null, automaticOpen: true, manualApprovalProposalId: null,
+    })]);
+  }
+
   if (event.type === "task.submitted") {
     const recipient = task.originalExecutor || task.executionRecords.at(0)?.executor || EXECUTION_POOL;
     return projection("running", [fact({

@@ -24,6 +24,7 @@ import type {
 } from "../support/capabilities/release/index.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
 import type { ExecutorFacade } from "../personas/executor/index.js";
+import type { ExecutorFailureRoutingOutDto } from "../../../contracts/services/personas/executor/index.js";
 
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 const ORCHESTRATOR_MEMBER_IDS = new Set(["nangong-wan", LINGHU_MEMBER_ID]);
@@ -937,13 +938,17 @@ export class CollaborationCoordinator {
       if (result.status !== "code-verified") {
         if (changeSpan) this.#durations.finish(changeSpan, "failed", { pendingActions: result.pendingActions.join("；") });
         if (verificationSpan) this.#durations.finish(verificationSpan, "failed", { pendingActions: result.pendingActions.join("；") });
+        // 唯一分流结果决定后续：未带分类的旧结果按门禁失败停止，禁止再把 incomplete 泛化派给令狐。
+        const routing = result.failureRouting;
+        if (!routing) return this.#holdForUnclassifiedFailure(taskId, result.pendingActions.join("；") || "执行结果缺少结构化失败分类", taskRevision);
+        if (routing.kind === "diagnostic-correction") return this.#continueDiagnosticCorrection(taskId, memberId, assignmentId, routing, taskRevision);
         return this.#repairFailedExecution(
           // 原任务标识保持不变，恢复过程继续沿同一任务历史记录。
           taskId,
           // 执行结果必须保留具体失败正文，不能只显示“失败”。
           result.pendingActions.join("；") || "当前修改尚未完成代码验证",
           // 结构化失败类别决定是否需要等待用户重新确认文件范围。
-          result.failureKind === "scope-confirmation",
+          routing.kind === "gate-failure" || result.failureKind === "scope-confirmation",
           taskRevision,
         );
       }
@@ -961,6 +966,43 @@ export class CollaborationCoordinator {
       if (this.#store.task(taskId).state === "cancelled") return;
       await this.#repairFailedExecution(taskId, `执行失败：${errorMessage(error)}`, false, taskRevision);
     }
+  }
+
+  /** 诊断纠正仍在原执行人与原会话内完成，不能制造恢复、审批或令狐接管状态。 */
+  async #continueDiagnosticCorrection(
+    taskId: string,
+    memberId: string,
+    assignmentId: string | null,
+    routing: ExecutorFailureRoutingOutDto,
+    expectedTaskRevision: number,
+  ): Promise<void> {
+    this.#store.updateTask(taskId, "execution.diagnostic_correction", (current, state) => {
+      if (current.taskRevision !== expectedTaskRevision) return;
+      current.state = "executing";
+      current.phase = "analyzing";
+      current.blockingReason = null;
+      current.repairKind = null;
+      current.repairFailureReason = null;
+      current.repairRequiresUserConfirmation = false;
+      current.currentHandler = participantSnapshot(requireMember(state, memberId));
+      appendFlow(current, "execution.diagnostic_correction", "execution", "started",
+        `正在核对：${routing.diagnosticContext}；保留原始失败，下一步：${routing.nextRetryAction}`,
+        requireMember(state, memberId), false, { assignmentId: assignmentId || undefined, failureRouting: routing, technicalEvidence: routing.rawCommandResults });
+    });
+    // 同一任务的会话和分配保持有效，只重新进入原执行步骤。
+    queueMicrotask(() => { if (this.#store.task(taskId).taskRevision === expectedTaskRevision) void this.#execute(taskId); });
+  }
+
+  /** 旧结果缺少唯一分流事实时只阻断，不再猜测为令狐可修复故障。 */
+  #holdForUnclassifiedFailure(taskId: string, reason: string, expectedTaskRevision: number): void {
+    this.#store.updateTask(taskId, "task.blocked", (current) => {
+      if (current.taskRevision !== expectedTaskRevision) return;
+      current.state = "blocked";
+      current.phase = "blocked";
+      current.blockingReason = `执行结果缺少结构化失败分类，已停止自动派发：${reason}`;
+      current.recoveryTargetState = "executing";
+      appendFlow(current, "task.blocked", "recovery", "failed", current.blockingReason, current.currentHandler || null, true);
+    });
   }
 
   /** 普通实施和令狐完整修复共享结果提交门，避免修复成功后重新执行整个任务。 */
