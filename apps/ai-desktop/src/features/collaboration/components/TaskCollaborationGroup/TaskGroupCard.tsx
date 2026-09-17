@@ -176,8 +176,6 @@ function TaskGroupHeader({
       <span>
         {/* 专题标题：直接显示后端时间线已经确定的专题名称。 */}
         <strong>{group.title}</strong>
-        {/* 取消结论在折叠头部也可见，用户无需展开历史卡才知道它不可再推进。 */}
-        {group.status === "cancelled" && <small className="task-group-cancelled-notice">{locale === "ja" ? "この案件は取消済みです" : "本专题已取消"}</small>}
       </span>
       {/* 用户主区域：固定回答发生事项、处理人状态、是否需要操作和下一步。 */}
       <span className="task-group-primary" aria-label={locale === "ja" ? "現在の状況" : "当前情况"}>
@@ -392,23 +390,18 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { locale, open, continueError, continueFeedback } = model.presentation;
   // 卡片操作这里只读取专题展开操作，节点操作继续由统一模型传给节点。
   const { onOpenChange } = model.actions;
-  // 已取消专题只保留为历史事实，不能复用当前专题的下一流程或任何操作入口。
+  // 已取消专题必须始终可见；不能复用会隐藏内容的折叠卡或任何当前专题操作入口。
   if (group.status === "cancelled") {
     return (
-      <SelUiDisclosure
-        idPrefix="task-collaboration-group"
-        className="task-collaboration-group task-collaboration-history-card cancelled"
-        open={open}
-        onOpenChange={onOpenChange}
-        trigger={<TaskGroupHeader group={group} presentation={model.presentation} />}
-      >
-        {/* 固定取消结论使历史卡可识别；本分支没有审批、分发、恢复或验收控件。 */}
-        <div className="task-cancelled-history-summary">
+      // 静态历史卡不接收展开状态或操作回调，保证取消结论与摘要始终可见。
+      <article className="task-collaboration-cancelled-history-card" data-cancelled-history-card data-task-timeline-topic-id={group.topicId || ""}>
+        <div className="task-cancelled-history-status">
           <strong>{locale === "ja" ? "取消済み" : "已取消"}</strong>
           <span>{locale === "ja" ? "この案件は取消済みです" : "本专题已取消"}</span>
-          <small>{group.summary}</small>
         </div>
-      </SelUiDisclosure>
+        <h3>{group.title}</h3>
+        <p>{group.summary}</p>
+      </article>
     );
   }
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
