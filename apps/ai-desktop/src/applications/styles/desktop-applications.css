@@ -497,8 +497,12 @@ button { color: inherit; }
 .task-collaboration-history { display: grid; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--sel-theme-control-line-soft); }
 .task-collaboration-history h2 { margin: 0; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-body); }
 .task-collaboration-history-cards { display: grid; gap: 10px; }
+.task-collaboration-cancelled-history-card { display: grid; min-width: 0; min-height: 112px; gap: 8px; padding: 16px; border: 1px solid var(--sel-theme-control-line-soft); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text-muted); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 82%, transparent); }
+.task-cancelled-history-status { display: flex; flex-wrap: wrap; gap: 8px; color: var(--sel-theme-workbench-text); }
+.task-cancelled-history-status strong { color: var(--sel-theme-semantic-warning); }
+.task-collaboration-cancelled-history-card h3, .task-collaboration-cancelled-history-card p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.task-collaboration-cancelled-history-card h3 { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-body); }
 .task-collaboration-group { min-height: 0; border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 72%, transparent); }
-.task-collaboration-history-card { opacity: .82; }
 /* 展开卡片占用任务列表的可用高度，保证下一流程后的详情行有真实高度可供内部滚动。 */
 .task-collaboration-group[data-sel-disclosure-open="true"] { display: grid; flex: 0 0 min(100%, 560px); grid-template-rows: auto minmax(0, 1fr); min-height: 280px; }
 .task-collaboration-group > .selui-disclosure-heading > .seldisclosure-trigger { min-height: 72px; padding: 14px 16px; }
@@ -508,7 +512,6 @@ button { color: inherit; }
 .task-group-header-content, .task-node-header-content { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-width: 0; width: 100%; }
 .task-group-header-content > span:first-child, .task-group-primary, .task-node-main { display: grid; min-width: 0; gap: 5px; }
 .task-group-header-content strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-body); }
-.task-group-cancelled-notice { color: var(--sel-theme-workbench-text-muted); }
 .task-group-header-content small, .task-node-main > small { overflow: visible; color: var(--sel-theme-workbench-text-muted); overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
 /* 当前结论和相邻节点都会随侧栏压缩；共同说明规则必须默认换行，不能依赖窗口媒体条件解除省略。 */
 .task-group-primary { min-width: 0; flex: 1; gap: 4px; }
@@ -578,9 +581,6 @@ button { color: inherit; }
 .task-timeline-next strong { color: var(--sel-theme-workbench-text); white-space: nowrap; }
 .task-timeline-next-current { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; overflow-wrap: anywhere; }
 .task-timeline-next > small { grid-column: 2 / -1; overflow-wrap: anywhere; }
-.task-cancelled-history-summary { display: grid; gap: 6px; margin: 12px 4px 4px 38px; padding: 12px; border: 1px solid var(--sel-theme-control-line-soft); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text-muted); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 82%, transparent); }
-.task-cancelled-history-summary strong, .task-cancelled-history-summary span { color: var(--sel-theme-workbench-text); }
-.task-cancelled-history-summary small { overflow-wrap: anywhere; }
 .task-collaboration-empty { width: min(100%, 480px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 8px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
 .task-collaboration-empty strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
 .task-collaboration-empty > span { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
