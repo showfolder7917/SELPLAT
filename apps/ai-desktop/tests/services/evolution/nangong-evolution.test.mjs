@@ -3019,6 +3019,13 @@ test("主推进忙碌时收到的工作流唤醒会在本轮结束后补跑", as
   } finally { facade.stop(); }
 });
 
+test("即时工作流通知抢占已登记的较慢续行计时器", () => {
+  const runtimeSource = readFileSync(new URL("../../../electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", import.meta.url), "utf8");
+  assert.match(runtimeSource, /#continuationDueAt: number \| null = null/);
+  assert.match(runtimeSource, /const dueAt = Date\.now\(\) \+ delayMs[\s\S]*#continuationDueAt !== null && this\.#continuationDueAt <= dueAt[\s\S]*clearTimeout\(this\.#continuationTimer\)/);
+  assert.match(runtimeSource, /this\.#continuationDueAt = dueAt[\s\S]*this\.#continuationDueAt = null[\s\S]*void this\.#tick\(\)/);
+});
+
 test("返修调查没有新增可核验事实时不创建提案版本", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "revision-without-evidence-"));
   try {

@@ -131,6 +131,8 @@ export class PersonaEvolutionRuntime {
   #timer: ReturnType<typeof setInterval> | null = null;
   /** 当前一次性流程的短间隔继续计时器。 */
   #continuationTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 已登记续行的最早到期时间；真实通知可以抢占较慢的后台轮询。 */
+  #continuationDueAt: number | null = null;
   /** 主推进仍忙碌时收到的最近继续请求；本轮结束后必须补跑，不能静默丢弃。 */
   #queuedContinuationDelayMs: number | null = null;
   /** 当前是否正在执行主推进循环，防止重入。 */
@@ -286,6 +288,7 @@ export class PersonaEvolutionRuntime {
     if (this.#continuationTimer) clearTimeout(this.#continuationTimer);
     this.#timer = null;
     this.#continuationTimer = null;
+    this.#continuationDueAt = null;
     this.#queuedContinuationDelayMs = null;
     this.#unsubscribeCollaboration();
     this.#currentTopicStageListeners.clear();
@@ -370,9 +373,16 @@ export class PersonaEvolutionRuntime {
         : Math.min(this.#queuedContinuationDelayMs, delayMs);
       return;
     }
-    if (this.#continuationTimer) return;
+    const dueAt = Date.now() + delayMs;
+    if (this.#continuationTimer) {
+      // 收到回复或协作状态变化时，不能让它等待已经登记的较慢后台续行。
+      if (this.#continuationDueAt !== null && this.#continuationDueAt <= dueAt) return;
+      clearTimeout(this.#continuationTimer);
+    }
+    this.#continuationDueAt = dueAt;
     this.#continuationTimer = setTimeout(() => {
       this.#continuationTimer = null;
+      this.#continuationDueAt = null;
       void this.#tick();
     }, delayMs);
   }
