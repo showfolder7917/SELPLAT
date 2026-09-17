@@ -873,10 +873,33 @@ test("可恢复验收卡点不能被普通专题确认覆盖，明确退役后�
     assert.equal(retired.topics.find((item) => item.topicId === topicId).status, "rejected");
     assert.equal(retired.topics.find((item) => item.topicId === topicId).recoveryPoint, "topic-switch-retired");
     assert.equal(retired.proposals.find((item) => item.proposalId === proposalId).status, "rejected");
+    assert.equal(retired.activeTopicId, null);
     const replacement = store.beginOneShotRun(workspaceState, "zh-CN", "confirmed-topic-switch");
     assert.notEqual(replacement.oneShotRun.runId, originalRunId);
     assert.equal(replacement.oneShotRun.sourceRequestId, "confirmed-topic-switch");
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("专题指针尚未回填的一次性运行切换时仍原子退役活动旧专题", () => {
+  const key = "topic-switch-with-unbound-run";
+  const store = evolutionStore(key);
+  store.beginOneShotRun(workspaceState, "zh-CN", "malformed-old-run");
+  let state = store.createTopic(topicRequest("指针未回填的旧专题"));
+  const oldTopicId = state.activeTopicId;
+  state = store.createProposal(oldTopicId, proposalRequest());
+  const oldProposalId = state.proposals.at(-1).proposalId;
+  assert.equal(state.oneShotRun.topicId, null);
+
+  const retired = store.retireOneShotRunForTopicSwitch("用户明确切换到新的独立专题");
+  assert.equal(retired.activeTopicId, null);
+  assert.equal(retired.topics.find((item) => item.topicId === oldTopicId).status, "rejected");
+  assert.equal(retired.topics.find((item) => item.topicId === oldTopicId).recoveryPoint, "topic-switch-retired");
+  assert.equal(retired.proposals.find((item) => item.proposalId === oldProposalId).status, "rejected");
+
+  const replacement = store.beginOneShotRun(workspaceState, "zh-CN", "new-run");
+  assert.equal(replacement.activeTopicId, null);
+  assert.equal(replacement.oneShotRun.status, "running");
+  assert.equal(replacement.oneShotRun.topicId, null);
 });
 
 test("历史退役提案不能被返修结果重新激活", () => {

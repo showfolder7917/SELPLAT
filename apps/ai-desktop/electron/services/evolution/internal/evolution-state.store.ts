@@ -245,24 +245,30 @@ export class EvolutionStateStore {
   retireOneShotRunForTopicSwitch(reason: string): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || !["running", "blocked"].includes(current.status)) return this.state();
+    // 正常运行优先使用 oneShot 绑定；旧版或异常中断可能留下 topicId=null、activeTopicId 仍指向旧专题。
+    // 明确切换时两种形态都必须收敛到同一个退役专题，不能让新运行继续扫描旧提案。
+    const retiredTopicId = current.topicId || this.#state.activeTopicId;
     const now = new Date().toISOString();
-    return this.#commit("one-shot.topic-switch-retired", current.topicId, current.proposalId, (state) => {
+    return this.#commit("one-shot.topic-switch-retired", retiredTopicId, current.proposalId, (state) => {
       const run = state.oneShotRun!;
       // 独立专题切换退役的是整条旧运行，而不只是 oneShot 指针。否则后台返修扫描仍会
       // 把旧 rejected/supplement-required 提案识别成可修订对象，并重新激活已经封存的专题。
-      if (run.topicId) {
-        const topic = state.topics.find((item) => item.topicId === run.topicId);
+      if (retiredTopicId) {
+        const topic = state.topics.find((item) => item.topicId === retiredTopicId);
         if (topic && topic.status !== "completed") {
           topic.status = "rejected";
           topic.recoveryPoint = "topic-switch-retired";
           topic.updatedAt = now;
         }
-        for (const proposal of state.proposals.filter((item) => item.topicId === run.topicId && item.status !== "completed")) {
+        for (const proposal of state.proposals.filter((item) => item.topicId === retiredTopicId && item.status !== "completed")) {
           proposal.status = "rejected";
           proposal.resultSummary = required(reason, "独立专题切换原因", 8_000);
           proposal.updatedAt = now;
         }
       }
+      // 新专题尚未建立前必须没有活动专题指针；否则下一次 tick 会把刚退役的 rejected 提案
+      // 当作当前待返修对象，并把旧调查错误写进新 oneShot。
+      state.activeTopicId = null;
       run.status = "blocked";
       run.phase = "blocked";
       run.actor = "user";
