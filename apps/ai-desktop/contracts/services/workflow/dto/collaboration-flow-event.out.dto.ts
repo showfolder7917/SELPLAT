@@ -14,6 +14,7 @@ import type { CollaborationCustomerActionGuidanceOutDto } from "./collaboration-
 // CollaborationParticipantSnapshotOutDto 固定事件发生时参与人物的身份。
 import type { CollaborationParticipantSnapshotOutDto } from "./collaboration-member.out.dto.js";
 import type { ManagedExecutionVerificationEvidenceOutDto } from "../../support/platform/codex/dto/codex-stream.event.out.dto.js";
+import type { ExecutorFailureRoutingOutDto } from "../../personas/executor/index.js";
 
 /** 流程事件可能携带的补充事实；没有对应事实的字段保持未定义。 */
 export interface CollaborationFlowEventDetailsOutDto {
@@ -51,6 +52,8 @@ export interface CollaborationFlowEventDetailsOutDto {
   waitingForTaskId?: string | null;
   /** 只有客户能够解除卡点时生成的处理指导。 */
   customerActionGuidance?: CollaborationCustomerActionGuidanceOutDto;
+  /** 执行层形成的唯一失败分流事实。 */
+  failureRouting?: ExecutorFailureRoutingOutDto;
 }
 
 /** 追加到任务历史中的一个不可变流程事实。 */

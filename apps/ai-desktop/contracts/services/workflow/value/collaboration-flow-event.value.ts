@@ -6,6 +6,7 @@ export type CollaborationFlowEventTypeValue =
   | "executor.self_test_started" | "executor.self_test_passed" | "executor.self_test_failed"
   | "executor.self_repair_started" | "executor.self_repair_completed" | "executor.self_repair_failed"
   | "task.code_verified" | "task.blocked" | "task.cancelled" | "task.interrupted" | "task.recovery_requested" | "task.scope_revised" | "task.failure_evidence_updated"
+  | "execution.diagnostic_correction"
   | "customer.action_required"
   | "execution.repair_queued" | "execution.repair_started" | "execution.repair_investigated" | "execution.repair_completed" | "execution.repair_waiting"
   | "integration.local_changes_transferred" | "integration.batch_frozen" | "integration.candidate_ready" | "integration.local_change_ownership_blocked" | "integration.local_change_ownership_wait_restored"

@@ -448,6 +448,10 @@ function transition(status: CollaborationTimelineGroupOutDto["status"], nodes: C
   if (status === "completed") return { nextStep: "本专题已完成", failureNextStep: null, nextOwner: null };
   if (status === "cancelled") return { nextStep: "本专题已取消", failureNextStep: null, nextOwner: null };
   const latest = nodes.at(-1);
+  if (latest?.eventType === "execution.diagnostic_correction") {
+    const next = latest.content.split("\n").find((line) => line.startsWith("下一步："))?.slice("下一步：".length) || "核对诊断对象后重试原步骤。";
+    return { nextStep: `${latest.actor.displayName} · ${next}`, failureNextStep: "保留原始命令证据，等待后续结构化分流结果。", nextOwner: latest.actor };
+  }
   if (latest?.eventType === "checkpoint.progress") return { nextStep: `${latest.actor.displayName} · ${latest.action}`, failureNextStep: "保留卡点证据，按当前处理结果继续", nextOwner: latest.actor };
   if (latest?.eventType === "release.restart_healthy") return { nextStep: "韩立 · 验收用户可见结果", failureNextStep: "未达到验收条件时继续修复", nextOwner: { memberId: "han-li", displayName: "韩立" } };
   if (status !== "blocked" && latest?.eventType === "unified_test.passed") return { nextStep: "令狐老祖 · 等待重启健康检查，之后交韩立验收", failureNextStep: "令狐老祖 · 调查健康检查失败", nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" } };
