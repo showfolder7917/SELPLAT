@@ -28,6 +28,8 @@ import type { ExecutorFacade } from "../personas/executor/index.js";
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 const ORCHESTRATOR_MEMBER_IDS = new Set(["nangong-wan", LINGHU_MEMBER_ID]);
 type CollaborationStateListener = (state: CollaborationStateOutDto, reason: string, taskIds: string[]) => void;
+type TaskOperationGuard = (task: CollaborationTaskOutDto, state: CollaborationStateOutDto) => { allowed: boolean; message: string };
+type ProposalOperationGuard = (proposalId: string, state: CollaborationStateOutDto) => { allowed: boolean; message: string };
 
 export interface CollaborationCoordinatorOptions {
   store: CollaborationStore;
@@ -63,6 +65,8 @@ export class CollaborationCoordinator {
   readonly #heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
   readonly #lastProgressWriteMs = new Map<string, number>();
   readonly #unsubscribeStore: () => void;
+  #taskOperationGuard: TaskOperationGuard | null = null;
+  #proposalOperationGuard: ProposalOperationGuard | null = null;
   #disposed = false;
 
   constructor(options: CollaborationCoordinatorOptions) {
@@ -85,6 +89,11 @@ export class CollaborationCoordinator {
   }
 
   state(): CollaborationStateOutDto { return this.#store.state(); }
+  /** 组合根注入当前专题判定，协调器据此阻止已取消关联进入恢复或调度。 */
+  setTaskOperationGuard(guard: TaskOperationGuard, proposalGuard?: ProposalOperationGuard): void {
+    this.#taskOperationGuard = guard;
+    this.#proposalOperationGuard = proposalGuard || null;
+  }
   /** 订阅协作事实提交；交付投影使用它刷新只读结论，不能反向写入协作状态。 */
   subscribe(listener: CollaborationStateListener): () => void { return this.#store.subscribe(listener); }
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
@@ -170,7 +179,8 @@ export class CollaborationCoordinator {
       candidate.automationSource === "linghu-safeguard"
       && candidate.evolutionProposalId === request.proposalId
       // 活动的一次性运行已经固定 proposalId；运行标识只用于审计，旧数据可能使用全角冒号。
-      && candidate.state !== "cancelled");
+      && candidate.state !== "cancelled"
+      && this.#canOperateTask(candidate, this.state()));
     if (!task) return { updated: false, taskId: null, taskRevision: null, message: "当前没有可更新的令狐修复任务。" };
 
     return this.#reviseRepairTask(task, request);
@@ -183,6 +193,7 @@ export class CollaborationCoordinator {
       || task.evolutionProposalId !== request.evolutionProposalId) {
       throw new Error("无法确认原修复任务与新故障归属，禁止修改任务。");
     }
+    this.#assertTaskOperationAllowed(task);
     const recoveryMarker = request.constraints?.find((value) => value.startsWith("卡点标识："));
     if (!recoveryMarker || !task.snapshot.constraints.includes(recoveryMarker)) {
       throw new Error("新故障不属于该任务保存的原运行恢复点，禁止更新。");
@@ -301,6 +312,7 @@ export class CollaborationCoordinator {
   }
 
   submitTask(request: SubmitCollaborationTaskInDto): SubmitCollaborationTaskOutDto {
+    if (request.evolutionProposalId) this.#assertProposalOperationAllowed(request.evolutionProposalId);
     const enabledWorkers = this.state().members.filter((member) => member.kind === "worker" && member.enabled).length;
     if (enabledWorkers < 1) throw new Error("协同执行至少需要一名已启用的执行人物。");
     const task = this.#store.submitTask({
@@ -316,6 +328,7 @@ export class CollaborationCoordinator {
     // 活跃修复拥有原任务，监督器晚到的恢复请求不能把旧 resultSha 重新送去集成。
     if (this.#technicalRepairRuns.has(taskId)) return this.state();
     const current = this.#store.task(taskId);
+    this.#assertTaskOperationAllowed(current);
     const guidanceActor = current.customerActionGuidance
       ? this.state().members.find((member) => member.memberId === LINGHU_MEMBER_ID)
       : undefined;
@@ -358,6 +371,7 @@ export class CollaborationCoordinator {
 
   /** 统一处理可由当前任务工作树修复的验证与发布基础设施故障。 */
   async repairTechnicalFailure(taskId: string): Promise<boolean> {
+    if (!this.#canOperateTask(this.#store.task(taskId), this.state())) return false;
     const existing = this.#technicalRepairRuns.get(taskId);
     if (existing) return existing;
     const run = this.#repairTechnicalFailure(taskId).finally(() => this.#technicalRepairRuns.delete(taskId));
@@ -483,6 +497,7 @@ export class CollaborationCoordinator {
     // 先保护在途修复，再处理可能已经过期的超时通知。
     if (this.#technicalRepairRuns.has(taskId)) return this.state();
     const task = this.#store.task(taskId);
+    if (!this.#canOperateTask(task, this.state())) return this.state();
     // 已验证版本只能由真实新进程确认；旧超时通知不得重新集成或访问已回收的工作树。
     if (task.state === "awaiting-restart" || task.state === "integrated" || task.state === "cancelled") return this.state();
     if (task.state !== "blocked" && task.state !== "recovering") await this.#blockTask(taskId, reason);
@@ -539,6 +554,7 @@ export class CollaborationCoordinator {
 
   /** 南宫婉确认同一演化轮全部结果已返回后，才把不可拆分的完整批次交给令狐。 */
   sealEvolutionRound(proposalId: string, taskIds: string[]): CollaborationStateOutDto {
+    this.#assertProposalOperationAllowed(proposalId);
     const uniqueTaskIds = [...new Set(taskIds)];
     if (!uniqueTaskIds.length) throw new Error("演化轮没有可封存的任务。");
     const current = this.state();
@@ -589,7 +605,7 @@ export class CollaborationCoordinator {
     if (this.#disposed || state.mode !== "collaboration") return;
     const linghu = state.members.find((member) => member.memberId === LINGHU_MEMBER_ID);
     if (!linghu || linghu.state !== "idle") return;
-    const task = state.tasks.find((candidate) => candidate.state === "test-failed" && candidate.integrationFailure?.kind === "verification");
+    const task = state.tasks.find((candidate) => candidate.state === "test-failed" && candidate.integrationFailure?.kind === "verification" && this.#canOperateTask(candidate, state));
     if (!task || this.#technicalRepairRuns.has(task.taskId)) return;
     queueMicrotask(() => {
       if (!this.#disposed) void this.repairFailedUnifiedTest(task.taskId);
@@ -599,7 +615,7 @@ export class CollaborationCoordinator {
   /** Git 合并冲突是确定的代码修正停点；无需等待主动巡检或人工点击，直接签发令狐修正版。 */
   #scheduleMergeConflictCorrections(state: CollaborationStateOutDto): void {
     if (this.#disposed || state.mode !== "collaboration") return;
-    const task = state.tasks.find((candidate) => ["blocked", "recovering"].includes(candidate.state) && candidate.integrationFailure?.kind === "merge-conflict");
+    const task = state.tasks.find((candidate) => ["blocked", "recovering"].includes(candidate.state) && candidate.integrationFailure?.kind === "merge-conflict" && this.#canOperateTask(candidate, state));
     if (!task || this.#mergeConflictCorrectionRuns.has(task.taskId)) return;
     this.#mergeConflictCorrectionRuns.add(task.taskId);
     queueMicrotask(() => {
@@ -626,7 +642,8 @@ export class CollaborationCoordinator {
       // 必须保留原始失败事实才能发起调查。
       && candidate.repairFailureReason
       // 文件范围确认属于用户决策，令狐释放后也不能自动越权继续。
-      && !candidate.repairRequiresUserConfirmation);
+      && !candidate.repairRequiresUserConfirmation
+      && this.#canOperateTask(candidate, state));
     if (!task) return;
     queueMicrotask(() => {
       if (!this.#disposed) void this.#repairFailedExecution(task.taskId, task.repairFailureReason || "执行故障等待恢复", false, task.taskRevision);
@@ -642,18 +659,32 @@ export class CollaborationCoordinator {
     });
   }
 
+  #canOperateTask(task: CollaborationTaskOutDto, state: CollaborationStateOutDto): boolean {
+    return this.#taskOperationGuard?.(task, state).allowed ?? true;
+  }
+
+  #assertTaskOperationAllowed(task: CollaborationTaskOutDto): void {
+    const decision = this.#taskOperationGuard?.(task, this.state());
+    if (decision && !decision.allowed) throw new Error(decision.message);
+  }
+
+  #assertProposalOperationAllowed(proposalId: string): void {
+    const decision = this.#proposalOperationGuard?.(proposalId, this.state());
+    if (decision && !decision.allowed) throw new Error(decision.message);
+  }
+
   #scheduleExecutors(): void {
     const state = this.state();
     const allWorkers = state.members.filter((member) => member.kind === "worker" && member.enabled && member.state !== "draining" && member.state !== "offline");
     const workers = allWorkers.filter((member) => !ORCHESTRATOR_MEMBER_IDS.has(member.memberId));
     // 受保护人物只接收显式严格指派的保障任务，且不消耗普通执行人的容量槽位。
-    const protectedTask = state.tasks.find((task) => task.state === "queued-executor" && task.preferredExecutorMemberId && ORCHESTRATOR_MEMBER_IDS.has(task.preferredExecutorMemberId));
+    const protectedTask = state.tasks.find((task) => task.state === "queued-executor" && task.preferredExecutorMemberId && ORCHESTRATOR_MEMBER_IDS.has(task.preferredExecutorMemberId) && this.#canOperateTask(task, state));
     const protectedExecutor = protectedTask ? allWorkers.find((member) => member.memberId === protectedTask.preferredExecutorMemberId && member.state === "idle") : null;
     if (protectedTask && protectedExecutor) void this.#beginExecutor(protectedTask.taskId, protectedExecutor.memberId);
     const activeExecutors = workers.filter((member) => member.role === "executor" && member.currentTaskId).length;
     const executorCapacity = Math.max(0, workers.length - activeExecutors);
     if (executorCapacity === 0) return;
-    const queued = state.tasks.filter((task) => task.state === "queued-executor" && !ORCHESTRATOR_MEMBER_IDS.has(task.preferredExecutorMemberId || "")).slice(0, executorCapacity);
+    const queued = state.tasks.filter((task) => task.state === "queued-executor" && !ORCHESTRATOR_MEMBER_IDS.has(task.preferredExecutorMemberId || "") && this.#canOperateTask(task, state)).slice(0, executorCapacity);
     const idle = fairIdleMembers(workers);
     for (const task of queued) {
       const strictPreferredId = task.preferredExecutorMemberId || null;
@@ -668,6 +699,8 @@ export class CollaborationCoordinator {
 
   async #beginExecutor(taskId: string, memberId: string): Promise<void> {
     if (this.#activeTaskRuns.has(taskId)) return;
+    const current = this.#store.task(taskId);
+    if (!this.#canOperateTask(current, this.state())) return;
     this.#activeTaskRuns.add(taskId);
     const queueSpan = this.#waitSpans.get(taskId);
     if (queueSpan) this.#durations.finish(queueSpan, "completed", { releaseEvent: "executor.assigned", memberId });

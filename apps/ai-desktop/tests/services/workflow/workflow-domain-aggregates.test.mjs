@@ -223,6 +223,14 @@ test("提案执行聚合使用已集成修复任务替代阻塞原任务", () =>
   assert.equal(view.nextStatus, "pending-acceptance");
 });
 
+test("提案执行聚合把有效取消任务与普通阻塞分开输出", () => {
+  const cancelled = task("task-cancelled", "cancelled", { evolutionProposalId: "proposal-1" });
+  const view = new ProposalExecutionAggregate({ proposal: proposal(["task-cancelled"]), collaborationTasks: [cancelled] }).view();
+  assert.equal(view.blocked, true);
+  assert.equal(view.cancelled, true);
+  assert.match(view.summary, /已取消/);
+});
+
 test("提案执行聚合在原记录缺失时接受显式替代任务", () => {
   // 创建一条替代缺失原任务的已集成修复任务。
   const repair = task("task-repair", "integrated", {

@@ -50,6 +50,11 @@ export class CollaborationTaskAggregate {
     return ["blocked", "cancelled", "test-failed"].includes(this.#task.state);
   }
 
+  /** 取消是历史终态，不能按普通阻塞任务进入恢复或重新分发。 */
+  isCancelled(): boolean {
+    return this.#task.state === "cancelled";
+  }
+
   /** 判断执行人是否已经把结果交回南宫婉等待集成。 */
   isReturnedToNangong(): boolean {
     // 只有权威任务状态可以结束执行阶段，不能读取页面文字推断。

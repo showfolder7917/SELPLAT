@@ -6,6 +6,7 @@ import type { EvolutionDistributionPlanOutDto, EvolutionDistributionUnitOutDto, 
 import type { CollaborationWorkflowFacade } from "../../../../workflow/index.js";
 import type { EvolutionMutationPort, EvolutionStatePort } from "../../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
+import { decideCurrentTopicOperation } from "../../../../workflow/domain/current-topic-operation.decision.js";
 
 type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
 type ParsedJsonObjects = { values: Record<string, unknown>[]; candidateCount: number; hasUnclosedObject: boolean };
@@ -71,6 +72,11 @@ export class NangongTaskDistributionService {
     let state = this.options.store.state();
     let proposal = requireProposal(state, proposalId);
     const topic = requireTopic(state, proposal.topicId);
+    const operation = decideCurrentTopicOperation(state, this.options.collaboration.state(), {
+      topicId: topic.topicId,
+      proposalId: proposal.proposalId,
+    });
+    if (operation.kind !== "operable") throw new Error(operation.message);
     if (proposal.status !== "approved") throw new Error("只有审批通过后才能分发任务。");
     if (!topic.workspaceState?.roots.length) throw new Error("当前专题缺少可用的实施工作区，无法分发。");
 
