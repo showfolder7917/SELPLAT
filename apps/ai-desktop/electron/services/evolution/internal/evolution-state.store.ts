@@ -202,6 +202,26 @@ export class EvolutionStateStore {
     }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
   }
 
+  /** 已取消关联只结束旧运行并保留档案；它不是可由恢复入口再次推进的普通阻塞。 */
+  retireCancelledOneShotRun(reason: string): EvolutionStateOutDto {
+    const current = this.#state.oneShotRun;
+    if (!current || !["running", "blocked"].includes(current.status)) return this.state();
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.cancelled-chain-retired", current.topicId, current.proposalId, (state) => {
+      const run = state.oneShotRun!;
+      run.status = "blocked";
+      run.phase = "blocked";
+      run.actor = "system";
+      run.actorName = "系统";
+      run.action = "本专题已取消";
+      run.blockingReason = required(reason, "已取消专题说明", 8_000);
+      // null 明确表示不可恢复，而不是等待用户从旧卡继续。
+      run.resumeMode = null;
+      run.updatedAt = now;
+      run.completedAt = now;
+    }, { phase: "blocked", actor: "system", status: "blocked", blockingReason: reason, nextOwner: "user" });
+  }
+
   /** 把没有真实执行者或任务的遗留 running 状态终止为可审计事实，允许新的用户确认继续。 */
   retireOrphanedOneShotRun(reason: string): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;

@@ -1,6 +1,7 @@
 import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
 import { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
+import { decideCurrentTopicOperation } from "./current-topic-operation.decision.js";
 
 /**
  * 把专题、提案、有效任务链和最新真实验收事实收敛为唯一当前阶段。
@@ -36,6 +37,31 @@ export function projectCurrentTopicStage(
       waitingFor: "南宫婉", nextAction: "等待形成可执行专题。", userAction: "none",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "当前交付投影", "系统将自动重新读取当前交付投影。", evolution.updatedAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+    };
+  }
+
+  // 已取消链只能作为历史展示，绝不能被当前专题投影重新包装成恢复、审批或验收入口。
+  const operation = decideCurrentTopicOperation(evolution, collaboration, {
+    topicId: topic?.topicId || proposal.topicId,
+    proposalId: proposal.proposalId,
+    runId: evolution.oneShotRun?.runId || null,
+  });
+  if (operation.kind === "cancelled") {
+    return {
+      topicId: operation.topicId, proposalId: operation.proposalId, status: "cancelled", title: topic?.title || proposal.title,
+      summary: operation.message, repairContent: "", remaining: "", waitingFor: "当前无需操作", nextAction: "本专题已取消", userAction: "none",
+      resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", "当前无需操作", "本专题已取消", evolution.updatedAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+    };
+  }
+  if (operation.kind === "unavailable") {
+    return {
+      topicId: operation.topicId, proposalId: operation.proposalId, status: "not-run", title: "当前专题读取受阻",
+      summary: operation.message, repairContent: "", remaining: operation.message, waitingFor: "当前专题状态", nextAction: "重新读取当前专题状态后再决定后续操作。", userAction: "none",
+      resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", "当前专题状态", "重新读取当前专题状态后再决定后续操作。", evolution.updatedAt),
       effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
     };
   }

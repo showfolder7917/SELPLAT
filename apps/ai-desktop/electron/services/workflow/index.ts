@@ -105,3 +105,8 @@ export function createPersonaCapabilityRegistry(): Pick<PersonaCapabilityRegistr
 
 // 心跳与巡检读取同一任务聚合的实际阶段持有人。
 export { CollaborationTaskAggregate } from "./domain/collaboration-task.aggregate.js";
+// 当前专题操作权只由这份纯判定产生，页面和跨人物入口不能自行回推历史链。
+export {
+  decideCurrentTopicOperation,
+  type CurrentTopicOperationDecision,
+} from "./domain/current-topic-operation.decision.js";

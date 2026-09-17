@@ -15,6 +15,7 @@ import type { PromptLibraryPort } from "../../../support/capabilities/prompts/in
 // 提案执行聚合统一解释原任务、修复任务和验收状态，Runtime 不再拼装零散布尔值。
 import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggregate.js";
 import { projectCurrentTopicStage } from "../../domain/current-topic-stage.projection.js";
+import { decideCurrentTopicOperation } from "../../domain/current-topic-operation.decision.js";
 // 单任务聚合统一解释人物是否仍真实占用任务。
 import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
 import { ProposalRevisionChain } from "../../domain/proposal-revision-chain.js";
@@ -378,6 +379,12 @@ export class PersonaEvolutionRuntime {
     const run = before.oneShotRun;
     if (expectedRunId !== undefined && run?.runId !== expectedRunId) throw new Error("当前运行已变化，请刷新后恢复原任务。");
     if (!run || (run.status !== "blocked" && before.automationRuntime.status !== "paused")) throw new Error("当前没有暂停或阻塞的运行。");
+    const operation = decideCurrentTopicOperation(before, this.#collaboration.state(), {
+      topicId: run.topicId,
+      proposalId: run.proposalId,
+      runId: run.runId,
+    });
+    if (operation.kind !== "operable") throw new Error(operation.message);
     this.#resuming = true;
     try {
       const proposal = run.proposalId ? before.proposals.find((item) => item.proposalId === run.proposalId) : null;
@@ -453,6 +460,14 @@ export class PersonaEvolutionRuntime {
         this.#store.updateOneShotRun("approving", "han-li", "韩立", "正在审批南宫婉提交的演化方向", topic.topicId, proposal.proposalId);
         continue;
       }
+
+      const operation = decideCurrentTopicOperation(state, this.#collaboration.state(), {
+        topicId: topic.topicId,
+        proposalId: proposal.proposalId,
+        runId: run.runId,
+      });
+      if (operation.kind === "cancelled") return this.#store.retireCancelledOneShotRun(operation.message);
+      if (operation.kind === "unavailable") return state;
 
       const flowAction = this.#flow.next(proposal);
       if (flowAction === "await-approval") {
@@ -746,6 +761,11 @@ export class PersonaEvolutionRuntime {
       for (const proposal of state.proposals.filter((item) => item.status === "pending-acceptance")) {
         const run = state.oneShotRun;
         if (run?.status !== "blocked" || run.proposalId !== proposal.proposalId) continue;
+        if (decideCurrentTopicOperation(state, this.#collaboration.state(), {
+          topicId: proposal.topicId,
+          proposalId: proposal.proposalId,
+          runId: run.runId,
+        }).kind !== "operable") continue;
         const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view();
         if (!execution.completed || execution.missingTaskIds.length > 0) continue;
         // oneShotRun 会在返修时指向新提案，但真实阻塞事实仍属于失败的旧版本。
@@ -788,8 +808,16 @@ export class PersonaEvolutionRuntime {
       }
       // 运行态代表用户已经确认统一托管；审批与分发固定自动，不再读取人物专用开关。
       if (state.automationRuntime.status !== "running") return;
-      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "await-approval")) state = await this.#hanli.autoApprove(proposal.proposalId);
-      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "dispatch")) state = await this.#dispatch(proposal.proposalId);
+      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "await-approval")) {
+        if (decideCurrentTopicOperation(state, this.#collaboration.state(), { topicId: proposal.topicId, proposalId: proposal.proposalId }).kind === "operable") {
+          state = await this.#hanli.autoApprove(proposal.proposalId);
+        }
+      }
+      for (const proposal of state.proposals.filter((item) => this.#flow.next(item) === "dispatch")) {
+        if (decideCurrentTopicOperation(state, this.#collaboration.state(), { topicId: proposal.topicId, proposalId: proposal.proposalId }).kind === "operable") {
+          state = await this.#dispatch(proposal.proposalId);
+        }
+      }
       const hasActiveWork = new ProposalRevisionChain(state.proposals).currentProposals()
         .some((item) => !["completed", "rejected"].includes(item.status))
         || state.topics.some((item) => !["completed", "rejected"].includes(item.status));

@@ -19,6 +19,7 @@ function task(state = "integrated") {
     createdAt: "2026-09-12T04:00:00.000Z", updatedAt: "2026-09-12T04:00:00.000Z",
     snapshot: { title: "修正测试台状态", confirmedIntent: "统一测试台专题状态" },
     resultSummary: { changes: "统一测试台专题状态", solvedProblem: "状态矛盾", remaining: "" },
+    flowEvents: [],
   };
 }
 
@@ -55,6 +56,34 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.equal(stage.status, "failed-pending-repair");
   assert.equal(stage.latestAcceptance?.runId, "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243");
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
+});
+
+test("已取消关联只保留历史取消结论，不生成恢复或验收动作", () => {
+  const state = evolution("missing");
+  state.oneShotRun = {
+    runId: "cancelled-run", topicId: "topic-current", proposalId: "proposal-current",
+    status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [task("cancelled")] });
+  assert.equal(stage.status, "cancelled");
+  assert.equal(stage.nextAction, "本专题已取消");
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeOneShotRunId, null);
+  assert.deepEqual(stage.effectiveTaskIds, []);
+});
+
+test("已被有效替代的旧取消任务不阻断当前专题", () => {
+  const state = evolution("missing");
+  const oldTask = task("cancelled");
+  const replacement = {
+    ...task("integrated"),
+    taskId: "task-current-replacement",
+    replacementForTaskId: oldTask.taskId,
+    updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [oldTask, replacement] });
+  assert.notEqual(stage.status, "cancelled");
+  assert.deepEqual(stage.effectiveTaskIds, ["task-current-replacement"]);
 });
 
 test("尚未开始真实验收时，待验收提案不得显示验收中", () => {
