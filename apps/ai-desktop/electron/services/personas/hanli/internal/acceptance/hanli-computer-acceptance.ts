@@ -173,7 +173,7 @@ export class HanliComputerAcceptance {
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "open-task-panel", "close-task-panel", "open-task-collaboration", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "key", "hover", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "toggle-task-audit-card", "open-task-panel", "close-task-panel", "open-task-collaboration", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "key", "hover", "finish"],
             },
             observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
@@ -181,6 +181,10 @@ export class HanliComputerAcceptance {
             endX: { type: "integer" },
             endY: { type: "integer" },
             deltaY: { type: "integer" },
+            auditCardIndex: {
+              type: "integer",
+              description: "仅供 toggle-task-audit-card 使用：历史审计中从 0 开始的只读卡序号。该动作只展开或收起对应审计卡，不会触发恢复、审批或派发。",
+            },
             resizePreset: {
               type: "string",
               enum: ["narrow", "restore"],
@@ -392,6 +396,19 @@ export class HanliComputerAcceptance {
               throw new Error(`任务协作页未滚动：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
+          } else if (args.action === "toggle-task-audit-card") {
+            if (!interactions.allows("persona-navigation")) {
+              throw new Error("当前正式验收未获任务协作群导航授权。");
+            }
+            const auditCardIndex = Number(args.auditCardIndex);
+            if (!Number.isInteger(auditCardIndex) || auditCardIndex < 0) {
+              throw new Error("审计卡序号必须是从 0 开始的非负整数。");
+            }
+            const result = await window.webContents.executeJavaScript(`(${toggleTaskAuditCard.toString()})(${auditCardIndex})`) as Record<string, unknown>;
+            if (result.status !== "opened" && result.status !== "closed") {
+              throw new Error(`历史审计卡未切换：${String(result.status)}。`);
+            }
+            taskCollaborationEvidence = result;
           } else if (args.action === "open-task-panel" || args.action === "close-task-panel" || args.action === "open-task-collaboration") {
             if (!interactions.allows("persona-navigation")) {
               throw new Error("当前正式验收未获任务面板导航授权。");
@@ -508,6 +525,8 @@ export class HanliComputerAcceptance {
             operation = { type: "scroll", x: Number(args.x), y: Number(args.y), deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "scroll-task-collaboration") {
             operation = { type: "scroll-task-collaboration", deltaY: Number(args.deltaY), reason: String(args.reason) };
+          } else if (args.action === "toggle-task-audit-card") {
+            operation = { type: "toggle-task-audit-card", auditCardIndex: Number(args.auditCardIndex), reason: String(args.reason) };
           } else if (args.action === "open-task-panel") {
             operation = { type: "open-task-panel", reason: String(args.reason) };
           } else if (args.action === "close-task-panel") {
@@ -694,6 +713,35 @@ async function scrollTaskCollaboration(deltaY: number): Promise<Record<string, u
     scrollTop: Math.round(after),
     maxScrollTop: Math.round(maxScrollTop),
     pageScrollTop: Math.round(pageScrollTop),
+  };
+}
+
+/** 只切换当前页面已展示的历史审计卡，并把该只读卡留在详情视口供截图核对。 */
+async function toggleTaskAuditCard(auditCardIndex: number): Promise<Record<string, unknown>> {
+  const page = document.querySelector<HTMLElement>(".task-collaboration-page");
+  const auditHistory = page?.querySelector<HTMLElement>(".task-collaboration-audit-history");
+  const historyDisclosure = auditHistory?.querySelector<HTMLElement>(":scope > .seldisclosure-root");
+  const historyTrigger = historyDisclosure?.querySelector<HTMLButtonElement>("button[data-sel-disclosure-trigger]");
+  if (!page || !auditHistory || !historyDisclosure || !historyTrigger) {
+    return { status: "audit-history-unavailable" };
+  }
+  if (historyTrigger.getAttribute("aria-expanded") !== "true") {
+    return { status: "audit-history-collapsed" };
+  }
+  const cards = Array.from(auditHistory.querySelectorAll<HTMLElement>(".task-collaboration-audit-history-card"));
+  const card = cards[auditCardIndex];
+  const trigger = card?.querySelector<HTMLButtonElement>("button[data-sel-disclosure-trigger]");
+  if (!card || !trigger) {
+    return { status: "audit-card-unavailable", auditCardCount: cards.length };
+  }
+  card.scrollIntoView({ block: "nearest" });
+  const wasOpen = trigger.getAttribute("aria-expanded") === "true";
+  trigger.click();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  return {
+    status: wasOpen ? "closed" : "opened",
+    auditCardIndex,
+    auditCardCount: cards.length,
   };
 }
 
