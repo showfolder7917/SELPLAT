@@ -934,6 +934,31 @@ test("专题指针尚未回填的一次性运行切换时仍原子退役活动�
   assert.equal(replacement.oneShotRun.topicId, null);
 });
 
+test("独立专题切换在同一状态提交中退役旧链并建立可投影的新运行", () => {
+  const key = `independent-topic-switch-${Date.now()}`;
+  const store = evolutionStore(key);
+  store.beginOneShotRun(workspaceState, "zh-CN", "old-topic");
+  let state = store.createTopic(topicRequest("需要审计退役的旧专题"));
+  const oldTopicId = state.activeTopicId;
+  state = store.createProposal(oldTopicId, proposalRequest());
+  const oldProposalId = state.proposals.at(-1).proposalId;
+  store.updateOneShotRun("forming-proposal", "nangong-wan", "南宫婉", "正在处理旧专题", oldTopicId, oldProposalId);
+  const archiveCount = store.state().archiveRecords.length;
+
+  state = store.switchToIndependentTopic(workspaceState, "zh-CN", "new-independent-topic", "用户明确切换独立专题", ["old-task-1"]);
+
+  assert.equal(state.activeTopicId, null);
+  assert.equal(state.topics.find((item) => item.topicId === oldTopicId).status, "rejected");
+  assert.equal(state.proposals.find((item) => item.proposalId === oldProposalId).status, "rejected");
+  assert.equal(state.oneShotRun.status, "running");
+  assert.equal(state.oneShotRun.topicId, null);
+  assert.equal(state.oneShotRun.proposalId, null);
+  assert.equal(state.oneShotRun.topicEstablishmentMode, "independent-switch");
+  assert.equal(state.oneShotRun.sourceRequestId, "new-independent-topic");
+  assert.equal(state.archiveRecords.length, archiveCount + 1);
+  assert.deepEqual(state.archiveRecords.at(-1).payload.retiredTaskIds, ["old-task-1"]);
+});
+
 test("历史退役提案不能被返修结果重新激活", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "retired-proposal-revision-guard-"));
   try {

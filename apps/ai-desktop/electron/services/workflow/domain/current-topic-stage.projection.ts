@@ -11,6 +11,18 @@ export function projectCurrentTopicStage(
   evolution: EvolutionStateOutDto,
   collaboration: CollaborationStateOutDto,
 ): CurrentTopicStageOutDto {
+  const run = evolution.oneShotRun;
+  const independentEstablishment = run?.topicEstablishmentMode === "independent-switch" && !run.topicId && !run.proposalId;
+  if (independentEstablishment && run?.status === "blocked") {
+    return {
+      topicId: null, proposalId: null, status: "topic-establishment-failed", title: "新专题建立失败",
+      summary: run.blockingReason || "新专题尚未建立，旧专题仍只保留审计记录。", repairContent: "", remaining: run.blockingReason || "建立新专题时出现未完成步骤。",
+      waitingFor: "系统恢复处理", nextAction: "保留建立失败证据并处理当前失败原因。", userAction: "none",
+      resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", "系统恢复处理", "保留建立失败证据并处理当前失败原因。", run.updatedAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
+    };
+  }
   // 已经绑定专题和提案的当前运行拥有交付阶段；后来产生但尚未确立的研讨不能把它覆盖成
   // 无专题的“等待确认”。独立专题切换必须先由状态机显式退役原运行，投影不在这里猜测切换。
   const activeProposalRun = Boolean(evolution.oneShotRun?.topicId && evolution.oneShotRun?.proposalId
@@ -28,6 +40,17 @@ export function projectCurrentTopicStage(
       resumeOneShotRunId: null,
       readRecovery: readRecovery("confirmation", "用户确认", "确认当前范围说明后继续。", confirmationUpdatedAt(evolution)),
       effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: confirmationUpdatedAt(evolution),
+    };
+  }
+
+  if (independentEstablishment && run?.status === "running") {
+    return {
+      topicId: null, proposalId: null, status: "establishing-topic", title: "正在建立新专题",
+      summary: "旧专题已经退出当前区，系统正在继续研讨并建立新的独立专题。", repairContent: "", remaining: "等待新的专题及其提案建立。",
+      waitingFor: "系统正在处理", nextAction: "系统将继续当前研讨；建立完成后显示新的专题卡。", userAction: "none",
+      resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", "系统正在处理", "系统将继续当前研讨；建立完成后显示新的专题卡。", run.updatedAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
     };
   }
 
@@ -68,7 +91,6 @@ export function projectCurrentTopicStage(
 
   // 监控者验收归档记录的是“已经发布并在正式页面完成操作”的独立事实，不是新的代码交付任务。
   // 它明确没有分发计划或任务链，因此不能再套用普通交付的候选、测试、发布门禁，否则完成卡会被误投影成缺少候选。
-  const run = evolution.oneShotRun;
   const monitorAcceptanceCompleted = topic?.status === "completed"
     && topic.recoveryPoint === "monitor-formal-acceptance-passed"
     && proposal.status === "completed"

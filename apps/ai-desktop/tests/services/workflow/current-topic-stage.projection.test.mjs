@@ -151,6 +151,30 @@ test("没有已绑定专题运行时仍展示待确认研讨", () => {
   assert.equal(stage.topicId, null);
 });
 
+test("独立专题建立中和建立失败不退化为空任务或旧专题恢复入口", () => {
+  const state = evolution("missing");
+  state.activeTopicId = null;
+  state.topics[0].status = "rejected";
+  state.proposals[0].status = "rejected";
+  state.oneShotRun = {
+    runId: "independent-topic-run", topicId: null, proposalId: null,
+    status: "running", phase: "preparing-topic", topicEstablishmentMode: "independent-switch",
+    updatedAt: "2026-09-12T05:00:00.000Z", blockingReason: null,
+  };
+
+  let stage = projectCurrentTopicStage(state, { tasks: [task("cancelled")] });
+  assert.equal(stage.status, "establishing-topic");
+  assert.equal(stage.topicId, null);
+  assert.equal(stage.userAction, "none");
+  assert.match(stage.nextAction, /继续当前研讨/);
+
+  state.oneShotRun = { ...state.oneShotRun, status: "blocked", phase: "blocked", blockingReason: "建立专题时缺少可用事实" };
+  stage = projectCurrentTopicStage(state, { tasks: [task("cancelled")] });
+  assert.equal(stage.status, "topic-establishment-failed");
+  assert.equal(stage.resumeOneShotRunId, null);
+  assert.match(stage.summary, /缺少可用事实/);
+});
+
 test("真实验收进行中优先于已经完成的提案状态", () => {
   const state = evolution("passed");
   state.proposals[0].status = "completed";

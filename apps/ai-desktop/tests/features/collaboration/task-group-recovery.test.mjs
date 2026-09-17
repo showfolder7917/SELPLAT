@@ -44,3 +44,11 @@ test("协作任务状态变化会通过正式订阅重新推送按最新任务�
   assert.match(applicationRuntimeSource, /personaEvolution\.subscribeCurrentTopicStage\([\s\S]*desktop:evolution-state/);
   assert.doesNotMatch(applicationRuntimeSource, /onStateChanged: \(state, reason, taskIds\)[\s\S]*personaEvolution\.state\(\)/s);
 });
+
+test("独立专题建立中和失败优先于空任务引导，且不提供旧专题恢复入口", () => {
+  const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+  assert.match(taskGroupSource, /const establishingTopic = model\.data\.currentTopicStage[\s\S]*\["establishing-topic", "topic-establishment-failed"\][\s\S]*task-topic-establishment/);
+  assert.match(taskGroupSource, /发生事项：\{establishingTopic\.summary\}[\s\S]*是否需要你操作：当前无需操作。[\s\S]*下一步：\{establishingTopic\.nextAction\}/);
+  assert.doesNotMatch(taskGroupSource.slice(taskGroupSource.indexOf("const establishingTopic"), taskGroupSource.indexOf("const statusMessage")), /openHanliConversation|task-recovery-continue/);
+  assert.match(developerStyles, /\.task-topic-establishment \{[\s\S]*width: min\(100%, 560px\)[\s\S]*min-width: 0/);
+});

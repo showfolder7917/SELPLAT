@@ -588,6 +588,9 @@ button { color: inherit; }
 .task-timeline-next-current { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; overflow-wrap: anywhere; }
 .task-timeline-next > small { grid-column: 2 / -1; overflow-wrap: anywhere; }
 .task-collaboration-empty { width: min(100%, 480px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 8px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
+.task-topic-establishment { width: min(100%, 560px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 10px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
+.task-topic-establishment strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
+.task-topic-establishment > span, .task-topic-establishment > small { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
 .task-collaboration-empty strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
 .task-collaboration-empty > span { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
 .task-collaboration-empty-action { max-width: 100%; min-height: 36px; padding: 6px 14px; border: 1px solid var(--sel-theme-workbench-accent-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); font: inherit; font-weight: 650; cursor: pointer; }
