@@ -497,6 +497,10 @@ button { color: inherit; }
 .task-collaboration-history { display: grid; flex: 0 0 auto; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--sel-theme-control-line-soft); }
 .task-collaboration-history h2 { margin: 0; color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-body); }
 .task-collaboration-history-cards { display: grid; gap: 10px; }
+.task-collaboration-audit-history { display: grid; flex: 0 0 auto; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--sel-theme-control-line-soft); }
+.task-collaboration-audit-disclosure { border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 82%, transparent); }
+.task-collaboration-audit-history-header { min-width: 0; display: grid; gap: 4px; padding: 2px 0; color: var(--sel-theme-workbench-text-muted); }
+.task-collaboration-audit-history-header > span { overflow-wrap: anywhere; font-size: var(--sel-theme-font-size-caption); }
 .task-collaboration-cancelled-history-card { min-width: 0; color: var(--sel-theme-workbench-text-muted); }
 .task-cancelled-history-disclosure { border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 82%, transparent); }
 .task-cancelled-history-disclosure > .selui-disclosure-heading > .seldisclosure-trigger { min-width: 0; min-height: 72px; padding: 14px 16px; }
