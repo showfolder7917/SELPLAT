@@ -97,6 +97,25 @@ test("缺少专题关联的历史卡点只显示一张汇总卡且原始事实�
   } finally { fixture.close(); }
 });
 
+test("无关联卡点全部取消后汇总卡进入取消历史且不再把令狐显示为阻塞负责人", () => {
+  const fixture = createFixture("cancelled-unlinked-checkpoints");
+  try {
+    for (let index = 1; index <= 2; index++) fixture.append({
+      eventId: `checkpoint:cancelled-${index}`, eventType: "checkpoint.progress",
+      group: { groupId: `checkpoint:cancelled-${index}`, topicId: null, proposalId: null, title: "第 1 轮卡点处理", status: "cancelled", summary: "旧卡点已封存", startedAt: fixture.at(index), updatedAt: fixture.at(index + 2) },
+      fact: { nodeId: `checkpoint:cancelled-${index}`, sourceFactKey: `checkpoint:cancelled-${index}`, taskId: null, proposalId: null, kind: "repair", actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "completed", action: "旧卡点已封存", summary: "当前没有活动任务", contentRole: "status", content: "保留审计，不再恢复", detailRole: "none", detail: "", startedAt: fixture.at(index), completedAt: fixture.at(index + 2), automaticOpen: false, manualApprovalProposalId: null, occurredAt: fixture.at(index + 2) },
+    });
+    const first = fixture.timeline.snapshot(fixture.at(8)).groups[0];
+    const later = fixture.timeline.snapshot(fixture.at(30)).groups[0];
+    assert.equal(first.groupId, "checkpoint:unlinked-history");
+    assert.equal(first.status, "cancelled");
+    assert.equal(first.nextStep, "本专题已取消");
+    assert.equal(first.nextOwner, null);
+    assert.equal(first.failureNextStep, null);
+    assert.equal(later.durationMs, first.durationMs, "取消后的专题耗时不能继续增长");
+  } finally { fixture.close(); }
+});
+
 test("卡点下一流程只显示人物与当前动作，完整失败证据保留在节点详情", () => {
   const fixture = createFixture("checkpoint-brief-next-step");
   try {

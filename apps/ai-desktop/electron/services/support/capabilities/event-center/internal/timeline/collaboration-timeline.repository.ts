@@ -404,17 +404,22 @@ function aggregateUnlinkedCheckpoints(groups: CollaborationTimelineGroupOutDto[]
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.nodeId.localeCompare(right.nodeId));
   const startedAt = orphaned.map((group) => group.startedAt).sort()[0] || now;
   const updatedAt = orphaned.map((group) => group.updatedAt).sort().at(-1) || now;
+  const aggregateStatus: CollaborationTimelineGroupOutDto["status"] = orphaned.every((group) => group.status === "cancelled")
+    ? "cancelled"
+    : orphaned.every((group) => group.status === "completed" || group.status === "cancelled") ? "completed" : "blocked";
+  const terminal = aggregateStatus === "completed" || aggregateStatus === "cancelled";
   const aggregate: CollaborationTimelineGroupOutDto = {
     groupId: "checkpoint:unlinked-history", topicId: null, proposalId: null,
-    title: `未关联历史卡点（${orphaned.length}项）`, status: "blocked",
+    title: `未关联历史卡点（${orphaned.length}项）`, status: aggregateStatus,
     summary: "这些历史异常缺少原任务或授权工作区，已汇总展示；原始审计记录仍完整保留。",
     nodes: uniqueNodes, executingCount: 0, verifyingCount: 0,
     waitingCount: uniqueNodes.filter((node) => node.status === "waiting" || node.status === "failed").length,
     completedCount: uniqueNodes.filter((node) => node.status === "completed").length,
-    startedAt, updatedAt, durationMs: durationMs(startedAt, now),
-    nextStep: "等待确认原任务或授权工作区后再恢复，不自动猜测范围。",
-    failureNextStep: "保留原始异常证据，不重复创建卡片或无范围修复任务。",
-    nextOwner: { memberId: "linghu-ancestor", displayName: "令狐老祖" },
+    startedAt, updatedAt, durationMs: durationMs(startedAt, terminal ? updatedAt : now),
+    nextStep: aggregateStatus === "cancelled" ? "本专题已取消"
+      : aggregateStatus === "completed" ? "本专题已完成" : "等待确认原任务或授权工作区后再恢复，不自动猜测范围。",
+    failureNextStep: terminal ? null : "保留原始异常证据，不重复创建卡片或无范围修复任务。",
+    nextOwner: terminal ? null : { memberId: "linghu-ancestor", displayName: "令狐老祖" },
   };
   return [...retained, aggregate].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.groupId.localeCompare(right.groupId));
 }
