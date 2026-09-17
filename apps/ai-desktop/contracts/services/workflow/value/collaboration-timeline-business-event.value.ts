@@ -13,4 +13,5 @@ export type CollaborationTimelineBusinessEventTypeValue =
   | "task.distribution_planning_started"
   | "task.distribution_planning_completed"
   | "task.distribution_planning_failed"
-  | "task.distribution";
+  | "task.distribution"
+  | "topic.retired";

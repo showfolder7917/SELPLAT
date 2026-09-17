@@ -18,6 +18,7 @@ test("当前专题的恢复入口只消费交付投影，不再从时间线节�
 test("非当前活动卡显示退役按钮且主进程先封存旧执行树再原子退役专题", () => {
   assert.match(taskCardSource, /activeStage\.topicId !== group\.topicId[\s\S]*className="task-stale-retire"[\s\S]*退役旧卡/);
   assert.match(collaborationIpcSource, /desktop:retire-stale-evolution-topic[\s\S]*archiveStaleTopicTask[\s\S]*retireStaleTopic/);
+  assert.match(collaborationIpcSource, /retireStaleTopic[\s\S]*eventType: "topic\.retired"[\s\S]*status: "cancelled"[\s\S]*sourceFactKey/);
   assert.match(personaEvolutionSource, /item\.topicId === state\.activeTopicId[\s\S]*supplement-required[\s\S]*rejected/);
 });
 

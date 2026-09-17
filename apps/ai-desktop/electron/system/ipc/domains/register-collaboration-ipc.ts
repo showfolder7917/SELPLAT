@@ -112,7 +112,53 @@ export function registerCollaborationIpc(
         // 同一提案可能留下多个人物任务；逐一封存直到没有活动任务。
       }
     }
-    return evolution.retireStaleTopic(request.topicId, request.proposalId, "旧任务卡已退出当前专题；旧提案、旧执行与工作树仅保留审计，不得恢复。 ");
+    const retiredReason = "旧任务卡已退出当前专题；旧提案、旧执行与工作树仅保留审计，不得恢复。";
+    const retired = evolution.retireStaleTopic(request.topicId, request.proposalId, retiredReason);
+    // 演化状态与任务时间线是两个独立读模型；同一次受控退役必须给时间线追加终态事实，
+    // 否则旧审批节点仍会把卡片投影为活动态，并再次暴露退役按钮。
+    if (collaborationTimeline) {
+      const group = collaborationTimeline.getTimelineSnapshot().groups.find((item) => item.topicId === request.topicId);
+      if (group) {
+        const occurredAt = new Date().toISOString();
+        const sourceFactKey = `topic-retired:${request.topicId}`;
+        collaborationTimeline.appendTimelineEvent({
+          eventId: sourceFactKey,
+          eventType: "topic.retired",
+          group: {
+            groupId: group.groupId,
+            topicId: request.topicId,
+            proposalId: request.proposalId,
+            title: group.title,
+            status: "cancelled",
+            summary: retiredReason,
+            startedAt: group.startedAt,
+            updatedAt: occurredAt,
+          },
+          fact: {
+            nodeId: sourceFactKey,
+            taskId: null,
+            proposalId: request.proposalId,
+            sourceFactKey,
+            occurredAt,
+            kind: "result",
+            actor: { memberId: "system", displayName: "系统" },
+            recipients: [],
+            status: "completed",
+            action: "旧任务卡已退役",
+            summary: retiredReason,
+            contentRole: "status",
+            content: retiredReason,
+            detailRole: "none",
+            detail: "",
+            startedAt: occurredAt,
+            completedAt: occurredAt,
+            automaticOpen: false,
+            manualApprovalProposalId: null,
+          },
+        });
+      }
+    }
+    return retired;
   });
   handle("desktop:create-evolution-proposal", (_event, topicId: string, request: CreateNangongProposalInDto) => nangong.createProposal(topicId, request));
   handle("desktop:decide-evolution-proposal", (_event, proposalId: string, request: DecideHanliProposalInDto) => hanli.decideProposal(proposalId, request));
