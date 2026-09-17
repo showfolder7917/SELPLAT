@@ -76,12 +76,17 @@ export function usePersonaConversation(personaId: string) {
   const [newConversationBusy, setNewConversationBusy] = useState(false);
   // 新线程建立成功后只提示当前页面，不把旧线程的错误或等待状态带入新对话。
   const [newConversationFeedback, setNewConversationFeedback] = useState("");
+  // 新建失败单独保存，页面只能据此显示“重新建立对话”的专用重试入口。
+  const [newConversationError, setNewConversationError] = useState("");
   const [error, setError] = useState("");
   const [hasEarlier, setHasEarlier] = useState(false);
   // 每条原消息独立追踪重读，避免客户连续点击同一位置时并发写入同一派生记录。
   const [retryingCustomerDisplayMessageIds, setRetryingCustomerDisplayMessageIds] = useState<ReadonlySet<string>>(() => new Set());
   const retryingCustomerDisplayMessageIdsRef = useRef<Set<string>>(new Set());
-  const requestGeneration = useRef(0);
+  // 客户显示窗口的代际和目标会话共同决定页面可接受的异步结果。
+  const conversationDisplay = useRef({ generation: 0, targetConversationId: null as string | null });
+  // React 状态尚未完成刷新前，也要立即拒绝重复点击建立会话。
+  const newConversationInFlight = useRef(false);
   // 官方模型目录只从 Codex bridge 读取，人物页面不维护固定模型列表。
   const [modelCatalog, setModelCatalog] = useState<CodexModelOptionOutDto[]>([]);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
@@ -93,14 +98,39 @@ export function usePersonaConversation(personaId: string) {
     && inquiryActivity?.status === "running" && inquiryActivity.phase === "investigating"
     ? "nangong-wan" : null;
 
+  /** 开始一次新的页面显示代际；旧窗口读取在返回后不再有资格覆盖当前页面。 */
+  function beginConversationDisplayGeneration(targetConversationId: string | null): number {
+    const generation = conversationDisplay.current.generation + 1;
+    conversationDisplay.current = { generation, targetConversationId };
+    return generation;
+  }
+
+  /** 只有同一代际、同一目标会话的客户显示窗口才能更新页面。 */
+  function acceptsConversationWindow(
+    generation: number,
+    expectedConversationId: string | null,
+    window: PersonaConversationWindowOutDto,
+  ): boolean {
+    if (conversationDisplay.current.generation !== generation) return false;
+    if (conversationDisplay.current.targetConversationId !== expectedConversationId) return false;
+    return expectedConversationId === null || window.conversationId === expectedConversationId;
+  }
+
   useEffect(() => {
     let active = true;
     let receivedOwnUpdate = false;
     let receivedInternalUpdate = false;
-    const generation = ++requestGeneration.current;
+    const currentConversationId = conversation.conversationId;
+    const generation = beginConversationDisplayGeneration(currentConversationId);
     const desktop = getOptionalCollaborationDesktopApi();
-    void readPersonaConversationWindow(desktop, personaId)
-      .then((value) => { if (active && generation === requestGeneration.current && !receivedOwnUpdate && value) { setConversation(windowConversation(value)); setHasEarlier(value.hasEarlier); } })
+    void readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId })
+      .then((value) => {
+        if (!active || receivedOwnUpdate || !value || !acceptsConversationWindow(generation, currentConversationId, value)) return;
+        // 初次读取没有稳定 ID 时，读取到的当前会话成为本代际唯一目标。
+        if (currentConversationId === null) conversationDisplay.current = { generation, targetConversationId: value.conversationId };
+        setConversation(windowConversation(value));
+        setHasEarlier(value.hasEarlier);
+      })
       .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取人物会话。")); });
     if (personaId === "nangong-wan") {
       void desktop?.getPersonaConversation("han-li")
@@ -111,10 +141,9 @@ export function usePersonaConversation(personaId: string) {
       if (!active) return;
       if (value.ownerPersonaId === personaId) {
         receivedOwnUpdate = true;
-        const currentConversationId = conversation.conversationId;
         void readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId })
           .then((window) => {
-            if (active && window && (!currentConversationId || window.conversationId === currentConversationId)) {
+            if (active && window && acceptsConversationWindow(generation, currentConversationId, window)) {
               setConversation((current) => ({
                 ...windowConversation(window),
                 activity: value.activity,
@@ -136,9 +165,11 @@ export function usePersonaConversation(personaId: string) {
   const loadEarlier = useCallback(async () => {
     const earliest = conversation.messages[0];
     if (!earliest || !hasEarlier) return;
+    const generation = conversationDisplay.current.generation;
+    const conversationId = conversation.conversationId;
     try {
-      const page = await readPersonaConversationWindow(getOptionalCollaborationDesktopApi(), personaId, { conversationId: conversation.conversationId, beforeSequenceNumber: earliest.sequenceNumber });
-      if (!page || page.conversationId !== conversation.conversationId) return;
+      const page = await readPersonaConversationWindow(getOptionalCollaborationDesktopApi(), personaId, { conversationId, beforeSequenceNumber: earliest.sequenceNumber });
+      if (!page || !acceptsConversationWindow(generation, conversationId, page)) return;
       setConversation((current) => ({ ...current, messages: [...page.messages, ...current.messages.filter((message) => !page.messages.some((loaded) => loaded.messageId === message.messageId))] }));
       setHasEarlier(page.hasEarlier);
     } catch (reason) { setError(readableDesktopError(reason, "无法读取更早消息，请重试。")); }
@@ -148,12 +179,13 @@ export function usePersonaConversation(personaId: string) {
   const retryCustomerDisplayMessage = useCallback(async (sourceMessageId: string) => {
     const desktop = getOptionalCollaborationDesktopApi();
     const conversationId = conversation.conversationId;
+    const generation = conversationDisplay.current.generation;
     if (!desktop || !conversationId || retryingCustomerDisplayMessageIdsRef.current.has(sourceMessageId)) return;
     retryingCustomerDisplayMessageIdsRef.current.add(sourceMessageId);
     setRetryingCustomerDisplayMessageIds((current) => new Set(current).add(sourceMessageId));
     try {
       const window = await desktop.retryPersonaCustomerDisplayMessage(personaId, conversationId, sourceMessageId);
-      if (window.conversationId === conversationId) {
+      if (acceptsConversationWindow(generation, conversationId, window)) {
         setConversation(windowConversation(window));
         setHasEarlier(window.hasEarlier);
       }
@@ -225,17 +257,26 @@ export function usePersonaConversation(personaId: string) {
   }, [conversation.messages, sharedInternalMessages]);
 
   const startNewConversation = async () => {
-    if (newConversationBusy || sending) return;
+    if (newConversationBusy || newConversationInFlight.current || sending) return;
+    newConversationInFlight.current = true;
+    // 新建开始即废止旧监听、补载和设置回执，创建完成前不接受任何旧窗口。
+    const generation = beginConversationDisplayGeneration(null);
     setNewConversationBusy(true);
     setNewConversationFeedback("");
+    setNewConversationError("");
     setError("");
     try {
       const desktop = getOptionalCollaborationDesktopApi();
       const value = await desktop?.newPersonaConversation(personaId);
       if (!value) throw new Error("新建人物会话服务没有返回结果。");
+      if (!value.conversationId) throw new Error("新建人物会话没有返回有效会话标识。");
+      if (conversationDisplay.current.generation !== generation) return;
+      // 新建动作只授权这一个新会话的客户显示窗口进入页面。
+      conversationDisplay.current = { generation, targetConversationId: value.conversationId };
       // 新建动作只提供会话标识；页面正文必须重新从客户显示窗口读取。
       const customerDisplay = await readPersonaConversationWindow(desktop, personaId, { conversationId: value.conversationId });
       if (!customerDisplay) throw new Error("新建人物会话后无法读取客户显示消息。");
+      if (!acceptsConversationWindow(generation, value.conversationId, customerDisplay)) return;
       setConversation(windowConversation(customerDisplay));
       setHasEarlier(customerDisplay.hasEarlier);
       setDraftText("");
@@ -246,14 +287,18 @@ export function usePersonaConversation(personaId: string) {
       setError("");
       setNewConversationFeedback("已建立新的空白对话。");
     } catch (reason) {
-      setError(readableDesktopError(reason, "无法新建人物会话。"));
+      if (conversationDisplay.current.generation === generation) {
+        setNewConversationError(readableDesktopError(reason, "无法新建人物会话。"));
+      }
     } finally {
-      setNewConversationBusy(false);
+      if (conversationDisplay.current.generation === generation) setNewConversationBusy(false);
+      newConversationInFlight.current = false;
     }
   };
 
   const selectModel = async (selectedModel: string | null) => {
     if (sending || newConversationBusy) return;
+    const generation = conversationDisplay.current.generation;
     setError("");
     try {
       const desktop = getOptionalCollaborationDesktopApi();
@@ -262,6 +307,7 @@ export function usePersonaConversation(personaId: string) {
       // 模型选择的全量回执不参与页面投影，避免旧混合正文借设置操作回流。
       const customerDisplay = await readPersonaConversationWindow(desktop, personaId, { conversationId: value.conversationId });
       if (!customerDisplay) throw new Error("保存人物对话模型后无法读取客户显示消息。");
+      if (!acceptsConversationWindow(generation, value.conversationId, customerDisplay)) return;
       setConversation(windowConversation(customerDisplay));
       setHasEarlier(customerDisplay.hasEarlier);
     } catch (reason) {
@@ -272,7 +318,7 @@ export function usePersonaConversation(personaId: string) {
   return {
     personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage, retryingCustomerDisplayMessageIds,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
-    sharedInternalMessages, newConversationBusy, newConversationFeedback, error, setError, startNewConversation,
+    sharedInternalMessages, newConversationBusy, newConversationFeedback, newConversationError, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,
   };
 }

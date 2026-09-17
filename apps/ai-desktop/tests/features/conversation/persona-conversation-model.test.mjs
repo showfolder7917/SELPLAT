@@ -96,6 +96,22 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.match(hanli, /aria-busy=\{controller\.retryingCustomerDisplayMessageIds\.has\(message\.messageId\)\}/);
 });
 
+test("新建人物会话以显示代际拒绝迟到窗口，并仅在南宫婉页面提供专用重试", () => {
+  const nangongView = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
+  assert.match(hook, /conversationDisplay = useRef\(\{ generation: 0, targetConversationId: null as string \| null \}\)/);
+  assert.match(hook, /function beginConversationDisplayGeneration\(targetConversationId: string \| null\)/);
+  assert.match(hook, /function acceptsConversationWindow\([\s\S]*?generation[\s\S]*?expectedConversationId[\s\S]*?window: PersonaConversationWindowOutDto/);
+  assert.match(hook, /const generation = beginConversationDisplayGeneration\(null\);/);
+  assert.match(hook, /conversationDisplay\.current = \{ generation, targetConversationId: value\.conversationId \};/);
+  assert.match(hook, /if \(!acceptsConversationWindow\(generation, value\.conversationId, customerDisplay\)\) return;/);
+  assert.match(hook, /const \[newConversationError, setNewConversationError\] = useState\(""\)/);
+  assert.match(hook, /setNewConversationError\(readableDesktopError\(reason, "无法新建人物会话。"\)\)/);
+  assert.match(hook, /newConversationError, error, setError, startNewConversation/);
+  assert.match(nangongView, /props\.runtime\.newConversationError/);
+  assert.match(nangongView, /重新建立南宫婉对话/);
+  assert.match(nangongView, /props\.runtime\.startNewConversation\(\)/);
+});
+
 test("内部研讨正文与技术证据使用不同内容角色，且证据只在南宫婉页面折叠显示", () => {
   const projector = read("src/features/conversation/model/realtime-conversation.ts");
   const nangongController = read("src/features/nangong/components/useNangongConversationWorkspace.ts");

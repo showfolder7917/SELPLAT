@@ -38,7 +38,9 @@ let inquiryFixtureBackup = null;
 let inquiryFixtureMembersBackup = null;
 let inquiryFixtureRequest = null;
 let inquiryFixtureRelease = null;
-let nangongNewConversationCalls = 0;
+let nangongNewConversationFailureCount = 0;
+let delayedPersonaConversationWindowRead = null;
+const archivedNangongConversations = new Map();
 let taskTimelineFixtureEnabled = false;
 let acceptanceTimelineFixtureStatus = null;
 let interruptedTimelineFixtureStatus = null;
@@ -796,7 +798,22 @@ contextBridge.exposeInMainWorld("desktop", {
   getInteractionInquiryRequest: async () => structuredClone(inquiryFixtureRequest),
   getPersonaConversation: async (personaId) => readInteractionPersonaConversation(personaId),
   // 客户页刷新和初次加载都通过窗口契约，避免测试桥接回退暴露原始会话正文。
-  getPersonaConversationWindow: async (personaId) => toPersonaCustomerDisplayWindow(await readInteractionPersonaConversation(personaId)),
+  getPersonaConversationWindow: async (personaId, request) => {
+    const current = await readInteractionPersonaConversation(personaId);
+    const requestedConversationId = request?.conversationId;
+    const source = personaId === "nangong-wan" && requestedConversationId && requestedConversationId !== current.conversationId
+      ? archivedNangongConversations.get(requestedConversationId) || current
+      : current;
+    const window = toPersonaCustomerDisplayWindow(structuredClone(source));
+    if (delayedPersonaConversationWindowRead) {
+      const delay = delayedPersonaConversationWindowRead;
+      delayedPersonaConversationWindowRead = null;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    return window;
+  },
+  setInteractionPersonaConversationWindowDelay: async (delay) => { delayedPersonaConversationWindowRead = Number(delay) || null; },
+  setInteractionNangongNewConversationFailures: async (count) => { nangongNewConversationFailureCount = Math.max(0, Number(count) || 0); },
   // 测试夹具不持久化失败派生，重试等价于按正式端口重新取得当前客户显示窗口。
   retryPersonaCustomerDisplayMessage: async (personaId) => toPersonaCustomerDisplayWindow(await readInteractionPersonaConversation(personaId)),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },
@@ -860,10 +877,13 @@ contextBridge.exposeInMainWorld("desktop", {
       hanliConversation = { ownerPersonaId: "han-li", conversationId: `hanli-conversation-${Date.now()}`, messages: [], updatedAt: new Date().toISOString() };
       return structuredClone(hanliConversation);
     }
-    nangongNewConversationCalls += 1;
     // 保留足够长的确定性窗口，让真实页面能够观察“正在建立新会话”的过渡状态。
     await new Promise((resolve) => setTimeout(resolve, 300));
-    if (nangongNewConversationCalls > 1) throw new Error("thread already has an active writer");
+    if (nangongNewConversationFailureCount > 0) {
+      nangongNewConversationFailureCount -= 1;
+      throw new Error("受控新建失败");
+    }
+    archivedNangongConversations.set(evolutionState.conversation.conversationId, structuredClone(evolutionState.conversation));
     evolutionState.conversation = { ownerPersonaId: "nangong-wan", conversationId: `nangong-${Date.now()}`, createdAt: new Date().toISOString(), messages: [], updatedAt: new Date().toISOString() };
     publishNangongEvolution("conversation.created");
     return structuredClone(evolutionState.conversation);
