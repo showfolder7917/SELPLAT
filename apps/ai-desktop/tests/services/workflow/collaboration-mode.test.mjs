@@ -548,7 +548,23 @@ test("客户范围修订会取消已经排队但尚未开始的旧令狐恢复",
       execute: async () => {
         executionCount += 1;
         return executionCount === 1
-          ? { status: "incomplete", text: "", pendingActions: ["旧执行失败"], authorizedFiles: [] }
+          ? {
+              status: "incomplete",
+              text: "",
+              pendingActions: ["旧执行失败"],
+              changedFiles: [],
+              authorizedFiles: [],
+              successfulCommands: [],
+              failureRouting: {
+                kind: "technical-failure",
+                stepPurpose: "implementation",
+                diagnosticContext: "旧执行已核实为与原任务直接相关的实现失败",
+                verifiedFacts: ["工作区、规则入口和任务范围均已核对"],
+                rawCommandResults: ["旧执行失败"],
+                taskRelation: "direct",
+                nextRetryAction: "沿原任务进入令狐修复",
+              },
+            }
           : { status: "code-verified", text: "新范围完成", pendingActions: [], authorizedFiles: [] };
       },
       close: async () => {
@@ -1171,10 +1187,13 @@ test("执行修复单次未完成后由令狐保留恢复点且不错误归属�
           analyze: async () => "只修改目标文件并完成代码级检查",
           optimize: async () => "",
           investigateRepair: async (_task, failure) => `调查结论：${failure}`,
-          executeRepair: async () => ({ status: "incomplete", text: "等待权限", pendingActions: ["Codex requests command execution approval"], changedFiles: [], successfulCommands: [] }),
+          executeRepair: async () => ({
+            status: "incomplete", text: "等待权限", pendingActions: ["Codex requests command execution approval"], changedFiles: [], authorizedFiles: [], successfulCommands: [],
+            failureRouting: { kind: "technical-failure", stepPurpose: "implementation", diagnosticContext: "修复命令等待授权", verifiedFacts: ["工作区与任务范围已核对"], rawCommandResults: ["Codex requests command execution approval"], taskRelation: "direct", nextRetryAction: "保留恢复点并等待授权" },
+          }),
           execute: async () => member.memberId === "linghu-ancestor"
-            ? { status: "partial", text: "等待权限", pendingActions: ["Codex requests command execution approval"] }
-            : { status: "partial", text: "执行未完成", pendingActions: ["路径诊断失败"] },
+            ? { status: "incomplete", text: "等待权限", pendingActions: ["Codex requests command execution approval"], changedFiles: [], authorizedFiles: [], successfulCommands: [], failureRouting: { kind: "technical-failure", stepPurpose: "implementation", diagnosticContext: "修复命令等待授权", verifiedFacts: ["工作区与任务范围已核对"], rawCommandResults: ["Codex requests command execution approval"], taskRelation: "direct", nextRetryAction: "保留恢复点并等待授权" } }
+            : { status: "incomplete", text: "执行未完成", pendingActions: ["实现步骤失败"], changedFiles: [], authorizedFiles: [], successfulCommands: [], failureRouting: { kind: "technical-failure", stepPurpose: "implementation", diagnosticContext: "实现步骤与原任务直接相关", verifiedFacts: ["工作区与任务范围已核对"], rawCommandResults: ["实现步骤失败"], taskRelation: "direct", nextRetryAction: "交由令狐沿原任务修复" } },
           dispose: async () => undefined,
         }),
       }),
@@ -1219,6 +1238,11 @@ test("文件范围冲突立即等待用户确认且令狐不会排队等待自�
       authorizedFiles: ["contracts/acceptance.value.ts", "acceptance.ts"],
       successfulCommands: [],
       failureKind: "scope-confirmation",
+      failureRouting: {
+        kind: "gate-failure", stepPurpose: "validation", diagnosticContext: "真实 Git 范围门禁发现新增文件",
+        verifiedFacts: ["工作区与初始授权范围已核对"], rawCommandResults: ["自动自修越过首次实施范围：contracts/acceptance.value.ts"],
+        taskRelation: "gate", nextRetryAction: "等待用户确认真实文件范围",
+      },
     };
     const coordinator = createExecutionResultCoordinator(directory, store, result);
     const { state: submitted } = coordinator.submitTask({
@@ -1252,6 +1276,11 @@ test("令狐自己的普通执行失败保留恢复点而不生成自等待任�
       changedFiles: ["acceptance.ts"],
       authorizedFiles: ["acceptance.ts"],
       successfulCommands: [],
+      failureRouting: {
+        kind: "technical-failure", stepPurpose: "validation", diagnosticContext: "固定测试仍未通过且与原任务直接相关",
+        verifiedFacts: ["工作区、规则入口和任务范围均已核对"], rawCommandResults: ["固定测试仍然失败"],
+        taskRelation: "direct", nextRetryAction: "令狐沿同一恢复点继续修复",
+      },
     };
     const coordinator = createExecutionResultCoordinator(directory, store, result);
     const { state: submitted } = coordinator.submitTask({
@@ -2733,7 +2762,7 @@ test("令狐候选统一测试把外层受控依赖链接传给全部固定脚�
   assert.match(unifiedTestRunnerSource, /AI_DESKTOP_TEST_TASK_ID: runId/);
   assert.match(unifiedTestRunnerSource, /acquireManagedDependencyLease/);
   assert.match(unifiedTestRunnerSource, /dependencyLease\?\.environment/);
-  assert.match(unifiedTestRunnerSource, /runNpmScript\(desktopRoot, script, environment\)/);
+  assert.match(unifiedTestRunnerSource, /runNpmScript\(desktopRoot, script, environment, this\.#scriptTimeoutMs\)/);
   assert.match(unifiedTestRunnerSource, /delete environment\.ELECTRON_RUN_AS_NODE/);
   assert.match(integrationVerifierSource, /AI_DESKTOP_DEPENDENCY_LEASE_ID/);
   assert.match(integrationVerifierSource, /verifyRegisteredWorktree/);

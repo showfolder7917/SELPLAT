@@ -18,7 +18,10 @@ function collectOwnedTests(directory) {
 const testFiles = collectOwnedTests(testsRoot);
 if (testFiles.length === 0) throw new Error(`No owned tests found under ${testsRoot}`);
 
-const result = spawnSync(process.execPath, ["--test", ...testFiles], {
+// 单个测试若留下永不完成的 Promise，不能占满统一测试脚本的二十分钟总时限。
+// Node 的逐用例时限会保留准确用例名，同时让同轮其余文件继续形成完整失败报告。
+const OWNED_TEST_TIMEOUT_MS = 30_000;
+const result = spawnSync(process.execPath, ["--test", `--test-timeout=${OWNED_TEST_TIMEOUT_MS}`, ...testFiles], {
   cwd: applicationRoot,
   stdio: "inherit",
 });
