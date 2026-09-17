@@ -58,6 +58,8 @@ type TaskGroupCardPresentation = {
   liveTextByNodeId: Record<string, string>;
   /** 当前专题唯一交付结论；历史时间线不能覆盖它。 */
   currentTopicStage: CurrentTopicStageOutDto | null;
+  /** 审计区的旧卡只允许查看历史，不能装配业务操作。 */
+  auditReadOnly: boolean;
 };
 
 /** 专题卡用户操作：集中声明卡片可以读取或触发的交互。 */
@@ -387,17 +389,18 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 专题数据属于卡片的业务输入。
   const { group } = model;
   // 卡片显示状态统一提供语言、时间、展开选择和错误信息。
-  const { locale, open, continueError, continueFeedback } = model.presentation;
+  const { locale, open, continueError, continueFeedback, auditReadOnly } = model.presentation;
   // 卡片操作这里只读取专题展开操作，节点操作继续由统一模型传给节点。
   const { onOpenChange } = model.actions;
   // 已取消专题只保留审计阅读；展开状态仍由专题卡的统一 groupId 状态管理。
-  if (group.status === "cancelled") {
+  if (group.status === "cancelled" || auditReadOnly) {
     return (
       // 历史卡只提供标题和审计摘要的阅读折叠，不装配当前专题的任何业务操作。
       <article
-        className="task-collaboration-cancelled-history-card"
-        aria-label={locale === "ja" ? "取消済みの案件履歴" : "已取消专题历史卡"}
-        data-cancelled-history-card
+        className="task-collaboration-cancelled-history-card task-collaboration-audit-history-card"
+        aria-label={locale === "ja" ? "監査履歴" : "专题审计历史卡"}
+        data-cancelled-history-card={group.status === "cancelled" || undefined}
+        data-audit-history-card
         data-task-timeline-topic-id={group.topicId || ""}
       >
         <SelUiDisclosure
@@ -407,8 +410,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
           onOpenChange={onOpenChange}
           trigger={<span className="task-cancelled-history-header">
             <span className="task-cancelled-history-status">
-              <strong>{locale === "ja" ? "取消済み" : "已取消"}</strong>
-              <span>{locale === "ja" ? "この案件は取消済みです" : "本专题已取消"}</span>
+              <strong>{group.status === "cancelled" ? (locale === "ja" ? "取消済み" : "已取消") : (locale === "ja" ? "監査履歴" : "审计历史")}</strong>
+              <span>{group.status === "cancelled" ? (locale === "ja" ? "この案件は取消済みです" : "本专题已取消") : (locale === "ja" ? "この案件は現在の作業領域に含まれません" : "此专题不属于当前工作区")}</span>
             </span>
             <strong>{group.title}</strong>
           </span>}
