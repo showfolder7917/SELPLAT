@@ -63,7 +63,7 @@ test("原始逐字流只进入时间线流表，不重复写入全局事件中�
 const collaborationSessionsSource = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
-test("监控者一次调用封存旧修复任务、退役工作树并释放遗留执行者", async () => {
+test("监控者一次调用封存任意旧执行任务、退役工作树并释放遗留执行者", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "monitor-takeover-archive-"));
   try {
     const store = new CollaborationStore(path.join(directory, "collaboration.json"));
@@ -73,19 +73,18 @@ test("监控者一次调用封存旧修复任务、退役工作树并释放遗�
       confirmedIntent: "由监控者接管正式版本",
       workspaceState,
       locale: "zh-CN",
-      automationSource: "linghu-safeguard",
       evolutionProposalId: "proposal-monitor-takeover",
-      initiatorMemberId: "linghu-ancestor",
-      preferredExecutorMemberId: "linghu-ancestor",
+      initiatorMemberId: "nangong-wan",
+      preferredExecutorMemberId: "li-huayuan",
     });
     const workspace = { workspaceId: "worktree:old:r1", rootPath: path.join(directory, "old-worktree"), branchName: "codex/collab/old/r1", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
     store.updateTask(submitted.taskId, "fixture.executing", (task, state) => {
-      task.state = "repairing-execution";
+      task.state = "executing";
       task.phase = "executing";
-      task.executorMemberId = "linghu-ancestor";
+      task.executorMemberId = "li-huayuan";
       task.assignmentId = "assignment-old";
       task.versionWorkspace = workspace;
-      const member = state.members.find((candidate) => candidate.memberId === "linghu-ancestor");
+      const member = state.members.find((candidate) => candidate.memberId === "li-huayuan");
       member.state = "working";
       member.role = "executor";
       member.phase = "executing";
@@ -107,7 +106,7 @@ test("监控者一次调用封存旧修复任务、退役工作树并释放遗�
 
     const archivedTaskId = await coordinator.archiveMonitorTakeover("proposal-monitor-takeover", "abcdef1234567890", "正式版本已由监控者交付");
     const archived = store.task(submitted.taskId);
-    const member = store.state().members.find((candidate) => candidate.memberId === "linghu-ancestor");
+    const member = store.state().members.find((candidate) => candidate.memberId === "li-huayuan");
     assert.equal(archivedTaskId, submitted.taskId);
     assert.deepEqual(calls, [`close:${submitted.taskId}`, "retire:worktree:old:r1"]);
     assert.equal(archived.state, "cancelled");

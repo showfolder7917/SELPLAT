@@ -106,7 +106,6 @@ export class CollaborationCoordinator {
   async archiveMonitorTakeover(proposalId: string, takeoverSha: string | null, reason: string): Promise<string | null> {
     const task = [...this.state().tasks].reverse().find((candidate) =>
       candidate.evolutionProposalId === proposalId
-      && candidate.automationSource === "linghu-safeguard"
       && !["integrated", "cancelled"].includes(candidate.state));
     if (!task) return null;
     return this.#archiveRetiredTask(task, takeoverSha, reason);
