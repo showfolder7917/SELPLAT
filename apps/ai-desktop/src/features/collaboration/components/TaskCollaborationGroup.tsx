@@ -166,6 +166,9 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     timelineUnavailable: false,
     recovery: readRecovery,
   });
+  // 首次时间线尚未形成快照时，读取失败不能被空数组误显示成“暂无专题任务”。
+  // 已有快照后的失败继续沿用下方局部提示，保留用户正在查看的历史和操作位置。
+  const initialTimelineReadFailed = timelineUnavailable && model.data.snapshot === null;
 
   /** 自动重读只按档案政策执行一次；失败后仍等待同一政策，不把权限改成手动入口。 */
   useEffect(() => {
@@ -224,6 +227,21 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
               {retryingRead ? "重新读取中…" : submittedReadPolicyId === readObstruction.policyId ? "已提交，等待处理" : "重新读取"}
             </button>
           )}
+        </div>
+      </section>
+    );
+  }
+
+  // 此入口只重新读取 SQLite 时间线；不触发任务恢复、审批、派发或交付投影读取。
+  if (initialTimelineReadFailed) {
+    return (
+      <section className="task-collaboration-page">
+        <div className="task-collaboration-empty" role="alert">
+          <strong>{locale === "ja" ? "タスク履歴を読み込めません" : "无法读取任务协作时间线"}</strong>
+          <span>{readError || (locale === "ja" ? "履歴を再読み込みしてください。" : "请重新读取任务协作时间线。")}</span>
+          <button type="button" className="task-collaboration-empty-action" disabled={retryingRead} onClick={retryTimelineRead}>
+            {retryingRead ? (locale === "ja" ? "再読み込み中…" : "重新读取中…") : (locale === "ja" ? "再読み込み" : "重新读取")}
+          </button>
         </div>
       </section>
     );

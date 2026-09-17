@@ -152,6 +152,7 @@ test("任务群在协作状态未返回或读取失败时不把空专题当作�
   assert.doesNotMatch(taskGroupSource, /automaticReadRetryFinished/);
   assert.match(taskGroupSource, /正在等待：[\s\S]*是否需要你操作：[\s\S]*下一步：\{readObstruction\.nextAction\}/);
   assert.match(taskGroupSource, /submittedReadPolicyId[\s\S]*readObstruction\.requiresUserAction[\s\S]*task-recovery-continue[\s\S]*disabled=\{retryingRead \|\| submittedReadPolicyId === readObstruction\.policyId\}[\s\S]*重新读取中…[\s\S]*已提交，等待处理/);
+  assert.match(taskGroupSource, /const initialTimelineReadFailed = timelineUnavailable && model\.data\.snapshot === null;[\s\S]*if \(initialTimelineReadFailed\)[\s\S]*无法读取任务协作时间线[\s\S]*onClick=\{retryTimelineRead\}[\s\S]*重新读取/);
   assert.match(taskGroupSource, /stateReadStatus === "syncing"[\s\S]*正在同步/);
   assert.match(taskGroupSource, /stateReadStatus === "unavailable"[\s\S]*状态暂未更新/);
   assert.match(taskGroupSource, /statusMessage \? <strong role="status">\{statusMessage\}<\/strong> : <>/);
@@ -173,7 +174,7 @@ test("任务时间线更新失败时保留最近快照并提供局部重读", ()
   const taskGroup = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
   const viewModel = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
   const workspace = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
-  assert.match(taskGroup, /timelineUnavailable: false/);
+  assert.match(taskGroup, /timelineUnavailable: false,[\s\S]*const initialTimelineReadFailed = timelineUnavailable && model\.data\.snapshot === null/);
   assert.match(taskGroup, /timelineRefreshing = timelineReadStatus === "syncing" && groups\.length > 0[\s\S]*?正在更新任务进度，当前内容和操作保持可用/);
   assert.match(taskGroup, /task-collaboration-refresh-status[\s\S]*?重新读取更新/);
   assert.match(taskGroup, /onRetryTimelineRead\(\)[\s\S]*?finally\(\(\) => setRetryingRead\(false\)\)/);
