@@ -14,6 +14,9 @@ apps/*/db/*.mv.db
 /apps/ai-desktop/db/events.sqlite3
 /apps/ai-desktop/db/events.sqlite3-wal
 /apps/ai-desktop/db/events.sqlite3-shm
+/apps/ai-desktop/db/workflow-control.sqlite3
+/apps/ai-desktop/db/workflow-control.sqlite3-wal
+/apps/ai-desktop/db/workflow-control.sqlite3-shm
 *.trace.db
 *.lock.db
 *.temp.db
