@@ -19,6 +19,8 @@ export function DeveloperExplorerSection({ viewModel }: DeveloperExplorerSection
         auditTask={viewModel.auditTask}
         controller={viewModel.collaboration}
         evolutionState={viewModel.evolutionState}
+        hanliInquiryActivity={viewModel.hanliInquiryActivity}
+        hanliDelegatedResponderPersonaId={viewModel.hanliDelegatedResponderPersonaId}
         onToggle={viewModel.onToggle}
       />
     </DeveloperExplorer>

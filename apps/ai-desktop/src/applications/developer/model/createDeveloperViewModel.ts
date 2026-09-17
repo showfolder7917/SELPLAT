@@ -76,6 +76,8 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       auditTask: controller.diagnostics.auditInfo?.latestTask || null,
       collaboration: controller.collaboration,
       evolutionState: controller.evolution.state,
+      hanliInquiryActivity: controller.hanli.conversation.activity,
+      hanliDelegatedResponderPersonaId: controller.hanli.delegatedResponderPersonaId,
       onToggle: controller.tasks.toggle,
       workspaceExpanded: controller.workspaceExplorer.expanded,
       workspaces: controller.workspace.workspaces,

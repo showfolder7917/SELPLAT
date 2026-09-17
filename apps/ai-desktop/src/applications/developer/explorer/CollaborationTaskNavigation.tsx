@@ -14,6 +14,7 @@ import type {
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/dto/evolution-state.out.dto";
+import type { PersonaConversationActivityOutDto } from "../../../../contracts/services/personas/conversation/dto/persona-conversation-activity.out.dto";
 import {
   // 左侧人物栏与人物页共用主进程协作状态的显示模型。
   collaborationMemberDisplayModel,
@@ -30,6 +31,10 @@ type CollaborationTaskNavigationProps = {
   locale: LocaleValue;
   /** Evolution 只读运行态补足调查阶段的真实人物状态。 */
   evolutionState: EvolutionStateOutDto | null;
+  /** 韩立当前排查活动直接来自人物会话主进程投影。 */
+  hanliInquiryActivity: PersonaConversationActivityOutDto | undefined;
+  /** investigating 阶段实际承担只读核实的人物。 */
+  hanliDelegatedResponderPersonaId: string | null;
 };
 
 /** 协同导航展示任务群入口和全部真实成员。 */
@@ -37,6 +42,8 @@ export function CollaborationTaskNavigation({
   controller,
   locale,
   evolutionState,
+  hanliInquiryActivity,
+  hanliDelegatedResponderPersonaId,
 }: CollaborationTaskNavigationProps) {
   // 权威数据提供成员列表和任务群时间线。
   const { state, stateReadStatus, timeline } = controller.data;
@@ -69,11 +76,16 @@ export function CollaborationTaskNavigation({
         )}
         {state?.members.map((member) => {
           const memberSelected = panel === "member" && member.memberId === controller.navigation.viewedMemberId;
+          const inquiryRole = member.memberId === "han-li"
+            ? "owner"
+            : member.memberId === hanliDelegatedResponderPersonaId ? "delegate" : null;
           const display = collaborationMemberDisplayModel({
             member,
             locale,
             status: stateReadStatus,
             oneShotRun: evolutionState?.oneShotRun,
+            inquiryActivity: inquiryRole ? hanliInquiryActivity : null,
+            inquiryRole,
           });
           const saving = savingMemberId === member.memberId;
           const selectCurrentMember = () => openMemberPage(member.memberId);

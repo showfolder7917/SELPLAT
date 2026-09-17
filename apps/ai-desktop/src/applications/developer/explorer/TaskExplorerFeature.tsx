@@ -20,6 +20,7 @@ import type {
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/dto/evolution-state.out.dto";
+import type { PersonaConversationActivityOutDto } from "../../../../contracts/services/personas/conversation/dto/persona-conversation-activity.out.dto";
 import type {
   // 协作控制器提供模式、人物和任务群页面操作。
   useCollaborationWorkspace,
@@ -41,6 +42,10 @@ type TaskExplorerFeatureProps = {
   controller: CollaborationController;
   /** 调查阶段的权威运行状态只用于左侧人物状态展示。 */
   evolutionState: EvolutionStateOutDto | null;
+  /** 韩立自由讨论中的排查阶段，专题建立前也必须投影到人物栏。 */
+  hanliInquiryActivity: PersonaConversationActivityOutDto | undefined;
+  /** 韩立把当前核实交给南宫婉时，同时投影受托人物状态。 */
+  hanliDelegatedResponderPersonaId: string | null;
   /** 展开或收起左侧任务区域。 */
   onToggle: () => void;
 };
@@ -52,6 +57,8 @@ export function TaskExplorerFeature({
   auditTask,
   controller,
   evolutionState,
+  hanliInquiryActivity,
+  hanliDelegatedResponderPersonaId,
   onToggle,
 }: TaskExplorerFeatureProps) {
   // 当前运行模式来自导航状态，模式切换与页面切换来自业务操作组。
@@ -80,6 +87,8 @@ export function TaskExplorerFeature({
         controller={controller}
         locale={locale}
         evolutionState={evolutionState}
+        hanliInquiryActivity={hanliInquiryActivity}
+        hanliDelegatedResponderPersonaId={hanliDelegatedResponderPersonaId}
       />
     );
   } else {

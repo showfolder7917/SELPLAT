@@ -29,6 +29,21 @@ test("内部调查尚未生成执行任务时，只有权威运行态指定的�
   assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run }), { presence: "idle", label: "空闲" });
 });
 
+test("韩立人物会话排查在专题建立前同时投影负责人和受托核实人物", () => {
+  const activity = { phase: "investigating", status: "running" };
+  const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
+  const nangong = { memberId: "nangong-wan", state: "idle", currentTaskId: null, phase: null };
+  assert.deepEqual(display({ member: hanli, locale: "zh-CN", inquiryActivity: activity, inquiryRole: "owner" }), { presence: "working", label: "等待核实中" });
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", inquiryActivity: activity, inquiryRole: "delegate" }), { presence: "working", label: "只读核实中" });
+  assert.deepEqual(display({ member: hanli, locale: "zh-CN", inquiryActivity: { phase: "assessing", status: "running" }, inquiryRole: "owner" }), { presence: "working", label: "研判结果中" });
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", inquiryActivity: { phase: "assessing", status: "running" }, inquiryRole: "delegate" }), { presence: "idle", label: "空闲" });
+});
+
+test("可恢复排查不能因没有任务编号而投影为空闲", () => {
+  const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
+  assert.deepEqual(display({ member: hanli, locale: "zh-CN", inquiryActivity: { phase: "explaining", status: "retryable" }, inquiryRole: "owner" }), { presence: "recovering", label: "等待恢复排查" });
+});
+
 test("状态尚未取得或更新失败时明确显示同步结果，不读取历史状态", () => {
   assert.deepEqual(display({ member: null, locale: "zh-CN", status: "syncing" }), { presence: "offline", label: "正在同步" });
   assert.deepEqual(display({ member: null, locale: "zh-CN", status: "unavailable" }), { presence: "offline", label: "状态暂未更新" });
@@ -36,5 +51,5 @@ test("状态尚未取得或更新失败时明确显示同步结果，不读取�
 
 test("当前任务存在时显示存储中的真实阶段，不由时间线文案覆盖", () => {
   const member = { memberId: "linghu-ancestor", state: "working", currentTaskId: "task-current", phase: "verifying" };
-  assert.deepEqual(display({ member, locale: "zh-CN" }), { presence: "working", label: "自检中" });
+  assert.deepEqual(display({ member, locale: "zh-CN", inquiryActivity: { phase: "investigating", status: "running" }, inquiryRole: "owner" }), { presence: "working", label: "自检中" });
 });

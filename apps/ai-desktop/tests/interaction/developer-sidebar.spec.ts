@@ -1380,7 +1380,7 @@ test("韩立排查显示真实阶段并从原阶段重试，保留输入草稿�
     await retry.click();
     await expect(progress).toContainText("韩立正在整理结论");
     await expect(retry).toHaveCount(0);
-    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("空闲");
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("整理结论中");
     await expect(draft).toHaveValue("保留这条待发送补充");
     const request = await page.evaluate(() => (window as any).desktop.getInteractionInquiryRequest());
     expect(request.clientMessageId).toBe("inquiry-ui-user");
@@ -1390,10 +1390,10 @@ test("韩立排查显示真实阶段并从原阶段重试，保留输入草稿�
     await expect(conversation.getByText("检查滚动条为什么会跳动", { exact: true })).toHaveCount(1);
     await expect(conversation.getByText("源码证据已确认，实际运行复现尚待验证。", { exact: true })).toBeVisible();
     await page.evaluate(() => (window as any).desktop.setInteractionInquiryPhase("investigating"));
-    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("空闲");
-    await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("等待核实中");
+    await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("只读核实中");
     await page.evaluate(() => (window as any).desktop.setInteractionInquiryPhase("assessing"));
-    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("空闲");
+    await expect(tasks.getByRole("button", { name: /韩立/ })).toContainText("研判结果中");
     await expect(tasks.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   } catch (error) {
     await page.screenshot({ path: testInfo.outputPath("hanli-inquiry-failure.png") });

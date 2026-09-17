@@ -16,6 +16,7 @@ import type {
   LocaleValue,
 } from "../../../../contracts/system/desktop/index";
 import type { EvolutionOneShotRunOutDto } from "../../../../contracts/services/evolution/dto/evolution-one-shot-run.out.dto";
+import type { PersonaConversationActivityOutDto } from "../../../../contracts/services/personas/conversation/dto/persona-conversation-activity.out.dto";
 
 /** 协作快照读取结果由人物页和任务群共用。 */
 export type CollaborationStateReadStatus = "syncing" | "ready" | "unavailable";
@@ -33,6 +34,9 @@ export type CollaborationMemberDisplayModelInput = {
    * 这是只读展示投影：不能据此创建任务或改写协作成员存储。
    */
   oneShotRun?: Pick<EvolutionOneShotRunOutDto, "actor" | "phase" | "status"> | null;
+  /** 专题建立前的人物排查活动；owner 与 delegate 分别投影韩立判断和南宫婉核实。 */
+  inquiryActivity?: Pick<PersonaConversationActivityOutDto, "phase" | "status"> | null;
+  inquiryRole?: "owner" | "delegate" | null;
 };
 
 type MemberState = CollaborationMemberOutDto["state"];
@@ -150,6 +154,45 @@ function deliberationMemberDisplay(
   return { presence: "working", label: labels[oneShotRun.phase] || fallback };
 }
 
+/** 人物会话排查尚未形成专题时，直接使用主进程活动投影，不能回退为协作成员空闲。 */
+function inquiryMemberDisplay(
+  activity: CollaborationMemberDisplayModelInput["inquiryActivity"],
+  role: CollaborationMemberDisplayModelInput["inquiryRole"],
+  locale: LocaleValue,
+): { presence: MemberState; label: string } | null {
+  if (!activity || !role || activity.status === "completed") return null;
+  if (activity.status === "retryable" || activity.status === "interrupted") {
+    return role === "owner"
+      ? { presence: "recovering", label: locale === "ja" ? "調査再開待ち" : "等待恢复排查" }
+      : null;
+  }
+  if (activity.status === "blocked") {
+    return role === "owner"
+      ? { presence: "recovering", label: locale === "ja" ? "調査ブロック" : "排查受阻" }
+      : null;
+  }
+  if (activity.status !== "running") return null;
+  if (role === "delegate") {
+    return activity.phase === "investigating"
+      ? { presence: "working", label: locale === "ja" ? "読取検証中" : "只读核实中" }
+      : null;
+  }
+  const chineseLabels: Partial<Record<PersonaConversationActivityOutDto["phase"], string>> = {
+    queued: "准备排查中",
+    investigating: "等待核实中",
+    assessing: "研判结果中",
+    explaining: "整理结论中",
+  };
+  const japaneseLabels: Partial<Record<PersonaConversationActivityOutDto["phase"], string>> = {
+    queued: "調査準備中",
+    investigating: "検証待ち",
+    assessing: "結果判定中",
+    explaining: "結論整理中",
+  };
+  const labels = locale === "ja" ? japaneseLabels : chineseLabels;
+  return { presence: "working", label: labels[activity.phase] || (locale === "ja" ? "調査中" : "排查中") };
+}
+
 /** 左侧人物栏与人物页共用的当前状态模型，只读取成员状态、任务编号和阶段。 */
 export function collaborationMemberDisplayModel(
   input: CollaborationMemberDisplayModelInput,
@@ -165,6 +208,11 @@ export function collaborationMemberDisplayModel(
   // 运行中的内部研讨是主进程已发布的当前事实，优先于“没有执行任务”的默认空闲显示。
   const deliberationDisplay = deliberationMemberDisplay(member, oneShotRun, locale);
   if (deliberationDisplay) return deliberationDisplay;
+  // 已有执行任务时继续以协作存储为权威；只有任务前排查才由人物会话活动补足状态。
+  if (!member.currentTaskId) {
+    const inquiryDisplay = inquiryMemberDisplay(input.inquiryActivity, input.inquiryRole, locale);
+    if (inquiryDisplay) return inquiryDisplay;
+  }
   // 没有当前任务、也没有归属本人的运行中研讨时，历史状态不能把成员重新投影为忙碌。
   const presence = member.currentTaskId ? member.state : "idle";
   // 阶段只属于当前在途任务；空闲成员不能继续显示上一轮的阶段。

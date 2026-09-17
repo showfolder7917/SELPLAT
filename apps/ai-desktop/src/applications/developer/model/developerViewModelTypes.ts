@@ -93,6 +93,10 @@ export type DeveloperExplorerViewModel = {
   collaboration: Controller["collaboration"];
   /** 内部研讨真实运行态用于人物导航状态投影，不参与协作任务写入。 */
   evolutionState: Controller["evolution"]["state"];
+  /** 韩立专题建立前的真实排查活动，用于补足左侧人物状态。 */
+  hanliInquiryActivity: Controller["hanli"]["conversation"]["activity"];
+  /** 调查阶段当前受托核实人物；为空时只有韩立本人显示排查状态。 */
+  hanliDelegatedResponderPersonaId: Controller["hanli"]["delegatedResponderPersonaId"];
   /** 点击标题时切换任务区域展开状态。 */
   onToggle: Controller["tasks"]["toggle"];
   workspaceExpanded: Controller["workspaceExplorer"]["expanded"];
