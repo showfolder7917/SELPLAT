@@ -161,7 +161,7 @@ let linghuAutomation: LinghuAutomationFacade | undefined;
 // 人物演化总运行时连接南宫、韩立、专题状态和 Workflow。
 let personaEvolution: PersonaEvolutionRuntime | undefined;
 // 数据库故障时部分界面仍可启动，因此这些持久化服务允许暂时为 null。
-let aiMemoryDatabase: SqliteDatabase | null = null;
+let workflowDatabase: SqliteDatabase | null = null;
 let persistenceContext: PersistenceContext | null = null;
 let workflowRepository: WorkflowRepository | null = null;
 let collaborationTimeline: EventCenterTimeline | null = null;
@@ -191,7 +191,7 @@ function mergeWorkspaceState(configured: WorkspaceStateOutDto, requested: Worksp
 function closeAiMemoryDatabase(): void {
   persistenceContext?.close();
   persistenceContext = null;
-  aiMemoryDatabase = null;
+  workflowDatabase = null;
 }
 
 /** 停止所有可能继续写数据库的后台任务，再关闭数据库；退出和受控重启都会调用。 */
@@ -219,7 +219,7 @@ export async function startApplication(): Promise<void> {
   const projectRoot = startupProjectRoot;
   const applicationName = startupApplicationName;
   const projectPaths = startupProjectPaths;
-  persistenceContext = createPersistenceContext({
+  persistenceContext = await createPersistenceContext({
     projectRoot,
     runtimeMarkerPath: path.join(app.getPath("userData"), "ai-memory-database-state.json"),
     // 已安装候选包从自身资源读取迁移，数据文件仍固定留在已选择的工程数据根。
@@ -236,7 +236,7 @@ export async function startApplication(): Promise<void> {
       }
     },
   });
-  aiMemoryDatabase = persistenceContext.database;
+  workflowDatabase = persistenceContext.workflowDatabase;
   aiMemoryDatabaseStatus = persistenceContext.status;
   workflowRepository = persistenceContext.workflowRepository;
   collaborationTimeline = persistenceContext.collaborationTimeline;
@@ -489,7 +489,7 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("thread.lifecycle", details),
   );
   // 人物会话 ID 存在 SQLite 中；数据库不可用时仓库实现负责提供受控降级。
-  const nangongSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "nangong");
+  const nangongSessions = createSqliteCodexSessionRepository(workflowDatabase, "nangong");
   // 南宫婉拥有独立、跨工作区保持的长期线程，用于连续调查同一演化主题。
   nangongCodex = new CodexService(
     projectRoot,
@@ -509,7 +509,7 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.conversation.thread.lifecycle", details),
   );
-  const hanLiSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "han-li");
+  const hanLiSessions = createSqliteCodexSessionRepository(workflowDatabase, "han-li");
   // 韩立使用另一条长期线程，确保审批意见不混入南宫婉的调查上下文。
   hanLiCodex = new CodexService(
     projectRoot, trustedCommands, hanLiSessions,
@@ -524,7 +524,7 @@ export async function startApplication(): Promise<void> {
   hanliResultAcceptanceCodex = new CodexService(
     projectRoot,
     trustedCommands,
-    createSqliteCodexSessionRepository(aiMemoryDatabase, "hanli-result-acceptance"),
+    createSqliteCodexSessionRepository(workflowDatabase, "hanli-result-acceptance"),
     {
       codexHome,
       serviceName: "selplat_ai_desktop_han_li_result_acceptance",
@@ -542,15 +542,15 @@ export async function startApplication(): Promise<void> {
   nangongDeliberationCodex = nangongCodex;
   nangongDistributionCodex = nangongCodex;
   // 核实使用独立只读连接，避免新询问取消正在进行的研讨或分发。
-  nangongInquiryCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(aiMemoryDatabase, "nangong-inquiry"), {
+  nangongInquiryCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(workflowDatabase, "nangong-inquiry"), {
     codexHome, serviceName: "selplat_ai_desktop_nangong_inquiry", threadSource: "ai-desktop-nangong-inquiry",
     migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
     readSettings: () => settings.read(), readRuleInstructions: readNangongRuleInstructions,
   }, (details) => eventCenter.recordEvent("nangong.inquiry.trusted_command.decision", details), (details) => eventCenter.recordEvent("nangong.inquiry.thread.lifecycle", details));
   let inquiryQueue: Promise<unknown> = Promise.resolve();
   // 令狐固定会话仅服务故障兜底和统一测试修复；常规分发由南宫婉规划并交给程序做确定性冲突校验。
-  const linghuSessions = createSqliteCodexSessionRepository(aiMemoryDatabase, "linghu");
-  linghuGuidanceCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(aiMemoryDatabase, "linghu-guidance"), {
+  const linghuSessions = createSqliteCodexSessionRepository(workflowDatabase, "linghu");
+  linghuGuidanceCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(workflowDatabase, "linghu-guidance"), {
     codexHome, serviceName: "selplat_ai_desktop_linghu_guidance", threadSource: "ai-desktop-linghu-guidance",
     migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
     readSettings: () => settings.read(), readRuleInstructions: () => rules.renderRoleInstructions("linghu"),
@@ -738,7 +738,10 @@ export async function startApplication(): Promise<void> {
   });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
   // 当前专题演化状态以 SQLite 为唯一生产来源。
-  const evolutionStateStore = createEvolutionState(aiMemoryDatabase);
+  const initialNangongConversation = collaborationMemory
+    ? await collaborationMemory.readPersonaConversation("nangong-wan")
+    : null;
+  const evolutionStateStore = createEvolutionState(workflowDatabase, initialNangongConversation);
   // 三个可选端口把专题写操作登记为幂等 mutation；数据库不可用时不伪造持久化成功。
   const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
   const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;
@@ -1000,12 +1003,21 @@ export async function startApplication(): Promise<void> {
       ? (taskId, memberId, event) => recordDistributionTimelineStream({ timeline: evolutionTimeline, eventCenter }, taskId, memberId, event)
       : undefined,
   });
-  startHanliInternalDeliberation = async (request, sourceRequestId, options) => {
-    if (options?.switchTopic) {
-      evolutionStateStore.retireOneShotRunForTopicSwitch(
-        "用户明确要求建立新的独立专题；旧专题、旧提案与冻结验收计划仅保留审计，不得承接本轮新范围。",
+  const archiveCurrentTopicForIndependentStart = async (): Promise<void> => {
+    const current = evolutionStateStore.state().oneShotRun;
+    if (current?.proposalId) {
+      await collaboration!.archiveMonitorTakeover(
+        current.proposalId,
+        startup.runtimeSourceSha,
+        "监控者已完成正式版本交付；旧修复任务与执行工作树已封存，新专题使用独立任务卡验收。",
       );
     }
+    evolutionStateStore.retireOneShotRunForTopicSwitch(
+      "已明确切换到新的独立验收专题；旧专题、旧提案与冻结验收计划仅保留审计，不得承接新范围。",
+    );
+  };
+  startHanliInternalDeliberation = async (request, sourceRequestId, options) => {
+    if (options?.switchTopic) await archiveCurrentTopicForIndependentStart();
     const state = personaEvolution!.startHanliNangongDeliberation(request.workspaceState, request.locale, sourceRequestId);
     return { continuous: state.automationRuntime.status === "running" };
   };

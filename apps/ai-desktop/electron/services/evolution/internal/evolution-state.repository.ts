@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
+
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import { PersonaConversationRepository } from "../../support/capabilities/conversation/index.js";
 import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
 
 /**
@@ -23,11 +24,11 @@ export interface EvolutionStatePersistence {
 /** Evolution 状态的 SQLite 投影仓库；只保存共同事实，不保存任何人物私有会话控制器。 */
 export class EvolutionStateRepository implements EvolutionStatePersistence {
   readonly #database: SqliteDatabase | null;
-  readonly #conversations: PersonaConversationRepository;
+  readonly #initialConversation: EvolutionStateOutDto["conversation"];
 
-  constructor(database: SqliteDatabase | null) {
+  constructor(database: SqliteDatabase | null, initialConversation: EvolutionStateOutDto["conversation"] | null = null) {
     this.#database = database;
-    this.#conversations = new PersonaConversationRepository(database);
+    this.#initialConversation = structuredClone(initialConversation || emptyConversation());
   }
 
   load(): EvolutionStateOutDto | null {
@@ -36,17 +37,15 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
       SELECT stateJson FROM AiDesktopEvolutionState WHERE singletonId = 1
     `).get() as { stateJson: string } | undefined);
     if (!row) return null;
-    // Evolution JSON 只保存专题运行事实；南宫婉正文每次从统一人物会话表装配。
+    // Evolution JSON 只保存专题运行事实；南宫婉正文由启动组合根从 AI Memory Worker 装配。
     return {
       ...(JSON.parse(row.stateJson) as Omit<EvolutionStateOutDto, "conversation">),
-      conversation: this.#conversations.readActive("nangong-wan"),
+      conversation: this.#initialConversation,
     };
   }
 
   loadLatestConversation(): EvolutionStateOutDto["conversation"] | null {
-    if (!this.#database) return null;
-    const conversation = this.#conversations.readActive("nangong-wan");
-    return conversation.conversationId ? conversation : null;
+    return this.#initialConversation ? structuredClone(this.#initialConversation) : null;
   }
 
   /** 只读查找统一异常中心已经落库的原验收运行事实，用于修复旧版本覆盖唯一运行指针的事故。 */
@@ -78,9 +77,8 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
   }
 
   save(state: EvolutionStateOutDto): void {
-    if (!this.#database) throw new Error("AI Memory 数据库当前不可用，专题演化状态未保存；请先恢复数据库后重试。");
-    // 先保存统一人物会话，再保存不含正文的 Evolution 状态，杜绝两个权威副本。
-    const savedConversation = this.#conversations.save(state.conversation);
+    if (!this.#database) throw new Error("工作流控制数据库当前不可用，专题演化状态未保存；请先恢复数据库后重试。");
+    // 人物正文只由 AI Memory Worker 保存；控制库不得再打开或写入人物会话表。
     const { conversation: _conversation, ...persistedState } = state;
     this.#database.transaction((connection) => connection.prepare(`
       INSERT INTO AiDesktopEvolutionState (singletonId, stateVersion, stateJson, updatedAt)
@@ -94,7 +92,17 @@ export class EvolutionStateRepository implements EvolutionStatePersistence {
       $stateJson: JSON.stringify(persistedState),
       $updatedAt: state.updatedAt,
     }));
-    // 返回统一仓储已分配的真实序号和同时追加的交接消息，避免下一轮继续使用旧投影。
-    state.conversation = savedConversation;
   }
+}
+
+/** 无 Worker 的测试或数据库降级路径只建立内存会话，不在控制库创建人物正文。 */
+function emptyConversation(): EvolutionStateOutDto["conversation"] {
+  const now = new Date().toISOString();
+  return {
+    ownerPersonaId: "nangong-wan",
+    conversationId: `persona-conversation-${randomUUID()}`,
+    createdAt: now,
+    messages: [],
+    updatedAt: now,
+  };
 }

@@ -103,7 +103,7 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /createProposal|resumeOneShotRun/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /automaticApprovalEnabled|raw\.version === [1-7]/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /node:fs|readFileSync|writeFileSync|renameSync/);
-  assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(aiMemoryDatabase\)/);
+  assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(workflowDatabase, initialNangongConversation\)/);
   assert.doesNotMatch(source("electron/system/bootstrap/application-runtime.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
   const apiMethods = [...source("contracts/system/desktop/api/desktop.api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
   const desktopApiDomains = ["system", "rules", "codex", "screenshot", "collaboration", "conversation"];
@@ -241,8 +241,10 @@ test("人物记忆只通过后台 Worker 单通道访问 SQLite", () => {
   const proxy = source("electron/services/support/capabilities/event-center/internal/projection/background-collaboration-memory.proxy.ts");
   const worker = source("electron/services/support/capabilities/event-center/internal/corpus/background-persistence.worker.ts");
   const methods = source("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory-methods.ts");
-  assert.match(bootstrap, /createCollaborationMemory\(backgroundPersistence\)/);
-  assert.doesNotMatch(bootstrap, /createCollaborationMemory\(database\)/);
+  assert.match(bootstrap, /createCollaborationMemory\(usableBackgroundPersistence\)/);
+  assert.doesNotMatch(bootstrap, /createCollaborationMemory\(workflowDatabase\)/);
+  assert.doesNotMatch(bootstrap, /initializeAiMemoryDatabase/);
+  assert.match(worker, /initializeAiMemoryDatabase/);
   assert.doesNotMatch(eventCenter, /new CollaborationMemoryService/);
   assert.match(proxy, /operation:\s*"collaboration-memory"/);
   assert.match(proxy, /from "\.\/collaboration-memory-methods\.js"/);

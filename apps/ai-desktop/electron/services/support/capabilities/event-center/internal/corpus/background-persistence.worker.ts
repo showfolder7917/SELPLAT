@@ -1,17 +1,34 @@
 import { parentPort, workerData, type MessagePort } from "node:worker_threads";
 
-import { initializeAiMemoryDatabase } from "../../../../platform/persistence/index.js";
+import { discardFreshWorkflowDatabase, initializeAiMemoryDatabase, initializeWorkflowDatabase, migrateWorkflowControlData } from "../../../../platform/persistence/index.js";
 import { CodexConversationCorpusIngestion } from "./codex-conversation-corpus.ingestion.js";
 import { CollaborationMemoryService } from "../projection/collaboration-memory.service.js";
 import { collaborationMemoryMethodNames } from "../projection/collaboration-memory-methods.js";
 
 type WorkerRequest = { id: number; operation: string; payload: Record<string, unknown> };
-type WorkerOptions = { projectRoot: string; runtimeMarkerPath: string; migrationSqlRoot?: string };
+type WorkerOptions = { projectRoot: string; runtimeMarkerPath: string; workflowRuntimeMarkerPath: string; migrationSqlRoot?: string };
 
 const workerPort = requireWorkerPort();
 const initialization = initializeAiMemoryDatabase(workerData as WorkerOptions);
 if (!initialization.database) throw new Error(initialization.status.message || "AI Memory 数据库不可用。");
 const database = initialization.database;
+const workflowInitialization = initializeWorkflowDatabase({
+  projectRoot: (workerData as WorkerOptions).projectRoot,
+  runtimeMarkerPath: (workerData as WorkerOptions).workflowRuntimeMarkerPath,
+  migrationSqlRoot: (workerData as WorkerOptions).migrationSqlRoot,
+});
+if (!workflowInitialization.database) throw new Error(workflowInitialization.status.message || "工作流控制数据库不可用。");
+const workflowDatabasePath = workflowInitialization.database.databasePath;
+workflowInitialization.database.close();
+if (workflowInitialization.createdThisAttempt) {
+  try {
+    migrateWorkflowControlData(database, workflowDatabasePath);
+  } catch (error) {
+    discardFreshWorkflowDatabase(workflowDatabasePath, (workerData as WorkerOptions).workflowRuntimeMarkerPath);
+    throw error;
+  }
+}
+workerPort.postMessage({ type: "ready", status: initialization.status });
 const collaborationMemory = new CollaborationMemoryService(database);
 const collaborationMemoryMethods = new Set<string>(collaborationMemoryMethodNames);
 let queue: Promise<void> = Promise.resolve();

@@ -206,6 +206,11 @@ export class VersionWorkspaceManager {
   /** 提交前与复测前只核对尚未提交的文件，防止已提交结果被误当作晚到修改。 */
   async readTaskUncommittedFiles(task: CollaborationTaskOutDto): Promise<string[]> {
     const { rootPath } = this.#resolveTaskWorkspace(task);
+    if (!existsSync(rootPath)) {
+      const registered = parseGitWorktrees(await this.#gitRaw(this.#repositoryRoot, ["worktree", "list", "--porcelain"]))
+        .some((candidate) => path.resolve(candidate.rootPath) === path.resolve(rootPath));
+      if (!registered) return [];
+    }
     return splitStatusPorcelain(await this.#gitRaw(rootPath, ["status", "--porcelain", "-z"]));
   }
 
@@ -388,8 +393,12 @@ export class VersionWorkspaceManager {
   async retireWorkspace(workspace: CollaborationVersionWorkspaceOutDto): Promise<void> {
     const rootPath = this.#validateManagedPath(workspace.rootPath);
     this.#validateManagedBranch(workspace.branchName);
-    await this.#git(this.#repositoryRoot, ["worktree", "remove", rootPath]);
-    await this.#git(this.#repositoryRoot, ["branch", "-D", workspace.branchName]);
+    const registered = parseGitWorktrees(await this.#gitRaw(this.#repositoryRoot, ["worktree", "list", "--porcelain"]))
+      .some((candidate) => path.resolve(candidate.rootPath) === path.resolve(rootPath));
+    if (registered) await this.#git(this.#repositoryRoot, ["worktree", "remove", rootPath]);
+    else if (existsSync(rootPath)) throw new Error("旧任务目录已不再是 Git 签发工作树，禁止当作退役对象删除。");
+    const branchExists = await this.#git(this.#repositoryRoot, ["show-ref", "--verify", `refs/heads/${workspace.branchName}`]).then(() => true, () => false);
+    if (branchExists) await this.#git(this.#repositoryRoot, ["branch", "-D", workspace.branchName]);
   }
 
   async retireCandidate(candidate: IntegrationCandidate): Promise<void> {

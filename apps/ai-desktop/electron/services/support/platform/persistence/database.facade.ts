@@ -3,6 +3,8 @@ export type DatabasePort = import("./internal/sqlite-database.js").SqliteDatabas
 // 初始化函数负责安全路径、迁移和恢复状态；调用方只接收可用端口或明确不可用状态。
 export {
   initializeAiMemoryDatabase,
+  initializeWorkflowDatabase,
+  discardFreshWorkflowDatabase,
   type AiMemoryDatabaseInitialization,
   type InitializeAiMemoryDatabaseOptions,
 } from "./internal/sqlite-database.js";

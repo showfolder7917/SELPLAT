@@ -90,6 +90,55 @@ export class CollaborationCoordinator {
   setMode(mode: DesktopOperatingModeValue): CollaborationStateOutDto { return this.#store.setMode(mode); }
 
   /**
+   * 监控者交付正式版本后，以一次受控调用封存旧修复任务并退役其工作树。
+   * 只有工作树无未提交证据时才执行；任一步失败都不写入“已封存”事实。
+   */
+  async archiveMonitorTakeover(proposalId: string, takeoverSha: string | null, reason: string): Promise<string | null> {
+    const task = [...this.state().tasks].reverse().find((candidate) =>
+      candidate.evolutionProposalId === proposalId
+      && candidate.automationSource === "linghu-safeguard"
+      && !["integrated", "cancelled"].includes(candidate.state));
+    if (!task) return null;
+    const changedFiles = task.versionWorkspace ? await this.#workspaces.readTaskUncommittedFiles(task) : [];
+    if (changedFiles.length) throw new Error(`旧任务工作树仍有未提交证据，禁止封存：${changedFiles.join("、")}`);
+    await this.#executor.close(task.taskId);
+    if (task.versionWorkspace && !task.versionWorkspace.retiredAt) await this.#workspaces.retireWorkspace(task.versionWorkspace);
+    this.#stopHeartbeat(`executor:${task.taskId}`);
+    this.#lastProgressWriteMs.delete(`${task.taskId}:${task.executorMemberId || ""}`);
+    this.#activeTaskRuns.delete(task.taskId);
+    this.#store.updateTask(task.taskId, "task.monitor_takeover_archived", (current, state) => {
+      const now = new Date().toISOString();
+      current.state = "cancelled";
+      current.phase = null;
+      current.assignmentId = null;
+      current.executorMemberId = null;
+      current.recoveryTargetState = null;
+      current.blockingReason = reason.slice(0, 2_000);
+      current.customerActionGuidance = null;
+      if (current.versionWorkspace) current.versionWorkspace.retiredAt = now;
+      for (const member of state.members.filter((candidate) => candidate.currentTaskId === current.taskId)) {
+        member.state = "idle";
+        member.role = null;
+        member.phase = null;
+        member.currentTaskId = null;
+        member.blockingReason = null;
+        member.updatedAt = now;
+      }
+      current.flowEvents.push({
+        eventId: randomUUID(),
+        type: "task.cancelled",
+        stage: "task",
+        status: "cancelled",
+        actor: null,
+        summary: `旧任务已由监控者接管并封存；正式版本${takeoverSha ? `提交 ${takeoverSha.slice(0, 12)}` : "发布包"}已生效，旧工作树已退役。`,
+        occurredAt: now,
+        error: false,
+      });
+    });
+    return task.taskId;
+  }
+
+  /**
    * 把客户在韩立会话中的最新纠正写回当前演化修复任务。
    * 保留同一 taskId 和历史记录，同时废止旧执行租约，避免旧范围的迟到结果继续进入集成。
    */

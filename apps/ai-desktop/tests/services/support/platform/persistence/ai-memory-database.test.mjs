@@ -4,7 +4,8 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { initializeAiMemoryDatabase } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
+import { initializeAiMemoryDatabase, initializeWorkflowDatabase } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
+import { migrateWorkflowControlData } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/workflow-control-migration.js";
 import { EvolutionStateRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.repository.js";
 import { EvolutionStateStore } from "../../../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
 import { runSqliteTransaction } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-transaction.js";
@@ -47,6 +48,36 @@ test("首次初始化建立版本表并在重复启动时保持幂等", () => {
     } finally {
       inspection.close();
     }
+  } finally {
+    rmSync(fixture.projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("首次拆分只复制控制面事实，人物正文仍只留在 AI Memory", () => {
+  const fixture = createFixture("workflow-control-migration");
+  const workflowMarkerPath = `${fixture.markerPath}.workflow-control`;
+  try {
+    const source = initializeAiMemoryDatabase(fixture.options);
+    assert.equal(source.status.state, "ready");
+    source.database.withConnection((connection) => connection.prepare(`
+      INSERT INTO AiDesktopPersonaSession (sessionKey, threadId, workspaceSignature, updatedAt)
+      VALUES ('nangong', 'thread-control-copy', 'workspace-copy', '2026-09-17T00:00:00.000Z')
+    `).run());
+    new PersonaConversationRepository(source.database).create("nangong-wan");
+    const workflow = initializeWorkflowDatabase({ ...fixture.options, runtimeMarkerPath: workflowMarkerPath });
+    assert.equal(workflow.createdThisAttempt, true);
+    const workflowPath = workflow.database.databasePath;
+    workflow.database.close();
+    migrateWorkflowControlData(source.database, workflowPath);
+
+    const inspection = new DatabaseSync(workflowPath, { readOnly: true });
+    try {
+      assert.equal(inspection.prepare("SELECT threadId FROM AiDesktopPersonaSession WHERE sessionKey='nangong'").get().threadId, "thread-control-copy");
+      assert.equal(Number(inspection.prepare("SELECT COUNT(*) AS count FROM AiDesktopPersonaConversation").get().count), 0);
+    } finally {
+      inspection.close();
+    }
+    source.database.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
   }
@@ -602,18 +633,17 @@ test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", 
     const store = new EvolutionStateStore(repository);
     store.appendConversation("user", "保留的用户原话", []);
     store.beginOneShotRun({ primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: fixture.projectRoot, permission: "workspace-write" }] }, "zh-CN");
-    assert.equal(new EvolutionStateStore(repository).state().oneShotRun?.status, "running");
+    assert.equal(new EvolutionStateStore(new EvolutionStateRepository(initialized.database, store.state().conversation)).state().oneShotRun?.status, "running");
     store.clearTestData();
     store.assertTestDataCleared();
     const persisted = initialized.database?.withConnection((connection) => connection.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1").get());
     assert.equal(Number(persisted.stateVersion), 9);
     assert.equal(JSON.parse(String(persisted.stateJson)).conversation, undefined);
-    const preservedMessage = initialized.database?.withConnection((connection) => connection.prepare(`
-      SELECT content FROM AiDesktopPersonaConversationMessage
-      WHERE ownerPersonaId='nangong-wan' AND speakerType='user'
-      ORDER BY sequenceNumber LIMIT 1
+    const controlDatabaseMessageCount = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT COUNT(*) AS count FROM AiDesktopPersonaConversationMessage
+      WHERE ownerPersonaId='nangong-wan'
     `).get());
-    assert.equal(preservedMessage.content, "保留的用户原话");
+    assert.equal(Number(controlDatabaseMessageCount.count), 0);
     initialized.database?.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
@@ -810,6 +840,7 @@ test("通用事务包装在异常时不留下部分写入", () => {
 
 test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", () => {
   const mainSource = readFileSync(path.join(appRoot, "electron", "system", "bootstrap", "persistence.bootstrap.ts"), "utf8");
+  const workerSource = readFileSync(path.join(appRoot, "electron", "services", "support", "capabilities", "event-center", "internal", "corpus", "background-persistence.worker.ts"), "utf8");
   const ipcSource = readFileSync(path.join(appRoot, "electron", "system", "ipc", "domains", "register-system-ipc.ts"), "utf8");
   const preloadSource = [
     readFileSync(path.join(appRoot, "electron", "system", "preload", "preload.cts"), "utf8"),
@@ -820,8 +851,11 @@ test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", (
     path.join(appRoot, "src", "applications", "developer", "components", "AiMemoryRecoveryBanner.tsx"),
     path.join(appRoot, "src", "features", "settings", "components", "DeveloperSettingsFeature.tsx"),
   ].map((file) => readFileSync(file, "utf8")).join("\n");
-  assert.match(mainSource, /initializeAiMemoryDatabase/);
-  assert.match(mainSource, /database\?\.close\(\)/);
+  assert.doesNotMatch(mainSource, /initializeAiMemoryDatabase/);
+  assert.match(mainSource, /initializeWorkflowDatabase/);
+  assert.match(mainSource, /workflowDatabase\?\.close\(\)/);
+  assert.match(workerSource, /initializeAiMemoryDatabase/);
+  assert.match(workerSource, /migrateWorkflowControlData/);
   assert.match(ipcSource, /desktop:get-ai-memory-database-status/);
   assert.match(preloadSource, /getAiMemoryDatabaseStatus/);
   assert.match(rendererSource, /ai-memory-recovery/);
@@ -888,12 +922,12 @@ test("旧演化快照与内部交接交错追加仍保留全部原文和唯一�
   try {
     const repository = new PersonaConversationRepository(database);
     repository.create("nangong-wan");
-    const evolution = new EvolutionStateStore(new EvolutionStateRepository(database));
-    evolution.appendConversation("user", "客户原问题");
+    const evolution = new EvolutionStateStore(new EvolutionStateRepository(database, repository.readActive("nangong-wan")));
+    repository.save(evolution.appendConversation("user", "客户原问题").conversation);
     const stale = structuredClone(evolution.state().conversation);
     const internal = { messageId: "internal-interleaved", messageType: "internal-deliberation", speakerType: "persona", speakerPersonaId: "han-li", content: "新追加的内部交接", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: stale.updatedAt, completedAt: stale.updatedAt };
     database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, internal, "append"));
-    const saved = evolution.appendConversation("nangong", "验收完成结果").conversation;
+    const saved = repository.save(evolution.appendConversation("nangong", "验收完成结果").conversation);
     assert.deepEqual(saved.messages.map((m) => m.content), ["客户原问题", "新追加的内部交接", "验收完成结果"]);
     assert.deepEqual(saved.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
     assert.deepEqual(saved.messages.map((m) => m.messageType), ["customer-visible", "internal-deliberation", "customer-visible"]);
@@ -901,7 +935,7 @@ test("旧演化快照与内部交接交错追加仍保留全部原文和唯一�
     stale.messages[0].content = "客户原问题补充";
     const updated = repository.save(stale);
     assert.deepEqual(updated.messages.map((m) => m.content), ["客户原问题补充", "新追加的内部交接", "验收完成结果"]);
-    assert.deepEqual(new EvolutionStateStore(new EvolutionStateRepository(database)).state().conversation.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
+    assert.deepEqual(new EvolutionStateStore(new EvolutionStateRepository(database, repository.readActive("nangong-wan"))).state().conversation.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
     assert.throws(() => database.transaction((connection) => writePersonaConversationMessage(connection, "han-li", stale.conversationId, internal, "update")), /其他人物或会话/);
     assert.throws(() => database.transaction((connection) => {
       writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, messageId: "must-rollback" }, "append");

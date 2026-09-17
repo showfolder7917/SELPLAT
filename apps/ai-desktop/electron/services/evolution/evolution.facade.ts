@@ -12,8 +12,11 @@ export type EvolutionStatePort = EvolutionStateStore;
 export type EvolutionMutationPort = EvolutionMutationCoordinator;
 
 // 组合根创建唯一 Evolution 状态所有者；数据库不可用时 Repository 保持原安全降级语义。
-export function createEvolutionState(database: DatabasePort | null): EvolutionStatePort {
-  return new EvolutionStateStore(new EvolutionStateRepository(database));
+export function createEvolutionState(
+  database: DatabasePort | null,
+  initialConversation: EvolutionStateOutDto["conversation"] | null = null,
+): EvolutionStatePort {
+  return new EvolutionStateStore(new EvolutionStateRepository(database, initialConversation));
 }
 
 // 南宫人物入口通过该工厂取得协调器，避免跨模块直接构造 internal 类。

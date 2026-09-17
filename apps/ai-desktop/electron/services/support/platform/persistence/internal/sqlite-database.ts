@@ -19,6 +19,8 @@ type RuntimeMarker = {
 export type AiMemoryDatabaseInitialization = {
   database: SqliteDatabase | null;
   status: AiMemoryDatabaseStatusOutDto;
+  /** 仅供启动迁移判断；既有库绝不能因重启再次复制旧事实。 */
+  createdThisAttempt: boolean;
 };
 
 export type InitializeAiMemoryDatabaseOptions = {
@@ -110,13 +112,33 @@ export class SqliteDatabase {
  * 异常或副作用示例：已初始化数据库丢失时返回 `recovery-required`，不会生成替代空库。
  */
 export function initializeAiMemoryDatabase(options: InitializeAiMemoryDatabaseOptions): AiMemoryDatabaseInitialization {
+  return initializeDatabase(options, null);
+}
+
+/** 工作流控制事实使用独立文件；AI Memory 原库只由后台 Worker 持有。 */
+export function initializeWorkflowDatabase(options: InitializeAiMemoryDatabaseOptions): AiMemoryDatabaseInitialization {
+  return initializeDatabase(options, "workflow-control.sqlite3");
+}
+
+/** 首次控制库复制失败时只撤销本轮新建产物，下次启动可重新完整迁移。 */
+export function discardFreshWorkflowDatabase(databasePath: string, runtimeMarkerPath: string): void {
+  if (!path.isAbsolute(databasePath) || path.basename(databasePath) !== "workflow-control.sqlite3") {
+    throw new Error("只允许撤销本轮新建的工作流控制库。");
+  }
+  if (!path.isAbsolute(runtimeMarkerPath)) throw new Error("工作流控制库运行标记必须使用绝对路径。");
+  removeFreshDatabaseArtifacts(databasePath);
+  rmSync(runtimeMarkerPath, { force: true });
+  rmSync(`${runtimeMarkerPath}.tmp`, { force: true });
+}
+
+function initializeDatabase(options: InitializeAiMemoryDatabaseOptions, databaseFile: string | null): AiMemoryDatabaseInitialization {
   let databasePath: string | null = null;
   let createdThisAttempt = false;
   let openedDatabase: SqliteDatabase | null = null;
   let recoveryEvidence = false;
   try {
     const resolved = resolveAiMemoryPaths(options.projectRoot);
-    databasePath = resolved.databasePath;
+    databasePath = databaseFile ? path.join(resolved.databaseRoot, databaseFile) : resolved.databasePath;
     recoveryEvidence = existsSync(databasePath) || existsSync(options.runtimeMarkerPath);
     // 候选包必须用自身携带的迁移版本升级受控工程数据库；不能因主工程尚未提升而遗漏新列。
     const sqlRoot = options.migrationSqlRoot
@@ -141,6 +163,7 @@ export function initializeAiMemoryDatabase(options: InitializeAiMemoryDatabaseOp
     return {
       database: openedDatabase,
       status: { state: "ready", schemaVersion: openedDatabase.latestSchemaVersion, message: null },
+      createdThisAttempt,
     };
   } catch (error) {
     try {
@@ -156,6 +179,7 @@ export function initializeAiMemoryDatabase(options: InitializeAiMemoryDatabaseOp
         schemaVersion: null,
         message: publicErrorMessage(error),
       },
+      createdThisAttempt: false,
     };
   }
 }
@@ -190,7 +214,7 @@ function assertQuickCheck(database: DatabaseSync): void {
 }
 
 function recoveryRequired(message: string): AiMemoryDatabaseInitialization {
-  return { database: null, status: { state: "recovery-required", schemaVersion: null, message } };
+  return { database: null, status: { state: "recovery-required", schemaVersion: null, message }, createdThisAttempt: false };
 }
 
 function removeFreshDatabaseArtifacts(databasePath: string): void {

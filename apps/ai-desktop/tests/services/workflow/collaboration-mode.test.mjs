@@ -63,6 +63,66 @@ test("原始逐字流只进入时间线流表，不重复写入全局事件中�
 const collaborationSessionsSource = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
 const idleTestResourceState = () => ({ holder: null, waiters: [], localQueueDepth: 0, lastEvent: null });
 
+test("监控者一次调用封存旧修复任务、退役工作树并释放遗留执行者", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "monitor-takeover-archive-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const submitted = store.submitTask({
+      title: "旧修复任务",
+      problemStatement: "旧执行链已失效",
+      confirmedIntent: "由监控者接管正式版本",
+      workspaceState,
+      locale: "zh-CN",
+      automationSource: "linghu-safeguard",
+      evolutionProposalId: "proposal-monitor-takeover",
+      initiatorMemberId: "linghu-ancestor",
+      preferredExecutorMemberId: "linghu-ancestor",
+    });
+    const workspace = { workspaceId: "worktree:old:r1", rootPath: path.join(directory, "old-worktree"), branchName: "codex/collab/old/r1", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    store.updateTask(submitted.taskId, "fixture.executing", (task, state) => {
+      task.state = "repairing-execution";
+      task.phase = "executing";
+      task.executorMemberId = "linghu-ancestor";
+      task.assignmentId = "assignment-old";
+      task.versionWorkspace = workspace;
+      const member = state.members.find((candidate) => candidate.memberId === "linghu-ancestor");
+      member.state = "working";
+      member.role = "executor";
+      member.phase = "executing";
+      member.currentTaskId = task.taskId;
+    });
+    const calls = [];
+    const coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: {
+        readTaskUncommittedFiles: async () => [],
+        retireWorkspace: async (value) => { calls.push(`retire:${value.workspaceId}`); },
+      },
+      executor: { close: async (taskId) => { calls.push(`close:${taskId}`); }, closeAll: async () => undefined },
+      integrationPipeline: { dispose: () => undefined },
+      emitState: () => undefined,
+      emitStream: () => undefined,
+    });
+
+    const archivedTaskId = await coordinator.archiveMonitorTakeover("proposal-monitor-takeover", "abcdef1234567890", "正式版本已由监控者交付");
+    const archived = store.task(submitted.taskId);
+    const member = store.state().members.find((candidate) => candidate.memberId === "linghu-ancestor");
+    assert.equal(archivedTaskId, submitted.taskId);
+    assert.deepEqual(calls, [`close:${submitted.taskId}`, "retire:worktree:old:r1"]);
+    assert.equal(archived.state, "cancelled");
+    assert.equal(archived.assignmentId, null);
+    assert.equal(archived.executorMemberId, null);
+    assert.ok(archived.versionWorkspace.retiredAt);
+    assert.match(archived.flowEvents.at(-1).summary, /abcdef123456/);
+    assert.equal(member.state, "idle");
+    assert.equal(member.currentTaskId, null);
+    await coordinator.dispose();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("候选跨模块回传容量阻断时保留等待身份", () => {
   const capacity = { fileBytes: 1, directoryBytes: 2, headroomBytes: 3, requiredBytes: 6, availableBytes: 4 };
   const relayed = { name: "UnifiedTestCapacityBlockedError", code: "unified-test-capacity-blocked", script: "package:mac:developer", capacity };
