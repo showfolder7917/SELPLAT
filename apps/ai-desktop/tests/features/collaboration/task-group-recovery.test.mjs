@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const taskCardSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", import.meta.url), "utf8");
+const taskGroupControllerSource = readFileSync(new URL("../../../src/features/collaboration/components/useTaskCollaborationGroup.ts", import.meta.url), "utf8");
+const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const collaborationFacadeSource = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const personaEvolutionSource = readFileSync(new URL("../../../electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", import.meta.url), "utf8");
@@ -22,13 +24,17 @@ test("非当前活动卡显示退役按钮且主进程先封存旧执行树再�
   assert.match(personaEvolutionSource, /item\.topicId === state\.activeTopicId[\s\S]*supplement-required[\s\S]*rejected/);
 });
 
-test("已取消专题独立归入历史区且不渲染操作入口", () => {
+test("已取消专题独立归入历史区，默认收起且只提供审计阅读", () => {
   const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
   assert.match(taskGroupSource, /const cancelledHistoryGroups = groups\.filter\(\(group\) => group\.status === "cancelled"\)/);
   assert.match(taskGroupSource, /task-collaboration-history[\s\S]*已取消专题历史/);
   const cancelledBranch = taskCardSource.slice(taskCardSource.indexOf('if (group.status === "cancelled")'), taskCardSource.indexOf("// 可见节点"));
-  assert.match(cancelledBranch, /<article[\s\S]*className="task-collaboration-cancelled-history-card"[\s\S]*aria-label=\{locale === "ja" \? "取消済みの案件履歴" : "已取消专题历史卡"\}[\s\S]*data-cancelled-history-card[\s\S]*已取消[\s\S]*本专题已取消/);
-  assert.doesNotMatch(cancelledBranch, /SelUiDisclosure|task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance/);
+  assert.match(cancelledBranch, /<article[\s\S]*className="task-collaboration-cancelled-history-card"[\s\S]*data-cancelled-history-card[\s\S]*<SelUiDisclosure[\s\S]*idPrefix="task-collaboration-cancelled-history"[\s\S]*className="task-cancelled-history-disclosure"[\s\S]*open=\{open\}[\s\S]*onOpenChange=\{onOpenChange\}/);
+  assert.match(cancelledBranch, /task-cancelled-history-detail[\s\S]*group\.summary[\s\S]*仅供查看审计历史/);
+  assert.doesNotMatch(cancelledBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance|onRetireStaleTopic/);
+  assert.match(taskGroupControllerSource, /groupOpenOverrides\.get\(group\.groupId\) \?\? \(group\.status !== "cancelled" && group\.groupId === currentGroupId\)/);
+  assert.match(taskGroupControllerSource, /useState<Map<string, boolean>>\(new Map\(\)\)/);
+  assert.match(developerStyles, /task-cancelled-history-header[\s\S]*task-cancelled-history-detail[\s\S]*@media \(max-width: 1120px\)[\s\S]*task-cancelled-history-disclosure/);
 });
 
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
