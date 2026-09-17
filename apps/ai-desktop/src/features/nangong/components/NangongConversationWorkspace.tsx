@@ -187,6 +187,11 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
       {/* 页面错误区：展示发送、草稿或桌面通信失败原因。 */}
       {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.visibleMessages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <button type="button" onClick={() => void controller.retrySend()}>重试发送</button>}</div>}
+      {/* 新建失败保留旧会话内容，并只提供重新建立南宫婉对话的专用重试入口。 */}
+      {props.runtime.newConversationError && <div className="composer-error" role="alert">
+        <span>{props.runtime.newConversationError}</span>
+        <button type="button" disabled={newConversationBusy} onClick={() => void props.runtime.startNewConversation()}>重新建立南宫婉对话</button>
+      </div>}
       {/* 模型目录失败保留真实原因和重读入口，不把空目录伪装成默认模型正常可用。 */}
       {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
         <span>{props.runtime.modelCatalogError}</span>

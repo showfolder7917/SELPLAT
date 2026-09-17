@@ -723,6 +723,43 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await taskList.getByRole("button", { name: "单会话" }).click();
 });
 
+test("南宫婉新建失败保留旧草稿，迟到旧窗口不能覆盖重试后的新会话", async () => {
+  const taskList = page.locator("#developer-task-list");
+  await taskList.getByRole("button", { name: "协同模式", exact: true }).click();
+  await taskList.getByRole("button", { name: /南宫婉/ }).click();
+  const nangongConversation = page.locator(".nangong-person-chat");
+  const composer = page.locator(".nangong-person-composer");
+  const draft = "新建失败时必须继续保留的南宫婉草稿";
+  await composer.getByRole("textbox", { name: "给南宫婉发送消息" }).fill(draft);
+  await page.evaluate(async () => (window as any).desktop.setInteractionNangongNewConversationFailures(1));
+  await page.getByRole("button", { name: "重新建立南宫婉对话", exact: true }).click();
+  const failure = composer.getByRole("alert").filter({ hasText: "受控新建失败" });
+  await expect(failure).toBeVisible();
+  await expect(composer.getByRole("textbox", { name: "给南宫婉发送消息" })).toHaveValue(draft);
+  for (const size of [{ width: 1560, height: 980 }, { width: 1000, height: 700 }]) {
+    await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), size);
+    await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([size.width, size.height]);
+    const overflow = await failure.evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(overflow, `新建失败提示在 ${size.width}×${size.height} 不能横向溢出`).toBeLessThanOrEqual(1);
+  }
+  await failure.getByRole("button", { name: "重新建立南宫婉对话", exact: true }).click();
+  await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
+  await expect(composer.getByRole("textbox", { name: "给南宫婉发送消息" })).toHaveValue("");
+
+  // 先让旧会话变更开始读取，再新建；延迟结果只能属于已经废止的显示代际。
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionPersonaConversationWindowDelay(600);
+    await (window as any).desktop.setInteractionCheckpointMessages();
+  });
+  await page.getByRole("button", { name: "重新建立南宫婉对话", exact: true }).click();
+  await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
+  await page.waitForTimeout(700);
+  await expect(nangongConversation.getByText("第1轮修复结果已返回，交回原步骤复验。", { exact: true })).toHaveCount(0);
+  await expect(nangongConversation.getByText("请告诉南宫婉你观察到什么", { exact: true })).toBeVisible();
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+  await taskList.getByRole("button", { name: "单会话" }).click();
+});
+
 test("启动读取期间收到的新人物状态不会被迟到的空闲快照覆盖", async () => {
   const isolatedEnvironment = { ...process.env, AI_DESKTOP_INTERACTION_COLLABORATION_READ_DELAY_MS: "500" };
   delete isolatedEnvironment.ELECTRON_RUN_AS_NODE;
