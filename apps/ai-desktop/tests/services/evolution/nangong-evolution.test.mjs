@@ -3026,6 +3026,12 @@ test("即时工作流通知抢占已登记的较慢续行计时器", () => {
   assert.match(runtimeSource, /this\.#continuationDueAt = dueAt[\s\S]*this\.#continuationDueAt = null[\s\S]*void this\.#tick\(\)/);
 });
 
+test("研讨返回 idle 时只对推进期间到达的新工作流通知续行", () => {
+  const runtimeSource = readFileSync(new URL("../../../electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", import.meta.url), "utf8");
+  assert.match(runtimeSource, /notifyWorkflowChanged\(\): void \{[\s\S]*#workflowSignalVersion \+= 1[\s\S]*#scheduleContinuation\(0\)/);
+  assert.match(runtimeSource, /const workflowSignalVersion = this\.#workflowSignalVersion[\s\S]*if \(result\.activity === "idle"\) \{[\s\S]*this\.#workflowSignalVersion !== workflowSignalVersion[\s\S]*this\.#scheduleContinuation\(0\)/);
+});
+
 test("返修调查没有新增可核验事实时不创建提案版本", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "revision-without-evidence-"));
   try {

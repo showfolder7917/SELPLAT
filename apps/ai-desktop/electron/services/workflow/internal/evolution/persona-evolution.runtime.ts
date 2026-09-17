@@ -135,6 +135,8 @@ export class PersonaEvolutionRuntime {
   #continuationDueAt: number | null = null;
   /** 主推进仍忙碌时收到的最近继续请求；本轮结束后必须补跑，不能静默丢弃。 */
   #queuedContinuationDelayMs: number | null = null;
+  /** 工作流事实通知序号：区分合法 idle 停点与推进期间新到达的状态变化。 */
+  #workflowSignalVersion = 0;
   /** 当前是否正在执行主推进循环，防止重入。 */
   #running = false;
   /** 当前是否正在执行人工恢复，防止重复继续。 */
@@ -296,7 +298,10 @@ export class PersonaEvolutionRuntime {
   /** 主进程窗口层登记真实应用验收执行器；业务状态仍由本 Facade 和原结果审批接口推进。 */
   setComputerAcceptanceSession(runner: (goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>): void { this.#computerAcceptanceSession = runner; }
   /** 协作任务状态变化时立即核对一次性流程；忙碌时排队，不能丢失本次唤醒。 */
-  notifyWorkflowChanged(): void { this.#scheduleContinuation(0); }
+  notifyWorkflowChanged(): void {
+    this.#workflowSignalVersion += 1;
+    this.#scheduleContinuation(0);
+  }
   /** 把用户已确认的范围登记为正式专题，不自动创建提案或执行任务。 */
   createTopic(request: CreateNangongTopicInDto): EvolutionStateOutDto { return this.#store.createTopic(request); }
   /** 页面兜底退役非当前旧卡；状态约束和原子提交仍由唯一 Evolution Store 执行。 */
@@ -835,10 +840,16 @@ export class PersonaEvolutionRuntime {
             return;
           }
           const hasCurrentRunDeliberation = state.deliberations.some((item) => Date.parse(item.createdAt) >= Date.parse(state.oneShotRun!.startedAt));
+          // 记录本轮开始时的通知版本，避免 idle 返回吞掉推进期间刚到达的状态变化。
+          const workflowSignalVersion = this.#workflowSignalVersion;
           const result = await this.#deliberation.advance({ requireProblem: true, forceNew: !hasCurrentRunDeliberation });
           state = result.state;
           // 等待真实客户确认属于稳定停点；没有新业务事实时禁止按秒改写整份演化状态并继续排队。
-          if (result.activity === "idle") return;
+          if (result.activity === "idle") {
+            // 只有本轮推进期间收到新的工作流通知时才立即续行，暂停、阻塞和等待确认继续保持停点。
+            if (this.#workflowSignalVersion !== workflowSignalVersion) this.#scheduleContinuation(0);
+            return;
+          }
           // 只有这次推进真正建立专题，才能移交实施；历史已建立专题不能接管新研讨。
           const established = result.activity === "topic-established"
             ? state.deliberations.find((item) => item.topicId === result.topicId) : undefined;
