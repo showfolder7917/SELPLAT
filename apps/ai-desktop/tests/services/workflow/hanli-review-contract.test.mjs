@@ -73,6 +73,20 @@ test("正式页面允许安全重开并等待加载后返回新截图", () => {
   assert.doesNotMatch(computer, /reloadIgnoringCache/);
 });
 
+test("正式页面验收可逐张展开只读历史审计卡并保留截图取证", () => {
+  const operationValues = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
+  const auditActionStart = computer.indexOf("async function toggleTaskAuditCard");
+  const auditActionEnd = computer.indexOf("/** 只读取正式页面中可见的任务协作群标识", auditActionStart);
+  const auditAction = computer.slice(auditActionStart, auditActionEnd);
+
+  assert.match(computerPrompt, /toggle-task-audit-card[\s\S]*只用于阅读[\s\S]*页面截图/);
+  assert.match(computer, /"toggle-task-audit-card"[\s\S]*auditCardIndex/);
+  assert.match(operationValues, /type: "toggle-task-audit-card"; auditCardIndex: number/);
+  assert.match(auditAction, /task-collaboration-audit-history[\s\S]*audit-history-collapsed/);
+  assert.match(auditAction, /task-collaboration-audit-history-card[\s\S]*data-sel-disclosure-trigger[\s\S]*scrollIntoView/);
+  assert.doesNotMatch(auditAction, /desktop:|window\.desktop|task-recovery-continue|onResumeAcceptance|onContinueTask/);
+});
+
 test("正式页面截图同时携带客户可见语义和布局边界", () => {
   assert.match(computer, /pageEvidence = await window\.webContents\.executeJavaScript/);
   assert.match(computer, /source: "customer-visible-renderer"/);
