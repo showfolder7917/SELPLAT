@@ -147,6 +147,9 @@ test("韩立和南宫婉各自从会话头读取模型并将实际模型传给 H
   assert.match(nangongService, /await this\.#memory\.readPersonaConversation\("nangong-wan", state\.conversation\.conversationId\)/);
   assert.match(nangongService, /memoryConversation\?\.selectedModel \|\| null/);
   assert.match(runtime, /nangongConversationWithSelectedModel/);
+  assert.match(runtime, /collaborationMemory\.syncEvolutionState\(nextState\)/);
+  assert.match(runtime, /const activeConversation = await collaborationMemory\.readPersonaConversation\("nangong-wan"\)/);
+  assert.match(runtime, /activeConversation\.conversationId !== conversation\.conversationId/);
   assert.match(codex, /const effectiveModel = await this\.#assertModelSettingsSupported\(modelSettings, selectedModel\)/);
   assert.match(codex, /selectedModel\?\.trim\(\) \|\| settings\.defaultModel/);
   assert.match(codex, /effort: modelSettings\.reasoningEffort/);

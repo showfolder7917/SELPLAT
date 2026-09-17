@@ -146,7 +146,7 @@ export class HanliComputerAcceptance {
         pageEvidence: { ...pageEvidence, taskCollaboration },
         instruction: taskCollaborationCriterionIds.size
           ? "任务卡条件必须先通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。每一步都先取得新截图，导航后再观察真实页面。"
-          : "依据当前正式应用截图选择一个只读或安全导航动作。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果，不读取任务时间线或测试记录，不等待需要制造业务数据才能出现的事件。",
+          : "依据当前正式应用截图选择一个只读或安全导航动作。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
         ...(interactionEvidence ? { interactionEvidence } : {}),
       };
       return {
@@ -167,7 +167,7 @@ export class HanliComputerAcceptance {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许仅重载当前正式页面以检查持久化显示，禁止发送消息、修改设置或业务数据。每次动作返回新截图，禁止批量操作。",
+        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许重载当前正式页面；原验收条件明确要求时，允许在当前人物会话内新建或重新建立会话并保留旧记录。禁止发送消息、修改设置、操作任务流程或修改条件未授权的数据。每次动作返回新截图，禁止批量操作。",
         inputSchema: {
           type: "object",
           properties: {

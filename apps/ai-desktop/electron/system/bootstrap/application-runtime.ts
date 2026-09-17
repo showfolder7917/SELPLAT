@@ -1049,7 +1049,23 @@ export async function startApplication(): Promise<void> {
     // 南宫婉页面状态还包含专题信息，这里只抽取统一会话 DTO 交给通用 IPC。
     conversation: () => nangongConversationWithSelectedModel(personaEvolution!.state().conversation),
     sendConversationMessage: async (request) => await nangongConversationWithSelectedModel((await nangongRuntime.facade.sendConversationMessage(request)).conversation),
-    newConversation: async () => await nangongConversationWithSelectedModel((await nangongRuntime.facade.newConversation()).conversation),
+    newConversation: async () => {
+      const nextState = await nangongRuntime.facade.newConversation();
+      const conversation = nextState.conversation;
+      if (!collaborationMemory) throw new Error("人物会话数据库当前不可用，无法建立南宫婉新对话。");
+      // Evolution 是南宫婉正文的所有者；客户显示窗口必须在 IPC 返回前同步到同一个新会话。
+      // 不能依赖稍后到达的订阅投影，否则 Renderer 会按新 ID 读取尚未落盘的窗口并继续显示旧会话。
+      collaborationMemory.syncEvolutionState(nextState);
+      const persisted = await collaborationMemory.readPersonaConversation("nangong-wan", conversation.conversationId);
+      const activeConversation = await collaborationMemory.readPersonaConversation("nangong-wan");
+      if (
+        persisted.conversationId !== conversation.conversationId
+        || activeConversation.conversationId !== conversation.conversationId
+      ) {
+        throw new Error("南宫婉新对话没有成为当前活动会话，已阻止页面显示成功。");
+      }
+      return { ...conversation, selectedModel: persisted.selectedModel || null };
+    },
     selectConversationModel: async (selectedModel) => {
       const conversation = personaEvolution!.state().conversation;
       if (!conversation.conversationId) throw new Error("南宫婉当前对话尚未建立，不能保存模型选择。");

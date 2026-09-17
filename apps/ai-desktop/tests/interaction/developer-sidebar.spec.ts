@@ -730,6 +730,9 @@ test("南宫婉新建失败保留旧草稿，迟到旧窗口不能覆盖重试�
   const nangongConversation = page.locator(".nangong-person-chat");
   const composer = page.locator(".nangong-person-composer");
   const draft = "新建失败时必须继续保留的南宫婉草稿";
+  const originalConversationId = await page.evaluate(async () => (await (window as any).desktop.getPersonaConversation("nangong-wan")).conversationId);
+  await page.evaluate(async () => (window as any).desktop.setInteractionSharedInternalMessages());
+  await expect(nangongConversation.getByText("这是一条属于旧南宫婉会话的内部研讨消息。", { exact: true })).toBeVisible();
   await composer.getByRole("textbox", { name: "给南宫婉发送消息" }).fill(draft);
   await page.evaluate(async () => (window as any).desktop.setInteractionNangongNewConversationFailures(1));
   await page.getByRole("button", { name: "重新建立南宫婉对话", exact: true }).click();
@@ -745,6 +748,9 @@ test("南宫婉新建失败保留旧草稿，迟到旧窗口不能覆盖重试�
   await failure.getByRole("button", { name: "重新建立南宫婉对话", exact: true }).click();
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
   await expect(composer.getByRole("textbox", { name: "给南宫婉发送消息" })).toHaveValue("");
+  const newConversationId = await page.evaluate(async () => (await (window as any).desktop.getPersonaConversation("nangong-wan")).conversationId);
+  expect(newConversationId).not.toBe(originalConversationId);
+  await expect(nangongConversation.getByText("这是一条属于旧南宫婉会话的内部研讨消息。", { exact: true })).toHaveCount(0);
 
   // 先让旧会话变更开始读取，再新建；延迟结果只能属于已经废止的显示代际。
   await page.evaluate(async () => {

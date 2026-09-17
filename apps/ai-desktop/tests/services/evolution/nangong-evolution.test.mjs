@@ -2380,6 +2380,42 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("模型误报纯源码时仍强制正式应用点击条件进入页面验收", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-required-formal-page-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({
+      ...topicRequest("正式应用点击不能降级源码审查"),
+      acceptanceCriteria: [
+        "在真实应用点击重新建立南宫婉对话后，当前页面只显示新的空白会话。",
+        "旧会话仍保存在持久化记录中。",
+      ],
+    });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const mistakenCodeOnly = JSON.stringify({
+      mode: "code-conformance",
+      findings: [
+        { criterionId: "criterion-1", status: "passed", actual: "源码显示会切换会话。", evidenceReferences: ["usePersonaConversation.ts"] },
+        { criterionId: "criterion-2", status: "passed", actual: "仓储保留旧会话。", evidenceReferences: ["persona-conversation.repository.ts"] },
+      ],
+      sourceReview: passedSourceReview,
+    });
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanli: async () => mistakenCodeOnly,
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.equal(result.plan.conditions[0].evidenceType, "page-experience");
+    assert.equal(result.plan.conditions[1].evidenceType, "code-conformance");
+    assert.equal(result.review.mode, "mixed");
+    assert.deepEqual(result.review.pageCriterionIds, ["criterion-1"]);
+    assert.deepEqual(result.review.stepResults.map((item) => item.checkId), ["criterion-2"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("冻结混合计划忽略页面条件的冗余源码结论但仍要求全部代码条件", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-frozen-plan-extra-page-findings-"));
   try {

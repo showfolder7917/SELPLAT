@@ -814,6 +814,29 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   setInteractionPersonaConversationWindowDelay: async (delay) => { delayedPersonaConversationWindowRead = Number(delay) || null; },
   setInteractionNangongNewConversationFailures: async (count) => { nangongNewConversationFailureCount = Math.max(0, Number(count) || 0); },
+  setInteractionSharedInternalMessages: async () => {
+    // 先让消息属于当前南宫婉会话；随后成功新建产生更晚的边界，页面才应将它隔离为历史。
+    const createdAt = new Date().toISOString();
+    hanliConversation = {
+      ...hanliConversation,
+      messages: [{
+        messageId: "internal:new-conversation:old-discussion",
+        messageType: "internal-deliberation",
+        contentRole: "conversation",
+        sequenceNumber: 0,
+        speakerType: "persona",
+        speakerPersonaId: "han-li",
+        content: "这是一条属于旧南宫婉会话的内部研讨消息。",
+        replyToMessageId: null,
+        deliveryStatus: "completed",
+        attachmentIds: [],
+        createdAt,
+        completedAt: createdAt,
+      }],
+      updatedAt: createdAt,
+    };
+    for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
+  },
   // 测试夹具不持久化失败派生，重试等价于按正式端口重新取得当前客户显示窗口。
   retryPersonaCustomerDisplayMessage: async (personaId) => toPersonaCustomerDisplayWindow(await readInteractionPersonaConversation(personaId)),
   onPersonaConversationChanged: (listener) => { personaConversationListeners.add(listener); return () => personaConversationListeners.delete(listener); },

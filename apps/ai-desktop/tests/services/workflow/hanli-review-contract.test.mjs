@@ -96,11 +96,14 @@ test("正式页面截图同时携带客户可见语义和布局边界", () => {
   assert.doesNotMatch(computer, /pageEvidence[\s\S]{0,300}(workflow|timelineNode|taskId|localStorage)/);
 });
 
-test("需要发送或创建数据的条件归令狐证据而不是韩立正式页面操作", () => {
-  assert.match(prompt, /必须发送消息、新建或重建会话、创建样本或测试数据/);
-  assert.match(prompt, /必须进入 code-conformance/);
-  assert.match(prompt, /不得因为条件描述了页面结果，就要求韩立在正式软件中制造该结果/);
+test("未授权的数据操作归工程证据，原条件明确要求的当前会话重建必须真实页面验收", () => {
+  assert.match(prompt, /发送消息、创建样本或测试数据、触发新任务、恢复任务、修改设置/);
+  assert.match(prompt, /默认必须进入 code-conformance/);
+  assert.match(prompt, /当前正式应用点击“新建\/重新建立会话”/);
+  assert.match(prompt, /必须进入 pageCriterionIds/);
   assert.match(prompt, /不得创建、重建或恢复任何已退役的隔离验收环境/);
+  assert.match(decision, /requiredFormalPageCriterionIds/);
+  assert.match(decision, /effectiveMode = pageCriterionIds\.length > 0 \? "mixed"/);
 });
 
 test("冻结的当前验收计划必须逐项复用且不得在结果审查时重新分区", () => {

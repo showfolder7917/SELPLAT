@@ -98,9 +98,22 @@ export class HanliDecisionService {
     // v2 已按正式页面只读边界冻结，后续复验继续消费同一分区，避免普通重试改写验收语义。
     // v1 冻结计划必须由应用层先行退役，禁止在这里恢复、升级或消费。
     if (frozenPlan?.version === 1) throw new Error("冻结的旧验收计划已退役，禁止恢复或继续消费。");
+    const mandatoryPageCriterionIds = requiredFormalPageCriterionIds(
+      frozenPlan?.conditions.map((item) => ({ criterionId: item.conditionId, criterion: item.criterion }))
+        || proposal.acceptanceCriteria.map((criterion, index) => ({ criterionId: `criterion-${index + 1}`, criterion })),
+    );
+    const modelPageCriterionIds = !frozenPlan && value.mode === "mixed"
+      ? pageCriterionIdsValidationResult(value.pageCriterionIds, allCriterionIds)
+      : { ok: true as const, pageCriterionIds: [] };
+    if (!modelPageCriterionIds.ok) {
+      throw new Error(`韩立混合验收计划页面条件编号${modelPageCriterionIds.error}。`);
+    }
     const pageCriterionIdsValue = frozenPlan
       ? frozenPlan.conditions.filter((item) => item.evidenceType === "page-experience").map((item) => item.conditionId)
-      : value.mode === "mixed" ? value.pageCriterionIds : [];
+      : [...new Set([
+        ...modelPageCriterionIds.pageCriterionIds,
+        ...mandatoryPageCriterionIds,
+      ])];
     const pageCriterionIdsResult = pageCriterionIdsValidationResult(pageCriterionIdsValue, allCriterionIds);
     if (!pageCriterionIdsResult.ok) {
       throw new Error(`韩立混合验收计划页面条件编号${pageCriterionIdsResult.error}。`);
@@ -170,21 +183,22 @@ export class HanliDecisionService {
     const status = steps.some((item) => item.status === "failed") || sourceReviewStatus === "failed" ? "failed"
       : steps.some((item) => item.status === "blocked") || sourceReviewStatus === "blocked" ? "blocked" : "passed";
     const now = new Date().toISOString();
+    const effectiveMode = pageCriterionIds.length > 0 ? "mixed" : "code-conformance";
     return {
       version: 3,
-      mode: value.mode,
+      mode: effectiveMode,
       runId: `hanli-code-review-${randomUUID()}`,
       topicId: proposal.topicId,
       proposalId: proposal.proposalId,
       criteria: [...proposal.acceptanceCriteria],
-      ...(value.mode === "mixed" ? { pageCriterionIds } : {}),
+      ...(effectiveMode === "mixed" ? { pageCriterionIds } : {}),
       sourceReview: {
         status: sourceReviewStatus as "passed" | "failed" | "blocked",
         actual: sourceReviewActual,
         evidenceReferences: sourceReviewReferences,
       },
       status,
-      windowTitle: value.mode === "mixed" ? "正式页面与源码审查" : "源码审查",
+      windowTitle: effectiveMode === "mixed" ? "正式页面与源码审查" : "源码审查",
       initialBounds: { x: 0, y: 0, width: 0, height: 0 },
       finalBounds: { x: 0, y: 0, width: 0, height: 0 },
       interactionSteps: [],
@@ -283,6 +297,20 @@ function pageCriterionIdsValidationResult(value: unknown, allCriterionIds: strin
   if (new Set(pageCriterionIds).size !== pageCriterionIds.length) return { ok: false, error: "存在重复项" };
   if (pageCriterionIds.some((item) => !allCriterionIds.includes(item))) return { ok: false, error: "包含当前条件外编号" };
   return { ok: true, pageCriterionIds };
+}
+
+/**
+ * 客户明确要求在正式应用完成的可见操作不能被模型降级成纯源码审查。
+ * 这里只识别原验收条件中已经授权的页面动作与布局观察；失败注入、发送消息、
+ * 设置修改和任务操作仍由代码或工程证据验收，不在此扩大韩立权限。
+ */
+function requiredFormalPageCriterionIds(criteria: Array<{ criterionId: string; criterion: string }>): string[] {
+  const formalInteraction = /(?:真实|正式|当前)应用.{0,40}(?:点击|打开|关闭|展开|收起|滚动|拖动|选择|新建|重建|重新建立)/;
+  const namedControlInteraction = /(?:点击|打开|关闭|展开|收起|滚动|拖动|选择).{0,40}(?:按钮|页面|任务卡|对话|窗口|面板|标签)/;
+  const visibleLayout = /(?:正常|窄|宽).{0,12}窗口.{0,60}(?:显示|可见|遮挡|布局|滚动)/;
+  return criteria
+    .filter(({ criterion }) => formalInteraction.test(criterion) || namedControlInteraction.test(criterion) || visibleLayout.test(criterion))
+    .map(({ criterionId }) => criterionId);
 }
 
 /** 汇总数组形状而不记录实际编号，便于定位模型格式偏差。 */
