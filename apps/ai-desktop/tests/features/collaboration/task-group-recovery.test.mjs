@@ -27,7 +27,7 @@ test("已取消专题独立归入历史区且不渲染操作入口", () => {
   assert.match(taskGroupSource, /const cancelledHistoryGroups = groups\.filter\(\(group\) => group\.status === "cancelled"\)/);
   assert.match(taskGroupSource, /task-collaboration-history[\s\S]*已取消专题历史/);
   const cancelledBranch = taskCardSource.slice(taskCardSource.indexOf('if (group.status === "cancelled")'), taskCardSource.indexOf("// 可见节点"));
-  assert.match(cancelledBranch, /<article className="task-collaboration-cancelled-history-card"[\s\S]*data-cancelled-history-card[\s\S]*已取消[\s\S]*本专题已取消/);
+  assert.match(cancelledBranch, /<article[\s\S]*className="task-collaboration-cancelled-history-card"[\s\S]*aria-label=\{locale === "ja" \? "取消済みの案件履歴" : "已取消专题历史卡"\}[\s\S]*data-cancelled-history-card[\s\S]*已取消[\s\S]*本专题已取消/);
   assert.doesNotMatch(cancelledBranch, /SelUiDisclosure|task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance/);
 });
 
