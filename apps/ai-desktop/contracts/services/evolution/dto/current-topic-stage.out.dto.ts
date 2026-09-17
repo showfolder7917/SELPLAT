@@ -13,6 +13,7 @@ export type CurrentTopicStageStatusValue =
   | "pending-acceptance"
   | "accepting"
   | "completed"
+  | "cancelled"
   | "failed-pending-repair"
   | "not-run";
 

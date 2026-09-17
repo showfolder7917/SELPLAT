@@ -106,6 +106,7 @@ import {
 } from "../../services/support/platform/codex/index.js";
 // Workflow 负责跨人物流程、恢复和监督，不承载某个人物自己的判断。
 import {
+  decideCurrentTopicOperation,
   type CollaborationWorkflowFacade as CollaborationCoordinator,
   type WorkflowRepositoryPort as WorkflowRepository,
   type WorkflowSupervisorPort as WorkflowSupervisor,
@@ -1002,6 +1003,16 @@ export async function startApplication(): Promise<void> {
     recordTimelineStream: evolutionTimeline
       ? (taskId, memberId, event) => recordDistributionTimelineStream({ timeline: evolutionTimeline, eventCenter }, taskId, memberId, event)
       : undefined,
+  });
+  collaboration.setTaskOperationGuard((task, collaborationState) => {
+    if (!task.evolutionProposalId) return { allowed: true, message: "当前任务不属于专题演化链。" };
+    const operation = decideCurrentTopicOperation(evolutionStateStore.state(), collaborationState, {
+      proposalId: task.evolutionProposalId,
+    });
+    return { allowed: operation.kind === "operable", message: operation.message };
+  }, (proposalId, collaborationState) => {
+    const operation = decideCurrentTopicOperation(evolutionStateStore.state(), collaborationState, { proposalId });
+    return { allowed: operation.kind === "operable", message: operation.message };
   });
   const archiveCurrentTopicForIndependentStart = async (): Promise<void> => {
     const current = evolutionStateStore.state().oneShotRun;

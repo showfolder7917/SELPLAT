@@ -157,7 +157,7 @@ function TaskGroupHeader({
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
   const currentStage = presentation.currentTopicStage?.topicId === group.topicId && presentation.currentTopicStage?.proposalId === group.proposalId
     ? presentation.currentTopicStage : null;
-  const groupStopped = currentStage?.status === "completed" || group.status === "cancelled";
+  const groupStopped = currentStage?.status === "completed" || currentStage?.status === "cancelled" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
   const activity = groupActivityPresentation(group, locale);
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。

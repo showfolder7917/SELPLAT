@@ -26,6 +26,8 @@ export interface ProposalExecutionView {
   missingTaskIds: string[];
   /** 是否至少一条当前有效任务处于失败或取消状态。 */
   blocked: boolean;
+  /** 是否至少一条当前有效任务已取消；调用方不得将其作为可恢复阻塞处理。 */
+  cancelled: boolean;
   /** 是否所有当前有效任务都已经交回南宫婉。 */
   allReturned: boolean;
   /** 是否所有当前有效任务都已经完成集成。 */
@@ -87,6 +89,7 @@ export class ProposalExecutionAggregate {
     // 逐项核对原分发标识，不能用任务数量相等代替身份校验。
     const missingTaskIds = originalTaskIds.filter((taskId) => !effectiveRootIds.has(taskId));
     // 任务记录缺失或者当前有效任务失败都会阻塞提案。
+    const cancelled = effectiveTasks.some((task) => task.isCancelled());
     const blocked = missingTaskIds.length > 0 || effectiveTasks.some((task) => task.blocksProposal());
     // 空任务集合不能被 Array.every 误判为全部交回。
     const allReturned = effectiveTasks.length > 0 && effectiveTasks.every((task) => task.isReturnedToNangong());
@@ -108,7 +111,9 @@ export class ProposalExecutionAggregate {
       nextStatus = "verifying";
     }
     // 根据同一执行视图生成状态说明，避免调用方拼装互相矛盾的文案。
-    const summary = this.#summary(nextStatus, missingTaskIds);
+    const summary = cancelled
+      ? "当前有效任务已取消，本专题仅保留历史结论，不能恢复或重新分发。"
+      : this.#summary(nextStatus, missingTaskIds);
     // 返回可序列化的稳定视图，供 Runtime 和测试共同消费。
     return {
       // 保留原始分发顺序，方便页面和审计回链。
@@ -119,6 +124,8 @@ export class ProposalExecutionAggregate {
       missingTaskIds: [...missingTaskIds],
       // 输出本轮统一计算得到的阻塞结论。
       blocked,
+      // 取消单独输出，避免调用方把历史终态降级为普通阻塞。
+      cancelled,
       // 输出本轮统一计算得到的交回结论。
       allReturned,
       // 输出本轮统一计算得到的完成结论。

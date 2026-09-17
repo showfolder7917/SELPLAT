@@ -2027,8 +2027,9 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
     facade.stop();
     const cancelled = facade.state();
     assert.equal(cancelled.oneShotRun.status, "blocked");
-    assert.equal(failures.at(-1).operation, "one_shot_task_blocked:cancelled");
-    assert.equal(failures.at(-1).details.taskId, "blocked-integration-task");
+    assert.equal(cancelled.oneShotRun.resumeMode, null);
+    assert.equal(cancelled.oneShotRun.action, "本专题已取消");
+    await assert.rejects(() => facade.resumeOneShotRun(cancelled.oneShotRun.runId), /本专题已取消/);
 
     tasks.length = 0;
     const missing = await facade.resumeOneShotRun(cancelled.oneShotRun.runId);
