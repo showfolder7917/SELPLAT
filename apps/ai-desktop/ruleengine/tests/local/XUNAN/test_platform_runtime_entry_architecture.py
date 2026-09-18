@@ -155,9 +155,32 @@ class PlatformRuntimeEntryArchitectureTests(unittest.TestCase):
         batch_launcher = (PROJECT_ROOT / "启动SELPLAT.bat").read_text(
             encoding="utf-8"
         )
+        command_launcher = (PROJECT_ROOT / "启动SELPLAT.command").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(":apps:host:backend:run", powershell_launcher)
         self.assertIn("8080", powershell_launcher)
         self.assertIn("启动SELPLAT.ps1", batch_launcher)
+        self.assertIn("--validate-only", command_launcher)
+        self.assertIn("8080", command_launcher)
+        self.assertIn(
+            "./gradlew --offline --no-daemon :apps:host:backend:run",
+            command_launcher,
+        )
+        self.assertIn("Listener process details before stopping:", command_launcher)
+        self.assertIn(
+            "Listener process details after port-release timeout:",
+            command_launcher,
+        )
+        self.assertIn(
+            "/usr/sbin/lsof -nP -iTCP:\"$HOST_PORT\" -sTCP:LISTEN",
+            command_launcher,
+        )
+        for desktop_only_responsibility in (
+                "node", "npm", "dependencies:ensure", "package:mac", "codesign",
+                "lsregister", "AI Desktop.app", "APP_EXECUTABLE", "EXISTING_PIDS",
+                "ps -axo", "open -n", "LAUNCH_TERMINAL_TTY", "osascript"):
+            self.assertNotIn(desktop_only_responsibility, command_launcher)
 
 
 if __name__ == "__main__":
