@@ -48,6 +48,6 @@ test("韩立首项失败后仍须逐项取得本轮全部条件自己的证据",
   assert.match(resultAcceptancePrompt, /发现一项失败后仍继续检查其余条件，最终一次返回完整 findings/);
   assert.match(eventMemoryRule, /criterion_scoped_action_and_screenshot_coverage/);
   assert.match(eventMemoryRule, /first_failure_preserved_then_all_independent_safe_criteria_continue_in_same_round/);
-  assert.match(eventMemoryRuleMetadata, /rule_version = 5\.162\.0/);
+  assert.match(eventMemoryRuleMetadata, /rule_version = 5\.163\.0/);
   assert.match(aiDesktopRuleIndex, /AI_DESKTOP_EVENT_MEMORY_UI_RULES = .*RUL_AIDesktop事件记忆与统一界面规则\.md/);
 });

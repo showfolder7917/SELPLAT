@@ -149,6 +149,18 @@ test("人物普通发送失败后保留稳定客户消息编号并提供同编�
   assert.match(nangongView, /重试发送/);
 });
 
+test("人物临时消息按客户可见最大顺序号追加，不能用过滤后的消息条数代替数据库顺序", () => {
+  const realtimeConversation = read("src/features/conversation/model/realtime-conversation.ts");
+  const hanliController = read("src/features/hanli/components/useHanliConversationWorkspace.ts");
+  const nangongController = read("src/features/nangong/components/useNangongConversationWorkspace.ts");
+  assert.match(realtimeConversation, /nextRealtimeConversationSequence/);
+  assert.match(realtimeConversation, /Math\.max\(next, message\.sequenceNumber \+ 1\)/);
+  assert.match(hanliController, /sequenceNumber: nextRealtimeConversationSequence\(directMessages\)/);
+  assert.match(nangongController, /sequenceNumber: nextRealtimeConversationSequence\(directMessages\)/);
+  assert.doesNotMatch(hanliController, /sequenceNumber: conversation\.messages\.length/);
+  assert.doesNotMatch(nangongController, /sequenceNumber: conversation\.messages\.length/);
+});
+
 test("韩立和南宫婉各自从会话头读取模型并将实际模型传给 Harness", () => {
   assert.match(runtime, /hanLiCodex!\.send\([\s\S]*?, selectedModel\)/);
   assert.match(runtime, /nangongCodex!\.send\([\s\S]*?, selectedModel\)/);

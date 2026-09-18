@@ -354,6 +354,7 @@ test("自动托管关闭时范围扩展仍回到真实客户确认", async () =>
     const store = evolutionStore(path.join(directory, "state.json"));
     store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: false, workspaceState, locale: "zh-CN" });
     const internalMessages = [];
+    const customerMessages = [];
     const replies = [
       JSON.stringify({ action: "ask", question: "是否同时改造其他页面？", reason: "这会扩大本次范围" }),
       JSON.stringify({ decision: "establish-topic", assessment: "当前方案成熟，但扩展需要客户决定。", discoveries: [{ issue: "改造其他页面", relation: "customer-decision-required", reason: "扩大产品范围", evidence: [], suggestedAction: "询问客户" }], reply: "当前修复已明确，扩展部分请客户决定。", topic: { title: "当前页面修复", goal: "修复当前页面", scope: ["当前页面"], exclusions: ["其他页面"], evidence: ["当前页面问题"], acceptanceCriteria: ["当前页面正常"], establishmentReason: "范围明确" } }),
@@ -365,6 +366,7 @@ test("自动托管关闭时范围扩展仍回到真实客户确认", async () =>
         readHanLiEvolutionCorpus(deliberationId) { return [{ snapshotId: "custody-off-source", deliberationId, source: "hanli", conversationId: "hanli-thread", sourceMessageId: "user-1", sequenceNumber: 0, role: "user", responsePhase: null, content: "修复当前页面。", originalCreatedAt: "2026-09-05T00:00:00.000Z", capturedAt: "2026-09-05T00:00:01.000Z" }]; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { internalMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+        appendPersonaCustomerMessage(message) { customerMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
       },
       askHanli: async () => replies.shift(), askNangong: async (_prompt) => internalMessages.some((item) => item.messageId.endsWith(":answer")) ? "本次修复范围说明，符合请回复 1。" : "其他页面属于范围扩展。",
       recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
@@ -372,7 +374,41 @@ test("自动托管关闭时范围扩展仍回到真实客户确认", async () =>
     const result = await service.advance({ requireProblem: true });
     assert.equal(result.activity, "idle");
     assert.equal(result.state.topics.length, 0);
-    assert.ok(internalMessages.some((message) => message.messageId.startsWith("hanli-confirmation:")));
+    assert.equal(internalMessages.some((message) => message.messageId.startsWith("hanli-confirmation:")), false);
+    assert.ok(customerMessages.some((message) => message.messageId.startsWith("hanli-confirmation:")));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("韩立页面独立输入1已完成本轮授权，内部研讨成熟后不再索取第二次确认", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "deliberation-single-confirmation-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    store.configureAutomation({ maxRoundsPerTopic: null, maxCorrectionRounds: 5, automaticCustodyEnabled: false, workspaceState, locale: "zh-CN" });
+    store.beginOneShotRun(workspaceState, "zh-CN", "hanli-explicit-one");
+    store.beginDeliberation("single-confirmation", [{ sourceMessageId: "hanli-explicit-one", content: "修复当前页面。" }], "应如何修复当前页面？", "确认实施范围");
+    const roundId = store.state().deliberations[0].rounds[0].roundId;
+    const candidate = { title: "当前页面修复", goal: "修复当前页面", scope: ["当前页面"], exclusions: ["其他页面"], evidence: ["用户已在韩立页面输入1"], acceptanceCriteria: ["当前页面恢复正常"], establishmentReason: "范围明确" };
+    store.recordDeliberationAnswer("single-confirmation", roundId, "只处理当前页面。");
+    store.assessDeliberation("single-confirmation", roundId, "范围已经明确", null, candidate);
+    const customerMessages = [];
+    const service = new HanliNangongDeliberationService({
+      store, prompts,
+      memory: {
+        readRequirementDiscussionContext() { return null; },
+        readHanLiEvolutionCorpus() { return []; },
+        readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
+        appendPersonaInternalMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+        appendPersonaCustomerMessage(message) { customerMessages.push(message); return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+      },
+      askHanli: async () => { throw new Error("首次1已经授权，不应再询问韩立确认"); },
+      askNangong: async () => "只修复当前页面并按当前验收条件验证。",
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace", readHanliConversationId: () => "hanli-thread",
+    });
+    const result = await service.advance({ requireProblem: true });
+    assert.equal(result.activity, "topic-established");
+    assert.equal(result.state.topics.length, 1);
+    assert.equal(result.state.deliberations[0].rounds[0].confirmation.reply, "1");
+    assert.equal(customerMessages.length, 0);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -402,6 +438,7 @@ test("等待真实客户确认时不重复改写一次性运行档案", async ()
         readHanLiEvolutionCorpus() { return []; },
         readHanliSemanticContext() { return { stableUserId: "XUNAN", projectScope: "/workspace", concerns: [], trajectories: [], inspectionExperiences: [] }; },
         appendPersonaInternalMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
+        appendPersonaCustomerMessage(message) { return { ownerPersonaId: message.ownerPersonaId, conversationId: message.conversationId, messages: [], updatedAt: message.createdAt }; },
       },
       readStableUserId: () => "XUNAN",
       readProjectScope: () => "/workspace",

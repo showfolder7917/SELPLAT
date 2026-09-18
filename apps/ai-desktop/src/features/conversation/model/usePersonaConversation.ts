@@ -45,7 +45,6 @@ async function readPersonaConversationWindow(
 
 export interface PersonaPendingMessage {
   messageId: string;
-  sequenceNumber?: number;
   content: string;
   attachments: ComposerAttachment[];
   failed: boolean;

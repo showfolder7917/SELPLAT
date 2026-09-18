@@ -654,6 +654,13 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   const hanliQuestion = "结合整理后的资料，告诉我现在最关键的目标。".repeat(50);
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill(hanliQuestion);
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
+  // 发送瞬间就要跟随到新的真实末尾；不能依赖后续手动滚动才把客户消息移出输入区。
+  await expect.poll(() => hanliConversation.evaluate((timeline) => {
+    const composer = document.querySelector<HTMLElement>(".hanli-person-composer");
+    const lastMessage = timeline.querySelector<HTMLElement>(".selconversation-message:last-of-type");
+    if (!composer || !lastMessage) return false;
+    return lastMessage.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top;
+  }), { message: "发送后的末条客户消息必须自动完整滚动到输入区上方" }).toBe(true);
   await expect(taskList.getByRole("button", { name: /韩立/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: /南宫婉/ }).click();
   await expect(page.locator(".developer-tab-page:visible"), "后台回复时仍只显示当前页面").toHaveCount(1);
@@ -661,7 +668,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.locator(".developer-tab-page:visible"), "返回韩立时应恢复原页面并保持单页可见").toHaveCount(1);
   await expect(hanliConversation.getByText(hanliQuestion, { exact: true })).toBeVisible();
-  await expect(hanliConversation.getByText("我 · 发送中", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("我 · 已发送", { exact: true })).toBeVisible();
   await expect(hanliComposer.getByRole("button", { name: "思考中" })).toBeDisabled();
   await expect(hanliConversation.getByText("我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", { exact: true })).toBeVisible();
   await expect(hanliConversation.getByText("当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", { exact: true })).toBeVisible();

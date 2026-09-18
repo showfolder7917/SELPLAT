@@ -29,6 +29,14 @@ test("内部调查尚未生成执行任务时，只有权威运行态指定的�
   assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run }), { presence: "idle", label: "空闲" });
 });
 
+test("仍需客户确认的范围说明由韩立显示等待确认，南宫婉不再显示调查中", () => {
+  const run = { actor: "nangong-wan", phase: "preparing-topic", status: "running" };
+  const nangong = { memberId: "nangong-wan", state: "idle", currentTaskId: null, phase: null };
+  const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
+  assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run, awaitingDeliberationConfirmation: true }), { presence: "conversation", label: "等待你确认" });
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", oneShotRun: run, awaitingDeliberationConfirmation: true }), { presence: "idle", label: "空闲" });
+});
+
 test("韩立人物会话排查在专题建立前同时投影负责人和受托核实人物", () => {
   const activity = { phase: "investigating", status: "running" };
   const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };

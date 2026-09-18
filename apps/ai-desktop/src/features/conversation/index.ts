@@ -25,6 +25,10 @@ export { applyCodexStreamEvent } from "./model/chat-message";
 export { createAssistantMessage } from "./model/chat-message";
 /** 人物会话时间线合并器：合并持久消息和实时事件。 */
 export { mergeRealtimeConversationTimeline } from "./model/realtime-conversation";
+/** 人物消息传递状态文字：把处理中和已持久化统一表达为客户已经发送。 */
+export { personaConversationDeliveryLabel } from "./model/realtime-conversation";
+/** 人物会话临时消息顺序器：把新消息稳定放到当前可见时间线末尾。 */
+export { nextRealtimeConversationSequence } from "./model/realtime-conversation";
 /** 人物会话投影器：将后端会话快照转换为前端可读时间线。 */
 export { projectPersonaConversation } from "./model/realtime-conversation";
 /** 待发送附件类型：供人物会话和截图功能交换图片。 */

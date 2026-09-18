@@ -20,7 +20,7 @@ import {
 } from "@fluentui/react-icons";
 
 // 消息正文组件（MarkdownMessage）把人物消息渲染成统一格式。
-import { ConversationMessageImage, MarkdownMessage } from "../../conversation";
+import { ConversationMessageImage, MarkdownMessage, personaConversationDeliveryLabel } from "../../conversation";
 // 统一会话外壳（SelUiConversation）提供人物会话共用的时间线和输入区结构。
 import { SelUiConversation } from "../../conversation";
 import { SelUiDisclosure } from "../../../theme/SelUiDisclosure";
@@ -103,8 +103,8 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
         const internal = controller.internalIds.has(message.messageId);
         // 人物显示名称（personaName）把内部人物编号转换成客户可以识别的名字。
         const personaName = personaNames[message.speakerPersonaId || "nangong-wan"] || message.speakerPersonaId;
-        // 发送状态文字（deliveryLabel）只为客户消息补充发送中或发送失败状态。
-        const deliveryLabel = message.status === "sending" ? " · 发送中" : message.status === "failed" ? " · 发送失败" : "";
+        // 发送状态文字（deliveryLabel）把处理中和已持久化统一显示为已发送，失败仍保留明确提示。
+        const deliveryLabel = personaConversationDeliveryLabel(message.deliveryStatus);
         // 内部消息类型文字（internalLabel）区分普通问答、内部研讨和内部交接。
         let internalLabel = "";
         // 内部消息需要在人物名称后显示其真实业务来源。
@@ -113,7 +113,7 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
           internalLabel = " · 内部研讨";
         }
         // 消息身份文字（speakerLabel）是消息头最终显示的客户或人物名称。
-        const speakerLabel = message.speakerType === "user" ? `我${deliveryLabel}` : `${personaName}${internalLabel}`;
+        const speakerLabel = message.speakerType === "user" ? `我 · ${deliveryLabel}` : `${personaName}${internalLabel}`;
 
         return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} data-internal-message-id={internal ? message.messageId : undefined}>
           {/* 消息身份区：显示客户或人物名称以及当前传递状态。 */}

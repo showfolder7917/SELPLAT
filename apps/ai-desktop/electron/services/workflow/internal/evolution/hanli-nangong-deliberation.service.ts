@@ -239,29 +239,36 @@ export class HanliNangongDeliberationService {
     }
     this.#appendInternalMessage(roundId, "offer", "nangong", confirmation.offer, `internal:${roundId}:reply`, confirmation.offeredAt);
     if (!confirmation.reply) {
-      // 托管关闭时由真实用户确认；托管开启时韩立在内部完成当前专题或后续专题判断。
-      if (store.state().automationSettings.automaticCustodyEnabled !== true) {
-        const conversation = await this.dependencies.memory.appendPersonaInternalMessage({
+      // 韩立页面的独立 1 已经是本轮完整启动授权；内部研讨只收敛方案，不再向客户索取第二次 1。
+      if (store.state().oneShotRun?.sourceRequestId) {
+        const saved = this.#recordConfirmationReply(deliberation, "1", null);
+        const current = requireDeliberation(saved, deliberation.deliberationId);
+        confirmation = current.rounds.find((item) => item.roundId === roundId)!.confirmation!;
+      // 没有韩立页面显式授权时，托管关闭由真实用户确认；托管开启由韩立在内部判断。
+      } else if (store.state().automationSettings.automaticCustodyEnabled !== true) {
+        const conversation = await this.dependencies.memory.appendPersonaCustomerMessage({
           ownerPersonaId: "han-li", conversationId: hanliConversationId,
           messageId: `hanli-confirmation:${roundId}`, speakerPersonaId: "han-li",
           content: `南宫婉已完成调查，以下是她核实后的范围说明：\n\n${confirmation.offer}\n\n请确认这些范围是否符合你的真实目标；回复 1 仅确认本轮说明，有需保留的能力请直接纠正。`, createdAt: confirmation.offeredAt,
+          replyToMessageId: `internal:${roundId}:offer`,
         });
         this.dependencies.onPersonaConversationChanged?.(conversation);
         return { state: store.state(), activity: "idle" };
-      }
-      const reply = (await this.dependencies.askHanli(prompts.render("hanli.internal-confirmation", {
-        candidateJson: JSON.stringify(deliberation.candidate), offer: confirmation.offer, sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
-        discussionBasisJson: discussionBasisJson(deliberation),
-        custodyMode: "自动托管已开启：你代表客户作出业务范围判断。若发现不属于当前专题，应明确要求留到后续讨论；不得把普通范围判断转回客户。",
-      }), store.state())).trim();
-      if (!reply) throw new Error("韩立尚未回复南宫婉的修复说明。");
-      if (interrupted()) return { state: store.state(), activity: "idle" };
-      if (store.state().automationSettings.automaticCustodyEnabled !== true) return { state: store.state(), activity: "idle" };
-      const saved = this.#recordConfirmationReply(deliberation, reply, reply === "1" ? null : { question: reply, reason: "韩立代表客户判断后要求南宫婉继续核实" });
-      const current = requireDeliberation(saved, deliberation.deliberationId);
-      confirmation = current.rounds.find((item) => item.roundId === roundId)!.confirmation!;
-      if (reply !== "1") {
-        return { state: saved, activity: "questioning" };
+      } else {
+        const reply = (await this.dependencies.askHanli(prompts.render("hanli.internal-confirmation", {
+          candidateJson: JSON.stringify(deliberation.candidate), offer: confirmation.offer, sourceCorpus: formatEvolutionCorpus(deliberation.sourceSnapshots),
+          discussionBasisJson: discussionBasisJson(deliberation),
+          custodyMode: "自动托管已开启：你代表客户作出业务范围判断。若发现不属于当前专题，应明确要求留到后续讨论；不得把普通范围判断转回客户。",
+        }), store.state())).trim();
+        if (!reply) throw new Error("韩立尚未回复南宫婉的修复说明。");
+        if (interrupted()) return { state: store.state(), activity: "idle" };
+        if (store.state().automationSettings.automaticCustodyEnabled !== true) return { state: store.state(), activity: "idle" };
+        const saved = this.#recordConfirmationReply(deliberation, reply, reply === "1" ? null : { question: reply, reason: "韩立代表客户判断后要求南宫婉继续核实" });
+        const current = requireDeliberation(saved, deliberation.deliberationId);
+        confirmation = current.rounds.find((item) => item.roundId === roundId)!.confirmation!;
+        if (reply !== "1") {
+          return { state: saved, activity: "questioning" };
+        }
       }
     }
     this.#appendInternalMessage(roundId, "confirm", "hanli", store.state().automationSettings.automaticCustodyEnabled === true ? `自动托管确认：${confirmation.reply!}` : `用户确认：${confirmation.reply!}`, `internal:${roundId}:offer`, confirmation.repliedAt!);

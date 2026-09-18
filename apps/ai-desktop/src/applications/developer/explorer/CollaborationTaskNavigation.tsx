@@ -51,6 +51,11 @@ export function CollaborationTaskNavigation({
   const { panel, savingMemberId } = controller.navigation;
   // 导航操作集中负责选人和切换右侧页面。
   const { setPanel, openMemberPage } = controller.actions;
+  // 只有仍未消费的持久范围说明才属于客户确认停点。
+  const awaitingDeliberationConfirmation = Boolean(evolutionState?.deliberations.some((deliberation) =>
+    deliberation.status === "ready-to-establish"
+    && deliberation.rounds.at(-1)?.confirmation
+    && !deliberation.rounds.at(-1)?.confirmation?.reply));
 
   /** 任务群按钮只切换右侧面板，不修改协作任务数据。 */
   const openTaskGroup = () => setPanel("task-group");
@@ -84,6 +89,7 @@ export function CollaborationTaskNavigation({
             locale,
             status: stateReadStatus,
             oneShotRun: evolutionState?.oneShotRun,
+            awaitingDeliberationConfirmation,
             inquiryActivity: inquiryRole ? hanliInquiryActivity : null,
             inquiryRole,
           });

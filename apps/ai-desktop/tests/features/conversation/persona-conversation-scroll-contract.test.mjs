@@ -17,12 +17,13 @@ const taskNavigation = read("../../../src/applications/developer/explorer/Collab
 test("可输入人物会话仅在用户停留底部时跟随新增消息", () => {
   assert.match(hook, /scrollHeight - timeline\.scrollTop - timeline\.clientHeight/);
   assert.match(hook, /followsTailRef\.current = remaining <= BOTTOM_TOLERANCE_PX/);
-  assert.match(hook, /if \(followsTailRef\.current\) timeline\.scrollTo/);
   assert.match(hanli, /useHanliConversationWorkspace\(props\)/);
   assert.match(hanliController, /latestMessage = messages\.at\(-1\)[\s\S]*usePersonaConversationTailFollow\(timelineIdentity\)/);
   assert.match(nangongController, /latestVisibleMessage = visibleMessages\.at\(-1\)[\s\S]*usePersonaConversationTailFollow\(timelineIdentity\)/);
   assert.doesNotMatch(hanliController, /messages\.map\(\(message\) => `\$\{message\.messageId\}:\$\{message\.deliveryStatus\}:\$\{message\.content\}`/);
   assert.doesNotMatch(nangongController, /visibleMessages\.map\(\(message\) => `\$\{message\.messageId\}:\$\{message\.status\}:\$\{message\.content\}`/);
+  assert.match(hook, /const shouldFollowTail = followsTailRef\.current;/);
+  assert.match(hook, /React 提交节点后立即对齐一次[\s\S]*timeline\.scrollTo\(\{ top: timeline\.scrollHeight \}\);[\s\S]*requestAnimationFrame[\s\S]*timeline\.scrollTo\(\{ top: timeline\.scrollHeight \}\);/);
 });
 
 test("韩立会话使用页面专属网格行隔离时间线和输入区，不修改共享 SELUI 会话选择器", () => {
@@ -46,7 +47,7 @@ test("浮层输入区按高度留白，布局流输入区只保留时间线收�
   assert.match(shell, /const reserve = isOverlay \? Math\.ceil\(composerElement\.getBoundingClientRect\(\)\.height\) \+ 48 : 38;/);
   assert.match(shell, /selConversation:geometry/);
   assert.match(hook, /addEventListener\("selConversation:geometry", followGeometryChange\)/);
-  assert.match(hook, /if \(!followsTailRef\.current\) return/);
+  assert.match(hook, /const shouldFollowTail = followsTailRef\.current;[\s\S]*if \(!shouldFollowTail\) return;/);
 });
 
 test("共享浮层仍使用动态底部内边距，韩立输入区改由独立网格行占位", () => {

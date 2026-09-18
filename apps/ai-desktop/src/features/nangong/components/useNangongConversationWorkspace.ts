@@ -17,8 +17,9 @@ import {
 } from "react";
 
 // 实时消息合并方法（mergeRealtimeConversationTimeline）合并数据库消息和前端临时消息。
+// 临时消息顺序方法（nextRealtimeConversationSequence）按真实可见顺序号把新消息放到末尾。
 // 人物消息分类方法（projectPersonaConversation）把直接问答与内部研讨消息分开。
-import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation";
+import { mergeRealtimeConversationTimeline, nextRealtimeConversationSequence, projectPersonaConversation } from "../../conversation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让消息区在新增内容后跟随到最新位置。
 import { usePersonaConversationTailFollow } from "../../conversation";
 // 协同桌面入口让人物页面沿同名 Contract、preload 和 IPC 找到南宫 Facade。
@@ -175,7 +176,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     // 清空待发送附件区，截图随后进入临时消息。
     if (!retrying) onAttachments([]);
     // 立即显示客户原文和截图，让页面产生真实反馈。
-    setOutgoingMessage(retrying ? { ...retrying, failed: false } : { messageId: clientMessageId, sequenceNumber: conversation.messages.length, content: message, attachments: sentAttachments, failed: false, createdAt });
+    setOutgoingMessage(retrying ? { ...retrying, failed: false } : { messageId: clientMessageId, content: message, attachments: sentAttachments, failed: false, createdAt });
     // 清除上一轮发送错误。
     onError("");
 
@@ -305,7 +306,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
       messageId: outgoingMessage.messageId,
       messageType: "customer-visible" as const,
       contentRole: "conversation" as const,
-      sequenceNumber: outgoingMessage.sequenceNumber ?? conversation.messages.length,
+      sequenceNumber: nextRealtimeConversationSequence(directMessages),
       speakerType: "user" as const,
       speakerPersonaId: null,
       content: outgoingMessage.content,

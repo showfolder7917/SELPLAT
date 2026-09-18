@@ -9,7 +9,7 @@
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 import { useEffect, useRef } from "react";
 
-import { ConversationMessageImage, MarkdownMessage, SelUiConversation } from "../../conversation";
+import { ConversationMessageImage, MarkdownMessage, personaConversationDeliveryLabel, SelUiConversation } from "../../conversation";
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 import { HanliCustodySwitch } from "./HanliConversationWorkspace/HanliCustodySwitch";
 import { useHanliConversationWorkspace } from "./useHanliConversationWorkspace";
@@ -77,7 +77,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}>
           {/* 问答身份区：显示“我”或“韩立”，并标记客户消息的发送状态。 */}
           <header>{message.speakerType === "user"
-            ? `我${message.deliveryStatus === "sending" ? " · 发送中" : message.deliveryStatus === "failed" ? " · 发送失败" : ""}`
+            ? `我 · ${personaConversationDeliveryLabel(message.deliveryStatus)}`
             : "韩立"}</header>
 
           {/* 问答内容区：承载本条消息的截图证据和文字正文。 */}

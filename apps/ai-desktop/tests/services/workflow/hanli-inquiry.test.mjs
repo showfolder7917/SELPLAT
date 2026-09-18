@@ -553,8 +553,8 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   const f = fixture(async () => findings);
   const replies = [];
   // 真实数据库的消息标识跨会话唯一：旧会话已有原消息时仍须在新会话展示范围。
-  const append = f.memory.appendPersonaInternalMessage;
-  f.memory.appendPersonaInternalMessage = (message) => {
+  const append = f.memory.appendPersonaCustomerMessage;
+  f.memory.appendPersonaCustomerMessage = (message) => {
     assert.notEqual(message.messageId, "hanli-confirmation:scope-round");
     return append(message);
   };
@@ -575,7 +575,9 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   });
   await service.send({ ...request, clientMessageId: "restore-scope", message: "1" });
   assert.equal(replies.length, 0);
-  assert.match(f.messages.find((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").content, /尚未批准.*[\s\S]*旧验收工具方案/);
+  const restoredConfirmation = f.messages.find((item) => item.messageId === "hanli-confirmation:scope-round:restored:original");
+  assert.equal(restoredConfirmation.messageType, "customer-visible");
+  assert.match(restoredConfirmation.content, /尚未批准.*[\s\S]*旧验收工具方案/);
   await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
   assert.deepEqual(replies, ["不要旧方案，仅修测试台状态"]);
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").length, 1);

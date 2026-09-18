@@ -34,6 +34,8 @@ export type CollaborationMemberDisplayModelInput = {
    * 这是只读展示投影：不能据此创建任务或改写协作成员存储。
    */
   oneShotRun?: Pick<EvolutionOneShotRunOutDto, "actor" | "phase" | "status"> | null;
+  /** 内部研讨已形成范围说明且正在等待客户确认。 */
+  awaitingDeliberationConfirmation?: boolean;
   /** 专题建立前的人物排查活动；owner 与 delegate 分别投影韩立判断和南宫婉核实。 */
   inquiryActivity?: Pick<PersonaConversationActivityOutDto, "phase" | "status"> | null;
   inquiryRole?: "owner" | "delegate" | null;
@@ -132,8 +134,15 @@ function deliberationMemberDisplay(
   member: CollaborationMemberOutDto,
   oneShotRun: CollaborationMemberDisplayModelInput["oneShotRun"],
   locale: LocaleValue,
+  awaitingConfirmation = false,
 ): { presence: MemberState; label: string } | null {
-  if (!oneShotRun || oneShotRun.status !== "running" || oneShotRun.actor !== member.memberId) return null;
+  if (!oneShotRun || oneShotRun.status !== "running") return null;
+  if (awaitingConfirmation) {
+    return member.memberId === "han-li"
+      ? { presence: "conversation", label: locale === "ja" ? "確認待ち" : "等待你确认" }
+      : null;
+  }
+  if (oneShotRun.actor !== member.memberId) return null;
 
   const chineseLabels: Partial<Record<EvolutionOneShotRunOutDto["phase"], string>> = {
     "preparing-topic": "梳理调查问题中",
@@ -206,7 +215,7 @@ export function collaborationMemberDisplayModel(
     return { presence: "offline", label };
   }
   // 运行中的内部研讨是主进程已发布的当前事实，优先于“没有执行任务”的默认空闲显示。
-  const deliberationDisplay = deliberationMemberDisplay(member, oneShotRun, locale);
+  const deliberationDisplay = deliberationMemberDisplay(member, oneShotRun, locale, input.awaitingDeliberationConfirmation);
   if (deliberationDisplay) return deliberationDisplay;
   // 已有执行任务时继续以协作存储为权威；只有任务前排查才由人物会话活动补足状态。
   if (!member.currentTaskId) {

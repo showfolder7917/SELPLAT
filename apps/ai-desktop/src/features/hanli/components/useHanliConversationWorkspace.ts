@@ -11,8 +11,9 @@ import { useMemo, type ClipboardEvent } from "react";
 // 截图附件类型（ComposerAttachment）表示一张已经保存、可以发送和预览的图片。
 import type { ComposerAttachment } from "../../conversation";
 // 实时消息合并方法（mergeRealtimeConversationTimeline）把数据库消息与发送中的临时消息合并为一条时间线。
+// 临时消息顺序方法（nextRealtimeConversationSequence）按真实可见顺序号把新消息放到末尾。
 // 人物消息分类方法（projectPersonaConversation）把韩立会话拆成直接对话和内部研讨两类消息。
-import { mergeRealtimeConversationTimeline, projectPersonaConversation } from "../../conversation";
+import { mergeRealtimeConversationTimeline, nextRealtimeConversationSequence, projectPersonaConversation } from "../../conversation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让会话区在新增消息后跟随到最新内容。
 import { usePersonaConversationTailFollow } from "../../conversation";
 // 协同桌面入口让人物页面沿同名 Contract、preload 和 IPC 找到韩立 Facade。
@@ -198,8 +199,8 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     messageId: pending.messageId,
     messageType: "customer-visible" as const,
     contentRole: "conversation" as const,
-    // 页面顺序号（sequenceNumber）暂放在当前历史末尾，正式顺序以后端结果为准。
-    sequenceNumber: conversation.messages.length,
+    // 页面顺序号（sequenceNumber）取可见消息最大顺序号加一；过滤内部消息后不能使用数组长度代替真实顺序。
+    sequenceNumber: nextRealtimeConversationSequence(directMessages),
     // 发言方类型（speakerType）使用 user 表示这条临时消息来自当前客户。
     speakerType: "user" as const,
     // 用户消息没有人物身份，所以 speakerPersonaId 固定为空。
@@ -219,7 +220,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     // 只有发送失败时当前生命周期才结束，发送中保持为空。
     completedAt: pending.failed ? new Date().toISOString() : null,
   // 没有临时消息时传入空数组，避免制造不存在的用户气泡。
-  }] : []), [conversation.messages.length, directMessages, pending]);
+  }] : []), [directMessages, pending]);
   // 只读取最后一条消息的变化；历史正文不会在每次输入时重新扫描。
   const latestMessage = messages.at(-1);
   const timelineIdentity = `${messages.length}:${latestMessage?.messageId || ""}:${latestMessage?.deliveryStatus || ""}:${latestMessage?.content.length || 0}`;

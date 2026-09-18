@@ -8,6 +8,31 @@ export interface RealtimeConversationMessage {
   createdAt: string;
 }
 
+/**
+ * 把人物会话的内部传递状态转换为客户可读文字。
+ *
+ * sending 表示消息已经交给人物服务、人物回复仍在处理中；它不是“尚未发送”。
+ * completed 表示同一条消息已经由持久快照接管。两种成功状态对客户都显示“已发送”。
+ */
+export function personaConversationDeliveryLabel(status: "sending" | "completed" | "failed"): "已发送" | "发送失败" {
+  // 只有服务明确返回失败时才显示失败；处理中和已持久化都已经完成客户侧发送动作。
+  if (status === "failed") return "发送失败";
+  // 人物是否仍在思考由按钮和活动区表达，不能继续占用消息传递文案。
+  return "已发送";
+}
+
+/**
+ * 为尚未持久化的新消息分配当前可见时间线的末尾顺序号。
+ *
+ * 客户显示窗口会过滤内部消息，因此可见条数不等于数据库 sequenceNumber；
+ * 这里必须从实际可见顺序号取最大值，避免临时消息短暂插到旧回复上方。
+ */
+export function nextRealtimeConversationSequence(messages: ReadonlyArray<Pick<RealtimeConversationMessage, "sequenceNumber">>): number {
+  return messages.reduce((next, message) => Number.isSafeInteger(message.sequenceNumber)
+    ? Math.max(next, message.sequenceNumber + 1)
+    : next, 0);
+}
+
 /** 统一人物会话按持久化业务类型投影；不读取 Renderer 临时正文或 messageId 命名。 */
 export function projectPersonaConversation<T extends {
   messageId: string;
