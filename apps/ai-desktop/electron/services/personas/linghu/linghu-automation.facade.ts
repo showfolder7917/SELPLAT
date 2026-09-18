@@ -21,6 +21,9 @@ import { isUnifiedTestCapacityBlockedError, isUnifiedTestInfrastructureError } f
 // 固定人物 ID 用于任务发起人、恢复负责人和审计关联。
 const LINGHU_MEMBER_ID = "linghu-ancestor";
 
+/** 令狐交付模式区分测试阶段脚本重启与封存保留的正式发布链。 */
+export type LinghuDeliveryMode = "developer-script" | "formal-release";
+
 /** 令狐调用协作工作流所需的最小端口；具体 Coordinator 只在组合根实现本接口。 */
 export interface LinghuCollaborationPort {
   // 返回协作快照，令狐不能直接持有或修改协作 Store。
@@ -55,8 +58,8 @@ export interface LinghuAutomationFacadeOptions {
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   // 资源读取器只返回快照，申请和释放由 Runner 完成。
   readTestResourceState(): TestResourceCoordinatorStateOutDto;
-  // 统一测试通过后由组合根安排受控重启。
-  runUnifiedTestAndRestart(onVerified: () => void): Promise<void>;
+  // 固定验证通过后由组合根按当前交付模式安排开发脚本或正式发布重启。
+  runUnifiedTestAndRestart(onVerified: (deliveryMode: LinghuDeliveryMode) => void): Promise<void>;
   // 只读模型根据已确认事实生成客户能执行的指导，程序不内置具体问题文案。
   analyzeCustomerActionGuidance?(facts: Record<string, unknown>): Promise<string>;
   // 普通运行异常只进入巡检修复，不伪装成阻断原任务的“卡点”。
@@ -230,13 +233,15 @@ export class LinghuAutomationFacade {
           if (completedModule === "test-coverage") {
             try {
               // 测试覆盖模块完成后执行固定统一测试；回调只在 Runner 验证成功后更新报告。
-              await this.#runUnifiedTestAndRestart(() => this.#store.updateRuntime("automation.unified_test_completed", (state) => {
+              await this.#runUnifiedTestAndRestart((deliveryMode) => this.#store.updateRuntime("automation.unified_test_completed", (state) => {
                 if (!state.lastModuleReport || state.lastModuleReport.module !== completedModule) return;
                 state.lastModuleReport.tests = { status: "passed", summary: "固定统一测试全部通过。" };
                 state.lastModuleReport.restartRecovery = {
                   status: "passed",
                   checkpoint: state.recoveryCheckpoint,
-                  summary: "下一循环恢复点已持久化，受控重启已安排。",
+                  summary: deliveryMode === "developer-script"
+                    ? "下一循环恢复点已持久化，测试阶段开发版启动脚本已安排。"
+                    : "下一循环恢复点已持久化，正式发布重启已安排。",
                 };
               }));
             } catch (error) {

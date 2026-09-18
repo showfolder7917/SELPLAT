@@ -9,7 +9,7 @@ import {
   type TestResourceCoordinatorFacade,
 } from "../../../support/capabilities/testing/index.js";
 // 主进程运行时由唯一 Facade 和唯一 Store 组成，调用方不再分别装配内部文件。
-import { LinghuAutomationFacade, type LinghuAutomationFacadeOptions } from "../linghu-automation.facade.js";
+import { LinghuAutomationFacade, type LinghuAutomationFacadeOptions, type LinghuDeliveryMode } from "../linghu-automation.facade.js";
 import { inspectManagedDependencyRecovery } from "../../../support/capabilities/release/index.js";
 import { LinghuAutomationStore } from "./linghu-automation.store.js";
 
@@ -23,8 +23,12 @@ export interface LinghuUnifiedTestRuntimeOptions {
   buildRoot: string;
   // 资源协调器串行管理 Electron、端口和构建目录。
   testResources: TestResourceCoordinatorFacade;
-  // 测试通过后的应用重启动作仍由 Electron 组合根执行。
-  onVerified(executable: string): void | Promise<void>;
+  // 当前阶段选择开发脚本快启或正式发布；正式链保留在同一运行时中，切换时无需恢复旧代码。
+  deliveryMode: LinghuDeliveryMode;
+  // 测试阶段由组合根启动登记的开发版脚本，脚本负责重新构建、打包和打开应用。
+  launchDeveloperScript(): void | Promise<void>;
+  // 正式发布模式继续使用经过发布门禁验证的可执行文件。
+  publishVerifiedPackage(executable: string): void | Promise<void>;
 }
 
 /** 创建令狐运行时需要的外部能力；内部 Store 和 Runner 不允许由调用方传入。 */
@@ -88,11 +92,17 @@ export function createLinghuRuntime(options: CreateLinghuRuntimeOptions): Linghu
     recordEvent: options.recordEvent,
     readTestResourceState: options.readTestResourceState,
     runUnifiedTestAndRestart: async (onVerified) => {
-      // 只有固定统一测试全部通过后才更新令狐报告并通知组合根执行重启。
+      if (options.unifiedTest.deliveryMode === "developer-script") {
+        // 测试阶段保留固定验证，但不执行正式发布门禁；开发脚本是唯一构建和重启入口。
+        await unifiedTests.validate();
+        onVerified("developer-script");
+        await options.unifiedTest.launchDeveloperScript();
+        return;
+      }
+      // 正式模式保留原有打包、发布验证和已核验可执行文件重启链。
       const unifiedTestResult = await unifiedTests.run();
-      const executable = unifiedTestResult.executable;
-      onVerified();
-      await options.unifiedTest.onVerified(executable);
+      onVerified("formal-release");
+      await options.unifiedTest.publishVerifiedPackage(unifiedTestResult.executable);
     },
     analyzeCustomerActionGuidance: options.analyzeCustomerActionGuidance,
   });

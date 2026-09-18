@@ -16,7 +16,7 @@ import { releaseRestartArguments } from "./release-restart-arguments.js";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 // Node.js 文件系统 API：检查工程、创建运行目录、读取版本以及写健康检查结果。
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 // 跨平台路径 API：避免手写 Windows 或 macOS 的路径分隔符。
 import path from "node:path";
 // ES Module 没有 __dirname；它把 import.meta.url 转换为真实磁盘路径。
@@ -1144,7 +1144,18 @@ export async function startApplication(): Promise<void> {
       applicationName,
       buildRoot: projectPaths.buildRoot,
       testResources,
-      onVerified: (executable) => {
+      // 当前是开发测试阶段；正式发布链仍保留在 publishVerifiedPackage，切换模式即可恢复。
+      deliveryMode: process.platform === "darwin" ? "developer-script" : "formal-release",
+      launchDeveloperScript: () => {
+        const developerStartScript = path.join(appRoot, "启动开发版.command");
+        if (!existsSync(developerStartScript)) throw new Error(`缺少开发版启动脚本：${developerStartScript}`);
+        eventCenter.recordEvent("application.developer_script_restart_scheduled", { reason: "linghu_unified_test_completed", developerStartScript });
+        // 由 LaunchServices 打开登记脚本；脚本自行构建、打包、关闭旧实例并启动最新版。
+        execFileSync("/usr/bin/open", [developerStartScript], { stdio: "ignore" });
+        prepareAiMemoryShutdown();
+        app.exit(0);
+      },
+      publishVerifiedPackage: (executable) => {
         // 统一测试成功后只发布已提交的源码版本，避免新进程无法证明自己实际装载了哪次修复。
         const runtimeSourceSha = resolveCleanRuntimeSourceSha(projectRoot);
         eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "linghu_unified_test_completed", executable, runtimeSourceSha });

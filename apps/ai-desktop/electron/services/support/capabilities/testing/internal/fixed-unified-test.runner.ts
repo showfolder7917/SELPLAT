@@ -133,6 +133,11 @@ export interface FixedUnifiedTestRunResult {
   verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[];
 }
 
+/** 测试阶段只执行固定验证清单，不生成或发布正式候选包。 */
+export interface FixedUnifiedValidationResult {
+  verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[];
+}
+
 export class FixedUnifiedTestRunner {
   // 源工程根是稳定依赖、构建数据和发布元数据的权威来源。
   readonly #sourceProjectRoot: string;
@@ -163,6 +168,18 @@ export class FixedUnifiedTestRunner {
   }
 
   async run(candidateProjectRoot = this.#sourceProjectRoot): Promise<FixedUnifiedTestRunResult> {
+    const result = await this.#execute(candidateProjectRoot, true);
+    if (!result.executable) throw new Error("正式发布验证完成后缺少已核验开发版启动程序。");
+    return { executable: result.executable, verificationEvidence: result.verificationEvidence };
+  }
+
+  /** 测试阶段只运行固定验证；打包和启动统一交给登记的开发版启动脚本。 */
+  async validate(candidateProjectRoot = this.#sourceProjectRoot): Promise<FixedUnifiedValidationResult> {
+    const result = await this.#execute(candidateProjectRoot, false);
+    return { verificationEvidence: result.verificationEvidence };
+  }
+
+  async #execute(candidateProjectRoot: string, includeReleaseGates: boolean): Promise<{ executable: string | null; verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[] }> {
     // 没有候选参数时测试源工程；集成流程可以传入独立候选工作树。
     const resolvedProjectRoot = path.resolve(candidateProjectRoot);
     // 应用根由候选工程根和登记应用名组成，禁止固定机器路径。
@@ -228,6 +245,8 @@ export class FixedUnifiedTestRunner {
         }
       }
       if (validationFailures.length > 0) throw new UnifiedTestAggregateError(validationFailures);
+      // 测试阶段在固定验证通过后交给唯一开发版脚本构建并启动，不伪造正式发布事实。
+      if (!includeReleaseGates) return { executable: null, verificationEvidence };
       // 发布验证有严格产物依赖，任一失败都必须停止后续发布动作。
       for (const script of FIXED_RELEASE_SCRIPTS) {
         this.#recordEvent(`${this.#eventNamespace}.unified_test.started`, { script, candidateProjectRoot: resolvedProjectRoot });

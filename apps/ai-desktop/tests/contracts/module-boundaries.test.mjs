@@ -323,7 +323,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRuleMetadata, /rule_version = 2\.22\.0/);
+  assert.match(architectureRuleMetadata, /rule_version = 2\.23\.0/);
   assert.match(architectureRule, /workflow_vertical_module_layout_contract/);
   assert.match(architectureRule, /workflow_aggregate_boundary_contract/);
   assert.match(architectureRule, /workflow_repair_replacement_contract/);

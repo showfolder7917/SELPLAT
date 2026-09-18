@@ -5,6 +5,9 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
+# 记录本次启动脚本所在的终端窗口。成功后按 TTY 精确关闭，避免误关用户的其他终端窗口。
+LAUNCH_TERMINAL_TTY="$(tty 2>/dev/null || true)"
+
 # 双击启动时补齐 Homebrew 的常用命令目录，并把稳定工程根传给桌面端。
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export SELPLAT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -32,16 +35,10 @@ if ! npm run dependencies:ensure; then
     exit 1
 fi
 
-echo "[构建] 正在生成最新开发版..."
-if ! npm run build:developer; then
-  echo "[错误] 开发版构建失败，已取消启动。"
-  read "?按回车键关闭窗口..."
-  exit 1
-fi
-
-echo "[打包] 正在生成与工程构建隔离的自包含 AI Desktop.app..."
+# package:mac:developer 内部已经执行完整开发版构建；这里禁止提前重复构建一次。
+echo "[构建与打包] 正在生成最新的自包含 AI Desktop.app..."
 if ! npm run package:mac:developer; then
-  echo "[错误] AI Desktop.app 生成失败，已取消启动。"
+  echo "[错误] 开发版构建或 AI Desktop.app 生成失败，已取消启动。"
   read "?按回车键关闭窗口..."
   exit 1
 fi
@@ -125,5 +122,25 @@ fi
 
 echo "[完成] 已启动固定身份的 AI Desktop.app。"
 echo "应用位置：$APP_PATH"
-sleep 2
+
+# 失败时保留终端供排查；只有成功启动后才异步关闭当前脚本对应的终端窗口。
+if [[ "$LAUNCH_TERMINAL_TTY" == /dev/* ]]; then
+  nohup /usr/bin/osascript \
+    -e 'on run arguments' \
+    -e 'set launchTty to item 1 of arguments' \
+    -e 'delay 2' \
+    -e 'tell application "Terminal"' \
+    -e 'repeat with terminalWindow in windows' \
+    -e 'repeat with terminalTab in tabs of terminalWindow' \
+    -e 'if tty of terminalTab is launchTty then' \
+    -e 'close terminalWindow' \
+    -e 'return' \
+    -e 'end if' \
+    -e 'end repeat' \
+    -e 'end repeat' \
+    -e 'end tell' \
+    -e 'end run' \
+    "$LAUNCH_TERMINAL_TTY" >/dev/null 2>&1 &!
+fi
+
 exit 0

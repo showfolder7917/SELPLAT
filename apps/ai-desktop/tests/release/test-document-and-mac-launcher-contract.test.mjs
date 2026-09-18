@@ -4,6 +4,7 @@ import test from "node:test";
 
 const runner = readFileSync(new URL("../../scripts/test-document-runner.mjs", import.meta.url), "utf8");
 const launcher = readFileSync(new URL("../../启动开发版.command", import.meta.url), "utf8");
+const packageManifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
 const appConfig = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
 const startupContext = readFileSync(new URL("../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
@@ -97,12 +98,13 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builderConfig, /const candidateProjectRoot = path\.resolve\(applicationRoot, "\.\.\/\.\."\);[\s\S]*const candidateBuildRoot = path\.join\(candidateProjectRoot, "build", "ai-desktop"\);[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/renderer\/developer"[\s\S]*path\.join\(candidateBuildRoot, "renderer", "developer"\)[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/electron"[\s\S]*path\.join\(candidateBuildRoot, "electron"\)/);
   assert.match(builderConfig, /resource\.to === "db\/sql".*path\.join\(applicationRoot, "db", "sql"\)/);
   assert.match(builder, /\{ "from": "db\/sql", "to": "db\/sql", "filter": \["load-order\.txt", "\*\.sql"\] \}/);
-  assert.match(launcher, /npm run build:developer/);
+  assert.doesNotMatch(launcher, /^if ! npm run build:developer/m);
   assert.match(launcher, /npm run package:mac:developer/);
+  assert.match(packageManifest.scripts["package:mac:developer"], /npm run build:developer/);
   assert.match(launcher, /codesign --force --deep --sign -/);
   assert.match(launcher, /EXPECTED_DESIGNATED_REQUIREMENT='designated => identifier/);
   assert.match(launcher, /codesign --force --sign - --requirements "=\$EXPECTED_DESIGNATED_REQUIREMENT"/);
-  assert.match(launcher, /与工程构建隔离的自包含 AI Desktop\.app/);
+  assert.match(launcher, /最新的自包含 AI Desktop\.app/);
   assert.doesNotMatch(launcher, /--ai-desktop-runtime-root=/);
   assert.match(launcher, /lsregister/);
   assert.match(launcher, /APP_EXECUTABLE="\$APP_PATH\/Contents\/MacOS\/AI Desktop"/);

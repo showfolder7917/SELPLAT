@@ -1476,16 +1476,21 @@ test("令狐将依赖自动流程的修正任务纳入同一停点检测闭环",
   }
 });
 
-test("令狐测试漏点模块只运行固定统一测试并在恢复点持久化后受控重启", () => {
+test("令狐测试阶段完成固定验证后启动开发版脚本并保留正式发布链", () => {
   const runner = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
   const facade = readFileSync(new URL("../../../electron/services/personas/linghu/linghu-automation.facade.ts", import.meta.url), "utf8");
   const main = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
   const collaborationBootstrap = readFileSync(new URL("../../../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
   assert.doesNotMatch(runner, /confirmedIntent|prompt\.content/);
-  assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(\) =>/);
+  assert.match(facade, /#completeModule[\s\S]*await this\.#runUnifiedTestAndRestart\(\(deliveryMode\) =>/);
   assert.match(facade, /automation\.unified_test_failed[\s\S]*currentModule = "flow-completion"/);
-  assert.match(linghuRuntimeSource, /createFixedUnifiedTestRunner[\s\S]*await unifiedTests\.run\(\)[\s\S]*onVerified\(\)[\s\S]*options\.unifiedTest\.onVerified\(executable\)/);
-  assert.match(main, /unifiedTest:[\s\S]*onVerified: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
+  assert.match(runner, /async validate[\s\S]*#execute\(candidateProjectRoot, false\)/);
+  assert.match(runner, /if \(!includeReleaseGates\) return \{ executable: null, verificationEvidence \}/);
+  assert.match(linghuRuntimeSource, /deliveryMode === "developer-script"[\s\S]*await unifiedTests\.validate\(\)[\s\S]*launchDeveloperScript\(\)/);
+  assert.match(linghuRuntimeSource, /await unifiedTests\.run\(\)[\s\S]*publishVerifiedPackage\(unifiedTestResult\.executable\)/);
+  assert.match(main, /deliveryMode: process\.platform === "darwin" \? "developer-script" : "formal-release"/);
+  assert.match(main, /launchDeveloperScript:[\s\S]*启动开发版\.command[\s\S]*execFileSync\("\/usr\/bin\/open"[\s\S]*app\.exit\(0\)/);
+  assert.match(main, /publishVerifiedPackage: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
   assert.match(collaborationBootstrap, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
   assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId, candidate\.candidateSha\)/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
@@ -1497,6 +1502,14 @@ test("令狐测试漏点模块只运行固定统一测试并在恢复点持久�
   assert.match(facade, /automaticFlowSnapshots[\s\S]*faultFingerprint[\s\S]*moduleCompletionReport/);
   assert.match(collaborationBootstrap, /const testResources = new TestResourceCoordinatorFacade[\s\S]*createTaskWorktreeTestRunner\([\s\S]*verifyCandidate:[\s\S]*testResources\.run[\s\S]*runUnifiedTests\(rootPath\)/);
   assert.doesNotMatch(collaborationBootstrap, /TestExecutionGate|test-execution-gate/);
+});
+
+test("正式发布流程是具备原子落盘与互斥保护的可恢复 Saga 而非单一事务", () => {
+  assert.match(releaseBatchStoreSource, /writeFileSync\(temporary[\s\S]*renameSync\(temporary, target\)/);
+  assert.match(integrationPipelineSource, /#acquireRelease[\s\S]*#releaseBatches\.create[\s\S]*releaseDocument\.state = "testing"[\s\S]*releaseDocument\.state = "published"/);
+  const publishedState = integrationPipelineSource.indexOf('releaseDocument.state = "published"');
+  const restartCall = integrationPipelineSource.lastIndexOf("this.#publishRelease(publishedExecutable");
+  assert.ok(publishedState >= 0 && restartCall > publishedState, "发布状态持久化与重启是两个可恢复提交点，不能误称端到端原子事务");
 });
 
 test("发布重启携带候选源码提交且只由同一运行版本完成健康验收", () => {

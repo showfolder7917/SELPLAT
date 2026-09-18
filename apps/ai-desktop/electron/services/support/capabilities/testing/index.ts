@@ -12,7 +12,7 @@ import {
   type FixedUnifiedTestRunnerOptions,
 } from "./internal/fixed-unified-test.runner.js";
 
-export type { FixedUnifiedTestRunResult } from "./internal/fixed-unified-test.runner.js";
+export type { FixedUnifiedTestRunResult, FixedUnifiedValidationResult } from "./internal/fixed-unified-test.runner.js";
 
 // Runner Port 只保留协作流程实际需要的执行方法，隐藏具体子进程和依赖租约实现。
 export type TaskWorktreeTestPort = Pick<TaskWorktreeTestRunner, "run">;
@@ -25,7 +25,7 @@ export function createTaskWorktreeTestRunner(
 }
 
 // 固定统一测试端口只公开运行行为，人物看不到子进程和脚本清单。
-export type FixedUnifiedTestPort = Pick<FixedUnifiedTestRunner, "run" | "prepareRuntimeActivation">;
+export type FixedUnifiedTestPort = Pick<FixedUnifiedTestRunner, "run" | "validate" | "prepareRuntimeActivation">;
 
 // 人物通过公开工厂申请固定统一测试能力，并显式登记发起人和事件命名空间。
 export function createFixedUnifiedTestRunner(options: FixedUnifiedTestRunnerOptions): FixedUnifiedTestPort {
