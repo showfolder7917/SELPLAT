@@ -22,6 +22,27 @@ sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
 # 用户程序启动的子进程继承相同缓存位置。
 os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
 
+
+def _is_collaboration_worktree(project_root: Path) -> bool:
+    """判断能力源码是否位于协作候选工作树。"""
+
+    path_parts = project_root.resolve().parts
+    return any(
+        current == "collaboration" and following == "worktrees"
+        for current, following in zip(path_parts, path_parts[1:])
+    )
+
+
+def _configure_workspace_root(project_root: Path) -> None:
+    """让直接导入能力时的规则资源根与当前源码工作树一致。"""
+
+    if _is_collaboration_worktree(project_root):
+        # 调用方继承主工程根时，路径配置会跨根读取规则，必须在加载前纠正。
+        os.environ["SELPLAT_ROOT"] = str(project_root)
+
+
+_configure_workspace_root(PROJECT_ROOT)
+
 from collections import Counter
 import hashlib
 import importlib.util

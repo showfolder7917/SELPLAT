@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 # 导入 re，从 AGENTS.md 唯一身份声明中解析当前稳定用户。
 import re
+# 导入 importlib.util，在测试发现前只读检查已声明的 Python 依赖。
+import importlib.util
 # 导入 sys，在测试模块加载前设置当前解释器的字节码缓存根并返回退出码。
 import sys
 import io
@@ -29,6 +31,27 @@ PYTHON_PYCACHE_ROOT = PROJECT_ROOT / "cache/python-pycache"
 sys.pycache_prefix = str(PYTHON_PYCACHE_ROOT)
 # 测试启动的子进程继承相同缓存根。
 os.environ["PYTHONPYCACHEPREFIX"] = str(PYTHON_PYCACHE_ROOT)
+
+
+def _is_collaboration_worktree(project_root: Path) -> bool:
+    """判断测试源码是否位于协作候选工作树。"""
+
+    path_parts = project_root.resolve().parts
+    return any(
+        current == "collaboration" and following == "worktrees"
+        for current, following in zip(path_parts, path_parts[1:])
+    )
+
+
+def _configure_test_workspace_root(project_root: Path) -> None:
+    """让候选工作树测试读取同一工作树内的规则与源码。"""
+
+    if _is_collaboration_worktree(project_root):
+        # 测试源码、规则资源与路径配置必须同根，不能继承主工程运行时数据根。
+        os.environ["SELPLAT_ROOT"] = str(project_root)
+
+
+_configure_test_workspace_root(PROJECT_ROOT)
 
 # 缓存策略完成后才导入 unittest，保证发现的测试模块不会污染源码目录。
 import unittest
@@ -55,6 +78,41 @@ TEST_PATTERNS = {
     "active-user": "test_*.py",
     "performance": "test_performance_*.py",
 }
+# 依赖清单中的发布包名与 Python 导入模块名并不总是一致，统一在这里维护映射。
+RUNTIME_DEPENDENCY_MODULES = {
+    "python-pptx": "pptx",
+    "openpyxl": "openpyxl",
+    "python-docx": "docx",
+    "Pillow": "PIL",
+    "lxml": "lxml",
+    "pypinyin": "pypinyin",
+}
+PYTHON_DEPENDENCY_MANIFEST = PROJECT_ROOT / "apps/ai-desktop/ruleengine/requirements-python.txt"
+
+
+def missing_runtime_dependencies() -> list[str]:
+    """返回当前解释器未安装的规则能力运行依赖，不修改环境。"""
+
+    return [
+        package_name
+        for package_name, module_name in RUNTIME_DEPENDENCY_MODULES.items()
+        if importlib.util.find_spec(module_name) is None
+    ]
+
+
+def report_missing_runtime_dependencies(missing_dependencies: list[str]) -> None:
+    """输出可执行的依赖修复指引，避免测试发现阶段只留下导入堆栈。"""
+
+    dependencies = ", ".join(missing_dependencies)
+    print(
+        "无法运行当前用户规则测试：当前 Python 解释器缺少依赖 "
+        f"{dependencies}。\n"
+        f"解释器：{sys.executable}\n"
+        f"依赖清单：{PYTHON_DEPENDENCY_MANIFEST.relative_to(PROJECT_ROOT)}\n"
+        "请由环境管理步骤安装清单依赖后重试：\n"
+        f"{sys.executable} -m pip install -r {PYTHON_DEPENDENCY_MANIFEST}",
+        file=sys.stderr,
+    )
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -79,6 +137,12 @@ def main(arguments: list[str] | None = None) -> int:
         return 2
     # all 按 core、当前稳定用户的稳定顺序组合两个发现结果。
     selected_scopes = list(TEST_SCOPES) if scope == "all" else [scope]
+    # 当前用户能力依赖外部 Python 包，先给出确定的环境错误，避免测试发现时导入失败。
+    if "active-user" in selected_scopes:
+        missing_dependencies = missing_runtime_dependencies()
+        if missing_dependencies:
+            report_missing_runtime_dependencies(missing_dependencies)
+            return 3
     # 每个作用域使用独立加载器，避免 unittest 复用首个目录为 top_level_dir 后拒绝相邻作用域。
     # 多个作用域组合为一个套件，最终只输出一份总结果。
     suite = unittest.TestSuite(
