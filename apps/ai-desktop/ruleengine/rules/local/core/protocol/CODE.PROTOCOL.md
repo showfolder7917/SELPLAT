@@ -82,6 +82,19 @@ layered_rule_explicit_full_replace = override_mode=replace
 layered_rule_value_conflict_priority = active_user,matched_scope_common,cross_project_common,core
 <!-- 正式执行前必须回执每个逻辑 ID 实际读取的层、物理路径和覆盖模式。 -->
 task_rule_loading_receipt_required = logical_id,layer,resource_path,override_mode
+task_rule_loading_primary_ability = rule_snapshot_manager
+task_rule_loading_fallback_ability = layered_rule_loader
+task_rule_selection_guard = rule_selection_guard
+task_rule_selection_guard_input = scope,language,artifact,operation,logical_id,index_trigger,loaded_rule_ids
+task_rule_selection_mismatch_policy = block_on_missing_unexpected_or_unknown_rule_id
+artifact_compliance_guard = artifact_compliance_guard:rule_evidence
+artifact_compliance_evidence_format = rule_id,check_id,result,evidence
+artifact_compliance_missing_or_failed_check_policy = block_delivery
+recipe_rule_runtime_content = compact_rule_then_hash_verified_recipe_resource_on_exact_match
+recipe_resource_loading_ability = layered_rule_loader:load_recipe_resource
+schema_2_rule_runtime_content = effective_values_only
+schema_2_rule_source_content_policy = explicit_diagnostics_only
+legacy_rule_source_content_policy = temporary_compatibility_until_schema_2_migration
 <!-- 规则读取与规则写入权限分离；core/common 默认可读可执行但不可写，只有 USER 协议的明确委托和独立 1 可打开指定范围写入。 -->
 core_common_default_access = readable_and_executable_but_not_writable
 <!-- core/common 写入门必须同时具备明确目标和独立 1，读取不需要打开写入门。 -->

@@ -41,7 +41,11 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
     _ = apps
     加载器 = skills.get("layered_rule_loader", layered_rule_loader)
     版本 = _资源版本()
-    请求 = {键: context.get(键) for 键 in ("logical_ids", "active_scope", "active_user")}
+    请求 = {
+        "logical_ids": context.get("logical_ids"),
+        "active_scope": context.get("active_scope"),
+        "active_user": context.get("active_user") or layered_rule_loader.current_stable_user_id(),
+    }
     请求键 = hashlib.sha256(json.dumps(请求, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     快照路径 = _缓存根 / f"{_线程标识(context)}.{请求键}.json"
     if 快照路径.is_file():

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -38,6 +39,17 @@ MACOS_ABSOLUTE_PATTERN = re.compile(r"(?:^|[=\s`'\"])(/Users/[^\s`'\"]+)")
 INDEX_LINE_ADVISORY_LIMIT = 150
 INDEX_TRIGGER_ADVISORY_LIMIT = 40
 RULE_LINE_ADVISORY_LIMIT = 400
+SCHEMA_2_REQUIRED_FIELDS = (
+    "rule_logical_id",
+    "rule_scope",
+    "rule_kind",
+    "rule_status",
+    "rule_version",
+    "rule_owner",
+    "rule_trigger",
+    "rule_check_refs",
+)
+SCHEMA_2_RULE_KINDS = {"protocol", "gate", "policy", "recipe"}
 
 
 def active_stable_user_id(project_root: Path) -> str:
@@ -96,6 +108,17 @@ def audit_ruleengine_structure(project_root: Path = PROJECT_ROOT) -> dict[str, A
             return
         text = index_path.read_text(encoding="utf-8")
         assignments = parse_assignments(text)
+        non_dsl_lines = [
+            line_number
+            for line_number, line in enumerate(text.splitlines(), 1)
+            if line.strip() and ASSIGNMENT_PATTERN.match(line.strip()) is None
+        ]
+        if non_dsl_lines:
+            add_hard(
+                "RULE_INDEX_NON_DSL_CONTENT",
+                relative_index,
+                f"non-DSL lines={','.join(str(value) for value in non_dsl_lines[:10])}",
+            )
         visited_indexes[relative_index] = assignments
         trigger_count = sum(
             1 for key, _, _ in assignments
@@ -145,6 +168,16 @@ def audit_ruleengine_structure(project_root: Path = PROJECT_ROOT) -> dict[str, A
                 locations[0]["index"],
                 f"{logical_id} is registered {len(locations)} times",
             )
+    resource_aliases: dict[str, list[str]] = {}
+    for logical_id, registration in rule_registrations.items():
+        resource_aliases.setdefault(registration["resourcePath"], []).append(logical_id)
+    for resource_path, logical_ids in resource_aliases.items():
+        if len(logical_ids) > 1:
+            add_hard(
+                "RULE_RESOURCE_ALIAS_FORBIDDEN",
+                resource_path,
+                f"one rule resource is registered by {','.join(sorted(logical_ids))}",
+            )
     known_ids = set(rule_registrations)
     for trigger in trigger_records:
         for referenced_id in (part.strip() for part in trigger["value"].split(",")):
@@ -162,6 +195,119 @@ def audit_ruleengine_structure(project_root: Path = PROJECT_ROOT) -> dict[str, A
         rule_path = rule_root / relative_rule
         text = rule_path.read_text(encoding="utf-8")
         assignments = parse_assignments(text)
+        assignment_values = {key: value for key, value, _ in assignments}
+        schema_version = assignment_values.get("rule_schema", "legacy")
+        if schema_version == "legacy":
+            add_hard(
+                "ACTIVE_RULE_LEGACY_SCHEMA_FORBIDDEN",
+                relative_rule,
+                f"{logical_id} must use schema 2",
+            )
+        if schema_version not in {"legacy", "2"}:
+            add_hard(
+                "RULE_SCHEMA_UNSUPPORTED",
+                relative_rule,
+                f"{logical_id} declares rule_schema={schema_version}",
+            )
+        if schema_version == "2":
+            non_dsl_lines = [
+                line_number
+                for line_number, line in enumerate(text.splitlines(), 1)
+                if line.strip() and ASSIGNMENT_PATTERN.match(line.strip()) is None
+            ]
+            if non_dsl_lines:
+                add_hard(
+                    "ACTIVE_RULE_NON_DSL_CONTENT",
+                    relative_rule,
+                    f"non-DSL lines={','.join(str(value) for value in non_dsl_lines[:10])}",
+                )
+            for field in SCHEMA_2_REQUIRED_FIELDS:
+                if not assignment_values.get(field):
+                    add_hard(
+                        "RULE_SCHEMA_FIELD_MISSING",
+                        relative_rule,
+                        f"{logical_id} is missing {field}",
+                    )
+            if assignment_values.get("rule_logical_id") != logical_id:
+                add_hard(
+                    "RULE_SCHEMA_LOGICAL_ID_MISMATCH",
+                    relative_rule,
+                    f"expected={logical_id}, actual={assignment_values.get('rule_logical_id', '')}",
+                )
+            if assignment_values.get("rule_kind") not in SCHEMA_2_RULE_KINDS:
+                add_hard(
+                    "RULE_SCHEMA_KIND_INVALID",
+                    relative_rule,
+                    assignment_values.get("rule_kind", ""),
+                )
+            expected_owner = "core" if relative_rule.startswith("local/core/") else (
+                "common" if relative_rule.startswith("local/common/") else "active_user"
+            )
+            if assignment_values.get("rule_owner") != expected_owner:
+                add_hard(
+                    "RULE_OWNER_LAYER_MISMATCH",
+                    relative_rule,
+                    f"expected={expected_owner}, actual={assignment_values.get('rule_owner', '')}",
+                )
+            check_refs = assignment_values.get("rule_check_refs", "")
+            if assignment_values.get("rule_kind") == "gate" and check_refs == "none":
+                add_hard(
+                    "RULE_GATE_CHECKER_MISSING",
+                    relative_rule,
+                    f"{logical_id} is a gate without a checker",
+                )
+            for check_ref in (part.strip() for part in check_refs.split(",")):
+                if not check_ref or check_ref == "none":
+                    continue
+                ability_id = check_ref.split(":", 1)[0]
+                ability_candidates = [
+                    *ruleengine_root.glob(f"python/local/*/abilities/{ability_id}.py"),
+                    *ruleengine_root.glob(f"python/ruleengine/abilities/{ability_id}.py"),
+                ]
+                if not any(candidate.is_file() for candidate in ability_candidates):
+                    add_hard(
+                        "RULE_CHECKER_MISSING",
+                        relative_rule,
+                        f"{logical_id} references missing checker {ability_id}",
+                    )
+            recipe_path = assignment_values.get("recipe_resource_path", "")
+            recipe_hash = assignment_values.get("recipe_resource_sha256", "")
+            if recipe_path or recipe_hash:
+                resource_path = safe_rule_path(recipe_path)
+                normalized_recipe_path = recipe_path.replace("\\", "/")
+                if "\\" in recipe_path:
+                    add_hard(
+                        "RECIPE_RESOURCE_PATH_NOT_POSIX",
+                        relative_rule,
+                        recipe_path,
+                    )
+                elif (
+                    assignment_values.get("rule_kind") != "recipe"
+                    or resource_path is None
+                    or not resource_path.is_file()
+                    or "/template/" not in f"/{normalized_recipe_path}"
+                ):
+                    add_hard(
+                        "RECIPE_RESOURCE_INVALID",
+                        relative_rule,
+                        recipe_path,
+                    )
+                elif not re.fullmatch(r"[0-9a-f]{64}", recipe_hash):
+                    add_hard(
+                        "RECIPE_RESOURCE_HASH_INVALID",
+                        relative_rule,
+                        recipe_hash,
+                    )
+                else:
+                    actual_hash = hashlib.sha256(
+                        resource_path.read_text(encoding="utf-8").encode("utf-8")
+                    ).hexdigest()
+                    if actual_hash != recipe_hash:
+                        add_hard(
+                            "RECIPE_RESOURCE_HASH_MISMATCH",
+                            relative_rule,
+                            recipe_path,
+                        )
         requires = [
             value for key, value, _ in assignments if key == "requires_rule_ids"
         ]
@@ -187,6 +333,12 @@ def audit_ruleengine_structure(project_root: Path = PROJECT_ROOT) -> dict[str, A
                 "path": relative_rule,
                 "message": f"lines={line_count}, dsl={len(assignments)}",
             })
+        if schema_version == "legacy" and not assignments:
+            advisories.append({
+                "code": "LEGACY_RULE_WITHOUT_DSL",
+                "path": relative_rule,
+                "message": f"{logical_id} still depends on source prose compatibility",
+            })
         for key, value, line_number in assignments:
             normalized = value.replace("\\", "/")
             if key == "requires_rule_ids" and "history/" in normalized:
@@ -200,6 +352,7 @@ def audit_ruleengine_structure(project_root: Path = PROJECT_ROOT) -> dict[str, A
         rule_metrics.append({
             "logicalId": logical_id,
             "resourcePath": relative_rule,
+            "schemaVersion": schema_version,
             "lineCount": line_count,
             "dslCount": len(assignments),
             "dependencyCount": sum(len(value.split(",")) for value in requires),

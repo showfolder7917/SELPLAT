@@ -9,6 +9,8 @@ from __future__ import annotations
 
 # 导入 json，为 ability 执行入口提供稳定的可序列化结果。
 import json
+# 导入 hashlib，为加载回执提供无需附加来源原文的稳定内容证据。
+import hashlib
 # 导入 os，让直接执行入口可以读取当前线程与 UTF-8 运行环境。
 import os
 # 导入 re，校验用户、作用域、逻辑 ID 和 DSL 键。
@@ -144,26 +146,73 @@ def load_for_current_user(logical_id: str, active_scope: str | None) -> LoadedRu
 def load_bundle_for_current_user(
     logical_ids: list[str] | tuple[str, ...],
     active_scope: str | None,
+    include_sources: bool = False,
 ) -> LoadedRuleBundle:
     """使用当前稳定用户加载任务规则及其显式依赖闭包。"""
 
-    return load_bundle(logical_ids, active_scope, current_stable_user_id())
+    return load_bundle(
+        logical_ids,
+        active_scope,
+        current_stable_user_id(),
+        include_sources=include_sources,
+    )
+
+
+def load_recipe_resource_for_current_user(
+    logical_id: str, active_scope: str | None = None
+) -> LoadedRule:
+    return load_recipe_resource(logical_id, active_scope, current_stable_user_id())
+
+
+def load_recipe_resource(
+    logical_id: str,
+    active_scope: str | None = None,
+    active_user: str | None = None,
+) -> LoadedRule:
+    stack = load_rule_stack(logical_id, active_scope, active_user)
+    values = stack.effective_values
+    if values.get("rule_kind") != "recipe":
+        raise RuleLoadingError(f"Rule is not a recipe: {logical_id}")
+    resource_path = values.get("recipe_resource_path", "")
+    expected_sha256 = values.get("recipe_resource_sha256", "")
+    if not resource_path or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+        raise RuleLoadingError(f"Recipe resource metadata is incomplete: {logical_id}")
+    _validate_rule_resource_path(resource_path)
+    content = _read_resource(resource_path)
+    actual_sha256 = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    if actual_sha256 != expected_sha256:
+        raise RuleLoadingError(
+            f"Recipe resource hash mismatch: {logical_id} expected={expected_sha256} actual={actual_sha256}"
+        )
+    return LoadedRule(
+        logical_id=logical_id,
+        layer=stack.effective_rule.layer,
+        resource_path=resource_path,
+        content=content,
+    )
 
 
 def load(
     logical_id: str,
     active_scope: str | None = None,
     active_user: str | None = None,
+    include_sources: bool = False,
 ) -> LoadedRule:
     """加载并合并一个逻辑 ID，返回最高优先级层承载的有效规则。"""
 
-    return load_rule_stack(logical_id, active_scope, active_user).effective_rule
+    return load_rule_stack(
+        logical_id,
+        active_scope,
+        active_user,
+        include_sources=include_sources,
+    ).effective_rule
 
 
 def load_rule_stack(
     logical_id: str,
     active_scope: str | None = None,
     active_user: str | None = None,
+    include_sources: bool = False,
 ) -> RuleStack:
     """按低到高优先级加载一个逻辑 ID 的全部相关分层。"""
 
@@ -229,19 +278,27 @@ def load_rule_stack(
         raise RuleLoadingError(
             f"Rule logical id is not registered for active scope: {logical_id}"
         )
-    return merge_rule_stack(logical_id, layers)
+    for layer in layers:
+        _validate_loaded_rule_owner(layer)
+    return merge_rule_stack(logical_id, layers, include_sources=include_sources)
 
 
 def load_bundle(
     logical_ids: list[str] | tuple[str, ...],
     active_scope: str | None = None,
     active_user: str | None = None,
+    include_sources: bool = False,
 ) -> LoadedRuleBundle:
     """加载任务规则，并使用相同作用域和用户补全依赖闭包。"""
 
     return assemble_bundle(
         logical_ids,
-        lambda logical_id: load_rule_stack(logical_id, active_scope, active_user),
+        lambda logical_id: load_rule_stack(
+            logical_id,
+            active_scope,
+            active_user,
+            include_sources=include_sources,
+        ),
     )
 
 
@@ -323,7 +380,9 @@ def _build_receipt_line(rule_stack: RuleStack) -> str:
     """构造包含真实层和资源路径的稳定加载回执。"""
 
     sources = " -> ".join(
-        f"[{layer.layer}] {layer.resource_path}" for layer in rule_stack.layers
+        f"[{layer.layer}] {layer.resource_path}"
+        f"#sha256:{hashlib.sha256(layer.content.encode('utf-8')).hexdigest()[:12]}"
+        for layer in rule_stack.layers
     ) or "[none]"
     return (
         f"{rule_stack.logical_id} | {sources} "
@@ -331,7 +390,11 @@ def _build_receipt_line(rule_stack: RuleStack) -> str:
     )
 
 
-def merge_rule_stack(logical_id: str, input_layers: list[LoadedRule]) -> RuleStack:
+def merge_rule_stack(
+    logical_id: str,
+    input_layers: list[LoadedRule],
+    include_sources: bool = False,
+) -> RuleStack:
     """按低到高优先级合并规则层，支持默认 extend 和显式 replace。"""
 
     _validate_logical_id(logical_id)
@@ -353,10 +416,19 @@ def merge_rule_stack(logical_id: str, input_layers: list[LoadedRule]) -> RuleSta
         effective_content_layers.append(layer)
     override_mode = "replace" if replace_applied else "extend"
     effective_values["override_mode"] = override_mode
-    effective_content = _build_effective_content(
-        logical_id, effective_values, effective_content_layers
-    )
     highest_layer = layers[-1]
+    if effective_values.get("rule_owner") == "active_user":
+        if highest_layer.layer in {"core", "common"}:
+            raise RuleLoadingError(
+                f"Symbolic active_user owner is invalid for layer: {highest_layer.layer}"
+            )
+        effective_values["rule_owner"] = highest_layer.layer
+    effective_content = _build_effective_content(
+        logical_id,
+        effective_values,
+        effective_content_layers,
+        include_sources=include_sources,
+    )
     effective_rule = LoadedRule(
         logical_id,
         highest_layer.layer,
@@ -370,6 +442,21 @@ def merge_rule_stack(logical_id: str, input_layers: list[LoadedRule]) -> RuleSta
         override_mode,
         effective_rule,
     )
+
+
+def _validate_loaded_rule_owner(layer: LoadedRule) -> None:
+    """校验活动规则使用分层符号所有者，禁止把稳定用户 ID 写入正文。"""
+
+    values = _parse_rule_values(layer.content)
+    if values.get("rule_schema") != "2":
+        return
+    expected_owner = layer.layer if layer.layer in {"core", "common"} else "active_user"
+    actual_owner = values.get("rule_owner", "")
+    if actual_owner != expected_owner:
+        raise RuleLoadingError(
+            f"Rule owner does not match layer: {layer.resource_path} "
+            f"expected={expected_owner} actual={actual_owner}"
+        )
 
 
 def _parse_rule_values(content: str) -> dict[str, str]:
@@ -395,15 +482,26 @@ def _build_effective_content(
     logical_id: str,
     effective_values: dict[str, str],
     effective_content_layers: list[LoadedRule],
+    include_sources: bool = False,
 ) -> str:
-    """生成机器有效 DSL 在前、来源原文在后的合并正文。"""
+    """schema 2 默认只生成有效 DSL；legacy 临时保留来源原文兼容。"""
+
+    if effective_values.get("rule_schema") == "2" and not include_sources:
+        compact_assignments = [
+            f"{key} = {value}"
+            for key, value in effective_values.items()
+            if key != "override_mode"
+        ]
+        return "\n".join(compact_assignments) + "\n"
+
+    assignments = [f"{key} = {value}" for key, value in effective_values.items()]
 
     lines = [
         f"# Effective layered rule: {logical_id}",
         "",
         "## Effective DSL values",
         "",
-        *(f"{key} = {value}" for key, value in effective_values.items()),
+        *assignments,
     ]
     for layer in effective_content_layers:
         lines.extend(
@@ -865,6 +963,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
                 str(context.get("logical_id") or ""),
                 context.get("active_scope"),
                 context.get("active_user"),
+                include_sources=bool(context.get("include_sources", False)),
             )
             return {
                 "status": "completed",
@@ -878,6 +977,7 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
                 list(logical_ids),
                 context.get("active_scope"),
                 context.get("active_user"),
+                include_sources=bool(context.get("include_sources", False)),
             )
             return {
                 "status": "completed",
@@ -890,6 +990,18 @@ def execute(context: dict, skills: dict, apps: dict) -> dict:
                     },
                     "receipt": list(bundle.receipt),
                 },
+            }
+        if action == "load_recipe_resource":
+            resource = load_recipe_resource(
+                str(context.get("logical_id") or ""),
+                context.get("active_scope"),
+                context.get("active_user"),
+            )
+            return {
+                "status": "completed",
+                "ability": ABILITY_ID,
+                "action": action,
+                "result": asdict(resource),
             }
         if action == "validate_index":
             return {
