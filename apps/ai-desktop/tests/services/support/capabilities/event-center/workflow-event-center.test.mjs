@@ -3,16 +3,26 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { SqliteDatabase } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
-import { CollaborationMemoryService } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.js";
-import { CodexConversationCorpusIngestion } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.js";
+import { SqliteDatabase } from "../../../../../../../build/ai-desktop/electron/electron/dao/platform/internal/sqlite-database.js";
+import { SqliteCollaborationMemoryDao } from "../../../../../../../build/ai-desktop/electron/electron/dao/memory/internal/collaboration-memory.dao.js";
+import { SqliteCodexConversationCorpusDao } from "../../../../../../../build/ai-desktop/electron/electron/dao/corpus/internal/codex-conversation-corpus.dao.js";
 import { CodexConversationSemanticBackfill } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-semantic-backfill.js";
 import { parseHanliSemanticExtraction } from "../../../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/semantic/hanli-semantic-extraction.runner.js";
-import { WorkflowRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/workflow.repository.js";
+import { SqliteWorkflowDao } from "../../../../../../../build/ai-desktop/electron/electron/dao/workflow/internal/workflow.dao.js";
 import { WorkflowSupervisor } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/collaboration/workflow.supervisor.js";
 import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.js";
 import { AcceptanceHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance/acceptance-handoff.service.js";
+import { derivePersonaCustomerDisplayMessage, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
+
+const customerDisplayProjector = {
+  version: PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
+  derive: derivePersonaCustomerDisplayMessage,
+};
+
+function createCollaborationMemory(database) {
+  return new SqliteCollaborationMemoryDao(database, customerDisplayProjector);
+}
 
 /** 手工会话快照也必须声明持久化类别，避免绕过 TypeScript 后把可见性事实遗漏给仓储。 */
 function conversationMessage(messageType, message) {
@@ -75,7 +85,7 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
 test("韩立自由对话原子入库并向统一语料提交用户原文和回答摘要", () => {
   const fixture = createFixture("hanli-free-conversation");
   try {
-    const memory = new CollaborationMemoryService(fixture.database);
+    const memory = createCollaborationMemory(fixture.database);
     memory.savePersonaConversation({ ownerPersonaId: "han-li", conversationId: "hanli-thread-free", messages: [], updatedAt: "2026-09-02T00:00:00.000Z" });
     const conversation = memory.registerPersonaRound({
       ownerPersonaId: "han-li", responderPersonaId: "han-li", corpusSource: "hanli",
@@ -95,7 +105,7 @@ test("韩立自由对话原子入库并向统一语料提交用户原文和回�
 test("人物内部消息只保留业务记录且不生成或领取语义资料", () => {
   const fixture = createFixture("persona-internal-conversation");
   try {
-    const memory = new CollaborationMemoryService(fixture.database);
+    const memory = createCollaborationMemory(fixture.database);
     memory.savePersonaConversation({
       ownerPersonaId: "han-li",
       conversationId: "persona-internal-conversation",
@@ -121,7 +131,7 @@ test("人物内部消息只保留业务记录且不生成或领取语义资料",
 test("中立需求研讨上下文独立保存并按人物会话读取，不进入训练语料", () => {
   const fixture = createFixture("requirement-discussion-context");
   try {
-    const memory = new CollaborationMemoryService(fixture.database);
+    const memory = createCollaborationMemory(fixture.database);
     memory.savePersonaConversation({ ownerPersonaId: "han-li", conversationId: "hanli-requirement-thread", messages: [], updatedAt: "2026-09-05T00:00:00.000Z" });
     const context = {
       contextId: "request-1", ownerPersonaId: "han-li", conversationId: "hanli-requirement-thread", sourceRequestId: "request-1",
@@ -144,7 +154,7 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
     fixture.repository.startRuntimeSession(4321, "2026-08-28T00:00:00.000Z");
     fixture.repository.recordAuditEvent("test.recorded", { message: "待清空事件" });
     fixture.repository.syncCollaborationState(collaborationState("2026-08-28T00:00:01.000Z"));
-    const memory = new CollaborationMemoryService(fixture.database);
+    const memory = createCollaborationMemory(fixture.database);
     memory.savePersonaConversation({ ownerPersonaId: "nangong-wan", conversationId: "training-conversation", messages: [
       conversationMessage("customer-visible", { messageId: "training-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "这是必须保留的训练原话。", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: "2026-08-28T00:00:02.000Z", completedAt: "2026-08-28T00:00:02.000Z" }),
     ], updatedAt: "2026-08-28T00:00:02.000Z" });
@@ -206,7 +216,7 @@ test("Codex 主人物语料按水位自动入库并在失败后保留旧检查�
       { timestamp: "2026-08-28T01:00:00.000Z", type: "session_meta", payload: { session_id: "thread-internal", thread_source: "ai-desktop-han-li-evolution" } },
       { ordinal: 1, timestamp: "2026-08-28T01:00:01.000Z", type: "response_item", payload: { type: "message", role: "user", content: [{ text: "内部自动审批提示不得进入训练语料。" }] } },
     ].map((value) => JSON.stringify(value)).join("\n")}\n`, "utf8");
-    const ingestion = new CodexConversationCorpusIngestion(fixture.database, path.join(fixture.root, "sessions"));
+    const ingestion = new SqliteCodexConversationCorpusDao(fixture.database, path.join(fixture.root, "sessions"));
     assert.deepEqual(ingestion.ingestPendingRollouts(), { scannedFileCount: 2, changedFileCount: 2, ingestedMessageCount: 2, skippedInternalFileCount: 1 });
     const stored = fixture.database.withConnection((connection) => connection.prepare("SELECT speakerRole AS sourceRole, content, contentRetention FROM AiDesktopTrainingCorpusMessage WHERE source='codex' ORDER BY sequenceNumber").all());
     assert.equal(stored[0].content, "保留我的完整原话。");
@@ -248,7 +258,7 @@ test("Codex 桌面会话只在每轮完成后按 SELPLAT 工作区分批增量�
   try {
     writeRollout();
     writeFileSync(otherWorkspacePath, `${JSON.stringify({ timestamp: "2026-08-28T02:00:00.000Z", type: "session_meta", payload: { session_id: "other-workspace", thread_source: "user", originator: "codex_work_desktop", cwd: path.join(fixture.root, "..", "OTHER") } })}\n`, "utf8");
-    const ingestion = new CodexConversationCorpusIngestion(fixture.database, sessionsRoot, {
+    const ingestion = new SqliteCodexConversationCorpusDao(fixture.database, sessionsRoot, {
       sourceKeyPrefix: "codex-app/active",
       eligibleThreadSources: ["user"],
       requiredWorkspaceRoot: fixture.root,
@@ -284,7 +294,7 @@ test("Codex 历史最终回答由 AI 生成短摘要并按原始消息去重补�
   const writeRollout = () => writeFileSync(rolloutPath, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
   writeRollout();
   try {
-    const ingestion = new CodexConversationCorpusIngestion(fixture.database, sessionsRoot, {
+    const ingestion = new SqliteCodexConversationCorpusDao(fixture.database, sessionsRoot, {
       sourceKeyPrefix: "codex-app/active", eligibleThreadSources: ["user"], requiredWorkspaceRoot: fixture.root,
       requiredOriginator: "codex_work_desktop", requireCompletedTurns: true,
     });
@@ -444,7 +454,7 @@ test("南宫婉轮次收集状态和任务返回结果统一投影到 SQLite", (
 
 test("用户与南宫婉完整原文独立保存预览且每轮自由登记主题类型", () => {
   const fixture = createFixture("conversation-memory");
-  const memory = new CollaborationMemoryService(fixture.database);
+  const memory = createCollaborationMemory(fixture.database);
   try {
     const firstConversation = {
       ownerPersonaId: "nangong-wan",
@@ -538,7 +548,7 @@ test("所有角色事件走统一入口并区分业务异常、技术异常和�
 test("韩立语义提取按用户、内容哈希和版本去重并保存可追溯关注点", () => {
   const fixture = createFixture("hanli-semantic-memory");
   try {
-    const memory = new CollaborationMemoryService(fixture.database);
+    const memory = createCollaborationMemory(fixture.database);
     fixture.database.withConnection((connection) => {
       connection.prepare(`INSERT INTO AiDesktopTrainingCorpusTopic
         (corpusTopicId, source, sourceConversationId, sourceTurnId, title, topicType, inferredIntent, tagsJson, definitionSource, createdAt, updatedAt)
@@ -691,9 +701,9 @@ test("成员任务心跳超时只登记一次卡住事件并交给有限重试�
 test("非正常退出在下一次启动被识别并留下恢复事件", () => {
   const fixture = createFixture("restart");
   try {
-    const first = new WorkflowRepository(fixture.database);
+    const first = new SqliteWorkflowDao(fixture.database);
     first.startRuntimeSession(101, "2026-08-26T00:00:00.000Z");
-    const second = new WorkflowRepository(fixture.database);
+    const second = new SqliteWorkflowDao(fixture.database);
     const interrupted = second.startRuntimeSession(202, "2026-08-26T00:01:00.000Z");
     assert.equal(interrupted.length, 1);
     const event = fixture.database.withConnection((connection) => connection.prepare("SELECT category, status FROM AiDesktopEvent WHERE eventType='application.previous_runtime_interrupted'").get());
@@ -707,7 +717,7 @@ test("非正常退出在下一次启动被识别并留下恢复事件", () => {
 test("真实SQLite的全局消息主键不吞掉另一人物的交接", async () => {
   const fixture = createFixture("checkpoint-messages");
   try {
-    const memory = new CollaborationMemoryService(fixture.database);
+    const memory = createCollaborationMemory(fixture.database);
     const hanli = memory.newPersonaConversation("han-li");
     const nangong = memory.newPersonaConversation("nangong-wan");
     const checkpoint = new CheckpointHandoffService({ memory, publish: () => {}, changed: () => {}, name: id => id, topic: () => null });
@@ -823,6 +833,6 @@ function createFixture(suffix) {
   const databasePath = path.join(root, "events.sqlite3");
   cpSync(path.join(appRoot, "db", "sql"), sqlRoot, { recursive: true });
   const database = SqliteDatabase.open(databasePath, sqlRoot, true);
-  const repository = new WorkflowRepository(database);
+  const repository = new SqliteWorkflowDao(database);
   return { root, database, repository, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
 }

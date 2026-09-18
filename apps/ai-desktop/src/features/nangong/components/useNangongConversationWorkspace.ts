@@ -85,8 +85,6 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
   const locale = props.locale;
   // 演化状态更新操作（onState）把后端权威状态交回父页面。
   const onState = props.onState;
-  // 会话更新操作（onConversation）把后端权威会话交回父页面。
-  const onConversation = props.onConversation;
   // 附件更新操作（onAttachments）更新父页面保存的待发送截图。
   const onAttachments = props.onAttachments;
   // 图片粘贴操作（onPaste）把剪贴板图片交给统一截图能力。
@@ -210,8 +208,8 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
         // 合并历史预览，避免覆盖旧消息截图。
         setAttachmentPreviews((current) => ({ ...current, [persisted.messageId]: sentAttachments }));
       }
-      // 使用后端会话刷新父页面。
-      onConversation(next);
+      // 发送回执只定位会话；客户页面必须重读安全窗口，不接受原始消息快照。
+      await runtime.acceptCustomerDisplayReceipt(next);
       // 正式消息出现后移除临时消息。
       setOutgoingMessage(null);
     // 发送失败处理保留客户消息并展示真实错误。

@@ -44,8 +44,6 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   const workspaces = props.workspaces;
   // 当前界面语言（locale）决定本轮请求和回答使用的语言。
   const locale = props.locale;
-  // 会话更新操作（onConversation）把后端返回的权威会话交回父页面。
-  const onConversation = props.onConversation;
   // 附件更新操作（onAttachments）更新父页面保存的待发送截图。
   const onAttachments = props.onAttachments;
   // 图片粘贴操作（onPaste）把剪贴板图片交给统一截图能力保存。
@@ -134,8 +132,8 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
         setAttachmentPreviews((current) => ({ ...current, [clientMessageId]: sentAttachments }));
       }
 
-      // 使用后端返回的权威会话刷新消息区和会话状态。
-      onConversation(next);
+      // 发送回执可包含内部原始消息；公共控制器重读客户安全窗口后才更新页面。
+      await runtime.acceptCustomerDisplayReceipt(next);
       // 正式消息已经出现后移除临时消息，避免同一用户消息显示两次。
       setPending(null);
     // 发送失败处理接住桌面通信、后端处理和页面状态更新中的异常。
@@ -177,7 +175,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
         locale,
       });
       if (!next) throw new Error("排查恢复服务没有返回结果。");
-      onConversation(next);
+      await runtime.acceptCustomerDisplayReceipt(next);
     } catch (error) {
       onError(readableDesktopError(error, "恢复排查失败。"));
     } finally {

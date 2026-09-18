@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { PersonaConversationMessageOutDto } from "../../../../../../contracts/services/personas/conversation/index.js";
-import { writePersonaCustomerDisplayMessage } from "./persona-customer-display-message.writer.js";
+import type { PersonaConversationMessageOutDto } from "../../../../contracts/services/personas/conversation/index.js";
+import { writePersonaCustomerDisplayMessage, type PersonaCustomerDisplayProjector } from "./persona-customer-display-message.dao.js";
 
 /** 统一人物消息写入：调用方持有事务；新消息只追加，既有身份保留序号，禁止跨会话覆盖。 */
 export function writePersonaConversationMessage(
@@ -9,6 +9,7 @@ export function writePersonaConversationMessage(
   conversationId: string,
   message: Omit<PersonaConversationMessageOutDto, "sequenceNumber">,
   mode: "append" | "update",
+  projector: PersonaCustomerDisplayProjector,
 ): number {
   // 同一立即写事务内读取已登记身份与最大序号；业务缓存中的消息数量不是数据库序号。
   const existing = connection.prepare(`SELECT ownerPersonaId, conversationId, sequenceNumber FROM AiDesktopPersonaConversationMessage WHERE messageId=$messageId`)
@@ -50,7 +51,7 @@ export function writePersonaConversationMessage(
     $completedAt: message.completedAt,
     $recordedAt: new Date().toISOString(),
   });
-  writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, { ...message, sequenceNumber });
+  writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, { ...message, sequenceNumber }, projector);
   return sequenceNumber;
 }
 

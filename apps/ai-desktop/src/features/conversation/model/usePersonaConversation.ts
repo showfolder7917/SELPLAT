@@ -201,6 +201,35 @@ export function usePersonaConversation(personaId: string) {
     }
   }, [conversation.conversationId, personaId]);
 
+  /**
+   * 把发送、恢复或设置操作的原始会话回执收敛为客户安全窗口。
+   *
+   * 后端回执只提供目标会话和活动状态，消息正文必须重新经过客户显示窗口，
+   * 避免原始回执与订阅刷新竞争并覆盖已经安全的页面状态。
+   */
+  const acceptCustomerDisplayReceipt = useCallback(async (receipt: PersonaConversationOutDto): Promise<PersonaConversationOutDto> => {
+    const desktop = getOptionalCollaborationDesktopApi();
+    const targetConversationId = receipt.conversationId;
+    if (!desktop || !targetConversationId) throw new Error("人物会话回执缺少可读取的客户会话。");
+    const currentDisplay = conversationDisplay.current;
+    const generation = currentDisplay.targetConversationId === targetConversationId
+      ? currentDisplay.generation
+      : beginConversationDisplayGeneration(targetConversationId);
+    const window = await readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId });
+    if (!window) throw new Error("人物会话回执后无法读取客户显示消息。");
+    if (!acceptsConversationWindow(generation, targetConversationId, window)) {
+      throw new Error("客户显示窗口已过期，未覆盖当前会话。");
+    }
+    const safeConversation = {
+      ...windowConversation(window),
+      activity: receipt.activity,
+      contextReadStats: receipt.contextReadStats,
+    };
+    setConversation(safeConversation);
+    setHasEarlier(window.hasEarlier);
+    return safeConversation;
+  }, [personaId]);
+
   useEffect(() => {
     let active = true;
     setModelCatalogLoading(true);
@@ -316,7 +345,7 @@ export function usePersonaConversation(personaId: string) {
   };
 
   return {
-    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage, retryingCustomerDisplayMessageIds,
+    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage, retryingCustomerDisplayMessageIds, acceptCustomerDisplayReceipt,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, newConversationError, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,

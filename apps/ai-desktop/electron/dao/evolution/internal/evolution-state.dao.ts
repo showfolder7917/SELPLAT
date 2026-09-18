@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 
 import type { EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../support/platform/persistence/index.js";
+import type { EvolutionStatePersistencePort } from "../../../services/evolution/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 /**
  * 作用：为南宫婉专题演化状态提供唯一 SQLite 持久化边界。
@@ -9,20 +10,8 @@ import type { DatabasePort as SqliteDatabase } from "../../support/platform/pers
  * 真实返回示例：重新启动后读取同一份完整专题状态，并从统一人物会话表装配南宫婉原话。
  * 异常或副作用示例：数据库不可用或状态 JSON 损坏时阻断写入，不回退到 JSON 文件。
  */
-export interface EvolutionStatePersistence {
-  load(): EvolutionStateOutDto | null;
-  loadLatestConversation(): EvolutionStateOutDto["conversation"] | null;
-  loadLatestBlockedOneShotRecovery?(topicId: string, proposalId: string): {
-    runId: string;
-    startedAt: string;
-    blockedAt: string;
-    reason: string;
-  } | null;
-  save(state: EvolutionStateOutDto): void;
-}
-
 /** Evolution 状态的 SQLite 投影仓库；只保存共同事实，不保存任何人物私有会话控制器。 */
-export class EvolutionStateRepository implements EvolutionStatePersistence {
+export class SqliteEvolutionStateDao implements EvolutionStatePersistencePort {
   readonly #database: SqliteDatabase | null;
   readonly #initialConversation: EvolutionStateOutDto["conversation"];
 

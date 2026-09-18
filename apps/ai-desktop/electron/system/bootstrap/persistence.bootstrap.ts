@@ -3,20 +3,23 @@ import type { CollaborationTimelineChangedEventOutDto, CollaborationTimelineProj
 import {
   createCollaborationMemory,
   createCollaborationTimeline,
-  createCodexCorpusPersistenceWorkerUrl,
   type EventCenterFacade,
   type EventCenterMemory,
   type EventCenterTimeline,
 } from "../../services/support/capabilities/event-center/index.js";
-import { BackgroundPersistenceWorkerPort, initializeWorkflowDatabase, type BackgroundPersistencePort, type DatabasePort } from "../../services/support/platform/persistence/index.js";
-import { createWorkflowRepository, type WorkflowRepositoryPort } from "../../services/workflow/index.js";
+import { createCodexCorpusPersistenceWorkerUrl } from "../../dao/corpus/index.js";
+import { initializeWorkflowDatabase, type DatabasePort } from "../../dao/platform/index.js";
+import { createWorkflowDao } from "../../dao/workflow/index.js";
+import { createCollaborationTimelineDao } from "../../dao/timeline/index.js";
+import { BackgroundPersistenceWorkerPort, type BackgroundPersistencePort } from "../../services/support/platform/persistence/index.js";
+import { type WorkflowPersistencePort } from "../../services/workflow/index.js";
 
 export interface PersistenceContext {
   readonly workflowDatabase: DatabasePort | null;
   /** AI Memory 语料、人物记忆与检查点只能经此 Worker 端口读写。 */
   readonly backgroundPersistence: BackgroundPersistencePort | null;
   readonly status: AiMemoryDatabaseStatusOutDto;
-  readonly workflowRepository: WorkflowRepositoryPort | null;
+  readonly workflowRepository: WorkflowPersistencePort | null;
   readonly collaborationTimeline: EventCenterTimeline | null;
   readonly collaborationMemory: EventCenterMemory | null;
   close(): void;
@@ -51,8 +54,8 @@ export async function createPersistenceContext(options: CreatePersistenceContext
   }) : { database: null, status: backgroundStatus, createdThisAttempt: false };
   const workflowDatabase = workflowInitialization.database;
   const usableBackgroundPersistence = backgroundStatus.state === "ready" ? backgroundPersistence : null;
-  const workflowRepository = workflowDatabase ? createWorkflowRepository(workflowDatabase) : null;
-  const collaborationTimeline = workflowDatabase ? createCollaborationTimeline(workflowDatabase) : null;
+  const workflowRepository = workflowDatabase ? createWorkflowDao(workflowDatabase) : null;
+  const collaborationTimeline = workflowDatabase ? createCollaborationTimeline(createCollaborationTimelineDao(workflowDatabase)) : null;
   const collaborationMemory = usableBackgroundPersistence ? createCollaborationMemory(usableBackgroundPersistence) : null;
   collaborationTimeline?.subscribeTimelineChanged(options.onTimelineChanged);
   collaborationTimeline?.subscribeProjectionStatus(options.onTimelineProjectionStatus);

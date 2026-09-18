@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, readdirSync, statSync, watch, type FSWatcher } from "node:fs";
+import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -58,7 +58,7 @@ export type CorpusIngestionPolicy = {
  * 真实返回示例：一个新增会话含 2 条可见消息时返回 changedFileCount=1、ingestedMessageCount=2。
  * 异常或副作用示例：rollout 尾行损坏或数据库写入失败时抛错且不更新检查点，下次启动或回合完成后会重试。
  */
-export class CodexConversationCorpusIngestion {
+export class SqliteCodexConversationCorpusDao {
   readonly #database: SqliteDatabase;
   readonly #sessionsRoot: string;
   readonly #policy: Required<Omit<CorpusIngestionPolicy, "requiredWorkspaceRoot" | "requiredOriginator">>
@@ -422,56 +422,6 @@ function normalizedMetadataText(value: unknown, maximumCharacters: number): stri
   if (typeof value !== "string") return "";
   const normalized = value.replaceAll(/\s+/gu, " ").trim();
   return Array.from(normalized).length <= maximumCharacters ? normalized : "";
-}
-
-/**
- * 监听 Codex 桌面持久记录并在每轮完成后触发增量入库，同时用低频扫描弥补文件系统事件丢失。
- *
- * 真实传参示例：roots 为 ~/.codex/sessions 与 archived_sessions，onChanged 调用语料入库器。
- * 真实返回示例：start 后新一轮 task_complete 最迟在防抖或30秒兜底扫描时触发一次回调。
- * 异常或副作用示例：目录尚不存在时跳过监听；回调失败由入库水位保留机制在下一次事件重试。
- */
-export class CodexConversationCorpusWatcher {
-  readonly #roots: string[];
-  readonly #onChanged: () => void;
-  #watchers: FSWatcher[] = [];
-  #debounceTimer: NodeJS.Timeout | null = null;
-  #fallbackTimer: NodeJS.Timeout | null = null;
-
-  constructor(roots: string[], onChanged: () => void) {
-    this.#roots = roots.map((root) => path.resolve(root));
-    this.#onChanged = onChanged;
-  }
-
-  start(): void {
-    this.stop();
-    for (const root of this.#roots) {
-      if (!existsSync(root)) continue;
-      try {
-        this.#watchers.push(watch(root, { recursive: true }, (_event, fileName) => {
-          if (!fileName || String(fileName).endsWith(".jsonl")) this.#schedule();
-        }));
-      } catch { /* 低频兜底扫描继续覆盖暂不支持递归监听的平台。 */ }
-    }
-    this.#fallbackTimer = setInterval(() => this.#onChanged(), 30_000);
-  }
-
-  stop(): void {
-    for (const watcher of this.#watchers) watcher.close();
-    this.#watchers = [];
-    if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
-    if (this.#fallbackTimer) clearInterval(this.#fallbackTimer);
-    this.#debounceTimer = null;
-    this.#fallbackTimer = null;
-  }
-
-  #schedule(): void {
-    if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
-    this.#debounceTimer = setTimeout(() => {
-      this.#debounceTimer = null;
-      this.#onChanged();
-    }, 800);
-  }
 }
 
 function listRolloutFiles(root: string): string[] {

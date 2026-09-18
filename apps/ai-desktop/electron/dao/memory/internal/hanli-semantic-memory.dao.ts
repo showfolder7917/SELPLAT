@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
+import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type {
   HanliCorpusExtractionCandidateOutDto,
   HanliCustomerConcernOutDto,
@@ -9,14 +9,14 @@ import type {
   HanliRequirementTrajectoryOutDto,
   HanliSemanticContextOutDto,
   HanliSemanticExtractionInDto,
-} from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
+} from "../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 const EXTRACTION_TYPE = "hanli-autonomous-analysis";
 const PROCESSING_LEASE_MILLISECONDS = 15 * 60_000;
 
 /** 保存韩立派生认知；统一训练消息始终是客户原话与轨迹结论的权威证据。 */
-export class HanliSemanticMemoryRepository {
+export class SqliteHanliSemanticMemoryDao {
   constructor(private readonly database: SqliteDatabase) {}
 
   /** 领取新增、变化或可重试语料；完成且哈希、版本未变化的记录不会再次进入模型。 */

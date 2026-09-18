@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import type { AiMemoryDatabaseStatusOutDto } from "../../../../../../contracts/services/support/platform/persistence/index.js";
-import { resolveAiMemoryPaths } from "../../../../../system/config/ai-memory-path-resolver.js";
+import type { AiMemoryDatabaseStatusOutDto } from "../../../../contracts/services/support/platform/persistence/index.js";
+import { resolveAiMemoryPaths } from "../../../system/config/ai-memory-path-resolver.js";
 import { SqliteMigrationRunner } from "./sqlite-migration.runner.js";
 import { runSqliteTransaction } from "./sqlite-transaction.js";
 

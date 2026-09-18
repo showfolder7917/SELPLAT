@@ -9,3 +9,4 @@ export {
   type EvolutionRuntime,
   type EvolutionStatePort,
 } from "./evolution.facade.js";
+export type { EvolutionStatePersistencePort } from "./evolution.persistence.port.js";

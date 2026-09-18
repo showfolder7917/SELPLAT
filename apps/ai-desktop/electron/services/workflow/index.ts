@@ -1,14 +1,12 @@
 // Workflow 门面是跨人物节点推进、暂停、恢复和人工接管的唯一公开入口。
 export { CollaborationCoordinator as CollaborationWorkflowFacade } from "./collaboration-workflow.facade.js";
 // 会话能力只依赖这些稳定 Workflow Port，不需要看到协调器的内部 Store。
-import type { DatabasePort } from "../support/platform/persistence/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration/collaboration-duration.log.js";
 import { CollaborationStore } from "./internal/collaboration/collaboration.store.js";
 import { CollaborationNavigationPreferenceStore } from "./internal/collaboration/collaboration-navigation-preference.store.js";
 import { CollaborationInteractionPerformanceLog } from "./internal/collaboration/collaboration-interaction-performance.log.js";
 import { EvolutionFlowPolicy } from "./domain/evolution-flow.policy.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
-import { WorkflowRepository } from "./internal/collaboration/workflow.repository.js";
 import { WorkflowSupervisor } from "./internal/collaboration/workflow.supervisor.js";
 import { CheckpointCoordinator } from "./internal/checkpoint/checkpoint-coordinator.js";
 import { CheckpointHandoffService } from "./internal/checkpoint/checkpoint-handoff.service.js";
@@ -19,7 +17,8 @@ export type CollaborationStatePort = CollaborationStore;
 export type CollaborationDurationPort = CollaborationDurationLog;
 export type CollaborationNavigationPreferencePort = CollaborationNavigationPreferenceStore;
 export type CollaborationInteractionPerformancePort = CollaborationInteractionPerformanceLog;
-export type WorkflowRepositoryPort = WorkflowRepository;
+export type { WorkflowPersistencePort, CodexApprovalDecisionRecord } from "./workflow.persistence.port.js";
+export type { WorkflowCheckpointState } from "./domain/workflow-checkpoint.aggregate.js";
 export type WorkflowSupervisorPort = WorkflowSupervisor;
 // 演化流程端口只判断下一步，不持有提案业务数据。
 export type EvolutionFlowPort = EvolutionFlowPolicy;
@@ -45,12 +44,6 @@ export function createCollaborationNavigationPreference(...arguments_: Construct
 /** 页面交互性能记录在临时材料目录，不能复用协作阶段耗时归档。 */
 export function createCollaborationInteractionPerformanceLog(...arguments_: ConstructorParameters<typeof CollaborationInteractionPerformanceLog>): CollaborationInteractionPerformancePort {
   return new CollaborationInteractionPerformanceLog(...arguments_);
-}
-
-// SQLite Repository 是 Workflow 事实的唯一持久化入口，IPC 只能调用受控查询方法。
-export function createWorkflowRepository(database: DatabasePort): WorkflowRepositoryPort {
-  // 把统一数据库端口注入仓储，仓储不自行创建第二个连接。
-  return new WorkflowRepository(database);
 }
 
 // Supervisor 观察异常退出和心跳停滞，只通过正式恢复入口通知令狐。

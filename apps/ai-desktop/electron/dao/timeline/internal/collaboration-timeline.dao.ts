@@ -1,17 +1,18 @@
 ﻿import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { CodexStreamEventOutDto } from "../../../../../../../contracts/services/support/platform/codex/index.js";
+import type { CodexStreamEventOutDto } from "../../../../contracts/services/support/platform/codex/index.js";
 import type {
   CollaborationParticipantSnapshotOutDto,
   CollaborationStateOutDto,
   CollaborationTimelineGroupOutDto,
   CollaborationTimelineNodeOutDto,
   CollaborationTimelineSnapshotOutDto,
-} from "../../../../../../../contracts/services/workflow/index.js";
-import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../../../contracts/services/workflow/index.js";
+} from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationTimelineCommit, CollaborationTimelinePersistencePort, CollaborationTimelineStreamCommit } from "../../../services/support/capabilities/event-center/index.js";
 import { projectCollaborationFlowEvent, projectLegacySubmittedFlowCorrection } from "./collaboration-timeline-flow.projector.js";
-import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 const NANGONG: CollaborationParticipantSnapshotOutDto = { memberId: "nangong-wan", displayName: "南宫婉" };
 
@@ -21,16 +22,6 @@ type TimelineFact = Omit<CollaborationTimelineNodeOutDto, "durationMs"> & {
   sourceFactKey: string;
   occurredAt: string;
 };
-
-export interface CollaborationTimelineCommit {
-  groupIds: string[];
-  committedAt: string;
-  groupVersions: Record<string, number>;
-}
-
-export interface CollaborationTimelineStreamCommit extends CollaborationTimelineCommit {
-  nodeId: string;
-}
 
 const TIMELINE_CONTENT_EVENT_TYPES = new Set<CodexStreamEventOutDto["type"]>([
   "message-delta",
@@ -46,7 +37,7 @@ const TIMELINE_CONTENT_EVENT_TYPES = new Set<CodexStreamEventOutDto["type"]>([
  * 真实返回示例：同一任务转交令狐后，旧执行人节点仍保留，令狐修复作为后续独立节点追加。
  * 异常或副作用示例：数据库不可写时抛出真实 SQLite 异常，由 EventCenter 的 IPC 边界记录并交给令狐捕捉。
  */
-export class CollaborationTimelineRepository {
+export class SqliteCollaborationTimelineDao implements CollaborationTimelinePersistencePort {
   readonly #database: SqliteDatabase;
 
   constructor(database: SqliteDatabase) {

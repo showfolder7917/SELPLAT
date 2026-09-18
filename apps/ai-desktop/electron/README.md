@@ -1,9 +1,10 @@
 # AI Desktop Electron 目录说明
 
-`electron` 是 AI Desktop 主进程和安全 preload 的源码根。目录固定收敛为两个主要区域：
+`electron` 是 AI Desktop 主进程和安全 preload 的源码根。目录固定收敛为三个主要区域：
 
 - `system/`：让 Electron 程序安全启动、通信、显示和退出。
 - `services/`：实现 AI Desktop 的应用能力，日常业务开发主要从这里进入。
+- `dao/`：实现 SQLite 连接、事务、迁移和各业务数据所有者的运行期数据访问。
 
 从 Renderer 追踪调用时，先确认 `src/foundation/desktop-api/domains/<domain>.desktop-api.ts` 中的领域名，再打开同名 `system/preload/domains/<domain>-bridge.cts` 和 `system/ipc/domains/register-<domain>-ipc.ts`，最后进入 handler 导入的 Service `index.ts`。
 
@@ -32,7 +33,7 @@ electron
 │  ├─ policies/
 │  └─ window/
 │
-└─ services/
+├─ services/
    ├─ personas/
    │  ├─ nangong/
    │  ├─ hanli/
@@ -44,6 +45,16 @@ electron
       ├─ application/
       ├─ capabilities/
       └─ platform/
+│
+└─ dao/
+   ├─ platform/
+   ├─ conversation/
+   ├─ corpus/
+   ├─ memory/
+   ├─ evolution/
+   ├─ timeline/
+   ├─ workflow/
+   └─ codex/
 ```
 
 禁止在 `electron` 根下重新建立平行的 `bootstrap/config/ipc/preload/policies/window/application`，也禁止增加含义宽泛的 `common/utils/helpers/managers` 目录。
@@ -176,9 +187,9 @@ personas/<persona>
 ```text
 main.ts
   → system/bootstrap
+  → dao 具体实现 + services 公开工厂
   → services/personas | services/evolution | services/workflow
-  → services/support/application | services/support/capabilities
-  → services/support/platform
+  → services/support/application | services/support/capabilities | services/support/platform
 
 Renderer
   → Contracts DesktopApi
@@ -197,8 +208,20 @@ Renderer
 6. IPC 不得导入 Store、Repository、Runner 或人物 internal。
 7. 跨服务区只能从目标模块 `index.ts` 导入。
 8. `internal` 永远不是跨模块入口。
+9. `services` 不得导入 `node:sqlite`、DAO 具体实现、数据库连接或 Statement API，也不得保存 SQL 字符串。
+10. `dao` 只能实现业务化持久化 Port，不得导入 `services/**/internal`、Renderer 或 `system/ipc`。
+11. `system/bootstrap` 是主进程 DAO 与 Service 的唯一组合根；IPC 不得直接调用 DAO。
 
-## 6. 日常开发从哪里进入
+## 6. DAO：运行期数据访问层
+
+DAO 回答“业务事实如何在 SQLite 中读取和保存”，不回答“业务下一步做什么”。
+
+- `dao/platform`：连接、事务、PRAGMA、迁移和完整性检查。
+- 其他 DAO 目录：按数据所有者保存 SQL、参数绑定和行映射。
+- `db/sql`：只保存已登记的 Schema、Migration SQL 与加载清单，不保存执行代码。
+- Service 只依赖不含 SQLite 类型的业务化 Port；不得使用通用 `query(sql)` 或 `execute(sql)` 绕过边界。
+
+## 7. 日常开发从哪里进入
 
 ### 修改某个人物能力
 
@@ -217,7 +240,16 @@ services/workflow/index.ts
 → internal runtime/orchestrator/repository
 ```
 
-### 修改数据库、Codex 或设置
+### 修改数据库访问
+
+```text
+electron/dao/<owner>/index.ts
+→ internal/<owner>.dao.ts
+→ dao/platform
+→ db/sql（仅 Schema/Migration）
+```
+
+### 修改 Codex 或设置
 
 ```text
 services/support/platform/<domain>/index.ts
@@ -242,7 +274,7 @@ main.ts
 → 对应的 *.bootstrap.ts
 ```
 
-## 7. 新文件放置判断
+## 8. 新文件放置判断
 
 1. Electron 生命周期、窗口、IPC、preload、启动配置：放 `system`。
 2. 跨多个领域协调一个用户用例：放 `services/support/application`。
@@ -250,6 +282,7 @@ main.ts
 4. 共同专题事实：放 `services/evolution`。
 5. 跨人物顺序和恢复：放 `services/workflow`。
 6. 多个业务域复用的应用能力：放 `services/support/capabilities`。
-7. 数据库、Codex、设置、附件等技术实现：放 `services/support/platform`。
+7. SQLite 连接、事务、迁移、SQL、参数绑定和行映射：放 `dao`。
+8. 非数据库的 Codex、设置、附件等技术能力：放 `services/support/platform`。
 
 若仍无法判断，先回答“谁拥有状态、谁做判断、谁消费结果”，禁止先放入 `common` 或 `utils`。

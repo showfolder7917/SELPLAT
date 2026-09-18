@@ -5,7 +5,8 @@ import test from "node:test";
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
 const acceptancePrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
 const resultAcceptancePrompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
-const eventMemoryRule = readFileSync("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop事件记忆与统一界面规则.md", "utf8");
+const eventMemoryRuleMetadata = readFileSync("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop事件记忆与统一界面规则.md", "utf8");
+const eventMemoryRule = readFileSync("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/template/RUL_AIDesktop事件记忆与统一界面规则/requirements.md", "utf8");
 const aiDesktopRuleIndex = readFileSync("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/RULE_INDEX.md", "utf8");
 const operationSource = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
 const goalSource = readFileSync("contracts/services/personas/hanli/dto/computer-acceptance.in.dto.ts", "utf8");
@@ -47,5 +48,6 @@ test("韩立首项失败后仍须逐项取得本轮全部条件自己的证据",
   assert.match(resultAcceptancePrompt, /发现一项失败后仍继续检查其余条件，最终一次返回完整 findings/);
   assert.match(eventMemoryRule, /criterion_scoped_action_and_screenshot_coverage/);
   assert.match(eventMemoryRule, /first_failure_preserved_then_all_independent_safe_criteria_continue_in_same_round/);
-  assert.match(aiDesktopRuleIndex, /v5\.162\.0：韩立同轮继续全部可安全验收条件/);
+  assert.match(eventMemoryRuleMetadata, /rule_version = 5\.162\.0/);
+  assert.match(aiDesktopRuleIndex, /AI_DESKTOP_EVENT_MEMORY_UI_RULES = .*RUL_AIDesktop事件记忆与统一界面规则\.md/);
 });

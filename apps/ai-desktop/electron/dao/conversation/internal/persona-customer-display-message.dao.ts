@@ -1,7 +1,16 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import type { PersonaConversationMessageOutDto } from "../../../../../../contracts/services/personas/conversation/index.js";
-import { derivePersonaCustomerDisplayMessage, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "./persona-customer-display-message.projector.js";
+import type { PersonaConversationMessageOutDto, PersonaCustomerDisplayStateValue } from "../../../../contracts/services/personas/conversation/index.js";
+
+/** DAO 只接收业务层注入的纯投影器，不理解历史文案或人物规则。 */
+export interface PersonaCustomerDisplayProjector {
+  readonly version: number;
+  derive(message: PersonaConversationMessageOutDto): {
+    readonly state: PersonaCustomerDisplayStateValue;
+    readonly content: string | null;
+    readonly failureReason: string | null;
+  };
+}
 
 /**
  * 唯一的客户显示派生写端口。
@@ -14,9 +23,10 @@ export function writePersonaCustomerDisplayMessage(
   ownerPersonaId: string,
   conversationId: string,
   message: PersonaConversationMessageOutDto,
+  projector: PersonaCustomerDisplayProjector,
 ): void {
   // 当前消息与历史消息必须得到相同的客户显示分类，避免同一内部正文因写入时机泄露。
-  const derived = derivePersonaCustomerDisplayMessage(message);
+  const derived = projector.derive(message);
   connection.prepare(`
     INSERT INTO AiDesktopPersonaCustomerDisplayMessage
       (sourceMessageId, ownerPersonaId, conversationId, displayState, displayContent, failureReason, derivationVersion, derivedAt)
@@ -31,7 +41,7 @@ export function writePersonaCustomerDisplayMessage(
     $displayState: derived.state,
     $displayContent: derived.content,
     $failureReason: derived.failureReason,
-    $derivationVersion: PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
+    $derivationVersion: projector.version,
     $derivedAt: new Date().toISOString(),
   });
 }

@@ -9,8 +9,8 @@ export interface PersonaCustomerDisplayDerivation {
 /**
  * 客户显示派生规则的版本。
  *
- * 历史记录保留当时的派生结果；读取端据此只重算规则落后的记录，避免把
- * 已经安全的记录在每次打开页面时重复写入。
+ * 新消息在写入事务中使用当前版本；历史版本只由启动重建任务或客户
+ * 明确重试时升级，普通读取不得修改投影。
  */
 export const PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION = 13;
 
@@ -24,7 +24,7 @@ const LEGACY_HANLI_AUTOMATIC_CONTROL_PREFIX = "hanli-control:automatic:";
 /**
  * 生成客户可见正文。
  *
- * 原始消息只在持久化边界短暂读取；调用方只能取得派生后的安全正文或不可显示状态。
+ * 本策略是不读写数据库的纯业务判定；调用方只能取得派生后的安全正文或不可显示状态。
  */
 export function derivePersonaCustomerDisplayMessage(
   message: Pick<PersonaConversationMessageOutDto, "messageType" | "content"> & Partial<Pick<PersonaConversationMessageOutDto, "messageId" | "speakerType">>,

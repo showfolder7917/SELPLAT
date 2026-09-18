@@ -12,7 +12,9 @@ assert.ok(activeStableUserId, "AGENTS.md 必须声明当前稳定用户 ID");
 const conversationContract = read("contracts/services/personas/conversation/dto/persona-conversation.out.dto.ts");
 const conversationContractIndex = read("contracts/services/personas/conversation/index.ts");
 const collaborationMemoryPort = read("contracts/services/support/capabilities/event-center/port/collaboration-memory.port.ts");
-const repository = read("electron/services/support/capabilities/conversation/internal/persona-conversation.repository.ts");
+const repository = read("electron/dao/conversation/internal/persona-conversation.dao.ts");
+const customerDisplayPolicy = read("electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.ts");
+const customerDisplayWriter = read("electron/dao/conversation/internal/persona-customer-display-message.dao.ts");
 const migration = read("db/sql/migration-1025-add-persona-conversation-model.sql");
 const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversation-message-type.sql");
 const customerDisplayMigration = read("db/sql/migration-1029-add-persona-customer-display-message.sql");
@@ -29,7 +31,7 @@ const hanliMethodContext = read("electron/services/personas/hanli/internal/conve
 const nangong = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
 const nangongService = read("electron/services/personas/nangong/internal/conversation/nangong-conversation.service.ts");
 const linghu = read("src/features/linghu/components/LinghuAutomationPanel.tsx");
-const harnessRule = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md`);
+const harnessRule = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/RUL_AIDesktop协作与自动化规则/requirements.md`);
 
 test("人物会话头以可空 selectedModel 保存并迁移既有数据", () => {
   assert.match(conversationContract, /selectedModel\?: string \| null/);
@@ -56,8 +58,8 @@ test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID �
 });
 
 test("工作流重复进展只能原位更新既有内部消息", () => {
-  const memory = read("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts");
-  const writer = read("electron/services/support/capabilities/conversation/internal/persona-conversation-message.writer.ts");
+  const memory = read("electron/dao/memory/internal/collaboration-memory.dao.ts");
+  const writer = read("electron/dao/conversation/internal/persona-conversation-message.dao.ts");
   assert.match(collaborationMemoryPort, /updatePersonaInternalProgress\(input: \{[\s\S]*?messageId: string;[\s\S]*?updatedAt: string;[\s\S]*?\}\): PersonaConversationOutDto/);
   assert.match(memory, /updatePersonaInternalProgress\(input:[\s\S]*?existing\.messageType !== "internal-deliberation"[\s\S]*?不能原位更新/);
   assert.match(memory, /writePersonaConversationMessage\([\s\S]*?"update"/);
@@ -74,8 +76,13 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.match(repository, /readCustomerDisplay\(/);
   assert.match(repository, /retryCustomerDisplayMessage\(/);
   assert.doesNotMatch(repository, /readWindow\(/);
-  assert.match(repository, /PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION/);
   assert.match(repository, /writePersonaCustomerDisplayMessage/);
+  assert.match(repository, /rebuildStaleCustomerDisplayRecords/);
+  assert.doesNotMatch(repository, /ensureCustomerDisplayRecords/);
+  assert.doesNotMatch(repository, /derivePersonaCustomerDisplayMessage|PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION/);
+  assert.match(customerDisplayPolicy, /PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION/);
+  assert.match(customerDisplayPolicy, /derivePersonaCustomerDisplayMessage/);
+  assert.match(customerDisplayWriter, /projector\.derive\(message\)/);
   assert.match(runtime, /readPersonaCustomerDisplayWindow\(personaId, request\)/);
   assert.match(hanliService, /readPersonaCustomerDisplayConversation\("han-li", conversation\.conversationId\)/);
   assert.match(hanliService, /buildHanliRecentConversation\(customerDisplayConversation\.messages\)/);
@@ -87,6 +94,7 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.doesNotMatch(hook, /const conversation = await desktop\.getPersonaConversation\(personaId\)/);
   assert.match(hook, /新建人物会话后无法读取客户显示消息/);
   assert.match(hook, /保存人物对话模型后无法读取客户显示消息/);
+  assert.match(hook, /acceptCustomerDisplayReceipt/);
   assert.doesNotMatch(hook, /setConversation\(value\)/);
   assert.match(hanli, /customerDisplayState === "missing"/);
   assert.match(hanli, /重新读取/);
@@ -116,7 +124,7 @@ test("内部研讨正文与技术证据使用不同内容角色，且证据只�
   const projector = read("src/features/conversation/model/realtime-conversation.ts");
   const nangongController = read("src/features/nangong/components/useNangongConversationWorkspace.ts");
   const nangongView = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
-  const memory = read("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts");
+  const memory = read("electron/dao/memory/internal/collaboration-memory.dao.ts");
   assert.match(conversationContract, /PersonaConversationContentRoleValue = "conversation" \| "technical-evidence"/);
   assert.match(conversationContractIndex, /PersonaConversationContentRoleValue/);
   assert.match(collaborationMemoryPort, /appendPersonaInternalMessage\(input: \{[\s\S]*?contentRole\?: PersonaConversationContentRoleValue[\s\S]*?\}\): PersonaConversationOutDto/);

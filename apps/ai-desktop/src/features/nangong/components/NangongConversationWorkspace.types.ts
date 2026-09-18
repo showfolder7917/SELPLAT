@@ -66,7 +66,7 @@ export interface NangongConversationWorkspaceProps {
   error: string;
   /** 演化状态更新操作（onState）使用后端权威结果刷新页面状态。 */
   onState(state: EvolutionStateOutDto): void;
-  /** 会话更新操作（onConversation）使用后端权威结果刷新南宫婉会话。 */
+  /** 会话状态更新操作；正文只能传入公共控制器已重读的客户安全窗口。 */
   onConversation(conversation: PersonaConversationOutDto): void;
   /** 附件更新操作（onAttachments）更新客户本轮尚未发送的截图。 */
   onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;

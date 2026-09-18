@@ -4,17 +4,26 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { initializeAiMemoryDatabase, initializeWorkflowDatabase } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-database.js";
-import { migrateWorkflowControlData } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/workflow-control-migration.js";
-import { EvolutionStateRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.repository.js";
+import { initializeAiMemoryDatabase, initializeWorkflowDatabase } from "../../../../../../../build/ai-desktop/electron/electron/dao/platform/internal/sqlite-database.js";
+import { migrateWorkflowControlData } from "../../../../../../../build/ai-desktop/electron/electron/dao/platform/internal/workflow-control-migration.js";
+import { SqliteEvolutionStateDao } from "../../../../../../../build/ai-desktop/electron/electron/dao/evolution/internal/evolution-state.dao.js";
 import { EvolutionStateStore } from "../../../../../../../build/ai-desktop/electron/electron/services/evolution/internal/evolution-state.store.js";
-import { runSqliteTransaction } from "../../../../../../../build/ai-desktop/electron/electron/services/support/platform/persistence/internal/sqlite-transaction.js";
-import { PersonaConversationRepository } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation.repository.js";
-import { writePersonaConversationMessage } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-conversation-message.writer.js";
-import { PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.js";
+import { runSqliteTransaction } from "../../../../../../../build/ai-desktop/electron/electron/dao/platform/internal/sqlite-transaction.js";
+import { SqlitePersonaConversationDao } from "../../../../../../../build/ai-desktop/electron/electron/dao/conversation/internal/persona-conversation.dao.js";
+import { writePersonaConversationMessage } from "../../../../../../../build/ai-desktop/electron/electron/dao/conversation/internal/persona-conversation-message.dao.js";
+import { derivePersonaCustomerDisplayMessage, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
 
 mkdirSync(controlledTestRoot, { recursive: true });
+
+const customerDisplayProjector = {
+  version: PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
+  derive: derivePersonaCustomerDisplayMessage,
+};
+
+function createPersonaConversationDao(database) {
+  return new SqlitePersonaConversationDao(database, customerDisplayProjector);
+}
 
 test("首次初始化建立版本表并在重复启动时保持幂等", () => {
   const fixture = createFixture("bootstrap");
@@ -63,7 +72,7 @@ test("首次拆分只复制控制面事实，人物正文仍只留在 AI Memory"
       INSERT INTO AiDesktopPersonaSession (sessionKey, threadId, workspaceSignature, updatedAt)
       VALUES ('nangong', 'thread-control-copy', 'workspace-copy', '2026-09-17T00:00:00.000Z')
     `).run());
-    new PersonaConversationRepository(source.database).create("nangong-wan");
+    createPersonaConversationDao(source.database).create("nangong-wan");
     const workflow = initializeWorkflowDatabase({ ...fixture.options, runtimeMarkerPath: workflowMarkerPath });
     assert.equal(workflow.createdThisAttempt, true);
     const workflowPath = workflow.database.databasePath;
@@ -119,11 +128,11 @@ test("候选包可用自身迁移清单升级仍停在旧版本的受控工程�
   }
 });
 
-test("打开历史会话时按客户显示派生版本重算旧 ready 记录，绝不回退混合审计正文", () => {
+test("显式启动重建按客户显示版本升级旧记录，普通读取不产生写入", () => {
   const fixture = createFixture("customer-display-versioned-backfill");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const raw = [
       "我会继续核实滚动问题。",
@@ -157,6 +166,12 @@ test("打开历史会话时按客户显示派生版本重算旧 ready 记录，�
       WHERE sourceMessageId='legacy-mixed-message'
     `).run({ $raw: raw }));
 
+    repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
+    const versionAfterRead = initialized.database?.withConnection((connection) => connection.prepare(`
+      SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId='legacy-mixed-message'
+    `).get());
+    assert.equal(versionAfterRead?.derivationVersion, 2);
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => message.content), ["我会继续核实滚动问题。"]);
     assert.doesNotMatch(window.messages[0].content, /contentRole|用户原话|用户目标|调查对象|持久化|恢复|页面投影/u);
@@ -174,7 +189,7 @@ test("新写入和打开 v6 人物实现短文时均保留失败位置，不能�
   const fixture = createFixture("customer-display-v6-safe-failure");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const raw = "contentRole、持久化、恢复和页面投影仅供内部协作使用。";
     repository.save({
@@ -205,6 +220,7 @@ test("新写入和打开 v6 人物实现短文时均保留失败位置，不能�
       WHERE sourceMessageId='legacy-technical-message'
     `).run({ $raw: raw }));
 
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
       content: "此消息暂时无法安全显示。", state: "failed",
@@ -220,11 +236,11 @@ test("新写入和打开 v6 人物实现短文时均保留失败位置，不能�
   }
 });
 
-test("打开 v7 人物协作说明时重算为失败位置，绝不回退审计原文", () => {
+test("显式重建 v7 人物协作说明为失败位置，绝不回退审计原文", () => {
   const fixture = createFixture("customer-display-v7-collaboration-prose");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const raw = [
       "原始消息、内部事实和审计依据仅供协作核对。",
@@ -255,6 +271,7 @@ test("打开 v7 人物协作说明时重算为失败位置，绝不回退审计�
       WHERE sourceMessageId='legacy-collaboration-prose-message'
     `).run({ $raw: raw }));
 
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => ({ content: message.content, state: message.customerDisplayState })), [{
       content: "此消息暂时无法安全显示。", state: "failed",
@@ -270,11 +287,11 @@ test("打开 v7 人物协作说明时重算为失败位置，绝不回退审计�
   }
 });
 
-test("打开旧 hanli-design 时按稳定身份重算为首段客户结论，过程前言只保留在审计原文", () => {
+test("显式重建旧 hanli-design 为首段客户结论，过程前言只保留在审计原文", () => {
   const fixture = createFixture("customer-display-legacy-hanli-design");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const processPreface = "我会保持本轮只读：先加载工程约束，再整理调查边界。";
     const customerConclusion = "要解决的是客户正文与内部事实混流，不是历史残留显示。";
@@ -312,6 +329,7 @@ test("打开旧 hanli-design 时按稳定身份重算为首段客户结论，过
       WHERE sourceMessageId='hanli-design:legacy-request'
     `).run({ $raw: raw }));
 
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => message.content), [customerConclusion]);
     assert.doesNotMatch(window.messages[0].content, /本轮只读|工程约束|调查边界|contentRole|持久化|SELPLAT_CORPUS_META|用户原话|交给南宫婉核实/u);
@@ -325,11 +343,11 @@ test("打开旧 hanli-design 时按稳定身份重算为首段客户结论，过
   }
 });
 
-test("打开 v9 自动托管启动回执时从客户时间线排除，原始协作记录仍可审计", () => {
+test("显式重建 v9 自动托管启动回执并从客户时间线排除，原始记录仍可审计", () => {
   const fixture = createFixture("customer-display-v9-automatic-control");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const raw = "已启动韩立与南宫婉的内部研讨。自动托管已开启，我会持续推进。";
     repository.save({
@@ -356,6 +374,7 @@ test("打开 v9 自动托管启动回执时从客户时间线排除，原始协�
       WHERE sourceMessageId='hanli-control:automatic:legacy-request'
     `).run({ $raw: raw }));
 
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages, []);
     const source = initialized.database?.withConnection((connection) => connection.prepare(`
@@ -374,11 +393,11 @@ test("打开 v9 自动托管启动回执时从客户时间线排除，原始协�
   }
 });
 
-test("打开 v11 旧 hanli-reply 混合记录时迁移自然结论并保留原始审计正文", () => {
+test("显式重建 v11 旧 hanli-reply 混合记录并保留原始审计正文", () => {
   const fixture = createFixture("customer-display-v10-hanli-reply");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const customerReply = "这次要治理的是旧消息留下的内部内容。";
     const inlineInternalContinuation = "客户时间线应只显示当时面向客户的自然答复；原始消息、内部事实和审计依据仍完整保留。";
@@ -411,6 +430,7 @@ test("打开 v11 旧 hanli-reply 混合记录时迁移自然结论并保留原�
       WHERE sourceMessageId='hanli-reply:legacy-request'
     `).run({ oldDisplay: `${customerReply}${inlineInternalContinuation}` }));
 
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages.map((message) => message.content), [customerReply]);
     const source = initialized.database?.withConnection((connection) => connection.prepare(`
@@ -429,11 +449,11 @@ test("打开 v11 旧 hanli-reply 混合记录时迁移自然结论并保留原�
   }
 });
 
-test("打开 v8 hanli-design 内部处理首段时排除记录，绝不显示内部说明或失败占位", () => {
+test("显式重建 v8 hanli-design 内部处理首段并排除记录，不显示内部说明或失败占位", () => {
   const fixture = createFixture("customer-display-v8-hanli-design-process-reply");
   const initialized = initializeAiMemoryDatabase(fixture.options);
   try {
-    const repository = new PersonaConversationRepository(initialized.database);
+    const repository = createPersonaConversationDao(initialized.database);
     const conversation = repository.create("han-li");
     const firstParagraph = "本轮只读、工程约束、产品目标、调查边界和验收路径属于内部处理。";
     const raw = [firstParagraph, "后续设计说明和审计字段只保留在原始记录。"].join("\n\n");
@@ -461,6 +481,7 @@ test("打开 v8 hanli-design 内部处理首段时排除记录，绝不显示内
       WHERE sourceMessageId='hanli-design:internal-process-reply'
     `).run({ $raw: raw }));
 
+    assert.equal(repository.rebuildStaleCustomerDisplayRecords(), 1);
     const window = repository.readCustomerDisplayWindow("han-li", { conversationId: conversation.conversationId });
     assert.deepEqual(window.messages, []);
     const version = initialized.database?.withConnection((connection) => connection.prepare(`
@@ -480,7 +501,7 @@ test("1026 至 1031 升级演化快照、人物消息与自动入库恢复状态
     installSchemaUpTo(fixture, 1025);
     const legacy = initializeAiMemoryDatabase(fixture.options);
     assert.equal(legacy.status.schemaVersion, "1025");
-    new PersonaConversationRepository(legacy.database).create("nangong-wan");
+    createPersonaConversationDao(legacy.database).create("nangong-wan");
     const updatedAt = "2026-09-15T00:00:00.000Z";
     const v8State = {
       version: 8,
@@ -518,7 +539,7 @@ test("1026 至 1031 升级演化快照、人物消息与自动入库恢复状态
     assert.ok(upgraded.database?.withConnection((connection) =>
       connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='AiDesktopCorpusIngestionJob'").get(),
     ));
-    const state = new EvolutionStateStore(new EvolutionStateRepository(upgraded.database)).state();
+    const state = new EvolutionStateStore(new SqliteEvolutionStateDao(upgraded.database)).state();
     assert.equal(state.version, 9);
     const persisted = upgraded.database?.withConnection((connection) => connection.prepare(
       "SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1",
@@ -629,11 +650,11 @@ test("专题演化状态只写入 SQLite 并在清空后验证运行态归零", 
   try {
     const initialized = initializeAiMemoryDatabase(fixture.options);
     assert.equal(initialized.status.state, "ready");
-    const repository = new EvolutionStateRepository(initialized.database);
+    const repository = new SqliteEvolutionStateDao(initialized.database);
     const store = new EvolutionStateStore(repository);
     store.appendConversation("user", "保留的用户原话", []);
     store.beginOneShotRun({ primaryId: "root", roots: [{ id: "root", name: "SELPLAT", path: fixture.projectRoot, permission: "workspace-write" }] }, "zh-CN");
-    assert.equal(new EvolutionStateStore(new EvolutionStateRepository(initialized.database, store.state().conversation)).state().oneShotRun?.status, "running");
+    assert.equal(new EvolutionStateStore(new SqliteEvolutionStateDao(initialized.database, store.state().conversation)).state().oneShotRun?.status, "running");
     store.clearTestData();
     store.assertTestDataCleared();
     const persisted = initialized.database?.withConnection((connection) => connection.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState WHERE singletonId=1").get());
@@ -686,7 +707,7 @@ test("演化仓储只按同专题同提案读取已阻塞的原验收运行事�
       });
     });
 
-    const fact = new EvolutionStateRepository(initialized.database).loadLatestBlockedOneShotRecovery("topic-recovery", "proposal-recovery");
+    const fact = new SqliteEvolutionStateDao(initialized.database).loadLatestBlockedOneShotRecovery("topic-recovery", "proposal-recovery");
 
     assert.deepEqual({ ...fact }, {
       runId: "run-recovery",
@@ -694,7 +715,7 @@ test("演化仓储只按同专题同提案读取已阻塞的原验收运行事�
       blockedAt: "2026-09-16T10:30:00.000Z",
       reason: "原验收格式受阻",
     });
-    assert.equal(new EvolutionStateRepository(initialized.database).loadLatestBlockedOneShotRecovery("topic-other", "proposal-recovery"), null);
+    assert.equal(new SqliteEvolutionStateDao(initialized.database).loadLatestBlockedOneShotRecovery("topic-other", "proposal-recovery"), null);
     initialized.database?.close();
   } finally {
     rmSync(fixture.projectRoot, { recursive: true, force: true });
@@ -840,7 +861,7 @@ test("通用事务包装在异常时不留下部分写入", () => {
 
 test("主进程与渲染层只公开数据库状态，不公开连接或 SQL", () => {
   const mainSource = readFileSync(path.join(appRoot, "electron", "system", "bootstrap", "persistence.bootstrap.ts"), "utf8");
-  const workerSource = readFileSync(path.join(appRoot, "electron", "services", "support", "capabilities", "event-center", "internal", "corpus", "background-persistence.worker.ts"), "utf8");
+  const workerSource = readFileSync(path.join(appRoot, "electron", "dao", "corpus", "internal", "background-persistence.worker.ts"), "utf8");
   const ipcSource = readFileSync(path.join(appRoot, "electron", "system", "ipc", "domains", "register-system-ipc.ts"), "utf8");
   const preloadSource = [
     readFileSync(path.join(appRoot, "electron", "system", "preload", "preload.cts"), "utf8"),
@@ -920,25 +941,25 @@ test("旧演化快照与内部交接交错追加仍保留全部原文和唯一�
   const initialized = initializeAiMemoryDatabase(fixture.options);
   const database = initialized.database;
   try {
-    const repository = new PersonaConversationRepository(database);
+    const repository = createPersonaConversationDao(database);
     repository.create("nangong-wan");
-    const evolution = new EvolutionStateStore(new EvolutionStateRepository(database, repository.readActive("nangong-wan")));
+    const evolution = new EvolutionStateStore(new SqliteEvolutionStateDao(database, repository.readActive("nangong-wan")));
     repository.save(evolution.appendConversation("user", "客户原问题").conversation);
     const stale = structuredClone(evolution.state().conversation);
     const internal = { messageId: "internal-interleaved", messageType: "internal-deliberation", speakerType: "persona", speakerPersonaId: "han-li", content: "新追加的内部交接", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt: stale.updatedAt, completedAt: stale.updatedAt };
-    database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, internal, "append"));
+    database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, internal, "append", customerDisplayProjector));
     const saved = repository.save(evolution.appendConversation("nangong", "验收完成结果").conversation);
     assert.deepEqual(saved.messages.map((m) => m.content), ["客户原问题", "新追加的内部交接", "验收完成结果"]);
     assert.deepEqual(saved.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
     assert.deepEqual(saved.messages.map((m) => m.messageType), ["customer-visible", "internal-deliberation", "customer-visible"]);
-    database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, content: "重复投递不覆盖原文" }, "append"));
+    database.transaction((connection) => writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, content: "重复投递不覆盖原文" }, "append", customerDisplayProjector));
     stale.messages[0].content = "客户原问题补充";
     const updated = repository.save(stale);
     assert.deepEqual(updated.messages.map((m) => m.content), ["客户原问题补充", "新追加的内部交接", "验收完成结果"]);
-    assert.deepEqual(new EvolutionStateStore(new EvolutionStateRepository(database, repository.readActive("nangong-wan"))).state().conversation.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
-    assert.throws(() => database.transaction((connection) => writePersonaConversationMessage(connection, "han-li", stale.conversationId, internal, "update")), /其他人物或会话/);
+    assert.deepEqual(new EvolutionStateStore(new SqliteEvolutionStateDao(database, repository.readActive("nangong-wan"))).state().conversation.messages.map((m) => m.sequenceNumber), [0, 1, 2]);
+    assert.throws(() => database.transaction((connection) => writePersonaConversationMessage(connection, "han-li", stale.conversationId, internal, "update", customerDisplayProjector)), /其他人物或会话/);
     assert.throws(() => database.transaction((connection) => {
-      writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, messageId: "must-rollback" }, "append");
+      writePersonaConversationMessage(connection, "nangong-wan", stale.conversationId, { ...internal, messageId: "must-rollback" }, "append", customerDisplayProjector);
       throw new Error("后续语料保存失败");
     }), /后续语料保存失败/);
     assert.equal(repository.readActive("nangong-wan").messages.length, 3);

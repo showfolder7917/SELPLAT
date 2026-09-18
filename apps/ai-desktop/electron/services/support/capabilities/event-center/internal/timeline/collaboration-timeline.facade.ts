@@ -6,9 +6,8 @@ import type {
   CollaborationTimelineSnapshotOutDto,
 } from "../../../../../../../contracts/services/workflow/index.js";
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../../../../contracts/services/workflow/index.js";
-import { CollaborationTimelineRepository } from "./collaboration-timeline.repository.js";
 import { createHash, randomUUID } from "node:crypto";
-import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
+import type { CollaborationTimelinePersistencePort } from "../../collaboration-timeline.persistence.port.js";
 
 type TimelineChangedListener = (event: CollaborationTimelineChangedEventOutDto) => void;
 type ProjectionStatusListener = (status: CollaborationTimelineProjectionStatusOutDto) => void;
@@ -22,18 +21,16 @@ type ProjectionOperation = "stream" | "task-flow" | "business-event";
  * 调用方不得越过该类直接操作 Repository 或借人物状态刷新页面。
  */
 export class CollaborationTimelineFacade {
-  readonly #repository: CollaborationTimelineRepository;
+  readonly #repository: CollaborationTimelinePersistencePort;
   readonly #listeners = new Set<TimelineChangedListener>();
   readonly #projectionStatusListeners = new Set<ProjectionStatusListener>();
   #projectionFailure: { message: string; retry: ProjectionRetry; taskId: string | null; operation: ProjectionOperation } | null = null;
 
-  constructor(database: SqliteDatabase) {
-    this.#repository = new CollaborationTimelineRepository(database);
-  }
+  constructor(repository: CollaborationTimelinePersistencePort) { this.#repository = repository; }
 
   appendTimelineEvent(event: CollaborationTimelineBusinessEventOutDto): void {
     const write = () => this.#repository.appendBusinessEvent(event);
-    let commit: ReturnType<CollaborationTimelineRepository["appendBusinessEvent"]>;
+    let commit: ReturnType<CollaborationTimelinePersistencePort["appendBusinessEvent"]>;
     try { commit = write(); }
     catch (error) { this.#recordProjectionFailure(error, write, event.fact.taskId, "business-event"); throw error; }
     if (commit) this.#publish(commit);
@@ -41,7 +38,7 @@ export class CollaborationTimelineFacade {
 
   appendTaskFlowEvents(state: CollaborationStateOutDto, taskIds: string[]): void {
     const write = () => this.#repository.appendTaskFlowEvents(state, taskIds);
-    let commit: ReturnType<CollaborationTimelineRepository["appendTaskFlowEvents"]>;
+    let commit: ReturnType<CollaborationTimelinePersistencePort["appendTaskFlowEvents"]>;
     try { commit = write(); }
     catch (error) { this.#recordProjectionFailure(error, write, taskIds.length === 1 ? taskIds[0]! : null, "task-flow"); throw error; }
     if (commit) this.#publish(commit);
@@ -91,7 +88,7 @@ export class CollaborationTimelineFacade {
     const chunkId = `timeline-stream-${randomUUID()}`;
     const occurredAt = new Date().toISOString();
     const write = () => this.#repository.appendStream(taskId, memberId, event, occurredAt, chunkId);
-    let commit: ReturnType<CollaborationTimelineRepository["appendStream"]>;
+    let commit: ReturnType<CollaborationTimelinePersistencePort["appendStream"]>;
     try { commit = write(); }
     catch (error) { this.#recordProjectionFailure(error, write, taskId, "stream"); throw error; }
     if (!commit) return null;

@@ -31,9 +31,8 @@ const packageManifest = read("package.json");
 const testDocumentRunner = read("scripts/test-document-runner.mjs");
 const ruleIndex = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/RULE_INDEX.md`);
 const harnessRule = [
-  read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop官方Harness接入规则.md`),
-  read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktopHarness工作区与运行时规则.md`),
-  read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop协作与自动化规则.md`),
+  read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/RUL_AIDesktopHarness工作区与运行时规则/requirements.md`),
+  read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/RUL_AIDesktop协作与自动化规则/requirements.md`),
 ].join("\n");
 
 test("全局设置持久化默认模型、推理强度和速度，人物会话字段不进入设置协议", () => {

@@ -1,4 +1,4 @@
-import type { DatabasePort } from "../database.facade.js";
+import type { SqliteDatabase as DatabasePort } from "./sqlite-database.js";
 
 // 只迁移控制面与客户可见审计事实；人物记忆、会话正文、语料和检查点继续留在 AI Memory 后台库。
 const CONTROL_TABLES = [

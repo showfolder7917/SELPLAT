@@ -19,9 +19,9 @@ async function loadWorkflowSource(entryPoint) {
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
 }
 
-const { CollaborationTimelineRepository } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts");
+const { SqliteCollaborationTimelineDao } = await loadWorkflowSource("electron/dao/timeline/internal/collaboration-timeline.dao.ts");
 const { CollaborationTimelineFacade } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.facade.ts");
-const { SqliteDatabase } = await loadWorkflowSource("electron/services/support/platform/persistence/internal/sqlite-database.ts");
+const { SqliteDatabase } = await loadWorkflowSource("electron/dao/platform/internal/sqlite-database.ts");
 const { recordDistributionTimelineStream } = await loadWorkflowSource("electron/system/bootstrap/distribution-timeline-stream-recorder.ts");
 
 const member = (memberId, displayName) => ({ memberId, displayName });
@@ -66,12 +66,12 @@ test("每轮自测与自修独立收尾，完成后耗时不再增长且重复�
 test("令狐巡检问题与恢复动作落库为会话事实，重复巡检不刷屏", () => {
   const fixture = createFixture("inspection-observation");
   try {
-    const facade = new CollaborationTimelineFacade(fixture.database);
+    const facade = new CollaborationTimelineFacade(fixture.timeline);
     facade.appendInspectionObservation("linghu.automation.inspection_no_action_required", { report: "没有问题" });
     facade.appendInspectionObservation("linghu.automation.issue_detected", { report: "墨大夫测试失败，正在核对失败证据", fingerprint: "failure-1" }, "task-1");
     facade.appendInspectionObservation("linghu.automation.issue_detected", { report: "墨大夫测试失败，正在核对失败证据", fingerprint: "failure-1" }, "task-1");
     facade.appendInspectionObservation("linghu.automation.recovery_requested", { report: "已发起第1次恢复，尚未验证通过", fingerprint: "failure-1" }, "task-1");
-    const nodes = new CollaborationTimelineFacade(fixture.database).getTimelineSnapshot().groups.flatMap((group) => group.nodes);
+    const nodes = new CollaborationTimelineFacade(fixture.timeline).getTimelineSnapshot().groups.flatMap((group) => group.nodes);
     assert.equal(nodes.length, 2);
     assert.deepEqual(nodes.map((node) => node.action), ["巡检发现问题", "已发起恢复"]);
     assert.ok(nodes.every((node) => node.actor.memberId === "linghu-ancestor"));
@@ -149,7 +149,7 @@ test("审批时间线只按显式事件追加申请、退回、补充和通过",
 test("时间线门面只在事务提交后通知页面读取已落库事实", () => {
   const fixture = createFixture("commit-notification");
   try {
-    const facade = new CollaborationTimelineFacade(fixture.database);
+    const facade = new CollaborationTimelineFacade(fixture.timeline);
     const received = [];
     const unsubscribe = facade.subscribeTimelineChanged((event) => {
       const snapshot = facade.getTimelineSnapshot(fixture.at(2));
@@ -170,7 +170,7 @@ test("流式增量不触发全量时间线刷新，正文完成后只刷新一�
   try {
     const running = task(fixture, 1, false);
     running.evolutionProposalId = null;
-    const facade = new CollaborationTimelineFacade(fixture.database);
+    const facade = new CollaborationTimelineFacade(fixture.timeline);
     facade.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
     const received = [];
     const unsubscribe = facade.subscribeTimelineChanged((event) => received.push(event));
@@ -191,7 +191,7 @@ test("流式进度投影失败保留现有内容并重试同一片段", () => {
   try {
     const running = task(fixture, 1, false);
     running.evolutionProposalId = null;
-    const facade = new CollaborationTimelineFacade(fixture.database);
+    const facade = new CollaborationTimelineFacade(fixture.timeline);
     facade.appendTaskFlowEvents(collaboration(fixture.at(3), [running]), [running.taskId]);
     const originalTransaction = fixture.database.transaction.bind(fixture.database);
     let failAfterCommit = true;
@@ -788,7 +788,7 @@ test("未登记的历史流程事件生成可读兜底节点而非静默丢弃",
 });
 
 test("旧状态反推接口和旧表读取已退役", () => {
-  const source = readFileSync(path.join(appRoot, "electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts"), "utf8");
+  const source = readFileSync(path.join(appRoot, "electron/dao/timeline/internal/collaboration-timeline.dao.ts"), "utf8");
   assert.doesNotMatch(source, /syncEvolutionState|#appendProposalFacts|#appendTaskFacts/);
   assert.doesNotMatch(source, /AiDesktopTaskCollaboration(?:Topic|Event|Stream)/);
   assert.match(source, /appendBusinessEvent/);
@@ -904,7 +904,7 @@ function createFixture(suffix) {
   const sqlRoot = path.join(root, "sql");
   cpSync(path.join(appRoot, "db", "sql"), sqlRoot, { recursive: true });
   const database = SqliteDatabase.open(path.join(root, "events.sqlite3"), sqlRoot, true);
-  const timeline = new CollaborationTimelineRepository(database);
+  const timeline = new SqliteCollaborationTimelineDao(database);
   const base = Date.now() + 1_000;
   return { database, timeline, at(offset) { return new Date(base + offset * 1_000).toISOString(); }, append(event) { timeline.appendBusinessEvent(event); }, close() { database.close(); rmSync(root, { recursive: true, force: true }); } };
 }

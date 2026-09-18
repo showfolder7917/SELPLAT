@@ -2255,7 +2255,14 @@ test("令狐自动保障用户层规则登记全量检测、故障指纹、损�
     "RUL_AIDesktop演化持久化与发布规则.md",
     "RUL_AIDesktop韩立用户代理提问规则.md",
     "RUL_AIDesktop架构边界与客户规则交付规则.md",
-  ].map((fileName) => readFileSync(new URL(`../../../ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/${fileName}`, import.meta.url), "utf8")).join("\n");
+  ].flatMap((fileName) => {
+    const ruleName = fileName.replace(/\.md$/u, "");
+    const metadataUrl = new URL(`../../../ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/${fileName}`, import.meta.url);
+    const requirementsUrl = new URL(`../../../ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/${ruleName}/requirements.md`, import.meta.url);
+    return existsSync(requirementsUrl)
+      ? [readFileSync(metadataUrl, "utf8"), readFileSync(requirementsUrl, "utf8")]
+      : [readFileSync(metadataUrl, "utf8")];
+  }).join("\n");
   assert.match(rule, /^rule_version = \d+\.\d+\.\d+$/m);
   assert.match(rule, /ai_desktop_shared_conversation_component_contract = selConversation_registered_before_implementation \+ every_persona_uses_same_generic_contract_hook_and_persona_id_parameter/);
   assert.match(rule, /nangong_distribution_planning_contract = AI_read_only_investigation/);

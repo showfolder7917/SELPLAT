@@ -26,6 +26,38 @@ function sourceFilesUnder(relativeRoot) {
   return collected;
 }
 
+test("DAO is the only runtime SQLite zone and services depend on persistence ports", () => {
+  const serviceFiles = sourceFilesUnder("electron/services");
+  const daoFiles = sourceFilesUnder("electron/dao");
+  const ipcFiles = sourceFilesUnder("electron/system/ipc");
+  const forbiddenServiceSql = /\b(?:SELECT|INSERT\s+INTO|UPDATE\s+[A-Z][A-Za-z0-9_]*|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|PRAGMA)\b|node:sqlite|\.prepare\(|\.withConnection\(/u;
+  for (const file of serviceFiles) {
+    assert.doesNotMatch(source(file), forbiddenServiceSql, `${file} must not execute SQLite or contain runtime SQL`);
+    assert.doesNotMatch(source(file), /(?:from|import\()\s*["'][^"']*\/dao(?:\/|["'])/u, `${file} must depend on a port, not a concrete DAO`);
+  }
+  for (const file of daoFiles) {
+    assert.doesNotMatch(source(file), /services\/[^"']+\/internal/u, `${file} must not depend on service internals`);
+    assert.doesNotMatch(source(file), /(?:renderer|system\/ipc)/u, `${file} must not depend on UI or IPC`);
+  }
+  for (const file of ipcFiles) assert.doesNotMatch(source(file), /(?:from|import\()\s*["'][^"']*\/dao(?:\/|["'])/u, `${file} must not access a DAO`);
+  for (const portFile of [
+    "electron/services/evolution/evolution.persistence.port.ts",
+    "electron/services/workflow/workflow.persistence.port.ts",
+    "electron/services/support/capabilities/event-center/collaboration-timeline.persistence.port.ts",
+  ]) assert.doesNotMatch(source(portFile), /AiDesktop|DatabaseSync|tableCount|query\s*\(|execute\s*\(/u, `${portFile} must expose business capabilities only`);
+  for (const retired of [
+    "electron/services/support/platform/persistence/internal/sqlite-database.ts",
+    "electron/services/workflow/internal/collaboration/workflow.repository.ts",
+    "electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts",
+    "electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.ts",
+  ]) assert.equal(existsSync(path.join(appRoot, retired)), false, retired);
+  assert.deepEqual(
+    readdirSync(path.join(appRoot, "db/sql")).filter((name) => name !== "load-order.txt" && !name.endsWith(".sql")),
+    [],
+    "db/sql may contain only SQL resources and load-order.txt",
+  );
+});
+
 test("contracts mirror Electron ownership and expose explicit protocol roles", () => {
   const contractRoots = readdirSync(path.join(appRoot, "contracts"), { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && sourceFilesUnder(path.join("contracts", entry.name)).length > 0)
@@ -92,7 +124,7 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.doesNotMatch(source("electron/system/ipc/register-desktop-ipc.ts"), /normalizeEvolutionWorkspaceLocation|evolutionWorkspaceWindow/);
   assert.doesNotMatch(source("contracts/system/desktop/api/desktop.api.ts"), /EvolutionWorkbench|EvolutionWorkspace|openEvolutionWorkspace/);
   assert.match(source("src/features/evolution/model/evolution-runtime.ts"), /expectedStateVersion:\s*state\.updatedAt/);
-  assert.match(source("electron/services/workflow/internal/collaboration/workflow.repository.ts"), /evolution\.mutation/);
+  assert.match(source("electron/dao/workflow/internal/workflow.dao.ts"), /evolution\.mutation/);
   const mutationCoordinator = source("electron/services/evolution/internal/evolution-mutation.coordinator.ts");
   assert.match(mutationCoordinator, /class EvolutionMutationCoordinator/);
   assert.match(mutationCoordinator, /runAsync/);
@@ -103,7 +135,7 @@ test("application-private contracts are domain modules outside shared", () => {
   assert.doesNotMatch(source("electron/services/personas/hanli/hanli.facade.ts"), /createProposal|resumeOneShotRun/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /automaticApprovalEnabled|raw\.version === [1-7]/);
   assert.doesNotMatch(source("electron/services/evolution/internal/evolution-state.store.ts"), /node:fs|readFileSync|writeFileSync|renameSync/);
-  assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(workflowDatabase, initialNangongConversation\)/);
+  assert.match(source("electron/system/bootstrap/application-runtime.ts"), /createEvolutionState\(createEvolutionStateDao\(workflowDatabase, initialNangongConversation\)\)/);
   assert.doesNotMatch(source("electron/system/bootstrap/application-runtime.ts"), /new NangongEvolutionStore\(path\.join\([^\n]+nangong-evolution\.json/);
   const apiMethods = [...source("contracts/system/desktop/api/desktop.api.ts").matchAll(/^\s{2}(\w+)\(/gm)].map((match) => match[1]);
   const desktopApiDomains = ["system", "rules", "codex", "screenshot", "collaboration", "conversation"];
@@ -170,7 +202,7 @@ test("sandboxed preload keeps domain source boundaries but builds one physical b
 });
 
 test("Nangong memory keeps internal intent without rendering it as user-authored text", () => {
-  const memory = source("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts");
+  const memory = source("electron/dao/memory/internal/collaboration-memory.dao.ts");
   const migration = source("db/sql/schema-AiDesktopCurrent.sql");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
   const main = source("electron/system/bootstrap/application-runtime.ts");
@@ -194,10 +226,11 @@ test("Nangong memory keeps internal intent without rendering it as user-authored
 
 test("人物训练语料通过主会话完成钩子和启动补录闭环且清空只重置内部线程", () => {
   const main = source("electron/system/bootstrap/application-runtime.ts");
-  const corpusWorker = source("electron/services/support/capabilities/event-center/internal/corpus/background-persistence.worker.ts");
+  const corpusWorker = source("electron/dao/corpus/internal/background-persistence.worker.ts");
+  const corpusWatcher = source("electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.watcher.ts");
   const codexService = source("electron/services/support/platform/codex/codex.facade.ts");
-  const ingestion = source("electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.ts");
-  const repository = source("electron/services/workflow/internal/collaboration/workflow.repository.ts");
+  const ingestion = source("electron/dao/corpus/internal/codex-conversation-corpus.dao.ts");
+  const repository = source("electron/dao/workflow/internal/workflow.dao.ts");
   assert.match(main, /ingestTrainingCorpus\("startup"\)/);
   assert.match(main, /onConversationTurnCompleted:\s*\(\) => ingestTrainingCorpus\("turn-completed"\)/);
   assert.match(codexService, /await this\.#options\.onConversationTurnCompleted\?\.\(\)/);
@@ -220,7 +253,7 @@ test("人物训练语料通过主会话完成钩子和启动补录闭环且清�
   assert.match(main, /corpusIngestionRunning/);
   assert.match(ingestion, /task_complete/);
   assert.match(ingestion, /setImmediate/);
-  assert.match(ingestion, /watch\(root, \{ recursive: true \}/);
+  assert.match(corpusWatcher, /watch\(root, \{ recursive: true \}/);
   assert.doesNotMatch(main, /linghuDistributionAuditCodex|ai-desktop-linghu-distribution-audit/);
   const semanticBackfill = source("electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-semantic-backfill.ts");
   assert.match(semanticBackfill, /phase\) === "final_answer"/);
@@ -239,24 +272,25 @@ test("人物记忆只通过后台 Worker 单通道访问 SQLite", () => {
   const bootstrap = source("electron/system/bootstrap/persistence.bootstrap.ts");
   const eventCenter = source("electron/services/support/capabilities/event-center/index.ts");
   const proxy = source("electron/services/support/capabilities/event-center/internal/projection/background-collaboration-memory.proxy.ts");
-  const worker = source("electron/services/support/capabilities/event-center/internal/corpus/background-persistence.worker.ts");
+  const worker = source("electron/dao/corpus/internal/background-persistence.worker.ts");
   const methods = source("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory-methods.ts");
   assert.match(bootstrap, /createCollaborationMemory\(usableBackgroundPersistence\)/);
   assert.doesNotMatch(bootstrap, /createCollaborationMemory\(workflowDatabase\)/);
   assert.doesNotMatch(bootstrap, /initializeAiMemoryDatabase/);
   assert.match(worker, /initializeAiMemoryDatabase/);
-  assert.doesNotMatch(eventCenter, /new CollaborationMemoryService/);
+  assert.doesNotMatch(eventCenter, /new SqliteCollaborationMemoryDao/);
   assert.match(proxy, /operation:\s*"collaboration-memory"/);
   assert.match(proxy, /from "\.\/collaboration-memory-methods\.js"/);
-  assert.match(worker, /from "\.\.\/projection\/collaboration-memory-methods\.js"/);
-  assert.match(worker, /new CollaborationMemoryService\(database\)/);
+  assert.match(worker, /from "\.\.\/\.\.\/\.\.\/services\/support\/capabilities\/event-center\/index\.js"/);
+  assert.match(worker, /createCollaborationMemoryDao\(database, \{/);
+  assert.match(worker, /rebuildStalePersonaCustomerDisplayMessages\(\)/);
   assert.match(methods, /satisfies readonly \(keyof CollaborationMemoryPort\)\[\]/);
 });
 
 test("统一对话语料不吸收专题审批任务测试与异常业务投影", () => {
   const packageJson = source("package.json");
   const corpusMigration = source("db/sql/schema-AiDesktopCurrent.sql");
-  const ingestion = source("electron/services/support/capabilities/event-center/internal/corpus/codex-conversation-corpus.ingestion.ts");
+  const ingestion = source("electron/dao/corpus/internal/codex-conversation-corpus.dao.ts");
   assert.doesNotMatch(packageJson, /backfill:codex-conversation/);
   assert.doesNotMatch(packageJson, /backfill-codex-conversation\.mjs/);
   assert.doesNotMatch(corpusMigration, /FROM AiDesktop(?:Approval|Workflow|Task|Event|Evolution)/);
@@ -278,7 +312,8 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
     source("src/features/settings/components/DeveloperSettingsFeature.tsx"),
     source("src/features/settings/components/DeveloperSettingsView.tsx"),
   ].join("\n");
-  const architectureRule = source(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md`);
+  const architectureRuleMetadata = source(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/rule/RUL_AIDesktop架构边界与客户规则交付规则.md`);
+  const architectureRule = source(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/RUL_AIDesktop架构边界与客户规则交付规则/requirements.md`);
   assert.doesNotMatch(developerApp, /function applyCodexStreamEvent/);
   assert.doesNotMatch(developerApp, /function readStoredChat/);
   assert.match(developerApp, /features\/conversation["']/);
@@ -288,7 +323,7 @@ test("renderer feature logic is no longer owned by the developer shell", () => {
   assert.match(collaborationWorkspace, /collaboration-live-output/);
   assert.match(settingsFeature, /\.\/SettingsFloatingPanel/);
   assert.match(source("src/features/collaboration/components/CollaborationMemberPage.tsx"), /SelUiConversation/);
-  assert.match(architectureRule, /rule_version = 2\.21\.0/);
+  assert.match(architectureRuleMetadata, /rule_version = 2\.22\.0/);
   assert.match(architectureRule, /workflow_vertical_module_layout_contract/);
   assert.match(architectureRule, /workflow_aggregate_boundary_contract/);
   assert.match(architectureRule, /workflow_repair_replacement_contract/);

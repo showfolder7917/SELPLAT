@@ -4,7 +4,7 @@ import type { EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionA
 import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto, type HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
-import type { EvolutionStatePersistence } from "./evolution-state.repository.js";
+import type { EvolutionStatePersistencePort } from "../evolution.persistence.port.js";
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
@@ -26,11 +26,11 @@ export interface CompleteMonitorAcceptanceInput {
  * 不能继续归属南宫婉，也不能由三个人物各保存一份。
  */
 export class EvolutionStateStore {
-  readonly #repository: EvolutionStatePersistence;
+  readonly #repository: EvolutionStatePersistencePort;
   readonly #listeners = new Set<StateListener>();
   #state: EvolutionStateOutDto;
 
-  constructor(repository: EvolutionStatePersistence) {
+  constructor(repository: EvolutionStatePersistencePort) {
     this.#repository = repository;
     this.#state = this.#load();
   }

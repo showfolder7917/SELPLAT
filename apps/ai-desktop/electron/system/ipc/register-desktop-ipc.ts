@@ -25,7 +25,7 @@ import { installDesktopIpcAuthorizationPolicy, registerEventCenterIpcHandler } f
 import { CodexFacade as CodexService } from "../../services/support/platform/codex/index.js";
 import { ConversationFacade as ConversationDispatchStore } from "../../services/support/capabilities/conversation/index.js";
 import { CollaborationCodexRegistry } from "../../services/support/capabilities/conversation/index.js";
-import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowRepositoryPort as WorkflowRepository, type CollaborationNavigationPreferencePort, type CollaborationInteractionPerformancePort } from "../../services/workflow/index.js";
+import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowPersistencePort as WorkflowRepository, type CollaborationNavigationPreferencePort, type CollaborationInteractionPerformancePort } from "../../services/workflow/index.js";
 import { LinghuAutomationFacade } from "../../services/personas/linghu/index.js";
 import type { HanliFacade } from "../../services/personas/hanli/index.js";
 import type { NangongFacade } from "../../services/personas/nangong/index.js";

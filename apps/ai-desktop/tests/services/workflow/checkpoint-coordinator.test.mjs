@@ -22,7 +22,7 @@ const { createOneShotFailureFingerprint } = await loadWorkflowSource("electron/s
 const { selectCurrentAcceptanceFailure } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-failure-selection.ts");
 const { CheckpointHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.ts");
 const { AcceptanceHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts");
-const { CollaborationTimelineRepository } = await loadWorkflowSource("electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline.repository.ts");
+const { SqliteCollaborationTimelineDao } = await loadWorkflowSource("electron/dao/timeline/internal/collaboration-timeline.dao.ts");
 
 test("真实验收每轮使用独立故障身份，普通轮询仍保持稳定去重", () => {
   const base = { runId: "run-1", proposalId: "proposal-1" };
@@ -329,7 +329,7 @@ test("协调器把同轮多异常收口为一个完成事实，重放稳定且�
     transaction(operation) { return operation(connection); },
     withConnection(operation) { return operation(connection); },
   };
-  const timeline = new CollaborationTimelineRepository(database);
+  const timeline = new SqliteCollaborationTimelineDao(database);
   const resolved = [];
   const originalTask = {
     taskId: "original-task", state: "integrated", phase: "integrated", updatedAt: "2026-09-14T00:00:00.000Z",

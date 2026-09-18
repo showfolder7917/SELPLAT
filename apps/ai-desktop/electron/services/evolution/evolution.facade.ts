@@ -1,10 +1,9 @@
 // Evolution 门面文件集中提供共同业务数据的装配入口，不把 Repository 或 Store 实现公开给人物和 IPC。
-import type { DatabasePort } from "../support/platform/persistence/index.js";
 import type { CurrentTopicReadRecoveryOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../contracts/services/evolution/index.js";
 import type { CreateNangongTopicInDto } from "../../../contracts/services/personas/nangong/index.js";
 import { EvolutionMutationCoordinator } from "./internal/evolution-mutation.coordinator.js";
-import { EvolutionStateRepository } from "./internal/evolution-state.repository.js";
 import { EvolutionStateStore } from "./internal/evolution-state.store.js";
+import type { EvolutionStatePersistencePort } from "./evolution.persistence.port.js";
 
 // Evolution Port 保留人物 Facade 实际使用的状态读写方法，底层 SQLite 与缓存策略仍属于 internal。
 export type EvolutionStatePort = EvolutionStateStore;
@@ -13,10 +12,9 @@ export type EvolutionMutationPort = EvolutionMutationCoordinator;
 
 // 组合根创建唯一 Evolution 状态所有者；数据库不可用时 Repository 保持原安全降级语义。
 export function createEvolutionState(
-  database: DatabasePort | null,
-  initialConversation: EvolutionStateOutDto["conversation"] | null = null,
+  persistence: EvolutionStatePersistencePort,
 ): EvolutionStatePort {
-  return new EvolutionStateStore(new EvolutionStateRepository(database, initialConversation));
+  return new EvolutionStateStore(persistence);
 }
 
 // 南宫人物入口通过该工厂取得协调器，避免跨模块直接构造 internal 类。

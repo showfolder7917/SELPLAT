@@ -13,7 +13,7 @@ import {
 } from "../../services/support/capabilities/release/index.js";
 import { createTaskWorktreeTestRunner, TestResourceCoordinatorFacade } from "../../services/support/capabilities/testing/index.js";
 import type { FixedUnifiedTestRunResult } from "../../services/support/capabilities/testing/index.js";
-import { createSqliteCodexSessionRepository } from "../../services/support/platform/codex/index.js";
+import { createSqliteCodexSessionDao } from "../../dao/codex/index.js";
 import { createExecutorRuntime } from "../../services/personas/executor/index.js";
 import {
   CollaborationWorkflowFacade,
@@ -29,7 +29,7 @@ type CoordinatorOptions = ConstructorParameters<typeof CollaborationWorkflowFaca
 export interface CollaborationBootstrapOptions {
   startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha" | "resumeReleaseBatchId">;
   capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts" | "rules">;
-  linghuSessions: ReturnType<typeof createSqliteCodexSessionRepository>;
+  linghuSessions: ReturnType<typeof createSqliteCodexSessionDao>;
   releaseVersion: string;
   readRuleInstructions(memberId: string, task: import("../../../contracts/services/workflow/index.js").CollaborationTaskOutDto): string;
   runUnifiedTests(rootPath: string): Promise<FixedUnifiedTestRunResult>;

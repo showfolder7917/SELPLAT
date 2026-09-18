@@ -1,9 +1,10 @@
 import { parentPort, workerData, type MessagePort } from "node:worker_threads";
 
-import { discardFreshWorkflowDatabase, initializeAiMemoryDatabase, initializeWorkflowDatabase, migrateWorkflowControlData } from "../../../../platform/persistence/index.js";
-import { CodexConversationCorpusIngestion } from "./codex-conversation-corpus.ingestion.js";
-import { CollaborationMemoryService } from "../projection/collaboration-memory.service.js";
-import { collaborationMemoryMethodNames } from "../projection/collaboration-memory-methods.js";
+import { discardFreshWorkflowDatabase, initializeAiMemoryDatabase, initializeWorkflowDatabase, migrateWorkflowControlData } from "../../platform/index.js";
+import { SqliteCodexConversationCorpusDao } from "./codex-conversation-corpus.dao.js";
+import { createCollaborationMemoryDao } from "../../memory/index.js";
+import { collaborationMemoryMethodNames } from "../../../services/support/capabilities/event-center/index.js";
+import { derivePersonaCustomerDisplayMessage, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../services/support/capabilities/conversation/index.js";
 
 type WorkerRequest = { id: number; operation: string; payload: Record<string, unknown> };
 type WorkerOptions = { projectRoot: string; runtimeMarkerPath: string; workflowRuntimeMarkerPath: string; migrationSqlRoot?: string };
@@ -28,8 +29,14 @@ if (workflowInitialization.createdThisAttempt) {
     throw error;
   }
 }
+// Worker 组合入口把纯业务策略注入 DAO；DAO 只保存结果，不再定义客户文案规则。
+const collaborationMemory = createCollaborationMemoryDao(database, {
+  version: PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
+  derive: derivePersonaCustomerDisplayMessage,
+});
+// 历史版本只在 Worker 就绪前显式重建；页面读取不再产生写入副作用。
+collaborationMemory.rebuildStalePersonaCustomerDisplayMessages();
 workerPort.postMessage({ type: "ready", status: initialization.status });
-const collaborationMemory = new CollaborationMemoryService(database);
 const collaborationMemoryMethods = new Set<string>(collaborationMemoryMethodNames);
 let queue: Promise<void> = Promise.resolve();
 
@@ -43,7 +50,7 @@ async function handle(request: WorkerRequest): Promise<void> {
       const method = requiredText(request.payload.method, "method");
       if (!collaborationMemoryMethods.has(method)) throw new Error("不支持的人物记忆操作：" + method);
       const args = Array.isArray(request.payload.args) ? request.payload.args : [];
-      const operation = collaborationMemory[method as keyof CollaborationMemoryService] as (...values: unknown[]) => unknown;
+      const operation = collaborationMemory[method as keyof typeof collaborationMemory] as (...values: unknown[]) => unknown;
       workerPort.postMessage({ id: request.id, result: operation.apply(collaborationMemory, args) });
       return;
     }
@@ -74,8 +81,8 @@ async function handle(request: WorkerRequest): Promise<void> {
     }
     if (request.operation === "ingest-rollouts") {
       const sessionsRoot = requiredText(request.payload.sessionsRoot, "sessionsRoot");
-      const policy = request.payload.policy as ConstructorParameters<typeof CodexConversationCorpusIngestion>[2];
-      const result = await new CodexConversationCorpusIngestion(database, sessionsRoot, policy).ingestPendingRolloutsIncrementally();
+      const policy = request.payload.policy as ConstructorParameters<typeof SqliteCodexConversationCorpusDao>[2];
+      const result = await new SqliteCodexConversationCorpusDao(database, sessionsRoot, policy).ingestPendingRolloutsIncrementally();
       workerPort.postMessage({ id: request.id, result });
       return;
     }

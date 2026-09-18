@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import { writePersonaConversationMessage } from "./persona-conversation-message.writer.js";
-import { PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "./persona-customer-display-message.projector.js";
-import { writePersonaCustomerDisplayMessage } from "./persona-customer-display-message.writer.js";
+import { writePersonaConversationMessage } from "./persona-conversation-message.dao.js";
+import { writePersonaCustomerDisplayMessage, type PersonaCustomerDisplayProjector } from "./persona-customer-display-message.dao.js";
 
-import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, PersonaCustomerDisplayStateValue, ReadPersonaConversationWindowInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
-import type { DatabasePort } from "../../../platform/persistence/index.js";
+import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, PersonaCustomerDisplayStateValue, ReadPersonaConversationWindowInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import type { DatabasePort } from "../../platform/index.js";
 
 /**
  * 所有人物共享的会话仓储。
@@ -13,8 +12,11 @@ import type { DatabasePort } from "../../../platform/persistence/index.js";
  * 新手阅读提示：业务服务只传入 personaId 和会话对象，本类负责把对象翻译成 SQL。
  * 韩立、南宫婉以及未来人物都不能再创建自己的消息表或直接复制这组查询。
  */
-export class PersonaConversationRepository {
-  constructor(private readonly database: DatabasePort | null) {}
+export class SqlitePersonaConversationDao {
+  constructor(
+    private readonly database: DatabasePort | null,
+    private readonly customerDisplayProjector: PersonaCustomerDisplayProjector,
+  ) {}
 
   /** 读取某个人物的当前活动会话；首次使用或数据库不可用时返回可显示的空会话。 */
   readActive(ownerPersonaId: string): PersonaConversationOutDto {
@@ -69,7 +71,6 @@ export class PersonaConversationRepository {
     const owner = requiredPersonaId(ownerPersonaId);
     const conversation = conversationId?.trim() || this.activeConversationId(owner);
     if (!conversation) return emptyConversation(owner);
-    this.ensureCustomerDisplayRecords(owner, conversation);
     return this.database.withConnection((connection) => {
       const header = connection.prepare(`SELECT conversationId, selectedModel, createdAt, updatedAt FROM AiDesktopPersonaConversation
         WHERE ownerPersonaId=$owner AND conversationId=$conversation`).get({ $owner: owner, $conversation: conversation }) as HeaderRow | undefined;
@@ -88,7 +89,6 @@ export class PersonaConversationRepository {
     const limit = normalizedWindowLimit(request.limit);
     const conversation = request.conversationId?.trim() || this.activeConversationId(owner);
     if (!conversation) return emptyWindow(owner);
-    this.ensureCustomerDisplayRecords(owner, conversation);
     return this.database.withConnection((connection) => {
       const header = connection.prepare("SELECT conversationId, selectedModel, createdAt, updatedAt FROM AiDesktopPersonaConversation WHERE ownerPersonaId=$owner AND conversationId=$conversation")
         .get({ $owner: owner, $conversation: conversation }) as HeaderRow | undefined;
@@ -114,7 +114,7 @@ export class PersonaConversationRepository {
     if (!this.database) throw new Error("AI Memory 数据库当前不可用，无法重新读取客户消息。");
     const owner = requiredPersonaId(ownerPersonaId);
     const conversation = requiredConversationId(conversationId);
-    this.database.transaction((connection) => this.ensureCustomerDisplayRecords(owner, conversation, sourceMessageId, connection, true));
+    this.database.transaction((connection) => this.projectCustomerDisplayRecords(owner, conversation, sourceMessageId, connection, true));
   }
 
   /**
@@ -145,7 +145,9 @@ export class PersonaConversationRepository {
         $createdAt: conversation.createdAt || conversation.messages[0]?.createdAt || conversation.updatedAt,
         $updatedAt: conversation.updatedAt,
       });
-      for (const message of conversation.messages) writePersonaConversationMessage(connection, ownerPersonaId, conversationId, message, "update");
+      for (const message of conversation.messages) {
+        writePersonaConversationMessage(connection, ownerPersonaId, conversationId, message, "update", this.customerDisplayProjector);
+      }
     });
     return this.read(ownerPersonaId, conversationId);
   }
@@ -195,9 +197,36 @@ export class PersonaConversationRepository {
     });
   }
 
-  /** 为旧记录补写可审计投影；失败状态可由指定的重试请求重新生成。 */
-  private ensureCustomerDisplayRecords(ownerPersonaId: string, conversationId: string, sourceMessageId?: string, existingConnection?: DatabaseSync, force = false): void {
-    if (!this.database) return;
+  /**
+   * 启动投影任务显式升级全部过期记录。
+   *
+   * 页面查询不调用本方法；因此普通读取永远是只读的，同一版本的结果不再受打开顺序影响。
+   */
+  rebuildStaleCustomerDisplayRecords(): number {
+    if (!this.database) return 0;
+    return this.database.transaction((connection) => {
+      const conversations = connection.prepare(`
+        SELECT DISTINCT source.ownerPersonaId, source.conversationId
+        FROM AiDesktopPersonaConversationMessage AS source
+        LEFT JOIN AiDesktopPersonaCustomerDisplayMessage AS display ON display.sourceMessageId=source.messageId
+        WHERE display.derivationVersion IS NULL OR display.derivationVersion<$version
+      `).all({ $version: this.customerDisplayProjector.version }) as unknown as Array<{ ownerPersonaId: string; conversationId: string }>;
+      let rebuilt = 0;
+      for (const conversation of conversations) {
+        rebuilt += this.projectCustomerDisplayRecords(
+          conversation.ownerPersonaId,
+          conversation.conversationId,
+          undefined,
+          connection,
+        );
+      }
+      return rebuilt;
+    });
+  }
+
+  /** 写入边界或明确重试为指定原始消息生成可审计投影。 */
+  private projectCustomerDisplayRecords(ownerPersonaId: string, conversationId: string, sourceMessageId?: string, existingConnection?: DatabaseSync, force = false): number {
+    if (!this.database) return 0;
     const write = (connection: DatabaseSync) => {
       const sourceMessageFilter = sourceMessageId ? "AND messageId=$sourceMessageId" : "";
       const statement = connection.prepare(`SELECT messageId, sequenceNumber, messageType, contentRole, speakerType, speakerPersonaId, content,
@@ -207,16 +236,19 @@ export class PersonaConversationRepository {
       const rows = sourceMessageId
         ? statement.all({ $owner: ownerPersonaId, $conversation: conversationId, $sourceMessageId: sourceMessageId })
         : statement.all({ $owner: ownerPersonaId, $conversation: conversationId });
+      let projected = 0;
       for (const row of rows) {
         const existing = connection.prepare("SELECT derivationVersion FROM AiDesktopPersonaCustomerDisplayMessage WHERE sourceMessageId=$messageId")
           .get({ $messageId: String(row.messageId) }) as { derivationVersion: number } | undefined;
-        if (!force && existing && Number(existing.derivationVersion) >= PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION) continue;
+        if (!force && existing && Number(existing.derivationVersion) >= this.customerDisplayProjector.version) continue;
         // 版本落后的记录只负责触发重算；正文安全分类由唯一派生器统一决定。
-        writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, mapMessage(row));
+        writePersonaCustomerDisplayMessage(connection, ownerPersonaId, conversationId, mapMessage(row), this.customerDisplayProjector);
+        projected += 1;
       }
+      return projected;
     };
-    if (existingConnection) write(existingConnection);
-    else this.database.transaction(write);
+    if (existingConnection) return write(existingConnection);
+    return this.database.transaction(write);
   }
 }
 

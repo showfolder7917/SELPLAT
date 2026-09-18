@@ -4,7 +4,7 @@ import type {
   CollaborationTaskOutDto,
   CollaborationTimelineGroupOutDto,
   CollaborationTimelineNodeOutDto,
-} from "../../../../../../../contracts/services/workflow/index.js";
+} from "../../../../contracts/services/workflow/index.js";
 
 const NANGONG: CollaborationParticipantSnapshotOutDto = { memberId: "nangong-wan", displayName: "南宫婉" };
 const LINGHU: CollaborationParticipantSnapshotOutDto = { memberId: "linghu-ancestor", displayName: "令狐老祖" };

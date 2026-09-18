@@ -102,13 +102,15 @@ import {
 import {
   CodexFacade as CodexService,
   createFileCodexSessionRepository,
-  createSqliteCodexSessionRepository,
 } from "../../services/support/platform/codex/index.js";
+import { createSqliteCodexSessionDao } from "../../dao/codex/index.js";
+import { createEvolutionStateDao } from "../../dao/evolution/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../dao/platform/index.js";
 // Workflow 负责跨人物流程、恢复和监督，不承载某个人物自己的判断。
 import {
   decideCurrentTopicOperation,
   type CollaborationWorkflowFacade as CollaborationCoordinator,
-  type WorkflowRepositoryPort as WorkflowRepository,
+  type WorkflowPersistencePort as WorkflowRepository,
   type WorkflowSupervisorPort as WorkflowSupervisor,
 } from "../../services/workflow/index.js";
 // 三个人物模块只通过公开入口向组合根提供 Runtime 或 Facade。
@@ -119,7 +121,7 @@ import { PersonaConversationFacade } from "../../services/personas/conversation/
 import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
 import { PersonaEvolutionRuntime } from "../../services/workflow/index.js";
 // Platform 服务提供截图、设置、工作区、安全和数据库等底层能力。
-import { createAtomicJsonPersistence, type DatabasePort as SqliteDatabase } from "../../services/support/platform/persistence/index.js";
+import { createAtomicJsonPersistence } from "../../services/support/platform/persistence/index.js";
 // 规则服务读取构建后的规则包，并合并用户允许的覆盖项。
 // 窗口工厂集中维护 BrowserWindow 安全配置和 Renderer 加载方式。
 import { createMainWindow } from "../window/create-main-window.js";
@@ -490,7 +492,7 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("thread.lifecycle", details),
   );
   // 人物会话 ID 存在 SQLite 中；数据库不可用时仓库实现负责提供受控降级。
-  const nangongSessions = createSqliteCodexSessionRepository(workflowDatabase, "nangong");
+  const nangongSessions = createSqliteCodexSessionDao(workflowDatabase, "nangong");
   // 南宫婉拥有独立、跨工作区保持的长期线程，用于连续调查同一演化主题。
   nangongCodex = new CodexService(
     projectRoot,
@@ -510,7 +512,7 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("nangong.conversation.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("nangong.conversation.thread.lifecycle", details),
   );
-  const hanLiSessions = createSqliteCodexSessionRepository(workflowDatabase, "han-li");
+  const hanLiSessions = createSqliteCodexSessionDao(workflowDatabase, "han-li");
   // 韩立使用另一条长期线程，确保审批意见不混入南宫婉的调查上下文。
   hanLiCodex = new CodexService(
     projectRoot, trustedCommands, hanLiSessions,
@@ -525,7 +527,7 @@ export async function startApplication(): Promise<void> {
   hanliResultAcceptanceCodex = new CodexService(
     projectRoot,
     trustedCommands,
-    createSqliteCodexSessionRepository(workflowDatabase, "hanli-result-acceptance"),
+    createSqliteCodexSessionDao(workflowDatabase, "hanli-result-acceptance"),
     {
       codexHome,
       serviceName: "selplat_ai_desktop_han_li_result_acceptance",
@@ -543,15 +545,15 @@ export async function startApplication(): Promise<void> {
   nangongDeliberationCodex = nangongCodex;
   nangongDistributionCodex = nangongCodex;
   // 核实使用独立只读连接，避免新询问取消正在进行的研讨或分发。
-  nangongInquiryCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(workflowDatabase, "nangong-inquiry"), {
+  nangongInquiryCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionDao(workflowDatabase, "nangong-inquiry"), {
     codexHome, serviceName: "selplat_ai_desktop_nangong_inquiry", threadSource: "ai-desktop-nangong-inquiry",
     migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
     readSettings: () => settings.read(), readRuleInstructions: readNangongRuleInstructions,
   }, (details) => eventCenter.recordEvent("nangong.inquiry.trusted_command.decision", details), (details) => eventCenter.recordEvent("nangong.inquiry.thread.lifecycle", details));
   let inquiryQueue: Promise<unknown> = Promise.resolve();
   // 令狐固定会话仅服务故障兜底和统一测试修复；常规分发由南宫婉规划并交给程序做确定性冲突校验。
-  const linghuSessions = createSqliteCodexSessionRepository(workflowDatabase, "linghu");
-  linghuGuidanceCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionRepository(workflowDatabase, "linghu-guidance"), {
+  const linghuSessions = createSqliteCodexSessionDao(workflowDatabase, "linghu");
+  linghuGuidanceCodex = new CodexService(projectRoot, trustedCommands, createSqliteCodexSessionDao(workflowDatabase, "linghu-guidance"), {
     codexHome, serviceName: "selplat_ai_desktop_linghu_guidance", threadSource: "ai-desktop-linghu-guidance",
     migrateLegacySession: false, sessionStorage: "ai-desktop", validationOwner: "desktop",
     readSettings: () => settings.read(), readRuleInstructions: () => rules.renderRoleInstructions("linghu"),
@@ -742,7 +744,7 @@ export async function startApplication(): Promise<void> {
   const initialNangongConversation = collaborationMemory
     ? await collaborationMemory.readPersonaConversation("nangong-wan")
     : null;
-  const evolutionStateStore = createEvolutionState(workflowDatabase, initialNangongConversation);
+  const evolutionStateStore = createEvolutionState(createEvolutionStateDao(workflowDatabase, initialNangongConversation));
   // 三个可选端口把专题写操作登记为幂等 mutation；数据库不可用时不伪造持久化成功。
   const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
   const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;

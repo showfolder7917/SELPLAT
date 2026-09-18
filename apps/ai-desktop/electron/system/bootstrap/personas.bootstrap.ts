@@ -10,7 +10,7 @@ import {
   createCheckpointCoordinator,
   type CollaborationWorkflowFacade,
   type PersonaEvolutionRuntime,
-  type WorkflowRepositoryPort,
+  type WorkflowPersistencePort,
 } from "../../services/workflow/index.js";
 
 export interface PersonaBootstrapOptions {
@@ -18,7 +18,7 @@ export interface PersonaBootstrapOptions {
   hanliRuntime: ReturnType<typeof createHanliRuntime>;
   collaboration: CollaborationWorkflowFacade;
   collaborationTimeline: EventCenterTimeline | null;
-  workflowRepository: WorkflowRepositoryPort | null;
+  workflowRepository: WorkflowPersistencePort | null;
   linghuRuntime: LinghuRuntime;
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
   memory?: AsyncCollaborationMemoryPort | null;

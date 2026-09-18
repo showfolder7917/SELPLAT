@@ -41,7 +41,7 @@ export interface HanliConversationWorkspaceProps {
   newConversationBusy: boolean;
   /** 父页面保存的可见错误，例如桌面通信失败。 */
   error: string;
-  /** 后端返回新会话后，用它替换父页面中的旧会话。 */
+  /** 会话状态更新操作；正文只能传入公共控制器已重读的客户安全窗口。 */
   onConversation(value: PersonaConversationOutDto): void;
   /** 更新父页面中的待发送附件；既可直接设置，也可根据当前附件计算。 */
   onAttachments: Dispatch<SetStateAction<ComposerAttachment[]>>;

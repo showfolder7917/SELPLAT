@@ -5,8 +5,9 @@ export {
   CodexCollaborationSessionFactory,
   CollaborationCodexRegistry,
 } from "./internal/collaboration-codex-sessions.js";
-// 人物共享的会话持久化能力由本模块统一提供，具体人物不直接操作 SQLite。
-export { PersonaConversationRepository } from "./internal/persona-conversation.repository.js";
-
-// 跨能力的原子业务事务统一复用消息写入器，序号与身份规则只维护一处。
-export { writePersonaConversationMessage } from "./internal/persona-conversation-message.writer.js";
+// 客户显示策略是会话业务规则；Worker 组合入口把它注入 DAO，DAO 不再定义内容判断。
+export {
+  derivePersonaCustomerDisplayMessage,
+  PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
+  type PersonaCustomerDisplayDerivation,
+} from "./internal/persona-customer-display-message.projector.js";

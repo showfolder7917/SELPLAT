@@ -7,7 +7,7 @@ import type { CodexFacade as CodexService } from "../../../services/support/plat
 import type { ConversationFacade as ConversationDispatchStore } from "../../../services/support/capabilities/conversation/index.js";
 import type { CollaborationCodexRegistry } from "../../../services/support/capabilities/conversation/index.js";
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
-import type { WorkflowRepositoryPort as WorkflowRepository } from "../../../services/workflow/index.js";
+import type { WorkflowPersistencePort as WorkflowRepository } from "../../../services/workflow/index.js";
 import type { SettingsFacade as SettingsStore } from "../../../services/support/platform/settings/index.js";
 import type { CommandGovernanceFacade as TrustedCommandStore } from "../../../services/support/platform/security/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../../services/support/platform/workspace/index.js";

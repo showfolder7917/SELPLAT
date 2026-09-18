@@ -126,6 +126,6 @@ test("结构化审查会自纠格式且不污染客户对话", () => {
   const appRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
   assert.match(decision, /#askForStructuredResult/);
   assert.match(decision, /连续 3 次未返回有效的结果验收判断/);
-  assert.match(appRuntime, /createSqliteCodexSessionRepository\(workflowDatabase, "hanli-result-acceptance"\)/);
+  assert.match(appRuntime, /createSqliteCodexSessionDao\(workflowDatabase, "hanli-result-acceptance"\)/);
   assert.match(appRuntime, /await acceptanceCodex\.newChat\(\)/);
 });

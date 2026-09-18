@@ -103,7 +103,7 @@ test("普通任务最多自修五轮而令狐按新技术证据持续修复", ()
 
 test("失败分流由受管执行结果统一形成，命令名称不再豁免或驱动令狐派发", () => {
   const workflow = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
-  const timeline = readFileSync(new URL("../../../electron/services/support/capabilities/event-center/internal/timeline/collaboration-timeline-flow.projector.ts", import.meta.url), "utf8");
+  const timeline = readFileSync(new URL("../../../electron/dao/timeline/internal/collaboration-timeline-flow.projector.ts", import.meta.url), "utf8");
   assert.match(executor, /function classifyFailureRouting/);
   assert.match(executor, /kind === "diagnostic-correction"/);
   assert.match(executor, /kind === "gate-failure"/);

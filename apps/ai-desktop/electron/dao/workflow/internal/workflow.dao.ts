@@ -1,21 +1,20 @@
-import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
+import { CollaborationTaskAggregate, type WorkflowCheckpointState, type WorkflowPersistencePort } from "../../../services/workflow/index.js";
 import { randomUUID } from "node:crypto";
 // Repository 只持久化卡点聚合快照，不自行解释卡点阶段。
-import type { WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
 import type { DatabaseSync } from "node:sqlite";
 
-import type { EventSeverityValue } from "../../../../../contracts/foundation/index.js";
-import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto, WorkflowFlowImpactValue } from "../../../../../contracts/services/workflow/index.js";
-import type { LinghuAutomationStateOutDto } from "../../../../../contracts/services/personas/linghu/index.js";
-import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../../support/platform/persistence/index.js";
+import type { EventSeverityValue } from "../../../../contracts/foundation/index.js";
+import type { ApprovalGovernanceRecordOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, StalledTaskDetectionOutDto, WorkflowEventCategoryValue, WorkflowEventInDto, WorkflowEventStatusValue, WorkflowExceptionRecordOutDto, WorkflowFlowImpactValue } from "../../../../contracts/services/workflow/index.js";
+import type { LinghuAutomationStateOutDto } from "../../../../contracts/services/personas/linghu/index.js";
+import type { EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionArchiveRecordOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 // 模型可能执行较长的定向测试；十分钟没有任何协议事件才判定停滞，避免把正常命令误杀。
 const STALE_AFTER_MS = 600_000;
 const TERMINAL_TASK_STATES = new Set(["integrated", "cancelled"]);
 
 /** 把现有协同控制面投影到统一 SQLite；JSON 继续负责恢复对象图，数据库负责跨角色查询、异常和审计。 */
-export class WorkflowRepository {
+export class SqliteWorkflowDao implements WorkflowPersistencePort {
   readonly #database: SqliteDatabase;
   readonly #sessionId = `runtime-session-${randomUUID()}`;
 

@@ -159,7 +159,7 @@ test("任务群在协作状态未返回或读取失败时不把空专题当作�
 });
 
 test("一次性工作流按可见实质状态更新同一消息，任务事件仍按真实事件身份追加", () => {
-  const memory = readFileSync(new URL("../../../electron/services/support/capabilities/event-center/internal/projection/collaboration-memory.service.ts", import.meta.url), "utf8");
+  const memory = readFileSync(new URL("../../../electron/dao/memory/internal/collaboration-memory.dao.ts", import.meta.url), "utf8");
   assert.match(applicationRuntimeSource, /const progressIdentity = createHash\("sha256"\)\.update\(JSON\.stringify\(\{[\s\S]*?runId: run\.runId,[\s\S]*?workflowStatus,[\s\S]*?\}\)\)\.digest\("hex"\)/);
   const progressIdentityBlock = applicationRuntimeSource.slice(applicationRuntimeSource.indexOf("const progressIdentity"), applicationRuntimeSource.indexOf("const messageId", applicationRuntimeSource.indexOf("const progressIdentity")));
   assert.doesNotMatch(progressIdentityBlock, /action: run\.action/);

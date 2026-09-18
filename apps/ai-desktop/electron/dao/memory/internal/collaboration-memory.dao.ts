@@ -10,13 +10,13 @@ import type {
   HanliSemanticExtractionInDto,
   RequirementDiscussionContextOutDto,
   TrainingCorpusTopicSearchResultOutDto,
-} from "../../../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../../../../contracts/services/evolution/index.js";
-import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../../../../contracts/services/personas/hanli/index.js";
-import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../../../../contracts/services/personas/conversation/index.js";
-import { PersonaConversationRepository, writePersonaConversationMessage } from "../../../conversation/index.js";
-import type { DatabasePort as SqliteDatabase } from "../../../../platform/persistence/index.js";
-import { HanliSemanticMemoryRepository } from "./hanli-semantic-memory.repository.js";
+} from "../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { HanliAcceptanceExperienceCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
+import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import { SqlitePersonaConversationDao, writePersonaConversationMessage, type PersonaCustomerDisplayProjector } from "../../conversation/index.js";
+import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
+import { SqliteHanliSemanticMemoryDao } from "./hanli-semantic-memory.dao.js";
 
 const CURRENT_CONVERSATION_TURN_LIMIT = 20;
 const HISTORICAL_USER_CONCERN_LIMIT = 8;
@@ -28,15 +28,22 @@ const EVOLUTION_CODEX_AI_PREVIEW_LIMIT = 120;
 const REQUIREMENT_DISCUSSION_CONTEXT_PREFIX = "internal:requirement-discussion-context:";
 
 /** 保存用户与南宫婉完整原文，并通过受控查询为后续调查和韩立审批提供上下文。 */
-export class CollaborationMemoryService implements CollaborationMemoryPort {
+export class SqliteCollaborationMemoryDao implements CollaborationMemoryPort {
   readonly #database: SqliteDatabase;
-  readonly #hanliSemanticMemory: HanliSemanticMemoryRepository;
-  readonly #conversations: PersonaConversationRepository;
+  readonly #hanliSemanticMemory: SqliteHanliSemanticMemoryDao;
+  readonly #conversations: SqlitePersonaConversationDao;
+  readonly #customerDisplayProjector: PersonaCustomerDisplayProjector;
 
-  constructor(database: SqliteDatabase) {
+  constructor(database: SqliteDatabase, customerDisplayProjector: PersonaCustomerDisplayProjector) {
     this.#database = database;
-    this.#hanliSemanticMemory = new HanliSemanticMemoryRepository(database);
-    this.#conversations = new PersonaConversationRepository(database);
+    this.#customerDisplayProjector = customerDisplayProjector;
+    this.#hanliSemanticMemory = new SqliteHanliSemanticMemoryDao(database);
+    this.#conversations = new SqlitePersonaConversationDao(database, customerDisplayProjector);
+  }
+
+  /** Worker 启动时一次性升级过期客户投影；普通查询永远不执行此写入。 */
+  rebuildStalePersonaCustomerDisplayMessages(): number {
+    return this.#conversations.rebuildStaleCustomerDisplayRecords();
   }
 
   /** 领取本轮尚未分析或内容版本已变化的统一语料。 */
@@ -110,7 +117,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         messageId: input.messageId, messageType: "internal-deliberation", contentRole: input.contentRole || "conversation", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
         content, attachmentIds, replyToMessageId: input.replyToMessageId || null,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
-      }, "append");
+      }, "append", this.#customerDisplayProjector);
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
@@ -135,7 +142,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         ...existing,
         content,
         completedAt: input.updatedAt,
-      }, "update");
+      }, "update", this.#customerDisplayProjector);
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.updatedAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
@@ -155,7 +162,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         messageId: input.messageId, messageType: "internal-recovery", contentRole: "technical-evidence", speakerType: "system", speakerPersonaId: null,
         content, attachmentIds: [], replyToMessageId: input.requestId,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
-      }, "append");
+      }, "append", this.#customerDisplayProjector);
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
@@ -176,7 +183,7 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         messageId: input.messageId, messageType: "customer-visible", contentRole: "conversation", speakerType: "persona", speakerPersonaId: input.speakerPersonaId,
         content, attachmentIds: [], replyToMessageId: input.replyToMessageId,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.createdAt,
-      }, "append");
+      }, "append", this.#customerDisplayProjector);
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.createdAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
@@ -231,12 +238,12 @@ export class CollaborationMemoryService implements CollaborationMemoryPort {
         messageId: input.userMessageId, messageType: "customer-visible", contentRole: "conversation", speakerType: "user", speakerPersonaId: null, content: input.userContent,
         inferredIntent: input.decision.userIntent || undefined, attachmentIds: input.attachmentIds, replyToMessageId: null,
         deliveryStatus: "completed", createdAt: input.createdAt, completedAt: input.completedAt,
-      }, "append");
+      }, "append", this.#customerDisplayProjector);
       const personaSequence = writePersonaConversationMessage(connection, input.ownerPersonaId, input.conversationId, {
         messageId: input.personaMessageId, messageType: "customer-visible", contentRole: "conversation", speakerType: "persona", speakerPersonaId: input.responderPersonaId,
         content: input.personaContent, attachmentIds: [], replyToMessageId: input.userMessageId,
         deliveryStatus: "completed", createdAt: input.completedAt, completedAt: input.completedAt,
-      }, "append");
+      }, "append", this.#customerDisplayProjector);
       connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
         WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
         $updatedAt: input.completedAt, $ownerPersonaId: input.ownerPersonaId, $conversationId: input.conversationId,
