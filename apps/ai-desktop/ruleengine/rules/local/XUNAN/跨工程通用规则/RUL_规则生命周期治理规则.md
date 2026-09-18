@@ -1,272 +1,137 @@
-# 规则生命周期治理
-
-<!-- 规则正文统一由 rule-engine 的标准 resources 承载；Python 加载器通过唯一索引直接读取，不依赖 Gradle 识别。 -->
+rule_schema = 2
+rule_logical_id = RULE_LIFECYCLE_GOVERNANCE_RULES
+rule_scope = cross_project
+rule_kind = policy
+rule_status = active
+rule_version = 2.2.0
+rule_owner = active_user
+rule_trigger = artifact:rule
+rule_trigger.2 = operation:create|modify|move|retire|complete
+rule_check_refs = artifact_compliance_guard:rule_schema
+current_version_change_summary = persona_runtime_contract_retirement_guard
+rule_owner_storage_policy = symbolic_layer_owner_only
+rule_owner_core_value = core
+rule_owner_common_value = common
+rule_owner_active_user_value = active_user
+rule_owner_runtime_resolution = AGENTS.md.current_stable_user_id
+rule_owner_concrete_stable_user_id_in_rule_source = forbidden
+active_rule_schema_policy = schema_2_only
+active_rule_source_format = machine_dsl_only
+recipe_detail_storage_policy = compact_main_rule_plus_on_demand_required_resource
+recipe_detail_resource_integrity = normalized_utf8_sha256
+recipe_detail_resource_loading = exact_recipe_match_only
+recipe_resource_path_format = posix_relative
+retirement_evidence_policy = verified_semantic_absorption_or_verified_no_runtime_contract
+retirement_reference_scan_must_include = index_triggers
+retirement_reference_scan_must_include.2 = dependencies
+retirement_reference_scan_must_include.3 = callers
+retirement_reference_scan_must_include.4 = tests
+retirement_reference_scan_must_include.5 = prompt_contracts
+retirement_reference_scan_must_include.6 = template_contracts
+retirement_reference_scan_must_include.7 = runtime_role_bindings
+zero_direct_inbound_reference_alone_is_not_retirement_evidence = true
+persona_rule_retirement_requires = verified_semantic_absorption_into_role_rule_plus_runtime_selection_and_regression
 rule_resource_root = apps/ai-desktop/ruleengine/rules
-
-<!-- 正式规则在标准 resources 内按 core、空预留 common 或稳定用户标识分层；适用于分层迁移完成后的全部规则维护。 -->
 rule_layer_root_pattern = apps/ai-desktop/ruleengine/rules/local/<layer>/
-<!-- rule_layer_values 的当前独立事实为 core。 -->
 rule_layer_values = core
-<!-- rule_layer_values.2 的当前独立事实为 common。 -->
 rule_layer_values.2 = common
-<!-- rule_layer_values.3 的当前独立事实为 <stable-user-id>。 -->
 rule_layer_values.3 = <stable-user-id>
-
-<!-- 跨工程通用规则直接放在“跨工程通用规则”目录；适用于不依赖组织或工程语义的稳定规则；业务含义是目录语义明确，避免被误认作任意模块规则 -->
 cross_project_rules_must_live_in_rule_root = apps/ai-desktop/ruleengine/rules/local/<layer>/跨工程通用规则/
-
-<!-- 当前用户中除“跨工程通用规则”外，每个一级目录都是一个大项目；业务含义是 Fujitsu、SELPLAT、中文教学等项目拥有独立索引和分类边界。 -->
 active_user_first_level_project_pattern = apps/ai-desktop/ruleengine/rules/local/<stable-user-id>/<large-project>/
-
-<!-- 大项目跨子项目共享的规则统一进入“通用/rule”；业务含义是共享规则不再与应用规则或材料混放。 -->
 active_user_large_project_general_rule_root = apps/ai-desktop/ruleengine/rules/local/<stable-user-id>/<large-project>/通用/rule/
-
-<!-- 大项目的二级子项目统一进入“应用/<subproject>”；业务含义是每个二级项目在一个位置聚合自己的规则和真实材料。 -->
 active_user_large_project_application_root = apps/ai-desktop/ruleengine/rules/local/<stable-user-id>/<large-project>/应用/<subproject>/
-
-<!-- 二级子项目规则正文统一进入自己的 rule 目录。 -->
 active_user_subproject_rule_root = apps/ai-desktop/ruleengine/rules/local/<stable-user-id>/<large-project>/应用/<subproject>/rule/
-
-<!-- SELPLAT 的 apps 目录允许持续新增应用工程；适用于当前和未来任意 apps/<app>；业务含义是新增应用不再膨胀规则资源顶层目录 -->
 selplat_application_source_pattern = apps/<app>/
-
-<!-- SELPLAT 内部应用同样遵循大项目分类，不再维护“通用规则”和“应用规则”两套旧目录名。 -->
 selplat_general_rule_path = apps/ai-desktop/ruleengine/rules/local/<stable-user-id>/selplat/通用/rule/
-<!-- selplat_application_rule_path_pattern 的当前独立事实为当前用户 SELPLAT 应用规则目录。 -->
 selplat_application_rule_path_pattern = apps/ai-desktop/ruleengine/rules/local/<stable-user-id>/selplat/应用/<app>/rule/
-
-<!-- apps 下应用不得在规则资源根创建同名顶层目录；适用于新增或迁移 SELPLAT 应用规则；业务含义是避免把平台内部应用误判成组织级或跨项目业务模块 -->
 selplat_application_must_not_create_resource_root_peer = true
-
-<!-- 新规则必须先查唯一索引和现有近义规则；适用于所有规则沉淀；业务含义是更新或合并已有模块而非重复堆叠 -->
 new_rule_must_check_and_merge_existing_semantics = true
-
-<!-- 规则变更必须同步唯一索引；适用于新增、移动、改名和删除；业务含义是任何有效规则始终拥有可调用入口 -->
 rule_change_must_sync_rule_index = RULE_INDEX.md
-
-## 任务完成前规则沉淀评估
-
-<!-- 每个任务交付前都必须加载本逻辑 ID 并执行沉淀评估；业务含义是完成门禁不依赖用户措辞、关键词或专项规则偶然命中。 -->
 task_completion_rule_sedimentation_evaluation = mandatory_every_task
-
-<!-- 沉淀评估必须形成一个显式结果，禁止没有结论就交付。 -->
 rule_sedimentation_evaluation_outcome = upgrade_existing_rule
-<!-- rule_sedimentation_evaluation_outcome.2 的当前独立事实为 create_new_rule。 -->
 rule_sedimentation_evaluation_outcome.2 = create_new_rule
-<!-- rule_sedimentation_evaluation_outcome.3 的当前独立事实为 no_change_with_near_rule_and_reason_evidence。 -->
 rule_sedimentation_evaluation_outcome.3 = no_change_with_near_rule_and_reason_evidence
-
-<!-- 用户纠正规范、同类偏差重复、约束可复用、公共结构或完成门槛变化、现有规则失效以及单点修正无法防复发时，必须进入正式沉淀判断。 -->
 rule_sedimentation_evaluation_triggers = explicit_user_standardization_or_correction
-<!-- rule_sedimentation_evaluation_triggers.2 的当前独立事实为 repeated_deviation_or_rework。 -->
 rule_sedimentation_evaluation_triggers.2 = repeated_deviation_or_rework
-<!-- rule_sedimentation_evaluation_triggers.3 的当前独立事实为 reusable_cross_file_or_future_task_constraint。 -->
 rule_sedimentation_evaluation_triggers.3 = reusable_cross_file_or_future_task_constraint
-<!-- rule_sedimentation_evaluation_triggers.4 的当前独立事实为 shared_structure_naming_boundary_sequence_or_completion_gate_change。 -->
 rule_sedimentation_evaluation_triggers.4 = shared_structure_naming_boundary_sequence_or_completion_gate_change
-<!-- rule_sedimentation_evaluation_triggers.5 的当前独立事实为 missing_incomplete_stale_or_ineffective_existing_rule。 -->
 rule_sedimentation_evaluation_triggers.5 = missing_incomplete_stale_or_ineffective_existing_rule
-<!-- rule_sedimentation_evaluation_triggers.6 的当前独立事实为 one_output_fix_cannot_prevent_recurrence。 -->
 rule_sedimentation_evaluation_triggers.6 = one_output_fix_cannot_prevent_recurrence
-
-<!-- 用户确认的约束可复用、超出单文件、语义明确且当前任务已有独立授权时，必须在同一任务内升级当前用户层规则与门禁。 -->
 automatic_rule_sedimentation_requires = reusable_user_confirmed_constraint
-<!-- automatic_rule_sedimentation_requires.2 的当前独立事实为 applies_beyond_one_file_or_one_record。 -->
 automatic_rule_sedimentation_requires.2 = applies_beyond_one_file_or_one_record
-<!-- automatic_rule_sedimentation_requires.3 的当前独立事实为 unambiguous_business_semantics。 -->
 automatic_rule_sedimentation_requires.3 = unambiguous_business_semantics
-<!-- automatic_rule_sedimentation_requires.4 的当前独立事实为 current_task_has_standalone_authorization。 -->
 automatic_rule_sedimentation_requires.4 = current_task_has_standalone_authorization
-<!-- automatic_rule_sedimentation_requires.5 的当前独立事实为 active_user_layer_only_without_scope_expansion。 -->
 automatic_rule_sedimentation_requires.5 = active_user_layer_only_without_scope_expansion
-
-<!-- 一次性数据或页面、仍在比较的方案、业务语义未确认、已有规则可吸收、未授权层级及 AI 临时偏好不得直接形成新长期规则。 -->
 automatic_rule_sedimentation_forbidden = one_off_data_file_or_page_change
-<!-- automatic_rule_sedimentation_forbidden.2 的当前独立事实为 undecided_alternative。 -->
 automatic_rule_sedimentation_forbidden.2 = undecided_alternative
-<!-- automatic_rule_sedimentation_forbidden.3 的当前独立事实为 unconfirmed_business_semantics。 -->
 automatic_rule_sedimentation_forbidden.3 = unconfirmed_business_semantics
-<!-- automatic_rule_sedimentation_forbidden.4 的当前独立事实为 near_rule_can_absorb_change。 -->
 automatic_rule_sedimentation_forbidden.4 = near_rule_can_absorb_change
-<!-- automatic_rule_sedimentation_forbidden.5 的当前独立事实为 unauthorized_core_common_or_other_user_change。 -->
 automatic_rule_sedimentation_forbidden.5 = unauthorized_core_common_or_other_user_change
-<!-- automatic_rule_sedimentation_forbidden.6 的当前独立事实为 ai_implementation_preference_without_stable_evidence。 -->
 automatic_rule_sedimentation_forbidden.6 = ai_implementation_preference_without_stable_evidence
-
-<!-- 沉淀目标按适用范围选择：单应用进入应用 rule，同项目多应用进入通用 rule，跨项目进入跨工程通用规则；所有路径都必须由稳定用户变量解析。 -->
 rule_sedimentation_target_by_scope = single_application_to_active_user_project_application_rule
-<!-- rule_sedimentation_target_by_scope.2 的当前独立事实为 multi_application_same_project_to_active_user_project_general_rule。 -->
 rule_sedimentation_target_by_scope.2 = multi_application_same_project_to_active_user_project_general_rule
-<!-- rule_sedimentation_target_by_scope.3 的当前独立事实为 project_independent_to_active_user_cross_project_rule。 -->
 rule_sedimentation_target_by_scope.3 = project_independent_to_active_user_cross_project_rule
-
-<!-- 沉淀闭环必须先检查近义规则，再修改正文与所属叶子索引，沿父链验证根索引可达，并检查失效路径、重复 ID 和跨用户引用。 -->
 rule_sedimentation_required_closure = check_near_rules
-<!-- rule_sedimentation_required_closure.2 的当前独立事实为 update_or_create_active_user_rule。 -->
 rule_sedimentation_required_closure.2 = update_or_create_active_user_rule
-<!-- rule_sedimentation_required_closure.3 的当前独立事实为 sync_owning_leaf_and_validate_parent_chain。 -->
 rule_sedimentation_required_closure.3 = sync_owning_leaf_and_validate_parent_chain
-<!-- rule_sedimentation_required_closure.4 的当前独立事实为 validate_root_reachability_stale_paths_duplicate_ids_and_cross_user_refs。 -->
 rule_sedimentation_required_closure.4 = validate_root_reachability_stale_paths_duplicate_ids_and_cross_user_refs
-<!-- rule_sedimentation_required_closure.5 的当前独立事实为 record_required_tests_and_handoff_outcome。 -->
 rule_sedimentation_required_closure.5 = record_required_tests_and_handoff_outcome
-
-## 分级规则索引
-
-<!-- 问题：当前用户层中多个工程、组织和业务域全部平铺到根索引后，任何局部维护都会扩大根索引冲突和审查范围。 -->
-<!-- 场景：当前稳定用户层存在 SELPLAT、Fujitsu、中文教学及未来新增的独立规则作用域。 -->
-<!-- 业务含义：每个作用域维护自己的权威索引，上级索引只负责汇总子索引，根索引保持稳定全局入口。 -->
 active_user_first_level_directory_semantics = independent_rule_scope
-<!-- active_user_rule_scope_examples 的当前独立事实为 fujitsu。 -->
 active_user_rule_scope_examples = fujitsu
-<!-- active_user_rule_scope_examples.2 的当前独立事实为 selplat。 -->
 active_user_rule_scope_examples.2 = selplat
-<!-- active_user_rule_scope_examples.3 的当前独立事实为中文教学。 -->
 active_user_rule_scope_examples.3 = 中文教学
-
-<!-- 跨工程通用规则是所有工程可按需使用的共享作用域，不等同某个具体项目，也不得因适用范围广而默认全量加载。 -->
 cross_project_common_scope = local/<stable-user-id>/跨工程通用规则/
-<!-- cross_project_common_index 的当前独立事实为当前用户跨工程通用规则索引。 -->
 cross_project_common_index = local/<stable-user-id>/跨工程通用规则/RULE_INDEX.md
-<!-- cross_project_common_loading_policy 的当前独立事实为 matched_rules_only。 -->
 cross_project_common_loading_policy = matched_rules_only
-<!-- cross_project_common_loading_policy.2 的当前独立事实为 no_bulk_loading。 -->
 cross_project_common_loading_policy.2 = no_bulk_loading
-
-<!-- 当前用户汇总索引只登记一级作用域索引；禁止复制子索引内的规则逻辑 ID。 -->
 active_user_aggregate_index = local/<stable-user-id>/RULE_INDEX.md
-<!-- active_user_aggregate_index_content 的当前独立事实为只登记子作用域索引。 -->
 active_user_aggregate_index_content = child_scope_index_references_only
-
-<!-- 每个当前用户一级大项目必须维护自己的索引，并分别汇总通用索引与应用索引。 -->
 active_user_scope_index_pattern = local/<stable-user-id>/<scope>/RULE_INDEX.md
-<!-- active_user_general_index_pattern 的当前独立事实为当前用户作用域通用索引。 -->
 active_user_general_index_pattern = local/<stable-user-id>/<scope>/通用/RULE_INDEX.md
-<!-- active_user_application_aggregate_index_pattern 的当前独立事实为当前用户作用域应用汇总索引。 -->
 active_user_application_aggregate_index_pattern = local/<stable-user-id>/<scope>/应用/RULE_INDEX.md
-<!-- active_user_application_leaf_index_pattern 的当前独立事实为当前用户具体应用叶子索引。 -->
 active_user_application_leaf_index_pattern = local/<stable-user-id>/<scope>/应用/<subproject>/RULE_INDEX.md
-
-<!-- 最下级所属索引唯一登记规则逻辑 ID 和主规则文件；所有父索引只登记子索引入口。 -->
 rule_logical_id_authority = nearest_owning_leaf_index
-<!-- parent_index_must_not_duplicate_child_rule_entries 的当前独立事实为 true。 -->
 parent_index_must_not_duplicate_child_rule_entries = true
-
-<!-- 根索引直接登记冻结 core 规则、空 common 入口与动态用户入口；core 平铺指索引登记，不得移动 core 实体文件。 -->
 root_index_core_registration = direct_core_rule_entries
-<!-- root_index_common_registration 的当前独立事实为空 common 预留索引。 -->
 root_index_common_registration = local/common/RULE_INDEX.md
-<!-- root_index_active_user_registration 的当前独立事实为动态用户索引模式。 -->
 root_index_active_user_registration = local/<stable-user-id>/RULE_INDEX.md
-<!-- core_flattening_means_index_entries_not_file_moves 的当前独立事实为 true。 -->
 core_flattening_means_index_entries_not_file_moves = true
-
-<!-- 任一规则新增、移动、改名或删除必须更新所属叶子索引，并沿父链验证到根索引可达。 -->
 hierarchical_rule_change_sync_chain = owning_leaf_index -> active_user_parent_indexes -> active_user_aggregate_index -> root_RULE_INDEX
-
-<!-- 分层迁移期间旧目录只作为迁移输入读取；新规则和新能力不得继续写入旧布局，业务含义是过渡期不扩大待迁移范围。 -->
-legacy_unlayered_rule_layout_policy = read_for_migration_only
-<!-- legacy_unlayered_rule_layout_policy.2 的当前独立事实为 no_new_authoring。 -->
-legacy_unlayered_rule_layout_policy.2 = no_new_authoring
-
-<!-- 被完全替代或失去入口的规则必须删除并清理索引；适用于规则退役；业务含义是避免旧规则继续误导执行 -->
 obsolete_rule_and_index_reference_must_be_removed = true
-
-## 规则正文、正式资源与可丢失素材
-
-<!-- 当前用户大项目中的主规则文件必须位于所属通用或应用子项目的 rule 目录。 -->
 active_user_rule_main_file_pattern = <project-or-subproject>/rule/RUL_<主题>规则.md
-
-<!-- 只有影响运行或稳定复现的正式资源才允许进入同一项目下 template 中与规则文件去扩展名同名的目录。 -->
 active_user_rule_template_material_pattern = <project-or-subproject>/template/RUL_<主题>规则/
-
-<!-- template 不是辅助素材目录；没有已验证的正式运行或复现依赖时不得创建。 -->
 active_user_rule_template_directory_policy = optional_create_only_when_verified_required_resource_exists
-
-<!-- template 只能保存已经存在、来源可说明且确实影响规则运行或稳定复现的正式资源。 -->
 active_user_rule_template_material_source_policy = verified_required_runtime_or_repeatability_resource_only
-<!-- active_user_rule_template_material_source_policy.2 的当前独立事实为不生成虚假资源。 -->
 active_user_rule_template_material_source_policy.2 = no_synthetic_material
-
-<!-- 非权威图片、Excel、示例数据和人工参考副本统一进入可丢失素材根，禁止继续散落在规则包 template。 -->
 optional_rule_material_root = apps/ai-desktop/ruleengine/history/素材
-<!-- 辅助素材目录整体丢失时不得影响生产规则、能力、构建、测试、门禁或客户规则包。 -->
 optional_rule_material_missing_policy = no_runtime_build_test_gate_or_bundle_effect
-<!-- 无法证明属于正式运行或稳定复现依赖的材料一律按可丢失素材处理，禁止凭文件名升级为正式资源。 -->
 unowned_template_material_policy = move_to_optional_material_root_without_production_reference
-
-<!-- 同一正式必需资源被多个子项目复用时必须提升到大项目通用正式资源包，禁止复制二进制或维护多个版本。 -->
 shared_template_material_policy = promote_required_resource_to_large_project_general_rule_package
-<!-- shared_template_material_policy.2 的当前独立事实为不复制正式二进制资源。 -->
 shared_template_material_policy.2 = no_duplicate_binary
-
-<!-- 正式 template 的 README 只解释必需资源来源、用途、使用方法和主规则入口，不得复制规则正文。 -->
 active_user_rule_template_readme_policy = required_resource_manifest_source_usage_and_rule_entry_only
-
-<!-- RULE_INDEX 只指向 rule 下的主规则文件，不得指向 template 材料或 README。 -->
 active_user_rule_index_target_policy = rule_main_file_only
-<!-- active_user_rule_index_target_policy.2 的当前独立事实为索引不得指向模板或说明文件。 -->
 active_user_rule_index_target_policy.2 = no_template_or_readme_target
-
-<!-- 跨工程通用规则是规则正文布局例外并继续位于作用域根；辅助素材仍必须进入统一 history 素材根。 -->
 cross_project_rule_layout_exception = direct_rule_file_in_cross_project_root
-<!-- cross_project_rule_layout_exception.2 的当前独立事实为辅助素材不允许使用规则旁目录。 -->
 cross_project_rule_layout_exception.2 = optional_material_still_uses_ruleengine_history_material_root
-
-<!-- 当前用户规则层使用大项目、通用/应用、rule 和可选正式 template；辅助素材与历史记录统一离开生产规则树。 -->
 active_user_rule_layout_policy = project_general_application_rule_optional_required_template_plus_decoupled_history
-
-<!-- 用户根索引只汇总跨工程和大项目索引，具体逻辑 ID 由最下级所属索引维护。 -->
 active_user_index_pattern = local/<stable-user-id>/RULE_INDEX.md -> cross-project-or-project-index -> owning-leaf-index
-
-<!-- 用户注册表和二次执行器不是规则提升所需结构；没有多个真实程序路由需求时不得预建。 -->
 active_user_program_registry_policy = create_only_for_multiple_registered_runtime_routes
-<!-- active_user_program_registry_policy.2 的当前独立事实为 otherwise_direct_program_entry。 -->
 active_user_program_registry_policy.2 = otherwise_direct_program_entry
-
-<!-- 规则生成器只创建 rule 主文件和索引入口；正式资源与辅助素材均须人工判定，避免程序复制或生成虚假材料。 -->
 rule_generator_default_output = rule_main_file + owning_leaf_rule_index_entry
-<!-- rule_generator_template_output_condition 的当前独立事实为仅在证明为正式必需资源后人工收集。 -->
 rule_generator_template_output_condition = manual_collection_after_required_resource_verification_only
-
-<!-- Java、Python 和 Node 能力统一保存在 rule-engine 的对应源码根；适用于规则自动生成、检测、迁移和工具交付；业务含义是能力可被多个规则包引用且不会复制到 resources。 -->
 rule_engine_ability_source_roots = ../java/com/sp/selplat/local/code/<layer>/
-<!-- rule_engine_language_native_source_roots 的当前独立事实为 ../python/local/<layer>/。 -->
 rule_engine_language_native_source_roots = ../python/local/<layer>/
-<!-- rule_engine_language_native_source_roots.2 的当前独立事实为 ../node/com/sp/selplat/local/code/<layer>/。 -->
 rule_engine_language_native_source_roots.2 = ../node/com/sp/selplat/local/code/<layer>/
-<!-- rule_engine_legacy_non_java_migration_policy 的当前独立事实为 preserve_original_language_with_equivalence_test_or_retire_with_deletion_evidence。 -->
 rule_engine_legacy_non_java_migration_policy = preserve_original_language_with_equivalence_test_or_retire_with_deletion_evidence
-
-<!-- 每个规则正文必须显式登记可复用能力入口；未使用的语言写 none；业务含义是读取规则后可直接定位执行工具，不依赖目录猜测。 -->
 rule_ability_reference_fields = java_ability_refs
-<!-- rule_ability_reference_fields.2 的当前独立事实为 python_ability_refs。 -->
 rule_ability_reference_fields.2 = python_ability_refs
-<!-- rule_ability_reference_fields.3 的当前独立事实为 node_ability_refs。 -->
 rule_ability_reference_fields.3 = node_ability_refs
-
-<!-- 规则可以引用同一个能力，能力不得因多规则复用而复制到多个规则包；业务含义是共享实现只有一个维护位置。 -->
 rule_ability_reuse_policy = multiple_rule_packages_may_reference_one_ability
-
-<!-- 规则没有稳定、可重复且可验证的自动化职责时，不得创建空能力目录或虚假入口；业务含义是规则约束与可执行能力保持真实边界。 -->
 rule_ability_creation_threshold = stable
-<!-- rule_ability_creation_threshold.2 的当前独立事实为 repeated。 -->
 rule_ability_creation_threshold.2 = repeated
-<!-- rule_ability_creation_threshold.3 的当前独立事实为 verifiable_automation_only。 -->
 rule_ability_creation_threshold.3 = verifiable_automation_only
-
-<!-- 非法规则名、路径逃逸、覆盖既有规则、创建空模板目录或生成虚假材料时必须阻断。 -->
 rule_generator_must_block = invalid_rule_name
-<!-- rule_generator_must_block.2 的当前独立事实为 path_escape。 -->
 rule_generator_must_block.2 = path_escape
-<!-- rule_generator_must_block.3 的当前独立事实为 existing_main_overwrite。 -->
 rule_generator_must_block.3 = existing_main_overwrite
-<!-- rule_generator_must_block.4 的当前独立事实为 empty_template_directory。 -->
 rule_generator_must_block.4 = empty_template_directory
-<!-- rule_generator_must_block.5 的当前独立事实为 synthetic_material。 -->
 rule_generator_must_block.5 = synthetic_material
-
-<!-- 旧规则正文迁入正式分层，必需资源迁入正式 template，辅助素材和历史记录迁入 ruleengine/history 并清理生产引用。 -->
-legacy_common_layout_migration_policy = rules_to_layered_rule_required_resources_to_template_optional_material_and_records_to_history
-<!-- legacy_common_layout_migration_policy.2 的当前独立事实为 clean_old_paths。 -->
-legacy_common_layout_migration_policy.2 = clean_old_paths

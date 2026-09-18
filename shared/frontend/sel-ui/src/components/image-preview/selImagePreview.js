@@ -109,7 +109,7 @@
 
   function ensurePreview() {
     if (state.dialog) return state.dialog;
-    const dialog = sel.components.dialog.mount(document.body, {
+    const dialog = window.sel.components.dialog.mount(document.body, {
       id: dialogId,
       title: "图片预览",
       closeLabel: "关闭图片预览",
@@ -162,7 +162,7 @@
     return state.dialog?.close("programmatic") ?? false;
   }
 
-  sel.register("components.imagePreview", sel.core.freeze({
+  window.sel.register("components.imagePreview", sel.core.freeze({
     open,
     close,
     getState: () => sel.core.freeze({ open: state.dialog?.getState().open === true, zoom: state.zoom }),

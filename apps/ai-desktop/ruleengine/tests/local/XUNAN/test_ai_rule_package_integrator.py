@@ -63,7 +63,7 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["model"], "ai_rule_driven_execution_and_continuous_rule_package_growth")
         # 根索引只递归冻结 core 与空预留 common；当前用户规则通过独立用户索引统计。
         self.assertEqual(result["indexes"], 2)
-        self.assertEqual(result["indexed_rules"], 11)
+        self.assertEqual(result["indexed_rules"], 10)
         self.assertEqual(result["active_user_id"], ACTIVE_STABLE_USER_ID)
         user_root = (
             PROJECT_ROOT
@@ -130,36 +130,28 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertIn("OPTION", result["message"])
 
-    def test_active_user_rule_assignments_have_line_level_chinese_comments(self) -> None:
+    def test_schema_2_rules_use_machine_fields_instead_of_line_comments(self) -> None:
         user_root = (
             PROJECT_ROOT
             / "apps/ai-desktop/ruleengine/rules/local"
             / ACTIVE_STABLE_USER_ID
         )
-        rule_paths = sorted(
-            path for path in user_root.rglob("RUL_*.md")
-            if "archive" not in path.parts
-        )
-        # 当前用户全部活动规则必须逐项接受紧邻中文业务注释检查。
-        self.assertGreater(len(rule_paths), 0)
-        for rule_path in rule_paths:
-            previous_nonempty = ""
-            for line_number, raw_line in enumerate(
-                    rule_path.read_text(encoding="utf-8").splitlines(), 1):
-                line = raw_line.strip()
-                # 只检查加载器会识别的裸 DSL 声明；Markdown 示例、公式和代码片段不是规则事实。
-                if re.match(r"^[A-Za-z][A-Za-z0-9_.-]*\s*=", line):
-                    self.assertTrue(
-                        previous_nonempty.startswith("<!--") and previous_nonempty.endswith("-->"),
-                        f"{rule_path}:{line_number} 的规则声明缺少上一行中文业务注释",
-                    )
-                    self.assertRegex(
-                        previous_nonempty,
-                        r"[\u4e00-\u9fff]",
-                        f"{rule_path}:{line_number} 的规则注释必须包含中文业务说明",
-                    )
-                if line:
-                    previous_nonempty = line
+        required_fields = {
+            "rule_logical_id", "rule_scope", "rule_kind", "rule_status",
+            "rule_version", "rule_owner", "rule_trigger", "rule_check_refs",
+        }
+        schema_2_count = 0
+        for rule_path in sorted(user_root.rglob("RUL_*.md")):
+            text = rule_path.read_text(encoding="utf-8")
+            assignments = dict(re.findall(
+                r"(?m)^([A-Za-z][A-Za-z0-9_.-]*)\s*=\s*(.+)$", text,
+            ))
+            if assignments.get("rule_schema") != "2":
+                continue
+            schema_2_count += 1
+            self.assertEqual(set(), required_fields - assignments.keys(), rule_path)
+            self.assertIn(assignments["rule_kind"], {"protocol", "gate", "policy", "recipe"})
+        self.assertGreaterEqual(schema_2_count, 6)
 
     def test_ai_rule_requires_memory_edit_and_lifecycle_preflight(self) -> None:
         rule_path = (
@@ -321,7 +313,7 @@ class AiRulePackageIntegratorTests(unittest.TestCase):
             delegation_text,
         )
         # 规则版本升级 → 授权语义变化具备可追踪的治理记录。
-        self.assertIn("rule_version = 1.2.0", delegation_text)
+        self.assertIn("rule_version = 2.0.0", delegation_text)
 
         # 读取根索引 → 验证新增确认场景仍通过既有稳定逻辑 ID 命中用户规则。
         root_index_text = (

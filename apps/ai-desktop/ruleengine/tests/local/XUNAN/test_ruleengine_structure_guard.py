@@ -41,6 +41,45 @@ class RuleengineStructureGuardTests(unittest.TestCase):
         self.assertGreater(result["logicalRuleCount"], 0)
         self.assertGreater(result["triggerCount"], 0)
 
+    def test_all_active_rules_use_compact_schema_2(self) -> None:
+        result = load_guard_module().audit_ruleengine_structure(PROJECT_ROOT)
+        self.assertTrue(result["metrics"]["rules"])
+        self.assertTrue(
+            all(rule["schemaVersion"] == "2" for rule in result["metrics"]["rules"])
+        )
+        self.assertTrue(
+            all(rule["dslCount"] >= 9 for rule in result["metrics"]["rules"])
+        )
+
+    def test_active_rules_and_indexes_contain_machine_dsl_only(self) -> None:
+        rule_root = PROJECT_ROOT / "apps/ai-desktop/ruleengine/rules"
+        result = load_guard_module().audit_ruleengine_structure(PROJECT_ROOT)
+        paths = [item["resourcePath"] for item in result["metrics"]["rules"]]
+        paths.extend(item["resourcePath"] for item in result["metrics"]["indexes"])
+        for relative_path in paths:
+            with self.subTest(relative_path=relative_path):
+                lines = (rule_root / relative_path).read_text(encoding="utf-8").splitlines()
+                self.assertTrue(lines)
+                self.assertTrue(
+                    all(
+                        re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]*\s*=\s*.+", line)
+                        for line in lines
+                    )
+                )
+
+    def test_active_user_owner_and_recipe_paths_are_portable(self) -> None:
+        rule_root = PROJECT_ROOT / "apps/ai-desktop/ruleengine/rules"
+        result = load_guard_module().audit_ruleengine_structure(PROJECT_ROOT)
+        for metric in result["metrics"]["rules"]:
+            relative_path = metric["resourcePath"]
+            text = (rule_root / relative_path).read_text(encoding="utf-8")
+            if relative_path.startswith(f"local/{ACTIVE_USER}/"):
+                self.assertIn("rule_owner = active_user", text, relative_path)
+                self.assertNotIn(f"rule_owner = {ACTIVE_USER}", text, relative_path)
+            for line in text.splitlines():
+                if line.startswith("recipe_resource_path = "):
+                    self.assertNotIn("\\", line, relative_path)
+
 
 if __name__ == "__main__":
     unittest.main()

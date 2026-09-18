@@ -1,0 +1,16 @@
+rule_schema = 2
+rule_logical_id = ANCIENT_POEM_BACKGROUND_RULES
+rule_scope = 中文教学
+rule_kind = recipe
+rule_status = active
+rule_version = 2.0.0
+rule_owner = active_user
+rule_trigger = artifact:ancient_poem_background
+rule_trigger.2 = operation:create|generate|repair|review
+rule_check_refs = artifact_compliance_guard:rule_schema
+java_ability_refs = none
+python_ability_refs = teaching_image_tools,artifact_compliance_guard
+node_ability_refs = none
+python_program = apps/ai-desktop/ruleengine/python/local/XUNAN/abilities/teaching_image_tools.py
+recipe_resource_path = local/XUNAN/中文教学/通用/template/RUL_古诗无文字底图规则/requirements.md
+recipe_resource_sha256 = f3aa9f8740c2a04c8829deace7b579927590025f679da6f16329b2717e4b6fc1

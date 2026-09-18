@@ -90,26 +90,26 @@ class AiRuleIntelligenceReportingTests(unittest.TestCase):
     def test_migrated_rules_reference_the_current_authority(self) -> None:
         """迁移收敛规则不得继续依赖已经删除的两个旧实体路径。"""
 
-        rule_path = (
+        pinyin_rule_path = (
             PROJECT_ROOT
             / "apps/ai-desktop/ruleengine/rules/local"
             / ACTIVE_STABLE_USER_ID
-            / "中文教学/通用/rule/RUL_规则引用迁移修正规则.md"
+            / "中文教学/通用/rule/RUL_拼音校正规则.md"
         )
-        text = rule_path.read_text(encoding="utf-8")
+        background_rule_path = (
+            PROJECT_ROOT
+            / "apps/ai-desktop/ruleengine/rules/local"
+            / ACTIVE_STABLE_USER_ID
+            / "中文教学/通用/rule/RUL_古诗无文字底图规则.md"
+        )
+        pinyin_text = pinyin_rule_path.read_text(encoding="utf-8")
+        background_text = background_rule_path.read_text(encoding="utf-8")
 
-        self.assertIn(
-            "CHINESE_PINYIN_CORRECTION_RULES.current_authority_rule = "
-            f"local/{ACTIVE_STABLE_USER_ID}/中文教学/通用/rule/RUL_规则引用迁移修正规则.md",
-            text,
-        )
-        self.assertIn(
-            "ANCIENT_POEM_BACKGROUND_RULES.current_authority_rule = "
-            f"local/{ACTIVE_STABLE_USER_ID}/中文教学/通用/rule/RUL_规则引用迁移修正规则.md",
-            text,
-        )
-        self.assertNotIn("RUL_拼音标注与朗读版校正规则.md", text)
-        self.assertNotIn("RUL_古诗无文字底图生成工作流程规则.md", text)
+        self.assertIn("rule_logical_id = CHINESE_PINYIN_CORRECTION_RULES", pinyin_text)
+        self.assertIn("rule_logical_id = ANCIENT_POEM_BACKGROUND_RULES", background_text)
+        self.assertNotEqual(pinyin_rule_path, background_rule_path)
+        self.assertNotIn("RUL_拼音标注与朗读版校正规则.md", pinyin_text)
+        self.assertNotIn("RUL_古诗无文字底图生成工作流程规则.md", background_text)
 
     def test_same_key_different_values_are_candidates_not_verdicts(self) -> None:
         """跨规则同键异值只能进入人工复核候选。"""

@@ -54,7 +54,8 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
             "local/core/rule/CODE_JAVA_CODING_RULES.md",
             core_rule.resource_path,
         )
-        self.assertIn("Java", core_rule.content)
+        self.assertIn("rule_schema = 2", core_rule.content)
+        self.assertNotIn("Loaded source", core_rule.content)
 
         cross_rule = loader.load_for_current_user(
             "RULE_LIFECYCLE_GOVERNANCE_RULES", None
@@ -150,6 +151,41 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         self.assertEqual("replace-result", replaced.effective_values["user_only"])
         self.assertEqual("replace", replaced.override_mode)
 
+    def test_schema_2_is_compact_and_legacy_source_requires_migration(self) -> None:
+        """schema 2 默认只返回有效值，legacy 临时保留原文，诊断可显式展开来源。"""
+
+        schema_2 = self._loaded_rule(
+            "TEST_SCHEMA_RULE",
+            "TESTUSER",
+            "# ignored\nrule_schema = 2\nrule_logical_id = TEST_SCHEMA_RULE\nvalue = compact",
+        )
+        compact = loader.merge_rule_stack("TEST_SCHEMA_RULE", [schema_2])
+        self.assertEqual(
+            "rule_schema = 2\nrule_logical_id = TEST_SCHEMA_RULE\nvalue = compact\n",
+            compact.effective_rule.content,
+        )
+        debug = loader.merge_rule_stack(
+            "TEST_SCHEMA_RULE", [schema_2], include_sources=True
+        )
+        self.assertIn("Loaded source", debug.effective_rule.content)
+        self.assertIn("# ignored", debug.effective_rule.content)
+
+        legacy = self._loaded_rule(
+            "TEST_LEGACY_RULE", "common", "# legacy prose\nlegacy_flag"
+        )
+        compatible = loader.merge_rule_stack("TEST_LEGACY_RULE", [legacy])
+        self.assertIn("# legacy prose", compatible.effective_rule.content)
+        self.assertIn("legacy_flag", compatible.effective_rule.content)
+
+    def test_schema_2_receipt_contains_source_hash(self) -> None:
+        """紧凑 bundle 仍通过来源路径和内容哈希提供可复核证据。"""
+
+        stack = self._rule_stack(
+            "TEST_SCHEMA_RULE", "rule_schema = 2\nrule_logical_id = TEST_SCHEMA_RULE"
+        )
+        bundle = loader.assemble_bundle(["TEST_SCHEMA_RULE"], lambda _: stack)
+        self.assertRegex(bundle.receipt[0], r"#sha256:[0-9a-f]{12}")
+
     def test_resolves_dependencies_and_rejects_dependency_cycle(self) -> None:
         """显式依赖按拓扑顺序加载，共享依赖去重且循环立即阻断。"""
 
@@ -203,9 +239,9 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
         """生产根/common 和当前用户索引全部可达且计数稳定。"""
 
         common_validation = loader.validate_index_tree()
-        self.assertEqual(loader.IndexValidation(2, 11), common_validation)
+        self.assertEqual(loader.IndexValidation(2, 10), common_validation)
         user_validation = loader.validate_current_user_index_tree()
-        self.assertEqual(loader.IndexValidation(33, 108), user_validation)
+        self.assertEqual(loader.IndexValidation(32, 109), user_validation)
 
     def test_loads_fujitsu_json_single_line_format_gate(self) -> None:
         """Fujitsu JSON 变更必须从当前用户层命中单行格式交付门禁。"""
@@ -327,6 +363,31 @@ class PythonLayeredRuleLoaderTest(unittest.TestCase):
                 / "src/test/java/com/sp/selplat/local/code/core/rule/LayeredRuleLoaderTest.java"
             ).exists()
         )
+
+    def test_recipe_resource_is_hash_verified_and_loaded_on_demand(self) -> None:
+        resource = loader.load_recipe_resource_for_current_user(
+            "CHILDREN_ORAL_PERFORMANCE_ALL_VOLUMES_RULES", "中文教学"
+        )
+        self.assertTrue(resource.resource_path.endswith("/requirements.md"))
+        self.assertIn("ORAL_COURSE_SCENE_LAYOUT =", resource.content)
+        self.assertIn("requirement.1 =", resource.content)
+
+    def test_active_user_owner_is_symbolic_in_source_and_resolved_at_runtime(self) -> None:
+        logical_id = "RULE_LIFECYCLE_GOVERNANCE_RULES"
+        stack = loader.load_rule_stack(
+            logical_id,
+            active_user=loader.current_stable_user_id(),
+        )
+        self.assertIn("rule_owner = active_user", stack.layers[-1].content)
+        self.assertEqual(
+            loader.current_stable_user_id(), stack.effective_values["rule_owner"]
+        )
+        with self.assertRaises(loader.RuleLoadingError):
+            loader._validate_loaded_rule_owner(self._loaded_rule(
+                "TEST_OWNER_RULE",
+                loader.current_stable_user_id(),
+                "rule_schema = 2\nrule_owner = XUNAN",
+            ))
 
     @staticmethod
     def _base_index_graph(common_index_content: str) -> dict[str, str]:

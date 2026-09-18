@@ -134,8 +134,8 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
         (
             "CHINESE_PINYIN_CORRECTION_RULES",
             "中文教学",
-            "中文教学/通用/rule/RUL_规则引用迁移修正规则.md",
-            "load_original_rule_semantics_then_replace_only_registered_stale_references",
+            "中文教学/通用/rule/RUL_拼音校正规则.md",
+            "dictionary_policy = caller_supplied_utf8_tsv_via_dictionaryPath",
         ),
         (
             "RULE_ENGINE_LOCAL_CORE_COMMON_USER_LAYER_GOVERNANCE_RULES",
@@ -164,10 +164,10 @@ class ActiveUserRuleOverrideIntegrationTest(unittest.TestCase):
     )
 
     def test_validates_complete_active_user_index_tree(self) -> None:
-        """当前用户三十三层索引完整登记一百零八个规则逻辑 ID。"""
+        """当前用户三十二层索引完整登记一百零九个规则逻辑 ID。"""
 
         self.assertEqual(
-            loader.IndexValidation(33, 108),
+            loader.IndexValidation(32, 109),
             loader.validate_current_user_index_tree(),
         )
 

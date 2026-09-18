@@ -57,7 +57,7 @@ class CoreResourceLayoutTests(unittest.TestCase):
 
         index_text = ROOT_RULE_INDEX.read_text(encoding="utf-8")
         paths = re.findall(r"=\s*(local/core/rule/\S+\.md)\s*$", index_text, re.MULTILINE)
-        self.assertGreaterEqual(len(paths), 11)
+        self.assertGreaterEqual(len(paths), 10)
         for relative_path in paths:
             self.assertTrue((RESOURCE_ROOT / relative_path).is_file(), relative_path)
 
@@ -75,14 +75,11 @@ class CoreResourceLayoutTests(unittest.TestCase):
             protocol_text,
         )
 
-    def test_legacy_vue_id_reuses_current_rule(self) -> None:
-        """旧 Vue 逻辑 ID 只保留索引别名，不再保留兼容规则文件。"""
+    def test_legacy_vue_id_is_fully_retired(self) -> None:
+        """无生产调用方的旧 Vue 逻辑 ID 不得继续占用活动索引。"""
 
         index_text = ROOT_RULE_INDEX.read_text(encoding="utf-8")
-        self.assertIn(
-            "CODE_VUE_RULES = local/core/rule/CODE_VUE_CODING_RULES.md",
-            index_text,
-        )
+        self.assertNotIn("CODE_VUE_RULES =", index_text)
         self.assertFalse((CORE_ROOT / "rule/CODE_VUE_RULES.md").exists())
 
     def test_superseded_project_execution_rule_is_removed(self) -> None:

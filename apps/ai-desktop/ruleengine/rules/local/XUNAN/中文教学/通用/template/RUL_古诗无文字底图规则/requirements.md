@@ -1,0 +1,4 @@
+must_generate_no_text_background = true
+must_keep_text_editable_outside_background = true
+must_verify_output_exists_and_is_readable = true
+must_preserve_unrelated_teaching_semantics = true
