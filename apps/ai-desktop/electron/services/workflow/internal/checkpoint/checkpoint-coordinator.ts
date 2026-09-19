@@ -174,9 +174,13 @@ export class CheckpointCoordinator {
       ? scope.defects.map((item) => (item as { checkId?: unknown }).checkId).filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
       : [];
     // 执行链卡点没有逐项验收缺陷时，只有冻结提案的条件集合可作为同一问题的可核验依据。
-    const conditionIds = scopedConditionIds.length ? scopedConditionIds
-      : proposal?.acceptancePlan?.conditions.map((item) => item.conditionId).filter(Boolean)
-        || proposal?.acceptanceCriteria.map((_item, index) => `criterion-${index + 1}`) || [];
+    const proposalConditionIds = Array.isArray(proposal?.acceptancePlan?.conditions)
+      ? proposal.acceptancePlan.conditions.map((item) => item.conditionId).filter(Boolean)
+      : Array.isArray(proposal?.acceptanceCriteria)
+        ? proposal.acceptanceCriteria.map((_item, index) => `criterion-${index + 1}`)
+        : [];
+    // 旧专题快照可能早于验收条件字段；缺少依据只能降级为未核验，不能中断卡点恢复。
+    const conditionIds = scopedConditionIds.length ? scopedConditionIds : proposalConditionIds;
     const failureCategory = typeof event.payload.acceptanceFailureKind === "string" ? event.payload.acceptanceFailureKind : String(event.payload.operation || "technical-runtime");
     const previous = this.options.evolution().technicalRecovery;
     const now = new Date().toISOString();
