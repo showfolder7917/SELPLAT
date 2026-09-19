@@ -668,6 +668,34 @@ test("韩立会话已有当前观点时收到独立1直接启动内部研讨", a
   assert.doesNotMatch(result.messages.at(-1).content, /内部研讨|自动托管/u);
 });
 
+test("自动托管关闭时独立1保留已核实的新专题切换意图并绕过旧研讨幂等返回", async () => {
+  const createdAt = "2026-09-19T00:00:00.000Z";
+  const messages = [
+    personaConversationMessage("customer-visible", { messageId: "switch-user", sequenceNumber: 0, speakerType: "user", speakerPersonaId: null, content: "开启另一个独立专题", replyToMessageId: null, deliveryStatus: "completed", attachmentIds: [], createdAt, completedAt: createdAt }),
+    personaConversationMessage("customer-visible", { messageId: "switch-viewpoint", sequenceNumber: 1, speakerType: "persona", speakerPersonaId: "han-li", content: "旧专题已完成，下一步建立独立新卡。", replyToMessageId: "switch-user", deliveryStatus: "completed", attachmentIds: [], createdAt, completedAt: createdAt }),
+  ];
+  const recordedContexts = [];
+  let started = 0;
+  const memory = {
+    readPersonaConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "switch-conversation", messages: structuredClone(messages), updatedAt: createdAt }; },
+    readPersonaCustomerDisplayConversation(ownerPersonaId) { return { ownerPersonaId, conversationId: "switch-conversation", messages: structuredClone(messages), updatedAt: createdAt }; },
+    readRequirementDiscussionContext(_owner, _conversation, requestId) { return requestId === "switch-user" ? { sourceRequestId: requestId, understoodGoal: "建立独立新卡", switchTopic: true } : null; },
+    recordRequirementDiscussionContext(context) { recordedContexts.push(context); },
+    registerPersonaRound(input) { return { ownerPersonaId: input.ownerPersonaId, conversationId: "switch-conversation", messages, updatedAt: input.completedAt }; },
+    appendPersonaInternalMessage(input) { messages.push(personaConversationMessage("internal-deliberation", { ...input, sequenceNumber: messages.length, speakerType: "persona", deliveryStatus: "completed", attachmentIds: [], completedAt: input.createdAt })); return { ownerPersonaId: "han-li", conversationId: "switch-conversation", messages, updatedAt: input.createdAt }; },
+  };
+  const service = new HanliConversationService({
+    store: { state: () => ({ deliberations: [], oneShotRun: { runId: "old-run", sourceRequestId: "old-user", status: "running" }, automationSettings: { automaticCustodyEnabled: false } }) },
+    prompts, memory,
+    conversation: { activeConversationId: () => "switch-conversation", async send() { throw new Error("不应重新询问模型"); }, async newChat() {} },
+    async startInternalDeliberation(_request, sourceRequestId, options) { started += 1; assert.equal(sourceRequestId, "switch-user"); assert.equal(options.switchTopic, true); return { continuous: true }; },
+    recordEvent() {}, refreshSemanticMemory() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+  });
+  await service.send({ clientMessageId: "switch-confirmation", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
+  assert.equal(started, 1);
+  assert.equal(recordedContexts[0].switchTopic, true);
+});
+
 test("韩立会话没有当前观点时输入1不创建空研讨", async () => {
   let started = 0;
   const messages = [];

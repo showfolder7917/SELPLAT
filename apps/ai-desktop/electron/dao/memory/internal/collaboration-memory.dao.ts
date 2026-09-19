@@ -580,6 +580,7 @@ function normalizeRequirementDiscussionContext(context: RequirementDiscussionCon
     investigationQuestion: text(context.investigationQuestion, "调查范围"), findingStatus: context.findingStatus,
     findingSummary: text(context.findingSummary, "调查结论"), evidence, unknowns,
     customerConclusion: text(context.customerConclusion, "客户可见结论"), createdAt: text(context.createdAt, "创建时间", 100),
+    ...(typeof context.switchTopic === "boolean" ? { switchTopic: context.switchTopic } : {}),
   };
 }
 

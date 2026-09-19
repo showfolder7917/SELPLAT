@@ -275,7 +275,7 @@ export class HanliInquiryService {
         sourceRequestId: state.requestId, ...state.goal,
         findingStatus: findings.status, findingSummary: findings.summary,
         evidence: findings.evidence, unknowns: findings.unknowns,
-        customerConclusion: customerReply, createdAt: new Date().toISOString(),
+        customerConclusion: customerReply, switchTopic: state.decision.switchTopic, createdAt: new Date().toISOString(),
       });
     } catch (error) {
       this.#options.recordEvent("hanli.inquiry.discussion_context_failed", {

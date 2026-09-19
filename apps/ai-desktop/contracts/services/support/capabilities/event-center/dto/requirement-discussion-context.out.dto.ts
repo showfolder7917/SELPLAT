@@ -28,5 +28,7 @@ export interface RequirementDiscussionContextOutDto {
   evidence: Array<{ source: string; detail: string }>;
   unknowns: string[];
   customerConclusion: string;
+  /** 最新客户观点是否明确要求切换独立专题；旧事实包缺失时视为 false。 */
+  switchTopic?: boolean;
   createdAt: string;
 }

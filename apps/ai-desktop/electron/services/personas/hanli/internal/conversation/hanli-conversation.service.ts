@@ -157,6 +157,17 @@ export class HanliConversationService {
     });
     // Domain 决定不依赖提示词文案，因此不会因模型少写一句邀请而断线。
     const action = aggregate.decideUserMessage(request.message);
+    const confirmedContext = request.message.trim() === "1" && action.viewpoint?.sourceUserMessageId && conversation.conversationId
+      ? await memory.readRequirementDiscussionContext?.("han-li", conversation.conversationId, action.viewpoint.sourceUserMessageId)
+      : null;
+    const confirmedDecision = confirmedContext?.switchTopic === true
+      ? { ...START_DELIBERATION_DECISION, switchTopic: true, userIntent: confirmedContext.understoodGoal }
+      : undefined;
+    // 新问题的独立切换意图来自已持久化的观点事实包；旧运行存在时也不得把本次 1 吞成“返回原研讨”。
+    if (action.kind === "return-existing-deliberation" && confirmedDecision?.switchTopic
+      && action.viewpoint?.sourceUserMessageId !== workflowState.oneShotRun?.sourceRequestId) {
+      return this.#startDeliberation(request, conversation, action.viewpoint!, confirmedDecision);
+    }
     // 已进入范围确认时，任何用户回复都只交给当前内部研讨处理。
     if (action.kind === "confirm-deliberation-scope") {
       // 调用确认端口并把韩立整理后的反馈保存回同一人物会话。
@@ -219,7 +230,7 @@ export class HanliConversationService {
         throw new Error("韩立会话没有返回可供内部研讨的观点快照。");
       }
       // 使用被冻结的观点保存事实并启动一次性研讨流程。
-      return this.#startDeliberation(request, conversation, action.viewpoint);
+      return this.#startDeliberation(request, conversation, action.viewpoint, confirmedDecision);
     }
     // 除上述结构化控制动作外，消息只进入普通韩立对话。
     return this.#continueConversation(request, conversation, aggregate);
@@ -730,6 +741,7 @@ export class HanliConversationService {
         unknowns: investigated?.unknowns || ["需要在内部研讨中继续核实事实"],
         // customerConclusion 保存用户在界面上确认的韩立完整观点。
         customerConclusion: normalizedViewpoint,
+        switchTopic: decision.switchTopic,
         // createdAt 使用观点形成或用户确认的真实时间。
         createdAt,
       });

@@ -120,6 +120,12 @@ test("韩立测试内存通过客户显示端口隔离内部消息并保留派�
   ]);
 });
 
+test("关闭自动托管的只读调查保留独立专题切换意图供独立1确认", async () => {
+  const f = fixture(async () => findings);
+  await f.service.run(request, "original", customerQuestion, understanding, { ...topic, switchTopic: true });
+  assert.equal(f.discussionContexts.at(-1).switchTopic, true);
+});
+
 test("真实调查、独立判断、解释依次推进；并发和完成重试保持同一消息", async () => {
   let resolve, acquire;
   const f = fixture((inquiry, input, onAcquired) => {

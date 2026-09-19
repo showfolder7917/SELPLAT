@@ -138,7 +138,7 @@ test("中立需求研讨上下文独立保存并按人物会话读取，不进�
       customerQuestion: "长消息是否还会被输入框遮挡", understoodGoal: "让长消息始终可读", verificationTarget: "消息时间线和输入区域",
       expectedAnswer: "确认当前问题和可行修正", investigationQuestion: "核对滚动区域和当前运行版本", findingStatus: "verified",
       findingSummary: "滚动区域存在布局缺陷", evidence: [{ source: "conversation.css:2", detail: "滚动容器缺少可收缩高度" }],
-      unknowns: ["当前安装版本"], customerConclusion: "需要修复消息区域并重新验证当前版本。", createdAt: "2026-09-05T00:00:01.000Z",
+      unknowns: ["当前安装版本"], customerConclusion: "需要修复消息区域并重新验证当前版本。", switchTopic: true, createdAt: "2026-09-05T00:00:01.000Z",
     };
     memory.recordRequirementDiscussionContext(context);
     assert.deepEqual(memory.readRequirementDiscussionContext("han-li", "hanli-requirement-thread", "request-1"), context);
