@@ -22,5 +22,8 @@ export function recordCollaborationInteractionPerformance(operation: string, sta
     scenarioId: context.scenarioId,
     phase: context.phase,
     details: { ...details, viewport: `${window.innerWidth}x${window.innerHeight}` },
+  }).catch((error: unknown) => {
+    // 韩立只读验收期间主进程会拒绝非读取 IPC；性能采样失败不能变成页面未处理异常。
+    console.warn("协作页面性能采样未保存", error);
   });
 }

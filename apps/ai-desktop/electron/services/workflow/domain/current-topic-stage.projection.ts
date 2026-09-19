@@ -89,27 +89,31 @@ export function projectCurrentTopicStage(
     };
   }
 
-  // 监控者验收归档记录的是“已经发布并在正式页面完成操作”的独立事实，不是新的代码交付任务。
-  // 它明确没有分发计划或任务链，因此不能再套用普通交付的候选、测试、发布门禁，否则完成卡会被误投影成缺少候选。
-  const monitorAcceptanceCompleted = topic?.status === "completed"
-    && topic.recoveryPoint === "monitor-formal-acceptance-passed"
-    && proposal.status === "completed"
+  // 监控者独立验收卡没有分发计划，不套用普通代码交付候选门禁；最终通过仍必须读取唯一结论记录。
+  const monitorAcceptanceCard = topic !== null && topic.recoveryPoint?.startsWith("monitor-formal-acceptance-")
     && proposal.distributionPlan === null
     && proposal.distributedTaskIds.length === 0
     && run?.topicId === topic.topicId
-    && run.proposalId === proposal.proposalId
-    && run.status === "completed";
-  if (monitorAcceptanceCompleted) {
+    && run.proposalId === proposal.proposalId;
+  if (monitorAcceptanceCard) {
     const occurredAt = run.completedAt || run.updatedAt;
-    const latestAcceptance: CurrentTopicAcceptanceOutDto = { runId: run.runId, status: "passed", occurredAt };
+    const finalConclusion = readFinalConclusion(evolution, proposal);
+    const latestAcceptance = readLatestAcceptance(evolution, proposal);
+    const verified = topic.status === "completed" && proposal.status === "completed"
+      && finalConclusion !== null && latestAcceptance?.status === "passed";
+    const failed = topic.status === "supplement-required" || run.status === "blocked" || latestAcceptance?.status === "failed";
     return {
-      topicId: topic.topicId, proposalId: proposal.proposalId, status: "completed", title: topic.title,
-      summary: proposal.resultSummary || "正式页面验收通过，专题已完成。", repairContent: proposal.content,
-      remaining: "", waitingFor: "当前无需操作", nextAction: "可开始下一专题。", userAction: "none",
+      topicId: topic.topicId, proposalId: proposal.proposalId,
+      status: verified ? "completed" : topic.status === "completed" ? "completed-unverified" : failed ? "failed-pending-repair" : "pending-acceptance", title: topic.title,
+      summary: verified ? (proposal.resultSummary || "正式页面验收通过，专题已完成。")
+        : topic.status === "completed" ? "完成状态缺少可追溯验收记录，尚未核验。"
+          : failed ? "独立页面验收未通过，等待核对失败证据。" : "正式版本已交付，等待独立页面验收。", repairContent: proposal.content,
+      remaining: verified ? "" : "缺少当前专题的唯一最终验收结论及通过记录。", waitingFor: verified ? "当前无需操作" : "韩立独立验收",
+      nextAction: verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", userAction: "none",
       resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "当前无需操作", "可开始下一专题。", occurredAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance,
-      deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: "passed" }, updatedAt: occurredAt,
+      readRecovery: readRecovery("none", verified ? "当前无需操作" : "韩立独立验收", verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", occurredAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance, finalConclusion,
+      deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
     };
   }
 

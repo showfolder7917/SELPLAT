@@ -54,7 +54,9 @@ const repository = {
       });
       const newTopic = next.topics.find((item) => item.topicId === next.oneShotRun?.topicId);
       const newProposal = next.proposals.find((item) => item.proposalId === next.oneShotRun?.proposalId);
-      if (!newTopic || !newProposal) throw new Error("监控者验收归档没有形成完整专题和提案。");
+      if (!newTopic || !newProposal || newTopic.status !== "pending-acceptance" || newProposal.finalConclusionRecordId !== null) {
+        throw new Error("监控者独立验收卡必须等待真实验收，不得预写通过结论。");
+      }
       const oldGroupId = previousRun?.topicId ? `topic:${previousRun.topicId}` : null;
       if (oldGroupId) {
         database.prepare(`UPDATE AiDesktopTaskTimelineTopic SET status='cancelled', summary=$summary, updatedAt=$updatedAt WHERE groupId=$groupId`).run({
@@ -83,22 +85,22 @@ const repository = {
       const groupId = `topic:${newTopic.topicId}`;
       database.prepare(`INSERT INTO AiDesktopTaskTimelineTopic
         (groupId, topicId, proposalId, title, status, summary, startedAt, updatedAt, createdAt)
-        VALUES ($groupId,$topicId,$proposalId,$title,'completed',$summary,$startedAt,$updatedAt,$createdAt)
-        ON CONFLICT(groupId) DO UPDATE SET proposalId=excluded.proposalId,title=excluded.title,status='completed',summary=excluded.summary,updatedAt=excluded.updatedAt`).run({
+        VALUES ($groupId,$topicId,$proposalId,$title,'verifying',$summary,$startedAt,$updatedAt,$createdAt)
+        ON CONFLICT(groupId) DO UPDATE SET proposalId=excluded.proposalId,title=excluded.title,status='verifying',summary=excluded.summary,updatedAt=excluded.updatedAt`).run({
           $groupId: groupId, $topicId: newTopic.topicId, $proposalId: newProposal.proposalId, $title: newTopic.title,
-          $summary: resultSummary, $startedAt: newTopic.createdAt, $updatedAt: newTopic.updatedAt, $createdAt: newTopic.createdAt,
+          $summary: "正式版本已交付，等待韩立独立页面验收。", $startedAt: newTopic.createdAt, $updatedAt: newTopic.updatedAt, $createdAt: newTopic.createdAt,
         });
-      const sourceFactKey = `monitor-acceptance:${newProposal.proposalId}:passed`;
+      const sourceFactKey = `monitor-acceptance:${newProposal.proposalId}:received`;
       if (!database.prepare("SELECT 1 FROM AiDesktopTaskTimelineEvent WHERE sourceFactKey=$sourceFactKey").get({ $sourceFactKey: sourceFactKey })) {
         const sequence = Number(database.prepare("SELECT COALESCE(MAX(sequenceNumber),0)+1 AS value FROM AiDesktopTaskTimelineEvent WHERE groupId=$groupId").get({ $groupId: groupId }).value);
         database.prepare(`INSERT INTO AiDesktopTaskTimelineEvent
           (factId,groupId,proposalId,taskId,nodeId,sourceFactKey,sequenceNumber,eventType,contentRole,detailRole,schemaVersion,kind,
            actorMemberId,actorDisplayName,recipientsJson,status,action,summary,content,detail,startedAt,completedAt,automaticOpen,manualApprovalProposalId,occurredAt,committedAt)
-          VALUES ($factId,$groupId,$proposalId,NULL,$nodeId,$sourceFactKey,$sequenceNumber,'acceptance.passed','analysis-output','result-evidence',2,'verification',
-           'han-li','韩立','[{"memberId":"user","displayName":"用户"}]','completed','验收通过，结果已归档',$summary,$content,$detail,$occurredAt,$occurredAt,0,NULL,$occurredAt,$occurredAt)`).run({
+          VALUES ($factId,$groupId,$proposalId,NULL,$nodeId,$sourceFactKey,$sequenceNumber,'acceptance.received','analysis-output','acceptance-criteria',2,'verification',
+           'system','系统','[{"memberId":"han-li","displayName":"韩立"}]','waiting','独立验收卡已建立',$summary,$content,$detail,$occurredAt,NULL,0,NULL,$occurredAt,$occurredAt)`).run({
             $factId: `timeline-fact-${randomUUID()}`, $groupId: groupId, $proposalId: newProposal.proposalId,
-            $nodeId: `acceptance:${newProposal.proposalId}:monitor:passed`, $sourceFactKey: sourceFactKey, $sequenceNumber: sequence,
-            $summary: resultSummary, $content: resultSummary, $detail: evidence.join("\n"), $occurredAt: next.updatedAt,
+            $nodeId: `acceptance:${newProposal.proposalId}:monitor:received`, $sourceFactKey: sourceFactKey, $sequenceNumber: sequence,
+            $summary: "等待独立验收", $content: resultSummary, $detail: evidence.join("\n"), $occurredAt: next.updatedAt,
           });
         database.prepare("UPDATE AiDesktopTaskTimelineTopic SET revision=revision+1 WHERE groupId=$groupId").run({ $groupId: groupId });
       }
@@ -111,9 +113,9 @@ const repository = {
 };
 
 try {
-  const state = new EvolutionStateStore(repository).completeMonitorAcceptance({
+  const state = new EvolutionStateStore(repository).createMonitorAcceptanceCard({
     title,
-    goal: `归档正式版本“${title}”已经完成的客户可见验收。`,
+    goal: `对正式版本“${title}”建立独立页面验收记录。`,
     evidence,
     acceptanceCriteria,
     resultSummary,

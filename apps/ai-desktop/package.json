@@ -34,7 +34,7 @@
     "check:no-retired-assessment-markers": "node scripts/run-with-dependencies.mjs node scripts/assert-no-retired-assessment-markers.mjs",
     "migrate:dependencies": "node scripts/migrate-dependencies-to-cache.mjs",
     "rollback:codex-runtime": "node scripts/rollback-codex-runtime.mjs",
-    "monitor:finalize-acceptance": "node scripts/run-with-dependencies.mjs node scripts/finalize-monitor-acceptance.mjs",
+    "monitor:create-acceptance-card": "node scripts/run-with-dependencies.mjs node scripts/create-monitor-acceptance-card.mjs",
     "dependencies:ensure": "node scripts/ensure-dependency-cache.mjs",
     "dependencies:link": "node scripts/manage-dependency-link.mjs link",
     "dependencies:unlink": "node scripts/manage-dependency-link.mjs unlink",

@@ -8,8 +8,8 @@ import type { EvolutionStatePersistencePort } from "../evolution.persistence.por
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
-/** 监控者已经完成正式交付后，用一条状态提交建立独立验收归档。 */
-export interface CompleteMonitorAcceptanceInput {
+/** 监控者完成正式交付后，用一条状态提交建立等待真实验收的独立卡。 */
+export interface CreateMonitorAcceptanceCardInput {
   title: string;
   goal: string;
   evidence: string[];
@@ -377,10 +377,10 @@ export class EvolutionStateStore {
   }
 
   /**
-   * 监控者接管完成后，在同一次 SQLite 状态提交中退役旧运行并建立已通过的独立验收卡。
-   * 该入口不创建分发计划、执行任务或恢复旧提案，避免验收归档重新进入常规修复链。
+   * 监控者交付正式版本后，在同一次 SQLite 状态提交中退役旧运行并建立待验收卡。
+   * 真实验收运行和最终结论仍须经过 recordAcceptanceRun、decideResult；本入口不预写通过。
    */
-  completeMonitorAcceptance(input: CompleteMonitorAcceptanceInput): EvolutionStateOutDto {
+  createMonitorAcceptanceCard(input: CreateMonitorAcceptanceCardInput): EvolutionStateOutDto {
     const workspaceState = this.#state.automationContext.workspaceState;
     if (!workspaceState?.roots?.length) throw new Error("监控者验收归档缺少已登记工作区。");
     const title = required(input.title, "监控者验收标题", 160);
@@ -394,7 +394,9 @@ export class EvolutionStateStore {
     const topicId = `evolution-topic-${randomUUID()}`;
     const proposalId = `evolution-proposal-${randomUUID()}`;
     const runId = `evolution-one-shot-${randomUUID()}`;
-    return this.#commit("one-shot.monitor-acceptance-completed", topicId, proposalId, (state) => {
+    const planId = `acceptance-plan-${randomUUID()}`;
+    const acceptanceRoundId = `acceptance-round-${randomUUID()}`;
+    return this.#commit("one-shot.monitor-acceptance-created", topicId, proposalId, (state) => {
       // 旧误投影专题保留审计但退出活动状态，不能继续触发审批、分发或恢复。
       if (previousRun?.topicId) {
         const oldTopic = state.topics.find((item) => item.topicId === previousRun.topicId);
@@ -416,8 +418,8 @@ export class EvolutionStateStore {
         topicId, title, goal, scope: ["正式 AI Desktop 页面交互验收"], exclusions: ["不恢复旧任务、旧工作树或旧计划", "不派发修复人物"],
         evidence, acceptanceCriteria, workspaceState: structuredClone(workspaceState), locale: state.automationContext.locale,
         origin: "nangong", sourceConversationMessageIds: input.sourceRequestId ? [input.sourceRequestId] : [], deliberationId: null,
-        continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "completed",
-        topicRevision: 1, currentProposalVersion: 1, recoveryPoint: "monitor-formal-acceptance-passed", createdAt: now, updatedAt: now,
+        continuationOfTopicId: null, nextTopicId: null, seriesId: topicId, roundNumber: 1, status: "pending-acceptance",
+        topicRevision: 1, currentProposalVersion: 1, recoveryPoint: "monitor-formal-acceptance-pending", createdAt: now, updatedAt: now,
       });
       state.proposals.push({
         proposalId, topicId, version: 1, title, type: "Bug修复", origin: "nangong",
@@ -426,23 +428,29 @@ export class EvolutionStateStore {
         revisionFeedbackApprovalId: null, content: resultSummary, evidence: [...evidence], impactScope: ["正式 AI Desktop 页面交互验收"],
         exclusions: ["不恢复旧任务、旧工作树或旧计划", "不派发修复人物"], risks: ["仅归档已经完成的正式页面验收事实，不执行代码修改。"],
         rollbackPlan: "如发现新的真实失败，另建独立修复卡，不恢复本次已退役运行。", acceptanceCriteria: [...acceptanceCriteria],
-        acceptancePlan: null, distributionPlan: null, finalConclusionRecordId: null, status: "completed", distributedTaskIds: [], resultSummary,
-        approvals: [{ approvalId: `evolution-approval-${randomUUID()}`, proposalId, decision: "approved", source: "automatic-han-li", stage: "result",
-          approverMemberId: "han-li", approverDisplayName: "韩立", advice: resultSummary, feedbackTarget: "proposal-content",
-          capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: state.preferenceSnapshotVersion, createdAt: now }],
+        acceptancePlan: {
+          version: 2, planId, topicId, proposalId, proposalVersion: 1,
+          conditions: acceptanceCriteria.map((criterion, index) => ({
+            conditionId: `criterion-${index + 1}`, criterion, evidenceType: "page-experience" as const,
+            completionRequirement: "正式页面只读截图、功能结果和布局判断均通过",
+          })),
+          rounds: [{ roundId: acceptanceRoundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+          currentRoundId: acceptanceRoundId, createdAt: now,
+        }, distributionPlan: null, finalConclusionRecordId: null, status: "pending-acceptance", distributedTaskIds: [], resultSummary,
+        approvals: [],
         createdAt: now, updatedAt: now,
       });
       state.activeTopicId = topicId;
       state.oneShotConfirmation = null;
       state.oneShotRun = {
-        runId, sourceRequestId: input.sourceRequestId || null, topicId, proposalId, status: "completed", phase: "completed",
-        actor: "han-li", actorName: "韩立", action: "正式版本交互验收通过并归档", blockingReason: null, resumeMode: null,
-        startedAt: now, updatedAt: now, completedAt: now,
+        runId, sourceRequestId: input.sourceRequestId || null, topicId, proposalId, status: "running", phase: "accepting",
+        actor: "han-li", actorName: "韩立", action: "等待正式版本独立验收", blockingReason: null, resumeMode: null,
+        startedAt: now, updatedAt: now, completedAt: null,
       };
-      state.automationRuntime.status = "idle";
+      // 当前独立验收属于已确认的一次性工作；托管总开关关闭也应由韩立继续验收。
+      state.automationRuntime.status = "running";
       state.automationRuntime.stopReason = null;
       state.automationRuntime.pausedAt = null;
-      state.automationRuntime.completedRounds += 1;
     }, { retiredRunId: previousRun?.runId || null, retiredTopicId: previousRun?.topicId || null, retiredProposalId: previousRun?.proposalId || null,
       retiredReason, resultSummary, nextOwner: "user" });
   }
@@ -1026,13 +1034,15 @@ export class EvolutionStateStore {
         mutable.status = "completed";
         mutable.finalConclusionRecordId = finalConclusionRecordId;
         topic.status = "completed";
-        topic.recoveryPoint = "han-li-result-accepted";
+        topic.recoveryPoint = topic.recoveryPoint?.startsWith("monitor-formal-acceptance-")
+          ? "monitor-formal-acceptance-passed" : "han-li-result-accepted";
         state.automationRuntime.completedRounds += 1;
         state.automationRuntime.correctionRounds = 0;
       } else {
         mutable.status = "supplement-required";
         topic.status = "supplement-required";
-        topic.recoveryPoint = "han-li-result-correction-required";
+        topic.recoveryPoint = topic.recoveryPoint?.startsWith("monitor-formal-acceptance-")
+          ? "monitor-formal-acceptance-failed" : "han-li-result-correction-required";
         state.automationRuntime.correctionRounds += 1;
         if (state.automationRuntime.correctionRounds >= state.automationSettings.maxCorrectionRounds && state.oneShotRun?.status !== "running") {
           state.automationRuntime.status = "blocked";
