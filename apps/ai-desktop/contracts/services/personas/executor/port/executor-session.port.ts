@@ -10,6 +10,8 @@ export interface ExecutorSessionPort {
   execute(task: CollaborationTaskOutDto, plan: CollaborationRequirementPlanOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto>;
   investigateRepair(task: CollaborationTaskOutDto, failure: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string>;
   executeRepair(task: CollaborationTaskOutDto, diagnosis: CollaborationRepairDiagnosisOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto>;
+  /** 使用修复后的结构化证据增量核对原验收条件，不重新执行完整故障调查。 */
+  verifyRepairCompletion(task: CollaborationTaskOutDto, completionContextJson: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string>;
   dispose(): Promise<void> | void;
 }
 

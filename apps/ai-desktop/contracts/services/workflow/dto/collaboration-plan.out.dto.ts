@@ -22,6 +22,17 @@ export interface CollaborationRequirementPlanOutDto {
   status: CollaborationPlanStatusValue;
   /** 可以直接交给执行者理解和实施的计划正文。 */
   text: string;
+  /** 执行阶段使用的精简实施包，避免在同一会话重新发送完整需求与分析正文。 */
+  executionBrief: {
+    /** 当前计划实际准备修改的文件。 */
+    files: string[];
+    /** 可以顺序执行的实施步骤。 */
+    steps: string[];
+    /** 与任务验收条件一一对应的验证要求。 */
+    verification: string[];
+    /** 分析后仍需在实施时留意的真实风险。 */
+    risks: string[];
+  };
   /** 计划正文哈希，用于识别执行期间的意外变化。 */
   contentHash: string;
   /** 计划版本创建时间，使用 ISO 日期时间字符串。 */

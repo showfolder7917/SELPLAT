@@ -824,6 +824,7 @@ export class CollaborationCoordinator {
         ownerDisplayName: requireMember(this.state(), memberId).displayName,
         status: "ready-for-execution",
         text,
+        executionBrief: parseExecutionBrief(text, task),
         contentHash: sha256(text),
         createdAt: new Date().toISOString(),
       };
@@ -1177,9 +1178,21 @@ export class CollaborationCoordinator {
       this.#assertTaskRevision(taskId, repairRevision);
       if (repaired.status !== "code-verified") throw new Error(repaired.pendingActions.join("；") || "修复未完成代码验证");
       // 修复通过代码验证仍不等于原需求完成；只读核对当前源码与原验收条件。
-      const completionText = await repairSession.investigateRepair(this.#store.task(taskId),
-        `修复后的只读完成核对，不要再次实施。原需求：${task.snapshot.confirmedIntent}\n验收条件：${JSON.stringify(task.snapshot.acceptanceCriteria)}\n修复结果：${repaired.text}\n检查当前源码和验证证据。最终单独输出 REPAIR_COMPLETION={"complete":true或false,"remaining":"真实剩余工作或空串","evidence":"具体证据"}。只有全部原需求已满足且无剩余工作才允许true。`,
-        emitRepairProgress);
+      const completionContextJson = JSON.stringify({
+        taskRevision: task.taskRevision,
+        acceptanceCriteria: task.snapshot.acceptanceCriteria.map((criterion, index) => ({ criterionId: `criterion-${index + 1}`, criterion })),
+        diagnosis: {
+          failureStage: diagnosis.failureStage,
+          failureSummary: diagnosis.failureSummary,
+          technicalEvidence: diagnosis.technicalEvidence,
+          repairInstruction: diagnosis.repairInstruction,
+        },
+        repairResult: repaired.text,
+        changedFiles: repaired.changedFiles,
+        successfulCommands: repaired.successfulCommands,
+        pendingActions: repaired.pendingActions,
+      });
+      const completionText = await repairSession.verifyRepairCompletion(this.#store.task(taskId), completionContextJson, emitRepairProgress);
       this.#assertTaskRevision(taskId, repairRevision);
       const completionLine = completionText.split("\n").find((line) => line.trim().startsWith("REPAIR_COMPLETION="));
       let completion: { complete?: boolean; remaining?: string; evidence?: string } = {};
@@ -1187,6 +1200,7 @@ export class CollaborationCoordinator {
       catch { throw new Error("修复后完成核对结果无法解析，保留恢复点"); }
       if (!completionLine || typeof completion.complete !== "boolean" || !completion.evidence?.trim()
         || typeof completion.remaining !== "string" || completion.complete !== !completion.remaining.trim()) throw new Error("修复后缺少明确完成证据，保留恢复点");
+      const remainingWork = completion.remaining;
       if (completion.complete && !completion.remaining.trim()) {
         this.#store.updateTask(taskId, "execution.repair_completed", (current, state) => {
           current.repairResult = repaired.text;
@@ -1218,7 +1232,14 @@ export class CollaborationCoordinator {
         current.currentPlanVersion += 1;
         current.plans.push({ version: current.currentPlanVersion, ownerMemberId: current.executorMemberId!,
           ownerDisplayName: original?.displayName || "原执行人", status: "ready-for-execution",
-          text: resumeText, contentHash: sha256(resumeText), createdAt: new Date().toISOString() });
+          text: resumeText,
+          executionBrief: {
+            files: repaired.changedFiles,
+            steps: [remainingWork],
+            verification: current.snapshot.acceptanceCriteria,
+            risks: [],
+          },
+          contentHash: sha256(resumeText), createdAt: new Date().toISOString() });
         current.currentHandler = original || null;
         current.blockingReason = original ? `令狐老祖修复完成，等待${original.displayName}继续剩余工作` : "令狐老祖修复完成，等待原执行人继续剩余工作";
         appendFlow(current, "execution.repair_completed", "recovery", "completed", current.blockingReason, participantSnapshot(requireMember(state, LINGHU_MEMBER_ID)), false, flowRepairDetails(current, diagnosis, repaired.text));
@@ -1463,6 +1484,37 @@ function normalizeChangedFiles(files: string[]): string[] {
     .map((file) => String(file).trim().replaceAll("\\", "/").replace(/^\.\//, ""))
     .filter((file) => file && file.length <= 500 && !file.includes("../") && !excluded.test(file)))]
     .slice(0, 500);
+}
+
+/** 从技术分析末尾提取执行包；带南宫婉交接的任务缺失结构化结果时必须停止，避免靠长正文猜测。 */
+function parseExecutionBrief(text: string, task: CollaborationTaskOutDto): CollaborationRequirementPlanOutDto["executionBrief"] {
+  const marker = text.split("\n").find((line) => line.trim().startsWith("EXECUTION_BRIEF="));
+  if (marker) {
+    try {
+      const value = JSON.parse(marker.trim().slice("EXECUTION_BRIEF=".length)) as Record<string, unknown>;
+      const files = normalizeStringList(value.files);
+      const steps = normalizeStringList(value.steps);
+      const verification = normalizeStringList(value.verification);
+      const risks = normalizeStringList(value.risks);
+      if (steps.length > 0 && verification.length > 0) return { files, steps, verification, risks };
+    } catch {
+      // 统一走下面的结构化错误，不能把格式错误降级成长正文重复传输。
+    }
+  }
+  if (task.snapshot.investigationHandoff) throw new Error("执行人物技术分析缺少有效 EXECUTION_BRIEF，已停止进入执行阶段。");
+  return {
+    files: [],
+    steps: ["执行当前会话中已经完成并冻结的技术分析；无法定位时停止并报告。"],
+    verification: task.snapshot.acceptanceCriteria.length > 0 ? task.snapshot.acceptanceCriteria : ["完成已确认任务并报告验证事实"],
+    risks: [],
+  };
+}
+
+/** 结构化模型数组只接收非空短文本，防止异常对象或超长正文进入后续提示。 */
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))].map((item) => item.slice(0, 2_000)).slice(0, 100)
+    : [];
 }
 
 /** 流程事件只记录可审计业务事实，不复制原始推理或认证信息。 */

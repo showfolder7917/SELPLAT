@@ -38,6 +38,26 @@ export interface CollaborationTaskRuleContextOutDto {
   ruleReceipt: string[];
 }
 
+/** 南宫婉交给执行人的结构化调查依据；只保存定位事实，不复制大段源码。 */
+export interface CollaborationInvestigationHandoffOutDto {
+  /** 调查对应的 Git 提交；必须与任务工作树基线一致才可直接复用。 */
+  evidenceBaseSha: string;
+  /** 当前任务预计修改的工程相对路径。 */
+  expectedWriteFiles: string[];
+  /** 已确认的入口，格式为“文件#符号”。 */
+  entryPoints: string[];
+  /** 已确认的关键调用关系。 */
+  callChain: string[];
+  /** 权威状态、配置或持久化事实的位置。 */
+  authoritativeStates: string[];
+  /** 已由源码或稳定运行结果确认的事实。 */
+  verifiedFacts: string[];
+  /** 仍需执行人继续调查的问题。 */
+  unknowns: string[];
+  /** 必须纳入验证的相邻风险。 */
+  adjacentRisks: string[];
+}
+
 /** 任务提交成功后不可随运行过程改变的需求快照。 */
 export interface CollaborationTaskSnapshotOutDto {
   /** 显示在任务卡和审计记录中的任务标题。 */
@@ -62,4 +82,6 @@ export interface CollaborationTaskSnapshotOutDto {
   contentHash: string;
   /** 当时实际加载的规则；旧任务无法恢复该信息时为 null。 */
   ruleContext: CollaborationTaskRuleContextOutDto | null;
+  /** 南宫婉已经完成的技术调查交接；非分发任务没有该字段时为 null。 */
+  investigationHandoff: CollaborationInvestigationHandoffOutDto | null;
 }

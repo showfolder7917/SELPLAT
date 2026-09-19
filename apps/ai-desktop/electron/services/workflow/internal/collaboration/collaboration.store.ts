@@ -156,6 +156,8 @@ export class CollaborationStore {
         locale: request.locale,
         contentHash: sha256(normalizedIntent),
         ruleContext: request.ruleContext ? structuredClone(request.ruleContext) : null,
+        // 调查交接在任务创建时冻结；执行人只能核对版本后复用，不能回写南宫婉的原始证据。
+        investigationHandoff: request.investigationHandoff ? structuredClone(request.investigationHandoff) : null,
       },
       plans: [],
       executionRecords: [],

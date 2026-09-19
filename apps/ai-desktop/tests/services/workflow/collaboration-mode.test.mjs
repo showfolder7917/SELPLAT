@@ -235,6 +235,7 @@ function createExecutionResultCoordinator(directory, store, executionResult) {
         execute: async () => executionResult,
         investigateRepair: async () => "已核对失败事实",
         executeRepair: async () => executionResult,
+        verifyRepairCompletion: async () => 'REPAIR_COMPLETION={"complete":true,"remaining":"","evidence":"修复结果已覆盖原验收条件"}',
         dispose: async () => undefined,
       }),
     }),
@@ -1151,7 +1152,7 @@ test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失�
       store,
       durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
       workspaces: { commitTaskResult: async () => "new-result-sha" },
-      executor: new ExecutorFacade({ createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async () => { throw new Error("修复流程不得调用原专题 execute"); }, investigateRepair: async (_task, failure) => { investigatedFailure = failure; return "只修正失败断言并重跑原验证命令"; }, executeRepair: async (_task, diagnosis) => { receivedRepairPlan = diagnosis.repairInstruction; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [], changedFiles: ["tests/version.test.ts"], successfulCommands: ["npm test"] }; }, dispose: async () => undefined }) }),
+      executor: new ExecutorFacade({ createExecutor: async () => ({ isAlive: () => true, analyze: async () => "", optimize: async () => "", execute: async () => { throw new Error("修复流程不得调用原专题 execute"); }, investigateRepair: async (_task, failure) => { investigatedFailure = failure; return "只修正失败断言并重跑原验证命令"; }, executeRepair: async (_task, diagnosis) => { receivedRepairPlan = diagnosis.repairInstruction; return { status: "code-verified", text: "断言已同步并完成代码级验证", pendingActions: [], changedFiles: ["tests/version.test.ts"], successfulCommands: ["npm test"] }; }, verifyRepairCompletion: async () => 'REPAIR_COMPLETION={"complete":true,"remaining":"","evidence":"原失败断言已修正且验证通过"}', dispose: async () => undefined }) }),
       integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => { integrationSchedules += 1; }, dispose: () => undefined },
       emitState: () => undefined,
       emitStream: () => undefined,
@@ -2577,6 +2578,11 @@ test("执行人物只做技术分析并直接进入实施，不再创建内部�
   assert.match(sessions, /prompts\.render\("executor\.technical-analysis"/);
   assert.match(technicalAnalysisPrompt, /执行人物技术分析/);
   assert.match(technicalAnalysisPrompt, /不要重新解释客户为什么要做/);
+  assert.match(technicalAnalysisPrompt, /investigationHandoffJson/);
+  assert.match(technicalAnalysisPrompt, /EXECUTION_BRIEF=/);
+  assert.match(sessions, /evidenceStatus/);
+  assert.match(sessions, /executionBriefJson/);
+  assert.doesNotMatch(sessions, /confirmedIntent:\s*task\.snapshot\.confirmedIntent,\s*plan:/);
   assert.doesNotMatch(sessions, /CodexReviewerSession|review_decision/);
 });
 
@@ -3193,6 +3199,7 @@ test("令狐活跃调查期间晚到恢复不得重排旧结果，真实进展�
         isAlive: () => true,
         investigateRepair: async (_task, _failure, emit) => { emit({ type: "activity", text: "真实调查" }); entered(); return diagnosis; },
         executeRepair: async () => ({ status: "code-verified", text: "已修复", pendingActions: [], changedFiles: [], authorizedFiles: [], successfulCommands: ["test"] }),
+        verifyRepairCompletion: async () => 'REPAIR_COMPLETION={"complete":true,"remaining":"","evidence":"修复命令通过且原验收条件满足"}',
         dispose: async () => {},
       }) }),
       integrationPipeline: { finishWaitingTask: () => {}, trackWaitingTask: () => {}, schedule: () => { schedules += 1; }, dispose: () => {} },

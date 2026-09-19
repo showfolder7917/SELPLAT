@@ -12,6 +12,8 @@ import type { WorkspaceStateOutDto } from "../../support/platform/workspace/inde
 import type { CollaborationAutomationSourceValue } from "../value/collaboration-task.value.js";
 // CollaborationMergeStrategyValue 决定任务结果完成后如何进入版本集成。
 import type { CollaborationMergeStrategyValue } from "../value/collaboration-task.value.js";
+// CollaborationInvestigationHandoffOutDto 携带南宫婉已经核实、可供执行人增量复用的技术事实。
+import type { CollaborationInvestigationHandoffOutDto } from "./collaboration-task-snapshot.out.dto.js";
 
 /** 发起方提交给 Workflow 并在创建时冻结的任务输入。 */
 export interface SubmitCollaborationTaskInDto {
@@ -59,4 +61,6 @@ export interface SubmitCollaborationTaskInDto {
   sourceEvolutionApprovalId?: string;
   /** 本任务显式命中的当前用户规则逻辑 ID；Workflow 会在提交时冻结解析结果。 */
   taskRuleIds?: string[];
+  /** 南宫婉分发任务时形成的结构化调查交接；普通人工任务可以不提供。 */
+  investigationHandoff?: CollaborationInvestigationHandoffOutDto;
 }

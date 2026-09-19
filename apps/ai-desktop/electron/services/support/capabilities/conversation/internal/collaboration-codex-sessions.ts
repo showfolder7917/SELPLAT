@@ -298,6 +298,7 @@ export class CodexCollaborationSessionFactory implements ExecutorSessionFactoryP
         this.#options.readTaskChangedFiles,
         this.#options.readWorkspaceState,
         this.#options.prompts,
+        this.#options.recordEvent,
       );
     } catch (error) {
       releaseManagedDependencyLease(dependencyLease);
@@ -347,6 +348,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
   readonly #readTaskChangedFiles: CodexCollaborationSessionFactoryOptions["readTaskChangedFiles"];
   readonly #readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"];
   readonly #prompts: PromptLibraryPort;
+  readonly #recordEvent: CodexCollaborationSessionFactoryOptions["recordEvent"];
   readonly #managed: ManagedTaskExecutor;
 
   constructor(
@@ -357,6 +359,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
     readTaskChangedFiles: CodexCollaborationSessionFactoryOptions["readTaskChangedFiles"],
     readWorkspaceState: CodexCollaborationSessionFactoryOptions["readWorkspaceState"],
     prompts: PromptLibraryPort,
+    recordEvent: CodexCollaborationSessionFactoryOptions["recordEvent"],
   ) {
     this.#connection = connection;
     this.#registry = registry;
@@ -366,13 +369,38 @@ class CodexExecutorSession implements ExecutorSessionPort {
     this.#readTaskChangedFiles = readTaskChangedFiles;
     this.#readWorkspaceState = readWorkspaceState;
     this.#prompts = prompts;
+    this.#recordEvent = recordEvent;
     this.#managed = new ManagedTaskExecutor(prompts);
   }
 
   async analyze(task: CollaborationTaskOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
-    return this.#runRequirement(task, this.#prompts.render("executor.technical-analysis", {
-      confirmedIntent: task.snapshot.confirmedIntent,
-    }), emit);
+    const handoff = task.snapshot.investigationHandoff;
+    const taskBaseSha = task.versionWorkspace?.baseSha || "";
+    const evidenceStatus = !handoff
+      ? "当前任务没有南宫婉结构化调查交接，允许完整技术调查。"
+      : handoff.evidenceBaseSha === taskBaseSha
+        ? `交接有效：调查提交与任务基线一致（${taskBaseSha}）。`
+        : `交接过期：调查提交 ${handoff.evidenceBaseSha} 与任务基线 ${taskBaseSha || "未知"} 不一致，必须重新核实后再复用。`;
+    const prompt = this.#prompts.render("executor.technical-analysis", {
+      taskContextJson: JSON.stringify({
+        title: task.snapshot.title,
+        confirmedIntent: task.snapshot.confirmedIntent,
+        constraints: task.snapshot.constraints,
+        acceptanceCriteria: task.snapshot.acceptanceCriteria,
+      }),
+      investigationHandoffJson: JSON.stringify(handoff),
+      evidenceStatus,
+    });
+    this.#recordEvent("collaboration.analysis_efficiency", {
+      stage: "technical-analysis",
+      promptCharacters: prompt.length,
+      evidenceReusable: Boolean(handoff && handoff.evidenceBaseSha === taskBaseSha),
+      reusedFactCount: handoff && handoff.evidenceBaseSha === taskBaseSha
+        ? handoff.entryPoints.length + handoff.callChain.length + handoff.authoritativeStates.length + handoff.verifiedFacts.length
+        : 0,
+      unresolvedFactCount: handoff?.unknowns.length || 0,
+    }, task.taskId);
+    return this.#runRequirement(task, prompt, emit);
   }
 
   isAlive(): boolean { return this.#connection.service.isAlive(); }
@@ -383,10 +411,24 @@ class CodexExecutorSession implements ExecutorSessionPort {
   }
 
   async execute(task: CollaborationTaskOutDto, plan: CollaborationRequirementPlanOutDto, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
-    return this.#executePlan(task, this.#prompts.render("executor.execution", {
-      confirmedIntent: task.snapshot.confirmedIntent,
-      planText: plan.text,
-    }), emit);
+    const executionBrief = plan.executionBrief || {
+      files: task.snapshot.investigationHandoff?.expectedWriteFiles || [],
+      steps: ["执行当前会话中已经完成并冻结的技术分析；无法定位时停止并报告。"],
+      verification: task.snapshot.acceptanceCriteria,
+      risks: task.snapshot.investigationHandoff?.adjacentRisks || [],
+    };
+    const prompt = this.#prompts.render("executor.execution", {
+      planReference: `任务 ${task.taskId} / 修订 ${task.taskRevision} / 方案 v${plan.version} / ${plan.contentHash}`,
+      executionBriefJson: JSON.stringify(executionBrief),
+      acceptanceCriteriaJson: JSON.stringify(task.snapshot.acceptanceCriteria),
+    });
+    this.#recordEvent("collaboration.analysis_efficiency", {
+      stage: "source-execution",
+      promptCharacters: prompt.length,
+      fullPlanCharactersAvoided: plan.text.length,
+      executionBriefCharacters: JSON.stringify(executionBrief).length,
+    }, task.taskId);
+    return this.#executePlan(task, prompt, emit);
   }
 
   async #executePlan(task: CollaborationTaskOutDto, message: string, emit: (event: CodexStreamEventOutDto) => void): Promise<ExecutorExecutionResultOutDto> {
@@ -439,6 +481,17 @@ class CodexExecutorSession implements ExecutorSessionPort {
       failureSummary: diagnosis.failureSummary,
       technicalEvidence: `${diagnosis.technicalEvidence.join("\n")}\n\n${repairInvestigationContext(task, process.platform)}`,
     }), emit);
+  }
+
+  async verifyRepairCompletion(task: CollaborationTaskOutDto, completionContextJson: string, emit: (event: CodexStreamEventOutDto) => void): Promise<string> {
+    const prompt = this.#prompts.render("executor.repair-completion", { completionContextJson });
+    this.#recordEvent("collaboration.analysis_efficiency", {
+      stage: "repair-completion",
+      promptCharacters: prompt.length,
+      completionContextCharacters: completionContextJson.length,
+      fullInvestigationPromptAvoided: true,
+    }, task.taskId);
+    return this.#runRequirement(task, prompt, emit);
   }
 
   async dispose(): Promise<void> {

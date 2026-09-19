@@ -25,6 +25,8 @@ export type { CollaborationParticipantSnapshotOutDto } from "./dto/collaboration
 export type { CollaborationTaskRuleContextOutDto } from "./dto/collaboration-task-snapshot.out.dto.js";
 // CollaborationTaskSnapshotOutDto 是任务提交时冻结的原始需求。
 export type { CollaborationTaskSnapshotOutDto } from "./dto/collaboration-task-snapshot.out.dto.js";
+// CollaborationInvestigationHandoffOutDto 是南宫婉与执行人之间可校验版本的调查交接。
+export type { CollaborationInvestigationHandoffOutDto } from "./dto/collaboration-task-snapshot.out.dto.js";
 
 // CollaborationMemberKindValue 区分会话负责人和执行成员。
 export type { CollaborationMemberKindValue } from "./value/collaboration-member.value.js";

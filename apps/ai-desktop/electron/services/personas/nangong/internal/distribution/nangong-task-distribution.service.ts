@@ -8,7 +8,7 @@ import type { EvolutionMutationPort, EvolutionStatePort } from "../../../../evol
 import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
 import { decideCurrentTopicOperation } from "../../../../workflow/domain/current-topic-operation.decision.js";
 
-type PlanResult = { summary: string; units: EvolutionDistributionUnitOutDto[] };
+type PlanResult = { summary: string; evidenceBaseSha: string; units: EvolutionDistributionUnitOutDto[] };
 type ParsedJsonObjects = { values: Record<string, unknown>[]; candidateCount: number; hasUnclosedObject: boolean };
 type DistributionPlanFormatKind = "unclosed-object" | "missing-object" | "invalid-object";
 
@@ -149,10 +149,10 @@ export class NangongTaskDistributionService {
         this.#publishPlanning(proposal, topic, attempt, "completed", "执行计划生成完成", planned.summary, planningStartedAt);
         const hardFindings = distributionHardFindings(planned.units, this.options.isCurrentUserTaskRuleId);
         const validation = validateDistributionPlan(planned, hardFindings);
-        const plan: EvolutionDistributionPlanOutDto = { version: 1, summary: planned.summary, units: planned.units, validation, plannedAt: new Date().toISOString() };
+        const plan: EvolutionDistributionPlanOutDto = { version: 2, summary: planned.summary, evidenceBaseSha: planned.evidenceBaseSha, units: planned.units, validation, plannedAt: new Date().toISOString() };
         state = this.options.store.saveDistributionPlan(proposalId, plan);
         proposal = requireProposal(state, proposalId);
-        this.options.recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, expectedFiles: plan.units.flatMap((unit) => unit.expectedFiles), validationDecision: validation.decision, validationFindings: validation.findings });
+        this.options.recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, evidenceBaseSha: plan.evidenceBaseSha, expectedWriteFiles: plan.units.flatMap((unit) => unit.expectedWriteFiles), validationDecision: validation.decision, validationFindings: validation.findings });
         this.options.recordEvent("nangong.distribution_validation.completed", { proposalId, attempt, decision: validation.decision, reason: validation.reason, findings: validation.findings });
         if (validation.decision === "passed") break;
         feedback = [validation.reason, ...validation.findings].filter(Boolean).join("；");
@@ -188,6 +188,16 @@ export class NangongTaskDistributionService {
         selfUpgradeTargetMemberId: proposal.targetMemberId || undefined, selfUpgradeCapabilityScope: proposal.capabilityScope || undefined,
         sourceEvolutionApprovalId: latestApproval?.approvalId,
         taskRuleIds: unit.taskRuleIds || [],
+        investigationHandoff: {
+          evidenceBaseSha: proposal.distributionPlan.evidenceBaseSha,
+          expectedWriteFiles: unit.expectedWriteFiles,
+          entryPoints: unit.investigation.entryPoints,
+          callChain: unit.investigation.callChain,
+          authoritativeStates: unit.investigation.authoritativeStates,
+          verifiedFacts: unit.investigation.verifiedFacts,
+          unknowns: unit.investigation.unknowns,
+          adjacentRisks: unit.investigation.adjacentRisks,
+        },
       });
       const createdTask = next.state.tasks.find((task) => task.taskId === next.taskId);
       if (!createdTask) throw new Error("协同任务已经创建，但未能建立提案关联。");
@@ -258,6 +268,9 @@ function parseDistributionPlan(text: string): PlanResult {
 
 function normalizeDistributionPlan(value: Record<string, unknown>): PlanResult | null {
   const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
+  const evidenceBaseSha = typeof value.evidenceBaseSha === "string" && /^[0-9a-f]{40}$/u.test(value.evidenceBaseSha.trim())
+    ? value.evidenceBaseSha.trim()
+    : "";
   const rawUnits = Array.isArray(value.units) ? value.units : [];
   const units = rawUnits.flatMap((raw): EvolutionDistributionUnitOutDto[] => {
     if (!raw || typeof raw !== "object") return [];
@@ -265,12 +278,29 @@ function normalizeDistributionPlan(value: Record<string, unknown>): PlanResult |
     const title = typeof item.title === "string" ? item.title.trim().slice(0, 200) : "";
     const scope = typeof item.scope === "string" ? item.scope.trim().slice(0, 8_000) : "";
     const acceptanceCriteria = normalizeDraftList(item.acceptanceCriteria);
-    const expectedFiles = normalizeDraftList(item.expectedFiles).map((file) => file.replaceAll("\\", "/").replace(/^\.\//u, "")).filter((file) => !file.startsWith("/") && !file.split("/").includes(".."));
+    const expectedWriteFiles = normalizeDraftList(item.expectedWriteFiles).map((file) => file.replaceAll("\\", "/").replace(/^\.\//u, "")).filter((file) => !file.startsWith("/") && !file.split("/").includes(".."));
+    const investigationValue = item.investigation && typeof item.investigation === "object"
+      ? item.investigation as Record<string, unknown>
+      : {};
+    const investigation = {
+      entryPoints: normalizeDraftList(investigationValue.entryPoints),
+      callChain: normalizeDraftList(investigationValue.callChain),
+      authoritativeStates: normalizeDraftList(investigationValue.authoritativeStates),
+      verifiedFacts: normalizeDraftList(investigationValue.verifiedFacts),
+      unknowns: normalizeDraftList(investigationValue.unknowns),
+      adjacentRisks: normalizeDraftList(investigationValue.adjacentRisks),
+    };
     const taskRuleIds = normalizeDraftList(item.taskRuleIds).filter((id) => /^[A-Z][A-Z0-9_]{1,127}$/u.test(id));
     const independentReason = typeof item.independentReason === "string" ? item.independentReason.trim().slice(0, 4_000) : "";
-    return title && scope && acceptanceCriteria.length && expectedFiles.length && independentReason ? [{ title, scope, acceptanceCriteria, expectedFiles, taskRuleIds, independentReason }] : [];
+    const hasReusableEvidence = investigation.entryPoints.length > 0
+      && investigation.callChain.length > 0
+      && investigation.authoritativeStates.length > 0
+      && investigation.verifiedFacts.length > 0;
+    return title && scope && acceptanceCriteria.length && expectedWriteFiles.length && independentReason && hasReusableEvidence
+      ? [{ title, scope, acceptanceCriteria, expectedWriteFiles, investigation, taskRuleIds, independentReason }]
+      : [];
   });
-  return summary && units.length ? { summary, units } : null;
+  return summary && evidenceBaseSha && units.length ? { summary, evidenceBaseSha, units } : null;
 }
 
 function normalizeDraftList(value: unknown): string[] {
@@ -334,10 +364,18 @@ function distributionHardFindings(units: EvolutionDistributionUnitOutDto[], isCu
     if (unknownRuleIds.length) findings.push(`任务“${unit.title}”声明了当前用户未登记的专项规则：${unknownRuleIds.join("、")}`);
   }
   for (let index = 0; index < units.length; index += 1) for (let other = index + 1; other < units.length; other += 1) {
-    const overlap = units[index].expectedFiles.filter((file) => units[other].expectedFiles.includes(file));
+    const overlap = units[index].expectedWriteFiles.filter((file) => units[other].expectedWriteFiles.some((otherFile) => writePathsOverlap(file, otherFile)));
     if (overlap.length) findings.push(`文件同时属于任务“${units[index].title}”与“${units[other].title}”：${overlap.join("、")}`);
   }
   return findings;
+}
+
+function writePathsOverlap(left: string, right: string): boolean {
+  const normalizedLeft = left.replace(/\/+$/u, "");
+  const normalizedRight = right.replace(/\/+$/u, "");
+  return normalizedLeft === normalizedRight
+    || normalizedLeft.startsWith(`${normalizedRight}/`)
+    || normalizedRight.startsWith(`${normalizedLeft}/`);
 }
 
 /** 程序只校验可确定的分发冲突；业务规划仍由南宫婉负责，令狐不参与常规分发审核。 */

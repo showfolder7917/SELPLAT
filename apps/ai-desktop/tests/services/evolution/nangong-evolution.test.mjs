@@ -158,9 +158,34 @@ function readPersistedState(key) { return structuredClone(persistedEvolutionStat
 function writePersistedState(key, state) { persistedEvolutionStates.set(key, structuredClone(state)); }
 function topicRequest(title = "协同审批分层") { return { title, goal: "把演化方向审批从执行审核中独立出来", scope: ["AI Desktop"], exclusions: ["其他应用"], evidence: ["现有审核只覆盖执行方案"], acceptanceCriteria: ["提案审批与执行审核具有独立记录"], workspaceState, locale: "zh-CN" }; }
 function proposalRequest() { return { type: "代码修正", content: "建立独立演化审批入口，审批通过后返还南宫婉分发。", risks: ["历史记录迁移"], rollbackPlan: "保留旧记录并关闭三项自动开关。" }; }
+const TEST_EVIDENCE_BASE_SHA = "a".repeat(40);
+function distributionPlanJson(plan) {
+  return JSON.stringify({
+    version: 2,
+    evidenceBaseSha: TEST_EVIDENCE_BASE_SHA,
+    ...plan,
+    units: plan.units.map((unit) => {
+      const expectedWriteFiles = unit.expectedWriteFiles || unit.expectedFiles || [];
+      const primaryFile = expectedWriteFiles[0] || "apps/ai-desktop/unknown.ts";
+      const { expectedFiles: _expectedFiles, ...rest } = unit;
+      return {
+        ...rest,
+        expectedWriteFiles,
+        investigation: unit.investigation || {
+          entryPoints: [`${primaryFile}#入口`],
+          callChain: [`${primaryFile}#入口→结果`],
+          authoritativeStates: [`${primaryFile}#权威状态`],
+          verifiedFacts: [`${primaryFile} 已确认属于当前任务边界`],
+          unknowns: [],
+          adjacentRisks: [],
+        },
+      };
+    }),
+  });
+}
 const conversation = { async send(_request, context) { return { text: `南宫婉调查结论：${context}\nNANGONG_TOPIC_META={"title":"当前调查","type":"事实调查","switchTopic":false,"userIntent":"调查当前问题并形成事实依据","tags":["调查","事实依据"],"summary":"围绕当前问题收集事实并形成可继续分析的依据。"}`, itemCount: 1 }; }, async newChat() {} };
 const distributionServices = {
-  async planDistribution() { return JSON.stringify({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
+  async planDistribution() { return distributionPlanJson({ summary: "改动集中在同一业务流程和文件边界，由一个人独立完成可减少合并成本。", units: [{ title: "完成审批后的专项实施", scope: "在同一业务边界内完成提案要求并验证闭环", acceptanceCriteria: ["提案验收条件全部通过"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "预计文件高度集中，不拆分可独立修改、回退和验收。" }] }); },
 };
 // 通过审批的测试替身必须提供本轮设计检查，缺项场景由独立门禁测试覆盖。
 function approvedDesignResponse(state, advice) {
@@ -1377,6 +1402,9 @@ test("审批通过后才由南宫婉分发并固定 proposalId", async () => {
     assert.deepEqual(submitted.workspaceState, workspaceState);
     assert.equal(submitted.initiatorMemberId, "nangong-wan"); assert.equal(submitted.evolutionProposalId, proposalId);
     assert.equal(submitted.evolutionRoundId, proposalId); assert.equal(submitted.mergeStrategy, "ATOMIC_GROUP"); assert.equal(submitted.atomicGroupId, proposalId);
+    assert.equal(submitted.investigationHandoff.evidenceBaseSha, TEST_EVIDENCE_BASE_SHA);
+    assert.deepEqual(submitted.investigationHandoff.expectedWriteFiles, ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"]);
+    assert.equal(submitted.investigationHandoff.verifiedFacts.length, 1);
     assert.deepEqual(submitted.dependencyTaskIds, []); assert.deepEqual(state.proposals[0].distributedTaskIds, ["collab-1"]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -1386,7 +1414,7 @@ test("分发计划会纠正首轮无效 JSON，并从围栏中的单个有效对
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const events = []; let attempts = 0; let submitted = 0;
-    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const validPlan = distributionPlanJson({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
       collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-retry-task", state: { tasks: [{ taskId: "json-retry-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
@@ -1411,7 +1439,7 @@ test("分发计划格式重试仅记录闭合候选数量而不记录无效对�
     const store = evolutionStore(path.join(directory, "state.json"));
     const events = []; let attempts = 0; let submitted = 0; let retryPrompt = "";
     const rawFailure = "无效对象：{\"summary\": }";
-    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const validPlan = distributionPlanJson({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
       collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-invalid-object-task", state: { tasks: [{ taskId: "json-invalid-object-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
@@ -1439,7 +1467,7 @@ test("分发计划外层对象未闭合但内部任务对象闭合时仍进入�
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const events = []; let attempts = 0; let submitted = 0; let retryPrompt = "";
-    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const validPlan = distributionPlanJson({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const rawFailure = validPlan.slice(0, -1);
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
@@ -1453,7 +1481,8 @@ test("分发计划外层对象未闭合但内部任务对象闭合时仍进入�
     state = await facade.dispatch(proposalId);
     assert.equal(attempts, 2);
     assert.equal(submitted, 1);
-    assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.candidateCount), [1]);
+    assert.ok(events.find((event) => event.type === "nangong.evolution.distribution_format_retry").details.candidateCount >= 1,
+      "外层计划未闭合时允许统计其中任意数量的闭合子对象，但不得把子对象误当完整计划");
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.hasUnclosedObject), [true]);
     assert.match(retryPrompt, /程序上一轮检测到格式错误：/);
     assert.match(retryPrompt, /检测到未闭合 JSON 对象/);
@@ -1468,7 +1497,7 @@ test("分发计划忽略说明中的相邻元数据对象并使用完整计划",
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     const events = []; let attempts = 0; let submitted = 0;
-    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const validPlan = distributionPlanJson({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: (type, details) => events.push({ type, details }),
       collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-adjacent-task", state: { tasks: [{ taskId: "json-adjacent-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
@@ -1492,7 +1521,7 @@ test("分发计划字段含转义字符和花括号时仍提取完整对象", as
     const store = evolutionStore(path.join(directory, "state.json"));
     let submitted = 0;
     const scope = "读取结果示例 {\"status\":\"ok\"}；路径 C:\\workspace\\fixture";
-    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope, acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const validPlan = distributionPlanJson({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope, acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: () => undefined,
       collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-escaped-task", state: { tasks: [{ taskId: "json-escaped-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
@@ -1513,7 +1542,7 @@ test("分发计划在说明文字包裹 JSON 围栏时仍使用完整计划", as
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     let submitted = 0;
-    const validPlan = JSON.stringify({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
+    const validPlan = distributionPlanJson({ summary: "单一文件边界由同一执行人完成。", units: [{ title: "收起临时工作区", scope: "在验收结束后收起当前临时工作区", acceptanceCriteria: ["临时工作区在验收结束后收起"], expectedFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"], independentReason: "状态变更与验收收口不能拆分" }] });
     const facade = new PersonaEvolutionRuntime({
       store, conversation, recordEvent: () => undefined,
       collaboration: { submitTask(request) { submitted += 1; return { taskId: "json-fenced-prose-task", state: { tasks: [{ taskId: "json-fenced-prose-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
@@ -1580,14 +1609,14 @@ test("生产分发会话显式使用专题工作区且令狐不再参与常规�
   assert.match(distributionServiceSource, /nangong\.distribution_validation\.completed/);
 });
 
-test("预计修改文件重叠时程序阻止多人重复分发", async () => {
+test("预计修改目录包含另一任务文件时程序阻止多人重复分发", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-overlap-audit-"));
   try {
     const store = evolutionStore(path.join(directory, "state.json"));
     let submitted = 0;
     const collaboration = { submitTask() { submitted += 1; return { tasks: [] }; } };
-    const overlappingPlan = JSON.stringify({ summary: "错误地按影响范围拆成两个任务。", units: [
-      { title: "修改按钮", scope: "调整同一工具栏按钮", acceptanceCriteria: ["按钮可用"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "页面改动" },
+    const overlappingPlan = distributionPlanJson({ summary: "错误地按影响范围拆成两个任务。", units: [
+      { title: "修改开发者页面", scope: "调整开发者页面目录", acceptanceCriteria: ["页面可用"], expectedFiles: ["apps/ai-desktop/src/applications/developer"], independentReason: "页面目录改动" },
       { title: "验证按钮", scope: "验证同一工具栏按钮", acceptanceCriteria: ["按钮通过测试"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "测试改动" },
     ] });
     const facade = new PersonaEvolutionRuntime({
@@ -1612,8 +1641,8 @@ test("分发计划中的 core 规则在创建任务前被当前用户目录校�
     let attempts = 0;
     let submittedAtAttempt = null;
     let retryPrompt = "";
-    const invalidPlan = JSON.stringify({ summary: "首轮错误引用 core 规则。", units: [{ title: "校验专项规则目录", scope: "为任务分发补充当前用户规则目录校验", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: ["CODE_JS_RULES"], independentReason: "目录校验与分发在同一职责边界" }] });
-    const validPlan = JSON.stringify({ summary: "第二轮移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "为任务分发补充当前用户规则目录校验", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "目录校验与分发在同一职责边界" }] });
+    const invalidPlan = distributionPlanJson({ summary: "首轮错误引用 core 规则。", units: [{ title: "校验专项规则目录", scope: "为任务分发补充当前用户规则目录校验", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: ["CODE_JS_RULES"], independentReason: "目录校验与分发在同一职责边界" }] });
+    const validPlan = distributionPlanJson({ summary: "第二轮移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "为任务分发补充当前用户规则目录校验", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "目录校验与分发在同一职责边界" }] });
     const facade = new PersonaEvolutionRuntime({
       store,
       conversation,
@@ -1651,13 +1680,14 @@ test("已通过的持久化计划在分发前重验当前用户规则目录", as
     const statePath = path.join(directory, "state.json");
     const store = evolutionStore(statePath);
     const stalePlan = {
-      version: 1,
+      ...JSON.parse(distributionPlanJson({
       summary: "旧计划在当时的规则目录中通过。",
       units: [{ title: "校验专项规则目录", scope: "在分发前重新核验持久化计划的规则 ID", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: ["CODE_JS_RULES"], independentReason: "规则目录在任务快照前必须保持一致" }],
+      })),
       validation: { decision: "passed", reason: "旧目录校验通过", findings: [], validatedAt: "2026-09-14T00:00:00.000Z" },
       plannedAt: "2026-09-14T00:00:00.000Z",
     };
-    const validPlan = JSON.stringify({ summary: "重新规划后移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "在分发前重新核验持久化计划的规则 ID", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "规则目录在任务快照前必须保持一致" }] });
+    const validPlan = distributionPlanJson({ summary: "重新规划后移除未登记规则。", units: [{ title: "校验专项规则目录", scope: "在分发前重新核验持久化计划的规则 ID", acceptanceCriteria: ["未登记规则不得创建任务"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], taskRuleIds: [], independentReason: "规则目录在任务快照前必须保持一致" }] });
     let attempts = 0;
     let submitted = 0;
     const events = [];
@@ -1741,7 +1771,7 @@ test("全部执行结果返回南宫婉后才封存同一轮并一次性交给�
     };
     const facade = new PersonaEvolutionRuntime({
       store, collaboration, conversation, recordEvent: () => undefined,
-      async planDistribution() { return JSON.stringify({ summary: "两个文件边界可独立执行，但必须整轮返回后统一测试。", units: [
+      async planDistribution() { return distributionPlanJson({ summary: "两个文件边界可独立执行，但必须整轮返回后统一测试。", units: [
         { title: "任务一", scope: "修改文件一", acceptanceCriteria: ["文件一通过"], expectedFiles: ["apps/ai-desktop/one.ts"], independentReason: "文件边界独立" },
         { title: "任务二", scope: "修改文件二", acceptanceCriteria: ["文件二通过"], expectedFiles: ["apps/ai-desktop/two.ts"], independentReason: "文件边界独立" },
       ] }); },

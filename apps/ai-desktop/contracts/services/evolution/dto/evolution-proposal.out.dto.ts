@@ -14,7 +14,23 @@ export interface EvolutionDistributionUnitOutDto {
   title: string;
   scope: string;
   acceptanceCriteria: string[];
-  expectedFiles: string[];
+  /** 预计会被本任务修改的文件；分发冲突只比较写边界，不把共享只读依赖误判为冲突。 */
+  expectedWriteFiles: string[];
+  /** 南宫婉已经核实、可由后续执行人按版本复用的技术调查结果。 */
+  investigation: {
+    /** 已确认的业务或程序入口，格式为“文件#符号”。 */
+    entryPoints: string[];
+    /** 从入口到结果的关键调用关系，不复制源码正文。 */
+    callChain: string[];
+    /** 权威状态、配置或持久化事实所在位置。 */
+    authoritativeStates: string[];
+    /** 已由源码或可重复读取结果确认的事实。 */
+    verifiedFacts: string[];
+    /** 当前尚未确认、必须由执行人继续调查的问题。 */
+    unknowns: string[];
+    /** 修改后必须覆盖的相邻回归风险。 */
+    adjacentRisks: string[];
+  };
   /** 南宫婉从当前用户索引选择、由任务提交时冻结的专项规则逻辑 ID。 */
   taskRuleIds?: string[];
   independentReason: string;
@@ -28,7 +44,9 @@ export interface EvolutionDistributionValidationOutDto {
 }
 
 export interface EvolutionDistributionPlanOutDto {
-  version: 1;
+  version: 2;
+  /** 南宫婉调查时读取的工作区提交；任务工作树基线不一致时不得直接复用调查事实。 */
+  evidenceBaseSha: string;
   summary: string;
   units: EvolutionDistributionUnitOutDto[];
   validation: EvolutionDistributionValidationOutDto;
