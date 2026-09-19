@@ -15,6 +15,24 @@ import type { EvolutionOneShotConfirmationOutDto, EvolutionOneShotRunOutDto } fr
 import type { EvolutionProposalOutDto } from "./evolution-proposal.out.dto.js";
 import type { EvolutionTopicOutDto } from "./evolution-topic.out.dto.js";
 
+/** 当前专题唯一的技术卡点恢复事实；Workflow 异常只保存审计副本，不能再作为页面计数来源。 */
+export interface EvolutionTechnicalRecoveryOutDto {
+  issueId: string;
+  topicId: string;
+  proposalId: string;
+  acceptanceConditionIds: string[];
+  failureCategory: string;
+  evidenceReferences: string[];
+  occurrences: Array<{ runId: string | null; taskId: string | null; occurrenceId: string | null; reason: string; occurredAt: string }>;
+  attemptCount: number;
+  handler: "linghu-ancestor" | "monitor" | "system";
+  handoffStatus: "pending" | "handed-off" | "failed" | "basis-unverified" | "monitoring";
+  failureReason: string | null;
+  nextAction: string;
+  active: boolean;
+  updatedAt: string;
+}
+
 export interface EvolutionStateOutDto {
   version: 10;
   automationSettings: EvolutionAutomationSettingsOutDto;
@@ -23,6 +41,8 @@ export interface EvolutionStateOutDto {
   oneShotConfirmation?: EvolutionOneShotConfirmationOutDto | null;
   /** 当前对话经用户确认后启动的单专题运行；完成后由运行状态决定是否继续发现下一问题。 */
   oneShotRun?: EvolutionOneShotRunOutDto | null;
+  /** 技术卡点的唯一恢复状态；历史档案不会重新激活该字段。 */
+  technicalRecovery?: EvolutionTechnicalRecoveryOutDto | null;
   automationContext: { workspaceState: WorkspaceStateOutDto | null; locale: LocaleValue };
   preferenceSnapshotVersion: number;
   activeTopicId: string | null;

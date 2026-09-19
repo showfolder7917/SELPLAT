@@ -89,6 +89,28 @@ export function projectCurrentTopicStage(
     };
   }
 
+  // 活动技术卡点是唯一恢复状态的只读投影；阻塞运行本身不能再签发“从卡点继续”。
+  const technicalRecovery = evolution.technicalRecovery;
+  if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
+    && technicalRecovery.proposalId === proposal.proposalId) {
+    const monitoring = technicalRecovery.handoffStatus === "monitoring";
+    const unverified = technicalRecovery.handoffStatus === "basis-unverified";
+    const failed = technicalRecovery.handoffStatus === "failed";
+    const summary = monitoring ? `监控接管复验：同一技术问题已保留 ${technicalRecovery.attemptCount} 轮证据。`
+      : unverified ? "次数依据尚未核验。"
+        : failed ? "令狐转交未完成。"
+          : "令狐老祖处理中。";
+    const waitingFor = monitoring ? "监控接管复验" : unverified || failed ? "系统恢复处理" : "令狐老祖";
+    return {
+      topicId: technicalRecovery.topicId, proposalId: technicalRecovery.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
+      summary, repairContent: proposal.content, remaining: technicalRecovery.failureReason || technicalRecovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
+      waitingFor, nextAction: technicalRecovery.nextAction, userAction: "none", resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
+      effectiveTaskIds: technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)), missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
+      hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: technicalRecovery.updatedAt,
+    };
+  }
+
   // 监控者独立验收卡没有分发计划，不套用普通代码交付候选门禁；最终通过仍必须读取唯一结论记录。
   const monitorAcceptanceCard = topic !== null && topic.recoveryPoint?.startsWith("monitor-formal-acceptance-")
     && proposal.distributionPlan === null
