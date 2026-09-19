@@ -256,7 +256,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     return (
       <section className="task-collaboration-page">
         <div className="task-collaboration-empty" role="alert">
-          <strong>验收依据暂时无法读取</strong>
+          <strong>当前无法读取：验收依据暂时无法读取</strong>
           <span>正在等待：{readObstruction.waitingFor}</span>
           <span>是否需要你操作：{readObstruction.requiresUserAction ? "需要重新读取，当前不会推进或恢复任务。" : "暂不需要，系统正在自动重试。"}</span>
           <span>下一步：{readObstruction.nextAction}</span>

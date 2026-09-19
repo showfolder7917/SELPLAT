@@ -217,7 +217,10 @@ test("验收结果按真实发生时间选择，保留历史顺序不修改输�
 
 test("完成必须绑定同一最终候选的测试、发布、重启健康与真实验收", () => {
   const complete = deliveredCollaboration();
-  const completed = projectCurrentTopicStage(evolution(complete.acceptanceStatus), complete);
+  const completedState = evolution(complete.acceptanceStatus);
+  completedState.proposals[0].status = "completed";
+  completedState.topics[0].status = "completed";
+  const completed = projectCurrentTopicStage(completedState, complete);
   assert.equal(completed.status, "completed");
   assert.equal(completed.summary, "韩立结果验收已经通过，专题已完成。");
   assert.equal(completed.waitingFor, "当前无需操作");
