@@ -3,6 +3,7 @@ import type { BrowserWindow } from "electron";
 import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/index.js";
 import type { AttachmentFacade } from "../../../../support/platform/attachments/index.js";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../../contracts/services/personas/hanli/index.js";
+import { selectHanliAcceptanceContinuation, type HanliAcceptanceContinuation } from "./hanli-acceptance-continuation.policy.js";
 
 // 授权由主进程登记的正式窗口会话实时判断，模型不能扩大权限。
 export type AcceptancePrivateAction = "persona-navigation";
@@ -61,7 +62,7 @@ export class HanliComputerAcceptance {
     window: BrowserWindow,
     model: (
       tools: CodexDynamicToolsPort,
-      session: { beginFinalization: () => boolean },
+      session: { nextContinuation: () => HanliAcceptanceContinuation | null },
     ) => Promise<void>,
     progress: (message: string) => void,
     interactions: PageReviewInteractionPort,
@@ -106,6 +107,7 @@ export class HanliComputerAcceptance {
     // 仅记录 finish 的受限终态，供未完成验收回到同一提案时区分模型未调用与参数被拒绝。
     let finishAttempted = false;
     let finishRejection = "";
+    let correctionAttempted = false;
     // 窄窗口只用于当前验收的固定预设；无论验收如何结束都还原起始尺寸。
     let formalWindowResized = false;
     let coordinateSpace: AcceptanceCoordinateSpace = { screenshot: { width: 1, height: 1 }, viewport: { width: 1, height: 1 } };
@@ -573,13 +575,22 @@ export class HanliComputerAcceptance {
     };
     try {
       await model(tools, {
-        beginFinalization: () => {
-          if (completed || finishAttempted || !snapshot || !evidence.includes(snapshot)) {
-            return false;
+        nextContinuation: () => {
+          const continuation = selectHanliAcceptanceContinuation({
+            completed,
+            hasArchivedScreenshot: Boolean(snapshot && evidence.includes(snapshot)),
+            finishAttempted,
+            finishRejection,
+            correctionAttempted,
+          });
+          if (continuation?.kind === "finish-only") {
+            finalizationOnly = true;
+            progress("验收模型未提交 finish；进入仅允许 finish 的终态回合，禁止继续操作应用。");
+          } else if (continuation?.kind === "correction") {
+            correctionAttempted = true;
+            progress("验收模型的 finish 被校验拒绝；进入一次受限纠正回合，仅可补齐原条件证据后重新提交 finish。");
           }
-          finalizationOnly = true;
-          progress("验收模型未提交 finish；进入仅允许 finish 的终态回合，禁止继续操作应用。");
-          return true;
+          return continuation;
         },
       });
     } finally {

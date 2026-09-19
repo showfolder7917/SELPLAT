@@ -967,14 +967,16 @@ export async function startApplication(): Promise<void> {
         timer = setTimeout(() => reject(new Error("韩立交互式验收会话超过10分钟未完成，未代替韩立给出验收结论。")), 600_000);
       });
       try {
-        const sendAcceptanceTurn = (promptId: "hanli.computer-acceptance" | "hanli.computer-acceptance-finalization") => Promise.race([
-          service.send(prompts.render(promptId, { goalJson: JSON.stringify(goal) }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null),
+        const sendAcceptanceTurn = (promptId: "hanli.computer-acceptance" | "hanli.computer-acceptance-finalization" | "hanli.computer-acceptance-correction", values: Record<string, string> = {}) => Promise.race([
+          service.send(prompts.render(promptId, { goalJson: JSON.stringify(goal), ...values }), topic.locale, "read-only", topic.workspaceState, [], () => undefined, null),
           acceptanceTimeout,
         ]);
         await sendAcceptanceTurn("hanli.computer-acceptance");
-        // 首回合正常结束却遗漏 finish 时，仅追加同一线程的终态提交回合；不重开窗口工具或放宽操作授权。
-        if (session.beginFinalization()) {
+        const continuation = session.nextContinuation();
+        if (continuation?.kind === "finish-only") {
           await sendAcceptanceTurn("hanli.computer-acceptance-finalization");
+        } else if (continuation?.kind === "correction") {
+          await sendAcceptanceTurn("hanli.computer-acceptance-correction", { finishRejection: continuation.rejection });
         }
       }
       finally { if (timer) clearTimeout(timer); service.dispose(); }
