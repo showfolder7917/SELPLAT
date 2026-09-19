@@ -430,6 +430,18 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const activeStage = model.presentation.currentTopicStage;
   const currentStage = activeStage?.topicId === group.topicId && activeStage?.proposalId === group.proposalId
     ? activeStage : null;
+  // 已保存的旧投影和隔离运行夹具可能尚未提供新增的 Host 启动字段；缺失时只显示尚未核验，不能中断整张任务卡。
+  const hostStartupAcceptance = currentStage?.hostStartupAcceptance ?? {
+    launchId: null,
+    handler: null,
+    startedAt: null,
+    exitCode: null,
+    healthStatus: "missing" as const,
+    healthSummary: null,
+    evidenceReferences: [],
+    status: "unverified" as const,
+    reason: "尚未记录当前专题的 Host 启动验收依据。",
+  };
   // 当前投影明确要求客户恢复时，优先使用它签发的原一次性运行标识；普通任务卡点才读取有效任务链。
   const projectedResumeRunId = currentStage?.userAction === "resume" ? currentStage.resumeOneShotRunId : null;
   const projectedResumeTaskId = currentStage?.userAction === "resume"
@@ -491,6 +503,23 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       {open && <>
         {/* 展开后才装载人物节点正文和技术详情；详情面板单独滚动，卡片摘要与下一流程持续可见。 */}
         <div className="task-timeline-detail-pane" onScroll={model.actions.onDetailScroll}>
+          {currentStage && (
+            <section className="task-node-detail">
+              <strong>{locale === "ja" ? "Host 起動受入" : "Host 启动验收"}</strong>
+              <p>{hostStartupAcceptance.status === "passed"
+                ? "Host 启动验收通过：同一启动标识的退出结果与 8080 health 已核验。"
+                : `尚未核验：${hostStartupAcceptance.reason}`}</p>
+              <pre>{[
+                `启动标识：${hostStartupAcceptance.launchId || "未记录"}`,
+                `处理人：${hostStartupAcceptance.handler || "未记录"}`,
+                `启动时间：${hostStartupAcceptance.startedAt || "未记录"}`,
+                `退出结果：${hostStartupAcceptance.exitCode ?? "未记录"}`,
+                `8080 health：${hostStartupAcceptance.healthStatus}`,
+                `响应摘要：${hostStartupAcceptance.healthSummary || "未记录"}`,
+                `证据引用：${hostStartupAcceptance.evidenceReferences.join("；") || "未记录"}`,
+              ].join("\n")}</pre>
+            </section>
+          )}
           {currentStage && (
             <section className="task-node-detail">
               <strong>{locale === "ja" ? "最終受入根拠" : "最终验收依据"}</strong>

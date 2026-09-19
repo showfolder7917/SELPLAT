@@ -8,6 +8,22 @@ import type { EvolutionStatePersistencePort } from "../evolution.persistence.por
 
 type StateListener = (state: EvolutionStateOutDto, reason: string, topicId: string | null, proposalId: string | null, previousState: EvolutionStateOutDto) => void;
 
+/** 受控本地接收端已经核验的 Host 启动事实；Store 仍负责专题绑定和持久化门禁。 */
+export interface HostStartupEvidenceInput {
+  topicId: string;
+  proposalId: string;
+  launchId: string;
+  handler: string;
+  startedAt: string;
+  commandLaunchId: string;
+  exitCode: number;
+  healthLaunchId: string;
+  healthSuccess: boolean;
+  healthCheckedAt: string;
+  healthSummary: string;
+  evidenceReferences: string[];
+}
+
 /** 监控者完成正式交付后，用一条状态提交建立等待真实验收的独立卡。 */
 export interface CreateMonitorAcceptanceCardInput {
   title: string;
@@ -832,6 +848,45 @@ export class EvolutionStateStore {
     return this.#commit("acceptance.result_checked", run.topicId, run.proposalId, () => undefined, { acceptanceRun: structuredClone(run), status: run.status, nextOwner: run.status === "passed" ? "han-li" : "nangong-wan" });
   }
 
+  /**
+   * 保存根目录 Host 启动器的原始验收事实。
+   * 真实传参示例：{ launchId: "host-1", handler: "启动SELPLAT.command", exitCode: 0 }。
+   * 真实返回示例：写入当前专题 archiveRecords 后返回新的状态快照。
+   * 异常或副作用示例：专题已切换、启动标识重复但内容不同或字段格式无效时抛错且不写入。
+   */
+  recordHostStartupEvidence(input: HostStartupEvidenceInput): EvolutionStateOutDto {
+    const topicId = required(input.topicId, "Host 启动专题", 200);
+    const proposalId = required(input.proposalId, "Host 启动提案", 200);
+    const launchId = required(input.launchId, "Host 启动标识", 200);
+    const handler = required(input.handler, "Host 启动处理人", 200);
+    const startedAt = required(input.startedAt, "Host 启动时间", 100);
+    const commandLaunchId = required(input.commandLaunchId, "命令启动标识", 200);
+    const healthLaunchId = required(input.healthLaunchId, "健康检查启动标识", 200);
+    const evidenceReferences = input.evidenceReferences.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim());
+    if (topicId !== this.#state.activeTopicId) throw new Error("Host 启动证据只能写入当前专题。 ");
+    const proposal = requireProposal(this.#state, proposalId);
+    if (proposal.topicId !== topicId) throw new Error("Host 启动证据与当前专题提案不一致。 ");
+    if (commandLaunchId !== launchId || healthLaunchId !== launchId) throw new Error("命令结果与 health 结果必须绑定同一 Host 启动标识。 ");
+    if (!Number.isInteger(input.exitCode)) throw new Error("Host 启动退出码必须为整数。 ");
+    if (typeof input.healthSuccess !== "boolean" || !input.healthCheckedAt || !input.healthSummary.trim()) throw new Error("Host 启动 health 结果不完整。 ");
+    if (!evidenceReferences.length) throw new Error("Host 启动证据缺少有效引用。 ");
+    const payload = {
+      version: 1,
+      launchId,
+      handler,
+      startedAt,
+      command: { launchId: commandLaunchId, exitCode: input.exitCode },
+      health: { launchId: healthLaunchId, success: input.healthSuccess, checkedAt: input.healthCheckedAt, summary: input.healthSummary.trim().slice(0, 4_000) },
+      evidenceReferences,
+    };
+    const prior = this.#state.archiveRecords.find((record) => record.eventType === "host-startup.evidence-recorded" && record.topicId === topicId && record.proposalId === proposalId && (record.payload as { hostStartupEvidence?: { launchId?: unknown } }).hostStartupEvidence?.launchId === launchId);
+    if (prior) {
+      if (JSON.stringify((prior.payload as { hostStartupEvidence?: unknown }).hostStartupEvidence) === JSON.stringify(payload)) return this.state();
+      throw new Error("同一 Host 启动标识已经记录为不同事实。 ");
+    }
+    return this.#commit("host-startup.evidence-recorded", topicId, proposalId, () => undefined, { hostStartupEvidence: payload, nextOwner: "han-li" });
+  }
+
   /** 在第一次结果验收前冻结韩立已分类的条件；同一提案版本不得由重试覆盖。 */
   saveAcceptancePlan(proposalId: string, plan: EvolutionAcceptancePlanOutDto): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
@@ -1206,7 +1261,8 @@ export class EvolutionStateStore {
   #load(): EvolutionStateOutDto {
     try {
       const raw = this.#repository.load() as (Partial<EvolutionStateOutDto> & Partial<RetiredAutomationSwitches>) | null;
-      if (raw && ((raw as { version?: number }).version === 8 || raw.version === 9) && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
+      const rawVersion: number | undefined = (raw as { version?: number } | null)?.version;
+      if (raw && (rawVersion === 8 || rawVersion === 9 || rawVersion === 10) && Array.isArray(raw.topics) && Array.isArray(raw.proposals) && Array.isArray(raw.deliberations)
         && Array.isArray(raw.archiveRecords) && raw.conversation && raw.automationSettings && raw.automationRuntime && raw.automationContext) {
         const migrated = migrateEvolutionState(raw as EvolutionStateOutDto & Partial<RetiredAutomationSwitches>);
         const recovered = this.#recoverOverwrittenAcceptanceRun(migrated.state);
@@ -1313,7 +1369,7 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
   return { state: distribution.state, changed: retiredSwitchFound || acceptance.changed || distribution.changed };
 }
 
-/** v8 没有验收计划；保留全部历史事实，但不把旧运行伪造为新计划。 */
+/** v8/v9 没有 Host 启动验收事实；保留全部历史事实，但不把旧运行伪造为新记录。 */
 function migrateAcceptancePlans(state: EvolutionStateOutDto & { version?: number }): { state: EvolutionStateOutDto; changed: boolean } {
   const proposals = state.proposals.map((proposal) => {
     const withConclusionReference = proposal.finalConclusionRecordId === undefined
@@ -1325,8 +1381,8 @@ function migrateAcceptancePlans(state: EvolutionStateOutDto & { version?: number
     const { materials: _retiredFileManifest, ...activePlan } = plan;
     return { ...withConclusionReference, acceptancePlan: activePlan as unknown as EvolutionAcceptancePlanOutDto };
   });
-  const changed = state.version !== 9 || proposals.some((proposal, index) => proposal !== state.proposals[index]);
-  return { state: { ...state, version: 9, proposals } as EvolutionStateOutDto, changed };
+  const changed = state.version !== 10 || proposals.some((proposal, index) => proposal !== state.proposals[index]);
+  return { state: { ...state, version: 10, proposals } as EvolutionStateOutDto, changed };
 }
 
 /** 只迁移既有确定性校验事实的字段名，不保留或重新启用令狐常规分发审核入口。 */
@@ -1359,7 +1415,7 @@ function migrateDistributionValidation(state: EvolutionStateOutDto): { state: Ev
 }
 
 function createInitialState(): EvolutionStateOutDto {
-  return { version: 9, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+  return { version: 10, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
 function required(value: unknown, label: string, maximum: number): string {
@@ -1414,7 +1470,7 @@ function archiveCategory(reason: string): EvolutionArchiveCategoryValue {
   if (reason === "conversation.topic_group_replied") return "source";
   if (reason.startsWith("deliberation.")) return "deliberation";
   if (reason.includes("distributed")) return "distribution";
-  if (reason.includes("result_decided") || reason.startsWith("acceptance.")) return "acceptance";
+  if (reason.includes("result_decided") || reason.startsWith("acceptance.") || reason.startsWith("host-startup.")) return "acceptance";
   if (reason.includes("decided")) return "approval";
   if (reason.includes("progress")) return "execution";
   if (reason.startsWith("proposal.")) return "proposal";
@@ -1433,6 +1489,7 @@ function archiveActor(reason: string, payload: Record<string, unknown>): Evoluti
 
 function archiveTitle(reason: string): string {
   const titles: Record<string, string> = {
+    "host-startup.evidence-recorded": "记录当前专题的 Host 启动验收事实",
     "deliberation.started": "韩立综合对话库并提出首个问题",
     "deliberation.nangong_answered": "南宫婉回答韩立问题",
     "deliberation.follow_up_planned": "韩立判断并形成下一轮追问",
