@@ -3,6 +3,7 @@ import type { CurrentTopicReadRecoveryOutDto, EvolutionTopicDossierOutDto, Evolu
 import type { CreateNangongTopicInDto } from "../../../contracts/services/personas/nangong/index.js";
 import { EvolutionMutationCoordinator } from "./internal/evolution-mutation.coordinator.js";
 import { EvolutionStateStore } from "./internal/evolution-state.store.js";
+import { createHostStartupEvidenceService, type HostStartupEvidenceService } from "./internal/host-startup-evidence.service.js";
 import type { EvolutionStatePersistencePort } from "./evolution.persistence.port.js";
 
 // Evolution Port 保留人物 Facade 实际使用的状态读写方法，底层 SQLite 与缓存策略仍属于 internal。
@@ -16,6 +17,9 @@ export function createEvolutionState(
 ): EvolutionStatePort {
   return new EvolutionStateStore(persistence);
 }
+
+/** 创建根目录 Host 启动器的受控证据接收端；实际状态写入仍由唯一 Store 完成。 */
+export { createHostStartupEvidenceService, type HostStartupEvidenceService };
 
 // 南宫人物入口通过该工厂取得协调器，避免跨模块直接构造 internal 类。
 export function createEvolutionMutationCoordinator(

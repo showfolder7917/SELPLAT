@@ -23,6 +23,9 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   assert.match(taskGroupSource, /验收依据暂时无法读取[\s\S]*onClick=\{retryDeliveryRead\}/);
   assert.match(taskCardSource, /最终验收依据[\s\S]*currentStage\.finalConclusion[\s\S]*尚未核验：当前不能确认最终验收通过/);
   assert.match(taskCardSource, /task-timeline-detail-pane[\s\S]*最终验收依据[\s\S]*task-timeline-list/s);
+  assert.match(taskCardSource, /Host 启动验收[\s\S]*hostStartupAcceptance\.status === "passed"[\s\S]*启动标识[\s\S]*8080 health/);
+  assert.match(taskCardSource, /hostStartupAcceptance\.reason[\s\S]*hostStartupAcceptance\.evidenceReferences/);
+  assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
 });
 
 test("非当前活动卡显示退役按钮且主进程先封存旧执行树再原子退役专题", () => {

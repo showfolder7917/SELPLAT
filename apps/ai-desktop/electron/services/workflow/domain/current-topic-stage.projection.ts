@@ -20,7 +20,7 @@ export function projectCurrentTopicStage(
       waitingFor: "系统恢复处理", nextAction: "保留建立失败证据并处理当前失败原因。", userAction: "none",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "系统恢复处理", "保留建立失败证据并处理当前失败原因。", run.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
     };
   }
   // 已经绑定专题和提案的当前运行拥有交付阶段；后来产生但尚未确立的研讨不能把它覆盖成
@@ -39,7 +39,7 @@ export function projectCurrentTopicStage(
       waitingFor: "用户确认", nextAction: "确认当前范围说明后继续。", userAction: "confirmation",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("confirmation", "用户确认", "确认当前范围说明后继续。", confirmationUpdatedAt(evolution)),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: confirmationUpdatedAt(evolution),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: confirmationUpdatedAt(evolution),
     };
   }
 
@@ -50,7 +50,7 @@ export function projectCurrentTopicStage(
       waitingFor: "系统正在处理", nextAction: "系统将继续当前研讨；建立完成后显示新的专题卡。", userAction: "none",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "系统正在处理", "系统将继续当前研讨；建立完成后显示新的专题卡。", run.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
     };
   }
 
@@ -60,7 +60,7 @@ export function projectCurrentTopicStage(
       waitingFor: "南宫婉", nextAction: "等待形成可执行专题。", userAction: "none",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "当前交付投影", "系统将自动重新读取当前交付投影。", evolution.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
     };
   }
 
@@ -76,7 +76,7 @@ export function projectCurrentTopicStage(
       summary: operation.message, repairContent: "", remaining: "", waitingFor: "当前无需操作", nextAction: "本专题已取消", userAction: "none",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "当前无需操作", "本专题已取消", evolution.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
     };
   }
   if (operation.kind === "unavailable") {
@@ -85,7 +85,7 @@ export function projectCurrentTopicStage(
       summary: operation.message, repairContent: "", remaining: operation.message, waitingFor: "当前专题状态", nextAction: "重新读取当前专题状态后再决定后续操作。", userAction: "none",
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", "当前专题状态", "重新读取当前专题状态后再决定后续操作。", evolution.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
     };
   }
 
@@ -99,6 +99,7 @@ export function projectCurrentTopicStage(
     const occurredAt = run.completedAt || run.updatedAt;
     const finalConclusion = readFinalConclusion(evolution, proposal);
     const latestAcceptance = readLatestAcceptance(evolution, proposal);
+    const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
     const verified = topic.status === "completed" && proposal.status === "completed"
       && finalConclusion !== null && latestAcceptance?.status === "passed";
     const failed = topic.status === "supplement-required" || run.status === "blocked" || latestAcceptance?.status === "failed";
@@ -113,13 +114,14 @@ export function projectCurrentTopicStage(
       resumeOneShotRunId: null,
       readRecovery: readRecovery("none", verified ? "当前无需操作" : "韩立独立验收", verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", occurredAt),
       effectiveTaskIds: [], missingTaskIds: [], latestAcceptance, finalConclusion,
-      deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
+      hostStartupAcceptance, deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
     };
   }
 
   const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
   const finalConclusion = readFinalConclusion(evolution, proposal);
+  const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
   const deliveryEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, latestAcceptance);
   const deliveryGate = readDeliveryGate(deliveryEvidence);
@@ -165,6 +167,7 @@ export function projectCurrentTopicStage(
     missingTaskIds: execution.missingTaskIds,
     latestAcceptance,
     finalConclusion,
+    hostStartupAcceptance,
     deliveryEvidence,
     updatedAt,
   };
@@ -212,6 +215,28 @@ function readFinalConclusion(evolution: EvolutionStateOutDto, proposal: Evolutio
 
 function emptyDeliveryEvidence(): CurrentTopicStageOutDto["deliveryEvidence"] {
   return { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" };
+}
+
+function emptyHostStartupAcceptance(reason = "尚未记录当前专题的 Host 启动验收依据。"): CurrentTopicStageOutDto["hostStartupAcceptance"] {
+  return { launchId: null, handler: null, startedAt: null, exitCode: null, healthStatus: "missing", healthSummary: null, evidenceReferences: [], status: "unverified", reason };
+}
+
+/** 只读取当前专题、当前提案的专用档案；审批、发布和历史记录均不参与。 */
+function readHostStartupAcceptance(evolution: EvolutionStateOutDto, proposal: EvolutionStateOutDto["proposals"][number]): CurrentTopicStageOutDto["hostStartupAcceptance"] {
+  const record = [...evolution.archiveRecords].reverse().find((item) => item.eventType === "host-startup.evidence-recorded" && item.topicId === proposal.topicId && item.proposalId === proposal.proposalId);
+  const raw = record?.payload.hostStartupEvidence;
+  if (!raw || typeof raw !== "object") return emptyHostStartupAcceptance();
+  const value = raw as { launchId?: unknown; handler?: unknown; startedAt?: unknown; command?: { launchId?: unknown; exitCode?: unknown }; health?: { launchId?: unknown; success?: unknown; checkedAt?: unknown; summary?: unknown }; evidenceReferences?: unknown };
+  const launchId = typeof value.launchId === "string" ? value.launchId : null;
+  const handler = typeof value.handler === "string" ? value.handler : null;
+  const startedAt = typeof value.startedAt === "string" ? value.startedAt : null;
+  const exitCode = typeof value.command?.exitCode === "number" ? value.command.exitCode : null;
+  const healthSummary = typeof value.health?.summary === "string" ? value.health.summary : null;
+  const healthStatus = value.health?.success === true ? "passed" : value.health?.success === false ? "failed" : "missing";
+  const evidenceReferences = Array.isArray(value.evidenceReferences) ? value.evidenceReferences.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
+  const matchedLaunch = Boolean(launchId && value.command?.launchId === launchId && value.health?.launchId === launchId);
+  const passed = Boolean(matchedLaunch && handler?.trim() && startedAt && Number.isInteger(exitCode) && exitCode === 0 && healthStatus === "passed" && typeof value.health?.checkedAt === "string" && healthSummary?.trim() && evidenceReferences.length);
+  return { launchId, handler, startedAt, exitCode, healthStatus, healthSummary, evidenceReferences, status: passed ? "passed" : "unverified", reason: passed ? "同一启动标识的退出结果、8080 health 和证据引用均已核验。" : "Host 启动依据不完整、失败或未绑定同一启动标识。" };
 }
 
 function readDeliveryEvidence(tasks: CollaborationTaskOutDto[], collaboration: CollaborationStateOutDto, acceptance: CurrentTopicAcceptanceOutDto | null): CurrentTopicStageOutDto["deliveryEvidence"] {
