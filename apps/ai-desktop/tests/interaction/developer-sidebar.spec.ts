@@ -66,6 +66,31 @@ test.afterAll(async () => {
   await application?.close();
 });
 
+test("窄窗口 Host 启动依据可独立滚到末尾", async () => {
+  await page.addStyleTag({ path: path.resolve("src/applications/styles/desktop-applications.css") });
+  const geometry = await page.evaluate(() => {
+    const disclosure = document.createElement("section");
+    disclosure.className = "task-host-startup-evidence";
+    disclosure.style.cssText = "position: fixed; top: 300px; left: 260px; width: 440px";
+    const content = document.createElement("div");
+    content.className = "seldisclosure-content";
+    const evidence = document.createElement("pre");
+    evidence.textContent = Array.from({ length: 24 }, (_, index) => `启动依据第 ${index + 1} 行：同次退出结果与 8080 health`).join("\n");
+    content.append(evidence);
+    disclosure.append(content);
+    document.body.append(disclosure);
+    const before = content.scrollTop;
+    content.scrollTop = content.scrollHeight;
+    const result = { before, after: content.scrollTop, viewportHeight: content.clientHeight, fullHeight: content.scrollHeight, maxHeight: getComputedStyle(content).maxHeight };
+    disclosure.remove();
+    return result;
+  });
+  expect(geometry.before).toBe(0);
+  expect(geometry.viewportHeight, `Host 依据 max-height=${geometry.maxHeight}`).toBeLessThanOrEqual(118);
+  expect(geometry.fullHeight).toBeGreaterThan(geometry.viewportHeight);
+  expect(geometry.after).toBeGreaterThan(0);
+});
+
 test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async ({}, testInfo) => {
   const blockedTimeline = await page.evaluate(async () => {
     const api = (window as any).desktop;
