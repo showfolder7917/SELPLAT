@@ -37,5 +37,5 @@ INSERT INTO MdaConnectionProfile (
     'MODE=MySQL;AUTO_SERVER=TRUE;DATABASE_TO_UPPER=false', TRUE, 30.00, 1
 WHERE NOT EXISTS (
     SELECT 1 FROM MdaConnectionProfile
-    WHERE databaseName = 'file:./apps/ai-factiory/db/ai-factiory'
+    WHERE id = 10006 OR databaseName = 'file:./apps/ai-factiory/db/ai-factiory'
 );

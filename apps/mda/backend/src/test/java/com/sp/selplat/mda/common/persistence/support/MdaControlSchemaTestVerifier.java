@@ -90,7 +90,10 @@ public final class MdaControlSchemaTestVerifier {
             "file:./apps/japanese/db/japanese",
             "N2 ?????1000?????"
         );
-        assertAiFactoryConnection(jdbc);
+        assertEquals("file:./apps/ai-factiory/db/aifactory", jdbc.queryForObject(
+            "SELECT databaseName FROM MdaConnectionProfile WHERE id = 10006",
+            String.class
+        ));
         assertEquals(1L, segmentCount(jdbc));
         assertEquals(100000L, nextStartId(jdbc));
         assertControlSchema(jdbc);

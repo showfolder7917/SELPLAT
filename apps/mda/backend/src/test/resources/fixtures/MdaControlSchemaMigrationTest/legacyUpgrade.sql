@@ -41,4 +41,5 @@ INSERT INTO MdaConnectionProfile (
     id, connectionName, databaseType, databaseName, username, password, status)
 VALUES
     (10004, 'Reference Data ?????', 'H2', 'file:./apps/reference-data/db/reference-data', 'sa', '123456', 1),
-    (10005, 'N2 ?????1000?????', 'H2', 'file:./apps/japanese/db/japanese', 'sa', '123456', 1);
+    (10005, 'N2 ?????1000?????', 'H2', 'file:./apps/japanese/db/japanese', 'sa', '123456', 1),
+    (10006, 'AI 工厂数据库', 'H2', 'file:./apps/ai-factiory/db/aifactory', 'sa', '123456', 1);
