@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+const continuationPolicySource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-continuation.policy.ts", "utf8");
 const acceptancePrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
 const resultAcceptancePrompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
 const eventMemoryRuleMetadata = readFileSync("ruleengine/rules/local/XUNAN/selplat/应用/ai-desktop/rule/RUL_AIDesktop事件记忆与统一界面规则.md", "utf8");
@@ -50,4 +51,11 @@ test("韩立首项失败后仍须逐项取得本轮全部条件自己的证据",
   assert.match(eventMemoryRule, /first_failure_preserved_then_all_independent_safe_criteria_continue_in_same_round/);
   assert.match(eventMemoryRuleMetadata, /rule_version = 5\.163\.0/);
   assert.match(aiDesktopRuleIndex, /AI_DESKTOP_EVENT_MEMORY_UI_RULES = .*RUL_AIDesktop事件记忆与统一界面规则\.md/);
+});
+
+test("被拒绝的 finish 仅允许一次受限纠正回合", () => {
+  assert.match(acceptanceSource, /let correctionAttempted = false/);
+  assert.match(continuationPolicySource, /!input\.finishRejection \|\| input\.correctionAttempted/);
+  assert.match(acceptanceSource, /continuation\?\.kind === "correction"[\s\S]*correctionAttempted = true/);
+  assert.match(acceptanceSource, /仅可补齐原条件证据后重新提交 finish/);
 });
