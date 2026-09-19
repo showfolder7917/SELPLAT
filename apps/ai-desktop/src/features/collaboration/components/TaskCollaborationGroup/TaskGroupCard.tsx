@@ -171,6 +171,12 @@ function TaskGroupHeader({
     customerAction: currentStage.userAction === "none" ? "当前无需你操作。" : "需要你完成一项操作。",
     nextAction: currentStage.nextAction,
   } : taskGroupPrimaryPresentation(group, locale);
+  // 只有已转交令狐且不要求用户恢复的活动技术卡点，才把投影的未完成原因展示为转交原因。
+  const technicalRecoveryReason = currentStage?.status === "failed-pending-repair"
+    && currentStage.userAction === "none"
+    && currentStage.waitingFor === "令狐老祖"
+    ? currentStage.remaining
+    : null;
   // 专题耗时（durationMs）在任务未结束时至少增长到当前墙钟时间。
 
   return (
@@ -185,6 +191,7 @@ function TaskGroupHeader({
       <span className="task-group-primary" aria-label={locale === "ja" ? "現在の状況" : "当前情况"}>
         <span className="task-group-primary-matter"><b>{locale === "ja" ? "内容" : "发生事项"}</b><small>{primary.matter}</small></span>
         <span className="task-group-primary-owner"><b>{locale === "ja" ? "担当" : "处理人和状态"}</b><small>{primary.ownerAndStatus}</small></span>
+        {technicalRecoveryReason && <span className="task-group-primary-handoff-reason"><b>{locale === "ja" ? "引き継ぎ理由" : "转交原因"}</b><small>{technicalRecoveryReason}</small></span>}
         <span className="task-group-primary-customer-action"><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
         {/* 卡片展开后由时间线中的“下一流程”独占该状态，避免同一文案重复。 */}
         {!open && <span className="task-group-primary-next"><b>{locale === "ja" ? "次の対応" : "下一步"}</b><small>{primary.nextAction}</small></span>}

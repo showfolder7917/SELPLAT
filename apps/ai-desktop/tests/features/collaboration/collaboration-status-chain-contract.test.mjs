@@ -203,6 +203,12 @@ test("审计历史在窄窗口保留四项状态和可展开长证据", () => {
   assert.match(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*task-cancelled-history-facts \{ grid-template-columns: 1fr; \}/);
 });
 
+test("令狐自动处理的技术卡点在主区域显示转交原因", () => {
+  const header = taskGroupCardSource.slice(taskGroupCardSource.indexOf("function TaskGroupHeader"), taskGroupCardSource.indexOf("function TaskNodeHeader"));
+  assert.match(header, /failed-pending-repair[\s\S]*userAction === "none"[\s\S]*waitingFor === "令狐老祖"[\s\S]*currentStage\.remaining[\s\S]*转交原因/);
+  assert.doesNotMatch(header, /task-recovery-continue/);
+});
+
 test("任务协作群说明在全部窗口宽度都完整换行而不使用省略号", () => {
   assert.match(developerStyles, /\.task-group-header-content > span:first-child, \.task-group-primary, \.task-node-main \{[\s\S]*min-width: 0/);
   assert.match(developerStyles, /\.task-group-header-content small, \.task-node-main > small \{[\s\S]*overflow-wrap: anywhere[\s\S]*text-overflow: clip[\s\S]*white-space: normal/);

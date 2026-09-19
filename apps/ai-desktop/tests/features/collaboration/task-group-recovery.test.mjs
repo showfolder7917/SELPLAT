@@ -74,6 +74,13 @@ test("审计历史卡在窄窗口仍公开四项事实和只读长证据", () =>
   assert.doesNotMatch(auditBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance|onRetireStaleTopic/);
 });
 
+test("令狐处理中的活动技术卡点公开转交原因且不签发恢复入口", () => {
+  const header = taskCardSource.slice(taskCardSource.indexOf("function TaskGroupHeader"), taskCardSource.indexOf("function TaskNodeHeader"));
+  assert.match(header, /technicalRecoveryReason = currentStage\?\.status === "failed-pending-repair"[\s\S]*currentStage\.userAction === "none"[\s\S]*currentStage\.waitingFor === "令狐老祖"[\s\S]*currentStage\.remaining/);
+  assert.match(header, /task-group-primary-handoff-reason[\s\S]*转交原因[\s\S]*technicalRecoveryReason/);
+  assert.doesNotMatch(header, /task-recovery-continue|onContinueTask|onResumeAcceptance/);
+});
+
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
   assert.match(collaborationFacadeSource, /subscribe\(listener: CollaborationStateListener\)[\s\S]*#store\.subscribe\(listener\)/);
   assert.match(personaEvolutionSource, /#collaboration\.subscribe\(\(_state, reason\) => this\.#notifyCurrentTopicStageChanged\(reason\)\)/);
