@@ -112,6 +112,10 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /kill "\$\{EXISTING_PIDS\[@\]\}"/);
   assert.match(launcher, /多个版本并行/);
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
+  assert.match(launcher, /git -C "\$SELPLAT_ROOT" diff --quiet "\$CONTROLLED_SHA" HEAD --/);
+  assert.match(launcher, /--ai-desktop-runtime-sha=\$CONTROLLED_SHA/);
+  assert.match(launcher, /--ai-desktop-user-data-dir=\$CONTROLLED_USER_DATA_DIR/);
+  assert.match(electronMain, /isolatedUserDataArgument[\s\S]*--user-data-dir=\$\{isolatedUserData\}/);
   assert.match(appConfig, /--selplat-root=/);
   assert.match(appConfig, /resolveAppVariant\(\): AppVariantValue \{\s+return "developer";/);
   assert.match(electronMain, /releaseRestartArguments\(projectRoot, runtimeSourceSha, process\.argv\)/);

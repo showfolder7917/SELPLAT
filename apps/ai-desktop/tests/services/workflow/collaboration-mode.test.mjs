@@ -1493,7 +1493,8 @@ test("令狐测试阶段完成固定验证后启动开发版脚本并保留正�
   assert.match(main, /launchDeveloperScript:[\s\S]*启动开发版\.command[\s\S]*execFileSync\("\/usr\/bin\/open"[\s\S]*app\.exit\(0\)/);
   assert.match(main, /publishVerifiedPackage: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
   assert.match(collaborationBootstrap, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
-  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId, candidate\.candidateSha\)/);
+  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*process\.platform === "darwin"[\s\S]*candidateExecutable[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId, candidate\.candidateSha\)/);
+  assert.match(main, /publishRelease: \(executable, releaseBatchId, runtimeSourceSha\)[\s\S]*启动开发版\.command[\s\S]*--release-batch=[\s\S]*--runtime-sha=[\s\S]*--replace-pid=/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
   assert.doesNotMatch(coordinatorSource, /createReleaseCandidate|promoteIntegrationCandidate|mergeIntoLocalBranch|releaseDocument\.state/);
   assert.match(integrationPipelineSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*promoteIntegrationCandidate[\s\S]*mergeIntoLocalBranch[\s\S]*releaseDocument\.state = "published"/);
@@ -2080,7 +2081,7 @@ test("重启后的恢复态合并冲突不依赖主动巡检或人工点击并�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("已验证候选应用先提升到稳定批次目录再允许回收候选", () => {
+test("正式发布包保留候选副本，测试阶段临时激活包只按批次回收", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "verified-package-stage-"));
   const candidateRoot = path.join(directory, "candidate");
   const sourceExecutable = path.join(candidateRoot, "build", "ai-desktop", "package", "developer", "mac-arm64", "AI Desktop.app", "Contents", "MacOS", "AI Desktop");
@@ -2105,6 +2106,13 @@ test("已验证候选应用先提升到稳定批次目录再允许回收候选",
     assert.equal(readFileSync(stagedExecutable, "utf8"), "verified candidate", "候选回收后稳定发布程序必须继续存在");
     assert.equal(readFileSync(stagedFrameworkLink, "utf8"), "verified framework", "候选回收后稳定应用的框架链接必须仍可解析");
     assert.throws(() => stageVerifiedDeveloperExecutable(stagedExecutable, stableBuildRoot, "release-0.1.1-g14", "a".repeat(40)), /禁止覆盖/);
+    const activationExecutable = stageVerifiedDeveloperExecutable(stagedExecutable, stableBuildRoot, "release-0.1.1-g15-runtime", "b".repeat(40), "activation");
+    const releaseBatches = new ReleaseBatchStore(path.join(directory, "running"), path.join(directory, "archive"), stableBuildRoot);
+    releaseBatches.retireRuntimeActivationPackage("release-0.1.1-g15");
+    assert.equal(existsSync(activationExecutable), false, "健康确认后只回收本批次临时激活包");
+    assert.equal(existsSync(stagedExecutable), true, "历史正式发布包必须保留");
+    releaseBatches.retireRuntimeActivationPackage("../published/release-0.1.1-g14");
+    assert.equal(existsSync(stagedExecutable), true, "非法批次不能越界清理正式发布包");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

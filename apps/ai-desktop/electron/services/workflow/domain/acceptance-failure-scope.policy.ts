@@ -10,7 +10,7 @@ export interface AcceptanceFailureDefect {
   checkId: string;
   /** 失败对应的具体原验收条件。 */
   target: string;
-  /** 韩立在真实界面中观察到的实际结果。 */
+  /** 韩立在真实页面或源码审查中观察到的实际结果。 */
   actual: string;
   /** 原提案要求达到的明确结果。 */
   expected: string;
@@ -18,6 +18,8 @@ export interface AcceptanceFailureDefect {
   reproductionOperations: HanliAcceptanceOperationValue[];
   /** 可以回看失败画面的截图标识。 */
   screenshotAttachmentIds: string[];
+  /** 源码审查失败时的真实文件证据；页面失败保持空数组。 */
+  sourceReferences?: string[];
 }
 
 /** 本轮新缺陷与原验收范围的判断结果。 */
@@ -45,6 +47,12 @@ export class AcceptanceFailureScopePolicy {
   review(proposal: EvolutionProposalOutDto, run: HanliAcceptanceRunOutDto): AcceptanceFailureScopeReview {
     // 只把明确失败的判断步骤作为产品缺陷；工具受阻沿独立卡点线路处理。
     const failedSteps = run.stepResults.filter((step) => step.status === "failed" || step.layoutStatus === "failed");
+    const sourceFailed = run.sourceReview?.status === "failed";
+    // 独立源码审查只在原计划恰有一项源码条件且具备具体文件证据时才能自动归属，禁止猜测多条件范围。
+    const sourceCriterionIndexes = proposal.acceptancePlan?.conditions
+      .map((condition, index) => condition.evidenceType === "code-conformance" ? index : -1)
+      .filter((index) => index >= 0) || [];
+    const sourceReferences = run.sourceReview?.evidenceReferences?.filter((reference) => Boolean(reference.trim())) || [];
     // 验收运行必须原样携带当前提案验收条件，防止旧目标或相邻目标混入修复任务。
     const criteriaUnchanged = sameTextList(run.criteria, proposal.acceptanceCriteria);
     // 每个失败步骤必须能定位到一个原验收条件。
@@ -61,11 +69,17 @@ export class AcceptanceFailureScopePolicy {
       const expected = proposal.acceptanceCriteria[criterionIndex].trim();
       // 空验收条件不能授权自动修改代码。
       if (!expected) return null;
-      // 截图去重后保留本步骤截图和本轮公共证据。
+      const sourceStep = step.evidenceMode === "code-conformance";
+      if (proposal.acceptancePlan && proposal.acceptancePlan.conditions[criterionIndex]?.evidenceType
+        !== (sourceStep ? "code-conformance" : "page-experience")) return null;
+      const sourceReferences = sourceStep
+        ? (step.evidenceReferences || []).filter((reference) => Boolean(reference.trim()))
+        : [];
+      // 源码失败必须有具体文件位置，不能借页面截图伪装成可修复代码缺陷。
+      if (sourceStep && sourceReferences.length === 0) return null;
+      // 页面截图去重后保留本步骤截图和本轮公共证据；源码步骤不消费页面附件。
       const screenshotAttachmentIds = [...new Set([
-        step.screenshotAttachmentId,
-        step.layoutScreenshotAttachmentId,
-        ...run.evidenceAttachmentIds,
+        ...(sourceStep ? [] : [step.screenshotAttachmentId, step.layoutScreenshotAttachmentId, ...run.evidenceAttachmentIds]),
       ].filter((item): item is string => Boolean(item)))];
       // 返回一项可以直接交给令狐复现的真实新缺陷。
       return {
@@ -76,20 +90,34 @@ export class AcceptanceFailureScopePolicy {
           step.layoutStatus === "failed" ? `布局：${step.layoutActual.trim()}` : "",
         ].filter(Boolean).join("；") || "本轮真实界面结果未达到验收条件",
         expected,
-        reproductionOperations: [...(run.interactionSteps || []), ...run.stepResults]
+        reproductionOperations: sourceStep ? [] : [...(run.interactionSteps || []), ...run.stepResults]
           .sort((left, right) => left.operationIndex - right.operationIndex)
           .slice(0, step.operationIndex + 1)
           .map((item) => structuredClone(item.operation)),
         screenshotAttachmentIds,
+        ...(sourceStep ? { sourceReferences } : {}),
       } satisfies AcceptanceFailureDefect;
     });
+    const sourceDefect: AcceptanceFailureDefect | null = sourceFailed && sourceCriterionIndexes.length === 1
+      && sourceReferences.length > 0 && run.sourceReview?.actual.trim()
+      ? {
+          checkId: `criterion-${sourceCriterionIndexes[0] + 1}`,
+          target: `验收条件 ${sourceCriterionIndexes[0] + 1}：${proposal.acceptanceCriteria[sourceCriterionIndexes[0]]?.trim() || ""}`,
+          actual: run.sourceReview.actual.trim(),
+          expected: proposal.acceptanceCriteria[sourceCriterionIndexes[0]]?.trim() || "",
+          reproductionOperations: [],
+          screenshotAttachmentIds: [],
+          sourceReferences,
+        }
+      : null;
     // 没有真实失败，或者任一失败无法定位原条件时，禁止自动进入原范围修复。
     const isWithinOriginalAcceptance = criteriaUnchanged
-      && failedSteps.length > 0
+      && (failedSteps.length > 0 || Boolean(sourceDefect))
+      && (!sourceFailed || Boolean(sourceDefect?.expected))
       && resolvedSteps.every((step) => step !== null);
     // 只在范围确认后把完整缺陷列表交给令狐。
     const defects = isWithinOriginalAcceptance
-      ? resolvedSteps.filter((step): step is AcceptanceFailureDefect => step !== null)
+      ? [...resolvedSteps.filter((step): step is AcceptanceFailureDefect => step !== null), ...(sourceDefect ? [sourceDefect] : [])]
       : [];
     // 范围内结论必须点名具体失败对象，不能只传达“验收未通过”。
     if (isWithinOriginalAcceptance) {
@@ -103,7 +131,9 @@ export class AcceptanceFailureScopePolicy {
     // 范围外结果说明缺少哪一种确定关系，等待客户或后续调查明确。
     const reason = !criteriaUnchanged
       ? "本轮验收条件与原提案验收条件不一致，不能确认新缺陷仍属于原范围。"
-      : failedSteps.length === 0
+      : sourceFailed && !sourceDefect
+        ? "源码审查失败缺少唯一原始源码条件或具体文件证据，不能猜测修复范围。"
+        : failedSteps.length === 0
         ? "本轮记录没有可提取的真实失败判断，不能据此创建代码修复任务。"
         : "至少一项失败无法对应原提案中的具体验收条件，不能自动扩大修复范围。";
     return {

@@ -13,10 +13,10 @@ import { releaseRestartArguments } from "./release-restart-arguments.js";
  */
 
 // Node.js 子进程 API：发布前只读核对 Git 提交与工作区洁净状态，不执行任何修改命令。
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 // Node.js 文件系统 API：检查工程、创建运行目录、读取版本以及写健康检查结果。
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 // 跨平台路径 API：避免手写 Windows 或 macOS 的路径分隔符。
 import path from "node:path";
 // ES Module 没有 __dirname；它把 import.meta.url 转换为真实磁盘路径。
@@ -663,6 +663,31 @@ export async function startApplication(): Promise<void> {
       app.exit(0);
     },
     publishRelease: (executable, releaseBatchId, runtimeSourceSha) => {
+      if (process.platform === "darwin") {
+        const developerStartScript = path.join(appRoot, "启动开发版.command");
+        if (!existsSync(developerStartScript)) throw new Error(`缺少开发版启动脚本：${developerStartScript}`);
+        const restartLogRoot = path.join(projectPaths.temporaryMaterialsRoot, "开发版受控重启");
+        mkdirSync(restartLogRoot, { recursive: true });
+        const restartLog = path.join(restartLogRoot, `${releaseBatchId}.log`);
+        const output = openSync(restartLog, "a");
+        try {
+          const isolatedUserDataArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-user-data-dir="));
+          const isolatedUserData = isolatedUserDataArgument?.slice("--ai-desktop-user-data-dir=".length) || null;
+          // 脚本先打包和核对候选，再结束当前实例；失败时旧应用及等待重启卡点仍可继续查看。
+          const child = spawn("/bin/zsh", [developerStartScript, `--release-batch=${releaseBatchId}`, `--runtime-sha=${runtimeSourceSha}`, `--replace-pid=${process.pid}`, ...(isolatedUserData ? [`--user-data-dir=${isolatedUserData}`] : [])], {
+            cwd: appRoot, detached: true, stdio: ["ignore", output, output],
+          });
+          child.on("error", (error) => eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "start_controlled_restart", error, details: { releaseBatchId, restartLog } }));
+          child.on("exit", (code) => {
+            if (code !== 0) eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "controlled_restart", error: new Error(`开发版启动脚本退出码 ${String(code)}`), details: { releaseBatchId, restartLog } });
+          });
+          child.unref();
+          eventCenter.recordEvent("application.developer_script_restart_scheduled", { reason: "integration_release_published", releaseBatchId, runtimeSourceSha, developerStartScript, restartLog });
+        } finally {
+          closeSync(output);
+        }
+        return;
+      }
       eventCenter.recordEvent("application.controlled_restart_scheduled", { reason: "integration_release_published", executable, releaseBatchId, runtimeSourceSha });
       app.relaunch({ execPath: executable, args: releaseRestartArguments(projectRoot, runtimeSourceSha, process.argv) });
       prepareAiMemoryShutdown();

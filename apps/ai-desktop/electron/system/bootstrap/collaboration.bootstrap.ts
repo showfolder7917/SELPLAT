@@ -109,7 +109,10 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
       const unifiedTestResult = await options.runUnifiedTests(rootPath);
       const candidateExecutable = unifiedTestResult.executable;
       return {
-        executable: stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId, candidate.candidateSha),
+        // macOS 测试阶段由固定开发脚本在已合并的主工作区重新打包；候选应用留在受控工作树，重启健康后随工作树回收。
+        executable: process.platform === "darwin"
+          ? candidateExecutable
+          : stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId, candidate.candidateSha),
         verificationEvidence: unifiedTestResult.verificationEvidence,
       };
     },

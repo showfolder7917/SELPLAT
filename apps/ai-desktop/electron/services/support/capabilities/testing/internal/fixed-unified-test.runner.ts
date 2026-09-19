@@ -317,7 +317,7 @@ export class FixedUnifiedTestRunner {
           await runNpmScript(desktopRoot, script, environment, this.#scriptTimeoutMs);
           this.#recordEvent(`${this.#eventNamespace}.runtime_activation.completed`, { script, candidateProjectRoot: resolvedProjectRoot, candidateSha });
         }
-        return stageVerifiedDeveloperExecutable(resolveVerifiedDeveloperExecutable(this.#buildRoot), this.#buildRoot, `${releaseBatchId}-runtime`, candidateSha);
+        return stageVerifiedDeveloperExecutable(resolveVerifiedDeveloperExecutable(this.#buildRoot), this.#buildRoot, `${releaseBatchId}-runtime`, candidateSha, "activation");
       });
     } finally {
       releaseManagedDependencyLease(dependencyLease);

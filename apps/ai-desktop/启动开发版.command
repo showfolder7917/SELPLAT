@@ -5,6 +5,39 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
+# 无参数保持人工双击行为；受控集成重启必须携带批次、候选提交和旧进程，供新版本核验后原位续接。
+CONTROLLED_BATCH=""
+CONTROLLED_SHA=""
+CONTROLLED_OLD_PID=""
+CONTROLLED_USER_DATA_DIR=""
+if (( $# > 0 )); then
+  if (( $# < 3 || $# > 4 )) || [[ "$1" != --release-batch=* || "$2" != --runtime-sha=* || "$3" != --replace-pid=* ]]; then
+    echo "[错误] 受控重启参数不完整。"
+    exit 1
+  fi
+  if (( $# == 4 )) && [[ "$4" != --user-data-dir=* ]]; then
+    echo "[错误] 受控重启参数不完整。"
+    exit 1
+  fi
+  CONTROLLED_BATCH="${1#--release-batch=}"
+  CONTROLLED_SHA="${2#--runtime-sha=}"
+  CONTROLLED_OLD_PID="${3#--replace-pid=}"
+  if (( $# == 4 )); then CONTROLLED_USER_DATA_DIR="${4#--user-data-dir=}"; fi
+  if [[ ! "$CONTROLLED_BATCH" =~ '^[a-zA-Z0-9._-]+$' || ! "$CONTROLLED_SHA" =~ '^[0-9a-f]{40,64}$' || ! "$CONTROLLED_OLD_PID" =~ '^[0-9]+$' ]]; then
+    echo "[错误] 受控重启参数格式无效。"
+    exit 1
+  fi
+  if (( $# == 4 )) && [[ "$CONTROLLED_USER_DATA_DIR" != /* ]]; then
+    echo "[错误] 受控重启的用户数据目录不是绝对路径。"
+    exit 1
+  fi
+fi
+
+# 受控后台启动没有终端输入，错误直接写日志退出；人工双击仍保留排查窗口。
+wait_before_close() {
+  [[ -n "$CONTROLLED_BATCH" ]] || read "?按回车键关闭窗口..."
+}
+
 # 记录本次启动脚本所在的终端窗口。成功后按 TTY 精确关闭，避免误关用户的其他终端窗口。
 LAUNCH_TERMINAL_TTY="$(tty 2>/dev/null || true)"
 
@@ -12,15 +45,22 @@ LAUNCH_TERMINAL_TTY="$(tty 2>/dev/null || true)"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export SELPLAT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+if [[ -n "$CONTROLLED_SHA" ]]; then
+  if [[ -n "$(git -C "$SELPLAT_ROOT" status --porcelain)" ]] || ! git -C "$SELPLAT_ROOT" diff --quiet "$CONTROLLED_SHA" HEAD --; then
+    echo "[错误] 当前工程源码不是已核验的候选版本，已停止受控重启。"
+    exit 1
+  fi
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "[错误] 未找到 Node.js，请先安装 Node.js 20 或更高版本。"
-  read "?按回车键关闭窗口..."
+  wait_before_close
   exit 1
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "[错误] 未找到 npm。"
-  read "?按回车键关闭窗口..."
+  wait_before_close
   exit 1
 fi
 
@@ -31,7 +71,7 @@ PACKAGE_ROOT="$BUILD_ROOT/package/developer"
 echo "[依赖] 正在核对当前锁文件专属缓存..."
 if ! npm run dependencies:ensure; then
     echo "[错误] 依赖安装失败。"
-    read "?按回车键关闭窗口..."
+    wait_before_close
     exit 1
 fi
 
@@ -39,14 +79,14 @@ fi
 echo "[构建与打包] 正在生成最新的自包含 AI Desktop.app..."
 if ! npm run package:mac:developer; then
   echo "[错误] 开发版构建或 AI Desktop.app 生成失败，已取消启动。"
-  read "?按回车键关闭窗口..."
+  wait_before_close
   exit 1
 fi
 APP_PATH="$(find "$PACKAGE_ROOT" -type d -name 'AI Desktop.app' -print -quit 2>/dev/null)"
 
 if [[ -z "$APP_PATH" || ! -d "$APP_PATH" ]]; then
   echo "[错误] 未找到 AI Desktop.app。"
-  read "?按回车键关闭窗口..."
+  wait_before_close
   exit 1
 fi
 
@@ -55,7 +95,7 @@ if ! codesign --verify --deep --strict "$APP_PATH" >/dev/null 2>&1; then
   echo "[签名] 正在为固定应用外壳生成本机开发签名..."
   if ! codesign --force --deep --sign - "$APP_PATH"; then
     echo "[错误] AI Desktop.app 本机签名失败，已取消启动。"
-    read "?按回车键关闭窗口..."
+    wait_before_close
     exit 1
   fi
 fi
@@ -65,18 +105,22 @@ if ! codesign -d --requirements - "$APP_PATH" 2>&1 | grep -Fq "$EXPECTED_DESIGNA
   echo "[签名] 正在写入稳定屏幕录制身份..."
   if ! codesign --force --sign - --requirements "=$EXPECTED_DESIGNATED_REQUIREMENT" "$APP_PATH"; then
     echo "[错误] AI Desktop.app 稳定指定要求签名失败，已取消启动。"
-    read "?按回车键关闭窗口..."
+    wait_before_close
     exit 1
   fi
 fi
 
 if ! codesign --verify --deep --strict "$APP_PATH" >/dev/null 2>&1; then
   echo "[错误] AI Desktop.app 稳定签名校验失败，已取消启动。"
-  read "?按回车键关闭窗口..."
+  wait_before_close
   exit 1
 fi
 
 APP_EXECUTABLE="$APP_PATH/Contents/MacOS/AI Desktop"
+if [[ -n "$CONTROLLED_SHA" ]]; then
+  # 包外清单与启动参数必须一致，新进程才会把本批次标记为真正重启健康。
+  node -e 'const fs=require("node:fs");const path=require("node:path");fs.writeFileSync(path.join(process.argv[2],"ai-desktop-runtime-source.json"),JSON.stringify({sourceSha:process.argv[1]})+"\n")' "$CONTROLLED_SHA" "$(dirname "$APP_PATH")" || exit 1
+fi
 EXISTING_PIDS=()
 while IFS= read -r EXISTING_PID; do
   [[ -n "$EXISTING_PID" ]] && EXISTING_PIDS+=("$EXISTING_PID")
@@ -87,6 +131,15 @@ done < <(ps -axo pid=,command= | awk -v target="$APP_EXECUTABLE" '
     if ($0 == target || index($0, target " ") == 1) print pid
   }
 ')
+if [[ -n "$CONTROLLED_OLD_PID" ]]; then
+  OLD_COMMAND="$(ps -p "$CONTROLLED_OLD_PID" -o command= 2>/dev/null || true)"
+  if [[ "$OLD_COMMAND" != *"AI Desktop.app/Contents/MacOS/AI Desktop"* ]]; then
+    echo "[错误] 待替换进程不是 AI Desktop，已取消重启。"
+    exit 1
+  fi
+  EXISTING_PIDS+=("$CONTROLLED_OLD_PID")
+fi
+EXISTING_PIDS=("${(@u)EXISTING_PIDS}")
 
 if (( ${#EXISTING_PIDS[@]} > 0 )); then
   echo "[切换] 正在关闭 ${#EXISTING_PIDS[@]} 个旧 AI Desktop 实例，防止旧代码和屏幕流继续占用..."
@@ -101,7 +154,7 @@ if (( ${#EXISTING_PIDS[@]} > 0 )); then
   done
   if [[ "$REMAINING" == true ]]; then
     echo "[错误] 旧 AI Desktop 实例未能正常退出，已取消启动，避免多个版本并行。"
-    read "?按回车键关闭窗口..."
+    wait_before_close
     exit 1
   fi
 fi
@@ -113,10 +166,15 @@ if [[ -x "$LSREGISTER" ]]; then
 fi
 
 echo "[启动] 正在打开最新 AI Desktop.app..."
-open -n "$APP_PATH" --args "--selplat-root=$SELPLAT_ROOT" "--ai-desktop-variant=developer"
+LAUNCH_ARGS=("--selplat-root=$SELPLAT_ROOT" "--ai-desktop-variant=developer")
+if [[ -n "$CONTROLLED_SHA" ]]; then
+  LAUNCH_ARGS+=("--ai-desktop-runtime-sha=$CONTROLLED_SHA" "--ai-desktop-resume-release=$CONTROLLED_BATCH")
+  if [[ -n "$CONTROLLED_USER_DATA_DIR" ]]; then LAUNCH_ARGS+=("--ai-desktop-user-data-dir=$CONTROLLED_USER_DATA_DIR"); fi
+fi
+open -n "$APP_PATH" --args "${LAUNCH_ARGS[@]}"
 if [[ $? -ne 0 ]]; then
   echo "[错误] AI Desktop.app 启动失败。"
-  read "?按回车键关闭窗口..."
+  wait_before_close
   exit 1
 fi
 

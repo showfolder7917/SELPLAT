@@ -48,6 +48,14 @@ export class ReleaseBatchStore {
     return document.state === "activating" && document.runtimeActivation?.state === "relaunch-scheduled" ? document : null;
   }
 
+  /** 固定开发版装载并通过健康检查后，仅回收本批次预激活临时应用；历史发布包与当前运行应用不在范围内。 */
+  retireRuntimeActivationPackage(releaseBatchId: string): void {
+    if (!this.#stableBuildRoot || !/^[a-zA-Z0-9._-]+$/.test(releaseBatchId)) return;
+    const activationRoot = path.join(this.#stableBuildRoot, "package", "activation");
+    const target = path.join(activationRoot, `${releaseBatchId}-runtime`);
+    if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+  }
+
   /**
    * 从当前运行文档与长期归档中避让已经使用的发布批次代次。
    * 真实传参示例：版本 0.1.1、请求代次 2，历史已有 release-0.1.1-g2 时返回 3。

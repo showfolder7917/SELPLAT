@@ -22,12 +22,12 @@ export function resolveVerifiedDeveloperExecutable(buildRoot: string): string {
 }
 
 /** 把候选工作区内已验证的应用提升到工程稳定构建域，候选回收后仍可发布和重启。 */
-export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stableBuildRoot: string, releaseBatchId: string, runtimeSourceSha: string): string {
+export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stableBuildRoot: string, releaseBatchId: string, runtimeSourceSha: string, lifetime: "published" | "activation" = "published"): string {
   const safeBatchId = releaseBatchId.toLowerCase().replaceAll(/[^a-z0-9._-]+/g, "-").replaceAll(/^-+|-+$/g, "");
   if (!safeBatchId) throw new Error("发布批次 ID 无法用于稳定发布目录。");
   // 启动程序位于 App/Contents/MacOS，两级向上才是应用包根；多退一层会复制整个架构目录并丢失目标启动程序。
   const sourceApp = path.resolve(path.dirname(sourceExecutable), "../..");
-  const destinationRoot = path.join(path.resolve(stableBuildRoot), "package", "published", safeBatchId);
+  const destinationRoot = path.join(path.resolve(stableBuildRoot), "package", lifetime, safeBatchId);
   const destinationApp = path.join(destinationRoot, "AI Desktop.app");
   const destinationExecutable = path.join(destinationApp, "Contents", "MacOS", "AI Desktop");
   if (!existsSync(sourceExecutable)) throw new Error("候选工作区内的已验证启动程序不存在。");

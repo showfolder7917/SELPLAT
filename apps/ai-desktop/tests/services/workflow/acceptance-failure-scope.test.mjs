@@ -71,3 +71,64 @@ test("验收条件变化或失败标识不能对应原条件时禁止自动扩�
   assert.equal(unknown.decision, "outside-original-acceptance");
   assert.match(unknown.reason, /无法对应原提案/);
 });
+
+test("源码审查失败有唯一源码条件和文件证据时交给令狐，页面受阻不冒充缺陷", () => {
+  const expected = ["真实页面区分各阶段结论", "模拟结论保存失败不能显示最终通过"];
+  const currentProposal = {
+    ...proposal(expected),
+    acceptancePlan: { conditions: [
+      { conditionId: "criterion-1", evidenceType: "page-experience" },
+      { conditionId: "criterion-2", evidenceType: "code-conformance" },
+    ] },
+  };
+  const run = failedRun(expected, "criterion-1");
+  run.stepResults[0].status = "blocked";
+  run.stepResults[0].layoutStatus = "blocked";
+  run.sourceReview = {
+    status: "failed",
+    actual: "另一条归档路径可绕过唯一结论记录直接显示完成。",
+    evidenceReferences: ["electron/services/evolution/internal/evolution-state.store.ts:429"],
+  };
+  const review = new AcceptanceFailureScopePolicy().review(currentProposal, run);
+  assert.equal(review.decision, "within-original-acceptance");
+  assert.equal(review.defects.length, 1);
+  assert.equal(review.defects[0].checkId, "criterion-2");
+  assert.match(review.defects[0].actual, /绕过唯一结论记录/);
+  assert.deepEqual(review.defects[0].sourceReferences, run.sourceReview.evidenceReferences);
+  assert.deepEqual(review.defects[0].screenshotAttachmentIds, []);
+});
+
+test("源码审查失败缺少唯一原条件或文件证据时不自动扩大修复范围", () => {
+  const run = failedRun();
+  run.stepResults[0].status = "blocked";
+  run.stepResults[0].layoutStatus = "blocked";
+  run.sourceReview = { status: "failed", actual: "源码存在缺口", evidenceReferences: [] };
+  const review = new AcceptanceFailureScopePolicy().review(proposal(), run);
+  assert.equal(review.decision, "outside-original-acceptance");
+  assert.match(review.reason, /源码审查失败/);
+});
+
+test("多个逐项源码失败保留各自文件依据，不伪造页面截图和操作", () => {
+  const expected = ["归档结论必须有唯一记录", "当前专题投影不得绕过该记录"];
+  const currentProposal = {
+    ...proposal(expected),
+    acceptancePlan: { conditions: expected.map((criterion, index) => ({ conditionId: `criterion-${index + 1}`, criterion, evidenceType: "code-conformance" })) },
+  };
+  const run = failedRun(expected, "criterion-1");
+  run.mode = "code-conformance";
+  run.sourceReview = { status: "passed", actual: "结构审查通过", evidenceReferences: ["structure.ts:1"] };
+  run.stepResults = expected.map((criterion, index) => ({
+    ...run.stepResults[0], checkId: `criterion-${index + 1}`, operationIndex: index,
+    evidenceMode: "code-conformance", actual: `${criterion}仍未实现`,
+    evidenceReferences: [`source-${index + 1}.ts:10`], screenshotAttachmentId: null, layoutScreenshotAttachmentId: null,
+    layoutStatus: "not-applicable",
+  }));
+  const review = new AcceptanceFailureScopePolicy().review(currentProposal, run);
+  assert.equal(review.decision, "within-original-acceptance");
+  assert.equal(review.defects.length, 2);
+  assert.deepEqual(review.defects.map((defect) => defect.sourceReferences), [["source-1.ts:10"], ["source-2.ts:10"]]);
+  assert.deepEqual(review.defects.map((defect) => defect.screenshotAttachmentIds), [[], []]);
+  assert.deepEqual(review.defects.map((defect) => defect.reproductionOperations), [[], []]);
+  run.stepResults[0].evidenceReferences = [];
+  assert.equal(new AcceptanceFailureScopePolicy().review(currentProposal, run).decision, "outside-original-acceptance");
+});

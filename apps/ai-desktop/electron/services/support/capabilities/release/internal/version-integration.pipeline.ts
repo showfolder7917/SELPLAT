@@ -149,6 +149,13 @@ export class VersionIntegrationPipeline {
           appendFlow(task, "release.restart_healthy", "integration", "completed", "新版本已重启并通过渲染器健康检查，结果返回南宫婉", currentActor);
         }
       });
+      // 新版本已从固定开发位置加载，预激活候选不再是运行进程；只回收本批次临时副本。
+      try {
+        this.#releaseBatches.retireRuntimeActivationPackage(`release-${this.#releaseVersion}-g${generation}`);
+      } catch (error) {
+        // 临时包回收失败只记诊断；已经完成的运行版本健康事实不能倒退。
+        this.#durations.instant(taskIds[0], "integration.runtime_activation_retirement_failed", { detail: errorMessage(error) });
+      }
     }
     // 只有已确认批次进入终态后才回收任务工作树；回收失败不会把已完成任务重新派发。
     for (const task of this.#store.state().tasks) {
