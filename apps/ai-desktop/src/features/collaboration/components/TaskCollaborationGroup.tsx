@@ -105,6 +105,9 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
       : groups.filter((group) => group.status !== "cancelled");
   // 其余时间线组包括已取消、旧阻塞和无关联卡点，统一作为只读审计历史。
   const auditHistoryGroups = groups.filter((group) => !activeGroups.includes(group));
+  // 当前专题未映射到活动时间线时，旧卡只保留审计；页面明确说明没有待处理技术卡点。
+  const noActiveTechnicalRecovery = activeGroups.length === 0 && auditHistoryGroups.length > 0
+    && (!currentTopicStage || currentTopicStage.status !== "failed-pending-repair");
 
   /** 只记录详情面板的连续滚动，防止页面外层滚动被误当成长任务。 */
   const recordDetailScroll = (groupId: string) => {
@@ -363,6 +366,12 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
       </div>}
       {/* 当前专题列表保持后端已确定的稳定顺序，且只承载仍可能存在的操作。 */}
       <div className="task-collaboration-groups">
+        {noActiveTechnicalRecovery && <div className="task-collaboration-empty task-collaboration-no-active-recovery" role="status">
+          <strong>没有待处理技术卡点</strong>
+          <span>处理人和状态：当前无需用户操作。</span>
+          <span>是否需要你操作：当前无需用户操作。</span>
+          <span>下一步：等待新证据。</span>
+        </div>}
         {activeGroups.map((group) => {
           // 当前专题仍使用具名卡片模型，保持调用点能直接辨别展示与操作边界。
           const cardModel = createCardModel(group);
