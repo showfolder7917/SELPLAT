@@ -30,7 +30,8 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   assert.match(taskCardSource, /hostStartupAcceptance\.reason[\s\S]*hostStartupAcceptance\.evidenceReferences/);
   assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
   assert.match(taskCardSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);
-  assert.match(developerStyles, /task-host-startup-evidence[\s\S]*max-height: 240px[\s\S]*overflow: auto/);
+  assert.match(developerStyles, /唯一滚动边界[\s\S]*task-host-startup-evidence > \.seldisclosure-content[^}]*padding: 10px/);
+  assert.doesNotMatch(developerStyles, /task-host-startup-evidence > \.seldisclosure-content \{[^}]*overflow:/);
   assert.match(timelineDisplaySource, /nodeOccurredAtLabel[\s\S]*发生时间[\s\S]*审批依据[\s\S]*代码集成依据/);
   assert.match(taskCardSource, /nodeOccurredAtLabel\(node, locale\)[\s\S]*detailLabel\(node, locale\)}/);
   assert.match(hostStartupServiceSource, /GET[\s\S]*host-startup-evidence\/context[\s\S]*topicId[\s\S]*proposalId[\s\S]*当前专题或提案已经变化/);
