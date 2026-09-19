@@ -1357,7 +1357,9 @@ export async function startApplication(): Promise<void> {
     return;
   }
   // 普通启动在窗口创建完成后恢复持久任务，再启动人物和监督循环。
-  collaboration.resumePendingWork();
+  const evolutionAtResume = evolutionStateStore.state();
+  collaboration.resumePendingWork(evolutionAtResume.oneShotRun?.status === "running"
+    && evolutionAtResume.automationRuntime.status === "running");
   personaRegistry.startAll();
   personaWorkflowRuntime.start();
   workflowSupervisor?.start();

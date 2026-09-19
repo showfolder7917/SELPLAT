@@ -2483,6 +2483,48 @@ test("应用重启保留活动任务恢复点并释放全部跨进程人物租�
   }
 });
 
+test("运行中的专题重启后自动接续原执行任务，暂停状态不推进", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "active-task-auto-resume-"));
+  let coordinator;
+  try {
+    const statePath = path.join(directory, "state.json");
+    const store = new CollaborationStore(statePath);
+    const submitted = store.submitTask({
+      title: "原任务继续", problemStatement: "应用重建中断执行", confirmedIntent: "沿原任务恢复",
+      workspaceState, locale: "zh-CN", preferredExecutorMemberId: "li-feiyu",
+    });
+    store.updateTask(submitted.taskId, "fixture.executing", (task) => {
+      task.state = "executing";
+      task.phase = "executing";
+      task.executorMemberId = "li-feiyu";
+      task.assignmentId = "original-assignment";
+      task.versionWorkspace = { workspaceId: "original-worktree", rootPath: directory, branchName: "codex/original", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
+    });
+    const restored = new CollaborationStore(statePath);
+    const makeCoordinator = () => new CollaborationCoordinator({
+      store: restored,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: {},
+      executor: { closeAll: async () => undefined },
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      emitState: () => undefined, emitStream: () => undefined,
+    });
+    coordinator = makeCoordinator();
+    coordinator.resumePendingWork(false);
+    assert.equal(restored.task(submitted.taskId).state, "recovering");
+    await coordinator.dispose();
+    coordinator = makeCoordinator();
+    coordinator.resumePendingWork(true);
+    const resumed = restored.task(submitted.taskId);
+    assert.equal(resumed.state, "queued-executor");
+    assert.equal(resumed.versionWorkspace.workspaceId, "original-worktree");
+    assert.equal(resumed.flowEvents.filter((event) => event.type === "task.recovery_requested").length, 1);
+  } finally {
+    await coordinator?.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("应用重启保留客户等待状态并释放人物，不把卡点改成恢复中", () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "blocked-restart-preserved-"));
   try {

@@ -517,7 +517,7 @@ export class CollaborationCoordinator {
     return state;
   }
 
-  resumePendingWork(): void {
+  resumePendingWork(resumeInterruptedExecution = false): void {
     // 旧版曾把本地归属等待误写为源码修复；恢复时先还原为客户处理卡点，避免重启后继续执行无权处理的修改。
     this.#restoreLegacyLocalChangeOwnershipWaits();
     // 应用重建后的统一恢复入口先接续全部可修复失败，再恢复普通执行和集成队列。
@@ -525,6 +525,17 @@ export class CollaborationCoordinator {
     this.#scheduleUnifiedTestRepairs(state);
     this.#scheduleMergeConflictCorrections(state);
     this.#scheduleExecutionRepairs(state);
+    // 正在运行的一次性专题在应用重建后沿原任务、原工作树接续普通执行。
+    // 技术失败和客户前置条件仍由各自的恢复路径处理，不能借启动绕过门禁。
+    if (resumeInterruptedExecution) {
+      for (const task of state.tasks.filter((candidate) => candidate.state === "recovering"
+        && candidate.recoveryTargetState === "executing"
+        && !candidate.repairKind && !candidate.integrationFailure
+        && !candidate.repairRequiresUserConfirmation && !candidate.customerActionGuidance
+        && this.#canOperateTask(candidate, state))) {
+        this.continueTask(task.taskId);
+      }
+    }
     this.#schedule();
   }
 
