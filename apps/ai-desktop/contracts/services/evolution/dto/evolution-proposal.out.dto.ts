@@ -78,6 +78,8 @@ export interface EvolutionProposalOutDto {
   /** 提案版本专属的验收计划；旧归档允许为空，但不会被用于新的完成判定。 */
   acceptancePlan: EvolutionAcceptancePlanOutDto | null;
   distributionPlan: EvolutionDistributionPlanOutDto | null;
+  /** 最终验收通过时写入的唯一结果决定档案；历史专题缺失时只能按尚未核验呈现。 */
+  finalConclusionRecordId: string | null;
   status: Exclude<EvolutionTopicStatusValue, "registered" | "investigating">;
   approvals: EvolutionApprovalOutDto[];
   distributedTaskIds: string[];

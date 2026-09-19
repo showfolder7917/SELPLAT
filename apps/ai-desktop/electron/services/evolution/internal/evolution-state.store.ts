@@ -426,7 +426,7 @@ export class EvolutionStateStore {
         revisionFeedbackApprovalId: null, content: resultSummary, evidence: [...evidence], impactScope: ["正式 AI Desktop 页面交互验收"],
         exclusions: ["不恢复旧任务、旧工作树或旧计划", "不派发修复人物"], risks: ["仅归档已经完成的正式页面验收事实，不执行代码修改。"],
         rollbackPlan: "如发现新的真实失败，另建独立修复卡，不恢复本次已退役运行。", acceptanceCriteria: [...acceptanceCriteria],
-        acceptancePlan: null, distributionPlan: null, status: "completed", distributedTaskIds: [], resultSummary,
+        acceptancePlan: null, distributionPlan: null, finalConclusionRecordId: null, status: "completed", distributedTaskIds: [], resultSummary,
         approvals: [{ approvalId: `evolution-approval-${randomUUID()}`, proposalId, decision: "approved", source: "automatic-han-li", stage: "result",
           approverMemberId: "han-li", approverDisplayName: "韩立", advice: resultSummary, feedbackTarget: "proposal-content",
           capabilityScope: null, referencedApprovalIds: [], preferenceSnapshotVersion: state.preferenceSnapshotVersion, createdAt: now }],
@@ -686,7 +686,7 @@ export class EvolutionStateStore {
         impactScope: [...mutableTopic.scope], exclusions: [...mutableTopic.exclusions],
         risks: normalizedList(request.risks, "风险"), rollbackPlan: required(request.rollbackPlan, "回退方案", 8_000),
         acceptanceCriteria: [...mutableTopic.acceptanceCriteria], acceptancePlan: null,
-        distributionPlan: null, status: "pending-approval",
+        distributionPlan: null, finalConclusionRecordId: null, status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
     });
@@ -859,7 +859,7 @@ export class EvolutionStateStore {
     const plan = requireAcceptancePlan(proposal);
     if (proposal.topicId !== topicId || proposal.status !== "completed" || topic.status !== "completed") throw new Error("只有同一已完成专题和提案可以重新验收。 ");
     const completedRecord = this.#state.archiveRecords.find((item) => item.recordId === sourceRecordId && item.proposalId === proposalId && item.eventType === "proposal.result_decided");
-    if (!completedRecord) throw new Error("重新验收必须引用原完成决定记录。 ");
+    if (!completedRecord || proposal.finalConclusionRecordId !== sourceRecordId) throw new Error("重新验收必须引用当前已保存的原完成决定记录。 ");
     const now = new Date().toISOString();
     const nextRound = { roundId: `acceptance-round-${randomUUID()}`, roundNumber: plan.rounds.length + 1, reopenedFromRecordId: completedRecord.recordId, reopenReason: required(reason, "重新验收原因", 8_000), reopenSourceRecordId: sourceRecordId, openedAt: now };
     return this.#commit("acceptance.reopened", topicId, proposalId, (state) => {
@@ -994,6 +994,24 @@ export class EvolutionStateStore {
       counterexampleCount: 0,
       createdAt: now,
     } : null;
+    // 通过结论的档案标识先于状态变更生成，使 completed 与其唯一依据进入同一次快照写入。
+    const finalConclusionRecordId = decision === "approved" ? `evolution-archive-${randomUUID()}` : null;
+    const finalConclusion = decision === "approved" && run ? {
+      recordId: finalConclusionRecordId,
+      handler: "韩立",
+      occurredAt: now,
+      acceptanceRunId: run.runId,
+      conditionResults: run.stepResults.map((step) => ({
+        checkId: step.checkId,
+        status: step.status,
+        evidenceReferences: [...new Set([
+          ...(step.evidenceReferences || []),
+          step.screenshotAttachmentId,
+          step.layoutScreenshotAttachmentId,
+        ].filter((item): item is string => Boolean(item)))],
+      })),
+      evidenceReferences: [...new Set([...run.evidenceAttachmentIds, ...run.stepResults.flatMap((step) => step.evidenceReferences || [])])],
+    } : null;
     return this.#commit("proposal.result_decided", proposal.topicId, proposalId, (state) => {
       const mutable = requireProposal(state, proposalId);
       if (source === "manual-user") state.preferenceSnapshotVersion += 1;
@@ -1006,6 +1024,7 @@ export class EvolutionStateStore {
       const topic = requireTopic(state, mutable.topicId);
       if (decision === "approved") {
         mutable.status = "completed";
+        mutable.finalConclusionRecordId = finalConclusionRecordId;
         topic.status = "completed";
         topic.recoveryPoint = "han-li-result-accepted";
         state.automationRuntime.completedRounds += 1;
@@ -1022,7 +1041,7 @@ export class EvolutionStateStore {
       }
       mutable.updatedAt = now;
       topic.updatedAt = now;
-    }, { acceptanceRunId: run?.runId || null, failureEvidence, experienceCandidate, nextOwner: decision === "approved" ? "han-li" : proposal.submitterMemberId });
+    }, { acceptanceRunId: run?.runId || null, finalConclusion, failureEvidence, experienceCandidate, nextOwner: decision === "approved" ? "han-li" : proposal.submitterMemberId }, finalConclusionRecordId || undefined);
   }
 
   /** 原提交人只能修订退回的本人提案；新版本保留原审批、反馈目标和完整替代链。 */
@@ -1069,7 +1088,7 @@ export class EvolutionStateStore {
         risks: normalizedList(request.risks, "修订风险"),
         rollbackPlan: required(request.rollbackPlan, "修订回退方案", 8_000),
         acceptanceCriteria: normalizedList(request.acceptanceCriteria, "修订验收条件"), acceptancePlan: null,
-        distributionPlan: null,
+        distributionPlan: null, finalConclusionRecordId: null,
         status: "pending-approval",
         approvals: [], distributedTaskIds: [], resultSummary: null, createdAt: now, updatedAt: now,
       });
@@ -1137,7 +1156,7 @@ export class EvolutionStateStore {
     });
   }
 
-  #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: EvolutionStateOutDto) => void, payloadExtra: Record<string, unknown> = {}): EvolutionStateOutDto {
+  #commit(reason: string, topicId: string | null, proposalId: string | null, mutate: (state: EvolutionStateOutDto) => void, payloadExtra: Record<string, unknown> = {}, recordId?: string): EvolutionStateOutDto {
     const previousState = this.state();
     const next = structuredClone(this.#state);
     mutate(next);
@@ -1150,7 +1169,7 @@ export class EvolutionStateStore {
       : [...next.deliberations].reverse().find((item) => item.status !== "established" || item.topicId === topicId) || null;
     // 专题档案只追加业务事实；普通聊天和纯配置变化没有专题或研讨关联时不伪造档案。
     if (topic || proposal || deliberation || reason === "one-shot.orphan-retired") next.archiveRecords.push({
-      recordId: `evolution-archive-${randomUUID()}`,
+      recordId: recordId || `evolution-archive-${randomUUID()}`,
       deliberationId: deliberation?.deliberationId || topic?.deliberationId || null,
       topicId: topicId || deliberation?.topicId || proposal?.topicId || null,
       proposalId,
@@ -1287,11 +1306,14 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
 /** v8 没有验收计划；保留全部历史事实，但不把旧运行伪造为新计划。 */
 function migrateAcceptancePlans(state: EvolutionStateOutDto & { version?: number }): { state: EvolutionStateOutDto; changed: boolean } {
   const proposals = state.proposals.map((proposal) => {
-    if (proposal.acceptancePlan === undefined) return { ...proposal, acceptancePlan: null };
-    const plan = proposal.acceptancePlan as unknown as (Record<string, unknown> & EvolutionAcceptancePlanOutDto) | null;
-    if (!plan || !("materials" in plan)) return proposal;
+    const withConclusionReference = proposal.finalConclusionRecordId === undefined
+      ? { ...proposal, finalConclusionRecordId: null }
+      : proposal;
+    if (withConclusionReference.acceptancePlan === undefined) return { ...withConclusionReference, acceptancePlan: null };
+    const plan = withConclusionReference.acceptancePlan as unknown as (Record<string, unknown> & EvolutionAcceptancePlanOutDto) | null;
+    if (!plan || !("materials" in plan)) return withConclusionReference;
     const { materials: _retiredFileManifest, ...activePlan } = plan;
-    return { ...proposal, acceptancePlan: activePlan as unknown as EvolutionAcceptancePlanOutDto };
+    return { ...withConclusionReference, acceptancePlan: activePlan as unknown as EvolutionAcceptancePlanOutDto };
   });
   const changed = state.version !== 9 || proposals.some((proposal, index) => proposal !== state.proposals[index]);
   return { state: { ...state, version: 9, proposals } as EvolutionStateOutDto, changed };
