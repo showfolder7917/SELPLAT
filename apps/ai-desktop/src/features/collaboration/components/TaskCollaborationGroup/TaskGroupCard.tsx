@@ -398,8 +398,13 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { onOpenChange } = model.actions;
   // 已取消专题只保留审计阅读；展开状态仍由专题卡的统一 groupId 状态管理。
   if (group.status === "cancelled" || auditReadOnly) {
+    const primary = taskGroupPrimaryPresentation(group, locale);
+    const auditEvidence = visibleTimelineNodes(group.nodes)
+      .map((node) => `${node.actor.displayName}：${node.detail || node.content || node.summary}`)
+      .filter(Boolean)
+      .join("\n\n");
     return (
-      // 历史卡只提供标题和审计摘要的阅读折叠，不装配当前专题的任何业务操作。
+      // 历史卡只提供事实和证据阅读，不装配当前专题的任何业务操作。
       <article
         className="task-collaboration-cancelled-history-card task-collaboration-audit-history-card"
         aria-label={locale === "ja" ? "監査履歴" : "专题审计历史卡"}
@@ -418,11 +423,18 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
               <span>{group.status === "cancelled" ? (locale === "ja" ? "この案件は取消済みです" : "本专题已取消") : (locale === "ja" ? "この案件は現在の作業領域に含まれません" : "此专题不属于当前工作区")}</span>
             </span>
             <strong>{group.title}</strong>
+            <span className="task-cancelled-history-facts">
+              <span><b>{locale === "ja" ? "内容" : "发生事项"}</b><small>{primary.matter}</small></span>
+              <span><b>{locale === "ja" ? "担当" : "处理人和状态"}</b><small>{primary.ownerAndStatus}</small></span>
+              <span><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
+              <span><b>{locale === "ja" ? "次の対応" : "下一步"}</b><small>{primary.nextAction}</small></span>
+            </span>
           </span>}
         >
           <div className="task-cancelled-history-detail">
             <p>{group.summary}</p>
             <small>{locale === "ja" ? "このカードは監査履歴としてのみ閲覧できます。" : "此卡仅供查看审计历史，不能执行任何操作。"}</small>
+            {auditEvidence && <pre className="task-cancelled-history-evidence">{auditEvidence}</pre>}
           </div>
         </SelUiDisclosure>
       </article>
