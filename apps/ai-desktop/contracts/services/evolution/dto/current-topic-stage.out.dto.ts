@@ -40,11 +40,12 @@ export interface CurrentTopicFinalConclusionOutDto {
   evidenceReferences: string[];
 }
 
-/** 当前专题的 Host 启动验收；只消费同一启动标识的退出与 8080 health 事实。 */
+/** 当前专题的 Host 启动验收；只消费同一启动标识的退出码与 8080 health 事实。 */
 export interface CurrentTopicHostStartupAcceptanceOutDto {
   launchId: string | null;
   handler: string | null;
   startedAt: string | null;
+  commandStatus: "missing" | "running" | "exited";
   exitCode: number | null;
   healthStatus: "missing" | "passed" | "failed";
   healthSummary: string | null;

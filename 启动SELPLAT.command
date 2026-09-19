@@ -43,6 +43,42 @@ HOST_STARTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 HOST_HEALTH_SUCCESS=false
 HOST_HEALTH_SUMMARY="未在启动等待期内取得 8080 health 响应。"
 HOST_HEALTH_CHECKED_AT="$HOST_STARTED_AT"
+HOST_EVIDENCE_ENDPOINT=""
+HOST_EVIDENCE_TOKEN=""
+HOST_EVIDENCE_TOPIC_ID=""
+HOST_EVIDENCE_PROPOSAL_ID=""
+
+# 在启动前取得当前专题与提案的受控上下文。提交时服务端会再次核对，防止启动期间切换专题后误写入新卡。
+if [[ -r "$HOST_EVIDENCE_ENDPOINT_FILE" ]]; then
+  HOST_EVIDENCE_ENDPOINT=$(sed -nE 's/.*"endpoint":"([^"]+)".*/\1/p' "$HOST_EVIDENCE_ENDPOINT_FILE")
+  HOST_EVIDENCE_TOKEN=$(sed -nE 's/.*"token":"([^"]+)".*/\1/p' "$HOST_EVIDENCE_ENDPOINT_FILE")
+  if [[ -n "$HOST_EVIDENCE_ENDPOINT" && -n "$HOST_EVIDENCE_TOKEN" ]]; then
+    HOST_EVIDENCE_CONTEXT=$(/usr/bin/curl --silent --show-error --fail --max-time 2 "$HOST_EVIDENCE_ENDPOINT/context?token=$HOST_EVIDENCE_TOKEN" 2>/dev/null || true)
+    HOST_EVIDENCE_TOPIC_ID=$(printf '%s' "$HOST_EVIDENCE_CONTEXT" | sed -nE 's/.*"topicId":"([^"]+)".*/\1/p')
+    HOST_EVIDENCE_PROPOSAL_ID=$(printf '%s' "$HOST_EVIDENCE_CONTEXT" | sed -nE 's/.*"proposalId":"([^"]+)".*/\1/p')
+  fi
+fi
+
+submit_host_startup_evidence() {
+  local command_state="$1"
+  local exit_code="${2:-}"
+  [[ -n "$HOST_EVIDENCE_ENDPOINT" && -n "$HOST_EVIDENCE_TOKEN" && -n "$HOST_EVIDENCE_TOPIC_ID" && -n "$HOST_EVIDENCE_PROPOSAL_ID" ]] || return 0
+  /usr/bin/curl --silent --show-error --fail --max-time 2 --request POST "$HOST_EVIDENCE_ENDPOINT" \
+    --data-urlencode "token=$HOST_EVIDENCE_TOKEN" \
+    --data-urlencode "topicId=$HOST_EVIDENCE_TOPIC_ID" \
+    --data-urlencode "proposalId=$HOST_EVIDENCE_PROPOSAL_ID" \
+    --data-urlencode "launchId=$HOST_LAUNCH_ID" \
+    --data-urlencode "handler=启动SELPLAT.command" \
+    --data-urlencode "startedAt=$HOST_STARTED_AT" \
+    --data-urlencode "commandLaunchId=$HOST_LAUNCH_ID" \
+    --data-urlencode "commandState=$command_state" \
+    --data-urlencode "exitCode=$exit_code" \
+    --data-urlencode "healthLaunchId=$HOST_LAUNCH_ID" \
+    --data-urlencode "healthSuccess=$HOST_HEALTH_SUCCESS" \
+    --data-urlencode "healthCheckedAt=$HOST_HEALTH_CHECKED_AT" \
+    --data-urlencode "healthSummary=$HOST_HEALTH_SUMMARY" \
+    >/dev/null || echo "[提示] Host 启动证据未能提交；AI Desktop 将显示尚未核验。" >&2
+}
 LISTENER_PIDS=()
 while IFS= read -r listener_pid; do
   [[ -n "$listener_pid" ]] && LISTENER_PIDS+=("$listener_pid")
@@ -93,27 +129,13 @@ for _ in {1..120}; do
   sleep 0.25
 done
 
+# 运行中的快照只供查看，不能代替退出码。退出后再次提交同一启动的完整事实。
+if kill -0 "$HOST_GRADLE_PID" 2>/dev/null; then
+  submit_host_startup_evidence "running"
+fi
+
 wait "$HOST_GRADLE_PID"
 HOST_EXIT_CODE=$?
-
-# AI Desktop 运行时创建短期本地凭据；脚本只提交事实，不读取或写入 SQLite。
-if [[ -r "$HOST_EVIDENCE_ENDPOINT_FILE" ]]; then
-  HOST_EVIDENCE_ENDPOINT=$(sed -nE 's/.*"endpoint":"([^"]+)".*/\1/p' "$HOST_EVIDENCE_ENDPOINT_FILE")
-  HOST_EVIDENCE_TOKEN=$(sed -nE 's/.*"token":"([^"]+)".*/\1/p' "$HOST_EVIDENCE_ENDPOINT_FILE")
-  if [[ -n "$HOST_EVIDENCE_ENDPOINT" && -n "$HOST_EVIDENCE_TOKEN" ]]; then
-    /usr/bin/curl --silent --show-error --fail --max-time 2 --request POST "$HOST_EVIDENCE_ENDPOINT" \
-      --data-urlencode "token=$HOST_EVIDENCE_TOKEN" \
-      --data-urlencode "launchId=$HOST_LAUNCH_ID" \
-      --data-urlencode "handler=启动SELPLAT.command" \
-      --data-urlencode "startedAt=$HOST_STARTED_AT" \
-      --data-urlencode "commandLaunchId=$HOST_LAUNCH_ID" \
-      --data-urlencode "exitCode=$HOST_EXIT_CODE" \
-      --data-urlencode "healthLaunchId=$HOST_LAUNCH_ID" \
-      --data-urlencode "healthSuccess=$HOST_HEALTH_SUCCESS" \
-      --data-urlencode "healthCheckedAt=$HOST_HEALTH_CHECKED_AT" \
-      --data-urlencode "healthSummary=$HOST_HEALTH_SUMMARY" \
-      >/dev/null || echo "[提示] Host 启动证据未能提交；AI Desktop 将显示尚未核验。" >&2
-  fi
-fi
+submit_host_startup_evidence "exited" "$HOST_EXIT_CODE"
 
 exit "$HOST_EXIT_CODE"

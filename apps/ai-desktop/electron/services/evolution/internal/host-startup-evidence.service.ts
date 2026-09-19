@@ -29,7 +29,21 @@ export function createHostStartupEvidenceService(
     start() {
       if (server) return;
       server = createServer((request, response) => {
-        if (request.method !== "POST" || request.url !== "/host-startup-evidence") {
+        const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
+        if (request.method === "GET" && requestUrl.pathname === "/host-startup-evidence/context") {
+          if (requestUrl.searchParams.get("token") !== token) {
+            response.writeHead(401).end();
+            return;
+          }
+          const current = currentTopicProposal(state.state());
+          if (!current) {
+            response.writeHead(409, { "content-type": "text/plain; charset=utf-8" }).end("当前没有可接收 Host 启动证据的专题提案。 ");
+            return;
+          }
+          response.writeHead(200, { "content-type": "application/json; charset=utf-8" }).end(JSON.stringify(current));
+          return;
+        }
+        if (request.method !== "POST" || requestUrl.pathname !== "/host-startup-evidence") {
           response.writeHead(404).end();
           return;
         }
@@ -40,18 +54,19 @@ export function createHostStartupEvidenceService(
           try {
             const fields = new URLSearchParams(body);
             if (fields.get("token") !== token) throw new Error("Host 启动证据凭据无效。 ");
-            const current = state.state();
-            const topicId = current.activeTopicId;
-            const proposal = topicId ? current.proposals.find((item) => item.topicId === topicId && item.version === current.topics.find((topic) => topic.topicId === topicId)?.currentProposalVersion) : null;
-            if (!topicId || !proposal) throw new Error("当前没有可接收 Host 启动证据的专题提案。 ");
+            const current = currentTopicProposal(state.state());
+            const topicId = requiredField(fields, "topicId");
+            const proposalId = requiredField(fields, "proposalId");
+            if (!current || current.topicId !== topicId || current.proposalId !== proposalId) throw new Error("Host 启动期间当前专题或提案已经变化，已拒绝写入。 ");
             state.recordHostStartupEvidence({
               topicId,
-              proposalId: proposal.proposalId,
+              proposalId,
               launchId: requiredField(fields, "launchId"),
               handler: requiredField(fields, "handler"),
               startedAt: requiredField(fields, "startedAt"),
               commandLaunchId: requiredField(fields, "commandLaunchId"),
-              exitCode: Number(requiredField(fields, "exitCode")),
+              commandState: requiredCommandState(fields),
+              exitCode: optionalIntegerField(fields, "exitCode"),
               healthLaunchId: requiredField(fields, "healthLaunchId"),
               healthSuccess: fields.get("healthSuccess") === "true",
               healthCheckedAt: requiredField(fields, "healthCheckedAt"),
@@ -81,8 +96,28 @@ export function createHostStartupEvidenceService(
   };
 }
 
+function currentTopicProposal(current: EvolutionStateOutDto): { topicId: string; proposalId: string } | null {
+  const topicId = current.activeTopicId;
+  const proposal = topicId ? current.proposals.find((item) => item.topicId === topicId && item.version === current.topics.find((topic) => topic.topicId === topicId)?.currentProposalVersion) : null;
+  return topicId && proposal ? { topicId, proposalId: proposal.proposalId } : null;
+}
+
 function requiredField(fields: URLSearchParams, key: string): string {
   const value = fields.get(key)?.trim() || "";
   if (!value) throw new Error(`Host 启动证据缺少 ${key}。`);
   return value;
+}
+
+function requiredCommandState(fields: URLSearchParams): "running" | "exited" {
+  const state = requiredField(fields, "commandState");
+  if (state !== "running" && state !== "exited") throw new Error("Host 启动进程状态无效。 ");
+  return state;
+}
+
+function optionalIntegerField(fields: URLSearchParams, key: string): number | null {
+  const value = fields.get(key)?.trim() || "";
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) throw new Error(`Host 启动证据中的 ${key} 必须为整数。`);
+  return parsed;
 }

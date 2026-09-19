@@ -9,6 +9,9 @@ const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/
 const collaborationFacadeSource = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const personaEvolutionSource = readFileSync(new URL("../../../electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", import.meta.url), "utf8");
 const collaborationIpcSource = readFileSync(new URL("../../../electron/system/ipc/domains/register-collaboration-ipc.ts", import.meta.url), "utf8");
+const timelineDisplaySource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts", import.meta.url), "utf8");
+const hostStartupServiceSource = readFileSync(new URL("../../../electron/services/evolution/internal/host-startup-evidence.service.ts", import.meta.url), "utf8");
+const hostStartupCommandSource = readFileSync(new URL("../../../../../启动SELPLAT.command", import.meta.url), "utf8");
 
 test("当前专题的恢复入口只消费交付投影，不再从时间线节点选择", () => {
   assert.match(taskCardSource, /currentTopicStage\?\.topicId === group\.topicId[\s\S]*currentTopicStage\?\.proposalId === group\.proposalId/);
@@ -26,6 +29,12 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   assert.match(taskCardSource, /Host 启动验收[\s\S]*hostStartupAcceptance\.status === "passed"[\s\S]*启动标识[\s\S]*8080 health/);
   assert.match(taskCardSource, /hostStartupAcceptance\.reason[\s\S]*hostStartupAcceptance\.evidenceReferences/);
   assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
+  assert.match(taskCardSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);
+  assert.match(developerStyles, /task-host-startup-evidence[\s\S]*max-height: 240px[\s\S]*overflow: auto/);
+  assert.match(timelineDisplaySource, /nodeOccurredAtLabel[\s\S]*发生时间[\s\S]*审批依据[\s\S]*代码集成依据/);
+  assert.match(taskCardSource, /nodeOccurredAtLabel\(node, locale\)[\s\S]*detailLabel\(node, locale\)}/);
+  assert.match(hostStartupServiceSource, /GET[\s\S]*host-startup-evidence\/context[\s\S]*topicId[\s\S]*proposalId[\s\S]*当前专题或提案已经变化/);
+  assert.match(hostStartupCommandSource, /HOST_EVIDENCE_ENDPOINT\/context\?token=[\s\S]*submit_host_startup_evidence[\s\S]*submit_host_startup_evidence "running"[\s\S]*wait "\$HOST_GRADLE_PID"/);
 });
 
 test("非当前活动卡显示退役按钮且主进程先封存旧执行树再原子退役专题", () => {

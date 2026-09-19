@@ -1295,13 +1295,21 @@ test("Host 启动证据只能以同一标识写入当前专题，且重复提交
     const proposalId = state.proposals.at(-1).proposalId;
     const evidence = {
       topicId: state.activeTopicId, proposalId, launchId: "host-run-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z",
-      commandLaunchId: "host-run-1", exitCode: 0, healthLaunchId: "host-run-1", healthSuccess: true,
+      commandLaunchId: "host-run-1", commandState: "running", exitCode: null, healthLaunchId: "host-run-1", healthSuccess: true,
       healthCheckedAt: "2026-09-19T00:00:02.000Z", healthSummary: '{"success":true,"status":"READY"}', evidenceReferences: ["启动SELPLAT.command"],
     };
     state = store.recordHostStartupEvidence(evidence);
     assert.equal(state.archiveRecords.at(-1).eventType, "host-startup.evidence-recorded");
+    assert.equal(state.archiveRecords.at(-1).payload.hostStartupEvidence.command.state, "running");
+    assert.equal(state.archiveRecords.at(-1).payload.hostStartupEvidence.command.exitCode, null);
     assert.equal(store.recordHostStartupEvidence(evidence).archiveRecords.length, state.archiveRecords.length);
+    assert.throws(() => store.recordHostStartupEvidence({ ...evidence, exitCode: 0 }), /不能伪造退出码/);
     assert.throws(() => store.recordHostStartupEvidence({ ...evidence, launchId: "host-run-2", healthLaunchId: "other-run" }), /同一 Host 启动标识/);
+    assert.throws(() => store.recordHostStartupEvidence({ ...evidence, commandState: "exited" }), /必须记录真实退出码/);
+    state = store.recordHostStartupEvidence({ ...evidence, commandState: "exited", exitCode: 0 });
+    assert.equal(state.archiveRecords.at(-1).payload.hostStartupEvidence.command.state, "exited");
+    assert.equal(state.archiveRecords.at(-1).payload.hostStartupEvidence.command.exitCode, 0);
+    assert.throws(() => store.recordHostStartupEvidence({ ...evidence, commandState: "exited", exitCode: 1 }), /已经记录为不同事实/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

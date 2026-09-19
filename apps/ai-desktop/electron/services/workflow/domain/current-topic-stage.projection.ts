@@ -218,7 +218,7 @@ function emptyDeliveryEvidence(): CurrentTopicStageOutDto["deliveryEvidence"] {
 }
 
 function emptyHostStartupAcceptance(reason = "尚未记录当前专题的 Host 启动验收依据。"): CurrentTopicStageOutDto["hostStartupAcceptance"] {
-  return { launchId: null, handler: null, startedAt: null, exitCode: null, healthStatus: "missing", healthSummary: null, evidenceReferences: [], status: "unverified", reason };
+  return { launchId: null, handler: null, startedAt: null, commandStatus: "missing", exitCode: null, healthStatus: "missing", healthSummary: null, evidenceReferences: [], status: "unverified", reason };
 }
 
 /** 只读取当前专题、当前提案的专用档案；审批、发布和历史记录均不参与。 */
@@ -226,17 +226,21 @@ function readHostStartupAcceptance(evolution: EvolutionStateOutDto, proposal: Ev
   const record = [...evolution.archiveRecords].reverse().find((item) => item.eventType === "host-startup.evidence-recorded" && item.topicId === proposal.topicId && item.proposalId === proposal.proposalId);
   const raw = record?.payload.hostStartupEvidence;
   if (!raw || typeof raw !== "object") return emptyHostStartupAcceptance();
-  const value = raw as { launchId?: unknown; handler?: unknown; startedAt?: unknown; command?: { launchId?: unknown; exitCode?: unknown }; health?: { launchId?: unknown; success?: unknown; checkedAt?: unknown; summary?: unknown }; evidenceReferences?: unknown };
+  const value = raw as { launchId?: unknown; handler?: unknown; startedAt?: unknown; command?: { launchId?: unknown; state?: unknown; exitCode?: unknown }; health?: { launchId?: unknown; success?: unknown; checkedAt?: unknown; summary?: unknown }; evidenceReferences?: unknown };
   const launchId = typeof value.launchId === "string" ? value.launchId : null;
   const handler = typeof value.handler === "string" ? value.handler : null;
   const startedAt = typeof value.startedAt === "string" ? value.startedAt : null;
+  const commandStatus = value.command?.state === "running" || value.command?.state === "exited"
+    ? value.command.state
+    : typeof value.command?.exitCode === "number" ? "exited" : "missing";
   const exitCode = typeof value.command?.exitCode === "number" ? value.command.exitCode : null;
   const healthSummary = typeof value.health?.summary === "string" ? value.health.summary : null;
   const healthStatus = value.health?.success === true ? "passed" : value.health?.success === false ? "failed" : "missing";
   const evidenceReferences = Array.isArray(value.evidenceReferences) ? value.evidenceReferences.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
   const matchedLaunch = Boolean(launchId && value.command?.launchId === launchId && value.health?.launchId === launchId);
-  const passed = Boolean(matchedLaunch && handler?.trim() && startedAt && Number.isInteger(exitCode) && exitCode === 0 && healthStatus === "passed" && typeof value.health?.checkedAt === "string" && healthSummary?.trim() && evidenceReferences.length);
-  return { launchId, handler, startedAt, exitCode, healthStatus, healthSummary, evidenceReferences, status: passed ? "passed" : "unverified", reason: passed ? "同一启动标识的退出结果、8080 health 和证据引用均已核验。" : "Host 启动依据不完整、失败或未绑定同一启动标识。" };
+  const commandAccepted = commandStatus === "exited" && exitCode === 0;
+  const passed = Boolean(matchedLaunch && handler?.trim() && startedAt && commandAccepted && healthStatus === "passed" && typeof value.health?.checkedAt === "string" && healthSummary?.trim() && evidenceReferences.length);
+  return { launchId, handler, startedAt, commandStatus, exitCode, healthStatus, healthSummary, evidenceReferences, status: passed ? "passed" : "unverified", reason: passed ? "同一启动标识的退出码、8080 health 和证据引用均已核验。" : "Host 启动依据不完整、失败或未绑定同一启动标识。" };
 }
 
 function readDeliveryEvidence(tasks: CollaborationTaskOutDto[], collaboration: CollaborationStateOutDto, acceptance: CurrentTopicAcceptanceOutDto | null): CurrentTopicStageOutDto["deliveryEvidence"] {

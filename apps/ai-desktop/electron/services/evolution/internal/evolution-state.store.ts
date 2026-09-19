@@ -16,7 +16,8 @@ export interface HostStartupEvidenceInput {
   handler: string;
   startedAt: string;
   commandLaunchId: string;
-  exitCode: number;
+  commandState: "running" | "exited";
+  exitCode: number | null;
   healthLaunchId: string;
   healthSuccess: boolean;
   healthCheckedAt: string;
@@ -850,7 +851,7 @@ export class EvolutionStateStore {
 
   /**
    * 保存根目录 Host 启动器的原始验收事实。
-   * 真实传参示例：{ launchId: "host-1", handler: "启动SELPLAT.command", exitCode: 0 }。
+   * 真实传参示例：{ launchId: "host-1", handler: "启动SELPLAT.command", commandState: "running", exitCode: null }。
    * 真实返回示例：写入当前专题 archiveRecords 后返回新的状态快照。
    * 异常或副作用示例：专题已切换、启动标识重复但内容不同或字段格式无效时抛错且不写入。
    */
@@ -867,22 +868,30 @@ export class EvolutionStateStore {
     const proposal = requireProposal(this.#state, proposalId);
     if (proposal.topicId !== topicId) throw new Error("Host 启动证据与当前专题提案不一致。 ");
     if (commandLaunchId !== launchId || healthLaunchId !== launchId) throw new Error("命令结果与 health 结果必须绑定同一 Host 启动标识。 ");
-    if (!Number.isInteger(input.exitCode)) throw new Error("Host 启动退出码必须为整数。 ");
+    if (input.commandState !== "running" && input.commandState !== "exited") throw new Error("Host 启动进程状态无效。 ");
+    if (input.exitCode !== null && !Number.isInteger(input.exitCode)) throw new Error("Host 启动退出码必须为整数或未记录。 ");
+    if (input.commandState === "running" && input.exitCode !== null) throw new Error("运行中的 Host 启动不能伪造退出码。 ");
+    if (input.commandState === "exited" && !Number.isInteger(input.exitCode)) throw new Error("已退出的 Host 启动必须记录真实退出码。 ");
     if (typeof input.healthSuccess !== "boolean" || !input.healthCheckedAt || !input.healthSummary.trim()) throw new Error("Host 启动 health 结果不完整。 ");
     if (!evidenceReferences.length) throw new Error("Host 启动证据缺少有效引用。 ");
     const payload = {
-      version: 1,
+      version: 2,
       launchId,
       handler,
       startedAt,
-      command: { launchId: commandLaunchId, exitCode: input.exitCode },
+      command: { launchId: commandLaunchId, state: input.commandState, exitCode: input.exitCode },
       health: { launchId: healthLaunchId, success: input.healthSuccess, checkedAt: input.healthCheckedAt, summary: input.healthSummary.trim().slice(0, 4_000) },
       evidenceReferences,
     };
-    const prior = this.#state.archiveRecords.find((record) => record.eventType === "host-startup.evidence-recorded" && record.topicId === topicId && record.proposalId === proposalId && (record.payload as { hostStartupEvidence?: { launchId?: unknown } }).hostStartupEvidence?.launchId === launchId);
+    const prior = [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "host-startup.evidence-recorded" && record.topicId === topicId && record.proposalId === proposalId && (record.payload as { hostStartupEvidence?: { launchId?: unknown } }).hostStartupEvidence?.launchId === launchId);
     if (prior) {
       if (JSON.stringify((prior.payload as { hostStartupEvidence?: unknown }).hostStartupEvidence) === JSON.stringify(payload)) return this.state();
-      throw new Error("同一 Host 启动标识已经记录为不同事实。 ");
+      const previous = (prior.payload as { hostStartupEvidence?: typeof payload }).hostStartupEvidence;
+      const validCompletion = previous?.command.state === "running" && previous.command.exitCode === null && input.commandState === "exited"
+        && previous.launchId === payload.launchId && previous.handler === payload.handler && previous.startedAt === payload.startedAt
+        && JSON.stringify(previous.health) === JSON.stringify(payload.health)
+        && JSON.stringify(previous.evidenceReferences) === JSON.stringify(payload.evidenceReferences);
+      if (!validCompletion) throw new Error("同一 Host 启动标识已经记录为不同事实。 ");
     }
     return this.#commit("host-startup.evidence-recorded", topicId, proposalId, () => undefined, { hostStartupEvidence: payload, nextOwner: "han-li" });
   }

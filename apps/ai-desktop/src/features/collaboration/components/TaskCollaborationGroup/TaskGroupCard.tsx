@@ -30,6 +30,8 @@ import {
   groupStatusLabel,
   // 节点耗时：正在执行或等待时随当前时间更新。
   nodeDurationLabel,
+  // 节点发生时间：审批和集成必须展示真实时间而非仅耗时。
+  nodeOccurredAtLabel,
   // 节点状态：把完成、当前、等待和失败转换成中日文。
   nodeStatusLabel,
   // 路径显示保护：把临时候选工作树根替换成稳定逻辑名。
@@ -241,6 +243,8 @@ function TaskNodeHeader({
         </span>
         {/* 节点摘要：用一行文字说明本次动作正在处理的内容。 */}
         <small>{summary}</small>
+        {/* 已完成事实直接显示落盘时间，审批和集成不能只显示处理耗时。 */}
+        <small className="task-node-occurred-at">{nodeOccurredAtLabel(node, locale)}</small>
         {/* 技术详情提示：只说明可查看的证据类型，不把修复过程重新放入主区域。 */}
         {hasTechnicalDetail && (
           <small className="task-node-detail-hint">
@@ -310,7 +314,7 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
   ) : undefined;
   // 节点详情保留完整业务事实和技术记录，主区域只显示投影时已确认的短摘要。
   const technicalDetail = [
-    node.content && node.content !== node.summary ? `完整记录：\n${node.content}` : "",
+    node.content ? `${detailLabel(node, locale)}：\n${node.content}` : "",
     node.detail,
     liveText ? `实时技术记录：\n${liveText}` : "",
   ].filter(Boolean).join("\n\n");
@@ -435,6 +439,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     launchId: null,
     handler: null,
     startedAt: null,
+    commandStatus: "missing" as const,
     exitCode: null,
     healthStatus: "missing" as const,
     healthSummary: null,
@@ -507,17 +512,25 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             <section className="task-node-detail">
               <strong>{locale === "ja" ? "Host 起動受入" : "Host 启动验收"}</strong>
               <p>{hostStartupAcceptance.status === "passed"
-                ? "Host 启动验收通过：同一启动标识的退出结果与 8080 health 已核验。"
+                ? "Host 启动验收通过：同一启动标识的进程状态与 8080 health 已核验。"
                 : `尚未核验：${hostStartupAcceptance.reason}`}</p>
-              <pre>{[
-                `启动标识：${hostStartupAcceptance.launchId || "未记录"}`,
-                `处理人：${hostStartupAcceptance.handler || "未记录"}`,
-                `启动时间：${hostStartupAcceptance.startedAt || "未记录"}`,
-                `退出结果：${hostStartupAcceptance.exitCode ?? "未记录"}`,
-                `8080 health：${hostStartupAcceptance.healthStatus}`,
-                `响应摘要：${hostStartupAcceptance.healthSummary || "未记录"}`,
-                `证据引用：${hostStartupAcceptance.evidenceReferences.join("；") || "未记录"}`,
-              ].join("\n")}</pre>
+              <SelUiDisclosure
+                idPrefix="task-host-startup-evidence"
+                className="task-host-startup-evidence"
+                open={false}
+                trigger={<span>{locale === "ja" ? "起動根拠を表示" : "展开查看本次启动依据"}</span>}
+              >
+                <pre>{[
+                  `启动标识：${hostStartupAcceptance.launchId || "未记录"}`,
+                  `处理人：${hostStartupAcceptance.handler || "未记录"}`,
+                  `启动时间：${hostStartupAcceptance.startedAt || "未记录"}`,
+                  `启动进程：${hostStartupAcceptance.commandStatus === "running" ? "运行中" : hostStartupAcceptance.commandStatus === "exited" ? "已退出" : "未记录"}`,
+                  `退出结果：${hostStartupAcceptance.exitCode ?? "运行中，尚无退出结果"}`,
+                  `8080 health：${hostStartupAcceptance.healthStatus}`,
+                  `响应摘要：${hostStartupAcceptance.healthSummary || "未记录"}`,
+                  `证据引用：${hostStartupAcceptance.evidenceReferences.join("；") || "未记录"}`,
+                ].join("\n")}</pre>
+              </SelUiDisclosure>
             </section>
           )}
           {currentStage && (

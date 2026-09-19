@@ -185,8 +185,16 @@ export function nodeDurationLabel(
   return `${prefix} ${formatTimelineDuration(durationMs, locale)}`;
 }
 
+/** 节点标题直接显示已落盘的发生时间，不能只用相对耗时替代审计事实。 */
+export function nodeOccurredAtLabel(node: CollaborationTimelineNodeOutDto, locale: LocaleValue): string {
+  const occurredAt = node.completedAt || node.startedAt;
+  return locale === "ja" ? `発生時刻 ${occurredAt}` : `发生时间 ${occurredAt}`;
+}
+
 /** 根据详情的业务角色选择展开按钮文案。 */
 export function detailLabel(node: CollaborationTimelineNodeOutDto, locale: LocaleValue): string {
+  if (node.kind === "approval-decision") return locale === "ja" ? "承認根拠" : "审批依据";
+  if (node.kind === "execution" && node.detailRole === "changed-files") return locale === "ja" ? "統合根拠" : "代码集成依据";
   const chinese: Record<CollaborationTimelineNodeOutDto["detailRole"], string> = {
     none: "详情",
     "application-evidence": "申请依据",
