@@ -196,6 +196,13 @@ test("任务协作群空状态在窄窗口保持单列、换行和容器边界",
   assert.match(developerStyles, /\.task-collaboration-empty-action \{[\s\S]*max-width: 100%/);
 });
 
+test("审计历史在窄窗口保留四项状态和可展开长证据", () => {
+  assert.match(taskGroupCardSource, /task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
+  assert.match(taskGroupCardSource, /task-cancelled-history-evidence/);
+  assert.match(developerStyles, /task-cancelled-history-facts \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)[\s\S]*task-cancelled-history-evidence \{[\s\S]*max-height: 240px[\s\S]*overflow: auto/);
+  assert.match(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*task-cancelled-history-facts \{ grid-template-columns: 1fr; \}/);
+});
+
 test("任务协作群说明在全部窗口宽度都完整换行而不使用省略号", () => {
   assert.match(developerStyles, /\.task-group-header-content > span:first-child, \.task-group-primary, \.task-node-main \{[\s\S]*min-width: 0/);
   assert.match(developerStyles, /\.task-group-header-content small, \.task-node-main > small \{[\s\S]*overflow-wrap: anywhere[\s\S]*text-overflow: clip[\s\S]*white-space: normal/);

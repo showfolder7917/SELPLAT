@@ -59,6 +59,21 @@ test("非当前专题统一归入默认收起审计区，且只提供审计阅�
   assert.match(developerStyles, /task-cancelled-history-header[\s\S]*task-cancelled-history-detail[\s\S]*@media \(max-width: 1120px\)[\s\S]*task-cancelled-history-disclosure/);
 });
 
+test("无活动技术卡点保留审计历史时明确显示只读空状态", () => {
+  const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+  assert.match(taskGroupSource, /noActiveTechnicalRecovery = activeGroups\.length === 0[\s\S]*auditHistoryGroups\.length > 0[\s\S]*currentTopicStage\.status !== "failed-pending-repair"/);
+  assert.match(taskGroupSource, /noActiveTechnicalRecovery && <div className="task-collaboration-empty task-collaboration-no-active-recovery"[\s\S]*没有待处理技术卡点[\s\S]*当前无需用户操作[\s\S]*等待新证据/);
+  const noActiveRecoveryBranch = taskGroupSource.slice(taskGroupSource.indexOf("noActiveTechnicalRecovery &&"), taskGroupSource.indexOf("{activeGroups.map"));
+  assert.doesNotMatch(noActiveRecoveryBranch, /task-recovery-continue|onContinueTask|onResumeAcceptance/);
+});
+
+test("审计历史卡在窄窗口仍公开四项事实和只读长证据", () => {
+  const auditBranch = taskCardSource.slice(taskCardSource.indexOf('if (group.status === "cancelled" || auditReadOnly)'), taskCardSource.indexOf("// 可见节点"));
+  assert.match(auditBranch, /taskGroupPrimaryPresentation\(group, locale\)[\s\S]*task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
+  assert.match(auditBranch, /const auditEvidence = visibleTimelineNodes\(group\.nodes\)[\s\S]*node\.actor\.displayName[\s\S]*task-cancelled-history-evidence/);
+  assert.doesNotMatch(auditBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance|onRetireStaleTopic/);
+});
+
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
   assert.match(collaborationFacadeSource, /subscribe\(listener: CollaborationStateListener\)[\s\S]*#store\.subscribe\(listener\)/);
   assert.match(personaEvolutionSource, /#collaboration\.subscribe\(\(_state, reason\) => this\.#notifyCurrentTopicStageChanged\(reason\)\)/);
