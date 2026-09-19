@@ -235,6 +235,19 @@ export class SqliteWorkflowDao implements WorkflowPersistencePort {
     });
   }
 
+  /** 仅依据仍存在的持久事件判定技术卡点是否全部解除；缺失记录不得冒充已解决。 */
+  areTechnicalRecoveryEventsResolved(eventIds: string[]): boolean {
+    const ids = [...new Set(eventIds)].filter(Boolean);
+    if (!ids.length) return false;
+    return this.#database.withConnection((connection) => {
+      const statement = connection.prepare("SELECT status FROM AiDesktopEvent WHERE eventId = $eventId");
+      return ids.every((eventId) => {
+        const row = statement.get({ $eventId: eventId }) as { status: string } | undefined;
+        return row?.status === "resolved";
+      });
+    });
+  }
+
   claimExceptions(eventIds: string[], ownerId: string, now = new Date().toISOString()): string[] {
     if (!eventIds.length) return [];
     return this.#database.transaction((connection) => {

@@ -28,6 +28,7 @@ export interface WorkflowPersistencePort {
   listApprovalGovernance(limit?: number): ApprovalGovernanceRecordOutDto[];
   listUnhandledExceptions(limit?: number): WorkflowExceptionRecordOutDto[];
   listWorkflowBlockages(limit?: number): WorkflowExceptionRecordOutDto[];
+  areTechnicalRecoveryEventsResolved(eventIds: string[]): boolean;
   claimExceptions(eventIds: string[], ownerId: string, now?: string): string[];
   saveCheckpoint(eventId: string, checkpoint: WorkflowCheckpointState): void;
   touchException(eventId: string): void;

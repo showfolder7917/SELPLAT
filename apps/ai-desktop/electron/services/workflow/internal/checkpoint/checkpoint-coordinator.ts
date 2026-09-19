@@ -28,6 +28,8 @@ export interface CheckpointCoordinatorOptions {
   submitRepair(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto;
   /** 唯一 Evolution 状态写入端；异常 payload 不再拥有页面恢复状态。 */
   recordTechnicalRecovery(input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt">): void;
+  /** 所有引用的卡点事件均有持久 resolved 事实时才解除页面恢复状态。 */
+  areTechnicalRecoveryEventsResolved(eventIds: string[]): boolean;
   /** 发布卡点人物交接与时间线事实。 */
   handoff: Pick<CheckpointHandoffService, "publish">;
 }
@@ -48,6 +50,7 @@ export class CheckpointCoordinator {
     // 标记当前批次已经取得处理权。
     this.#busy = true;
     try {
+      this.#reconcileResolvedTechnicalRecovery();
       // 只处理明确影响流程继续执行的异常。
       for (const event of events.filter((item) => item.flowImpact === "blocked")) {
         try {
@@ -71,6 +74,14 @@ export class CheckpointCoordinator {
       // 无论单条异常是否失败都释放批次锁。
       this.#busy = false;
     }
+  }
+
+  /** 重启后从持久事件状态核对旧卡点是否已解除，保留问题次数与证据。 */
+  #reconcileResolvedTechnicalRecovery(): void {
+    const recovery = this.options.evolution().technicalRecovery;
+    if (!recovery?.active || !recovery.evidenceReferences.length
+      || !this.options.areTechnicalRecoveryEventsResolved(recovery.evidenceReferences)) return;
+    this.options.recordTechnicalRecovery({ ...recovery, active: false, nextAction: "卡点已解除，继续当前专题验收。" });
   }
 
   #state(event: WorkflowExceptionRecordOutDto): WorkflowCheckpointState {
@@ -184,6 +195,7 @@ export class CheckpointCoordinator {
     const failureCategory = typeof event.payload.acceptanceFailureKind === "string" ? event.payload.acceptanceFailureKind : String(event.payload.operation || "technical-runtime");
     const previous = this.options.evolution().technicalRecovery;
     const now = new Date().toISOString();
+    if (state.phase === "resolved") return;
     if (!conditionIds.length) {
       this.options.recordTechnicalRecovery({ issueId: `unverified:${state.topicId}:${state.proposalId}`, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: [], failureCategory, evidenceReferences: [event.eventId], occurrences: [{ runId: state.runId, taskId: state.taskId, occurrenceId: event.eventId, reason: event.message, occurredAt: now }], attemptCount: previous?.attemptCount || 0, handler: "system", handoffStatus: "basis-unverified", failureReason: "缺少可核验的原验收条件，未改变技术问题次数。", nextAction: "系统重新读取原验收条件与失败依据。", active: true });
       return;
@@ -255,6 +267,7 @@ export class CheckpointCoordinator {
     // 原流程已经产生真实完成事实时直接解除，不再补写令狐接收或修复节点。
     if (isAcceptanceCheckpoint && originalRunCompleted) {
       this.options.resolve(event.eventId, "验收受阻已由原流程完成事实解除");
+      this.#reconcileResolvedTechnicalRecovery();
       return;
     }
     // 验收分类是唯一的令狐派发依据：产品缺陷和既有验收能力故障都进入真实修复链；缺少分类不能猜测。
@@ -276,6 +289,7 @@ export class CheckpointCoordinator {
     if (originalTaskCompleted || originalRunCompleted) {
       this.#phase(event, state, "resolved", "原任务已完成验证，确认此卡点解除；历史轮次保留。", this.#resolvedRoundEvents(event, state));
       this.options.resolve(event.eventId, "原任务完成事实已确认");
+      this.#reconcileResolvedTechnicalRecovery();
       return;
     }
     // 明确暂停、取消及业务授权问题不能因统一受理而变成自动放权。

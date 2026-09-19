@@ -62,6 +62,7 @@ function fixture() {
   const options = { evolution: () => evolution, collaboration: () => collaboration, pending: () => events,
     save: (id, state) => { events.find((item) => item.eventId === id).payload.checkpoint = structuredClone(state); },
     resolve: (id) => effects.resolved.push(id),
+    areTechnicalRecoveryEventsResolved: (ids) => ids.length > 0 && ids.every((id) => effects.resolved.includes(id)),
     resume: async (id) => { effects.resumed.push(id); return evolution; },
     handleTask: async (...args) => { effects.handled.push(args); },
     refreshRepair: async (id, request) => { effects.refreshed ||= []; effects.refreshed.push({ id, request }); collaboration.tasks.find(task => task.taskId === id).snapshot = request; },
@@ -97,6 +98,23 @@ test("卡点真实派发、重启去重、返回原点后才允许解除", async
   await f.run();
   assert.deepEqual(f.effects.resolved, ["issue-1"]);
   assert.ok(f.effects.phases.includes("1:returned"));
+  assert.equal(f.evolution.technicalRecovery.active, false);
+  assert.deepEqual(f.evolution.technicalRecovery.evidenceReferences, ["issue-1"]);
+  assert.equal(f.evolution.technicalRecovery.nextAction, "卡点已解除，继续当前专题验收。");
+});
+
+test("重启后仅在全部持久卡点事件已解除时收口技术恢复投影", async () => {
+  const f = fixture();
+  await f.run();
+  const original = structuredClone(f.evolution.technicalRecovery);
+  f.effects.resolved.push("issue-1");
+  await new CheckpointCoordinator(f.options).process([]);
+  assert.equal(f.evolution.technicalRecovery.active, false);
+  assert.deepEqual(f.evolution.technicalRecovery.evidenceReferences, original.evidenceReferences);
+
+  f.evolution.technicalRecovery = { ...original, evidenceReferences: ["issue-1", "missing-event"] };
+  await new CheckpointCoordinator(f.options).process([]);
+  assert.equal(f.evolution.technicalRecovery.active, true);
 });
 
 test("韩立验收卡点不因原开发任务已集成而误报解除", async () => {
@@ -378,6 +396,7 @@ test("协调器把同轮多异常收口为一个完成事实，重放稳定且�
     pending: () => events,
     save: (eventId, state) => { events.find((item) => item.eventId === eventId).payload.checkpoint = structuredClone(state); },
     resolve: (eventId) => resolved.push(eventId),
+    areTechnicalRecoveryEventsResolved: (ids) => ids.length > 0 && ids.every((id) => resolved.includes(id)),
     resume: async () => evolution,
     handleTask: async () => {},
     submitRepair: () => collaboration,
