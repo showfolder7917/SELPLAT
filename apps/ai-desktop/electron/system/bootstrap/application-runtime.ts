@@ -666,7 +666,7 @@ export async function startApplication(): Promise<void> {
     },
     publishRelease: (executable, releaseBatchId, runtimeSourceSha) => {
       if (process.platform === "darwin") {
-        const developerStartScript = path.join(appRoot, "启动开发版.command");
+        const developerStartScript = path.join(projectPaths.sourceRoot, "启动开发版.command");
         if (!existsSync(developerStartScript)) throw new Error(`缺少开发版启动脚本：${developerStartScript}`);
         const restartLogRoot = path.join(projectPaths.temporaryMaterialsRoot, "开发版受控重启");
         mkdirSync(restartLogRoot, { recursive: true });
@@ -677,7 +677,7 @@ export async function startApplication(): Promise<void> {
           const isolatedUserData = isolatedUserDataArgument?.slice("--ai-desktop-user-data-dir=".length) || null;
           // 脚本先打包和核对候选，再结束当前实例；失败时旧应用及等待重启卡点仍可继续查看。
           const child = spawn("/bin/zsh", [developerStartScript, `--release-batch=${releaseBatchId}`, `--runtime-sha=${runtimeSourceSha}`, `--replace-pid=${process.pid}`, ...(isolatedUserData ? [`--user-data-dir=${isolatedUserData}`] : [])], {
-            cwd: appRoot, detached: true, stdio: ["ignore", output, output],
+            cwd: projectPaths.sourceRoot, detached: true, stdio: ["ignore", output, output],
           });
           child.on("error", (error) => eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "start_controlled_restart", error, details: { releaseBatchId, restartLog } }));
           child.on("exit", (code) => {
@@ -1179,7 +1179,7 @@ export async function startApplication(): Promise<void> {
       // 当前是开发测试阶段；正式发布链仍保留在 publishVerifiedPackage，切换模式即可恢复。
       deliveryMode: process.platform === "darwin" ? "developer-script" : "formal-release",
       launchDeveloperScript: () => {
-        const developerStartScript = path.join(appRoot, "启动开发版.command");
+        const developerStartScript = path.join(projectPaths.sourceRoot, "启动开发版.command");
         if (!existsSync(developerStartScript)) throw new Error(`缺少开发版启动脚本：${developerStartScript}`);
         eventCenter.recordEvent("application.developer_script_restart_scheduled", { reason: "linghu_unified_test_completed", developerStartScript });
         // 由 LaunchServices 打开登记脚本；脚本自行构建、打包、关闭旧实例并启动最新版。

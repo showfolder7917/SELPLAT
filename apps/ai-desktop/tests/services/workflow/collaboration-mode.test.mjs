@@ -1506,6 +1506,13 @@ test("令狐测试阶段完成固定验证后启动开发版脚本并保留正�
   assert.doesNotMatch(collaborationBootstrap, /TestExecutionGate|test-execution-gate/);
 });
 
+test("打包运行时的两条重启路径都从工程源码目录查找开发版脚本", () => {
+  const runtime = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
+  assert.equal((runtime.match(/path\.join\(projectPaths\.sourceRoot, "启动开发版\.command"\)/g) || []).length, 2);
+  assert.doesNotMatch(runtime, /path\.join\(appRoot, "启动开发版\.command"\)/);
+  assert.match(runtime, /spawn\("\/bin\/zsh", \[developerStartScript,[\s\S]*?cwd: projectPaths\.sourceRoot/);
+});
+
 test("正式发布流程是具备原子落盘与互斥保护的可恢复 Saga 而非单一事务", () => {
   assert.match(releaseBatchStoreSource, /writeFileSync\(temporary[\s\S]*renameSync\(temporary, target\)/);
   assert.match(integrationPipelineSource, /#acquireRelease[\s\S]*#releaseBatches\.create[\s\S]*releaseDocument\.state = "testing"[\s\S]*releaseDocument\.state = "published"/);
