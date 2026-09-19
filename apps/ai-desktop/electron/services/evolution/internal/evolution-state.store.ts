@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto, EvolutionTechnicalRecoveryOutDto } from "../../../../contracts/services/evolution/index.js";
 import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto, type HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../../contracts/services/personas/nangong/index.js";
 import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto } from "../../../../contracts/services/workflow/index.js";
@@ -54,6 +54,12 @@ export class EvolutionStateStore {
   }
 
   state(): EvolutionStateOutDto { return structuredClone(this.#state); }
+  /** Workflow 在真实交接结果已知后提交技术卡点；同一 issueId 只累计原点复验未解的轮次。 */
+  recordTechnicalRecovery(input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt">): EvolutionStateOutDto {
+    return this.#commit("technical-recovery.updated", input.topicId, input.proposalId, (state) => {
+      state.technicalRecovery = { ...structuredClone(input), updatedAt: new Date().toISOString() };
+    }, { technicalRecovery: input });
+  }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 
   /** 清除专题测试运行态并安全关闭自动流程，保留人物完整对话、训练意图、轮次上限与语言；返回被移除的业务记录数。示例：1 个专题、2 个提案返回 3；写入失败时抛错。 */
@@ -1380,7 +1386,10 @@ function migrateEvolutionState(state: EvolutionStateOutDto & Partial<RetiredAuto
   const acceptance = migrateAcceptancePlans(current as EvolutionStateOutDto & { version?: number });
   const distribution = migrateDistributionValidation(acceptance.state);
   const retiredSwitchFound = [_retiredEvolution, _retiredNangongApproval, _retiredLinghuApproval, _retiredExecution].some((value) => typeof value === "boolean");
-  return { state: distribution.state, changed: retiredSwitchFound || acceptance.changed || distribution.changed };
+  const recoveryState = distribution.state.technicalRecovery === undefined
+    ? { ...distribution.state, technicalRecovery: null }
+    : distribution.state;
+  return { state: recoveryState, changed: retiredSwitchFound || acceptance.changed || distribution.changed || recoveryState !== distribution.state };
 }
 
 /** v8/v9 没有 Host 启动验收事实；保留全部历史事实，但不把旧运行伪造为新记录。 */
@@ -1429,7 +1438,7 @@ function migrateDistributionValidation(state: EvolutionStateOutDto): { state: Ev
 }
 
 function createInitialState(): EvolutionStateOutDto {
-  return { version: 10, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+  return { version: 10, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, technicalRecovery: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
 }
 
 function required(value: unknown, label: string, maximum: number): string {

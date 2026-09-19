@@ -62,6 +62,28 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
+test("活动技术卡点优先投影为令狐处理且不签发恢复动作", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "run-1", taskId: "repair-1", occurrenceId: "event-1", reason: "原验收失败", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "等待令狐沿原验收范围调查、修复并复验。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeOneShotRunId, null);
+  assert.match(stage.summary, /令狐老祖处理中/);
+});
+
+test("技术卡点计数依据缺失不会进入监控接管", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = { issueId: "unverified:topic-current:proposal-current", topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: [], failureCategory: "technical-runtime", evidenceReferences: ["event-2"], occurrences: [], attemptCount: 0, handler: "system", handoffStatus: "basis-unverified", failureReason: "缺少原验收条件", nextAction: "系统重新读取原验收条件与失败依据。", active: true, updatedAt: "2026-09-12T05:00:00.000Z" };
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.userAction, "none");
+  assert.match(stage.summary, /次数依据尚未核验/);
+});
+
 test("已取消关联只保留历史取消结论，不生成恢复或验收动作", () => {
   const state = evolution("missing");
   state.oneShotRun = {

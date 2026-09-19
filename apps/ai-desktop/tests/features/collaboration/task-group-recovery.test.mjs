@@ -16,6 +16,7 @@ const hostStartupCommandSource = readFileSync(new URL("../../../../../启动SELP
 test("当前专题的恢复入口只消费交付投影，不再从时间线节点选择", () => {
   assert.match(taskCardSource, /currentTopicStage\?\.topicId === group\.topicId[\s\S]*currentTopicStage\?\.proposalId === group\.proposalId/);
   assert.match(taskCardSource, /currentStage\?\.userAction === "resume"[\s\S]*resumeOneShotRunId[\s\S]*effectiveTaskIds\.at\(-1\)/);
+  assert.match(taskCardSource, /technicalRecoveryActive[\s\S]*!technicalRecoveryActive && currentStage\?\.userAction === "resume"/);
   assert.match(taskCardSource, /task-timeline-next-current[\s\S]*onResumeAcceptance[\s\S]*onContinueTask\(projectedResumeTaskId!/);
   assert.doesNotMatch(taskCardSource, /latestActiveRecoveryAction|TaskGroupRecovery|oneShotRecoveryRequired/);
 });

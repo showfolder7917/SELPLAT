@@ -15,6 +15,7 @@ export type { EvolutionDistributionPlanOutDto, EvolutionDistributionUnitOutDto, 
 export type { EvolutionProposalPurposeValue, EvolutionProposalTypeValue } from "./value/evolution-proposal.value.js";
 export type { EvolutionStateEventOutDto } from "./dto/evolution-state.event.out.dto.js";
 export type { EvolutionStateOutDto } from "./dto/evolution-state.out.dto.js";
+export type { EvolutionTechnicalRecoveryOutDto } from "./dto/evolution-state.out.dto.js";
 export type { EvolutionTopicDossierOutDto } from "./dto/evolution-topic-dossier.out.dto.js";
 export type { EvolutionSourceMessageSnapshotOutDto, EvolutionTopicOutDto } from "./dto/evolution-topic.out.dto.js";
 export type { EvolutionProposalOriginValue, EvolutionTopicStatusValue } from "./value/evolution-topic.value.js";

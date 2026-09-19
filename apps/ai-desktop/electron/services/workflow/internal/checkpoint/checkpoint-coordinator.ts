@@ -1,8 +1,8 @@
 import type { CollaborationStateOutDto, WorkflowExceptionRecordOutDto, SubmitCollaborationTaskInDto } from "../../../../../contracts/services/workflow/index.js";
-import type { EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { EvolutionStateOutDto, EvolutionTechnicalRecoveryOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { WorkflowCheckpointAggregate, type WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
 import { ProposalRevisionChain } from "../../domain/proposal-revision-chain.js";
-import { isAcceptanceFailureOperation } from "../evolution/one-shot-failure-identity.js";
+import { createTechnicalRecoveryIssueId, isAcceptanceFailureOperation } from "../evolution/one-shot-failure-identity.js";
 import type { CheckpointHandoffService } from "./checkpoint-handoff.service.js";
 import { selectCurrentAcceptanceFailure } from "./checkpoint-failure-selection.js";
 import { checkpointResolutionIdentity, type CheckpointResolvedRoundEvent } from "./checkpoint-resolution-identity.js";
@@ -26,6 +26,8 @@ export interface CheckpointCoordinatorOptions {
   refreshRepair(taskId: string, request: SubmitCollaborationTaskInDto): Promise<unknown>;
   /** 创建一条受范围限制的真实修复任务。 */
   submitRepair(request: SubmitCollaborationTaskInDto): CollaborationStateOutDto;
+  /** 唯一 Evolution 状态写入端；异常 payload 不再拥有页面恢复状态。 */
+  recordTechnicalRecovery(input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt">): void;
   /** 发布卡点人物交接与时间线事实。 */
   handoff: Pick<CheckpointHandoffService, "publish">;
 }
@@ -150,6 +152,7 @@ export class CheckpointCoordinator {
     Object.assign(state, next);
     if (previousPhase === phase) {
       this.options.save(event.eventId, state);
+      this.#publishTechnicalRecovery(event, state);
       return;
     }
     // 新阶段先发布真实人物交接事实。
@@ -158,6 +161,39 @@ export class CheckpointCoordinator {
     this.options.save(event.eventId, state);
     // 同步当前内存异常对象，保证本批次后续读取同一快照。
     event.payload.checkpoint = structuredClone(state);
+    this.#publishTechnicalRecovery(event, state);
+  }
+
+  /** 将已验证的协调器事实投影回唯一 Evolution 状态；缺少验收条件时只报告不可计数。 */
+  #publishTechnicalRecovery(event: WorkflowExceptionRecordOutDto, state: WorkflowCheckpointState): void {
+    if (!state.topicId || !state.proposalId) return;
+    const evolution = this.options.evolution();
+    const proposal = evolution.proposals.find((item) => item.proposalId === state.proposalId);
+    const scope = event.payload.acceptanceFailureScope as { defects?: unknown } | undefined;
+    const scopedConditionIds = Array.isArray(scope?.defects)
+      ? scope.defects.map((item) => (item as { checkId?: unknown }).checkId).filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+      : [];
+    // 执行链卡点没有逐项验收缺陷时，只有冻结提案的条件集合可作为同一问题的可核验依据。
+    const proposalConditionIds = Array.isArray(proposal?.acceptancePlan?.conditions)
+      ? proposal.acceptancePlan.conditions.map((item) => item.conditionId).filter(Boolean)
+      : Array.isArray(proposal?.acceptanceCriteria)
+        ? proposal.acceptanceCriteria.map((_item, index) => `criterion-${index + 1}`)
+        : [];
+    // 旧专题快照可能早于验收条件字段；缺少依据只能降级为未核验，不能中断卡点恢复。
+    const conditionIds = scopedConditionIds.length ? scopedConditionIds : proposalConditionIds;
+    const failureCategory = typeof event.payload.acceptanceFailureKind === "string" ? event.payload.acceptanceFailureKind : String(event.payload.operation || "technical-runtime");
+    const previous = this.options.evolution().technicalRecovery;
+    const now = new Date().toISOString();
+    if (!conditionIds.length) {
+      this.options.recordTechnicalRecovery({ issueId: `unverified:${state.topicId}:${state.proposalId}`, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: [], failureCategory, evidenceReferences: [event.eventId], occurrences: [{ runId: state.runId, taskId: state.taskId, occurrenceId: event.eventId, reason: event.message, occurredAt: now }], attemptCount: previous?.attemptCount || 0, handler: "system", handoffStatus: "basis-unverified", failureReason: "缺少可核验的原验收条件，未改变技术问题次数。", nextAction: "系统重新读取原验收条件与失败依据。", active: true });
+      return;
+    }
+    const issueId = createTechnicalRecoveryIssueId({ topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory });
+    const same = previous?.issueId === issueId;
+    const attemptCount = same ? Math.max(previous.attemptCount, state.round) : state.round;
+    const monitoring = state.phase === "exhausted" || attemptCount >= 3;
+    const handoffStatus: EvolutionTechnicalRecoveryOutDto["handoffStatus"] = monitoring ? "monitoring" : state.repairTaskId ? "handed-off" : state.phase === "waiting" ? "failed" : "pending";
+    this.options.recordTechnicalRecovery({ issueId, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory, evidenceReferences: [...new Set([...(same ? previous.evidenceReferences : []), event.eventId])], occurrences: [...(same ? previous.occurrences : []), { runId: state.runId, taskId: state.repairTaskId || state.taskId, occurrenceId: event.eventId, reason: state.latestProgress || event.message, occurredAt: now }].slice(-3), attemptCount, handler: monitoring ? "monitor" : state.repairTaskId ? "linghu-ancestor" : "system", handoffStatus, failureReason: handoffStatus === "failed" ? state.latestProgress || event.message : null, nextAction: monitoring ? "监控接管复验，并保留本轮依据。" : handoffStatus === "handed-off" ? "等待令狐沿原验收范围调查、修复并复验。" : "系统重试写入令狐交接。", active: true });
   }
 
   /** 未分类的验收受阻只保留可恢复事实，不能猜测为产品或验收能力缺陷。 */

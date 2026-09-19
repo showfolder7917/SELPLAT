@@ -16,6 +16,13 @@ export interface OneShotFailureIdentity {
   occurrenceId?: string | null;
 }
 
+/** 技术卡点跨运行的稳定身份；运行、任务与验收发生编号只能作为证据。 */
+export function createTechnicalRecoveryIssueId(input: { topicId: string; proposalId: string; acceptanceConditionIds: string[]; failureCategory: string }): string {
+  const conditions = [...new Set(input.acceptanceConditionIds.map((item) => item.trim()).filter(Boolean))].sort();
+  if (!input.topicId || !input.proposalId || !input.failureCategory || !conditions.length) throw new Error("技术卡点缺少专题、提案、验收条件或失败类别，不能统计轮次。");
+  return `technical-recovery:${input.topicId}:${input.proposalId}:${conditions.join(",")}:${input.failureCategory.trim().toLowerCase()}`;
+}
+
 /**
  * 普通步骤按运行和操作去重；每次真实验收使用独立发生身份。
  * 这样轮询不会重复登记同一故障，而后续复验的新失败也不会被旧记录吞掉。

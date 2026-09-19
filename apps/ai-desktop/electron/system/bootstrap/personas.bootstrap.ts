@@ -43,6 +43,7 @@ export function createPersonaApplicationContext(options: PersonaBootstrapOptions
     evolution: () => options.personaEvolution.state(), collaboration: () => options.collaboration.state(),
     pending: () => repository.listWorkflowBlockages(1000),
     save: (id, state) => repository.saveCheckpoint(id, state), resolve: (id, reason) => repository.resolveException(id, reason),
+    recordTechnicalRecovery: (input) => { options.personaEvolution.recordTechnicalRecovery(input); },
     resume: (id) => options.personaEvolution.resumeOneShotRun(id),
     refreshRepair: (id, request) => options.collaboration.refreshCheckpointRepair(id, request),
     handleTask: (id, stalled) => linghuAutomation.handleTaskCheckpoint(id, stalled), submitRepair: (request) => linghuAutomation.submitCheckpointRepair(request),

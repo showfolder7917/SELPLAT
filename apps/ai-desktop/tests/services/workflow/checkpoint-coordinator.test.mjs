@@ -57,7 +57,7 @@ function fixture() {
   const event = { eventId: "issue-1", correlationId: "topic-1", category: "technical-error", flowImpact: "blocked", message: "真实点击被工具拒绝", occurredAt: "2026-09-05T00:00:00Z", payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", recoveryPoint: "真实界面验收", acceptanceFailureKind: "product-defect" } };
   const evolution = { automationSettings: { automaticCustodyEnabled: false }, automationRuntime: { status: "idle" }, oneShotRun: { runId: "run-1", proposalId: "proposal-1", status: "blocked" }, topics: [{ topicId: "topic-1", title: "验收", workspaceState: { roots: [] }, locale: "zh-CN" }], proposals: [{ proposalId: "proposal-1", topicId: "topic-1", title: "原验收" }] };
   const collaboration = { tasks: [], members: [] };
-  const effects = { submitted: [], resumed: [], handled: [], resolved: [], phases: [] };
+  const effects = { submitted: [], resumed: [], handled: [], resolved: [], phases: [], technicalRecoveries: [] };
   const events = [event];
   const options = { evolution: () => evolution, collaboration: () => collaboration, pending: () => events,
     save: (id, state) => { events.find((item) => item.eventId === id).payload.checkpoint = structuredClone(state); },
@@ -66,6 +66,11 @@ function fixture() {
     handleTask: async (...args) => { effects.handled.push(args); },
     refreshRepair: async (id, request) => { effects.refreshed ||= []; effects.refreshed.push({ id, request }); collaboration.tasks.find(task => task.taskId === id).snapshot = request; },
     submitRepair: (request) => { effects.submitted.push(request); collaboration.tasks.push({ taskId: `repair-${effects.submitted.length}`, state: "executing", snapshot: request }); return collaboration; },
+    recordTechnicalRecovery: (input) => {
+      const recovery = structuredClone(input);
+      effects.technicalRecoveries.push(recovery);
+      evolution.technicalRecovery = { ...recovery, updatedAt: "2026-09-05T00:00:00Z" };
+    },
     handoff: { publish: (_event, state, phase) => effects.phases.push(`${state.round}:${phase}`) },
   };
   return { event, events, evolution, collaboration, effects, options, run: () => new CheckpointCoordinator(options).process(events) };
@@ -79,6 +84,9 @@ test("卡点真实派发、重启去重、返回原点后才允许解除", async
   assert.equal(f.effects.submitted[0].initiatorMemberId, "han-li");
   assert.equal(f.effects.submitted[0].evolutionProposalId, "proposal-1");
   assert.equal(f.effects.submitted[0].evolutionRoundId, "proposal-1");
+  const recovery = f.effects.technicalRecoveries.at(-1);
+  assert.deepEqual(recovery.acceptanceConditionIds, []);
+  assert.equal(recovery.handoffStatus, "basis-unverified");
   assert.deepEqual(f.effects.resolved, []);
   f.collaboration.tasks[0].state = "integrated";
   f.options.resume = async (id) => { f.effects.resumed.push(id); f.evolution.oneShotRun.status = "running"; return f.evolution; };
@@ -132,6 +140,11 @@ test("韩立范围内验收失败建立令狐新修复任务并明确完整测�
   assert.ok(repair.constraints.some((item) => item.includes("修复方向错误")));
   assert.ok(repair.constraints.some((item) => item.includes("acceptanceFailureScope")));
   assert.ok(repair.acceptanceCriteria.some((item) => item.includes("自动返回同一提案")));
+  const recovery = f.effects.technicalRecoveries.at(-1);
+  assert.equal(recovery.topicId, "topic-1");
+  assert.equal(recovery.proposalId, "proposal-1");
+  assert.deepEqual(recovery.acceptanceConditionIds, ["criterion-1"]);
+  assert.equal(recovery.handoffStatus, "handed-off");
 });
 
 test("韩立验收能力受阻进入令狐修复链并保留故障分类边界", async () => {
@@ -368,6 +381,9 @@ test("协调器把同轮多异常收口为一个完成事实，重放稳定且�
     resume: async () => evolution,
     handleTask: async () => {},
     submitRepair: () => collaboration,
+    recordTechnicalRecovery: (input) => {
+      evolution.technicalRecovery = { ...structuredClone(input), updatedAt: "2026-09-14T00:00:00.000Z" };
+    },
     handoff: new CheckpointHandoffService({
       memory: null,
       publish: (timelineEvent) => { timeline.appendBusinessEvent(timelineEvent); },
