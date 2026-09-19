@@ -326,7 +326,7 @@ test("Host 启动通过只接受当前专题同一启动标识的完整退出与
   const state = evolution("missing");
   state.archiveRecords.push({
     topicId: "topic-current", proposalId: "proposal-current", eventType: "host-startup.evidence-recorded", occurredAt: "2026-09-19T00:00:02.000Z",
-    payload: { hostStartupEvidence: { launchId: "host-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z", command: { launchId: "host-1", state: "running", exitCode: null }, health: { launchId: "host-1", success: true, checkedAt: "2026-09-19T00:00:01.000Z", summary: '{"success":true,"status":"READY"}' }, evidenceReferences: ["启动SELPLAT.command"] } },
+    payload: { hostStartupEvidence: { launchId: "host-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z", command: { launchId: "host-1", state: "running", exitCode: null }, health: { launchId: "host-1", success: true, checkedAt: "2026-09-19T00:00:01.000Z", summary: '{"success":true,"data":{"status":"READY"}}' }, evidenceSnapshot: { launcherSource: "#!/bin/zsh\necho startup", healthResponse: '{"success":true,"data":{"status":"READY"}}' }, evidenceReferences: ["启动SELPLAT.command"] } },
   });
   let stage = projectCurrentTopicStage(state, { tasks: [task()] });
   assert.equal(stage.hostStartupAcceptance.status, "unverified");
@@ -335,6 +335,10 @@ test("Host 启动通过只接受当前专题同一启动标识的完整退出与
   state.archiveRecords.push({ ...state.archiveRecords.at(-1), payload: { hostStartupEvidence: { ...state.archiveRecords.at(-1).payload.hostStartupEvidence, command: { launchId: "host-1", state: "exited", exitCode: 0 } } } });
   stage = projectCurrentTopicStage(state, { tasks: [task()] });
   assert.equal(stage.hostStartupAcceptance.status, "passed");
+  state.archiveRecords.at(-1).payload.hostStartupEvidence.evidenceSnapshot.launcherSource = null;
+  stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.hostStartupAcceptance.status, "unverified");
+  state.archiveRecords.at(-1).payload.hostStartupEvidence.evidenceSnapshot.launcherSource = "#!/bin/zsh\necho startup";
   state.archiveRecords.at(-1).payload.hostStartupEvidence.health.launchId = "other-host";
   stage = projectCurrentTopicStage(state, { tasks: [task()] });
   assert.equal(stage.hostStartupAcceptance.status, "unverified");

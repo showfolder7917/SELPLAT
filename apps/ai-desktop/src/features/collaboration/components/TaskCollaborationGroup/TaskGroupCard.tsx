@@ -443,6 +443,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     exitCode: null,
     healthStatus: "missing" as const,
     healthSummary: null,
+    evidenceReadable: false,
     evidenceReferences: [],
     status: "unverified" as const,
     reason: "尚未记录当前专题的 Host 启动验收依据。",
@@ -528,6 +529,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
                   `退出结果：${hostStartupAcceptance.exitCode ?? "运行中，尚无退出结果"}`,
                   `8080 health：${hostStartupAcceptance.healthStatus}`,
                   `响应摘要：${hostStartupAcceptance.healthSummary || "未记录"}`,
+                  `依据快照：${hostStartupAcceptance.evidenceReadable ? "可读取" : "缺失或不可读取"}`,
                   `证据引用：${hostStartupAcceptance.evidenceReferences.join("；") || "未记录"}`,
                 ].join("\n")}</pre>
               </SelUiDisclosure>

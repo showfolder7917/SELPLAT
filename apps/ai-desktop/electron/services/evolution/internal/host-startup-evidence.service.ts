@@ -5,7 +5,7 @@
  * 本文件不访问 SQLite，也不决定专题完成状态。
  */
 import { randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
 
@@ -21,6 +21,7 @@ export interface HostStartupEvidenceService {
 export function createHostStartupEvidenceService(
   state: { state(): EvolutionStateOutDto; recordHostStartupEvidence(input: HostStartupEvidenceInput): EvolutionStateOutDto },
   endpointFile: string,
+  sourceRoot: string,
 ): HostStartupEvidenceService {
   let server: Server | null = null;
   const token = randomBytes(32).toString("hex");
@@ -71,6 +72,7 @@ export function createHostStartupEvidenceService(
               healthSuccess: fields.get("healthSuccess") === "true",
               healthCheckedAt: requiredField(fields, "healthCheckedAt"),
               healthSummary: requiredField(fields, "healthSummary"),
+              launcherSource: readLauncherSource(sourceRoot),
               evidenceReferences: ["启动SELPLAT.command", "http://localhost:8080/api/platform/runtime/health"],
             });
             response.writeHead(204).end();
@@ -94,6 +96,11 @@ export function createHostStartupEvidenceService(
       if (active) await new Promise<void>((resolve) => active.close(() => resolve()));
     },
   };
+}
+
+function readLauncherSource(sourceRoot: string): string | null {
+  try { return readFileSync(path.join(sourceRoot, "启动SELPLAT.command"), "utf8"); }
+  catch { return null; }
 }
 
 function currentTopicProposal(current: EvolutionStateOutDto): { topicId: string; proposalId: string } | null {

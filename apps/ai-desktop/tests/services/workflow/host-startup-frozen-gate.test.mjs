@@ -13,7 +13,8 @@ const result = await build({
 });
 const { projectCurrentTopicStage } = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
 
-function stageFor(command) {
+function stageFor(command, readable = true) {
+  const healthResponse = '{"success":true,"data":{"status":"READY"}}';
   const state = {
     updatedAt: "2026-09-19T00:00:02.000Z",
     oneShotConfirmation: null,
@@ -26,7 +27,8 @@ function stageFor(command) {
       payload: { hostStartupEvidence: {
         launchId: "host-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z",
         command: { launchId: "host-1", ...command },
-        health: { launchId: "host-1", success: true, checkedAt: "2026-09-19T00:00:01.000Z", summary: '{"success":true,"status":"READY"}' },
+        health: { launchId: "host-1", success: true, checkedAt: "2026-09-19T00:00:01.000Z", summary: healthResponse },
+        evidenceSnapshot: readable ? { launcherSource: "#!/bin/zsh\necho startup", healthResponse } : null,
         evidenceReferences: ["启动SELPLAT.command"],
       } },
     }],
@@ -39,4 +41,5 @@ test("运行中即使 8080 health 成功也不能越过真实退出码门禁", (
   assert.equal(stageFor({ state: "running", exitCode: null }).status, "unverified");
   assert.equal(stageFor({ state: "exited", exitCode: 1 }).status, "unverified");
   assert.equal(stageFor({ state: "exited", exitCode: 0 }).status, "passed");
+  assert.equal(stageFor({ state: "exited", exitCode: 0 }, false).status, "unverified");
 });

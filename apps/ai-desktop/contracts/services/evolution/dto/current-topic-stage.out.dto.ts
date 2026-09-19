@@ -49,6 +49,7 @@ export interface CurrentTopicHostStartupAcceptanceOutDto {
   exitCode: number | null;
   healthStatus: "missing" | "passed" | "failed";
   healthSummary: string | null;
+  evidenceReadable: boolean;
   evidenceReferences: string[];
   status: "passed" | "unverified";
   reason: string;

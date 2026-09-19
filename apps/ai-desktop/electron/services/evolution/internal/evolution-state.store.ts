@@ -22,6 +22,7 @@ export interface HostStartupEvidenceInput {
   healthSuccess: boolean;
   healthCheckedAt: string;
   healthSummary: string;
+  launcherSource: string | null;
   evidenceReferences: string[];
 }
 
@@ -873,6 +874,7 @@ export class EvolutionStateStore {
     if (input.commandState === "running" && input.exitCode !== null) throw new Error("运行中的 Host 启动不能伪造退出码。 ");
     if (input.commandState === "exited" && !Number.isInteger(input.exitCode)) throw new Error("已退出的 Host 启动必须记录真实退出码。 ");
     if (typeof input.healthSuccess !== "boolean" || !input.healthCheckedAt || !input.healthSummary.trim()) throw new Error("Host 启动 health 结果不完整。 ");
+    if (input.launcherSource !== null && (typeof input.launcherSource !== "string" || input.launcherSource.length > 32_000)) throw new Error("Host 启动脚本快照无效。 ");
     if (!evidenceReferences.length) throw new Error("Host 启动证据缺少有效引用。 ");
     const payload = {
       version: 2,
@@ -881,6 +883,7 @@ export class EvolutionStateStore {
       startedAt,
       command: { launchId: commandLaunchId, state: input.commandState, exitCode: input.exitCode },
       health: { launchId: healthLaunchId, success: input.healthSuccess, checkedAt: input.healthCheckedAt, summary: input.healthSummary.trim().slice(0, 4_000) },
+      evidenceSnapshot: { launcherSource: input.launcherSource || null, healthResponse: input.healthSummary.trim().slice(0, 4_000) },
       evidenceReferences,
     };
     const prior = [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "host-startup.evidence-recorded" && record.topicId === topicId && record.proposalId === proposalId && (record.payload as { hostStartupEvidence?: { launchId?: unknown } }).hostStartupEvidence?.launchId === launchId);
@@ -890,6 +893,7 @@ export class EvolutionStateStore {
       const validCompletion = previous?.command.state === "running" && previous.command.exitCode === null && input.commandState === "exited"
         && previous.launchId === payload.launchId && previous.handler === payload.handler && previous.startedAt === payload.startedAt
         && JSON.stringify(previous.health) === JSON.stringify(payload.health)
+        && JSON.stringify(previous.evidenceSnapshot) === JSON.stringify(payload.evidenceSnapshot)
         && JSON.stringify(previous.evidenceReferences) === JSON.stringify(payload.evidenceReferences);
       if (!validCompletion) throw new Error("同一 Host 启动标识已经记录为不同事实。 ");
     }

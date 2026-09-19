@@ -775,6 +775,7 @@ export async function startApplication(): Promise<void> {
   hostStartupEvidenceService = createHostStartupEvidenceService(
     evolutionStateStore,
     path.join(projectPaths.temporaryMaterialsRoot, "Host启动验收", "endpoint.json"),
+    projectPaths.sourceRoot,
   );
   hostStartupEvidenceService.start();
   // 三个可选端口把专题写操作登记为幂等 mutation；数据库不可用时不伪造持久化成功。

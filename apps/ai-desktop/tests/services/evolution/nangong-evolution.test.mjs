@@ -1297,6 +1297,7 @@ test("Host 启动证据只能以同一标识写入当前专题，且重复提交
       topicId: state.activeTopicId, proposalId, launchId: "host-run-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z",
       commandLaunchId: "host-run-1", commandState: "running", exitCode: null, healthLaunchId: "host-run-1", healthSuccess: true,
       healthCheckedAt: "2026-09-19T00:00:02.000Z", healthSummary: '{"success":true,"status":"READY"}', evidenceReferences: ["启动SELPLAT.command"],
+      launcherSource: "#!/bin/zsh\necho startup",
     };
     state = store.recordHostStartupEvidence(evidence);
     assert.equal(state.archiveRecords.at(-1).eventType, "host-startup.evidence-recorded");
