@@ -45,7 +45,7 @@ for (const complete of [true, false, "invalid"]) test(`修复后按完成证据�
   try {
     const store = new CollaborationStore(path.join(directory, "state.json"));
     const workspace = { workspaceId: "worktree:repair", rootPath: directory, branchName: "codex/repair", baseSha: "base", resultSha: null, createdAt: new Date().toISOString(), retiredAt: null };
-    let analysisCount = 0, executionCount = 0, commits = 0;
+    let analysisCount = 0, investigationCount = 0, completionCount = 0, executionCount = 0, commits = 0;
     const plans = [];
     coordinator = new CollaborationCoordinator({
       store, durations,
@@ -53,10 +53,13 @@ for (const complete of [true, false, "invalid"]) test(`修复后按完成证据�
       executor: new ExecutorFacade({ createExecutor: async () => ({
         isAlive: () => true, dispose: async () => {}, optimize: async () => "",
         analyze: async () => { analysisCount++; return "原整项任务方案"; },
-        investigateRepair: async (_task, reason) => reason.includes("REPAIR_COMPLETION=")
-          ? complete === "invalid" ? "没有结构化证据" : `REPAIR_COMPLETION=${JSON.stringify({ complete, remaining: complete ? "" : "补充边界用例", evidence: "目标源码已检查，主路径验证通过" })}`
-          : "只修复已定位错误",
+        investigateRepair: async () => { investigationCount++; return "只修复已定位错误"; },
         executeRepair: async () => verified,
+        verifyRepairCompletion: async () => {
+          completionCount++;
+          return complete === "invalid" ? "没有结构化证据"
+            : `REPAIR_COMPLETION=${JSON.stringify({ complete, remaining: complete ? "" : "补充边界用例", evidence: "目标源码已检查，主路径验证通过" })}`;
+        },
         execute: async (_task, plan) => {
           plans.push(plan.text);
           return ++executionCount === 1 ? {
@@ -76,6 +79,8 @@ for (const complete of [true, false, "invalid"]) test(`修复后按完成证据�
     for (let i = 0; i < 200 && !["ready-for-integration", "recovering"].includes(store.task(taskId).state); i++) await new Promise(resolve => setTimeout(resolve, 10));
     const task = store.task(taskId);
     assert.equal(analysisCount, 1, "修复后不得重新技术分析整项需求");
+    assert.equal(investigationCount, 1, "令狐只调查原故障一次，不得用旧调查入口做完成核对");
+    assert.equal(completionCount, 1, "修复后必须通过独立的增量完成核对入口判断结果");
     if (complete === "invalid") {
       assert.equal(task.state, "recovering");
       assert.equal(commits, 0);
