@@ -1823,6 +1823,13 @@ test("南宫婉提案从人工审批、任务分发推进到韩立验收后才�
     store.recordAcceptanceRun(computerRun("completed-run", state.topics[0].topicId, proposalId, "passed", "shot-completed", state.proposals[0].acceptancePlan));
     state = facade.decideResult(proposalId, { mutation: mutation(facade), decision: "approved", advice: "真实操作和视觉检查符合目标。" });
     assert.equal(state.proposals[0].status, "completed");
+    assert.ok(state.proposals[0].finalConclusionRecordId);
+    const conclusionRecord = state.archiveRecords.find((record) => record.recordId === state.proposals[0].finalConclusionRecordId);
+    assert.equal(conclusionRecord?.eventType, "proposal.result_decided");
+    assert.equal(conclusionRecord?.payload.finalConclusion.acceptanceRunId, "completed-run");
+    assert.equal(conclusionRecord?.payload.finalConclusion.handler, "韩立");
+    assert.ok(conclusionRecord?.payload.finalConclusion.conditionResults.length);
+    assert.ok(conclusionRecord?.payload.finalConclusion.evidenceReferences.length);
     assert.equal(state.proposals[0].approvals.at(-1).stage, "result");
     state = facade.state();
     assert.equal(state.topics.length, 1);

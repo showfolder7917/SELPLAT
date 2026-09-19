@@ -17,6 +17,14 @@ test("当前专题的恢复入口只消费交付投影，不再从时间线节�
   assert.doesNotMatch(taskCardSource, /latestActiveRecoveryAction|TaskGroupRecovery|oneShotRecoveryRequired/);
 });
 
+test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保留重新读取入口", () => {
+  const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+  assert.match(taskGroupSource, /deliveryReadStatus === "syncing"[\s\S]*正在读取验收依据[\s\S]*不会推进、恢复或改写当前专题状态/);
+  assert.match(taskGroupSource, /验收依据暂时无法读取[\s\S]*onClick=\{retryDeliveryRead\}/);
+  assert.match(taskCardSource, /最终验收依据[\s\S]*currentStage\.finalConclusion[\s\S]*尚未核验：当前不能确认最终验收通过/);
+  assert.match(taskCardSource, /task-timeline-detail-pane[\s\S]*最终验收依据[\s\S]*task-timeline-list/s);
+});
+
 test("非当前活动卡显示退役按钮且主进程先封存旧执行树再原子退役专题", () => {
   assert.match(taskCardSource, /activeStage\.topicId !== group\.topicId[\s\S]*className="task-stale-retire"[\s\S]*退役旧卡/);
   assert.match(collaborationIpcSource, /desktop:retire-stale-evolution-topic[\s\S]*archiveStaleTopicTask[\s\S]*retireStaleTopic/);

@@ -29,6 +29,7 @@ export interface EvolutionStateOutDto {
   topics: EvolutionTopicOutDto[];
   proposals: EvolutionProposalOutDto[];
   deliberations: HanliEvolutionDeliberationOutDto[];
+  /** 追加式专题档案；完成提案只能通过其 finalConclusionRecordId 引用其中的结果决定记录。 */
   archiveRecords: EvolutionArchiveRecordOutDto[];
   /** 由 Evolution/Workflow 运行时生成的当前专题唯一阶段；页面不得再自行合成任务与验收状态。 */
   currentTopicStage?: CurrentTopicStageOutDto;
