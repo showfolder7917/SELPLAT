@@ -321,3 +321,19 @@ test("读取恢复政策只随当前专题档案的用户操作变化", () => {
   assert.equal(manual.resumeOneShotRunId, "blocked-run");
   assert.match(manual.readRecovery.nextAction, /重新读取当前交付投影/);
 });
+
+test("Host 启动通过只接受当前专题同一启动标识的完整退出与 health 事实", () => {
+  const state = evolution("missing");
+  state.archiveRecords.push({
+    topicId: "topic-current", proposalId: "proposal-current", eventType: "host-startup.evidence-recorded", occurredAt: "2026-09-19T00:00:02.000Z",
+    payload: { hostStartupEvidence: { launchId: "host-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z", command: { launchId: "host-1", exitCode: 0 }, health: { launchId: "host-1", success: true, checkedAt: "2026-09-19T00:00:01.000Z", summary: '{"success":true,"status":"READY"}' }, evidenceReferences: ["启动SELPLAT.command"] } },
+  });
+  let stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.hostStartupAcceptance.status, "passed");
+  assert.equal(stage.hostStartupAcceptance.launchId, "host-1");
+  state.archiveRecords.at(-1).payload.hostStartupEvidence.health.launchId = "other-host";
+  stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.hostStartupAcceptance.status, "unverified");
+  const releaseOnly = projectCurrentTopicStage(evolution("missing"), deliveredCollaboration());
+  assert.equal(releaseOnly.hostStartupAcceptance.status, "unverified");
+});

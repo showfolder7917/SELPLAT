@@ -16,7 +16,7 @@ import type { EvolutionProposalOutDto } from "./evolution-proposal.out.dto.js";
 import type { EvolutionTopicOutDto } from "./evolution-topic.out.dto.js";
 
 export interface EvolutionStateOutDto {
-  version: 9;
+  version: 10;
   automationSettings: EvolutionAutomationSettingsOutDto;
   automationRuntime: EvolutionAutomationRuntimeOutDto;
   /** 南宫婉已经在可见正文中明确邀请启动本轮流程；应用重启后仍可继续等待用户确认。 */

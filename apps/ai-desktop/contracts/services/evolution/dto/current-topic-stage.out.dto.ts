@@ -40,6 +40,19 @@ export interface CurrentTopicFinalConclusionOutDto {
   evidenceReferences: string[];
 }
 
+/** 当前专题的 Host 启动验收；只消费同一启动标识的退出与 8080 health 事实。 */
+export interface CurrentTopicHostStartupAcceptanceOutDto {
+  launchId: string | null;
+  handler: string | null;
+  startedAt: string | null;
+  exitCode: number | null;
+  healthStatus: "missing" | "passed" | "failed";
+  healthSummary: string | null;
+  evidenceReferences: string[];
+  status: "passed" | "unverified";
+  reason: string;
+}
+
 /** 最终候选交付闭环的四项不可互相替代的事实。 */
 export interface CurrentTopicDeliveryEvidenceOutDto {
   /** 当前有效任务链共同指向的最终候选；缺失时禁止把任意历史结果拼成完成。 */
@@ -100,6 +113,8 @@ export interface CurrentTopicStageOutDto {
   latestAcceptance: CurrentTopicAcceptanceOutDto | null;
   /** 最终通过的唯一可追溯依据；为空时 completed 不能显示为最终验收通过。 */
   finalConclusion?: CurrentTopicFinalConclusionOutDto | null;
+  /** 根目录 Host 启动器的独立验收事实，不能由发布重启或任务状态替代。 */
+  hostStartupAcceptance: CurrentTopicHostStartupAcceptanceOutDto;
   /** 最终候选的完整交付闭环证据。 */
   deliveryEvidence: CurrentTopicDeliveryEvidenceOutDto;
   /** 生成此投影时使用的最新权威事实时间。 */

@@ -118,7 +118,7 @@ import { createLinghuRuntime, LinghuAutomationFacade, type LinghuRuntime } from 
 import { createHanliRuntime, presentHanliTaskStatus, presentHanliWorkflowStatus } from "../../services/personas/hanli/index.js";
 import { nangongInquiryWithCorrection } from "../../services/personas/nangong/index.js";
 import { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
-import { createEvolutionRuntime, createEvolutionState } from "../../services/evolution/index.js";
+import { createEvolutionRuntime, createEvolutionState, createHostStartupEvidenceService, type HostStartupEvidenceService } from "../../services/evolution/index.js";
 import { PersonaEvolutionRuntime } from "../../services/workflow/index.js";
 // Platform 服务提供截图、设置、工作区、安全和数据库等底层能力。
 import { createAtomicJsonPersistence } from "../../services/support/platform/persistence/index.js";
@@ -173,6 +173,8 @@ let collaborationMemory: EventCenterMemory | null = null;
 let codexAppCorpusWatcher: CorpusWatcher | null = null;
 // 韩立语义提取计时器必须先于 SQLite 关闭；运行时创建后替换为空操作。
 let stopHanliRuntime: () => void = () => undefined;
+/** 根目录启动器只通过该受控服务提交证据；它不持有 SQLite 或 Renderer 能力。 */
+let hostStartupEvidenceService: HostStartupEvidenceService | undefined;
 // 数据库初始化前先提供稳定状态，Renderer 不会收到含义不明的 undefined。
 let aiMemoryDatabaseStatus: AiMemoryDatabaseStatusOutDto = {
   state: "unavailable",
@@ -770,6 +772,11 @@ export async function startApplication(): Promise<void> {
     ? await collaborationMemory.readPersonaConversation("nangong-wan")
     : null;
   const evolutionStateStore = createEvolutionState(createEvolutionStateDao(workflowDatabase, initialNangongConversation));
+  hostStartupEvidenceService = createHostStartupEvidenceService(
+    evolutionStateStore,
+    path.join(projectPaths.temporaryMaterialsRoot, "Host启动验收", "endpoint.json"),
+  );
+  hostStartupEvidenceService.start();
   // 三个可选端口把专题写操作登记为幂等 mutation；数据库不可用时不伪造持久化成功。
   const beginEvolutionMutation = workflowRepository ? (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => workflowRepository!.beginEvolutionMutation(topicId, action, request, currentStateVersion) : undefined;
   const completeEvolutionMutation = workflowRepository ? (idempotencyKey: string, resultStateVersion: string) => workflowRepository!.completeEvolutionMutation(idempotencyKey, resultStateVersion) : undefined;
@@ -1380,6 +1387,8 @@ export function reportStartupFailure(error: unknown): void {
 
 /** 统一停止人物、协作、Codex 和持久化资源；可被退出与受控重启共同调用。 */
 export function disposeApplication(): void {
+  void hostStartupEvidenceService?.dispose();
+  hostStartupEvidenceService = undefined;
   linghuAutomation?.stop();
   personaEvolution?.stop();
   void collaboration?.dispose().catch((error) => eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "collaboration", operation: "dispose", error }));

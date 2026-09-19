@@ -31,3 +31,4 @@
 1029|migration-1029-add-persona-customer-display-message.sql|为客户显示正文建立可审计派生记录
 1030|migration-1030-version-persona-customer-display-message.sql|允许客户显示派生按净化规则版本安全重算
 1031|migration-1031-add-corpus-ingestion-job.sql|持久化自动入库的恢复状态与重试事实
+1032|migration-1032-evolution-state-version-10.sql|允许专题演化状态从 v8/v9 平滑升级到 v10

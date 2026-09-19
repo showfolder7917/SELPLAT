@@ -66,7 +66,7 @@ test("统一迁移建立事件、流程、任务、审批、对话记忆、专�
     for (const table of ["AiDesktopEvent", "AiDesktopWorkflowRun", "AiDesktopTaskExecution", "AiDesktopApprovalRecord", "AiDesktopApprovalGovernance", "AiDesktopMemberRuntime", "AiDesktopRuntimeSession", "AiDesktopPersonaConversation", "AiDesktopConversationTopic", "AiDesktopConversationTopicLink", "AiDesktopTrainingCorpusTopic", "AiDesktopTrainingCorpusMessage", "AiDesktopCorpusIngestionCheckpoint", "AiDesktopCorpusIngestionJob", "AiDesktopEvolutionDeliberation", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopEvolutionRound", "AiDesktopEvolutionRoundTask", "AiDesktopTaskTimelineTopic", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineStream", "AiDesktopCorpusExtractionState", "AiDesktopCustomerConcern", "AiDesktopCustomerConcernEvidence", "AiDesktopRequirementTrajectory", "AiDesktopRequirementNode", "AiDesktopInspectionExperience", "AiDesktopPersonaConversationMessage"]) {
       assert.equal(fixture.repository.tableCount(table), 0, table);
     }
-    assert.equal(fixture.database.latestSchemaVersion, "1031");
+    assert.equal(fixture.database.latestSchemaVersion, "1032");
     fixture.database.withConnection((connection) => {
       for (const retired of ["AiDesktopCollaborationTopic", "AiDesktopCollaborationTimelineEvent", "AiDesktopCollaborationStreamChunk", "AiDesktopTaskCollaborationTopic", "AiDesktopTaskCollaborationEvent", "AiDesktopTaskCollaborationStream", "AiDesktopEvolutionWorkbenchPreference"]) {
         assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(retired), undefined, retired);

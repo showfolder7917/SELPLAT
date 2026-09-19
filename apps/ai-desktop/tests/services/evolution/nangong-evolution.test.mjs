@@ -1280,9 +1280,28 @@ test("专题状态只读取当前版本并拒绝旧版本兼容补造", () => {
     const filePath = path.join(directory, "state.json");
     writePersistedState(filePath, { version: 7, automaticApprovalEnabled: true, topics: [], proposals: [] });
     const state = evolutionStore(filePath).state();
-    assert.equal(state.version, 9);
+    assert.equal(state.version, 10);
     assert.equal("automaticNangongApprovalEnabled" in state, false);
     assert.deepEqual(state.topics, []);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("Host 启动证据只能以同一标识写入当前专题，且重复提交保持幂等", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "host-startup-evidence-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic(topicRequest("Host 启动验收"));
+    state = store.createProposal(state.activeTopicId, proposalRequest());
+    const proposalId = state.proposals.at(-1).proposalId;
+    const evidence = {
+      topicId: state.activeTopicId, proposalId, launchId: "host-run-1", handler: "启动SELPLAT.command", startedAt: "2026-09-19T00:00:00.000Z",
+      commandLaunchId: "host-run-1", exitCode: 0, healthLaunchId: "host-run-1", healthSuccess: true,
+      healthCheckedAt: "2026-09-19T00:00:02.000Z", healthSummary: '{"success":true,"status":"READY"}', evidenceReferences: ["启动SELPLAT.command"],
+    };
+    state = store.recordHostStartupEvidence(evidence);
+    assert.equal(state.archiveRecords.at(-1).eventType, "host-startup.evidence-recorded");
+    assert.equal(store.recordHostStartupEvidence(evidence).archiveRecords.length, state.archiveRecords.length);
+    assert.throws(() => store.recordHostStartupEvidence({ ...evidence, launchId: "host-run-2", healthLaunchId: "other-run" }), /同一 Host 启动标识/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

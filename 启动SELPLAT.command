@@ -36,6 +36,13 @@ if [[ "${1:-}" == "--validate-only" ]]; then
 fi
 
 HOST_PORT=8080
+HOST_HEALTH_URL="http://localhost:$HOST_PORT/api/platform/runtime/health"
+HOST_EVIDENCE_ENDPOINT_FILE="OPTION/temp/ai-desktop/临时材料/Host启动验收/endpoint.json"
+HOST_LAUNCH_ID="host-startup-$(/usr/bin/uuidgen | tr '[:upper:]' '[:lower:]')"
+HOST_STARTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+HOST_HEALTH_SUCCESS=false
+HOST_HEALTH_SUMMARY="未在启动等待期内取得 8080 health 响应。"
+HOST_HEALTH_CHECKED_AT="$HOST_STARTED_AT"
 LISTENER_PIDS=()
 while IFS= read -r listener_pid; do
   [[ -n "$listener_pid" ]] && LISTENER_PIDS+=("$listener_pid")
@@ -66,6 +73,47 @@ if /usr/sbin/lsof -nP -iTCP:"$HOST_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 echo "Starting the SELPLAT platform runtime."
-echo "Health: http://localhost:$HOST_PORT/api/platform/runtime/health"
-./gradlew --offline --no-daemon :apps:host:backend:run
-exit $?
+echo "Health: $HOST_HEALTH_URL"
+# 仍以前台方式等待 Gradle，保留终端输出和手动停止体验；health 只记录运行期间的真实响应。
+./gradlew --offline --no-daemon :apps:host:backend:run &
+HOST_GRADLE_PID=$!
+
+for _ in {1..120}; do
+  HOST_HEALTH_CHECKED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  if HOST_HEALTH_RESPONSE=$(/usr/bin/curl --silent --show-error --fail --max-time 1 "$HOST_HEALTH_URL" 2>/dev/null); then
+    HOST_HEALTH_SUMMARY="${HOST_HEALTH_RESPONSE:0:4000}"
+    if [[ "$HOST_HEALTH_RESPONSE" == *'"success":true'* && "$HOST_HEALTH_RESPONSE" == *'"status":"READY"'* ]]; then
+      HOST_HEALTH_SUCCESS=true
+      break
+    fi
+  fi
+  if ! kill -0 "$HOST_GRADLE_PID" 2>/dev/null; then
+    break
+  fi
+  sleep 0.25
+done
+
+wait "$HOST_GRADLE_PID"
+HOST_EXIT_CODE=$?
+
+# AI Desktop 运行时创建短期本地凭据；脚本只提交事实，不读取或写入 SQLite。
+if [[ -r "$HOST_EVIDENCE_ENDPOINT_FILE" ]]; then
+  HOST_EVIDENCE_ENDPOINT=$(sed -nE 's/.*"endpoint":"([^"]+)".*/\1/p' "$HOST_EVIDENCE_ENDPOINT_FILE")
+  HOST_EVIDENCE_TOKEN=$(sed -nE 's/.*"token":"([^"]+)".*/\1/p' "$HOST_EVIDENCE_ENDPOINT_FILE")
+  if [[ -n "$HOST_EVIDENCE_ENDPOINT" && -n "$HOST_EVIDENCE_TOKEN" ]]; then
+    /usr/bin/curl --silent --show-error --fail --max-time 2 --request POST "$HOST_EVIDENCE_ENDPOINT" \
+      --data-urlencode "token=$HOST_EVIDENCE_TOKEN" \
+      --data-urlencode "launchId=$HOST_LAUNCH_ID" \
+      --data-urlencode "handler=启动SELPLAT.command" \
+      --data-urlencode "startedAt=$HOST_STARTED_AT" \
+      --data-urlencode "commandLaunchId=$HOST_LAUNCH_ID" \
+      --data-urlencode "exitCode=$HOST_EXIT_CODE" \
+      --data-urlencode "healthLaunchId=$HOST_LAUNCH_ID" \
+      --data-urlencode "healthSuccess=$HOST_HEALTH_SUCCESS" \
+      --data-urlencode "healthCheckedAt=$HOST_HEALTH_CHECKED_AT" \
+      --data-urlencode "healthSummary=$HOST_HEALTH_SUMMARY" \
+      >/dev/null || echo "[提示] Host 启动证据未能提交；AI Desktop 将显示尚未核验。" >&2
+  fi
+fi
+
+exit "$HOST_EXIT_CODE"
