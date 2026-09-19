@@ -1,5 +1,5 @@
 ﻿import type { AsyncCollaborationMemoryPort } from "../../../../../contracts/services/support/capabilities/event-center/index.js";
-import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
+import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionOneShotRunOutDto, EvolutionProposalOutDto, EvolutionTechnicalRecoveryOutDto, EvolutionTopicDossierOutDto, EvolutionTopicOutDto, EvolutionStateOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { randomUUID } from "node:crypto";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
 import type { CreateNangongTopicInDto } from "../../../../../contracts/services/personas/nangong/index.js";
@@ -227,6 +227,10 @@ export class PersonaEvolutionRuntime {
   /** 读取当前 Evolution 快照；返回值是副本，调用方不能绕过 Store 直接改状态。 */
   state(): EvolutionStateOutDto {
     return this.#withCurrentTopicStage(this.#store.state());
+  }
+  /** Workflow 只在真实交接结果已确定后写入技术卡点；页面始终读取 Store 投影。 */
+  recordTechnicalRecovery(input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt">): EvolutionStateOutDto {
+    return this.#withCurrentTopicStage(this.#store.recordTechnicalRecovery(input));
   }
 
   /** 读取失败时只返回当前专题投影的恢复政策，避免 Renderer 从旧时间线或本地次数推断权限。 */

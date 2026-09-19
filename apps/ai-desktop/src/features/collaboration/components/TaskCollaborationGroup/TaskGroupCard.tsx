@@ -434,6 +434,10 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const activeStage = model.presentation.currentTopicStage;
   const currentStage = activeStage?.topicId === group.topicId && activeStage?.proposalId === group.proposalId
     ? activeStage : null;
+  // 技术卡点已经由专题投影安排自动交接或监控复验，页面不得把它重新包装成手工恢复。
+  const technicalRecoveryActive = currentStage?.userAction === "none"
+    && currentStage?.status === "failed-pending-repair"
+    && /令狐老祖|转交未完成|次数依据|监控接管/u.test(currentStage.summary);
   // 已保存的旧投影和隔离运行夹具可能尚未提供新增的 Host 启动字段；缺失时只显示尚未核验，不能中断整张任务卡。
   const hostStartupAcceptance = currentStage?.hostStartupAcceptance ?? {
     launchId: null,
@@ -451,8 +455,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     reason: "尚未记录当前专题的 Host 启动验收依据。",
   };
   // 当前投影明确要求客户恢复时，优先使用它签发的原一次性运行标识；普通任务卡点才读取有效任务链。
-  const projectedResumeRunId = currentStage?.userAction === "resume" ? currentStage.resumeOneShotRunId : null;
-  const projectedResumeTaskId = currentStage?.userAction === "resume"
+  const projectedResumeRunId = !technicalRecoveryActive && currentStage?.userAction === "resume" ? currentStage.resumeOneShotRunId : null;
+  const projectedResumeTaskId = !technicalRecoveryActive && currentStage?.userAction === "resume"
     && !projectedResumeRunId ? currentStage.effectiveTaskIds.at(-1) || null
     : null;
   // 两类恢复共用一个页面忙碌锁，但分别调用各自已有的权威业务入口。
