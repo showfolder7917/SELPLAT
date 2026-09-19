@@ -445,6 +445,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     healthSummary: null,
     evidenceReadable: false,
     evidenceReferences: [],
+    launcherSource: null,
+    healthResponse: null,
     status: "unverified" as const,
     reason: "尚未记录当前专题的 Host 启动验收依据。",
   };
@@ -531,6 +533,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
                   `响应摘要：${hostStartupAcceptance.healthSummary || "未记录"}`,
                   `依据快照：${hostStartupAcceptance.evidenceReadable ? "可读取" : "缺失或不可读取"}`,
                   `证据引用：${hostStartupAcceptance.evidenceReferences.join("；") || "未记录"}`,
+                  `启动脚本归档：${hostStartupAcceptance.launcherSource || "未记录"}`,
+                  `health 响应归档：${hostStartupAcceptance.healthResponse || "未记录"}`,
                 ].join("\n")}</pre>
               </SelUiDisclosure>
             </section>

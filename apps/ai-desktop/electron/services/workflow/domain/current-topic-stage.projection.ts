@@ -218,7 +218,7 @@ function emptyDeliveryEvidence(): CurrentTopicStageOutDto["deliveryEvidence"] {
 }
 
 function emptyHostStartupAcceptance(reason = "尚未记录当前专题的 Host 启动验收依据。"): CurrentTopicStageOutDto["hostStartupAcceptance"] {
-  return { launchId: null, handler: null, startedAt: null, commandStatus: "missing", exitCode: null, healthStatus: "missing", healthSummary: null, evidenceReadable: false, evidenceReferences: [], status: "unverified", reason };
+  return { launchId: null, handler: null, startedAt: null, commandStatus: "missing", exitCode: null, healthStatus: "missing", healthSummary: null, evidenceReadable: false, evidenceReferences: [], launcherSource: null, healthResponse: null, status: "unverified", reason };
 }
 
 /** 只读取当前专题、当前提案的专用档案；审批、发布和历史记录均不参与。 */
@@ -244,12 +244,16 @@ function readHostStartupAcceptance(evolution: EvolutionStateOutDto, proposal: Ev
       healthResponseReadable = response.success === true && response.data?.status === "READY";
     } catch { healthResponseReadable = false; }
   }
-  const evidenceReadable = typeof value.evidenceSnapshot?.launcherSource === "string"
-    && value.evidenceSnapshot.launcherSource.startsWith("#!/bin/zsh") && healthResponseReadable;
+  const launcherSource = typeof value.evidenceSnapshot?.launcherSource === "string" ? value.evidenceSnapshot.launcherSource : null;
+  const healthResponse = typeof value.evidenceSnapshot?.healthResponse === "string" ? value.evidenceSnapshot.healthResponse : null;
+  const expectedReferences = launchId ? [`archive://host-startup/${encodeURIComponent(launchId)}/launcherSource`, `archive://host-startup/${encodeURIComponent(launchId)}/healthResponse`] : [];
+  // 引用只指向本次不可覆盖档案中的两个字段，避免把当前文件或已关闭的 8080 服务误当成可读历史依据。
+  const evidenceReadable = launcherSource?.startsWith("#!/bin/zsh") === true && healthResponseReadable && evidenceReferences.length === expectedReferences.length
+    && expectedReferences.every((reference) => evidenceReferences.includes(reference));
   const matchedLaunch = Boolean(launchId && value.command?.launchId === launchId && value.health?.launchId === launchId);
   const commandAccepted = commandStatus === "exited" && exitCode === 0;
   const passed = Boolean(matchedLaunch && handler?.trim() && startedAt && commandAccepted && healthStatus === "passed" && typeof value.health?.checkedAt === "string" && evidenceReadable && evidenceReferences.length);
-  return { launchId, handler, startedAt, commandStatus, exitCode, healthStatus, healthSummary, evidenceReadable, evidenceReferences, status: passed ? "passed" : "unverified", reason: passed ? "同一启动标识的退出码、8080 health 和可读证据快照均已核验。" : "Host 启动依据不完整、失败、不可读取或未绑定同一启动标识。" };
+  return { launchId, handler, startedAt, commandStatus, exitCode, healthStatus, healthSummary, evidenceReadable, evidenceReferences, launcherSource, healthResponse, status: passed ? "passed" : "unverified", reason: passed ? "同一启动标识的退出码、8080 health 和可读证据快照均已核验。" : "Host 启动依据不完整、失败、不可读取或未绑定同一启动标识。" };
 }
 
 function readDeliveryEvidence(tasks: CollaborationTaskOutDto[], collaboration: CollaborationStateOutDto, acceptance: CurrentTopicAcceptanceOutDto | null): CurrentTopicStageOutDto["deliveryEvidence"] {

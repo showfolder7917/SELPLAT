@@ -29,7 +29,7 @@ function stageFor(command, readable = true) {
         command: { launchId: "host-1", ...command },
         health: { launchId: "host-1", success: true, checkedAt: "2026-09-19T00:00:01.000Z", summary: healthResponse },
         evidenceSnapshot: readable ? { launcherSource: "#!/bin/zsh\necho startup", healthResponse } : null,
-        evidenceReferences: ["启动SELPLAT.command"],
+        evidenceReferences: ["archive://host-startup/host-1/launcherSource", "archive://host-startup/host-1/healthResponse"],
       } },
     }],
   };

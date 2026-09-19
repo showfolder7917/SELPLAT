@@ -884,7 +884,8 @@ export class EvolutionStateStore {
       command: { launchId: commandLaunchId, state: input.commandState, exitCode: input.exitCode },
       health: { launchId: healthLaunchId, success: input.healthSuccess, checkedAt: input.healthCheckedAt, summary: input.healthSummary.trim().slice(0, 4_000) },
       evidenceSnapshot: { launcherSource: input.launcherSource || null, healthResponse: input.healthSummary.trim().slice(0, 4_000) },
-      evidenceReferences,
+      sourceReferences: evidenceReferences,
+      evidenceReferences: [`archive://host-startup/${encodeURIComponent(launchId)}/launcherSource`, `archive://host-startup/${encodeURIComponent(launchId)}/healthResponse`],
     };
     const prior = [...this.#state.archiveRecords].reverse().find((record) => record.eventType === "host-startup.evidence-recorded" && record.topicId === topicId && record.proposalId === proposalId && (record.payload as { hostStartupEvidence?: { launchId?: unknown } }).hostStartupEvidence?.launchId === launchId);
     if (prior) {

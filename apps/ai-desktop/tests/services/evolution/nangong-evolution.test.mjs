@@ -1303,6 +1303,8 @@ test("Host 启动证据只能以同一标识写入当前专题，且重复提交
     assert.equal(state.archiveRecords.at(-1).eventType, "host-startup.evidence-recorded");
     assert.equal(state.archiveRecords.at(-1).payload.hostStartupEvidence.command.state, "running");
     assert.equal(state.archiveRecords.at(-1).payload.hostStartupEvidence.command.exitCode, null);
+    assert.deepEqual(state.archiveRecords.at(-1).payload.hostStartupEvidence.evidenceReferences, ["archive://host-startup/host-run-1/launcherSource", "archive://host-startup/host-run-1/healthResponse"]);
+    assert.deepEqual(state.archiveRecords.at(-1).payload.hostStartupEvidence.sourceReferences, ["启动SELPLAT.command"]);
     assert.equal(store.recordHostStartupEvidence(evidence).archiveRecords.length, state.archiveRecords.length);
     assert.throws(() => store.recordHostStartupEvidence({ ...evidence, exitCode: 0 }), /不能伪造退出码/);
     assert.throws(() => store.recordHostStartupEvidence({ ...evidence, launchId: "host-run-2", healthLaunchId: "other-run" }), /同一 Host 启动标识/);

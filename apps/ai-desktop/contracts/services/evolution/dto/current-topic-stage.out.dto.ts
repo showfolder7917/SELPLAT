@@ -51,6 +51,8 @@ export interface CurrentTopicHostStartupAcceptanceOutDto {
   healthSummary: string | null;
   evidenceReadable: boolean;
   evidenceReferences: string[];
+  launcherSource: string | null;
+  healthResponse: string | null;
   status: "passed" | "unverified";
   reason: string;
 }

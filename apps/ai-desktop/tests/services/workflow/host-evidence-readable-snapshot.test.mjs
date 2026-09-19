@@ -29,7 +29,15 @@ test("Host 验收不能用可访问的引用文字代替本次归档的原始证
   const read = () => projectCurrentTopicStage(state, { tasks: [task] }).hostStartupAcceptance;
   assert.equal(read().status, "unverified");
   evidence.evidenceSnapshot = { launcherSource: "#!/bin/zsh\necho startup", healthResponse };
+  assert.equal(read().status, "unverified");
+  evidence.evidenceReferences = ["archive://host-startup/host-1/launcherSource", "archive://host-startup/host-1/healthResponse"];
   assert.equal(read().status, "passed");
   evidence.evidenceSnapshot.healthResponse = "无法读取";
+  assert.equal(read().status, "unverified");
+  evidence.evidenceSnapshot.healthResponse = healthResponse;
+  evidence.evidenceReferences[1] = "archive://host-startup/another-launch/healthResponse";
+  assert.equal(read().status, "unverified");
+  evidence.evidenceReferences[1] = "archive://host-startup/host-1/healthResponse";
+  evidence.evidenceReferences.push("http://localhost:8080/api/platform/runtime/health");
   assert.equal(read().status, "unverified");
 });
