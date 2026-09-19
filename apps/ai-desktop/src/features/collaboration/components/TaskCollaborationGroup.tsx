@@ -183,6 +183,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   );
 
   const deliveryUnavailable = deliveryReadStatus === "unavailable";
+  const deliveryReading = deliveryReadStatus === "syncing";
   const timelineUnavailable = timelineReadStatus === "unavailable";
   const timelineRefreshing = timelineReadStatus === "syncing" && groups.length > 0;
   const timelineProjectionUnavailable = model.presentation.timelineProjectionStatus.status === "unavailable";
@@ -195,6 +196,18 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   // 首次时间线尚未形成快照时，读取失败不能被空数组误显示成“暂无专题任务”。
   // 已有快照后的失败继续沿用下方局部提示，保留用户正在查看的历史和操作位置。
   const initialTimelineReadFailed = timelineUnavailable && model.data.snapshot === null;
+
+  // 权威结论刷新期间不继续显示上一次快照中的最终通过，避免把陈旧依据误当作当前事实。
+  if (deliveryReading) {
+    return (
+      <section className="task-collaboration-page">
+        <div className="task-collaboration-empty" role="status">
+          <strong>正在读取验收依据</strong>
+          <span>读取完成前不会推进、恢复或改写当前专题状态。</span>
+        </div>
+      </section>
+    );
+  }
 
   /** 自动重读只按档案政策执行一次；失败后仍等待同一政策，不把权限改成手动入口。 */
   useEffect(() => {
@@ -243,7 +256,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     return (
       <section className="task-collaboration-page">
         <div className="task-collaboration-empty" role="alert">
-          <strong>当前无法读取</strong>
+          <strong>验收依据暂时无法读取</strong>
           <span>正在等待：{readObstruction.waitingFor}</span>
           <span>是否需要你操作：{readObstruction.requiresUserAction ? "需要重新读取，当前不会推进或恢复任务。" : "暂不需要，系统正在自动重试。"}</span>
           <span>下一步：{readObstruction.nextAction}</span>

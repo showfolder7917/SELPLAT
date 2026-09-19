@@ -115,6 +115,7 @@ export function projectCurrentTopicStage(
 
   const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
+  const finalConclusion = readFinalConclusion(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
   const deliveryEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, latestAcceptance);
   const deliveryGate = readDeliveryGate(deliveryEvidence);
@@ -132,8 +133,8 @@ export function projectCurrentTopicStage(
   else if (runBlocked) status = "failed-pending-repair";
   else if (acceptanceStarted) status = "accepting";
   else if (failedAcceptance) status = "failed-pending-repair";
+  else if (proposal.status === "completed") status = finalConclusion ? "completed" : "completed-unverified";
   else if (deliveryGate) status = deliveryGate.status;
-  else if (deliveryEvidence.acceptance === "passed") status = "completed";
   else if (execution.blocked) status = "failed-pending-repair";
   else if (execution.nextStatus === "verifying") status = "verifying";
 
@@ -159,8 +160,49 @@ export function projectCurrentTopicStage(
     effectiveTaskIds: execution.effectiveTasks.map((item) => item.taskId),
     missingTaskIds: execution.missingTaskIds,
     latestAcceptance,
+    finalConclusion,
     deliveryEvidence,
     updatedAt,
+  };
+}
+
+/** 只接受与完成提案、通过验收运行和完整条件证据绑定的同一快照档案。 */
+function readFinalConclusion(evolution: EvolutionStateOutDto, proposal: EvolutionStateOutDto["proposals"][number]): NonNullable<CurrentTopicStageOutDto["finalConclusion"]> | null {
+  const recordId = proposal.finalConclusionRecordId;
+  if (proposal.status !== "completed" || typeof recordId !== "string" || !recordId) return null;
+  const record = evolution.archiveRecords.find((item) => item.recordId === recordId
+    && item.eventType === "proposal.result_decided"
+    && item.topicId === proposal.topicId
+    && item.proposalId === proposal.proposalId);
+  const value = record?.payload.finalConclusion;
+  if (!record || !value || typeof value !== "object") return null;
+  const conclusion = value as {
+    recordId?: unknown; handler?: unknown; occurredAt?: unknown; acceptanceRunId?: unknown;
+    conditionResults?: unknown; evidenceReferences?: unknown;
+  };
+  if (conclusion.recordId !== record.recordId || typeof conclusion.handler !== "string" || !conclusion.handler.trim()
+    || typeof conclusion.occurredAt !== "string" || typeof conclusion.acceptanceRunId !== "string"
+    || !Array.isArray(conclusion.conditionResults) || !conclusion.conditionResults.length
+    || !Array.isArray(conclusion.evidenceReferences) || !conclusion.evidenceReferences.length) return null;
+  const acceptance = readLatestAcceptance(evolution, proposal);
+  if (acceptance?.runId !== conclusion.acceptanceRunId || acceptance.status !== "passed") return null;
+  const conditionResults: NonNullable<CurrentTopicStageOutDto["finalConclusion"]>["conditionResults"] = [];
+  for (const raw of conclusion.conditionResults) {
+    const item = raw as { checkId?: unknown; status?: unknown; evidenceReferences?: unknown };
+    if (typeof item.checkId !== "string" || item.status !== "passed"
+      || !Array.isArray(item.evidenceReferences) || !item.evidenceReferences.length
+      || item.evidenceReferences.some((reference) => typeof reference !== "string" || !reference.trim())) return null;
+    conditionResults.push({ checkId: item.checkId, status: item.status, evidenceReferences: [...item.evidenceReferences] });
+  }
+  if (conclusion.evidenceReferences.some((reference) => typeof reference !== "string" || !reference.trim())) return null;
+  const evidenceReferences = conclusion.evidenceReferences as string[];
+  return {
+    recordId: record.recordId,
+    handler: conclusion.handler,
+    occurredAt: conclusion.occurredAt,
+    acceptanceRunId: conclusion.acceptanceRunId,
+    conditionResults,
+    evidenceReferences: [...evidenceReferences],
   };
 }
 
@@ -248,6 +290,7 @@ function stageSummary(status: CurrentTopicStageOutDto["status"], executionSummar
   if (status === "awaiting-restart-health") return "最终候选已发布，等待重启健康检查。";
   if (status === "accepting") return "韩立已开始本轮结果验收。";
   if (status === "completed") return "韩立结果验收已经通过，专题已完成。";
+  if (status === "completed-unverified") return "尚未核验：当前无法确认最终验收通过。";
   return executionSummary;
 }
 
@@ -255,6 +298,7 @@ function stageWaitingFor(status: CurrentTopicStageOutDto["status"], deliveryGate
   if (deliveryGate?.status === status) return deliveryGate.waitingFor;
   // 专题已经完成时不再虚构处理中处理人，卡片只说明当前无需操作。
   if (status === "completed") return "当前无需操作";
+  if (status === "completed-unverified") return "验收依据";
   if (status === "awaiting-confirmation") return "用户确认";
   if (status === "awaiting-release") return "发布服务";
   if (status === "awaiting-restart-health") return "新版本重启健康检查";
@@ -267,6 +311,7 @@ function stageNextAction(status: CurrentTopicStageOutDto["status"], deliveryGate
   if (deliveryGate?.status === status) return deliveryGate.nextAction;
   // 完成结论已闭合，下一步是开始独立的新专题而不是继续当前处理。
   if (status === "completed") return "可开始下一专题。";
+  if (status === "completed-unverified") return "系统重新读取权威记录；仍无法取得时由结果验收流程重新记录本轮结论。";
   if (status === "awaiting-confirmation") return "确认当前范围说明后继续。";
   if (status === "awaiting-release") return "发布最终候选，并记录发布结果。";
   if (status === "awaiting-restart-health") return "完成新版本重启健康检查。";

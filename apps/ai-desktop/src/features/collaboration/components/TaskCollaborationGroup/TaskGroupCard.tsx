@@ -159,7 +159,7 @@ function TaskGroupHeader({
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
   const currentStage = presentation.currentTopicStage?.topicId === group.topicId && presentation.currentTopicStage?.proposalId === group.proposalId
     ? presentation.currentTopicStage : null;
-  const groupStopped = currentStage?.status === "completed" || currentStage?.status === "cancelled" || group.status === "cancelled";
+  const groupStopped = currentStage?.status === "completed" || currentStage?.status === "completed-unverified" || currentStage?.status === "cancelled" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
   const activity = groupActivityPresentation(group, locale);
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。
@@ -491,6 +491,20 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       {open && <>
         {/* 展开后才装载人物节点正文和技术详情；详情面板单独滚动，卡片摘要与下一流程持续可见。 */}
         <div className="task-timeline-detail-pane" onScroll={model.actions.onDetailScroll}>
+          {currentStage && (
+            <section className="task-node-detail">
+              <strong>{locale === "ja" ? "最終受入根拠" : "最终验收依据"}</strong>
+              {currentStage.finalConclusion ? (
+                <pre>{[
+                  `处理人：${currentStage.finalConclusion.handler}`,
+                  `发生时间：${currentStage.finalConclusion.occurredAt}`,
+                  `验收运行：${currentStage.finalConclusion.acceptanceRunId}`,
+                  `条件结果：${currentStage.finalConclusion.conditionResults.map((item) => `${item.checkId}=${item.status}`).join("；")}`,
+                  `证据引用：${currentStage.finalConclusion.evidenceReferences.join("；")}`,
+                ].join("\n")}</pre>
+              ) : <p>尚未核验：当前不能确认最终验收通过。</p>}
+            </section>
+          )}
           <div className="task-timeline-list" data-task-timeline-topic-id={group.topicId || ""} data-task-timeline-proposal-id={group.proposalId || ""}>
             {visibleNodes.map((node, index) => <TaskTimelineNode key={node.nodeId} model={model} node={node} index={index} />)}
           </div>

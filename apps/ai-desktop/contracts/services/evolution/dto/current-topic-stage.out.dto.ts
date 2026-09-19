@@ -15,6 +15,7 @@ export type CurrentTopicStageStatusValue =
   | "pending-acceptance"
   | "accepting"
   | "completed"
+  | "completed-unverified"
   | "cancelled"
   | "failed-pending-repair"
   | "not-run";
@@ -27,6 +28,16 @@ export interface CurrentTopicAcceptanceOutDto {
   status: "running" | "passed" | "failed" | "blocked";
   /** 该验收事实写入 Evolution 档案的时间。 */
   occurredAt: string;
+}
+
+/** 当前完成专题可展示的最终验收结论；只由同一 Evolution 快照中的结果决定档案生成。 */
+export interface CurrentTopicFinalConclusionOutDto {
+  recordId: string;
+  handler: string;
+  occurredAt: string;
+  acceptanceRunId: string;
+  conditionResults: Array<{ checkId: string; status: string; evidenceReferences: string[] }>;
+  evidenceReferences: string[];
 }
 
 /** 最终候选交付闭环的四项不可互相替代的事实。 */
@@ -87,6 +98,8 @@ export interface CurrentTopicStageOutDto {
   missingTaskIds: string[];
   /** 最新真实验收结论；历史记录不覆盖此字段。 */
   latestAcceptance: CurrentTopicAcceptanceOutDto | null;
+  /** 最终通过的唯一可追溯依据；为空时 completed 不能显示为最终验收通过。 */
+  finalConclusion?: CurrentTopicFinalConclusionOutDto | null;
   /** 最终候选的完整交付闭环证据。 */
   deliveryEvidence: CurrentTopicDeliveryEvidenceOutDto;
   /** 生成此投影时使用的最新权威事实时间。 */

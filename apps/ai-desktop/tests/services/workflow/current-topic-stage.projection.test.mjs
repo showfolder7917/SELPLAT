@@ -24,14 +24,18 @@ function task(state = "integrated") {
 }
 
 function evolution(acceptanceStatus) {
+  const finalConclusionRecordId = acceptanceStatus === "passed" ? "result-decision-current" : null;
   return {
     updatedAt: "2026-09-12T04:42:19.000Z",
     oneShotConfirmation: null,
     oneShotRun: { proposalId: "proposal-current" },
-    proposals: [{ proposalId: "proposal-current", topicId: "topic-current", title: "修正测试台修复状态误导", content: "统一状态投影", status: "pending-acceptance", distributedTaskIds: ["task-current"], updatedAt: "2026-09-12T04:00:00.000Z" }],
+    proposals: [{ proposalId: "proposal-current", topicId: "topic-current", title: "修正测试台修复状态误导", content: "统一状态投影", status: "pending-acceptance", finalConclusionRecordId, distributedTaskIds: ["task-current"], updatedAt: "2026-09-12T04:00:00.000Z" }],
     topics: [{ topicId: "topic-current", title: "修正测试台修复状态误导" }],
     deliberations: [],
-    archiveRecords: [{ proposalId: "proposal-current", eventType: "acceptance.result_checked", occurredAt: "2026-09-12T04:42:19.000Z", payload: { acceptanceRun: { runId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", status: acceptanceStatus } } }],
+    archiveRecords: [
+      { proposalId: "proposal-current", eventType: "acceptance.result_checked", occurredAt: "2026-09-12T04:42:19.000Z", payload: { acceptanceRun: { runId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", status: acceptanceStatus } } },
+      ...(finalConclusionRecordId ? [{ recordId: finalConclusionRecordId, topicId: "topic-current", proposalId: "proposal-current", eventType: "proposal.result_decided", occurredAt: "2026-09-12T04:42:20.000Z", payload: { finalConclusion: { recordId: finalConclusionRecordId, handler: "韩立", occurredAt: "2026-09-12T04:42:20.000Z", acceptanceRunId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", conditionResults: [{ checkId: "criterion-1", status: "passed", evidenceReferences: ["tests/evidence"] }], evidenceReferences: ["tests/evidence"] } } }] : []),
+    ],
   };
 }
 
@@ -116,6 +120,26 @@ test("完成态后的当前复核运行阻塞时优先显示原卡恢复状态",
   assert.equal(stage.status, "failed-pending-repair");
   assert.equal(stage.userAction, "resume");
   assert.equal(stage.resumeOneShotRunId, "completion-review");
+});
+
+test("已完成专题缺少唯一结论引用时只能显示尚未核验", () => {
+  const state = evolution("passed");
+  state.proposals[0].status = "completed";
+  state.proposals[0].finalConclusionRecordId = null;
+  const stage = projectCurrentTopicStage(state, deliveredCollaboration());
+  assert.equal(stage.status, "completed-unverified");
+  assert.equal(stage.finalConclusion, null);
+  assert.match(stage.summary, /尚未核验/);
+  assert.equal(stage.waitingFor, "验收依据");
+});
+
+test("错误关联或不完整结论记录不能把 completed 显示为最终验收通过", () => {
+  const state = evolution("passed");
+  state.proposals[0].status = "completed";
+  state.archiveRecords.at(-1).payload.finalConclusion.evidenceReferences = [];
+  const stage = projectCurrentTopicStage(state, deliveredCollaboration());
+  assert.equal(stage.status, "completed-unverified");
+  assert.equal(stage.finalConclusion, null);
 });
 
 test("未确立的新研讨不能覆盖已经绑定专题的验收卡点", () => {
