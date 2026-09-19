@@ -586,10 +586,10 @@ button { color: inherit; }
 @keyframes task-live-caret { 50% { opacity: 0; } }
 .task-node-detail { margin: 2px 12px 10px; }
 .task-node-detail pre { max-height: 320px; margin: 0; overflow: auto; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; }
-/* Host 依据的滚动视口短于任务详情可见区，窄窗口里也能独立滚到末尾。 */
+/* Host 依据沿用卡片详情的唯一滚动边界，避免嵌套滚动让正式页面动作停在错误容器。 */
 .task-host-startup-evidence { min-width: 0; margin-top: 8px; border: 1px solid var(--sel-theme-control-line-soft); border-radius: var(--sel-theme-radius-control); }
-.task-host-startup-evidence > .seldisclosure-content { min-width: 0; max-height: 118px; padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
-.task-host-startup-evidence pre { margin: 0; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; }
+.task-host-startup-evidence > .seldisclosure-content { min-width: 0; padding: 10px; }
+.task-host-startup-evidence pre { margin: 0; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; overflow: visible; overflow-wrap: anywhere; }
 .task-timeline-next { display: grid; grid-template-columns: 12px max-content minmax(0, 1fr); align-items: start; column-gap: 10px; row-gap: 6px; margin: 12px 0 0 38px; padding: 12px 4px; color: var(--sel-theme-workbench-text-muted); }
 .task-timeline-next > i { width: 12px; height: 12px; border: 2px solid var(--sel-theme-control-line-soft); border-radius: 50%; }
 .task-timeline-next strong { color: var(--sel-theme-workbench-text); white-space: nowrap; }
