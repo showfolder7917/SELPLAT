@@ -50,7 +50,8 @@ export class TestDataResetService {
       return result;
     } catch (error) {
       this.#inProgress = false;
-      if (!runtimeDisposed) this.options.resumeWriters();
+      if (runtimeDisposed) this.options.scheduleRestart(1);
+      else this.options.resumeWriters();
       throw error;
     }
   }
