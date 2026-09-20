@@ -3030,6 +3030,75 @@ test("令狐一轮没有新增修复证据时停止同内容盲目重试", async
   assert.match(result.pendingActions[0], /没有产生新的代码或文件范围证据/);
 });
 
+test("令狐同一交互问题两次修正未通过后只读重查测试替身并再次修复", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  const changedFiles = ["apps/ai-desktop/original.ts"];
+  const modes = [];
+  const messages = [];
+  let validationCount = 0;
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修复当前任务",
+    restartRequired: false,
+    allowProjectTechnicalRepair: true,
+    emit: () => undefined,
+    readChangedFiles: async () => [...changedFiles],
+    runTurn: async (message, emit, mode) => {
+      modes.push(mode);
+      messages.push(message);
+      if (mode === "requirement-managed") return { text: "替身仅写标记，没有真实重启；结果应在重启前检查。", itemCount: 1 };
+      const nextFile = `apps/ai-desktop/repair-${modes.length}.ts`;
+      changedFiles.push(nextFile);
+      emit({ type: "activity", turnId: `turn-${modes.length}`, activity: {
+        id: `change-${modes.length}`, itemType: "fileChange", phase: "completed", status: "completed", summary: nextFile,
+      } });
+      return { text: "已修复", itemCount: 1 };
+    },
+    runCodeValidation: async () => {
+      validationCount += 1;
+      if (validationCount <= 3) throw new Error(`test:interaction 失败\n失败：developer-sidebar.spec.ts / 清空测试数据\n第 ${validationCount} 次断言失败`);
+    },
+  });
+  assert.equal(result.managedStatus, "code-verified");
+  assert.equal(validationCount, 4);
+  assert.deepEqual(modes, ["task-managed", "task-managed", "task-managed", "requirement-managed", "task-managed"]);
+  assert.match(messages[3], /测试替身/);
+  assert.match(messages[4], /替身仅写标记/);
+});
+
+test("令狐独立重查后同一问题仍失败就交回接管而不无限修正", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  const changedFiles = ["apps/ai-desktop/original.ts"];
+  let diagnosisCount = 0;
+  let validationCount = 0;
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修复当前任务",
+    restartRequired: false,
+    allowProjectTechnicalRepair: true,
+    emit: () => undefined,
+    readChangedFiles: async () => [...changedFiles],
+    runTurn: async (_message, emit, mode) => {
+      if (mode === "requirement-managed") {
+        diagnosisCount += 1;
+        return { text: "已独立调查真实调用链。", itemCount: 1 };
+      }
+      const nextFile = `apps/ai-desktop/repair-${changedFiles.length}.ts`;
+      changedFiles.push(nextFile);
+      emit({ type: "activity", turnId: nextFile, activity: { id: nextFile, itemType: "fileChange", phase: "completed", status: "completed", summary: nextFile } });
+      return { text: "已修复", itemCount: 1 };
+    },
+    runCodeValidation: async () => {
+      validationCount += 1;
+      throw new Error("test:interaction 失败\n失败：developer-sidebar.spec.ts / 清空测试数据");
+    },
+  });
+  assert.equal(result.managedStatus, "incomplete");
+  assert.equal(validationCount, 4);
+  assert.equal(diagnosisCount, 1);
+  assert.match(result.pendingActions[0], /已停止重复补丁并交回接管流程/);
+});
+
 test("任务结果提交前通过真实 Git 状态阻断自修新增的范围外文件", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "repair-scope-"));
   const repositoryRoot = path.join(directory, "repository");

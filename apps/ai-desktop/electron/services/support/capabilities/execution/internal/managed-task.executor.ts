@@ -185,6 +185,8 @@ export class ManagedTaskExecutor {
     let response = initialResponse;
     let lastFailure = "";
     let round = 0;
+    const failureHistory: Array<{ family: string; message: string }> = [];
+    let independentlyInvestigatedFamily: string | null = null;
     // 令狐没有固定修复轮数；只要每轮产生新的代码或文件范围证据，就继续修复和复测。
     while (request.allowProjectTechnicalRepair || round < VALIDATION_ROUNDS) {
       round += 1;
@@ -234,6 +236,30 @@ export class ManagedTaskExecutor {
           };
         }
         if (!request.allowProjectTechnicalRepair && round === VALIDATION_ROUNDS) break;
+        if (request.allowProjectTechnicalRepair) {
+          const family = validationFailureFamily(lastFailure);
+          if (independentlyInvestigatedFamily === family) {
+            lastFailure = `${lastFailure}；同一问题在两次常规修正和一次独立根因调查修复后仍未通过，已停止重复补丁并交回接管流程。`;
+            break;
+          }
+          if (independentlyInvestigatedFamily && independentlyInvestigatedFamily !== family) {
+            independentlyInvestigatedFamily = null;
+            failureHistory.length = 0;
+          }
+          failureHistory.push({ family, message: lastFailure });
+          if (failureHistory.length > 3) failureHistory.shift();
+          if (failureHistory.length === 3 && failureHistory.every((item) => item.family === family)) {
+            emitManaged(request, "requirement-analysis", "started", round, displayedTotal, "同一问题两次修正仍失败，令狐正在独立重查真实调用链与测试替身");
+            const diagnosis = await request.runTurn(this.#managedPrompt("重新独立调查当前故障。", "executor.repair-investigation", {
+              failure: `前两次修正的结论只作为待核假设，不能直接沿用；保留并比较以下三次真实失败证据。必须分别核对原验收要求、生产调用链、测试替身及页面生命周期，解释为何前两次未修好；此轮只读，不修改文件。\n${failureHistory.map((item, index) => `第 ${index + 1} 次失败：\n${item.message}`).join("\n\n")}`,
+            }), request.emit, "requirement-managed");
+            if (!diagnosis.text.trim()) throw new Error("令狐独立根因调查没有形成可核验结论，已停止重复修复。");
+            independentlyInvestigatedFamily = family;
+            lastFailure = `${lastFailure}\n独立根因调查结论（须由后续源码与复测证明）：\n${diagnosis.text.trim()}`;
+            failureHistory.length = 0;
+            emitManaged(request, "requirement-analysis", "completed", round, displayedTotal, "令狐已完成独立根因调查，开始按新证据修复");
+          }
+        }
         const changeRevisionBeforeRepair = evidence.changeRevision();
         const authorizedCountBeforeRepair = repairScope.authorizedFiles().length;
         evidence.beginRound();
@@ -313,6 +339,12 @@ export class ManagedTaskExecutor {
   #managedPrompt(message: string, promptId: string, variables: PromptVariables = {}): string {
     return managedPrompt(message, this.prompts.render(promptId, variables));
   }
+}
+
+/** 同一测试可先后暴露不同断言，仍属于同一客户路径；只用稳定测试名聚合重查触发器。 */
+function validationFailureFamily(message: string): string {
+  const tests = [...message.matchAll(/^失败：\s*(.+)$/gm)].map((match) => match[1].trim());
+  return tests.length ? [...new Set(tests)].sort().join(" | ") : message.split("\n", 1)[0].trim();
 }
 
 class ExecutionEvidence {

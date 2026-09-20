@@ -451,7 +451,7 @@ class CodexExecutorSession implements ExecutorSessionPort {
           `规则入口：${task.snapshot.ruleContext ? "已冻结并已核对" : "旧任务缺少规则快照"}`,
         ],
       },
-      runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
+      runTurn: (message, onEvent, mode) => this.#connection.service.send(message, task.snapshot.locale, mode === "requirement-managed" ? "read-only" : "workspace-write", workspaceState, attachmentPaths, onEvent, mode),
     });
     let status: ExecutorExecutionResultOutDto["status"] = "incomplete";
     if (result.managedStatus === "code-verified") {

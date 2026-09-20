@@ -4,7 +4,10 @@ import type { CollaborationTaskOutDto } from "../../../../../../contracts/servic
 /** 为调查和执行提供相同的跨轮事实，重启后仍从原任务历史恢复。 */
 export function repairInvestigationContext(task: CollaborationTaskOutDto, platform: string): string {
   const history = task.flowEvents.filter((event) => event.type.startsWith("unified_test.")
-    || event.type.startsWith("execution.repair_") || (event.type.startsWith("integration.") && event.error));
+    || event.type.startsWith("execution.repair_")
+    || event.type.startsWith("executor.self_test_")
+    || event.type.startsWith("executor.self_repair_")
+    || (event.type.startsWith("integration.") && event.error));
   const recent = history.slice(-12);
   const completedRepairs = history.filter((event) => event.type.endsWith("repair_completed")).length;
   const lines = [

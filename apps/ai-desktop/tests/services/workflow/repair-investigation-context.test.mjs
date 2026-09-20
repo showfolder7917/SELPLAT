@@ -13,6 +13,20 @@ test("重复失败上下文保留版本与前轮证据，要求共同根因调�
   assert.equal(task.flowEvents.length, 2);
 });
 
+test("令狐接手时包含原执行人的自测与自修证据", () => {
+  const task = { taskId: "handoff", flowEvents: [
+    { type: "executor.self_test_failed", occurredAt: "first", summary: "首次交互失败" },
+    { type: "executor.self_repair_completed", occurredAt: "second", summary: "补了设置浮层" },
+    { type: "executor.self_test_failed", occurredAt: "third", summary: "同一路径再次失败" },
+  ] };
+  const context = repairInvestigationContext(task, "darwin");
+  assert.match(context, /首次交互失败/);
+  assert.match(context, /补了设置浮层/);
+  assert.match(context, /同一路径再次失败/);
+  assert.match(context, /已完成修复轮次：1/);
+  assert.match(context, /共同根因/);
+});
+
 test("阶段心跳属于当前令狐而非原执行人", () => {
   const task = { taskId: "task", executorMemberId: "song-yu", currentHandler: { memberId: "linghu-ancestor" } };
   const members = [
