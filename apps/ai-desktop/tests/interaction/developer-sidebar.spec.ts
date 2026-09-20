@@ -588,6 +588,10 @@ test("一键清空测试数据必须二次确认且明确保留范围", async ()
   await expect(resetCard).toContainText("协作运行状态：8 条");
   await expect(resetCard).toContainText("已处理候选分支 1 个、工作树 2 个");
   await expect(resetCard).toContainText("1 个候选工作树未能清理");
+  // 用户确认重启前仍在当前 Renderer；在此时核对窄窗口可读性，不能把隔离测试标记当作重启后的页面。
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  await expect(resetCard.locator("small").last()).toBeVisible();
+  expect(await resetCard.evaluate((card) => card.scrollWidth <= card.clientWidth)).toBe(true);
   const restartButton = resetCard.getByRole("button", { name: "确认结果并重启" });
   await expect(restartButton).toBeVisible();
   await restartButton.click();
@@ -597,20 +601,8 @@ test("一键清空测试数据必须二次确认且明确保留范围", async ()
   await restartButton.click();
   dialog = page.getByRole("dialog", { name: "确认结果并重启" });
   await dialog.getByRole("button", { name: "确认结果并重启" }).click();
+  // 隔离 preload 只能验证重启请求已提交；真实重启由发布重启健康检查覆盖。
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.interactionTestDataResetRestart)).toBe("true");
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
-  // 受控重启会重新挂载 Renderer；设置浮层默认关闭，必须按真实用户路径重新打开。
-  const settingsButtonAfterRestart = page.getByRole("button", { name: "打开连接与执行设置" });
-  await expect(settingsButtonAfterRestart).toBeVisible();
-  await settingsButtonAfterRestart.click();
-  const resetCardAfterRestart = page.locator(".test-data-reset-card");
-  await expect(resetCardAfterRestart.locator(":scope > small")).toHaveText("保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。");
-  await expect(resetCardAfterRestart.getByRole("status")).toContainText("已清除 42 条运行记录");
-  await expect(resetCardAfterRestart.getByRole("button", { name: "正在清空…" })).toBeDisabled();
-  await expect(resetCardAfterRestart.locator("small").last()).toBeVisible();
-  expect(await resetCardAfterRestart.evaluate((card) => card.scrollWidth <= card.clientWidth)).toBe(true);
-  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
-  await expect(page.getByRole("button", { name: "打开连接与执行设置" })).toBeVisible();
 });
 
 test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
