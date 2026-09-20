@@ -71,6 +71,7 @@ interface DesktopIpcDependencies {
   rules: RuleService;
   prompts: PromptLibraryPort;
   clearTestData: () => Promise<TestDataResetResultOutDto>;
+  confirmTestDataResetRestart: () => void;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
   corpusIngestionStatus: () => CorpusIngestionStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
@@ -283,6 +284,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   registerSystemIpc({
     aiMemoryDatabaseStatus, projectRoot, variant, screenshots, eventCenter,
     clearTestData: dependencies.clearTestData,
+    confirmTestDataResetRestart: dependencies.confirmTestDataResetRestart,
     corpusSemanticBackfillStatus: dependencies.corpusSemanticBackfillStatus,
     corpusIngestionStatus: dependencies.corpusIngestionStatus,
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,

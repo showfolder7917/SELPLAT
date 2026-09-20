@@ -15,17 +15,19 @@ interface SystemIpcDependencies {
   screenshots: ScreenshotStore;
   eventCenter: EventCenterFacade;
   clearTestData: () => Promise<TestDataResetResultOutDto>;
+  confirmTestDataResetRestart: () => void;
   corpusSemanticBackfillStatus: () => CorpusSemanticBackfillStatusOutDto;
   corpusIngestionStatus: () => CorpusIngestionStatusOutDto;
   startCorpusSemanticBackfill: (limit?: number) => CorpusSemanticBackfillStatusOutDto;
 }
 
 /** 注册系统只读查询和受控目录操作；外部 URL 仅允许 HTTP(S)。 */
-export function registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, eventCenter, clearTestData, corpusSemanticBackfillStatus, corpusIngestionStatus, startCorpusSemanticBackfill }: SystemIpcDependencies): void {
+export function registerSystemIpc({ aiMemoryDatabaseStatus, projectRoot, variant, screenshots, eventCenter, clearTestData, confirmTestDataResetRestart, corpusSemanticBackfillStatus, corpusIngestionStatus, startCorpusSemanticBackfill }: SystemIpcDependencies): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto") => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
   handle("desktop:get-environment", () => ({ projectRoot, platform: process.platform, variant }));
   handle("desktop:get-ai-memory-database-status", () => aiMemoryDatabaseStatus);
   handle("desktop:clear-test-data", () => clearTestData(), "business");
+  handle("desktop:confirm-test-data-reset-restart", () => confirmTestDataResetRestart(), "business");
   handle("desktop:get-corpus-semantic-backfill-status", () => corpusSemanticBackfillStatus());
   handle("desktop:get-corpus-ingestion-status", () => corpusIngestionStatus());
   handle("desktop:start-corpus-semantic-backfill", (_event, limit?: number) => startCorpusSemanticBackfill(limit), "business");

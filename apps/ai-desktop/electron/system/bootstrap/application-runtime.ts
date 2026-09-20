@@ -1242,10 +1242,12 @@ export async function startApplication(): Promise<void> {
     cleanupCandidates: () => versionWorkspaces.clearFailedTestReleaseCandidates(releaseBatches.failedCandidateBranches()),
     clearStores: () => {
       dispatch.clear();
-      return collaborationStore.clearTestData()
-        + evolutionStateStore.clearTestData()
-        + linghuRuntime!.clearTestData()
-        + (workflowRepository?.clearTestData() || 0);
+      return [
+        { category: "collaboration" as const, clearedRecordCount: collaborationStore.clearTestData() },
+        { category: "evolution" as const, clearedRecordCount: evolutionStateStore.clearTestData() },
+        { category: "linghu" as const, clearedRecordCount: linghuRuntime!.clearTestData() },
+        { category: "workflow" as const, clearedRecordCount: workflowRepository?.clearTestData() || 0 },
+      ];
     },
     assertStoresCleared: () => {
       collaborationStore.assertTestDataCleared();
@@ -1263,6 +1265,7 @@ export async function startApplication(): Promise<void> {
     },
   });
   const clearTestData = () => testDataReset.clear();
+  const confirmTestDataResetRestart = () => testDataReset.confirmRestart();
 
   // 到这里全部服务已装配完成；IPC 只取得公开 Facade 和必要配置，不取得人物内部 Store。
   registerApplicationIpc({
@@ -1299,6 +1302,7 @@ export async function startApplication(): Promise<void> {
     rules,
     prompts,
     clearTestData,
+    confirmTestDataResetRestart,
     corpusSemanticBackfillStatus: () => corpusSemanticBackfill?.status() || ({
       // 功能未创建时返回完整失败 DTO，Renderer 无需猜测 null 的含义。
       state: "failed", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0,

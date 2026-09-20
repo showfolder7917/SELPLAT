@@ -562,17 +562,55 @@ test("一键清空测试数据必须二次确认且明确保留范围", async ()
   await resetButton.click();
   let dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
   await expect(dialog).toContainText("此操作不可撤销");
+  await expect(dialog).toContainText("旧审批参考也会被清除，之后不能再用于建议或恢复");
   await expect(dialog).toContainText("不会删除人物对话、训练记忆、登录、设置、工作区、可信命令、规则、源码和工程审计文件");
   await dialog.getByRole("button", { name: "取消" }).click();
   await page.getByRole("button", { name: "打开连接与执行设置" }).click();
   const reopenedResetButton = page.getByRole("button", { name: "一键清空测试数据" });
   await expect(reopenedResetButton).toBeEnabled();
 
+  await page.evaluate(() => (window as any).desktop.setInteractionTestDataResetFailure("运行投影归零断言失败"));
+  await reopenedResetButton.click();
+  dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
+  await dialog.getByRole("button", { name: "一键清空测试数据" }).click();
+  const resetCard = page.locator(".test-data-reset-card");
+  await expect(resetCard.getByRole("alert")).toContainText("运行投影归零断言失败");
+  await expect(resetCard.getByRole("status")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.interactionTestDataResetRestart)).not.toBe("true");
+  await page.evaluate(() => (window as any).desktop.setInteractionTestDataResetFailure(null));
+
   await reopenedResetButton.click();
   dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
   await dialog.getByRole("button", { name: "一键清空测试数据" }).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.interactionTestDataReset)).toBe("true");
   await expect(page.getByRole("dialog", { name: "一键清空测试数据" })).toHaveCount(0);
+  await expect(resetCard.getByRole("status")).toContainText("已清除 42 条运行记录");
+  await expect(resetCard).toContainText("协作运行状态：8 条");
+  await expect(resetCard).toContainText("已处理候选分支 1 个、工作树 2 个");
+  await expect(resetCard).toContainText("1 个候选工作树未能清理");
+  const restartButton = resetCard.getByRole("button", { name: "确认结果并重启" });
+  await expect(restartButton).toBeVisible();
+  await restartButton.click();
+  dialog = page.getByRole("dialog", { name: "确认结果并重启" });
+  await dialog.getByRole("button", { name: "取消" }).click();
+  await expect(restartButton).toBeVisible();
+  await restartButton.click();
+  dialog = page.getByRole("dialog", { name: "确认结果并重启" });
+  await dialog.getByRole("button", { name: "确认结果并重启" }).click();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.interactionTestDataResetRestart)).toBe("true");
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  // 受控重启会重新挂载 Renderer；设置浮层默认关闭，必须按真实用户路径重新打开。
+  const settingsButtonAfterRestart = page.getByRole("button", { name: "打开连接与执行设置" });
+  await expect(settingsButtonAfterRestart).toBeVisible();
+  await settingsButtonAfterRestart.click();
+  const resetCardAfterRestart = page.locator(".test-data-reset-card");
+  await expect(resetCardAfterRestart.locator(":scope > small")).toHaveText("保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。");
+  await expect(resetCardAfterRestart.getByRole("status")).toContainText("已清除 42 条运行记录");
+  await expect(resetCardAfterRestart.getByRole("button", { name: "正在清空…" })).toBeDisabled();
+  await expect(resetCardAfterRestart.locator("small").last()).toBeVisible();
+  expect(await resetCardAfterRestart.evaluate((card) => card.scrollWidth <= card.clientWidth)).toBe(true);
+  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
+  await expect(page.getByRole("button", { name: "打开连接与执行设置" })).toBeVisible();
 });
 
 test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
@@ -597,6 +635,7 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
       const triggerBounds = triggerElement.getBoundingClientRect();
       const panelBounds = panel.getBoundingClientRect();
       const titleBounds = title.getBoundingClientRect();
+      const panelStyle = window.getComputedStyle(panel);
       const actionButtons = [...panel.querySelectorAll<HTMLElement>(".temp-card button")].map((button) => {
         const bounds = button.getBoundingClientRect();
         return {
@@ -615,6 +654,18 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
         panelBottom: panelBounds.bottom,
         panelClientWidth: panel.clientWidth,
         panelScrollWidth: panel.scrollWidth,
+        panelLayout: {
+          className: panel.className,
+          parentClassName: panel.parentElement?.className ?? "",
+          matchesControlChild: panel.matches(".dev-settings-control > .dev-settings"),
+          inlineStyle: panel.getAttribute("style") ?? "",
+          position: panelStyle.position,
+          left: panelStyle.left,
+          right: panelStyle.right,
+          top: panelStyle.top,
+          bottom: panelStyle.bottom,
+          transform: panelStyle.transform,
+        },
         titleWidth: titleBounds.width,
         titleHeight: titleBounds.height,
         titleWritingMode: window.getComputedStyle(title).writingMode,
@@ -627,7 +678,7 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
     expect(metrics.triggerLeft, `${size.name}窗口的设置按钮必须锚定左侧`).toBeLessThanOrEqual(1);
     expect(metrics.triggerTop, `${size.name}窗口的设置按钮不能跑到上半区`).toBeGreaterThan(metrics.viewportHeight / 2);
     expect(Math.abs(metrics.viewportHeight - metrics.triggerBottom - 22), `${size.name}窗口的设置按钮必须锚定左下`).toBeLessThanOrEqual(1);
-    expect(metrics.panelLeft, `${size.name}窗口的设置面板必须从活动栏右侧开始`).toBeGreaterThanOrEqual(57);
+    expect(metrics.panelLeft, `${size.name}窗口的设置面板必须从活动栏右侧开始；运行面板信息：${JSON.stringify(metrics.panelLayout)}`).toBeGreaterThanOrEqual(57);
     expect(metrics.panelRight, `${size.name}窗口的设置面板不能超出桌面`).toBeLessThanOrEqual(metrics.viewportWidth + 1);
     expect(Math.abs(metrics.viewportHeight - metrics.panelBottom), `${size.name}窗口的设置面板必须贴合底部`).toBeLessThanOrEqual(1);
     expect(metrics.panelScrollWidth, `${size.name}窗口的设置面板不能横向溢出`).toBeLessThanOrEqual(metrics.panelClientWidth + 1);

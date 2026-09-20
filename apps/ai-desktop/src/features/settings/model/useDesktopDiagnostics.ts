@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { AiMemoryDatabaseStatusOutDto, AuditLogInfoOutDto, LocaleValue, TempDirectoryInfoOutDto, TrustedCommandInfoOutDto } from "../../../../contracts/system/desktop/index";
+import type { AiMemoryDatabaseStatusOutDto, AuditLogInfoOutDto, LocaleValue, TempDirectoryInfoOutDto, TestDataResetResultOutDto, TrustedCommandInfoOutDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 
@@ -17,6 +17,7 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
   const [aiMemoryDatabaseStatus, setAiMemoryDatabaseStatus] = useState<AiMemoryDatabaseStatusOutDto | null>(null);
   const [testDataResetting, setTestDataResetting] = useState(false);
   const [testDataResetError, setTestDataResetError] = useState("");
+  const [testDataResetResult, setTestDataResetResult] = useState<TestDataResetResultOutDto | null>(null);
 
   useEffect(() => {
     const desktop = getOptionalSystemDesktopApi();
@@ -44,10 +45,26 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
   const clearTestData = async () => {
     setTestDataResetting(true);
     setTestDataResetError("");
+    setTestDataResetResult(null);
     try {
-      await getOptionalSystemDesktopApi()?.clearTestData();
+      const desktop = getOptionalSystemDesktopApi();
+      if (!desktop) throw new Error("桌面接口不可用。");
+      setTestDataResetResult(await desktop.clearTestData());
+      setTestDataResetting(false);
     } catch (error) {
       setTestDataResetError(readableDesktopError(error, locale === "ja" ? "テストデータを消去できませんでした。" : "清空测试数据失败。"));
+      setTestDataResetting(false);
+    }
+  };
+  const confirmTestDataResetRestart = async () => {
+    setTestDataResetting(true);
+    setTestDataResetError("");
+    try {
+      const desktop = getOptionalSystemDesktopApi();
+      if (!desktop) throw new Error("桌面接口不可用。");
+      await desktop.confirmTestDataResetRestart();
+    } catch (error) {
+      setTestDataResetError(readableDesktopError(error, locale === "ja" ? "再起動を開始できませんでした。" : "无法启动应用重启。"));
       setTestDataResetting(false);
     }
   };
@@ -56,7 +73,7 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
   const refreshTrustedCommandInfo = () => { void getOptionalCodexDesktopApi()?.getTrustedCommandInfo().then(setTrustedCommandInfo); };
 
   return {
-    tempInfo, auditInfo, trustedCommandInfo, aiMemoryDatabaseStatus, testDataResetting, testDataResetError,
-    clearTempFiles, clearTrustedCommands, clearTestData, refreshTempInfo, refreshAuditInfo, refreshTrustedCommandInfo,
+    tempInfo, auditInfo, trustedCommandInfo, aiMemoryDatabaseStatus, testDataResetting, testDataResetError, testDataResetResult,
+    clearTempFiles, clearTrustedCommands, clearTestData, confirmTestDataResetRestart, refreshTempInfo, refreshAuditInfo, refreshTrustedCommandInfo,
   };
 }

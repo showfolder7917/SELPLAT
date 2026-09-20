@@ -11,7 +11,9 @@ const testDataResetCopy = {
     detail: "人物の会話、学習メモリ、ログイン、設定、ワークスペース、ルール、ソースコードは保持されます。完了後にアプリを再起動します。",
     action: "テストデータを一括消去",
     busy: "消去中…",
-    confirm: "AI Desktop 内部のテスト実行データを消去しますか？この操作は元に戻せません。人物の会話、学習メモリ、ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは削除されません。",
+    confirm: "AI Desktop 内部のテスト実行データを消去しますか？この操作は元に戻せません。古い承認参照も消去され、提案や復元には使用できなくなります。人物の会話、学習メモリ、ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは削除されません。",
+    restart: "結果を確認して再起動",
+    restartConfirm: "表示されている消去結果を確認しました。現在のアプリを再起動しますか？",
   },
   "zh-CN": {
     title: "测试数据",
@@ -19,7 +21,9 @@ const testDataResetCopy = {
     detail: "保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。",
     action: "一键清空测试数据",
     busy: "正在清空…",
-    confirm: "确定一键清空 AI Desktop 内部的测试运行数据吗？此操作不可撤销。不会删除人物对话、训练记忆、登录、设置、工作区、可信命令、规则、源码和工程审计文件。",
+    confirm: "确定一键清空 AI Desktop 内部的测试运行数据吗？此操作不可撤销。旧审批参考也会被清除，之后不能再用于建议或恢复。不会删除人物对话、训练记忆、登录、设置、工作区、可信命令、规则、源码和工程审计文件。",
+    restart: "确认结果并重启",
+    restartConfirm: "我已确认本次实际清理结果，现在按受控路径重启应用。是否继续？",
   },
 } as const;
 
@@ -31,6 +35,10 @@ export function createDeveloperSettingsViewModel(
   const { settings, diagnostics, status, text } = props;
   const locale = settings.locale;
   const resetCopy = testDataResetCopy[locale];
+  const resetCategoryLabels = locale === "ja"
+    ? { collaboration: "協同実行状態", evolution: "進化実行状態", linghu: "令狐実行状態", workflow: "イベントとワークフロー投影" }
+    : { collaboration: "协作运行状态", evolution: "演化运行状态", linghu: "令狐运行状态", workflow: "事件与工作流投影" };
+  const resetResult = diagnostics.testDataResetResult;
   const selectedModelName = settings.selectedModel?.displayName
     || (locale === "ja" ? "Codex の既定値" : "Codex 默认");
   const runtimeDescription = status.runtime
@@ -67,7 +75,18 @@ export function createDeveloperSettingsViewModel(
       detail: resetCopy.detail,
       actionLabel: diagnostics.testDataResetting ? resetCopy.busy : resetCopy.action,
       error: diagnostics.testDataResetError,
-      busy: diagnostics.testDataResetting,
+      busy: diagnostics.testDataResetting || Boolean(resetResult),
+      result: resetResult && {
+        summary: locale === "ja" ? `実行記録を ${resetResult.clearedRecordCount} 件消去しました。` : `已清除 ${resetResult.clearedRecordCount} 条运行记录。`,
+        categories: resetResult.clearedCategories.map((item) => ({ label: resetCategoryLabels[item.category], count: item.clearedRecordCount })),
+        candidates: locale === "ja"
+          ? `候補ブランチ ${resetResult.clearedCandidateBranchCount} 件・Worktree ${resetResult.clearedCandidateWorktreeCount} 件を処理しました。`
+          : `已处理候选分支 ${resetResult.clearedCandidateBranchCount} 个、工作树 ${resetResult.clearedCandidateWorktreeCount} 个。`,
+        warnings: resetResult.candidateCleanupWarnings,
+        retained: resetCopy.detail,
+        restartLabel: resetCopy.restart,
+        onRestart: () => { void controller.confirmTestDataResetRestart(resetCopy.restart, resetCopy.restartConfirm); },
+      },
       onClear: () => { void controller.clearTestData(resetCopy.action, resetCopy.confirm); },
     },
     model: {

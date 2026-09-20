@@ -16,6 +16,7 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
 
   return (
     <SettingsFloatingPanel
+      key={viewModel.panel.open ? "developer-settings-open" : "developer-settings-closed"}
       locale={viewModel.panel.locale}
       open={viewModel.panel.open}
       onOpenChange={viewModel.panel.onOpenChange}
@@ -37,6 +38,16 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
         <strong>{testData.summary}</strong>
         <small>{testData.detail}</small>
         {testData.error && <em role="alert">{testData.error}</em>}
+        {testData.result && (
+          <div className="test-data-reset-result" role="status">
+            <strong>{testData.result.summary}</strong>
+            {testData.result.categories.map((category) => <small key={category.label}>{category.label}：{category.count} 条</small>)}
+            <small>{testData.result.candidates}</small>
+            {testData.result.warnings.map((warning) => <em key={warning}>{warning}</em>)}
+            <small>{testData.result.retained}</small>
+            <button className="danger" type="button" onClick={testData.result.onRestart}>{testData.result.restartLabel}</button>
+          </div>
+        )}
         <div>
           <button className="danger" disabled={testData.busy} onClick={testData.onClear}>
             <Delete24Regular />

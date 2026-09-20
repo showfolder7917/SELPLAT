@@ -484,12 +484,33 @@ async function sendNangongTestConversation(request) {
   return structuredClone(evolutionState.conversation);
 }
 
+let interactionTestDataResetFailure = null;
+
 contextBridge.exposeInMainWorld("desktop", {
   // 启动诊断只供隔离交互测试读取，业务 Renderer 仍只依赖正式桌面接口。
   getInteractionLaunchDiagnostics: async () => ipcRenderer.invoke("interaction:get-launch-diagnostics"),
   getEnvironment: async () => ({ projectRoot, platform: process.platform, variant: "developer" }),
   getAiMemoryDatabaseStatus: async () => ({ ...readInteractionAiMemoryDatabaseStatus() }),
-  clearTestData: async () => { document.documentElement.dataset.interactionTestDataReset = "true"; return { cleared: true, clearedRecordCount: 42, clearedCandidateBranchCount: 0, clearedCandidateWorktreeCount: 0, candidateCleanupWarnings: [], restartScheduled: true }; },
+  clearTestData: async () => {
+    if (interactionTestDataResetFailure) throw new Error(interactionTestDataResetFailure);
+    document.documentElement.dataset.interactionTestDataReset = "true";
+    return {
+      cleared: true,
+      clearedRecordCount: 42,
+      clearedCategories: [
+        { category: "collaboration", clearedRecordCount: 8 },
+        { category: "evolution", clearedRecordCount: 11 },
+        { category: "linghu", clearedRecordCount: 3 },
+        { category: "workflow", clearedRecordCount: 20 },
+      ],
+      clearedCandidateBranchCount: 1,
+      clearedCandidateWorktreeCount: 2,
+      candidateCleanupWarnings: ["1 个候选工作树未能清理。"],
+      restartRequired: true,
+    };
+  },
+  confirmTestDataResetRestart: async () => { document.documentElement.dataset.interactionTestDataResetRestart = "true"; },
+  setInteractionTestDataResetFailure: async (message) => { interactionTestDataResetFailure = message || null; },
   getCorpusSemanticBackfillStatus: async () => ({ state: "idle", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0, failedCount: 0, message: null, startedAt: null, completedAt: null }),
   getCorpusIngestionStatus: async () => ({ state: "stopped", message: "自动入库已停止。", lastSucceededAt: null, retryable: false }),
   startCorpusSemanticBackfill: async () => ({ state: "completed", targetCount: 2, discoveredCount: 2, processedCount: 2, insertedCount: 2, failedCount: 0, message: "补齐完成：新增 2 条 AI 摘要。", startedAt: "2026-08-28T00:00:00.000Z", completedAt: "2026-08-28T00:00:01.000Z" }),

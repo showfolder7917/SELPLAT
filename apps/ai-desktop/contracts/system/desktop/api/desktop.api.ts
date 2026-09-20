@@ -38,8 +38,10 @@ export interface DesktopApi {
   getEnvironment(): Promise<DesktopEnvironmentOutDto>;
   /** 读取 AI Memory 数据库初始化状态，不触发重建。 */
   getAiMemoryDatabaseStatus(): Promise<AiMemoryDatabaseStatusOutDto>;
-  /** 清除应用内部测试业务数据并安排受控重启。示例：确认后返回 cleared=true；清理失败时拒绝 Promise，登录、设置、规则和工程文件不受影响。 */
+  /** 清除应用内部测试业务数据并返回可见结果；清理失败时拒绝 Promise，登录、设置、规则和工程文件不受影响。 */
   clearTestData(): Promise<TestDataResetResultOutDto>;
+  /** 用户确认已查看测试数据清理结果后，按既有受控路径重启应用。 */
+  confirmTestDataResetRestart(): Promise<void>;
   /** 读取 Codex 历史 AI 摘要补齐进度，不返回原始会话正文。 */
   getCorpusSemanticBackfillStatus(): Promise<CorpusSemanticBackfillStatusOutDto>;
   /** 读取自动入库的后台状态；不返回会话文件、检查点或原始对话。 */

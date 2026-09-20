@@ -40,6 +40,24 @@ export function useDeveloperSettingsSectionController(props: DeveloperSettingsFe
     });
     if (!confirmed) return;
     await props.diagnostics.clearTestData();
+    // SELUI 关闭危险确认窗口时会一并收起设置浮层；无论清理成功或失败，都恢复原卡片承载结果。
+    props.onOpenChange(true);
+  }
+
+  /** 用户查看实际清理结果后，才允许调用主进程的受控重启。 */
+  async function confirmTestDataResetRestart(action: string, confirmMessage: string) {
+    const confirmed = await selUi.confirm({
+      title: action,
+      message: confirmMessage,
+      tone: "danger",
+      confirmLabel: action,
+    });
+    if (!confirmed) {
+      // 重启确认由浮层外的 SELUI 对话框承载；取消时恢复结果卡片，允许用户再次确认。
+      props.onOpenChange(true);
+      return;
+    }
+    await props.diagnostics.confirmTestDataResetRestart();
   }
 
   /** 打开应用专属临时目录，不向页面暴露真实路径解析。 */
@@ -52,7 +70,7 @@ export function useDeveloperSettingsSectionController(props: DeveloperSettingsFe
     void getOptionalSystemDesktopApi()?.openAuditLogDirectory();
   }
 
-  return { clearTempFiles, clearTrustedCommands, clearTestData, openTempDirectory, openAuditLogDirectory };
+  return { clearTempFiles, clearTrustedCommands, clearTestData, confirmTestDataResetRestart, openTempDirectory, openAuditLogDirectory };
 }
 
 /** 设置 ViewModel 只读取该协调 Controller 的具名动作。 */

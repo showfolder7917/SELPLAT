@@ -1,1 +1,1 @@
-export type { TestDataResetResultOutDto } from "./dto/test-data-reset-result.out.dto.js";
+export type { TestDataResetCategoryOutDto, TestDataResetResultOutDto } from "./dto/test-data-reset-result.out.dto.js";

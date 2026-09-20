@@ -503,9 +503,14 @@ export class SqliteWorkflowDao implements WorkflowPersistencePort {
     return this.#database.transaction((connection) => {
       // 固定白名单只包含可重建运行投影；SchemaVersion、人物原文、主题、归档消息与入库检查点永远不进入清理范围。
       const tables = [
+        // 时间线专题是父投影；先显式清除两个子投影，再删除专题本身。
         "AiDesktopTaskTimelineStream", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineTopic",
-        "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord",
-        "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord", "AiDesktopTaskExecution", "AiDesktopWorkflowRun",
+        // 轮次任务同时引用任务执行和演化轮次，必须先于两端父记录删除。
+        "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound",
+        // 来源快照引用演化研讨；审批记录虽会清理，但当前没有 workflowId 外键。
+        "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionArchiveRecord", "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord",
+        // 任务执行引用工作流，必须先删除任务执行。
+        "AiDesktopTaskExecution", "AiDesktopWorkflowRun",
         "AiDesktopMemberRuntime", "AiDesktopEvent", "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation",
       ] as const;
       let clearedRecordCount = 0;
