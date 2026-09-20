@@ -19,7 +19,7 @@ async function loadWorkflowSource(entryPoint) {
 
 const { CheckpointCoordinator } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts");
 const { createOneShotFailureFingerprint } = await loadWorkflowSource("electron/services/workflow/internal/evolution/one-shot-failure-identity.ts");
-const { selectCurrentAcceptanceFailure } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-failure-selection.ts");
+const { selectCurrentAcceptanceFailure, selectRepeatedAcceptanceFailures } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-failure-selection.ts");
 const { CheckpointHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/checkpoint/checkpoint-handoff.service.ts");
 const { AcceptanceHandoffService } = await loadWorkflowSource("electron/services/workflow/internal/acceptance/acceptance-handoff.service.ts");
 const { SqliteCollaborationTimelineDao } = await loadWorkflowSource("electron/dao/timeline/internal/collaboration-timeline.dao.ts");
@@ -50,6 +50,24 @@ test("旧主卡点只保存恢复关系，修复事实选择本轮最新验收�
     payload: { proposalId: "proposal-2", operation: "run_hanli_result_acceptance" },
   };
   assert.equal(selectCurrentAcceptanceFailure(oldPrimary, [oldPrimary, currentAcceptance, unrelated], "proposal-1"), currentAcceptance);
+});
+
+test("两次韩立验收失败只按同一提案的不同真实运行计数", () => {
+  const failure = (eventId, acceptanceRunId, proposalId = "proposal-1") => ({
+    eventId, occurredAt: `2026-09-14T0${eventId.length}:00:00Z`, flowImpact: "blocked", message: `验收失败 ${eventId}`,
+    payload: { proposalId, operation: "repair_failed_hanli_acceptance", acceptanceRunId,
+      acceptanceFailureKind: "product-defect", acceptanceFailureScope: { decision: "within-original-acceptance", defects: [{ checkId: "criterion-1" }] } },
+  });
+  const first = failure("a", "accept-1");
+  const replay = failure("b", "accept-1");
+  const second = failure("cc", "accept-2");
+  const unrelated = failure("ddd", "accept-3", "proposal-other");
+  assert.deepEqual(selectRepeatedAcceptanceFailures([first, replay, second, unrelated], "proposal-1"), [replay, second]);
+  assert.equal(selectRepeatedAcceptanceFailures([first, replay, unrelated], "proposal-1").length, 1);
+  assert.equal(selectRepeatedAcceptanceFailures([{ ...second, payload: { ...second.payload, acceptanceFailureScope: { decision: "outside-original-acceptance" } } }], "proposal-1").length, 0);
+  const latestUnverified = { ...failure("dddd", "accept-4"), payload: { ...second.payload,
+    acceptanceRunId: "accept-4", acceptanceFailureScope: { decision: "outside-original-acceptance" } } };
+  assert.deepEqual(selectRepeatedAcceptanceFailures([first, second, latestUnverified], "proposal-1"), []);
 });
 
 // 端口夹具只模拟已发生的任务状态，不调用真实服务、不修改生产运行。
@@ -163,6 +181,24 @@ test("韩立范围内验收失败建立令狐新修复任务并明确完整测�
   assert.equal(recovery.proposalId, "proposal-1");
   assert.deepEqual(recovery.acceptanceConditionIds, ["criterion-1"]);
   assert.equal(recovery.handoffStatus, "handed-off");
+});
+
+test("韩立两次真实验收未通过时令狐同时核查验收误判与产品缺陷", async () => {
+  const f = fixture();
+  const failureScope = { decision: "within-original-acceptance", defects: [{ checkId: "criterion-1" }] };
+  Object.assign(f.event.payload, { operation: "repair_failed_hanli_acceptance", acceptanceRunId: "accept-1",
+    acceptanceFailureKind: "product-defect", acceptanceFailureScope: failureScope });
+  f.events.push({ ...structuredClone(f.event), eventId: "issue-2", occurredAt: "2026-09-05T00:01:00Z",
+    message: "第二次同条件验收失败", payload: { ...structuredClone(f.event.payload), acceptanceRunId: "accept-2" } });
+  await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+  const repair = f.effects.submitted[0];
+  assert.match(repair.confirmedIntent, /韩立已有两次不同验收运行未通过/);
+  assert.match(repair.confirmedIntent, /accept-1/);
+  assert.match(repair.confirmedIntent, /accept-2/);
+  assert.match(repair.confirmedIntent, /验收实现或提示词错误/);
+  assert.ok(repair.constraints.some((item) => item.includes("原条件与门禁保持不变")));
+  assert.ok(repair.acceptanceCriteria.some((item) => item.includes("两次验收失败")));
 });
 
 test("韩立验收能力受阻进入令狐修复链并保留故障分类边界", async () => {
