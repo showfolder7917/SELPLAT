@@ -743,6 +743,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await hanliComposer.getByRole("textbox", { name: "给韩立发送消息" }).fill("1");
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(hanliComposer.getByRole("button", { name: "发送给韩立" })).toBeVisible();
+  await expect(hanliConversation.getByText(/^(我已开始核实这个问题。确认范围和影响后，我会向你说明下一步。|已启动韩立与南宫婉的内部研讨。)$/u)).toBeVisible();
   for (const [width, height] of [[1000, 700], [1560, 980]]) {
     // BrowserWindow 由 Electron 主进程提供；测试进程只传递可序列化的窗口尺寸。
     await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), { width, height });

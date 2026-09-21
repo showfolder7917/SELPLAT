@@ -665,7 +665,11 @@ test("韩立会话已有当前观点时收到独立1直接启动内部研讨", a
   assert.equal(externalChatCalls, 0);
   assert.equal(result.messages.at(-2).content, "1");
   assert.match(result.messages.at(-1).content, /确认范围和影响后/);
+  assert.equal(result.messages.at(-1).messageId, "hanli-control:confirm-1");
   assert.doesNotMatch(result.messages.at(-1).content, /内部研讨|自动托管/u);
+  const replayed = await service.send({ clientMessageId: "confirm-1", message: "1", attachmentIds: [], workspaceState, locale: "zh-CN" });
+  assert.equal(started, 1);
+  assert.deepEqual(replayed, result);
 });
 
 test("自动托管关闭时独立1保留已核实的新专题切换意图并绕过旧研讨幂等返回", async () => {
@@ -727,7 +731,7 @@ test("韩立会话没有当前观点时输入1不创建空研讨", async () => {
 
   assert.equal(started, 0);
   assert.match(result.messages.at(-1).content, /还没有形成可供研讨的韩立观点/);
-  assert.match(result.messages.at(-1).messageId, /^hanli-control:/);
+  assert.equal(result.messages.at(-1).messageId, "hanli-control:empty-confirm-1");
 });
 
 test("韩立会话已有活动研讨时重复输入1只返回原流程", async () => {
@@ -762,6 +766,7 @@ test("韩立会话已有活动研讨时重复输入1只返回原流程", async (
   assert.equal(started, 0);
   assert.match(result.messages.at(-1).content, /正在内部研讨中，无需重复启动/);
   assert.match(result.messages.at(-1).content, /调查形成方案后，才会生成任务协作群/);
+  assert.equal(result.messages.at(-1).messageId, "hanli-control:duplicate-confirm-1");
 });
 
 test("同一客户显示投影同时隔离近期对话与当前观点", () => {

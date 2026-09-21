@@ -135,9 +135,10 @@ export class HanliConversationService {
       || JSON.stringify(originalUser.attachmentIds || []) !== JSON.stringify(request.attachmentIds || []))) {
       throw new Error("同一请求不能替换已保存的用户问题或截图，请使用新消息说明调整。");
     }
-    // 同一托管请求已经返回启动回执时，重复发送只能读取原结果。
+    // 同一控制请求已经返回启动回执时，重复发送只能读取原结果。
     if (request.clientMessageId && conversation.messages.some((item) =>
-      item.messageId === `hanli-control:automatic:${request.clientMessageId}`)) return conversation;
+      item.messageId === `hanli-control:automatic:${request.clientMessageId}`
+      || item.messageId === `hanli-control:${request.clientMessageId}`)) return conversation;
     // 同一请求恢复已保存的失败阶段；避免重新理解、重新调查或再次登记用户消息。
     const resumedInquiry = this.#inquiry.resume(request, conversation);
     if (resumedInquiry) return resumedInquiry;
@@ -479,8 +480,8 @@ export class HanliConversationService {
       userContent: request.message.trim(),
       // 保存用户本轮真实提交的附件引用。
       attachmentIds: request.attachmentIds || [],
-      // 韩立反馈使用新的稳定消息标识。
-      personaMessageId: `hanli-control:${randomUUID()}`,
+      // 同一确认请求必须回读同一客户可见反馈，避免重试重复入库。
+      personaMessageId: `hanli-control:${request.clientMessageId || randomUUID()}`,
       // 保存研讨服务返回的客户可读反馈。
       personaContent: confirmation.customerReply,
       // 用户确认进入处理的时间与完成时间使用同一原子写入时刻。
@@ -627,8 +628,8 @@ export class HanliConversationService {
       userContent: request.message.trim(),
       // 保存控制消息携带的真实附件引用。
       attachmentIds: request.attachmentIds || [],
-      // 控制反馈使用专用前缀，Aggregate 不会把流程状态误认成新的韩立观点。
-      personaMessageId: `hanli-control:${randomUUID()}`,
+      // 控制反馈按请求标识持久化，Aggregate 不会把流程状态误认成新的韩立观点。
+      personaMessageId: `hanli-control:${request.clientMessageId || randomUUID()}`,
       // 保存程序根据真实状态生成的可见反馈。
       personaContent: reply,
       // createdAt 表示控制消息进入应用服务的完成时刻。
