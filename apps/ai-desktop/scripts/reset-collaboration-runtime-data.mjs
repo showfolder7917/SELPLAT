@@ -33,19 +33,24 @@ for (const member of collaboration.members) {
 writeJson(collaborationPath, collaboration);
 
 const nangongPath = path.join(collaborationRoot, "nangong-evolution.json");
-const nangong = readJson(nangongPath);
-const preservedConversation = structuredClone(nangong.conversation);
-nangong.version = 8;
-nangong.preferenceSnapshotVersion = 0;
-nangong.activeTopicId = null;
-nangong.topics = [];
-nangong.proposals = [];
-nangong.deliberations = [];
-nangong.archiveRecords = [];
-nangong.automationRuntime = { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null };
-nangong.conversation = preservedConversation;
-nangong.updatedAt = now;
-writeJson(nangongPath, nangong);
+let preservedConversationMessageCount = 0;
+// 新版专题状态已经迁入 SQLite；仅在旧安装仍有该文件时清理旧运行态并保留会话原文。
+if (existsSync(nangongPath)) {
+  const nangong = readJson(nangongPath);
+  const preservedConversation = structuredClone(nangong.conversation);
+  preservedConversationMessageCount = Array.isArray(preservedConversation?.messages) ? preservedConversation.messages.length : 0;
+  nangong.version = 8;
+  nangong.preferenceSnapshotVersion = 0;
+  nangong.activeTopicId = null;
+  nangong.topics = [];
+  nangong.proposals = [];
+  nangong.deliberations = [];
+  nangong.archiveRecords = [];
+  nangong.automationRuntime = { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null };
+  nangong.conversation = preservedConversation;
+  nangong.updatedAt = now;
+  writeJson(nangongPath, nangong);
+}
 
 const linghuPath = path.join(collaborationRoot, "linghu-automation.json");
 const linghu = readJson(linghuPath);
@@ -83,7 +88,7 @@ try {
   throw error;
 }
 database.close();
-process.stdout.write(JSON.stringify({ resetAt: now, preservedConversationMessages: preservedConversation.messages.length, linghuEnabled: linghu.enabled, operationalDatabaseReset: true }));
+process.stdout.write(JSON.stringify({ resetAt: now, preservedConversationMessages: preservedConversationMessageCount, linghuEnabled: linghu.enabled, operationalDatabaseReset: true }));
 
 function readJson(filePath) {
   const value = JSON.parse(readFileSync(filePath, "utf8"));
