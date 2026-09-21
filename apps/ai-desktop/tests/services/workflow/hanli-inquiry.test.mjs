@@ -485,7 +485,7 @@ test("自动托管开启时就绪的自然语言请求只启动一次内部研�
   assert.match(explicitConfirmation.messages.at(-1).content, /正在内部研讨中，无需重复启动/);
 });
 
-test("托管中的客户纠正不自动建立专题；证据不匹配时保留可重试调查", async () => {
+test("托管中的客户纠正复用原运行并持久化修订范围", async () => {
   const f = fixture(async () => findings);
   const revisions = [];
   f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
@@ -511,15 +511,21 @@ test("托管中的客户纠正不自动建立专题；证据不匹配时保留�
       revisions.push(revision);
       return { updated: true, taskId: "task-4", taskRevision: 5, message: "已更新原任务范围并停止旧执行，正在按新范围重新分析。" };
     },
-    investigateWithNangong: async (inquiry) => ({ ...findings, answeredQuestion: inquiry.customerQuestion }),
+    investigateWithNangong: async () => { throw new Error("自动托管的就绪纠正不应进入只读调查服务"); },
     recordEvent: () => {},
   });
   const result = await service.send({ ...request, clientMessageId: "scope-fix", message: "测试台保持通用，不承担韩立验收" });
-  assert.deepEqual(revisions, []);
-  assert.equal(result.activity?.status, "completed");
+  assert.deepEqual(revisions, [{
+    runId: "run-4",
+    proposalId: "proposal-4",
+    instruction: "测试台保持通用，不承担韩立验收",
+    confirmedIntent: "测试台保持通用工具，令狐读取内部证据完成验收。",
+    acceptanceCriteria: ["测试台保持通用工具，令狐读取内部证据完成验收。"],
+  }]);
+  assert.equal(result.messages.at(-1).messageId, "hanli-control:automatic:scope-fix");
 });
 
-test("明确切换独立专题不写回旧任务也不提前建立新专题", async () => {
+test("自动托管中的明确新专题不写回旧任务并启动独立运行", async () => {
   const f = fixture(async () => findings);
   let revisions = 0;
   const starts = [];
@@ -546,15 +552,15 @@ test("明确切换独立专题不写回旧任务也不提前建立新专题", as
       starts.push({ sourceRequestId, options });
       return { continuous: true };
     },
-    investigateWithNangong: async (inquiry) => ({ ...findings, answeredQuestion: inquiry.customerQuestion }),
+    investigateWithNangong: async () => { throw new Error("自动托管的新专题不应进入只读调查服务"); },
     recordEvent: () => {},
   });
 
   const result = await service.send({ ...request, clientMessageId: "new-topic", message: "作为新的独立专题启动" });
 
   assert.equal(revisions, 0);
-  assert.deepEqual(starts, []);
-  assert.equal(result.activity?.status, "completed");
+  assert.deepEqual(starts, [{ sourceRequestId: "new-topic", options: { switchTopic: true } }]);
+  assert.equal(result.messages.at(-1).messageId, "hanli-control:automatic:new-topic");
 });
 
 test("删除韩立托管排障旁路，不保留后台恢复或旧状态兼容入口", () => {
@@ -601,7 +607,7 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").length, 1);
 });
 
-test("托管纠偏缺调查决定时补全同一回合，再返回调查结论", async () => {
+test("托管纠偏补全同一回合的就绪决定后复用原运行", async () => {
   const f = fixture(async () => findings);
   let calls = 0;
   const revisions = [], contexts = [];
@@ -624,14 +630,20 @@ test("托管纠偏缺调查决定时补全同一回合，再返回调查结论",
     } },
     reviseActiveRepairScope: async value => { revisions.push(value); return { updated: true, message: "已更新原任务" }; },
     startInternalDeliberation: async () => { throw new Error("不得新建"); },
-    investigateWithNangong: async () => findings,
+    investigateWithNangong: async () => { throw new Error("补全就绪决定后不应进入只读调查服务"); },
     recordEvent() {},
   });
   const result = await service.send(request);
-  assert.equal(calls, 4);
-  assert.equal(revisions.length, 0);
+  assert.equal(calls, 2);
+  assert.deepEqual(revisions, [{
+    runId: "original-run",
+    proposalId: "original-proposal",
+    instruction: customerQuestion,
+    confirmedIntent: "交原流程核实。",
+    acceptanceCriteria: ["交原流程核实。"],
+  }]);
   assert.equal(contexts.at(-1).sourceRequestId, request.clientMessageId);
-  assert.match(resultMessage(result).content, /调查结论/);
+  assert.equal(result.messages.at(-1).messageId, "hanli-control:automatic:u1");
 });
 
 test("托管回合连续遗漏决定不能伪装已交接，明确纯答复不启动执行", async () => {
