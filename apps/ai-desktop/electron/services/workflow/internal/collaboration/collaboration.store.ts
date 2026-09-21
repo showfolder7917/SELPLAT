@@ -243,6 +243,17 @@ export class CollaborationStore {
         || task.integrationFailure?.kind === "local-change-ownership";
       // 客户控制的前置条件必须先有令狐生成的可执行指导；通用“继续”入口不能越过容量、归属等等待节点。
       if (requiresCustomerAction && !customerGuidance) {
+        if (task.integrationFailure?.kind === "local-change-ownership") {
+          // 用户明确要求从卡点继续时，只把未登记文件交给令狐重新核查；不提交、合并、删除或认定该文件归属。
+          task.state = "recovering";
+          task.phase = null;
+          task.repairKind = "execution";
+          task.repairFailureReason = `用户请求令狐重新核查本地修改归属：${task.integrationFailure.summary || task.blockingReason || "未登记本地修改"}`;
+          task.repairRequiresUserConfirmation = false;
+          task.blockingReason = "令狐正在复核本地修改是否属于启动运行数据，复核完成前不会集成或提交该文件。";
+          task.flowEvents.push({ eventId: randomUUID(), type: "task.recovery_requested", stage: "recovery", status: "started", actor: recoveryActor || task.initiator, summary: task.blockingReason, occurredAt: new Date().toISOString(), error: false });
+          return;
+        }
         throw new Error("请先按等待节点中的操作步骤处理客户前置条件；令狐给出完成标准后，才能从该卡点继续。");
       }
       if (task.state === "test-failed") {

@@ -96,6 +96,14 @@ export function projectCurrentTopicStage(
     const runBlocked = run?.status === "blocked"
       && run.topicId === (topic?.topicId || proposal.topicId)
       && run.proposalId === proposal.proposalId;
+    // 部分历史卡点没有绑定一次性运行；仍从当前提案的真实阻塞任务签发同一条受控复核入口。
+    const recoveryTaskIds = [...new Set([
+      ...technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)),
+      ...collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
+        && ["blocked", "recovering", "test-failed"].includes(item.state))
+        .map((item) => item.taskId),
+    ])];
+    const taskBlocked = recoveryTaskIds.length > 0;
     const monitoring = technicalRecovery.handoffStatus === "monitoring";
     const unverified = technicalRecovery.handoffStatus === "basis-unverified";
     const failed = technicalRecovery.handoffStatus === "failed";
@@ -107,9 +115,9 @@ export function projectCurrentTopicStage(
     return {
       topicId: technicalRecovery.topicId, proposalId: technicalRecovery.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
       summary, repairContent: proposal.content, remaining: technicalRecovery.failureReason || technicalRecovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
-      waitingFor, nextAction: technicalRecovery.nextAction, userAction: runBlocked ? "resume" : "none", resumeOneShotRunId: runBlocked ? run.runId : null,
-      readRecovery: readRecovery(runBlocked ? "resume" : "none", waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
-      effectiveTaskIds: technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)), missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
+      waitingFor, nextAction: technicalRecovery.nextAction, userAction: runBlocked || taskBlocked ? "resume" : "none", resumeOneShotRunId: runBlocked ? run.runId : null,
+      readRecovery: readRecovery(runBlocked || taskBlocked ? "resume" : "none", waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
+      effectiveTaskIds: recoveryTaskIds, missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
       hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: technicalRecovery.updatedAt,
     };
   }
