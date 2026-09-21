@@ -139,16 +139,18 @@ function deliberationMemberDisplay(
   deliberating = false,
   awaitingConfirmation = false,
 ): { presence: MemberState; label: string } | null {
-  if (!oneShotRun || oneShotRun.status !== "running") return null;
+  // 已经建立专题时，协作状态中的当前任务仍是成员状态的唯一事实。
+  if (member.currentTaskId) return null;
   if (awaitingConfirmation) {
     return member.memberId === "han-li"
       ? { presence: "conversation", label: locale === "ja" ? "確認待ち" : "等待你确认" }
       : null;
   }
-  // 联合研讨仍由单一运行 actor 推进，但南宫婉也在同一持久化研讨中工作。
+  // 联合研讨由 currentTopicStage 的持久化投影确认；不能因一次性运行已转换阶段而把南宫婉误显示为空闲。
   if (member.memberId === "nangong-wan" && deliberating) {
     return { presence: "working", label: locale === "ja" ? "内部検討中" : "内部研讨中" };
   }
+  if (!oneShotRun || oneShotRun.status !== "running") return null;
   if (oneShotRun.actor !== member.memberId) return null;
 
   const chineseLabels: Partial<Record<EvolutionOneShotRunOutDto["phase"], string>> = {

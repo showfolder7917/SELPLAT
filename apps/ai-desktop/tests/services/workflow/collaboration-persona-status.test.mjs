@@ -45,6 +45,14 @@ test("已持久化的联合研讨同时显示南宫婉活动，不改写韩立�
   assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run, deliberating: true }), { presence: "working", label: "梳理调查问题中" });
 });
 
+test("联合研讨投影不依赖一次性运行仍处于 running，且不覆盖已有任务", () => {
+  const nangong = { memberId: "nangong-wan", state: "idle", currentTaskId: null, phase: null };
+  const executingNangong = { memberId: "nangong-wan", state: "working", currentTaskId: "task-current", phase: "verifying" };
+
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", deliberating: true }), { presence: "working", label: "内部研讨中" });
+  assert.deepEqual(display({ member: executingNangong, locale: "zh-CN", deliberating: true }), { presence: "working", label: "自检中" });
+});
+
 test("韩立人物会话排查在专题建立前同时投影负责人和受托核实人物", () => {
   const activity = { phase: "investigating", status: "running" };
   const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
