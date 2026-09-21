@@ -107,6 +107,21 @@ test("技术故障历史仍保留但任务已进入统一测试时撤销恢复�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
+test("点击继续进入恢复处理中时立即撤销恢复动作", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "run-1", taskId: "task-current", occurrenceId: "event-1", reason: "原验收失败", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "等待令狐复核。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [task("recovering")] });
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeOneShotRunId, null);
+  assert.equal(stage.readRecovery.requiresUserAction, false);
+  assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
+});
+
 test("没有阻塞运行但关联任务仍阻塞时签发任务级恢复动作", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
