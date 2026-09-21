@@ -436,13 +436,14 @@ test("排查恢复点不进入后续客户对话上下文，也不挤掉真实�
 });
 
 
-test("自动托管开启时调查仍先返回结论；重复请求不提前建立专题", async () => {
+test("自动托管开启时就绪的自然语言请求只启动一次内部研讨", async () => {
   const f = fixture(async () => findings);
   let starts = 0, calls = 0;
+  const state = { deliberations: [], automationSettings: { automaticCustodyEnabled: true }, oneShotRun: null };
   f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
   const service = new HanliConversationService({
     memory: f.memory,
-    store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true }, oneShotRun: null }) },
+    store: { state: () => state },
     prompts: { render: (id) => id },
     conversation: {
       activeConversationId: () => "provider",
@@ -453,20 +454,35 @@ test("自动托管开启时调查仍先返回结论；重复请求不提前建�
         return { threadId: "provider", text: `消息区独立滚动，输入区固定可见，加载和错误状态明确。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` };
       },
     },
-    startInternalDeliberation: async () => {
+    startInternalDeliberation: async (_request, sourceRequestId, options) => {
       starts += 1;
-      throw new Error("调查结论返回前不能建立专题");
+      assert.equal(sourceRequestId, request.clientMessageId);
+      assert.deepEqual(options, { switchTopic: false });
+      assert.equal(f.discussionContexts.length, 1, "启动前必须持久化当前观点和调查上下文");
+      const context = f.discussionContexts[0];
+      assert.match(context.contextId, /^viewpoint-hanli-message-/u);
+      assert.equal(context.sourceRequestId, request.clientMessageId);
+      assert.equal(context.customerQuestion, customerQuestion);
+      assert.equal(context.understoodGoal, understanding.understoodGoal);
+      assert.equal(context.verificationTarget, understanding.verificationTarget);
+      assert.equal(context.expectedAnswer, understanding.expectedAnswer);
+      assert.equal(context.investigationQuestion, understanding.investigationQuestion);
+      state.oneShotRun = { runId: "automatic-run", status: "running" };
+      return { continuous: true };
     },
-    investigateWithNangong: async (inquiry) => ({ ...findings, answeredQuestion: inquiry.customerQuestion }),
+    investigateWithNangong: async () => { throw new Error("自动托管不应进入只读调查服务"); },
     recordEvent: () => {},
   });
   const [first, second] = await Promise.all([service.send(request), service.send(request)]);
-  assert.equal(starts, 0);
-  assert.equal(calls, 3);
+  assert.equal(starts, 1);
+  assert.equal(calls, 1);
   assert.equal(f.messages.filter((item) => item.speakerType === "user").length, 1);
-  assert.match(resultMessage(first).content, /调查结论/);
-  assert.equal(resultMessage(second).messageId, "inquiry:u1:result");
-  assert.equal(f.messages.filter((item) => item.messageId === "hanli-control:automatic:u1").length, 0);
+  assert.match(first.messages.find((item) => item.messageId === request.clientMessageId).content, /长消息超过一屏/);
+  assert.equal(second.messages.at(-1).messageId, "hanli-control:automatic:u1");
+  assert.equal(f.messages.filter((item) => item.messageId === "hanli-control:automatic:u1").length, 1);
+  const explicitConfirmation = await service.send({ ...request, clientMessageId: "explicit-1", message: "1" });
+  assert.equal(starts, 1, "自动启动后独立1不得创建第二个研讨");
+  assert.match(explicitConfirmation.messages.at(-1).content, /正在内部研讨中，无需重复启动/);
 });
 
 test("托管中的客户纠正不自动建立专题；证据不匹配时保留可重试调查", async () => {
