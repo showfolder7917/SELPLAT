@@ -45,6 +45,7 @@ let taskTimelineFixtureEnabled = false;
 let acceptanceTimelineFixtureStatus = null;
 let interruptedTimelineFixtureStatus = null;
 let customerActionTimelineFixtureEnabled = false;
+let interactionDeliberationFixtureEnabled = false;
 let collaborationTimelineRevision = 0;
 // 隔离桥与正式导航偏好相同：只保存最后一次成功的人物标识，不修改协作快照。
 let collaborationNavigationPreferenceMemberId = "han-li";
@@ -230,10 +231,25 @@ const resetInteractionTimelineVariants = () => {
   acceptanceTimelineFixtureStatus = null;
   interruptedTimelineFixtureStatus = null;
   customerActionTimelineFixtureEnabled = false;
+  interactionDeliberationFixtureEnabled = false;
   evolutionState.oneShotRun = null;
 };
 // 隔离夹具必须模拟正式 Evolution 运行时提供的当前专题投影；卡片不会从历史节点自行推断恢复入口。
 const synchronizeInteractionCurrentTopicStage = () => {
+  if (interactionDeliberationFixtureEnabled) {
+    const deliberation = evolutionState.deliberations.find((item) => item.status === "questioning" && item.topicId === null);
+    if (deliberation) {
+      evolutionState.currentTopicStage = {
+        topicId: null, proposalId: null, status: "deliberating", title: "南宫婉正在内部研讨",
+        summary: "韩立已确认当前问题，南宫婉正在与韩立核实范围和影响。", repairContent: "", remaining: "等待本轮内部研讨形成可执行范围。",
+        waitingFor: "南宫婉内部研讨", nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。", userAction: "none",
+        resumeOneShotRunId: null, effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null,
+        readRecovery: { policyId: `interaction-deliberation:${deliberation.deliberationId}`, waitingFor: "南宫婉内部研讨", requiresUserAction: false, nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。" },
+        deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" }, updatedAt: deliberation.updatedAt,
+      };
+      return;
+    }
+  }
   if (!taskTimelineFixtureEnabled) {
     evolutionState.currentTopicStage = null;
     return;
@@ -717,6 +733,12 @@ contextBridge.exposeInMainWorld("desktop", {
     nextAction: "系统将自动重新读取当前交付投影；读取成功后再显示当前结论。",
   }),
   setInteractionTestConsoleFixture: async (enabled) => structuredClone(setInteractionTestConsoleFixture(enabled)),
+  setInteractionDeliberationFixture: async (enabled) => {
+    interactionDeliberationFixtureEnabled = enabled === true;
+    evolutionState.deliberations = enabled ? [{ deliberationId: "interaction-deliberation-fixture", topicId: null, status: "questioning", rounds: [], updatedAt: new Date().toISOString() }] : [];
+    synchronizeInteractionCurrentTopicStage();
+    return publishNangongEvolution(enabled ? "interaction.deliberation_fixture" : "interaction.deliberation_fixture_cleared");
+  },
   setInteractionOneShotRun: async (run) => {
     evolutionState.oneShotRun = run ? structuredClone(run) : null;
     if (run?.resumeMode === "post-completion-review" && run.proposalId) {
@@ -904,6 +926,12 @@ contextBridge.exposeInMainWorld("desktop", {
     const sequenceNumber = hanliConversation.messages.length;
     hanliConversation.messages.push({ messageId: userMessageId, messageType: "customer-visible", sequenceNumber, speakerType: "user", speakerPersonaId: null, content: request.message, replyToMessageId: null, deliveryStatus: "completed", attachmentIds: request.attachmentIds || [], createdAt: now, completedAt: now });
     if (request.message.trim() === "1") {
+      // 交互替身沿正式数据方向写入持久化研讨事实，再发布由当前专题投影提供的状态。
+      interactionDeliberationFixtureEnabled = true;
+      evolutionState.deliberations = [{
+        deliberationId: `interaction-deliberation-${Date.now()}`, topicId: null, status: "questioning", rounds: [], updatedAt: now,
+      }];
+      synchronizeInteractionCurrentTopicStage();
       hanliConversation.messages.push({ messageId: `hanli-confirmed-${Date.now()}`, messageType: "customer-visible", sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "已启动韩立与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
       hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:question`, messageType: "internal-deliberation", sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前需求最关键的验收边界是什么？", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
       hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:answer`, messageType: "internal-deliberation", sequenceNumber: sequenceNumber + 3, speakerType: "persona", speakerPersonaId: "nangong-wan", content: "验收时需确认内部一问一答可见，且不写入用户语义资料。", replyToMessageId: `internal:${sequenceNumber}:question`, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
@@ -913,6 +941,7 @@ contextBridge.exposeInMainWorld("desktop", {
       hanliConversation.messages.push({ messageId: `hanli-viewpoint-${Date.now()}`, messageType: "customer-visible", sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
     }
     hanliConversation.updatedAt = now;
+    publishNangongEvolution(request.message.trim() === "1" ? "hanli.deliberation_started" : "hanli.message_sent");
     for (const listener of personaConversationListeners) listener(structuredClone(hanliConversation));
     return structuredClone(hanliConversation);
   },

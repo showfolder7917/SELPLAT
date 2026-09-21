@@ -97,3 +97,12 @@ test("独立专题建立中和失败优先于审计历史与空任务引导，�
   assert.doesNotMatch(establishmentBranch, /openHanliConversation|task-recovery-continue/);
   assert.match(developerStyles, /\.task-topic-establishment \{[\s\S]*width: min\(100%, 560px\)[\s\S]*min-width: 0/);
 });
+
+test("已持久化的内部研讨优先于空任务引导，且不伪造时间线或用户操作", () => {
+  const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
+  assert.match(taskGroupSource, /const deliberating = currentTopicStage\?\.status === "deliberating"[\s\S]*const activeGroups = establishingTopic \|\| deliberating/);
+  assert.match(taskGroupSource, /if \(deliberating\)[\s\S]*task-deliberation-activity[\s\S]*发生事项：\{deliberating\.summary\}[\s\S]*处理人和状态：\{deliberating\.waitingFor\}[\s\S]*是否需要你操作：当前无需操作。[\s\S]*下一步：\{deliberating\.nextAction\}[\s\S]*\{auditHistory\}/);
+  const deliberatingBranch = taskGroupSource.slice(taskGroupSource.indexOf("if (deliberating)"), taskGroupSource.indexOf("if (groups.length === 0)"));
+  assert.doesNotMatch(deliberatingBranch, /TaskGroupCard|openHanliConversation|task-recovery-continue|onContinueTask|onResumeAcceptance/);
+  assert.match(developerStyles, /\.task-deliberation-activity \{[\s\S]*width: min\(100%, 560px\)[\s\S]*min-width: 0[\s\S]*overflow-wrap: anywhere/);
+});

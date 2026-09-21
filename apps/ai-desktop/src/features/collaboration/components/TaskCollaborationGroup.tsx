@@ -97,8 +97,9 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const currentTopicStage = model.data.currentTopicStage;
   const establishingTopic = currentTopicStage && ["establishing-topic", "topic-establishment-failed"].includes(currentTopicStage.status)
     ? currentTopicStage : null;
+  const deliberating = currentTopicStage?.status === "deliberating" ? currentTopicStage : null;
   // 当前区只接受当前投影明确关联的专题；建立阶段没有专题标识时保持为空，避免旧卡占用主区域。
-  const activeGroups = establishingTopic
+  const activeGroups = establishingTopic || deliberating
     ? []
     : currentTopicStage?.topicId
       ? groups.filter((group) => group.topicId === currentTopicStage.topicId)
@@ -300,6 +301,24 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
             <span>是否需要你操作：当前无需操作。</span>
             <span>下一步：{establishingTopic.nextAction}</span>
             {establishingTopic.remaining && <small>{establishingTopic.remaining}</small>}
+          </div>
+          {auditHistory}
+        </div>
+      </section>
+    );
+  }
+
+  if (deliberating) {
+    return (
+      <section className="task-collaboration-page">
+        <div className="task-collaboration-groups">
+          <div className="task-deliberation-activity" role="status">
+            <strong>{deliberating.title}</strong>
+            <span>发生事项：{deliberating.summary}</span>
+            <span>处理人和状态：{deliberating.waitingFor}</span>
+            <span>是否需要你操作：当前无需操作。</span>
+            <span>下一步：{deliberating.nextAction}</span>
+            {deliberating.remaining && <small>{deliberating.remaining}</small>}
           </div>
           {auditHistory}
         </div>

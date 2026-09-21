@@ -744,6 +744,25 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await hanliComposer.getByRole("button", { name: "发送给韩立" }).click();
   await expect(hanliComposer.getByRole("button", { name: "发送给韩立" })).toBeVisible();
   await expect(hanliConversation.getByText(/^(我已开始核实这个问题。确认范围和影响后，我会向你说明下一步。|已启动韩立与南宫婉的内部研讨。)$/u)).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => (await window.desktop!.getEvolutionState()).currentTopicStage?.status)).toBe("deliberating");
+  await taskList.getByRole("button", { name: /任务协作群/ }).click();
+  const deliberationActivity = page.locator(".task-deliberation-activity");
+  await expect(deliberationActivity).toContainText("南宫婉正在内部研讨");
+  await expect(deliberationActivity).toContainText("是否需要你操作：当前无需操作。");
+  await expect(deliberationActivity).toContainText("形成可执行范围后再显示确认");
+  for (const [width, height] of [[1000, 700], [1560, 980]]) {
+    await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), { width, height });
+    const deliberationGeometry = await deliberationActivity.evaluate((activity) => ({
+      overflow: activity.scrollWidth - activity.clientWidth,
+      top: activity.getBoundingClientRect().top,
+      bottom: activity.getBoundingClientRect().bottom,
+      viewportHeight: window.innerHeight,
+    }));
+    expect(deliberationGeometry.overflow, `${width}×${height} 的研讨状态不能横向溢出`).toBeLessThanOrEqual(1);
+    expect(deliberationGeometry.top, `${width}×${height} 的研讨状态必须位于可滚动页面内`).toBeGreaterThanOrEqual(0);
+    expect(deliberationGeometry.bottom, `${width}×${height} 的研讨状态必须完整位于窗口内`).toBeLessThanOrEqual(deliberationGeometry.viewportHeight);
+  }
+  await taskList.getByRole("button", { name: /韩立/ }).click();
   for (const [width, height] of [[1000, 700], [1560, 980]]) {
     // BrowserWindow 由 Electron 主进程提供；测试进程只传递可序列化的窗口尺寸。
     await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), { width, height });
@@ -796,6 +815,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   expect(preserved.filter((message) => message.messageType === "internal-deliberation")).toHaveLength(2);
   expect(preserved.filter((message) => message.messageType === "internal-recovery")).toHaveLength(1);
   await page.screenshot({ path: test.info().outputPath("nangong-new-conversation-isolated.png"), fullPage: true });
+  await page.evaluate(() => (window as any).desktop.setInteractionDeliberationFixture(false));
   await taskList.getByRole("button", { name: "单会话" }).click();
 });
 
