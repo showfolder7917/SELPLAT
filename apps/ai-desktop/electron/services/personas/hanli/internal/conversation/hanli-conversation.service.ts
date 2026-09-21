@@ -334,9 +334,37 @@ export class HanliConversationService {
       // 使用本轮用户原话替换旧澄清锚点。
       effectiveCustomerQuestion = request.message.trim();
     }
-    // 理解充分时由韩立真实调用南宫婉完成一次只读调查。
+    // 理解充分后按持久化托管设置选择现有的唯一后续流程。
     if (parsed.inquiry?.status === "ready") {
-      // 调查在两种托管状态下都只读完成并先返回结论；独立输入 1 才能把当前观点送入后续专题。
+      // 自动托管已授权韩立以本轮完整目标、观点和调查范围启动统一内部研讨。
+      if (this.#options.store.state().automationSettings.automaticCustodyEnabled === true) {
+        // ready 契约要求调查问题存在；在交给必填的持久化上下文前再次显式收窄类型。
+        const investigationQuestion = parsed.inquiry.investigationQuestion;
+        if (!investigationQuestion) {
+          throw new Error("韩立尚未形成可启动内部研讨的调查问题。");
+        }
+        // 观点消息标识与用户请求标识绑定，重试仍由 send 的单飞映射返回同一结果。
+        return this.#startDeliberation(
+          request,
+          conversation,
+          {
+            sourceMessageId: `hanli-message-${randomUUID()}`,
+            sourceUserMessageId: request.clientMessageId || null,
+            content: parsed.reply,
+            createdAt,
+          },
+          parsed.topic,
+          undefined,
+          {
+            customerQuestion: effectiveCustomerQuestion,
+            understoodGoal: parsed.inquiry.understoodGoal,
+            verificationTarget: parsed.inquiry.verificationTarget,
+            expectedAnswer: parsed.inquiry.expectedAnswer,
+            investigationQuestion,
+          },
+        );
+      }
+      // 非托管状态仍先完成只读调查，用户随后以独立 1 明确授权启动研讨。
       const investigatedConversation = await this.#inquiry.run(
         request,
         conversationId,
