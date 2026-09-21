@@ -48,10 +48,18 @@ export class WorkflowSupervisor {
   }
 
   async checkNow(): Promise<void> {
-    if (this.#checking) return;
+    const now = this.#now().toISOString();
+    // 长耗时的令狐接管不能冻结应用运行心跳；重叠轮询只续约会话，不重复执行状态同步和异常交接。
+    if (this.#checking) {
+      try {
+        this.#repository.heartbeatRuntimeSession(now);
+      } catch (error) {
+        this.#recordFailure(error);
+      }
+      return;
+    }
     this.#checking = true;
     try {
-      const now = this.#now().toISOString();
       this.#repository.heartbeatRuntimeSession(now);
       // 三个业务域必须相互隔离；某一份状态损坏时仍要让其他领域和卡住检测继续推进。
       this.#syncDomain("evolution", () => this.#repository.syncEvolutionState(this.#readers.evolution()), now);
@@ -85,23 +93,28 @@ export class WorkflowSupervisor {
         for (const event of batch) this.#repository.touchException(event.eventId);
       }
     } catch (error) {
-      try {
-        const message = error instanceof Error ? error.message : String(error);
-        this.#repository.recordEvent({
-          sourceType: "launcher",
-          sourceId: "workflow-supervisor",
-          eventType: "workflow.supervisor.failed",
-          category: "technical-error",
-          severity: "error",
-          status: "open",
-          message,
-          fingerprint: `workflow-supervisor:failed:${message.slice(0, 500)}`,
-        });
-      } catch {
-        // 数据库自身不可用时不能递归写入同一数据库；启动状态和文件审计仍保留真实失败。
-      }
+      this.#recordFailure(error);
     } finally {
       this.#checking = false;
+    }
+  }
+
+  /** 监督器故障统一去重入库；数据库自身不可用时不能递归写入同一数据库。 */
+  #recordFailure(error: unknown): void {
+    try {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#repository.recordEvent({
+        sourceType: "launcher",
+        sourceId: "workflow-supervisor",
+        eventType: "workflow.supervisor.failed",
+        category: "technical-error",
+        severity: "error",
+        status: "open",
+        message,
+        fingerprint: `workflow-supervisor:failed:${message.slice(0, 500)}`,
+      });
+    } catch {
+      // 启动状态和文件审计仍保留真实失败。
     }
   }
 

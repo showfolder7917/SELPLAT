@@ -809,6 +809,50 @@ test("独立监督器同步全流程后把卡住任务交给令狐入口", async
   }
 });
 
+test("长耗时卡点接管期间重叠轮询仍持续更新应用运行心跳", async () => {
+  const heartbeats = [];
+  let releaseRecovery;
+  const recoveryFinished = new Promise((resolve) => { releaseRecovery = resolve; });
+  const nowValues = [new Date("2026-09-21T11:21:52.000Z"), new Date("2026-09-21T11:22:22.000Z")];
+  const blockingEvent = {
+    eventId: "blocking-event", sourceType: "system", sourceId: "test", eventType: "test.blocked",
+    category: "technical-error", severity: "error", status: "processing", message: "等待长耗时修复",
+    payload: {}, correlationId: null, fingerprint: "test.blocked", occurredAt: nowValues[0].toISOString(),
+    recordedAt: nowValues[0].toISOString(), resolvedAt: null, handlingOwnerId: "linghu-ancestor",
+    handlingStartedAt: nowValues[0].toISOString(), resolutionSummary: null, flowImpact: "blocked",
+  };
+  const repository = {
+    heartbeatRuntimeSession: (now) => heartbeats.push(now),
+    syncEvolutionState: () => undefined,
+    syncCollaborationState: () => undefined,
+    syncLinghuState: () => undefined,
+    detectStalledTasks: () => [],
+    listWorkflowBlockages: () => [blockingEvent],
+    claimExceptions: () => [],
+    touchException: () => undefined,
+    recordEvent: () => "event",
+  };
+  const supervisor = new WorkflowSupervisor({
+    repository,
+    now: () => nowValues.shift() || new Date("2026-09-21T11:22:52.000Z"),
+    readers: {
+      collaboration: () => ({ mode: "collaboration", tasks: [] }),
+      evolution: () => ({ oneShotRun: null }),
+      linghu: () => ({}),
+    },
+    projectCollaborationTimeline: () => undefined,
+    onStalledTasks: () => undefined,
+    onUnhandledExceptions: () => recoveryFinished,
+  });
+
+  const firstCheck = supervisor.checkNow();
+  await Promise.resolve();
+  await supervisor.checkNow();
+  assert.deepEqual(heartbeats, ["2026-09-21T11:21:52.000Z", "2026-09-21T11:22:22.000Z"]);
+  releaseRecovery();
+  await firstCheck;
+});
+
 function collaborationState(heartbeat) {
   const updatedAt = heartbeat;
   return {
