@@ -97,13 +97,15 @@ export function projectCurrentTopicStage(
       && run.topicId === (topic?.topicId || proposal.topicId)
       && run.proposalId === proposal.proposalId;
     // 部分历史卡点没有绑定一次性运行；仍从当前提案的真实阻塞任务签发同一条受控复核入口。
+    const blockingTaskIds = collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
+      && ["blocked", "recovering", "test-failed"].includes(item.state))
+      .map((item) => item.taskId);
     const recoveryTaskIds = [...new Set([
       ...technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)),
-      ...collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
-        && ["blocked", "recovering", "test-failed"].includes(item.state))
-        .map((item) => item.taskId),
+      ...blockingTaskIds,
     ])];
-    const taskBlocked = recoveryTaskIds.length > 0;
+    // 历史故障记录只用于保留恢复证据；按钮必须由当前仍处于失败恢复态的真实任务签发。
+    const taskBlocked = blockingTaskIds.length > 0;
     const monitoring = technicalRecovery.handoffStatus === "monitoring";
     const unverified = technicalRecovery.handoffStatus === "basis-unverified";
     const failed = technicalRecovery.handoffStatus === "failed";
