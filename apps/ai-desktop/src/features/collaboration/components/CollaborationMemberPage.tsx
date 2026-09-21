@@ -47,6 +47,8 @@ type CollaborationMemberPagePresentation = {
   linghuAutomation: LinghuAutomationStateOutDto | null;
   /** 协作状态存储的读取结果决定空页面应显示同步或失败状态。 */
   stateReadStatus: CollaborationStateReadStatus;
+  /** 当前专题阶段已确认的联合内部研讨只读事实。 */
+  deliberating: boolean;
 };
 
 /** 人物页面模型：把人物、时间线、显示状态和操作归成一个入口。 */
@@ -190,7 +192,7 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
   // 人物和时间线是页面展示真实协作记录的权威业务数据。
   const { member, timeline } = model;
   // 显示状态集中提供语言、实时正文以及人物专项运行状态。
-  const { liveTextByNodeId, locale, linghuAutomation, stateReadStatus } = model.presentation;
+  const { liveTextByNodeId, locale, linghuAutomation, stateReadStatus, deliberating } = model.presentation;
   // 人物操作组当前只开放令狐状态写回，后续动作仍有明确归属位置。
   const { onLinghuState } = model.actions;
   // 可见专题只保留当前人物真实参与且仍属于当前展示边界的节点。
@@ -211,7 +213,7 @@ export function CollaborationMemberPage({ model }: CollaborationMemberPageProps)
     return <section className="collaboration-member-page">{display.label}</section>;
   }
 
-  const memberDisplay = collaborationMemberDisplayModel({ member, locale, status: stateReadStatus });
+  const memberDisplay = collaborationMemberDisplayModel({ member, locale, status: stateReadStatus, deliberating });
   const visibleLinghuAutomation = member.memberId === "linghu-ancestor"
     ? linghuAutomation
     : null;

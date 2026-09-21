@@ -56,6 +56,7 @@ export function CollaborationTaskNavigation({
     deliberation.status === "ready-to-establish"
     && deliberation.rounds.at(-1)?.confirmation
     && !deliberation.rounds.at(-1)?.confirmation?.reply));
+  const deliberating = evolutionState?.currentTopicStage?.status === "deliberating";
 
   /** 任务群按钮只切换右侧面板，不修改协作任务数据。 */
   const openTaskGroup = () => setPanel("task-group");
@@ -89,6 +90,7 @@ export function CollaborationTaskNavigation({
             locale,
             status: stateReadStatus,
             oneShotRun: evolutionState?.oneShotRun,
+            deliberating,
             awaitingDeliberationConfirmation,
             inquiryActivity: inquiryRole ? hanliInquiryActivity : null,
             inquiryRole,

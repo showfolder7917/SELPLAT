@@ -931,6 +931,13 @@ contextBridge.exposeInMainWorld("desktop", {
       evolutionState.deliberations = [{
         deliberationId: `interaction-deliberation-${Date.now()}`, topicId: null, status: "questioning", rounds: [], updatedAt: now,
       }];
+      // 对齐正式启动链：先建立运行，再由韩立作为首个调查问题的发起人推进。
+      evolutionState.oneShotRun = {
+        runId: `interaction-one-shot-${Date.now()}`, topicId: null, proposalId: null,
+        status: "running", phase: "preparing-topic", actor: "han-li", actorName: "韩立",
+        action: "正在围绕用户已确认需求向南宫婉提出第一项调查问题", blockingReason: null,
+        startedAt: now, updatedAt: now, completedAt: null,
+      };
       synchronizeInteractionCurrentTopicStage();
       hanliConversation.messages.push({ messageId: `hanli-confirmed-${Date.now()}`, messageType: "customer-visible", sequenceNumber: sequenceNumber + 1, speakerType: "persona", speakerPersonaId: "han-li", content: "已启动韩立与南宫婉的内部研讨。", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });
       hanliConversation.messages.push({ messageId: `internal:${sequenceNumber}:question`, messageType: "internal-deliberation", sequenceNumber: sequenceNumber + 2, speakerType: "persona", speakerPersonaId: "han-li", content: "当前需求最关键的验收边界是什么？", replyToMessageId: userMessageId, deliveryStatus: "completed", attachmentIds: [], createdAt: now, completedAt: now });

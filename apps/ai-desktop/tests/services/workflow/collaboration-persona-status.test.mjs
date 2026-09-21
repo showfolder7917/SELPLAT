@@ -34,7 +34,15 @@ test("仍需客户确认的范围说明由韩立显示等待确认，南宫婉�
   const nangong = { memberId: "nangong-wan", state: "idle", currentTaskId: null, phase: null };
   const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
   assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run, awaitingDeliberationConfirmation: true }), { presence: "conversation", label: "等待你确认" });
-  assert.deepEqual(display({ member: nangong, locale: "zh-CN", oneShotRun: run, awaitingDeliberationConfirmation: true }), { presence: "idle", label: "空闲" });
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", oneShotRun: run, deliberating: true, awaitingDeliberationConfirmation: true }), { presence: "idle", label: "空闲" });
+});
+
+test("已持久化的联合研讨同时显示南宫婉活动，不改写韩立运行角色", () => {
+  const run = { actor: "han-li", phase: "preparing-topic", status: "running" };
+  const nangong = { memberId: "nangong-wan", state: "idle", currentTaskId: null, phase: null };
+  const hanli = { memberId: "han-li", state: "idle", currentTaskId: null, phase: null };
+  assert.deepEqual(display({ member: nangong, locale: "zh-CN", oneShotRun: run, deliberating: true }), { presence: "working", label: "内部研讨中" });
+  assert.deepEqual(display({ member: hanli, locale: "zh-CN", oneShotRun: run, deliberating: true }), { presence: "working", label: "梳理调查问题中" });
 });
 
 test("韩立人物会话排查在专题建立前同时投影负责人和受托核实人物", () => {
