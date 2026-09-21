@@ -22,6 +22,7 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /async function navigateTaskCollaboration[\s\S]*waitForPanel[\s\S]*task-panel-not-open[\s\S]*task-panel-not-closed[\s\S]*task-group-not-visible/);
   assert.match(acceptanceSource, /taskCollaborationVisible: true/);
   assert.match(acceptanceSource, /resize-formal-window[\s\S]*width: 1000, height: 700/);
+  assert.match(acceptanceSource, /仅当本步 criterionIds 包含任务卡条件[\s\S]*no-visible-conversation[\s\S]*韩立人物入口[\s\S]*不发送消息、不修改任务或设置/);
 });
 
 test("任务协作群滚动只移动详情面板，并等待窄窗口布局回显", () => {

@@ -147,8 +147,8 @@ export class HanliComputerAcceptance {
         criteria,
         pageEvidence: { ...pageEvidence, taskCollaboration },
         instruction: taskCollaborationCriterionIds.size
-          ? "任务卡条件必须先通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。每一步都先取得新截图，导航后再观察真实页面。"
-          : "依据当前正式应用截图选择一个只读或安全导航动作。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
+          ? "仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
+          : "依据当前正式应用截图选择一个只读或安全导航动作。若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
         ...(interactionEvidence ? { interactionEvidence } : {}),
       };
       return {
