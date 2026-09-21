@@ -60,6 +60,33 @@ test("提示词库按 include 顺序组合并拒绝循环", () => {
   }
 });
 
+test("提示词变量值中的占位符样式日志按业务证据原样保留", () => {
+  const temporaryRoot = mkdtempSync(path.join(controlledTestRoot, "prompt-value-placeholder-"));
+  try {
+    const records = [record("sample.evidence", "失败事实：{{message}}", ["message"], [])];
+    writeBundle(temporaryRoot, records);
+    const library = new PromptLibraryFacade(temporaryRoot);
+    assert.equal(
+      library.render("sample.evidence", { message: "原始日志包含 {{methodContextJson}}" }),
+      "失败事实：原始日志包含 {{methodContextJson}}",
+    );
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("提示词模板源码中的未声明占位符仍被阻断", () => {
+  const temporaryRoot = mkdtempSync(path.join(controlledTestRoot, "prompt-undeclared-placeholder-"));
+  try {
+    const records = [record("sample.invalid", "业务正文：{{unknown}}", [], [])];
+    writeBundle(temporaryRoot, records);
+    const library = new PromptLibraryFacade(temporaryRoot);
+    assert.throws(() => library.render("sample.invalid"), /仍有未解析变量/);
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 function record(id, content, variables, includes) {
   return {
     id,

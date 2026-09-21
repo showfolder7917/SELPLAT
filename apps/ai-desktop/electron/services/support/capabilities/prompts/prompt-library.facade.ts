@@ -147,9 +147,14 @@ function validatePromptRecord(prompt: PromptRecord): void {
 }
 
 function renderTemplate(prompt: PromptRecord, variables: PromptVariables): string {
+  // 只检查模板源码中的未声明占位符。变量值属于不可信业务证据，可能合法包含
+  // `{{methodContextJson}}` 一类原样日志；替换后再次全局扫描会把证据误判成模板缺失。
+  const undeclared = [...prompt.content.matchAll(/\{\{([a-zA-Z][a-zA-Z0-9]*)\}\}/g)]
+    .map((match) => match[1])
+    .find((name) => !prompt.variables.includes(name));
+  if (undeclared) throw new Error(`提示词 ${prompt.id} 渲染后仍有未解析变量。`);
   let content = prompt.content;
   for (const variable of prompt.variables) content = content.split(`{{${variable}}}`).join(String(variables[variable]));
-  if (/\{\{[a-zA-Z][a-zA-Z0-9]*\}\}/.test(content)) throw new Error(`提示词 ${prompt.id} 渲染后仍有未解析变量。`);
   return content;
 }
 
