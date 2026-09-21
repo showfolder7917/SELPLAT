@@ -400,7 +400,7 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
       { messageId: round.personaMessageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent },
     ); return snapshot(); },
   };
-  const decision = { ...topic, userIntent: "根据已核实的长消息问题形成修正方案" };
+  const decision = { ...topic, userIntent: "根据已核实的长消息问题形成修正方案", inquiry: { status: "not-needed" } };
   const service = new HanliConversationService({
     store: { state: () => ({ deliberations: [], automationSettings: {} }) }, memory,
     prompts: { render: (_id, variables) => JSON.stringify(variables) },
@@ -436,47 +436,41 @@ test("排查恢复点不进入后续客户对话上下文，也不挤掉真实�
 });
 
 
-test("托管只保存韩立自然答复并把调查字段交给内部事实包；重复请求幂等", async () => {
-  const f = fixture(async () => { throw new Error("不得调用独立排查链"); });
-  const contexts = [];
-  let starts = 0, calls = 0, currentRun = null;
+test("自动托管开启时调查仍先返回结论；重复请求不提前建立专题", async () => {
+  const f = fixture(async () => findings);
+  let starts = 0, calls = 0;
   f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
-  f.memory.recordRequirementDiscussionContext = (value) => contexts.push(value);
   const service = new HanliConversationService({
     memory: f.memory,
-    store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true }, oneShotRun: currentRun }) },
-    prompts: { render: () => "设计要求" },
+    store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true }, oneShotRun: null }) },
+    prompts: { render: (id) => id },
     conversation: {
       activeConversationId: () => "provider",
-      send: async () => { calls += 1; return { threadId: "provider", text:
-        `消息区独立滚动，输入区固定可见，加载和错误状态明确。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` }; },
+      send: async (_request, prompt) => {
+        calls += 1;
+        if (prompt === "hanli.inquiry-assessment") return { threadId: "provider", text: JSON.stringify(conclude) };
+        if (prompt === "hanli.inquiry-response") return { threadId: "provider", text: "调查结论：源码已修改，但当前运行版本尚未确认。" };
+        return { threadId: "provider", text: `消息区独立滚动，输入区固定可见，加载和错误状态明确。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` };
+      },
     },
     startInternalDeliberation: async () => {
       starts += 1;
-      assert.equal(contexts.at(-1).customerConclusion, "消息区独立滚动，输入区固定可见，加载和错误状态明确。");
-      assert.equal(contexts.at(-1).customerQuestion, customerQuestion);
-      assert.ok(f.messages.some((item) => item.messageId === "hanli-reply:u1"));
-      assert.ok(!f.messages.some((item) => /用户原话：|调查对象：/.test(item.content)));
-      currentRun = { runId: "run", status: "running" };
-      return { continuous: true };
+      throw new Error("调查结论返回前不能建立专题");
     },
-    investigateWithNangong: async () => { throw new Error("不得启动另一条调查工作流"); },
+    investigateWithNangong: async (inquiry) => ({ ...findings, answeredQuestion: inquiry.customerQuestion }),
     recordEvent: () => {},
   });
-  await Promise.all([service.send(request), service.send(request)]);
-  await service.send(request);
-  assert.equal(starts, 1);
-  assert.equal(calls, 1);
+  const [first, second] = await Promise.all([service.send(request), service.send(request)]);
+  assert.equal(starts, 0);
+  assert.equal(calls, 3);
   assert.equal(f.messages.filter((item) => item.speakerType === "user").length, 1);
-  assert.equal(f.messages.filter((item) => item.messageId === "hanli-control:automatic:u1").length, 1);
-  const receipt = f.messages.find((item) => item.messageId === "hanli-control:automatic:u1");
-  assert.equal(receipt.messageType, "internal-deliberation");
-  assert.match(receipt.content, /持续推进已确认范围内的工作/);
-  assert.doesNotMatch(receipt.content, /内部研讨|自动托管/u);
+  assert.match(resultMessage(first).content, /调查结论/);
+  assert.equal(resultMessage(second).messageId, "inquiry:u1:result");
+  assert.equal(f.messages.filter((item) => item.messageId === "hanli-control:automatic:u1").length, 0);
 });
 
-test("托管中的客户纠正会更新原令狐任务并明确反馈当前状态", async () => {
-  const f = fixture(async () => { throw new Error("不得启动另一条调查链"); });
+test("托管中的客户纠正不自动建立专题；证据不匹配时保留可重试调查", async () => {
+  const f = fixture(async () => findings);
   const revisions = [];
   f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
   f.memory.recordRequirementDiscussionContext = () => undefined;
@@ -488,35 +482,29 @@ test("托管中的客户纠正会更新原令狐任务并明确反馈当前状�
       automationRuntime: { status: "running" },
       oneShotRun: { runId: "run-4", proposalId: "proposal-4", status: "running" },
     }) },
-    prompts: { render: () => "设计要求" },
+    prompts: { render: (id) => id },
     conversation: {
       activeConversationId: () => "provider",
-      send: async () => ({ threadId: "provider", text:
-        `测试台保持通用工具，令狐读取内部证据完成验收。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` }),
+      send: async (_request, prompt) => ({ threadId: "provider", text:
+        prompt === "hanli.inquiry-assessment" ? JSON.stringify({ ...conclude, answeredQuestion: "测试台保持通用，不承担韩立验收" })
+          : prompt === "hanli.inquiry-response" ? "调查结论：当前运行版本尚未确认。"
+            : `测试台保持通用工具，令狐读取内部证据完成验收。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` }),
     },
     startInternalDeliberation: async () => { throw new Error("不能创建重复研讨"); },
     reviseActiveRepairScope: async (revision) => {
       revisions.push(revision);
       return { updated: true, taskId: "task-4", taskRevision: 5, message: "已更新原任务范围并停止旧执行，正在按新范围重新分析。" };
     },
+    investigateWithNangong: async (inquiry) => ({ ...findings, answeredQuestion: inquiry.customerQuestion }),
     recordEvent: () => {},
   });
   const result = await service.send({ ...request, clientMessageId: "scope-fix", message: "测试台保持通用，不承担韩立验收" });
-  assert.deepEqual(revisions, [{
-    runId: "run-4",
-    proposalId: "proposal-4",
-    instruction: "测试台保持通用，不承担韩立验收",
-    confirmedIntent: understanding.understoodGoal,
-    acceptanceCriteria: [understanding.expectedAnswer],
-  }]);
-  assert.match(result.messages.at(-1).content, /当前在做：已更新原任务范围/);
-  assert.match(result.messages.at(-1).content, /失败原因：上一执行代次仍使用修正前的范围/);
-  assert.match(result.messages.at(-1).content, /接下来：令狐会在原任务中重新分析/);
-  assert.match(result.messages.at(-1).content, /需要你处理：暂时不需要/);
+  assert.deepEqual(revisions, []);
+  assert.equal(result.activity?.status, "completed");
 });
 
-test("明确切换独立专题不会把新范围写回旧修复任务", async () => {
-  const f = fixture(async () => { throw new Error("不得启动旁路调查"); });
+test("明确切换独立专题不写回旧任务也不提前建立新专题", async () => {
+  const f = fixture(async () => findings);
   let revisions = 0;
   const starts = [];
   f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
@@ -529,24 +517,28 @@ test("明确切换独立专题不会把新范围写回旧修复任务", async ()
       automationRuntime: { status: "running" },
       oneShotRun: { runId: "old-run", proposalId: "old-proposal", status: "running" },
     }) },
-    prompts: { render: () => "建立新的独立专题" },
+    prompts: { render: (id) => id },
     conversation: {
       activeConversationId: () => "provider",
-      send: async () => ({ threadId: "provider", text:
-        `前一专题已经结束，现在独立调查一次完成能力。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, switchTopic: true, inquiry: understanding })}` }),
+      send: async (_request, prompt) => ({ threadId: "provider", text:
+        prompt === "hanli.inquiry-assessment" ? JSON.stringify({ ...conclude, answeredQuestion: "作为新的独立专题启动" })
+          : prompt === "hanli.inquiry-response" ? "调查结论：当前运行版本尚未确认。"
+            : `前一专题已经结束，现在独立调查一次完成能力。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, switchTopic: true, inquiry: understanding })}` }),
     },
     reviseActiveRepairScope: async () => { revisions += 1; throw new Error("不得修订旧任务"); },
     startInternalDeliberation: async (_request, sourceRequestId, options) => {
       starts.push({ sourceRequestId, options });
       return { continuous: true };
     },
+    investigateWithNangong: async (inquiry) => ({ ...findings, answeredQuestion: inquiry.customerQuestion }),
     recordEvent: () => {},
   });
 
-  await service.send({ ...request, clientMessageId: "new-topic", message: "作为新的独立专题启动" });
+  const result = await service.send({ ...request, clientMessageId: "new-topic", message: "作为新的独立专题启动" });
 
   assert.equal(revisions, 0);
-  assert.deepEqual(starts, [{ sourceRequestId: "new-topic", options: { switchTopic: true } }]);
+  assert.deepEqual(starts, []);
+  assert.equal(result.activity?.status, "completed");
 });
 
 test("删除韩立托管排障旁路，不保留后台恢复或旧状态兼容入口", () => {
@@ -589,8 +581,8 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").length, 1);
 });
 
-test("托管纠偏缺调查决定时补全同一回合，再实际更新原任务", async () => {
-  const f = fixture(async () => { throw new Error("不得另开调查链"); });
+test("托管纠偏缺调查决定时补全同一回合，再返回调查结论", async () => {
+  const f = fixture(async () => findings);
   let calls = 0;
   const revisions = [], contexts = [];
   f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
@@ -603,21 +595,23 @@ test("托管纠偏缺调查决定时补全同一回合，再实际更新原任�
     conversation: { activeConversationId: () => "provider", send: async (_r, prompt) => {
       calls++;
       if (calls === 1) return { threadId: "provider", text: "应补真实交互证据。\nHANLI_TOPIC_META=" + JSON.stringify(topic) };
-      assert.equal(JSON.parse(prompt).routingFeedback, "missing-routing-decision");
-      return { threadId: "provider", text: "交原流程核实。\nHANLI_TOPIC_META=" + JSON.stringify({ ...topic, inquiry: understanding }) };
+      if (calls === 2) {
+        assert.equal(JSON.parse(prompt).routingFeedback, "missing-routing-decision");
+        return { threadId: "provider", text: "交原流程核实。\nHANLI_TOPIC_META=" + JSON.stringify({ ...topic, inquiry: understanding }) };
+      }
+      if (calls === 3) return { threadId: "provider", text: JSON.stringify(conclude) };
+      return { threadId: "provider", text: "调查结论：当前运行版本尚未确认。" };
     } },
     reviseActiveRepairScope: async value => { revisions.push(value); return { updated: true, message: "已更新原任务" }; },
     startInternalDeliberation: async () => { throw new Error("不得新建"); },
+    investigateWithNangong: async () => findings,
     recordEvent() {},
   });
-  await service.send(request);
-  assert.equal(calls, 2);
-  assert.equal(revisions.length, 1);
-  assert.equal(revisions[0].instruction, request.message);
-  assert.equal(revisions[0].runId, "original-run");
+  const result = await service.send(request);
+  assert.equal(calls, 4);
+  assert.equal(revisions.length, 0);
   assert.equal(contexts.at(-1).sourceRequestId, request.clientMessageId);
-  await service.send(request);
-  assert.equal(revisions.length, 1);
+  assert.match(resultMessage(result).content, /调查结论/);
 });
 
 test("托管回合连续遗漏决定不能伪装已交接，明确纯答复不启动执行", async () => {

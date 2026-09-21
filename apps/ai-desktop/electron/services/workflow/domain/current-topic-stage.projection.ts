@@ -89,10 +89,13 @@ export function projectCurrentTopicStage(
     };
   }
 
-  // 活动技术卡点是唯一恢复状态的只读投影；阻塞运行本身不能再签发“从卡点继续”。
+  // 技术恢复不能覆盖原运行的恢复动作：原运行仍被阻塞时，用户必须能够沿既有受控入口重新核查。
   const technicalRecovery = evolution.technicalRecovery;
   if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
     && technicalRecovery.proposalId === proposal.proposalId) {
+    const runBlocked = run?.status === "blocked"
+      && run.topicId === (topic?.topicId || proposal.topicId)
+      && run.proposalId === proposal.proposalId;
     const monitoring = technicalRecovery.handoffStatus === "monitoring";
     const unverified = technicalRecovery.handoffStatus === "basis-unverified";
     const failed = technicalRecovery.handoffStatus === "failed";
@@ -104,8 +107,8 @@ export function projectCurrentTopicStage(
     return {
       topicId: technicalRecovery.topicId, proposalId: technicalRecovery.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
       summary, repairContent: proposal.content, remaining: technicalRecovery.failureReason || technicalRecovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
-      waitingFor, nextAction: technicalRecovery.nextAction, userAction: "none", resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
+      waitingFor, nextAction: technicalRecovery.nextAction, userAction: runBlocked ? "resume" : "none", resumeOneShotRunId: runBlocked ? run.runId : null,
+      readRecovery: readRecovery(runBlocked ? "resume" : "none", waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
       effectiveTaskIds: technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)), missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
       hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: technicalRecovery.updatedAt,
     };

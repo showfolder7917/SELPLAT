@@ -62,7 +62,23 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
-test("活动技术卡点优先投影为令狐处理且不签发恢复动作", () => {
+test("活动技术卡点保留令狐状态；原运行阻塞时签发既有恢复动作", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "run-1", taskId: "repair-1", occurrenceId: "event-1", reason: "原验收失败", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "等待令狐沿原验收范围调查、修复并复验。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  state.oneShotRun = { runId: "blocked-recovery", topicId: "topic-current", proposalId: "proposal-current", status: "blocked" };
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeOneShotRunId, "blocked-recovery");
+  assert.equal(stage.readRecovery.requiresUserAction, true);
+  assert.match(stage.summary, /令狐老祖处理中/);
+});
+
+test("活动技术卡点没有原运行阻塞时不伪造恢复动作", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
     issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",

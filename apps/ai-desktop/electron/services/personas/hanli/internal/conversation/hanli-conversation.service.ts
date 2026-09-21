@@ -317,10 +317,8 @@ export class HanliConversationService {
     }
     // 解析可见回复、主题判断和可选调查理解。
     let parsed = parseHanliConversationResponse(response.text);
-    const workflow = this.#options.store.state();
-    const requiresRoutingDecision = workflow.automationSettings.automaticCustodyEnabled === true
-      && !!workflow.oneShotRun && ["running", "blocked"].includes(workflow.oneShotRun.status);
-    // 活动任务中的每轮反馈必须明确选择调查、澄清或仅答复，不能用遗漏元数据吞掉纠偏。
+    // 每轮都必须明确选择调查、澄清或仅答复；不能因自动托管关闭而把“会调查”保存成普通回复。
+    const requiresRoutingDecision = true;
     if (requiresRoutingDecision && !parsed.inquiry && !parsed.inquiryNotNeeded) {
       const corrected = await chat.send(request, renderPrompt("missing-routing-decision"), conversation.selectedModel);
       parsed = parseHanliConversationResponse(corrected.text);
@@ -337,28 +335,7 @@ export class HanliConversationService {
     }
     // 理解充分时由韩立真实调用南宫婉完成一次只读调查。
     if (parsed.inquiry?.status === "ready") {
-      if (this.#options.store.state().automationSettings.automaticCustodyEnabled === true) {
-        // 客户会话只保存自然答复；调查字段只写入独立事实包，再交给既有流程。
-        const viewpoint: HanliConversationViewpointValue = {
-          sourceMessageId: `hanli-reply:${request.clientMessageId || randomUUID()}`,
-          sourceUserMessageId: request.clientMessageId || null,
-          content: parsed.reply,
-          createdAt,
-        };
-        // 已有运行中的客户纠正也必须进入同一个受控入口；入口负责修订当前
-        // 提案和原修复任务，不能用“流程正在推进”的回执吞掉新范围。
-        return this.#startDeliberation(request, conversation, viewpoint, parsed.topic, {
-          confirmedIntent: parsed.inquiry.understoodGoal,
-          acceptanceCriteria: [parsed.inquiry.expectedAnswer],
-        }, {
-          customerQuestion: effectiveCustomerQuestion,
-          understoodGoal: parsed.inquiry.understoodGoal,
-          verificationTarget: parsed.inquiry.verificationTarget,
-          expectedAnswer: parsed.inquiry.expectedAnswer,
-          investigationQuestion: parsed.inquiry.investigationQuestion!,
-        });
-      }
-      // 非托管只读问答保留调查与解释，不自动产生工程写入。
+      // 调查在两种托管状态下都只读完成并先返回结论；独立输入 1 才能把当前观点送入后续专题。
       const investigatedConversation = await this.#inquiry.run(
         request,
         conversationId,
