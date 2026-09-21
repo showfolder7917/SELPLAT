@@ -340,6 +340,14 @@ export class LinghuAutomationFacade {
     const checkpoint = `${task.taskId}:${task.recoveryTargetState || task.state}:${task.workerGeneration}`;
     // 人类报告用于状态、事件和等待原因保持同一事实表述。
     const report = taskHumanReport(this.#collaboration.state(), task, snapshot);
+    const repeatedWaitingReason = `${report}。同一故障已经发起恢复；令狐不会重复派发相同操作，检测仍保持运行，出现新的代码、测试、数据或依赖事实后继续修复。`;
+    const runtime = this.#store.state();
+    // 同一故障进入稳定等待后，轮询和卡点监督只读取状态；没有新增事实时不重复发布状态与问题事件。
+    if (attempts >= 1
+      && runtime.currentFaultFingerprint === fingerprint
+      && runtime.recoveryAttemptCount === attempts
+      && runtime.recoveryCheckpoint === checkpoint
+      && runtime.blockingReason === repeatedWaitingReason) return;
     this.#recordEvent("linghu.automation.issue_detected", { report, fingerprint }, task.taskId);
     if (task.repairRequiresUserConfirmation || snapshot?.blockingKind === "business") {
       // 客户前置条件优先于快照；快照暂缺时同样不得落入基础设施修复分支绕过授权。
@@ -395,7 +403,7 @@ export class LinghuAutomationFacade {
         state.currentFaultFingerprint = fingerprint;
         state.recoveryAttemptCount = attempts;
         state.recoveryCheckpoint = checkpoint;
-        state.blockingReason = `${report}。同一故障已经发起恢复；令狐不会重复派发相同操作，检测仍保持运行，出现新的代码、测试、数据或依赖事实后继续修复。`;
+        state.blockingReason = repeatedWaitingReason;
       });
       return;
     }

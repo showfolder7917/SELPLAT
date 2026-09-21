@@ -3299,6 +3299,41 @@ test("初始化卡点核查环境变化后恢复同一任务，重启和心跳�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("令狐对同一恢复等待事实只发布一次状态和问题事件", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-recovery-waiting-dedup-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = collaborationStore.submitTask({ title: "恢复等待去重", problemStatement: "任务停在原卡点",
+      confirmedIntent: "保持检测但不重复发布相同等待事实", workspaceState, locale: "zh-CN" });
+    collaborationStore.updateTask(submitted.taskId, "test.blocked", (task) => {
+      task.state = "blocked";
+      task.phase = "blocked";
+      task.blockingReason = "应用重建后等待继续执行";
+    });
+    const reasons = [];
+    const events = [];
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
+    store.subscribe((event) => reasons.push(event.reason));
+    const facade = new LinghuAutomationFacade({
+      store,
+      collaboration: { state: () => collaborationStore.state(), continueTask: () => collaborationStore.state() },
+      readWorkspaceState: () => workspaceState, locale: () => "zh-CN",
+      recordEvent: (type) => events.push(type), readTestResourceState: idleTestResourceState,
+      runUnifiedTestAndRestart: async () => undefined,
+    });
+
+    await facade.handleTaskCheckpoint(submitted.taskId);
+    await facade.handleTaskCheckpoint(submitted.taskId);
+    const stableUpdatedAt = facade.state().updatedAt;
+    await facade.handleTaskCheckpoint(submitted.taskId);
+
+    assert.equal(reasons.filter((reason) => reason === "automation.flow_recovery_waiting").length, 1);
+    assert.equal(events.filter((type) => type === "linghu.automation.issue_detected").length, 2);
+    assert.equal(facade.state().updatedAt, stableUpdatedAt);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 
 test("令狐活跃调查期间晚到恢复不得重排旧结果，真实进展属于令狐", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "repair-ownership-"));
