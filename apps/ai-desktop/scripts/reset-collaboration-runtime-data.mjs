@@ -70,10 +70,11 @@ database.exec("PRAGMA foreign_keys = ON");
 database.exec("BEGIN IMMEDIATE");
 try {
   for (const table of [
+    "AiDesktopTaskTimelineStream", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineTopic",
     "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionArchiveRecord",
     "AiDesktopEvolutionSourceSnapshot", "AiDesktopEvolutionDeliberation", "AiDesktopApprovalGovernance",
     "AiDesktopApprovalRecord", "AiDesktopTaskExecution", "AiDesktopWorkflowRun", "AiDesktopMemberRuntime",
-    "AiDesktopRuntimeSession", "AiDesktopEvent",
+    "AiDesktopRuntimeSession", "AiDesktopEvent", "AiDesktopEvolutionState",
   ]) database.exec(`DELETE FROM ${table}`);
   database.exec("COMMIT");
 } catch (error) {
