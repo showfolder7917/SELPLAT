@@ -200,9 +200,9 @@ function TaskGroupHeader({
       <span className="task-group-facts">
         {/* 专题状态：把稳定状态码转换为当前语言的可读标签。 */}
         <b>{currentStage ? currentStage.title : activity.statusLabel}</b>
-        {/* 并行人数：只有确实有人执行或验证时才显示，避免无意义的零值。 */}
+        {/* 任务执行人数：只描述当前任务节点的执行或验收人物，不表示内部研讨成员。 */}
         {!groupStopped && activity.activeOwnerLabels.length > 0 && (
-          <em>{locale === "ja" ? `並行 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `并行处理中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
+          <em>{locale === "ja" ? `タスク実行中 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `任务执行中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
         )}
         {/* 专题总耗时：已结束专题固定，未结束专题跟随当前时间增长。 */}
         <TimelineDuration
