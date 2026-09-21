@@ -25,6 +25,13 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /仅当本步 criterionIds 包含任务卡条件[\s\S]*no-visible-conversation[\s\S]*韩立人物入口[\s\S]*不发送消息、不修改任务或设置/);
 });
 
+test("结果验收计划不申请外部进程或桌面权限", () => {
+  assert.match(resultAcceptancePrompt, /当前正式应用窗口与运行版本已经由主进程选定/);
+  assert.match(resultAcceptancePrompt, /禁止调用 `ps`、shell、exec、osascript、System Events、外部窗口枚举或截图命令/);
+  assert.match(resultAcceptancePrompt, /禁止为这些动作申请用户审批/);
+  assert.match(resultAcceptancePrompt, /页面条件应进入 pageCriterionIds/);
+});
+
 test("任务协作群滚动只移动详情面板，并等待窄窗口布局回显", () => {
   const scrollStart = acceptanceSource.indexOf("function scrollTaskCollaboration");
   const scrollEnd = acceptanceSource.indexOf("function readTaskCollaborationSurface", scrollStart);
