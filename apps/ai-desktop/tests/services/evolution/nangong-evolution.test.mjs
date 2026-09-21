@@ -843,7 +843,7 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
       activeConversationId: () => "hanli-provider-thread",
       async send(_request, prompt) {
         sentPrompt = prompt;
-        return { threadId: "hanli-provider-thread", itemCount: 1, text: `我会先确认信息缺口。\nHANLI_TOPIC_META={"title":"方法学习","type":"提问方法","switchTopic":false,"userIntent":"优化调查方法","tags":["调查"],"summary":"先确认信息缺口。"}` };
+        return { threadId: "hanli-provider-thread", itemCount: 1, text: `我会先确认信息缺口。\nHANLI_TOPIC_META={"title":"方法学习","type":"提问方法","switchTopic":false,"userIntent":"优化调查方法","tags":["调查"],"summary":"先确认信息缺口。","inquiry":{"status":"not-needed"}}` };
       },
       async newChat() {},
     },
