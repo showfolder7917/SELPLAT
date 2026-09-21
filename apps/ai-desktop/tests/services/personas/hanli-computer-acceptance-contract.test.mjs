@@ -24,7 +24,10 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /resize-formal-window[\s\S]*width: 1000, height: 700/);
   assert.match(acceptanceSource, /仅当本步 criterionIds 包含任务卡条件[\s\S]*no-visible-conversation[\s\S]*韩立人物入口[\s\S]*不发送消息、不修改任务或设置/);
   assert.match(operationSource, /type: "open-hanli-conversation"/);
-  assert.match(acceptanceSource, /navigateHanliConversation[\s\S]*button\.collaboration-member[\s\S]*startsWith\("韩立"\)[\s\S]*requestAnimationFrame[\s\S]*conversation-not-visible/);
+  assert.match(acceptanceSource, /async function navigateHanliConversation[\s\S]*task-panel-unavailable[\s\S]*task-panel-not-open/);
+  assert.match(acceptanceSource, /button\.section-toggle\[aria-controls="developer-task-list"\]/);
+  assert.match(acceptanceSource, /panel\.querySelectorAll[\s\S]*button\.collaboration-member[\s\S]*startsWith\("韩立"\)/);
+  assert.match(acceptanceSource, /navigateHanliConversation[\s\S]*requestAnimationFrame[\s\S]*conversation-not-visible/);
   assert.match(acceptanceSource, /open-hanli-conversation[\s\S]*当前正式验收未获韩立会话导航授权[\s\S]*hanliConversation/);
 });
 
