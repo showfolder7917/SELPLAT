@@ -8,6 +8,7 @@ import type {
   CollaborationTimelineGroupOutDto,
   CollaborationTimelineNodeOutDto,
   CollaborationTimelineSnapshotOutDto,
+  CollaborationTimelineTaskCardOutDto,
 } from "../../../../contracts/services/workflow/index.js";
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
 import type { CollaborationTimelineCommit, CollaborationTimelinePersistencePort, CollaborationTimelineStreamCommit } from "../../../services/support/capabilities/event-center/index.js";
@@ -360,10 +361,12 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
             : persistedStatus === "completed" ? "completed"
               : nodes.at(-1)?.status === "failed" ? "blocked" : persistedStatus;
     const updatedAt = topicUpdatedAt;
+    const topicNodes = nodes.filter((node) => !node.taskId);
+    const taskCards = taskCardsFromFacts(connection, rows, nodes);
     return {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
       status: calculated, summary: [...nodes].reverse().find((node) => node.status === "current")?.summary || nodes.at(-1)?.summary || String(topic.summary),
-      nodes, executingCount, verifyingCount, waitingCount, completedCount, startedAt: String(topic.startedAt), updatedAt,
+      nodes, topicNodes, taskCards, executingCount, verifyingCount, waitingCount, completedCount, startedAt: String(topic.startedAt), updatedAt,
       durationMs: durationMs(String(topic.startedAt), calculated === "completed" ? updatedAt : now), ...transition(calculated, nodes),
     };
   }
@@ -384,6 +387,37 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),
     };
   }
+}
+
+/** 从持久化 taskId 和任务标题建立层级；分类只依赖首次事实顺序，不根据标题文本猜测。 */
+function taskCardsFromFacts(
+  connection: DatabaseSync,
+  rows: Array<Record<string, unknown>>,
+  nodes: CollaborationTimelineNodeOutDto[],
+): CollaborationTimelineTaskCardOutDto[] {
+  const firstSequenceByTask = new Map<string, number>();
+  for (const row of rows) {
+    const taskId = nullable(row.taskId);
+    if (taskId && !firstSequenceByTask.has(taskId)) firstSequenceByTask.set(taskId, Number(row.sequenceNumber));
+  }
+  const taskIds = [...firstSequenceByTask].sort((left, right) => left[1] - right[1]).map(([taskId]) => taskId);
+  return taskIds.map((taskId, index) => {
+    const taskNodes = nodes.filter((node) => node.taskId === taskId);
+    const title = connection.prepare("SELECT title FROM AiDesktopTaskExecution WHERE taskId=$taskId")
+      .get({ $taskId: taskId }) as { title?: string } | undefined;
+    const repairAttempts = [...new Set(taskNodes.flatMap((node) => {
+      const match = node.action.match(/第\s*(\d+)\s*次修复/u);
+      return match ? [Number(match[1])] : [];
+    }))].sort((left, right) => left - right);
+    return {
+      taskId,
+      title: title?.title || `任务 ${taskId}`,
+      role: index === 0 ? "original-task" : "issue",
+      issueNumber: index === 0 ? null : index,
+      repairAttempts,
+      nodes: taskNodes,
+    };
+  });
 }
 
 /** 旧异常仍逐条保存在SQLite；读模型只把缺少专题关联的卡点合成一张卡，避免审计事实淹没真实任务。 */

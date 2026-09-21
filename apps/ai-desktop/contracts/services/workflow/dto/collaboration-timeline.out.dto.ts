@@ -54,6 +54,22 @@ export interface CollaborationTimelineNodeOutDto {
   manualApprovalProposalId: string | null;
 }
 
+/** 专题卡内一项真实任务形成的独立任务卡；问题修复不会与其他任务混成一条时间线。 */
+export interface CollaborationTimelineTaskCardOutDto {
+  /** 任务的稳定唯一标识。 */
+  taskId: string;
+  /** 任务创建时保存的标题。 */
+  title: string;
+  /** 专题中的首项任务是原始实现，后续独立任务是问题卡。 */
+  role: "original-task" | "issue";
+  /** 问题卡在本专题中的稳定序号；原始实现任务为 null。 */
+  issueNumber: number | null;
+  /** 本任务已实际进入的修复轮次，例如 [1, 2] 对应 r1、r2。 */
+  repairAttempts: number[];
+  /** 只属于本任务的业务节点。 */
+  nodes: CollaborationTimelineNodeOutDto[];
+}
+
 /** 一个专题对应的一张可折叠任务卡。 */
 export interface CollaborationTimelineGroupOutDto {
   /** 专题卡的稳定唯一标识。 */
@@ -70,6 +86,10 @@ export interface CollaborationTimelineGroupOutDto {
   summary: string;
   /** 按业务发生顺序排列的时间线节点。 */
   nodes: CollaborationTimelineNodeOutDto[];
+  /** 不属于单一任务的专题级审批、验收等节点。旧快照可能没有此字段。 */
+  topicNodes?: CollaborationTimelineNodeOutDto[];
+  /** 按首次出现顺序排列的原始任务卡和独立问题卡。旧快照可能没有此字段。 */
+  taskCards?: CollaborationTimelineTaskCardOutDto[];
   /** 当前正在执行的节点数量。 */
   executingCount: number;
   /** 当前正在验证的节点数量。 */

@@ -102,6 +102,13 @@ test("专题卡使用单一卡片模型归组显示状态和用户操作", () =>
   assert.match(taskGroupSource, /function TaskTimelineNode\([\s\S]*model: TaskGroupCardModel/);
 });
 
+test("专题卡内按原始任务、独立问题和修复尝试显示真实层级", () => {
+  assert.match(taskGroupCardSource, /group\.taskCards[\s\S]*data-task-card-role=\{card\.role\}/);
+  assert.match(taskGroupCardSource, /原始实现任务[\s\S]*问题卡[\s\S]*修复尝试/);
+  assert.match(taskGroupCardSource, /card\.repairAttempts\.map\(\(attempt\) => `r\$\{attempt\}`\)/);
+  assert.match(developerStyles, /\.task-nested-card\.issue[\s\S]*\.task-nested-card\.original-task/);
+});
+
 test("任务时间线公开稳定时间边界供韩立区分本轮与历史审计", () => {
   assert.match(taskGroupCardSource, /data-task-timeline-topic-id=\{group\.topicId \|\| ""\}/);
   assert.match(taskGroupCardSource, /data-task-timeline-proposal-id=\{group\.proposalId \|\| ""\}/);

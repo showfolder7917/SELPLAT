@@ -362,6 +362,34 @@ test("卡点修复任务沿用原专题时间线而不另建分叉专题", () =>
   } finally { fixture.close(); }
 });
 
+test("同一专题按真实任务拆成原始任务卡和独立问题卡，修复轮次留在对应问题卡", () => {
+  const fixture = createFixture("nested-task-cards");
+  try {
+    fixture.append(approvalApplication(fixture, "proposal-1", 1, "审批申请"));
+    const original = task(fixture, 1, false);
+    const issueOne = task(fixture, 2, false);
+    issueOne.flowEvents.push(
+      flow("issue-1-repair-started", "execution.repair_started", "recovery", "started", member("linghu-ancestor", "令狐老祖"), "第一次修复", fixture.at(5)),
+      flow("issue-1-repair-investigated", "execution.repair_investigated", "recovery", "completed", member("linghu-ancestor", "令狐老祖"), "第一次调查完成", fixture.at(6)),
+      flow("issue-1-repair-completed", "execution.repair_completed", "recovery", "completed", member("linghu-ancestor", "令狐老祖"), "第一次修复完成", fixture.at(7)),
+      flow("issue-1-repair-2-started", "execution.repair_started", "recovery", "started", member("linghu-ancestor", "令狐老祖"), "第二次修复", fixture.at(8)),
+    );
+    const issueTwo = task(fixture, 3, false);
+    fixture.timeline.appendTaskFlowEvents(collaboration(fixture.at(10), [original, issueOne, issueTwo]), [original.taskId, issueOne.taskId, issueTwo.taskId]);
+
+    const group = fixture.timeline.snapshot(fixture.at(11)).groups[0];
+    assert.equal(group.topicNodes.length, 1);
+    assert.deepEqual(group.taskCards.map((card) => [card.taskId, card.role, card.issueNumber]), [
+      [original.taskId, "original-task", null],
+      [issueOne.taskId, "issue", 1],
+      [issueTwo.taskId, "issue", 2],
+    ]);
+    assert.deepEqual(group.taskCards[1].repairAttempts, [1, 2]);
+    assert.ok(group.taskCards.every((card) => card.nodes.every((node) => node.taskId === card.taskId)));
+    assert.equal(group.nodes.length, group.topicNodes.length + group.taskCards.reduce((total, card) => total + card.nodes.length, 0));
+  } finally { fixture.close(); }
+});
+
 test("启动顺序产生的空任务占位不显示为重复专题", () => {
   const fixture = createFixture("empty-task-placeholder");
   try {

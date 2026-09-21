@@ -449,6 +449,14 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   }
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
+  const visibleNodeIds = new Set(visibleNodes.map((node) => node.nodeId));
+  const topicNodes = (group.topicNodes || visibleNodes.filter((node) => !node.taskId))
+    .filter((node) => visibleNodeIds.has(node.nodeId));
+  const taskCards = (group.taskCards || []).map((card) => ({
+    ...card,
+    nodes: card.nodes.filter((node) => visibleNodeIds.has(node.nodeId)),
+  })).filter((card) => card.nodes.length > 0);
+  const hasStructuredTaskCards = taskCards.length > 0;
   // 历史时间线不再决定当前恢复入口。
   const activeStage = model.presentation.currentTopicStage;
   const currentStage = activeStage?.topicId === group.topicId && activeStage?.proposalId === group.proposalId
@@ -573,7 +581,31 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
             </section>
           )}
           <div className="task-timeline-list" data-task-timeline-topic-id={group.topicId || ""} data-task-timeline-proposal-id={group.proposalId || ""}>
-            {visibleNodes.map((node, index) => <TaskTimelineNode key={node.nodeId} model={model} node={node} index={index} />)}
+            {hasStructuredTaskCards ? <>
+              {topicNodes.length > 0 && <section className="task-topic-flow" aria-label={locale === "ja" ? "案件フロー" : "专题流程"}>
+                <header><strong>{locale === "ja" ? "案件フロー" : "专题流程"}</strong></header>
+                {topicNodes.map((node, index) => <TaskTimelineNode key={node.nodeId} model={model} node={node} index={index} />)}
+              </section>}
+              {taskCards.map((card) => <section
+                key={card.taskId}
+                className={`task-nested-card ${card.role}`}
+                data-task-card-id={card.taskId}
+                data-task-card-role={card.role}
+              >
+                <header className="task-nested-card-header">
+                  <span>{card.role === "original-task"
+                    ? locale === "ja" ? "元の実装タスク" : "原始实现任务"
+                    : `${locale === "ja" ? "問題カード" : "问题卡"} ${card.issueNumber}`}</span>
+                  <strong>{card.title}</strong>
+                  {card.repairAttempts.length > 0 && <small>
+                    {locale === "ja" ? "修正試行" : "修复尝试"}：{card.repairAttempts.map((attempt) => `r${attempt}`).join("、")}
+                  </small>}
+                </header>
+                <div className="task-nested-card-nodes">
+                  {card.nodes.map((node, index) => <TaskTimelineNode key={node.nodeId} model={model} node={node} index={index} />)}
+                </div>
+              </section>)}
+            </> : visibleNodes.map((node, index) => <TaskTimelineNode key={node.nodeId} model={model} node={node} index={index} />)}
           </div>
           {continueError && <RecoveryError message={continueError} locale={locale} />}
           {continueFeedback && <RecoveryFeedback message={continueFeedback} />}
