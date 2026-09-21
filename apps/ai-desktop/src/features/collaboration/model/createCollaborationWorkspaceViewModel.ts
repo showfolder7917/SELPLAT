@@ -96,6 +96,7 @@ export function createCollaborationWorkspaceViewModel({
         locale,
         linghuAutomation: controller.data.linghuAutomation,
         stateReadStatus: controller.data.stateReadStatus,
+        deliberating: evolution.state?.currentTopicStage?.status === "deliberating",
       },
       actions: {
         onLinghuState: controller.actions.setLinghuAutomation,

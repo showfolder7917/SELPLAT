@@ -745,6 +745,8 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await expect(hanliComposer.getByRole("button", { name: "发送给韩立" })).toBeVisible();
   await expect(hanliConversation.getByText(/^(我已开始核实这个问题。确认范围和影响后，我会向你说明下一步。|已启动韩立与南宫婉的内部研讨。)$/u)).toBeVisible();
   await expect.poll(() => page.evaluate(async () => (await window.desktop!.getEvolutionState()).currentTopicStage?.status)).toBe("deliberating");
+  await expect(taskList.getByRole("button", { name: /韩立/ })).not.toContainText("空闲");
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("内部研讨中");
   await taskList.getByRole("button", { name: /任务协作群/ }).click();
   const deliberationActivity = page.locator(".task-deliberation-activity");
   await expect(deliberationActivity).toContainText("南宫婉正在内部研讨");
@@ -803,7 +805,8 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await page.screenshot({ path: test.info().outputPath("shared-persona-deliberation.png"), fullPage: true });
   const newNangongConversation = page.getByRole("button", { name: "重新建立南宫婉对话" });
   await newNangongConversation.click();
-  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
+  // 新建会话只隔离消息，不会结束仍在持久化运行的内部研讨。
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("内部研讨中");
   await expect(nangongConversation.getByRole("status")).toHaveText("已建立新的空白对话。");
   await expect(nangongConversation.getByText("请告诉南宫婉你观察到什么", { exact: true })).toBeVisible();
   await expect(nangongConversation.getByText("你可以说明需要调查的现象，以及不可改变的约束。", { exact: true })).toBeVisible();
@@ -816,6 +819,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   expect(preserved.filter((message) => message.messageType === "internal-recovery")).toHaveLength(1);
   await page.screenshot({ path: test.info().outputPath("nangong-new-conversation-isolated.png"), fullPage: true });
   await page.evaluate(() => (window as any).desktop.setInteractionDeliberationFixture(false));
+  await expect(taskList.getByRole("button", { name: /南宫婉/ })).toContainText("空闲");
   await taskList.getByRole("button", { name: "单会话" }).click();
 });
 

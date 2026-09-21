@@ -419,6 +419,10 @@ test("协调器把同轮多异常收口为一个完成事实，重放稳定且�
   connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineTopic.sql", import.meta.url), "utf8"));
   connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineEvent.sql", import.meta.url), "utf8"));
   connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineStream.sql", import.meta.url), "utf8"));
+  // 时间线任务卡会读取正式任务表的标题；夹具只建本用例实际消费的列。
+  connection.exec("CREATE TABLE AiDesktopTaskExecution (taskId TEXT PRIMARY KEY, title TEXT NOT NULL)");
+  connection.prepare("INSERT INTO AiDesktopTaskExecution (taskId, title) VALUES ($taskId, $title)")
+    .run({ $taskId: "original-task", $title: "原任务" });
   const database = {
     // 本测试仅验证仓库的同步业务事实写入，不开启额外运行时或构建产物。
     transaction(operation) { return operation(connection); },
