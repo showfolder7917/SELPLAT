@@ -3370,3 +3370,26 @@ test("任务创建回执不会把历史保障任务登记为新分发任务", as
     assert.ok(restored.archiveRecords.some((record) => record.eventType === "proposal.distribution_reconciled"));
   } finally { facade?.stop(); rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("相同技术恢复集合重复提交不刷新状态或事件", () => {
+  const store = evolutionStore("technical-recovery-idempotent");
+  let changes = 0;
+  store.subscribe((_state, reason) => { if (reason === "technical-recovery.updated") changes += 1; });
+  const occurrenceA = { runId: "run-1", taskId: "task-1", occurrenceId: "event-a", reason: "旧卡点", occurredAt: "2026-09-21T01:00:00.000Z" };
+  const occurrenceB = { runId: "run-1", taskId: "task-2", occurrenceId: "event-b", reason: "新卡点", occurredAt: "2026-09-21T02:00:00.000Z" };
+  const recovery = {
+    issueId: "technical-recovery:test", topicId: "topic-1", proposalId: "proposal-1",
+    acceptanceConditionIds: ["criterion-2", "criterion-1"], failureCategory: "technical-runtime",
+    evidenceReferences: ["event-b", "event-a"], occurrences: [occurrenceB, occurrenceA],
+    attemptCount: 1, handler: "system", handoffStatus: "pending", failureReason: null,
+    nextAction: "等待恢复。", active: true,
+  };
+  const first = store.recordTechnicalRecovery(recovery);
+  const second = store.recordTechnicalRecovery({ ...recovery,
+    acceptanceConditionIds: ["criterion-1", "criterion-2"],
+    evidenceReferences: ["event-a", "event-b"], occurrences: [occurrenceA, occurrenceB] });
+  assert.equal(changes, 1);
+  assert.equal(second.technicalRecovery.updatedAt, first.technicalRecovery.updatedAt);
+  assert.deepEqual(second.technicalRecovery.evidenceReferences, ["event-a", "event-b"]);
+  assert.deepEqual(second.technicalRecovery.occurrences.map((item) => item.occurrenceId), ["event-a", "event-b"]);
+});

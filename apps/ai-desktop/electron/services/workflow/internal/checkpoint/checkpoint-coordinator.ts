@@ -81,7 +81,26 @@ export class CheckpointCoordinator {
     const recovery = this.options.evolution().technicalRecovery;
     if (!recovery?.active || !recovery.evidenceReferences.length
       || !this.options.areTechnicalRecoveryEventsResolved(recovery.evidenceReferences)) return;
-    this.options.recordTechnicalRecovery({ ...recovery, active: false, nextAction: "卡点已解除，继续当前专题验收。" });
+    this.#recordTechnicalRecovery({ ...recovery, active: false, nextAction: "卡点已解除，继续当前专题验收。" });
+  }
+
+  /** 相同卡点投影在监督轮询中保持幂等，避免只刷新 updatedAt 形成事件风暴。 */
+  #recordTechnicalRecovery(input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt">): void {
+    const current = this.options.evolution().technicalRecovery;
+    if (current && technicalRecoveryProjection(current) === technicalRecoveryProjection(input)) return;
+    this.options.recordTechnicalRecovery(input);
+  }
+
+  /** 单一页面投影只允许更新事实接替旧事实；历史卡点重放不能反复抢回当前状态。 */
+  #isOlderThanCurrentRecovery(issueId: string, event: WorkflowExceptionRecordOutDto): boolean {
+    const current = this.options.evolution().technicalRecovery;
+    if (!current?.active || current.issueId === issueId) return false;
+    const currentOccurrence = [...current.occurrences]
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)
+        || (right.occurrenceId || "").localeCompare(left.occurrenceId || ""))[0];
+    if (!currentOccurrence) return false;
+    return currentOccurrence.occurredAt > event.occurredAt
+      || (currentOccurrence.occurredAt === event.occurredAt && (currentOccurrence.occurrenceId || "") >= event.eventId);
   }
 
   #state(event: WorkflowExceptionRecordOutDto): WorkflowCheckpointState {
@@ -197,15 +216,34 @@ export class CheckpointCoordinator {
     const now = new Date().toISOString();
     if (state.phase === "resolved") return;
     if (!conditionIds.length) {
-      this.options.recordTechnicalRecovery({ issueId: `unverified:${state.topicId}:${state.proposalId}`, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: [], failureCategory, evidenceReferences: [event.eventId], occurrences: [{ runId: state.runId, taskId: state.taskId, occurrenceId: event.eventId, reason: event.message, occurredAt: now }], attemptCount: previous?.attemptCount || 0, handler: "system", handoffStatus: "basis-unverified", failureReason: "缺少可核验的原验收条件，未改变技术问题次数。", nextAction: "系统重新读取原验收条件与失败依据。", active: true });
+      const issueId = `unverified:${state.topicId}:${state.proposalId}`;
+      if (this.#isOlderThanCurrentRecovery(issueId, event)) return;
+      const previousOccurrence = previous?.occurrences.find((item) => item.occurrenceId === event.eventId);
+      this.#recordTechnicalRecovery({ issueId, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: [], failureCategory, evidenceReferences: [event.eventId], occurrences: [{ runId: state.runId, taskId: state.taskId, occurrenceId: event.eventId, reason: event.message, occurredAt: previousOccurrence?.occurredAt || event.occurredAt || now }], attemptCount: previous?.attemptCount || 0, handler: "system", handoffStatus: "basis-unverified", failureReason: "缺少可核验的原验收条件，未改变技术问题次数。", nextAction: "系统重新读取原验收条件与失败依据。", active: true });
       return;
     }
     const issueId = createTechnicalRecoveryIssueId({ topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory });
-    const same = previous?.issueId === issueId;
-    const attemptCount = same ? Math.max(previous.attemptCount, state.round) : state.round;
+    if (this.#isOlderThanCurrentRecovery(issueId, event)) return;
+    const sameRecovery = previous?.issueId === issueId ? previous : null;
+    const attemptCount = sameRecovery ? Math.max(sameRecovery.attemptCount, state.round) : state.round;
     const monitoring = state.phase === "exhausted" || attemptCount >= 3;
-    const handoffStatus: EvolutionTechnicalRecoveryOutDto["handoffStatus"] = monitoring ? "monitoring" : state.repairTaskId ? "handed-off" : state.phase === "waiting" ? "failed" : "pending";
-    this.options.recordTechnicalRecovery({ issueId, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory, evidenceReferences: [...new Set([...(same ? previous.evidenceReferences : []), event.eventId])], occurrences: [...(same ? previous.occurrences : []), { runId: state.runId, taskId: state.repairTaskId || state.taskId, occurrenceId: event.eventId, reason: state.latestProgress || event.message, occurredAt: now }].slice(-3), attemptCount, handler: monitoring ? "monitor" : state.repairTaskId ? "linghu-ancestor" : "system", handoffStatus, failureReason: handoffStatus === "failed" ? state.latestProgress || event.message : null, nextAction: monitoring ? "监控接管复验，并保留本轮依据。" : handoffStatus === "handed-off" ? "等待令狐沿原验收范围调查、修复并复验。" : "系统重试写入令狐交接。", active: true });
+    const newestPreviousOccurrence = sameRecovery ? [...sameRecovery.occurrences]
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)
+        || (right.occurrenceId || "").localeCompare(left.occurrenceId || ""))[0] : undefined;
+    // 同一问题可能聚合多个卡点事件；重放较旧事件时只合并其证据，不能用旧阶段覆盖较新的页面状态。
+    const preservesNewerProjection = Boolean(newestPreviousOccurrence
+      && (newestPreviousOccurrence.occurredAt > event.occurredAt
+        || (newestPreviousOccurrence.occurredAt === event.occurredAt
+          && (newestPreviousOccurrence.occurrenceId || "") > event.eventId)));
+    const derivedHandoffStatus: EvolutionTechnicalRecoveryOutDto["handoffStatus"] = monitoring ? "monitoring" : state.repairTaskId ? "handed-off" : state.phase === "waiting" ? "failed" : "pending";
+    const handoffStatus = preservesNewerProjection ? sameRecovery!.handoffStatus : derivedHandoffStatus;
+    const previousOccurrence = sameRecovery?.occurrences.find((item) => item.occurrenceId === event.eventId);
+    const occurrences = [
+      ...(sameRecovery ? sameRecovery.occurrences.filter((item) => item.occurrenceId !== event.eventId) : []),
+      { runId: state.runId, taskId: state.repairTaskId || state.taskId, occurrenceId: event.eventId, reason: state.latestProgress || event.message, occurredAt: previousOccurrence?.occurredAt || event.occurredAt || now },
+    ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)
+      || (left.occurrenceId || "").localeCompare(right.occurrenceId || "")).slice(-3);
+    this.#recordTechnicalRecovery({ issueId, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory, evidenceReferences: [...new Set([...(sameRecovery ? sameRecovery.evidenceReferences : []), event.eventId])], occurrences, attemptCount, handler: preservesNewerProjection ? sameRecovery!.handler : monitoring ? "monitor" : state.repairTaskId ? "linghu-ancestor" : "system", handoffStatus, failureReason: preservesNewerProjection ? sameRecovery!.failureReason : handoffStatus === "failed" ? state.latestProgress || event.message : null, nextAction: preservesNewerProjection ? sameRecovery!.nextAction : monitoring ? "监控接管复验，并保留本轮依据。" : handoffStatus === "handed-off" ? "等待令狐沿原验收范围调查、修复并复验。" : "系统重试写入令狐交接。", active: true });
   }
 
   /** 未分类的验收受阻只保留可恢复事实，不能猜测为产品或验收能力缺陷。 */
@@ -576,6 +614,12 @@ function omitCheckpointSnapshot(key: string, value: unknown): unknown {
   }
   // 其他异常事实保持原值。
   return value;
+}
+
+/** 比较技术恢复的业务投影；updatedAt 只是提交结果，不能制造新的业务变化。 */
+function technicalRecoveryProjection(value: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt"> | EvolutionTechnicalRecoveryOutDto): string {
+  const { updatedAt: _updatedAt, ...projection } = value as EvolutionTechnicalRecoveryOutDto;
+  return JSON.stringify(projection);
 }
 
 /** 把未知异常字段安全转换为非空文本。 */

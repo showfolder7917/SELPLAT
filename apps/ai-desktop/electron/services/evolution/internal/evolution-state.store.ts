@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import type { EvolutionAcceptancePlanOutDto, EvolutionApprovalOutDto, EvolutionApprovalDecisionValue, EvolutionApprovalSourceValue, EvolutionArchiveActorValue, EvolutionArchiveCategoryValue, EvolutionDistributionPlanOutDto, EvolutionFeedbackTargetValue, EvolutionOneShotPhaseValue, EvolutionProposalOutDto, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto, EvolutionTechnicalRecoveryOutDto } from "../../../../contracts/services/evolution/index.js";
 import { requiresPageAcceptanceEvidence, type HanliAcceptanceRunOutDto, type HanliTopicCandidateOutDto } from "../../../../contracts/services/personas/hanli/index.js";
@@ -56,9 +57,12 @@ export class EvolutionStateStore {
   state(): EvolutionStateOutDto { return structuredClone(this.#state); }
   /** Workflow 在真实交接结果已知后提交技术卡点；同一 issueId 只累计原点复验未解的轮次。 */
   recordTechnicalRecovery(input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt">): EvolutionStateOutDto {
+    const normalized = normalizeTechnicalRecovery(input);
+    const current = this.#state.technicalRecovery ? normalizeTechnicalRecovery(this.#state.technicalRecovery) : null;
+    if (current && isDeepStrictEqual(current, normalized)) return this.state();
     return this.#commit("technical-recovery.updated", input.topicId, input.proposalId, (state) => {
-      state.technicalRecovery = { ...structuredClone(input), updatedAt: new Date().toISOString() };
-    }, { technicalRecovery: input });
+      state.technicalRecovery = { ...normalized, updatedAt: new Date().toISOString() };
+    }, { technicalRecovery: normalized });
   }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 
@@ -1439,6 +1443,20 @@ function migrateDistributionValidation(state: EvolutionStateOutDto): { state: Ev
 
 function createInitialState(): EvolutionStateOutDto {
   return { version: 10, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, technicalRecovery: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: createConversation(), updatedAt: new Date().toISOString() };
+}
+
+/** 技术恢复中的条件、证据和发生记录都是集合事实；统一排序后再比较和持久化。 */
+function normalizeTechnicalRecovery(
+  input: Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt"> | EvolutionTechnicalRecoveryOutDto,
+): Omit<EvolutionTechnicalRecoveryOutDto, "updatedAt"> {
+  const { updatedAt: _updatedAt, ...value } = structuredClone(input) as EvolutionTechnicalRecoveryOutDto;
+  return {
+    ...value,
+    acceptanceConditionIds: [...new Set(value.acceptanceConditionIds)].sort(),
+    evidenceReferences: [...new Set(value.evidenceReferences)].sort(),
+    occurrences: [...value.occurrences].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)
+      || (left.occurrenceId || "").localeCompare(right.occurrenceId || "")),
+  };
 }
 
 function required(value: unknown, label: string, maximum: number): string {

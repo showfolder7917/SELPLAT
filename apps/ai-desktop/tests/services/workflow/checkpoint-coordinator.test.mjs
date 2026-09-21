@@ -121,6 +121,57 @@ test("卡点真实派发、重启去重、返回原点后才允许解除", async
   assert.equal(f.evolution.technicalRecovery.nextAction, "卡点已解除，继续当前专题验收。");
 });
 
+test("同一卡点监督轮询不重复提交技术恢复投影", async () => {
+  const f = fixture();
+  await f.run();
+  const committed = f.effects.technicalRecoveries.length;
+  const occurrence = structuredClone(f.evolution.technicalRecovery.occurrences);
+  await f.run();
+  assert.equal(f.effects.technicalRecoveries.length, committed);
+  assert.deepEqual(f.evolution.technicalRecovery.occurrences, occurrence);
+});
+
+test("历史卡点重放不覆盖较新的当前技术恢复投影", async () => {
+  const f = fixture();
+  f.evolution.technicalRecovery = {
+    issueId: "technical-recovery:newer", topicId: "topic-1", proposalId: "proposal-1",
+    acceptanceConditionIds: ["criterion-new"], failureCategory: "technical-runtime",
+    evidenceReferences: ["newer-event"], occurrences: [{ runId: "run-1", taskId: "newer-task",
+      occurrenceId: "newer-event", reason: "较新的卡点", occurredAt: "2026-09-05T01:00:00Z" }],
+    attemptCount: 1, handler: "system", handoffStatus: "pending", failureReason: null,
+    nextAction: "等待较新卡点恢复。", active: true, updatedAt: "2026-09-05T01:00:00Z",
+  };
+  await f.run();
+  assert.equal(f.evolution.technicalRecovery.issueId, "technical-recovery:newer");
+  assert.equal(f.effects.technicalRecoveries.length, 0);
+});
+
+test("同一问题的旧卡点只补充证据而不覆盖较新恢复状态", async () => {
+  const f = fixture();
+  f.evolution.proposals[0].acceptanceCriteria = ["恢复后继续原流程"];
+  f.evolution.automationRuntime.status = "paused";
+  await f.run();
+  const issueId = f.evolution.technicalRecovery.issueId;
+  f.evolution.technicalRecovery = {
+    ...f.evolution.technicalRecovery,
+    evidenceReferences: ["newer-event"],
+    occurrences: [{ runId: "run-1", taskId: "newer-task", occurrenceId: "newer-event",
+      reason: "较新的卡点正在恢复", occurredAt: "2026-09-05T01:00:00Z" }],
+    handler: "system", handoffStatus: "pending", failureReason: null,
+    nextAction: "等待较新卡点恢复。", updatedAt: "2026-09-05T01:00:00Z",
+  };
+  f.effects.technicalRecoveries.length = 0;
+
+  await f.run();
+
+  assert.equal(f.evolution.technicalRecovery.issueId, issueId);
+  assert.equal(f.evolution.technicalRecovery.handoffStatus, "pending");
+  assert.equal(f.evolution.technicalRecovery.failureReason, null);
+  assert.equal(f.evolution.technicalRecovery.nextAction, "等待较新卡点恢复。");
+  assert.deepEqual(f.evolution.technicalRecovery.evidenceReferences, ["newer-event", "issue-1"]);
+  assert.deepEqual(f.evolution.technicalRecovery.occurrences.map((item) => item.occurrenceId), ["issue-1", "newer-event"]);
+});
+
 test("重启后仅在全部持久卡点事件已解除时收口技术恢复投影", async () => {
   const f = fixture();
   await f.run();
