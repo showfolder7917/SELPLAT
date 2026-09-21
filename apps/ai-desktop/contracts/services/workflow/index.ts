@@ -97,6 +97,8 @@ export type { CollaborationTimelineChangedEventOutDto } from "./dto/collaboratio
 export type { CollaborationTimelineGroupOutDto } from "./dto/collaboration-timeline.out.dto.js";
 // CollaborationTimelineNodeOutDto 是专题任务卡中的一个已发生业务节点。
 export type { CollaborationTimelineNodeOutDto } from "./dto/collaboration-timeline.out.dto.js";
+// CollaborationTimelineTaskCardOutDto 是专题卡内按真实 taskId 划分的原始任务或独立问题卡。
+export type { CollaborationTimelineTaskCardOutDto } from "./dto/collaboration-timeline.out.dto.js";
 // CollaborationTimelineSnapshotOutDto 是主进程返回的完整专题时间线投影。
 export type { CollaborationTimelineSnapshotOutDto } from "./dto/collaboration-timeline.out.dto.js";
 // CollaborationTimelineProjectionStatusOutDto 描述时间线投影失败的局部技术状态。
