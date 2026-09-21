@@ -610,7 +610,7 @@ button { color: inherit; }
 .task-topic-establishment strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
 .task-topic-establishment > span, .task-topic-establishment > small { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
 .task-deliberation-activity { width: min(100%, 560px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 10px; margin: 0 auto; padding: 24px 16px; min-height: 320px; border: 1px solid var(--sel-theme-border); border-radius: var(--sel-theme-radius-card); color: var(--sel-theme-text-secondary); background: var(--sel-theme-surface-raised); text-align: center; }
-.task-deliberation-activity strong { color: var(--sel-theme-text-primary); font-size: 16px; }
+.task-deliberation-activity strong { color: var(--sel-theme-text-primary); font-size: var(--sel-theme-font-size-subtitle); }
 .task-deliberation-activity > span, .task-deliberation-activity > small { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
 .task-collaboration-empty strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-subtitle); }
 .task-collaboration-empty > span { max-width: 100%; overflow-wrap: anywhere; line-height: 1.55; }
