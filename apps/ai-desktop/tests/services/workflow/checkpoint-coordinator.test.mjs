@@ -309,6 +309,34 @@ test("三轮复验仍受阻停止派发，暂停恢复和重启不能重置上�
   assert.deepEqual(f.effects.resolved, []);
 });
 
+test("旧卡点三轮耗尽后新验收事实建立独立修复任务", async () => {
+  const f = fixture();
+  for (let round = 1; round <= 3; round++) {
+    await f.run();
+    f.collaboration.tasks.at(-1).state = "integrated";
+    await f.run();
+  }
+  assert.equal(f.event.payload.checkpoint.exhausted, true);
+  const newFailure = {
+    ...structuredClone(f.event),
+    eventId: "issue-new-evidence",
+    occurredAt: "2026-09-05T01:00:00Z",
+    message: "正式页面显示南宫婉仍为空闲",
+    payload: {
+      ...structuredClone(f.event.payload),
+      acceptanceRunId: "accept-new-evidence",
+      checkpoint: undefined,
+    },
+  };
+  f.events.push(newFailure);
+  await f.run();
+  assert.equal(f.effects.submitted.length, 4);
+  assert.equal(newFailure.payload.checkpoint.repairTaskId, "repair-4");
+  assert.equal(newFailure.payload.checkpoint.phase, "repairing");
+  assert.ok(f.effects.submitted[3].constraints.some((item) => item === "卡点标识：run-1:proposal:proposal-1:round:1:event:issue-new-evidence"));
+  assert.match(f.effects.submitted[3].problemStatement, /南宫婉仍为空闲/);
+});
+
 test("暂停、业务选择、未知工作区和取消修复不能自动越权", async () => {
   for (const configure of [f => { f.evolution.automationRuntime.status = "paused"; }, f => { f.event.category = "business-exception"; }, f => { f.evolution.topics = []; }]) {
     const f = fixture(); configure(f); await f.run(); assert.equal(f.effects.submitted.length, 0); assert.equal(f.effects.resumed.length, 0);

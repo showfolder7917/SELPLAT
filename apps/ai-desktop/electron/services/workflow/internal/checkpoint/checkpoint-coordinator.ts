@@ -356,10 +356,10 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "received", `原点复验再次受阻：${run.blockingReason || event.message}。上一轮没有解除原故障，进入新的根因调查，禁止重复原修复方向。`);
     }
     // 用持久任务标记查重，覆盖创建任务后、保存关联前崩溃的窗口。
-    const marker = `卡点标识：${state.runId}:proposal:${state.proposalId}:round:${state.round}`;
+    const marker = checkpointRepairMarker(event, state, relatedEvents);
     const repair = this.options.collaboration().tasks.find((item) => item.taskId === state.repairTaskId || item.snapshot.constraints.includes(marker));
     if (repair) {
-      const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures);
+      const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker);
       const evidenceMarker = `卡点故障事实：${failureEvent.eventId}`;
       if (repair.state !== "cancelled" && isAcceptanceFailureOperation(failureEvent.payload.operation)
         && !repair.snapshot.constraints.includes(evidenceMarker)) {
@@ -453,7 +453,7 @@ export class CheckpointCoordinator {
       // 下一次监督轮询会继续核对当前任务。
       return;
     }
-    const result = this.options.submitRepair(buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures));
+    const result = this.options.submitRepair(buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker));
     const repairTaskId = result.tasks.find((item) => item.snapshot.constraints.includes(marker))?.taskId || null;
     if (!repairTaskId) throw new Error("未获得真实修复任务标识，不能报告派发完成");
     const aggregate = new WorkflowCheckpointAggregate(state);
@@ -471,8 +471,8 @@ function buildCheckpointRepairRequest(
   proposal: EvolutionStateOutDto["proposals"][number],
   failureEvent: WorkflowExceptionRecordOutDto,
   repeatedAcceptanceFailures: WorkflowExceptionRecordOutDto[],
+  marker: string,
 ): SubmitCollaborationTaskInDto {
-  const marker = `卡点标识：${state.runId}:proposal:${state.proposalId}:round:${state.round}`;
   const acceptanceFailureKind = failureEvent.payload.acceptanceFailureKind === "product-defect"
     ? "product-defect"
     : failureEvent.payload.acceptanceFailureKind === "acceptance-capability-blocked" ? "acceptance-capability-blocked" : "technical-runtime";
@@ -525,6 +525,13 @@ function compareCheckpointPriority(left: WorkflowExceptionRecordOutDto, right: W
   const leftCheckpoint = left.payload.checkpoint as WorkflowCheckpointState | undefined;
   // 读取右侧卡点快照。
   const rightCheckpoint = right.payload.checkpoint as WorkflowCheckpointState | undefined;
+  // 已明确耗尽的旧卡点只保留历史，不得永久抢占后来出现的新故障事实。
+  const exhaustedPriority = Number(leftCheckpoint?.exhausted === true) - Number(rightCheckpoint?.exhausted === true);
+  // 新故障优先于已经停止派发的旧卡点，才能建立新的独立修复任务。
+  if (exhaustedPriority !== 0) {
+    // 保证同一输入得到稳定顺序。
+    return exhaustedPriority;
+  }
   // 已建立修复任务的卡点优先成为主记录。
   const repairPriority = Number(Boolean(rightCheckpoint?.repairTaskId)) - Number(Boolean(leftCheckpoint?.repairTaskId));
   // 修复任务优先级不同就直接返回。
@@ -541,6 +548,23 @@ function compareCheckpointPriority(left: WorkflowExceptionRecordOutDto, right: W
   }
   // 同一时间使用稳定事件标识消除排序不确定性。
   return left.eventId.localeCompare(right.eventId);
+}
+
+/** 新事实接替已耗尽卡点时使用独立任务标识；普通恢复轮次继续兼容原标识。 */
+function checkpointRepairMarker(
+  event: WorkflowExceptionRecordOutDto,
+  state: WorkflowCheckpointState,
+  relatedEvents: WorkflowExceptionRecordOutDto[],
+): string {
+  // 原轮次标识继续承担重启后查回既有修复任务的职责。
+  const base = `卡点标识：${state.runId}:proposal:${state.proposalId}:round:${state.round}`;
+  // 已经登记任务的事件必须继续使用旧标识，不能因其他事件后来耗尽而失去关联。
+  if (state.repairTaskId) return base;
+  // 只有新事件接替同一流程已耗尽的旧主卡点时才建立新的任务身份。
+  const replacesExhaustedCheckpoint = relatedEvents.some((candidate) => candidate.eventId !== event.eventId
+    && (candidate.payload.checkpoint as WorkflowCheckpointState | undefined)?.exhausted === true);
+  // 事件标识来自持久异常事实，重启和重复轮询都会保持稳定。
+  return replacesExhaustedCheckpoint ? `${base}:event:${event.eventId}` : base;
 }
 
 /** 序列化修复任务事实时移除嵌套卡点快照，避免任务意图无限递归膨胀。 */
