@@ -576,8 +576,12 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   const restoredConfirmation = f.messages.find((item) => item.messageId === "hanli-confirmation:scope-round:restored:original");
   assert.equal(restoredConfirmation.messageType, "customer-visible");
   assert.match(restoredConfirmation.content, /尚未批准.*[\s\S]*旧验收工具方案/);
-  await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
+  const corrected = await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
   assert.deepEqual(replies, ["不要旧方案，仅修测试台状态"]);
+  assert.equal(corrected.messages.at(-1).messageId, "hanli-control:correct-scope");
+  const replayed = await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
+  assert.deepEqual(replies, ["不要旧方案，仅修测试台状态"]);
+  assert.deepEqual(replayed, corrected);
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").length, 1);
 });
 
