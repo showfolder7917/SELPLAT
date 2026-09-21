@@ -7,6 +7,7 @@ export type HanliAcceptanceOperationValue =
   | { type: "open-task-panel"; reason: string }
   | { type: "close-task-panel"; reason: string }
   | { type: "open-task-collaboration"; reason: string }
+  | { type: "open-hanli-conversation"; reason: string }
   | { type: "scroll-settings-panel"; deltaY: number; reason: string }
   | { type: "resize-formal-window"; preset: "narrow" | "restore"; reason: string }
   | { type: "reload-formal-page"; reason: string }

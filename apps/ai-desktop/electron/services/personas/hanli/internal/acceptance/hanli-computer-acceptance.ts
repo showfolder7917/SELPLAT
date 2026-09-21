@@ -175,7 +175,7 @@ export class HanliComputerAcceptance {
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "toggle-task-audit-card", "open-task-panel", "close-task-panel", "open-task-collaboration", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "key", "hover", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "toggle-task-audit-card", "open-task-panel", "close-task-panel", "open-task-collaboration", "open-hanli-conversation", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "key", "hover", "finish"],
             },
             observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
@@ -386,6 +386,7 @@ export class HanliComputerAcceptance {
           let dragEvidence: Record<string, unknown> | null = null;
           let settingsPanelEvidence: Record<string, unknown> | null = null;
           let taskCollaborationEvidence: Record<string, unknown> | null = null;
+          let hanliConversationEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
           let pageReloadEvidence: Record<string, unknown> | null = null;
           if (args.action === "scroll-task-collaboration") {
@@ -420,6 +421,11 @@ export class HanliComputerAcceptance {
               throw new Error(`任务协作群导航未完成：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
+          } else if (args.action === "open-hanli-conversation") {
+            if (!interactions.allows("persona-navigation")) {
+              throw new Error("当前正式验收未获韩立会话导航授权。");
+            }
+            hanliConversationEvidence = await window.webContents.executeJavaScript(`(${navigateHanliConversation.toString()})()`) as Record<string, unknown>;
           } else if (args.action === "scroll-settings-panel") {
             const deltaY = Number(args.deltaY);
             if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
@@ -510,6 +516,7 @@ export class HanliComputerAcceptance {
             ...(dragEvidence ? { imagePreviewDuringDrag: dragEvidence } : {}),
             ...(settingsPanelEvidence ? { settingsPanel: settingsPanelEvidence } : {}),
             ...(taskCollaborationEvidence ? { taskCollaboration: taskCollaborationEvidence } : {}),
+            ...(hanliConversationEvidence ? { hanliConversation: hanliConversationEvidence } : {}),
             ...(windowResizeEvidence ? { formalWindow: windowResizeEvidence } : {}),
             ...(pageReloadEvidence ? { formalPage: pageReloadEvidence } : {}),
           };
@@ -535,6 +542,8 @@ export class HanliComputerAcceptance {
             operation = { type: "close-task-panel", reason: String(args.reason) };
           } else if (args.action === "open-task-collaboration") {
             operation = { type: "open-task-collaboration", reason: String(args.reason) };
+          } else if (args.action === "open-hanli-conversation") {
+            operation = { type: "open-hanli-conversation", reason: String(args.reason) };
           } else if (args.action === "scroll-settings-panel") {
             operation = { type: "scroll-settings-panel", deltaY: Number(args.deltaY), reason: String(args.reason) };
           } else if (args.action === "resize-formal-window") {
@@ -830,6 +839,27 @@ async function navigateTaskCollaboration(action: string): Promise<Record<string,
     taskPanelExpanded: toggle.getAttribute("aria-expanded") === "true",
     taskCollaborationVisible: false,
   };
+}
+
+/** 仅打开当前正式窗口中已呈现的韩立成员页，并回执会话时间线是否已恢复；不会发送消息或修改任务。 */
+async function navigateHanliConversation(): Promise<Record<string, unknown>> {
+  const timelineVisible = (): boolean => Array.from(document.querySelectorAll<HTMLElement>(".selconversation-timeline"))
+    .some((timeline) => {
+      const rect = timeline.getBoundingClientRect();
+      const style = getComputedStyle(timeline);
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    });
+  if (timelineVisible()) return { status: "already-visible" };
+  const entry = Array.from(document.querySelectorAll<HTMLButtonElement>("button.collaboration-member"))
+    .find((member) => member.textContent?.trim().startsWith("韩立"));
+  if (!entry) return { status: "hanli-member-unavailable" };
+  if (entry.disabled) return { status: "hanli-member-disabled" };
+  entry.click();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    if (timelineVisible()) return { status: "navigated" };
+  }
+  return { status: "conversation-not-visible" };
 }
 
 /** 只滚动当前可见设置浮层的固定内容容器，并回执位置，不读取或修改设置内容。 */
