@@ -850,7 +850,7 @@ async function navigateHanliConversation(): Promise<Record<string, unknown>> {
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     });
   if (timelineVisible()) return { status: "already-visible" };
-  // 人物入口位于可折叠任务面板内；先恢复既有导航表面，再选择已经渲染的韩立入口。
+  // 人物入口在既有可折叠任务面板内；仅恢复该导航表面，不触发任务或会话写入。
   const toggle = document.querySelector<HTMLButtonElement>('button.section-toggle[aria-controls="developer-task-list"]');
   const panel = document.querySelector<HTMLElement>("#developer-task-list");
   if (!toggle || !panel) return { status: "task-panel-unavailable" };
