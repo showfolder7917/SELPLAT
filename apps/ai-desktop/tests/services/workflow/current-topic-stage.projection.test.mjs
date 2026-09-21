@@ -232,8 +232,8 @@ test("未确立的新研讨不能覆盖已经绑定专题的验收卡点", () =>
     status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z",
   };
   state.deliberations = [{
-    deliberationId: "later-unconfirmed-deliberation", status: "ready-to-establish",
-    rounds: [{ confirmation: { offeredAt: "2026-09-12T05:01:00.000Z", reply: null } }],
+    deliberationId: "later-questioning-deliberation", topicId: null, status: "questioning",
+    updatedAt: "2026-09-12T05:01:00.000Z", rounds: [],
   }];
 
   const stage = projectCurrentTopicStage(state, { tasks: [task()] });
@@ -256,6 +256,26 @@ test("没有已绑定专题运行时仍展示待确认研讨", () => {
   assert.equal(stage.status, "awaiting-confirmation");
   assert.equal(stage.userAction, "confirmation");
   assert.equal(stage.topicId, null);
+});
+
+test("没有已绑定专题运行时显示已持久化的南宫婉活跃研讨", () => {
+  const state = evolution("missing");
+  state.oneShotRun = null;
+  state.proposals = [];
+  state.topics = [];
+  state.deliberations = [{
+    deliberationId: "active-questioning-deliberation", topicId: null, status: "questioning",
+    updatedAt: "2026-09-12T05:02:00.000Z", rounds: [],
+  }];
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.status, "deliberating");
+  assert.equal(stage.topicId, null);
+  assert.equal(stage.proposalId, null);
+  assert.equal(stage.userAction, "none");
+  assert.match(stage.title, /南宫婉正在内部研讨/);
+  assert.match(stage.nextAction, /形成可执行范围后再显示确认/);
+  assert.equal(stage.updatedAt, "2026-09-12T05:02:00.000Z");
 });
 
 test("独立专题建立中和建立失败不退化为空任务或旧专题恢复入口", () => {
