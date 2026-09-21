@@ -28,6 +28,10 @@ export function projectCurrentTopicStage(
   const activeProposalRun = Boolean(evolution.oneShotRun?.topicId && evolution.oneShotRun?.proposalId
     && evolution.oneShotRun.status !== "completed");
   const awaitingConfirmation = !activeProposalRun && hasPendingConfirmation(evolution);
+  // questioning 研讨已经写入 Evolution，但尚未形成专题和提案；页面只能通过当前阶段读取这项事实。
+  const activeDeliberation = !activeProposalRun
+    ? [...evolution.deliberations].reverse().find((item) => item.status === "questioning" && item.topicId === null) || null
+    : null;
   const proposalId = evolution.oneShotRun?.proposalId || null;
   const proposal = proposalId ? evolution.proposals.find((item) => item.proposalId === proposalId) || null : null;
   const topic = proposal ? evolution.topics.find((item) => item.topicId === proposal.topicId) || null : null;
@@ -40,6 +44,17 @@ export function projectCurrentTopicStage(
       resumeOneShotRunId: null,
       readRecovery: readRecovery("confirmation", "用户确认", "确认当前范围说明后继续。", confirmationUpdatedAt(evolution)),
       effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: confirmationUpdatedAt(evolution),
+    };
+  }
+
+  if (activeDeliberation) {
+    return {
+      topicId: null, proposalId: null, status: "deliberating", title: "南宫婉正在内部研讨",
+      summary: "韩立已确认当前问题，南宫婉正在与韩立核实范围和影响。", repairContent: "", remaining: "等待本轮内部研讨形成可执行范围。",
+      waitingFor: "南宫婉内部研讨", nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。", userAction: "none",
+      resumeOneShotRunId: null,
+      readRecovery: readRecovery("none", "南宫婉内部研讨", "系统会继续当前研讨；形成可执行范围后再显示确认。", activeDeliberation.updatedAt),
+      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: activeDeliberation.updatedAt,
     };
   }
 

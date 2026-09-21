@@ -7,6 +7,7 @@
 export type CurrentTopicStageStatusValue =
   | "establishing-topic"
   | "topic-establishment-failed"
+  | "deliberating"
   | "awaiting-confirmation"
   | "executing"
   | "verifying"
