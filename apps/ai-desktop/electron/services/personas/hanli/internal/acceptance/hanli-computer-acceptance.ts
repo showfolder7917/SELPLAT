@@ -850,13 +850,28 @@ async function navigateHanliConversation(): Promise<Record<string, unknown>> {
       return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
     });
   if (timelineVisible()) return { status: "already-visible" };
-  const entry = Array.from(document.querySelectorAll<HTMLButtonElement>("button.collaboration-member"))
+  // 人物入口位于可折叠任务面板内；先恢复既有导航表面，再选择已经渲染的韩立入口。
+  const toggle = document.querySelector<HTMLButtonElement>('button.section-toggle[aria-controls="developer-task-list"]');
+  const panel = document.querySelector<HTMLElement>("#developer-task-list");
+  if (!toggle || !panel) return { status: "task-panel-unavailable" };
+  const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  if (toggle.getAttribute("aria-expanded") !== "true") {
+    toggle.click();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await nextFrame();
+      if (toggle.getAttribute("aria-expanded") === "true") break;
+    }
+  }
+  if (toggle.getAttribute("aria-expanded") !== "true") {
+    return { status: "task-panel-not-open", taskPanelExpanded: false };
+  }
+  const entry = Array.from(panel.querySelectorAll<HTMLButtonElement>("button.collaboration-member"))
     .find((member) => member.textContent?.trim().startsWith("韩立"));
-  if (!entry) return { status: "hanli-member-unavailable" };
+  if (!entry) return { status: "hanli-member-unavailable", taskPanelExpanded: true };
   if (entry.disabled) return { status: "hanli-member-disabled" };
   entry.click();
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await nextFrame();
     if (timelineVisible()) return { status: "navigated" };
   }
   return { status: "conversation-not-visible" };
