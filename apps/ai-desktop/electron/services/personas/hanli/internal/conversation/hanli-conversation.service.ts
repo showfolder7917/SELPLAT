@@ -92,12 +92,14 @@ export class HanliConversationService {
     }
     const recovery = await chat.recoverConversationSession(linkedSession);
     if (!recovery) return conversation;
+    // 恢复结论属于最初请求的历史会话；即使人物后来切换了活动会话，也必须留下可见记录。
+    const saved = await this.#recordThreadRecovery(conversation.conversationId, recovery);
     const current = await memory.readPersonaConversation("han-li");
-    if (current.conversationId !== conversation.conversationId) return current;
-    if (recovery.status === "verified" && recovery.successorThreadId) {
+    // 只有目标仍是活动会话时才接管人物当前线程，避免历史会话的迟到恢复覆盖新会话。
+    if (current.conversationId === conversation.conversationId && recovery.status === "verified" && recovery.successorThreadId) {
       chat.activateRecoveredConversationSession(recovery.successorThreadId);
     }
-    return (await this.#recordThreadRecovery(conversation.conversationId, recovery)) || current;
+    return saved || conversation;
   }
 
   /** 读取当前韩立业务会话；数据库不可用时返回结构稳定的空快照。 */

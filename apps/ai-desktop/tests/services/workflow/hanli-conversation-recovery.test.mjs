@@ -29,8 +29,8 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
 test("打开韩立会话前准备恢复，并仅写入目标业务会话", () => {
   assert.match(service, /async prepareRecovery\(request\?: Pick<ReadPersonaConversationWindowInDto, "conversationId">\)[\s\S]*?memory\.readPersonaConversation\("han-li", request\?\.conversationId\)[\s\S]*?const linkedSession = await memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)[\s\S]*?if \(!linkedSession\) \{[\s\S]*?未找到可验证的原线程关联；既有历史保持可读，未将其显示为已恢复。/);
   assert.match(service, /linkedSession[\s\S]*?chat\.recoverConversationSession\(linkedSession\)/);
-  assert.match(service, /const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId !== conversation\.conversationId[\s\S]*?activateRecoveredConversationSession/);
-  assert.match(service, /#recordThreadRecovery\(conversation\.conversationId, recovery\)/);
+  assert.match(service, /const saved = await this\.#recordThreadRecovery\(conversation\.conversationId, recovery\)[\s\S]*?const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId === conversation\.conversationId[\s\S]*?activateRecoveredConversationSession[\s\S]*?return saved \|\| conversation/);
+  assert.doesNotMatch(service.match(/async prepareRecovery[\s\S]*?\n  }\n\n  /)?.[0] || "", /current\.conversationId !== conversation\.conversationId\) return current/);
   assert.match(runtime, /recoverConversationSession: \(session\) => hanLiCodex!\.recoverConversationSession\(session, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
   assert.match(runtime, /activateRecoveredConversationSession: \(threadId\) => hanLiCodex!\.activateRecoveredConversationSession\(threadId, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
   assert.doesNotMatch(service.match(/async prepareRecovery\(\)[\s\S]*?\n  }\n\n  /)?.[0] || "", /chat\.send/);
