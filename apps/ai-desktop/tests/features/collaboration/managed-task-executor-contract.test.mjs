@@ -61,6 +61,11 @@ test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /task-managed/);
   assert.match(executor, /codeValidationGate/);
   assert.match(executor, /任务要求修改源码，但未观察到文件变更/);
+  assert.match(executor, /const sourceChangeMissing = !evidence\.roundFailed && changedFiles\.length === 0/);
+  assert.match(executor, /const roundChangedFiles = request\.readChangedFiles/);
+  assert.match(executor, /if \(!evidence\.roundFailed && roundChangedFiles\.length > 0\) break/);
+  assert.match(executor, /sourceChangeMissing \? undefined : classifyFailureRouting/);
+  assert.match(executor, /缺少可实施的新失败候选，已停止自动转交/);
   assert.doesNotMatch(executor, /likelySourceChangeRequest/);
   assert.match(executionPrompts, /必须产生可追踪的源码变更/);
   assert.match(executionPrompts, /目标应用根为 cwd/);

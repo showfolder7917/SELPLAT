@@ -93,7 +93,11 @@ export class ManagedTaskExecutor {
         taskRound === 1 ? "正在按确认的方案修改源码" : "正在处理修改过程中发现的问题");
       evidence.beginRound();
       response = await request.runTurn(taskMessage, (event) => { evidence.record(event); request.emit(event); }, "task-managed");
-      if (!evidence.roundFailed && evidence.changedFiles.size > 0) break;
+      // 流事件可能在模型回复前遗漏 diff；工作树 Git 差异才是任务是否已实际修改源码的权威证据。
+      const roundChangedFiles = request.readChangedFiles
+        ? await request.readChangedFiles()
+        : [...evidence.changedFiles];
+      if (!evidence.roundFailed && roundChangedFiles.length > 0) break;
       taskMessage = evidence.roundFailed
         ? this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: evidence.failedCommandSummaries().join("\n") || "存在未解决错误" })
         : this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: "任务要求修改源码，但上一轮没有观察到任何文件变更" });
@@ -105,14 +109,19 @@ export class ManagedTaskExecutor {
       ? await request.readChangedFiles()
       // 没有工作区读取端口时，继续使用当前执行轮已经观察到的文件。
       : [...evidence.changedFiles];
-    // 执行命令失败或真实工作区没有修改时，任务尚不能进入验证。
-    if (evidence.roundFailed || changedFiles.length === 0) {
-      emitManaged(request, "task-execution", "blocked", taskRound - 1, TASK_ROUNDS, "修改过程仍有未解决错误，已停止自动续跑");
-      const failureRouting = classifyFailureRouting(evidence, request.failureRoutingContext);
+    // 命令失败仍是可分流的技术故障；没有源码差异且没有命令错误说明任务缺少新的实施输入，
+    // 只能交由调用方停在未分类门禁，不能伪装成可由令狐重复修复的产品故障。
+    const sourceChangeMissing = !evidence.roundFailed && changedFiles.length === 0;
+    if (evidence.roundFailed || sourceChangeMissing) {
+      emitManaged(request, "task-execution", "blocked", taskRound - 1, TASK_ROUNDS,
+        sourceChangeMissing ? "未观察到新的源码差异，已停止自动派发修复" : "修改过程仍有未解决错误，已停止自动续跑");
+      const failureRouting = sourceChangeMissing ? undefined : classifyFailureRouting(evidence, request.failureRoutingContext);
       return {
         ...response,
         managedStatus: "incomplete",
-        pendingActions: [changedFiles.length === 0 ? "任务要求修改源码，但未观察到文件变更" : evidence.failedCommandSummaries().join("；") || "处理任务阶段未解决错误"],
+        pendingActions: [sourceChangeMissing
+          ? "任务要求修改源码，但未观察到文件变更；缺少可实施的新失败候选，已停止自动转交"
+          : evidence.failedCommandSummaries().join("；") || "处理任务阶段未解决错误"],
         restartRequired: false,
         changedFiles,
         authorizedFiles: [],
