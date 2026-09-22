@@ -33,3 +33,4 @@
 1031|migration-1031-add-corpus-ingestion-job.sql|持久化自动入库的恢复状态与重试事实
 1032|migration-1032-evolution-state-version-10.sql|允许专题演化状态从 v8/v9 平滑升级到 v10
 1033|migration-1033-add-persona-conversation-recovery.sql|持久化人物业务会话的 Codex 恢复结论与线程接续关系
+1034|migration-1034-link-persona-conversation-codex-thread.sql|持久化人物业务会话与 Codex 线程的显式关联
