@@ -226,7 +226,8 @@ export class CheckpointCoordinator {
     if (this.#isOlderThanCurrentRecovery(issueId, event)) return;
     const sameRecovery = previous?.issueId === issueId ? previous : null;
     const attemptCount = sameRecovery ? Math.max(sameRecovery.attemptCount, state.round) : state.round;
-    const monitoring = state.phase === "exhausted" || attemptCount >= 3;
+    // 次数只是调查历史，不是自动托管的停止条件；只有聚合已确认外部等待或取消导致耗尽时才交给监控。
+    const monitoring = state.phase === "exhausted";
     const newestPreviousOccurrence = sameRecovery ? [...sameRecovery.occurrences]
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)
         || (right.occurrenceId || "").localeCompare(left.occurrenceId || ""))[0] : undefined;

@@ -580,6 +580,7 @@ test("验收每轮独立身份，结果留在专题时间线而不写入客户�
 test("自动托管原点复验超过三轮仍交令狐调查，不关闭流程或重复派同一轮", async () => {
   const f = fixture();
   f.evolution.automationSettings.automaticCustodyEnabled = true;
+  f.evolution.proposals[0].acceptanceCriteria = ["真实页面必须显示恢复状态"];
   for (let round = 1; round <= 5; round += 1) {
     await f.run();
     assert.equal(f.effects.submitted.length, round);
@@ -591,6 +592,14 @@ test("自动托管原点复验超过三轮仍交令狐调查，不关闭流程�
   }
   assert.equal(f.effects.submitted.length, 5);
   assert.notEqual(f.event.payload.checkpoint.exhausted, true);
+  assert.equal(f.evolution.technicalRecovery.attemptCount, 6);
+  assert.equal(f.evolution.technicalRecovery.handler, "system");
+  assert.equal(f.evolution.technicalRecovery.handoffStatus, "pending");
+  assert.notEqual(f.evolution.technicalRecovery.nextAction, "监控接管复验，并保留本轮依据。");
+  await f.run();
+  assert.equal(f.effects.submitted.length, 6);
+  assert.equal(f.evolution.technicalRecovery.handler, "linghu-ancestor");
+  assert.equal(f.evolution.technicalRecovery.handoffStatus, "handed-off");
   assert.deepEqual(f.effects.resolved, []);
 });
 

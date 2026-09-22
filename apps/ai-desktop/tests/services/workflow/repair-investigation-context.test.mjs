@@ -9,8 +9,15 @@ test("重复失败上下文保留版本与前轮证据，要求共同根因调�
     { type: "unified_test.failed", occurredAt: "second", summary: "仍缺文件", details: { technicalEvidence: ["original-error"] } },
   ], versionWorkspace: { rootPath: "/candidate/task", resultSha: "new-result" }, integrationFailure: { workspaceRoot: "/candidate/release", generation: 14 } };
   const text = repairInvestigationContext(task, "darwin");
-  for (const expected of ["darwin", "same-task", "new-result", "/candidate/release", "previous-change", "original-error", "共同根因", "共同根因分组", "同一修复计划", "重构", "相邻回归"]) assert.ok(text.includes(expected), expected);
+  for (const expected of ["darwin", "same-task", "new-result", "/candidate/release", "previous-change", "original-error", "共同根因", "共同根因分组", "同一修复计划", "重构", "相邻回归", "运行应用携带的候选 SHA", "Git ancestry", "带时区的绝对时间", "持久化事实", "窗口 API DTO", "真实页面 DOM", "自动降级为待证伪假设"]) assert.ok(text.includes(expected), expected);
   assert.equal(task.flowEvents.length, 2);
+});
+
+test("令狐调查提示禁止用墙上钟点和源码存在性替代真实运行证据", () => {
+  const context = repairInvestigationContext({ taskId: "runtime-proof", flowEvents: [] }, "darwin");
+  assert.match(context, /禁止用不同时区的墙上钟点/);
+  assert.match(context, /不能凭源码存在组件或测试通过认定页面已经具备能力/);
+  assert.match(context, /第一个丢失或变形的边界/);
 });
 
 test("令狐接手时包含原执行人的自测与自修证据", () => {

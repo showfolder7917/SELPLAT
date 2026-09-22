@@ -17,7 +17,9 @@ export function repairInvestigationContext(task: CollaborationTaskOutDto, platfo
     `已登记结果提交：${task.versionWorkspace?.resultSha || "尚未登记"}`,
     `失败候选目录：${task.integrationFailure?.workspaceRoot || "未记录，先读取发布批次归档"}`,
     `失败批次：${task.integrationFailure?.generation ?? "未记录"}`,
-    "先比较任务 HEAD、已登记 resultSha 与失败候选包含的提交。修复未进入候选时先调查调度和交接，不重复修改已经修好的代码。",
+    "先比较任务 HEAD、已登记 resultSha、运行应用携带的候选 SHA 与失败候选包含的提交。版本包含关系必须用候选清单和 Git ancestry 验证；所有时间先解析为带时区的绝对时间，禁止用不同时区的墙上钟点推断修复是否已进入运行版本。",
+    "页面缺陷必须使用同一个稳定业务标识建立运行证据链：依次记录持久化事实、主进程/窗口 API DTO 和真实页面 DOM 的实际值。任一层尚未读取都只能报告证据缺口，不能凭源码存在组件或测试通过认定页面已经具备能力。",
+    "新候选完成发布重启后若真实页面仍复现同一症状，前一轮根因与修复结论自动降级为待证伪假设；必须沿实际运行数据重新定位第一个丢失或变形的边界，禁止重复发布、重复原补丁或仅以源码审查结束。",
     "统一测试若一次报告多个未通过项，先按共同根因分组，列全每组的调用方、边界、修复项和回归项；全部纳入同一修复计划后再实施，不得处理第一项后提前交回。",
   ];
   if (completedRepairs > 0) {
