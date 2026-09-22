@@ -79,6 +79,7 @@ export function usePersonaConversation(personaId: string) {
   // 新建失败单独保存，页面只能据此显示“重新建立对话”的专用重试入口。
   const [newConversationError, setNewConversationError] = useState("");
   const [error, setError] = useState("");
+  const [recovering, setRecovering] = useState(false);
   const [hasEarlier, setHasEarlier] = useState(false);
   // 每条原消息独立追踪重读，避免客户连续点击同一位置时并发写入同一派生记录。
   const [retryingCustomerDisplayMessageIds, setRetryingCustomerDisplayMessageIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -87,6 +88,7 @@ export function usePersonaConversation(personaId: string) {
   const conversationDisplay = useRef({ generation: 0, targetConversationId: null as string | null });
   // React 状态尚未完成刷新前，也要立即拒绝重复点击建立会话。
   const newConversationInFlight = useRef(false);
+  const recoveryInFlight = useRef(false);
   // 官方模型目录只从 Codex bridge 读取，人物页面不维护固定模型列表。
   const [modelCatalog, setModelCatalog] = useState<CodexModelOptionOutDto[]>([]);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
@@ -203,6 +205,31 @@ export function usePersonaConversation(personaId: string) {
       });
     }
   }, [conversation.conversationId, personaId]);
+
+  /** 仅重试当前业务会话的线程恢复；窗口读取仍保持无副作用。 */
+  const retryRecovery = useCallback(async () => {
+    if (personaId !== "han-li" || recoveryInFlight.current || sending || newConversationBusy) return;
+    const desktop = getOptionalCollaborationDesktopApi();
+    if (!desktop || typeof desktop.preparePersonaConversationRecovery !== "function") return;
+    const conversationId = conversation.conversationId;
+    const generation = conversationDisplay.current.generation;
+    recoveryInFlight.current = true;
+    setRecovering(true);
+    setError("");
+    try {
+      const receipt = await desktop.preparePersonaConversationRecovery(personaId);
+      const targetConversationId = receipt.conversationId || conversationId;
+      const window = await readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId });
+      if (!window || !acceptsConversationWindow(generation, conversationId, window)) return;
+      setConversation(windowConversation(window));
+      setHasEarlier(window.hasEarlier);
+    } catch (reason) {
+      setError(readableDesktopError(reason, "无法重试恢复当前会话。"));
+    } finally {
+      recoveryInFlight.current = false;
+      setRecovering(false);
+    }
+  }, [conversation.conversationId, newConversationBusy, personaId, sending]);
 
   /**
    * 把发送、恢复或设置操作的原始会话回执收敛为客户安全窗口。
@@ -348,7 +375,7 @@ export function usePersonaConversation(personaId: string) {
   };
 
   return {
-    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage, retryingCustomerDisplayMessageIds, acceptCustomerDisplayReceipt,
+    personaId, conversation, setConversation, draftText, setDraftText, attachments, setAttachments, hasEarlier, loadEarlier, retryCustomerDisplayMessage, retryingCustomerDisplayMessageIds, retryRecovery, recovering, acceptCustomerDisplayReceipt,
     pendingMessage, setPendingMessage, attachmentPreviews, setAttachmentPreviews, attachmentPreviewErrors, setAttachmentPreviewErrors, sending, setSending,
     sharedInternalMessages, newConversationBusy, newConversationFeedback, newConversationError, error, setError, startNewConversation,
     delegatedResponderPersonaId, modelCatalog, modelCatalogLoading, modelCatalogError, reloadModelCatalog, selectModel,

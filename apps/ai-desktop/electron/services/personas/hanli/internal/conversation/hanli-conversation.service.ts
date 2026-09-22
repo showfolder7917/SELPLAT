@@ -81,7 +81,14 @@ export class HanliConversationService {
     const conversation = await memory.readPersonaConversation("han-li");
     if (!conversation.conversationId) return conversation;
     const linkedSession = await memory.readPersonaConversationCodexThread("han-li", conversation.conversationId);
-    if (!linkedSession) return conversation;
+    if (!linkedSession) {
+      // 旧会话没有可验证关联时，必须留下可见结论；绝不能借用人物当前线程伪造恢复成功。
+      if (conversation.recovery?.status === "verification-incomplete" && conversation.recovery.sourceThreadId === null) return conversation;
+      return (await this.#recordThreadRecovery(conversation.conversationId, {
+        status: "verification-incomplete", sourceThreadId: null, successorThreadId: null,
+        summary: "未找到可验证的原线程关联；既有历史保持可读，未将其显示为已恢复。",
+      })) || conversation;
+    }
     const recovery = await chat.recoverConversationSession(linkedSession);
     if (!recovery) return conversation;
     const current = await memory.readPersonaConversation("han-li");
@@ -334,7 +341,7 @@ export class HanliConversationService {
     try {
       response = await chat.send(request, prompt, conversation.selectedModel);
     } catch (error) {
-      await this.#recordThreadRecovery(conversationId, chat.readThreadRecovery());
+      await this.#recordThreadRecovery(conversationId, chat.readThreadRecovery(), request.clientMessageId);
       throw error;
     }
     // 没有稳定 provider 会话标识时不能把模型输出当成完整人物回合。
@@ -348,7 +355,7 @@ export class HanliConversationService {
     await memory.linkPersonaConversationCodexThread({
       ownerPersonaId: "han-li", conversationId, threadId, workspaceSignature: session.workspaceSignature, occurredAt: new Date().toISOString(),
     });
-    await this.#recordThreadRecovery(conversationId, response.threadRecovery);
+    await this.#recordThreadRecovery(conversationId, response.threadRecovery, request.clientMessageId);
     // 解析可见回复、主题判断和可选调查理解。
     let parsed = parseHanliConversationResponse(response.text);
     // 每轮都必须明确选择调查、澄清或仅答复；不能因自动托管关闭而把“会调查”保存成普通回复。
@@ -513,6 +520,7 @@ export class HanliConversationService {
   async #recordThreadRecovery(
     conversationId: string,
     recovery: SendMessageOutDto["threadRecovery"] | undefined,
+    affectedMessageId?: string | null,
   ): Promise<PersonaConversationOutDto | undefined> {
     if (!recovery) return undefined;
     const saved = await this.#options.memory!.recordPersonaConversationRecovery({
@@ -523,6 +531,7 @@ export class HanliConversationService {
       successorThreadId: recovery.successorThreadId,
       affectedTurnId: recovery.affectedTurnId,
       affectedItemId: recovery.affectedItemId,
+      affectedMessageId,
       summary: recovery.summary,
       retryable: recovery.status === "retryable",
       occurredAt: new Date().toISOString(),

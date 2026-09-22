@@ -224,6 +224,7 @@ export class SqlitePersonaConversationDao {
     successorThreadId?: string | null;
     affectedTurnId?: string | null;
     affectedItemId?: string | null;
+    affectedMessageId?: string | null;
     summary: string;
     retryable: boolean;
     occurredAt: string;
@@ -242,10 +243,10 @@ export class SqlitePersonaConversationDao {
       if (changed.count === 0) throw new Error("当前人物会话不存在，不能保存恢复记录。");
       connection.prepare(`INSERT INTO AiDesktopPersonaConversationRecovery (
         recoveryId, ownerPersonaId, conversationId, status, sourceThreadId, successorThreadId,
-        affectedTurnId, affectedItemId, summary, retryable, createdAt, updatedAt
+        affectedTurnId, affectedItemId, affectedMessageId, summary, retryable, createdAt, updatedAt
       ) VALUES (
         $recoveryId, $ownerPersonaId, $conversationId, $status, $sourceThreadId, $successorThreadId,
-        $affectedTurnId, $affectedItemId, $summary, $retryable, $createdAt, $updatedAt
+        $affectedTurnId, $affectedItemId, $affectedMessageId, $summary, $retryable, $createdAt, $updatedAt
       )`).run({
         $recoveryId: `persona-recovery-${randomUUID()}`,
         $ownerPersonaId: owner,
@@ -255,6 +256,7 @@ export class SqlitePersonaConversationDao {
         $successorThreadId: nullable(input.successorThreadId),
         $affectedTurnId: nullable(input.affectedTurnId),
         $affectedItemId: nullable(input.affectedItemId),
+        $affectedMessageId: nullable(input.affectedMessageId),
         $summary: summary,
         $retryable: input.retryable ? 1 : 0,
         $createdAt: input.occurredAt,
@@ -331,7 +333,7 @@ export class SqlitePersonaConversationDao {
 interface HeaderRow { conversationId: string; selectedModel: string | null; createdAt: string; updatedAt: string; }
 
 function readLatestRecovery(connection: DatabaseSync, ownerPersonaId: string, conversationId: string): PersonaConversationRecoveryOutDto | undefined {
-  const row = connection.prepare(`SELECT recoveryId, status, sourceThreadId, successorThreadId, affectedTurnId, affectedItemId,
+  const row = connection.prepare(`SELECT recoveryId, status, sourceThreadId, successorThreadId, affectedTurnId, affectedItemId, affectedMessageId,
     summary, retryable, createdAt, updatedAt FROM AiDesktopPersonaConversationRecovery
     WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId
     ORDER BY updatedAt DESC, recoveryId DESC LIMIT 1`).get({ $ownerPersonaId: ownerPersonaId, $conversationId: conversationId }) as Record<string, unknown> | undefined;
@@ -343,6 +345,7 @@ function readLatestRecovery(connection: DatabaseSync, ownerPersonaId: string, co
     successorThreadId: nullable(row.successorThreadId),
     affectedTurnId: nullable(row.affectedTurnId),
     affectedItemId: nullable(row.affectedItemId),
+    affectedMessageId: nullable(row.affectedMessageId),
     summary: String(row.summary),
     retryable: Number(row.retryable) === 1,
     createdAt: String(row.createdAt),
