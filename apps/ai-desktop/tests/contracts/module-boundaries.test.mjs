@@ -285,6 +285,9 @@ test("人物记忆只通过后台 Worker 单通道访问 SQLite", () => {
   assert.match(worker, /createCollaborationMemoryDao\(database, \{/);
   assert.match(worker, /rebuildStalePersonaCustomerDisplayMessages\(\)/);
   assert.match(methods, /satisfies readonly \(keyof CollaborationMemoryPort\)\[\]/);
+  assert.match(methods, /"readPersonaConversationCodexThread"/);
+  assert.match(methods, /"linkPersonaConversationCodexThread"/);
+  assert.match(methods, /"recordPersonaConversationRecovery"/);
 });
 
 test("统一对话语料不吸收专题审批任务测试与异常业务投影", () => {
