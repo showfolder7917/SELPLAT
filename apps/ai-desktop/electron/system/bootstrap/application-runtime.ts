@@ -868,8 +868,10 @@ export async function startApplication(): Promise<void> {
       },
       newChat: () => hanLiCodex!.newChat(),
       activeConversationId: () => hanLiCodex!.activeSession().threadId,
+      activeConversationSession: () => hanLiCodex!.activeSession(),
       readThreadRecovery: () => hanLiCodex!.lastThreadRecovery(),
-      recoverExistingSession: () => hanLiCodex!.recoverExistingSession(workspaces.read(), settings.read().locale),
+      recoverConversationSession: (session) => hanLiCodex!.recoverConversationSession(session, workspaces.read(), settings.read().locale),
+      activateRecoveredConversationSession: (threadId) => hanLiCodex!.activateRecoveredConversationSession(threadId, workspaces.read(), settings.read().locale),
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request, sourceRequestId, options) =>

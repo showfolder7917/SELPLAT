@@ -24,6 +24,10 @@ export interface CollaborationMemoryPort {
   readHanliSemanticContext(stableUserId: string, projectScope: string, query?: string, limit?: number): HanliSemanticContextOutDto;
   recordVerifiedInspectionExperience(stableUserId: string, projectScope: string, candidate: HanliAcceptanceExperienceCandidateOutDto): void;
   readPersonaConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
+  /** 只读取指定业务会话的 Codex 线程关联；绝不回退人物级当前线程。 */
+  readPersonaConversationCodexThread(ownerPersonaId: string, conversationId: string): { threadId: string; workspaceSignature: string } | null;
+  /** 成功启动或恢复后将真实 Codex 线程绑定到同一业务会话。 */
+  linkPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string; workspaceSignature: string; occurredAt: string }): void;
   /** 客户正文读取只能经过该投影端口；原始会话仍只用于审计、提取和内部事实。 */
   readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
   readPersonaCustomerDisplayWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto;
