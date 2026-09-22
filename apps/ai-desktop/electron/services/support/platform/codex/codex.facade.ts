@@ -166,9 +166,44 @@ export class CodexService {
     return this.#lastThreadRecovery ? { ...this.#lastThreadRecovery } : undefined;
   }
 
-  activeSession(): { threadId: string | null } {
+  activeSession(): { threadId: string | null; workspaceSignature: string | null } {
     // 迁移完成前仍回显旧线程 ID，确保用户可以看到并明确处理待迁移的活动任务。
-    return { threadId: this.#threadId || this.#sessions.read()?.threadId || null };
+    const stored = this.#sessions.read();
+    return {
+      threadId: this.#threadId || stored?.threadId || null,
+      workspaceSignature: this.#threadWorkspaceSignature || stored?.workspaceSignature || null,
+    };
+  }
+
+  /** 只恢复业务会话已关联的线程；调用方确认会话未切换前不更新人物当前线程。 */
+  async recoverConversationSession(session: { threadId: string; workspaceSignature: string }, workspaces: WorkspaceStateOutDto, locale: LocaleValue): Promise<ThreadRecovery> {
+    await this.#ensureReady();
+    const workspaceSignature = this.#workspaceSignature(workspaces, locale);
+    const preservePersonaThread = this.#options.preserveThreadAcrossWorkspaceChanges === true;
+    if (!preservePersonaThread && session.workspaceSignature !== workspaceSignature) {
+      return { status: "verification-incomplete", sourceThreadId: session.threadId, successorThreadId: null,
+        summary: "当前工作区与该会话的恢复记录不一致，未将其显示为已恢复。" };
+    }
+    try {
+      const resumed = asObject(await this.#request("thread/resume", { threadId: session.threadId }));
+      const threadId = stringValue(asObject(resumed.thread).id) || session.threadId;
+      this.#onThreadLifecycle({ action: "resumed", threadId });
+      return { status: "verified", sourceThreadId: session.threadId, successorThreadId: threadId, summary: "已恢复，历史已核对。" };
+    } catch (error) {
+      if (isMissingCodexThreadError(error)) {
+        this.#onThreadLifecycle({ action: "missing_on_resume", threadId: session.threadId, reason: errorMessage(error) });
+        return { status: "thread-unavailable", sourceThreadId: session.threadId, successorThreadId: null,
+          summary: "原线程不可恢复；既有会话历史仍可阅读，后续消息会从新线程接续。" };
+      }
+      this.#onThreadLifecycle({ action: "resume_failed", threadId: session.threadId, reason: errorMessage(error) });
+      return { status: "retryable", sourceThreadId: session.threadId, successorThreadId: null,
+        summary: "恢复当前会话失败，可保留原线程并重试恢复。" };
+    }
+  }
+
+  /** 业务服务完成会话一致性核对后才接管已恢复线程。 */
+  activateRecoveredConversationSession(threadId: string, workspaces: WorkspaceStateOutDto, locale: LocaleValue): void {
+    this.#rememberThread(threadId, this.#workspaceSignature(workspaces, locale));
   }
 
   /** 启动恢复只恢复已有线程，绝不创建线程或发送用户消息。 */
@@ -176,8 +211,7 @@ export class CodexService {
     const activeThreadId = this.activeSession().threadId;
     if (!activeThreadId) return undefined;
     await this.#ensureReady();
-    const developerInstructions = this.#developerInstructions(locale);
-    const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
+    const workspaceSignature = this.#workspaceSignature(workspaces, locale);
     if (this.#threadId === activeThreadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) {
       return { status: "verified", sourceThreadId: activeThreadId, successorThreadId: activeThreadId, summary: "已恢复，历史已核对。" };
     }
@@ -217,6 +251,10 @@ export class CodexService {
       this.#lastThreadRecovery = recovery;
       return recovery;
     }
+  }
+
+  #workspaceSignature(workspaces: WorkspaceStateOutDto, locale: LocaleValue): string {
+    return JSON.stringify({ workspaces, developerInstructions: this.#developerInstructions(locale) });
   }
 
   /** 只报告本地 app-server 子进程是否仍存活，不发起账号或网络请求。 */

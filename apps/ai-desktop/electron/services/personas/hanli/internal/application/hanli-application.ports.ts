@@ -68,9 +68,14 @@ export interface HanliApplicationServiceOptions {
     newChat(): Promise<void>;
     /** 返回当前 provider 线程标识，仅用于校验会话是否可续接。 */
     activeConversationId(): string | null;
+    /** 返回当前人物线程及其工作区签名，供已完成回合写入业务会话关联。 */
+    activeConversationSession(): { threadId: string | null; workspaceSignature: string | null };
     /** 返回刚发生的线程恢复结论，供业务会话持久化而非直接读取事件审计。 */
     readThreadRecovery(): SendMessageOutDto["threadRecovery"] | undefined;
-    recoverExistingSession(): Promise<SendMessageOutDto["threadRecovery"] | undefined>;
+    /** 只 resume 指定业务会话的已关联线程；返回前不接管人物当前线程。 */
+    recoverConversationSession(session: { threadId: string; workspaceSignature: string }): Promise<SendMessageOutDto["threadRecovery"] | undefined>;
+    /** 业务会话仍为活动会话时，才把已恢复线程接管为人物当前线程。 */
+    activateRecoveredConversationSession(threadId: string): void;
   };
   /** 完整用户回合入库后异步唤醒韩立客户语义整理。 */
   refreshSemanticMemory?: () => void;
