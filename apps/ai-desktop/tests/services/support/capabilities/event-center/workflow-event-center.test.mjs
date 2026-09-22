@@ -200,6 +200,41 @@ test("一键清空只删除运行投影并保留数据库版本与人物训练�
   } finally { fixture.close(); }
 });
 
+test("韩立新空会话原子归档旧活动会话并保留旧历史", () => {
+  const fixture = createFixture("hanli-fresh-conversation");
+  try {
+    const memory = createCollaborationMemory(fixture.database);
+    const oldConversation = memory.newPersonaConversation("han-li");
+    memory.appendPersonaInternalMessage({
+      ownerPersonaId: "han-li", conversationId: oldConversation.conversationId,
+      messageId: "hanli-old-message", speakerPersonaId: "han-li", content: "旧会话历史", createdAt: "2026-09-22T00:00:00.000Z",
+    });
+    memory.linkPersonaConversationCodexThread({
+      ownerPersonaId: "han-li", conversationId: oldConversation.conversationId,
+      threadId: "hanli-old-thread", workspaceSignature: "workspace-old", occurredAt: "2026-09-22T00:00:00.000Z",
+    });
+    memory.recordPersonaConversationRecovery({
+      ownerPersonaId: "han-li", conversationId: oldConversation.conversationId, status: "verified",
+      sourceThreadId: "hanli-old-thread", successorThreadId: "hanli-old-successor", affectedTurnId: null,
+      affectedItemId: null, affectedMessageId: "hanli-old-message", summary: "旧会话恢复记录", retryable: false,
+      occurredAt: "2026-09-22T00:00:01.000Z",
+    });
+    const freshConversation = memory.newPersonaConversation("han-li");
+    const active = memory.readPersonaConversation("han-li");
+    const old = memory.readPersonaConversation("han-li", oldConversation.conversationId);
+    const headers = fixture.database.withConnection((connection) => connection.prepare(
+      "SELECT conversationId, status FROM AiDesktopPersonaConversation WHERE ownerPersonaId='han-li' ORDER BY createdAt",
+    ).all());
+    assert.equal(active.conversationId, freshConversation.conversationId);
+    assert.deepEqual(active.messages, []);
+    assert.equal(active.recovery, undefined);
+    assert.equal(memory.readPersonaConversationCodexThread("han-li", freshConversation.conversationId), null);
+    assert.equal(old.messages.length, 1);
+    assert.equal(old.recovery?.summary, "旧会话恢复记录");
+    assert.deepEqual(headers.map((header) => header.status), ["archived", "active"]);
+  } finally { fixture.close(); }
+});
+
 test("Codex 主人物语料按水位自动入库并在失败后保留旧检查点重试", () => {
   const fixture = createFixture("corpus-ingestion");
   const sessionsRoot = path.join(fixture.root, "sessions", "2026", "08", "28");

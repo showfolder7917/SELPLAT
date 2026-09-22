@@ -1251,7 +1251,7 @@ export async function startApplication(): Promise<void> {
     },
     disposeRuntime: () => collaboration!.dispose(),
     cleanupCandidates: () => versionWorkspaces.clearFailedTestReleaseCandidates(releaseBatches.failedCandidateBranches()),
-    clearStores: () => {
+    clearStores: async () => {
       dispatch.clear();
       return [
         { category: "collaboration" as const, clearedRecordCount: collaborationStore.clearTestData() },
@@ -1264,6 +1264,23 @@ export async function startApplication(): Promise<void> {
       collaborationStore.assertTestDataCleared();
       evolutionStateStore.assertTestDataCleared();
       linghuRuntime!.assertTestDataCleared();
+    },
+    createFreshHanliConversation: async () => {
+      if (!collaborationMemory) throw new Error("AI Memory 数据库当前不可用，无法建立韩立新空会话。");
+      // 复用人物会话 DAO 的单事务归档与新建能力，不重置 Codex 模型线程或复制会话状态。
+      const created = await collaborationMemory.newPersonaConversation("han-li");
+      const conversationId = created.conversationId;
+      if (!conversationId) throw new Error("韩立新空会话缺少稳定标识，已阻止测试数据清空成功。");
+      const active = await collaborationMemory.readPersonaConversation("han-li");
+      const linkedThread = await collaborationMemory.readPersonaConversationCodexThread("han-li", conversationId);
+      if (
+        active.conversationId !== conversationId
+        || active.messages.length !== 0
+        || active.recovery
+        || linkedThread
+      ) {
+        throw new Error("韩立新空会话未成为唯一无历史活动会话，已阻止测试数据清空成功。");
+      }
     },
     detachPersistence: () => {
       eventCenter.attachRepository(null);
