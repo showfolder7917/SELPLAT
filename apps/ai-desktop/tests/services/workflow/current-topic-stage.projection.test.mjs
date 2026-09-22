@@ -192,6 +192,29 @@ test("新一轮真实验收开始覆盖旧失败，结束后以新结果为准",
   assert.equal(stage.latestAcceptance.runId, "new-run");
 });
 
+test("新一轮真实验收开始后旧技术恢复只保留审计，不再覆盖当前负责人和动作", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "old-run", taskId: "task-current", occurrenceId: "event-1", reason: "上一轮验收失败", occurredAt: "2026-09-12T04:50:00.000Z" }],
+    attemptCount: 1, handler: "system", handoffStatus: "failed", failureReason: "上一轮令狐转交未完成",
+    nextAction: "系统重试写入令狐交接。", active: true, updatedAt: "2026-09-12T04:50:00.000Z",
+  };
+  state.oneShotRun = {
+    runId: "resumed-acceptance", topicId: "topic-current", proposalId: "proposal-current",
+    status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+
+  const stage = projectCurrentTopicStage(state, deliveredCollaboration());
+
+  assert.equal(stage.status, "accepting");
+  assert.equal(stage.waitingFor, "韩立真实验收");
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeOneShotRunId, null);
+  assert.doesNotMatch(stage.summary, /令狐转交未完成|系统恢复处理/);
+});
+
 test("完成态后的当前复核运行阻塞时优先显示原卡恢复状态", () => {
   const state = evolution("passed");
   state.proposals[0].status = "completed";

@@ -105,9 +105,16 @@ export function projectCurrentTopicStage(
   }
 
   // 技术恢复不能覆盖原运行的恢复动作：原运行仍被阻塞时，用户必须能够沿既有受控入口重新核查。
+  // 但原运行已经在旧失败之后重新进入真实验收时，旧恢复记录只保留审计价值；页面必须展示当前验收，
+  // 否则会把已恢复的流程继续显示成“系统恢复处理”，造成负责人、动作和真实运行互相矛盾。
   const technicalRecovery = evolution.technicalRecovery;
+  const acceptanceBeforeRecovery = readLatestAcceptance(evolution, proposal);
+  const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
+    && run.topicId === (topic?.topicId || proposal.topicId)
+    && run.proposalId === proposal.proposalId
+    && (!acceptanceBeforeRecovery || run.updatedAt > acceptanceBeforeRecovery.occurredAt);
   if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
-    && technicalRecovery.proposalId === proposal.proposalId) {
+    && technicalRecovery.proposalId === proposal.proposalId && !resumedAcceptance) {
     const runBlocked = run?.status === "blocked"
       && run.topicId === (topic?.topicId || proposal.topicId)
       && run.proposalId === proposal.proposalId;
