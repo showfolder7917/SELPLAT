@@ -106,7 +106,8 @@ try {
     const resetState = resetEvolutionState(state, now);
     workflowDatabase.prepare("UPDATE AiDesktopEvolutionState SET stateVersion = $stateVersion, stateJson = $stateJson, updatedAt = $updatedAt WHERE singletonId = $singletonId").run({
       $singletonId: row.singletonId,
-      $stateVersion: Number(row.stateVersion) + 1,
+      // stateVersion 是专题聚合的固定架构版本，不是数据库修订序号；沿用原值才能满足正式库约束。
+      $stateVersion: Number(row.stateVersion),
       $stateJson: JSON.stringify(resetState),
       $updatedAt: now,
     });

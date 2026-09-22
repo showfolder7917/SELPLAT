@@ -37,7 +37,7 @@ test("离线清理同时重置旧事件库和当前工作流库，并保留人�
   const workflowPath = path.join(databaseRoot, "workflow-control.sqlite3");
   const workflow = new DatabaseSync(workflowPath);
   for (const table of runtimeTables) workflow.exec(`CREATE TABLE ${table} (id TEXT)`);
-  workflow.exec("CREATE TABLE AiDesktopEvolutionState (singletonId INTEGER PRIMARY KEY, stateVersion INTEGER NOT NULL, stateJson TEXT NOT NULL, updatedAt TEXT NOT NULL)");
+  workflow.exec("CREATE TABLE AiDesktopEvolutionState (singletonId INTEGER PRIMARY KEY, stateVersion INTEGER NOT NULL CONSTRAINT CK_AiDesktopEvolutionState_Version CHECK (stateVersion = 4), stateJson TEXT NOT NULL, updatedAt TEXT NOT NULL)");
   const originalState = {
     version: 10, automationSettings: { maxRoundsPerTopic: 5 }, automationRuntime: { status: "blocked" },
     oneShotConfirmation: { confirmationId: "confirmation-old" }, oneShotRun: { status: "blocked" },
@@ -65,7 +65,7 @@ test("离线清理同时重置旧事件库和当前工作流库，并保留人�
   assert.equal(verifiedWorkflow.prepare("SELECT COUNT(*) AS count FROM AiDesktopTaskExecution").get().count, 0);
   const row = verifiedWorkflow.prepare("SELECT stateVersion, stateJson FROM AiDesktopEvolutionState").get();
   const resetState = JSON.parse(row.stateJson);
-  assert.equal(row.stateVersion, 5);
+  assert.equal(row.stateVersion, 4);
   assert.equal(resetState.activeTopicId, null);
   assert.deepEqual(resetState.topics, []);
   assert.deepEqual(resetState.conversation, originalState.conversation);
