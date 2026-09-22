@@ -130,3 +130,14 @@ test("结构化审查会自纠格式且不污染客户对话", () => {
   assert.match(appRuntime, /createSqliteCodexSessionDao\(workflowDatabase, "hanli-result-acceptance"\)/);
   assert.match(appRuntime, /await acceptanceCodex\.newChat\(\)/);
 });
+
+test("结果验收归档实际传入的只读工作区授权边界", () => {
+  const appRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
+  const acceptanceStart = appRuntime.indexOf("askHanliResultAcceptance: async");
+  const acceptanceEnd = appRuntime.indexOf("    conversation:", acceptanceStart);
+  const acceptance = appRuntime.slice(acceptanceStart, acceptanceEnd);
+  assert.match(acceptance, /const workspace = mergeWorkspaceState\(workspaces\.read\(\), state\.automationContext\.workspaceState!\)/);
+  assert.match(acceptance, /eventCenter\.recordEvent\("han-li\.result_acceptance\.workspace_authorized"/);
+  assert.match(acceptance, /roots: workspace\.roots\.map/);
+  assert.match(acceptance, /acceptanceCodex\.send\(prompt, state\.automationContext\.locale, "read-only", workspace/);
+});
