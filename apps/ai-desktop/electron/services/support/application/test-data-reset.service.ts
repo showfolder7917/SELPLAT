@@ -11,8 +11,10 @@ export interface TestDataResetServiceOptions {
   resumeWriters(): void;
   disposeRuntime(): Promise<void>;
   cleanupCandidates(): Promise<CandidateCleanupResult>;
-  clearStores(): TestDataResetCategoryOutDto[];
+  clearStores(): Promise<TestDataResetCategoryOutDto[]>;
   assertStoresCleared(): void;
+  /** 运行投影归零后建立韩立新空会话；失败时不得向页面提交清空成功。 */
+  createFreshHanliConversation(): Promise<void>;
   detachPersistence(): void;
   scheduleRestart(exitCode: number): void;
 }
@@ -34,8 +36,9 @@ export class TestDataResetService {
       runtimeDisposed = true;
       const candidateCleanup = await this.options.cleanupCandidates()
         .catch((error) => ({ branchCount: 0, worktreeCount: 0, failures: [error instanceof Error ? error.message : String(error)] }));
-      const clearedCategories = this.options.clearStores();
+      const clearedCategories = await this.options.clearStores();
       this.options.assertStoresCleared();
+      await this.options.createFreshHanliConversation();
       this.options.detachPersistence();
       const result: TestDataResetResultOutDto = {
         cleared: true,

@@ -83,6 +83,8 @@ export class HanliConversationService {
     if (!conversation.conversationId) return conversation;
     const linkedSession = await memory.readPersonaConversationCodexThread("han-li", conversation.conversationId);
     if (!linkedSession) {
+      // 清空后创建的会话没有消息也没有线程关联；它不是历史恢复失败，不能写入恢复告警。
+      if (conversation.messages.length === 0) return conversation;
       // 旧会话没有可验证关联时，必须留下可见结论；绝不能借用人物当前线程伪造恢复成功。
       if (conversation.recovery?.status === "verification-incomplete" && conversation.recovery.sourceThreadId === null) return conversation;
       return (await this.#recordThreadRecovery(conversation.conversationId, {
