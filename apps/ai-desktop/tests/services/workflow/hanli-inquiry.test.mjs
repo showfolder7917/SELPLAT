@@ -63,12 +63,17 @@ function customerDisplaySnapshot(conversation) {
 
 function fixture(investigate, explain = async () => ({ text: "源码已经修改，但当前运行版本尚未确认。建议先确认运行版本再复验。" }), assess = async () => conclude) {
   const messages = [], order = [], discussionContexts = [], events = [], activities = [];
-  const snapshot = (id = "original") => ({ ownerPersonaId: "han-li", selectedModel: "selected-model", conversationId: id, messages: structuredClone(messages), updatedAt: new Date().toISOString() });
+  // 模拟持久化会话头：读取不会改变 updatedAt，只有成功写入消息才推进该值。
+  let updatedAt = "2026-01-01T00:00:00.000Z";
+  const snapshot = (id = "original") => ({ ownerPersonaId: "han-li", selectedModel: "selected-model", conversationId: id, messages: structuredClone(messages), updatedAt });
   const append = (message) => {
-    if (!messages.some((item) => item.messageId === message.messageId)) messages.push({
+    if (messages.some((item) => item.messageId === message.messageId)) return false;
+    messages.push({
       speakerType: "persona", sequenceNumber: messages.length, deliveryStatus: "completed",
       messageType: "customer-visible", replyToMessageId: null, ...structuredClone(message),
     });
+    updatedAt = new Date(Date.parse(updatedAt) + 1).toISOString();
+    return true;
   };
   const memory = {
     readPersonaConversation: (_owner, id) => snapshot(id),
@@ -611,6 +616,7 @@ test("新会话输入1恢复旧范围但不批准，后续纠正进入原确认�
   assert.equal(corrected.messages.at(-1).messageId, "hanli-control:correct-scope");
   const replayed = await service.send({ ...request, clientMessageId: "correct-scope", message: "不要旧方案，仅修测试台状态" });
   assert.deepEqual(replies, ["不要旧方案，仅修测试台状态"]);
+  assert.equal(replayed.updatedAt, corrected.updatedAt);
   assert.deepEqual(replayed, corrected);
   assert.equal(f.messages.filter((item) => item.messageId === "hanli-confirmation:scope-round:restored:original").length, 1);
 });
