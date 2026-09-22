@@ -3,7 +3,7 @@ import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPe
 /** 每个人物只实现这一组公共会话动作；人物特有业务继续留在自己的 Facade。 */
 export interface PersonaConversationHandler {
   conversation(): Promise<PersonaConversationOutDto>;
-  prepareConversationRecovery?(): Promise<PersonaConversationOutDto>;
+  prepareConversationRecovery?(request?: Pick<ReadPersonaConversationWindowInDto, "conversationId">): Promise<PersonaConversationOutDto>;
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   newConversation(): Promise<PersonaConversationOutDto>;
   selectConversationModel(selectedModel: string | null): Promise<PersonaConversationOutDto>;
@@ -40,7 +40,7 @@ export class PersonaConversationFacade {
     return this.#requireHandler(personaId).conversation();
   }
 
-  prepareConversationRecovery(personaId: string): Promise<PersonaConversationOutDto> {
+  prepareConversationRecovery(personaId: string, request?: Pick<ReadPersonaConversationWindowInDto, "conversationId">): Promise<PersonaConversationOutDto> {
     const normalized = requiredPersonaId(personaId);
     const handler = this.#requireHandler(normalized);
     // 韩立页面的恢复状态是正式客户可见结论；缺失处理器必须失败，不能静默显示普通会话。
@@ -48,7 +48,7 @@ export class PersonaConversationFacade {
       throw new Error("韩立会话恢复处理器尚未就绪。");
     }
     if (!handler.prepareConversationRecovery) return handler.conversation();
-    return handler.prepareConversationRecovery();
+    return handler.prepareConversationRecovery(request);
   }
 
   /** 读取当前人物会话的有限窗口；缺少受控读取器时明确阻断，禁止回退全量快照。 */

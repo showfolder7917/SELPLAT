@@ -6,7 +6,7 @@ import type {
   HanliComputerAcceptanceInDto,
   HanliAcceptanceRunOutDto,
 } from "../../../../contracts/services/personas/hanli/index.js";
-import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions, type HanliResultAcceptanceReview } from "./internal/application/hanli-application.service.js";
@@ -17,7 +17,7 @@ import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semanti
 export interface HanliApplicationPort {
   /** 读取韩立当前业务会话。 */
   conversation(): Promise<PersonaConversationOutDto>;
-  prepareConversationRecovery(): Promise<PersonaConversationOutDto>;
+  prepareConversationRecovery(request?: Pick<ReadPersonaConversationWindowInDto, "conversationId">): Promise<PersonaConversationOutDto>;
   /** 向韩立当前业务会话发送一条用户消息。 */
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 归档当前业务会话并创建新会话。 */
@@ -92,8 +92,8 @@ export class HanliFacade {
   conversation(): Promise<PersonaConversationOutDto> {
     return this.#application.conversation();
   }
-  prepareConversationRecovery(): Promise<PersonaConversationOutDto> {
-    return this.#application.prepareConversationRecovery();
+  prepareConversationRecovery(request?: Pick<ReadPersonaConversationWindowInDto, "conversationId">): Promise<PersonaConversationOutDto> {
+    return this.#application.prepareConversationRecovery(request);
   }
   /** 与韩立自由讨论；人物使用语义记忆精准追问，但不执行工程写入。 */
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> {

@@ -26,8 +26,8 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
   assert.match(service, /onPersonaConversationChanged\?\.\(saved\)/);
 });
 
-test("打开韩立会话前准备恢复，并仅写入仍活动的同一业务会话", () => {
-  assert.match(service, /async prepareRecovery\(\)[\s\S]*?const linkedSession = await memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)[\s\S]*?if \(!linkedSession\) \{[\s\S]*?未找到可验证的原线程关联；既有历史保持可读，未将其显示为已恢复。/);
+test("打开韩立会话前准备恢复，并仅写入目标业务会话", () => {
+  assert.match(service, /async prepareRecovery\(request\?: Pick<ReadPersonaConversationWindowInDto, "conversationId">\)[\s\S]*?memory\.readPersonaConversation\("han-li", request\?\.conversationId\)[\s\S]*?const linkedSession = await memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)[\s\S]*?if \(!linkedSession\) \{[\s\S]*?未找到可验证的原线程关联；既有历史保持可读，未将其显示为已恢复。/);
   assert.match(service, /linkedSession[\s\S]*?chat\.recoverConversationSession\(linkedSession\)/);
   assert.match(service, /const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId !== conversation\.conversationId[\s\S]*?activateRecoveredConversationSession/);
   assert.match(service, /#recordThreadRecovery\(conversation\.conversationId, recovery\)/);
@@ -69,8 +69,9 @@ test("韩立完成回合后把实际 Codex 线程绑定到同一业务会话", (
 });
 
 test("页面显式准备恢复后才读取只读窗口", () => {
-  assert.match(ipc, /desktop:prepare-persona-conversation-recovery[\s\S]*?prepareConversationRecovery/);
-  assert.match(preload, /preparePersonaConversationRecovery: \(personaId: string\) => invoke\("desktop:prepare-persona-conversation-recovery"/);
-  assert.match(model, /personaId === "han-li"[\s\S]*?preparePersonaConversationRecovery\(personaId\)[\s\S]*?prepareRecovery\.then\(\(receipt\) => active/);
+  assert.match(ipc, /desktop:prepare-persona-conversation-recovery[\s\S]*?request\?: Pick<ReadPersonaConversationWindowInDto, "conversationId">[\s\S]*?prepareConversationRecovery\(personaId, request\)/);
+  assert.match(preload, /preparePersonaConversationRecovery: \(personaId: string, request\?: \{ conversationId\?: string \| null \}\) => invoke\("desktop:prepare-persona-conversation-recovery", personaId, request\)/);
+  assert.match(model, /personaId === "han-li"[\s\S]*?preparePersonaConversationRecovery\(personaId, \{ conversationId: currentConversationId \}\)[\s\S]*?prepareRecovery\.then\(\(receipt\) => active/);
+  assert.match(model, /preparePersonaConversationRecovery\(personaId, \{ conversationId \}\)/);
   assert.match(conversationFacade, /!handler\.prepareConversationRecovery && normalized === "han-li"[\s\S]*?韩立会话恢复处理器尚未就绪/);
 });

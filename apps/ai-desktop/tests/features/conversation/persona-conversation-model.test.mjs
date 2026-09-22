@@ -81,6 +81,8 @@ test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", ()
   assert.match(hook, /恢复后的客户显示窗口不属于当前会话。/);
   assert.match(hook, /conversationDisplay\.current\.generation !== generation\) return undefined;/);
   assert.match(hook, /targetConversationId = conversationDisplay\.current\.targetConversationId \?\? currentConversationId/);
+  assert.match(hook, /preparePersonaConversationRecovery\(personaId, \{ conversationId: currentConversationId \}\)/);
+  assert.match(hook, /preparePersonaConversationRecovery\(personaId, \{ conversationId \}\)/);
 });
 
 test("工作流重复进展只能原位更新既有内部消息", () => {
