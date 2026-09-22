@@ -76,7 +76,10 @@ test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", ()
   assert.match(hanli, /hanli-conversation-recovery/);
   assert.match(hanli, /data-recovery-affected/);
   assert.match(hook, /async function readPreparedRecoveryWindow\([\s\S]*?receipt\?\.conversationId \|\| expectedConversationId/);
-  assert.match(hook, /expectedConversationId && conversationId !== expectedConversationId/);
+  assert.match(hook, /expectedConversationId && conversationId !== expectedConversationId[\s\S]*?恢复结果属于另一会话，未覆盖当前会话。/);
+  assert.match(hook, /恢复后未读取到客户显示窗口。/);
+  assert.match(hook, /恢复后的客户显示窗口不属于当前会话。/);
+  assert.match(hook, /conversationDisplay\.current\.generation !== generation\) return undefined;/);
   assert.match(hook, /targetConversationId = conversationDisplay\.current\.targetConversationId \?\? currentConversationId/);
 });
 
