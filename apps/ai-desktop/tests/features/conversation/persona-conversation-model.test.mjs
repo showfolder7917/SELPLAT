@@ -20,6 +20,7 @@ const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversatio
 const customerDisplayMigration = read("db/sql/migration-1029-add-persona-customer-display-message.sql");
 const customerDisplayVersionMigration = read("db/sql/migration-1030-version-persona-customer-display-message.sql");
 const recoveryMigration = read("db/sql/migration-1033-add-persona-conversation-recovery.sql");
+const recoveryMessageMigration = read("db/sql/migration-1035-link-recovery-to-persona-message.sql");
 const loadOrder = read("db/sql/load-order.txt");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
@@ -62,15 +63,18 @@ test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", ()
   const windowContract = read("contracts/services/personas/conversation/dto/persona-conversation-window.out.dto.ts");
   assert.match(recoveryMigration, /CREATE TABLE AiDesktopPersonaConversationRecovery/);
   assert.match(recoveryMigration, /FOREIGN KEY \(conversationId\) REFERENCES AiDesktopPersonaConversation/);
+  assert.match(recoveryMessageMigration, /ADD COLUMN affectedMessageId TEXT/);
   assert.match(loadOrder, /1033\|migration-1033-add-persona-conversation-recovery\.sql/);
   assert.match(conversationContract, /PersonaConversationRecoveryStatusValue = "verified" \| "unknown-turn" \| "thread-unavailable" \| "retryable" \| "verification-incomplete"/);
   assert.match(windowContract, /recovery\?: PersonaConversationRecoveryOutDto/);
   assert.match(collaborationMemoryPort, /recordPersonaConversationRecovery/);
   assert.match(repository, /recordRecovery\(input:/);
   assert.match(repository, /readLatestRecovery/);
+  assert.match(repository, /affectedMessageId/);
   assert.match(hook, /recovery: window\.recovery/);
   assert.match(hanli, /已恢复，历史已核对/);
   assert.match(hanli, /hanli-conversation-recovery/);
+  assert.match(hanli, /data-recovery-affected/);
 });
 
 test("工作流重复进展只能原位更新既有内部消息", () => {

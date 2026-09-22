@@ -13,24 +13,35 @@ const memoryPort = read("contracts/services/support/capabilities/event-center/po
 const ipc = read("electron/system/ipc/domains/register-collaboration-ipc.ts");
 const preload = read("electron/system/preload/domains/collaboration-bridge.cts");
 const model = read("src/features/conversation/model/usePersonaConversation.ts");
+const workspace = read("src/features/hanli/components/HanliConversationWorkspace.tsx");
 
 test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新", () => {
   assert.match(ports, /readThreadRecovery\(\): SendMessageOutDto\["threadRecovery"\]/);
   assert.match(runtime, /readThreadRecovery: \(\) => hanLiCodex!\.lastThreadRecovery\(\)/);
-  assert.match(service, /await this\.#recordThreadRecovery\(conversationId, response\.threadRecovery\)/);
+  assert.match(service, /await this\.#recordThreadRecovery\(conversationId, response\.threadRecovery, request\.clientMessageId\)/);
   assert.match(service, /catch \(error\) \{[\s\S]*?chat\.readThreadRecovery\(\)/);
   assert.match(service, /recordPersonaConversationRecovery/);
   assert.match(service, /onPersonaConversationChanged\?\.\(saved\)/);
 });
 
 test("打开韩立会话前准备恢复，并仅写入仍活动的同一业务会话", () => {
-  assert.match(service, /async prepareRecovery\(\)[\s\S]*?const linkedSession = await memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)[\s\S]*?if \(!linkedSession\) return conversation/);
+  assert.match(service, /async prepareRecovery\(\)[\s\S]*?const linkedSession = await memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)[\s\S]*?if \(!linkedSession\) \{[\s\S]*?未找到可验证的原线程关联；既有历史保持可读，未将其显示为已恢复。/);
   assert.match(service, /linkedSession[\s\S]*?chat\.recoverConversationSession\(linkedSession\)/);
   assert.match(service, /const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId !== conversation\.conversationId[\s\S]*?activateRecoveredConversationSession/);
   assert.match(service, /#recordThreadRecovery\(conversation\.conversationId, recovery\)/);
   assert.match(runtime, /recoverConversationSession: \(session\) => hanLiCodex!\.recoverConversationSession\(session, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
   assert.match(runtime, /activateRecoveredConversationSession: \(threadId\) => hanLiCodex!\.activateRecoveredConversationSession\(threadId, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
   assert.doesNotMatch(service.match(/async prepareRecovery\(\)[\s\S]*?\n  }\n\n  /)?.[0] || "", /chat\.send/);
+});
+
+test("恢复记录保留回合、条目与客户消息关联，并仅由可重试状态开放重试", () => {
+  assert.match(service, /affectedMessageId,/);
+  assert.match(memoryPort, /affectedMessageId\?: string \| null/);
+  assert.match(workspace, /hanli-recovery-\$\{conversation\.recovery\.recoveryId\}/);
+  assert.match(workspace, /data-recovery-affected/);
+  assert.match(workspace, /conversation\.recovery\.retryable && <button[\s\S]*?重试恢复/);
+  assert.match(model, /const retryRecovery = useCallback[\s\S]*?preparePersonaConversationRecovery/);
+  assert.match(model, /acceptsConversationWindow\(generation, conversationId, window\)/);
 });
 
 test("韩立完成回合后把实际 Codex 线程绑定到同一业务会话", () => {

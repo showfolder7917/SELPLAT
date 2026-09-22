@@ -41,6 +41,7 @@ export interface CollaborationMemoryPort {
     successorThreadId?: string | null;
     affectedTurnId?: string | null;
     affectedItemId?: string | null;
+    affectedMessageId?: string | null;
     summary: string;
     retryable: boolean;
     occurredAt: string;
