@@ -255,6 +255,9 @@ export class HanliDecisionService {
 
 /** 仅补足结果验收的歧义分类提示；语义校验仍是唯一允许放行的边界。 */
 function resultAcceptanceRetryHint(lastError: string): string {
+  if (lastError.startsWith("韩立源码审查缺少 ") && lastError.endsWith(" 的明确结论或源码依据。")) {
+    return " 先重新读取当前已授权工作区中与每项 code-conformance 条件直接相关的源码；每项 finding 和 sourceReview 的 evidenceReferences 必须填写实际文件或具体结构位置，不能引用测试日志、任务状态或猜测。无法读取时保留 blocked，并说明缺少的授权或源码。";
+  }
   if (lastError === "韩立代码符合性审查没有与混合计划的剩余条件逐项对应。") {
     return " acceptancePlan 已存在时必须保持其 evidenceType 分区；findings 逐项覆盖计划内全部 code-conformance 条件，不得用新 pageCriterionIds 排除冻结的代码条件。";
   }
