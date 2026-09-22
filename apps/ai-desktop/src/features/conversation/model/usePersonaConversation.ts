@@ -118,6 +118,25 @@ export function usePersonaConversation(personaId: string) {
     return expectedConversationId === null || window.conversationId === expectedConversationId;
   }
 
+  /**
+   * 恢复回执确认了主进程实际处理的业务会话；窗口读取必须使用该标识，
+   * 否则恢复完成后仍可能读回渲染层保留的旧会话窗口。
+   */
+  async function readPreparedRecoveryWindow(
+    desktop: ReturnType<typeof getOptionalCollaborationDesktopApi>,
+    expectedConversationId: string | null,
+    receipt: PersonaConversationOutDto | undefined,
+    generation: number,
+  ): Promise<PersonaConversationWindowOutDto | undefined> {
+    const conversationId = receipt?.conversationId || expectedConversationId;
+    // 已经显示特定会话时，恢复不能把另一个活动会话的结果覆盖到当前页面。
+    if (expectedConversationId && conversationId !== expectedConversationId) return undefined;
+    if (conversationDisplay.current.generation !== generation) return undefined;
+    conversationDisplay.current = { generation, targetConversationId: conversationId };
+    const window = await readPersonaConversationWindow(desktop, personaId, { conversationId });
+    return window && acceptsConversationWindow(generation, conversationId, window) ? window : undefined;
+  }
+
   useEffect(() => {
     let active = true;
     let receivedOwnUpdate = false;
@@ -128,11 +147,11 @@ export function usePersonaConversation(personaId: string) {
     const prepareRecovery = personaId === "han-li" && typeof desktop?.preparePersonaConversationRecovery === "function"
       ? desktop.preparePersonaConversationRecovery(personaId)
       : Promise.resolve(undefined);
-    void prepareRecovery.then(() => readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId }))
+    void prepareRecovery.then((receipt) => active
+      ? readPreparedRecoveryWindow(desktop, currentConversationId, receipt, generation)
+      : undefined)
       .then((value) => {
-        if (!active || receivedOwnUpdate || !value || !acceptsConversationWindow(generation, currentConversationId, value)) return;
-        // 初次读取没有稳定 ID 时，读取到的当前会话成为本代际唯一目标。
-        if (currentConversationId === null) conversationDisplay.current = { generation, targetConversationId: value.conversationId };
+        if (!active || receivedOwnUpdate || !value) return;
         setConversation(windowConversation(value));
         setHasEarlier(value.hasEarlier);
       })
@@ -146,9 +165,11 @@ export function usePersonaConversation(personaId: string) {
       if (!active) return;
       if (value.ownerPersonaId === personaId) {
         receivedOwnUpdate = true;
-        void readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId })
+        // 恢复已确认目标会话后，订阅刷新也必须读取同一窗口，不能回退闭包中的旧 ID。
+        const targetConversationId = conversationDisplay.current.targetConversationId ?? currentConversationId;
+        void readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId })
           .then((window) => {
-            if (active && window && acceptsConversationWindow(generation, currentConversationId, window)) {
+            if (active && window && acceptsConversationWindow(generation, targetConversationId, window)) {
               setConversation((current) => ({
                 ...windowConversation(window),
                 activity: value.activity,
@@ -218,9 +239,8 @@ export function usePersonaConversation(personaId: string) {
     setError("");
     try {
       const receipt = await desktop.preparePersonaConversationRecovery(personaId);
-      const targetConversationId = receipt.conversationId || conversationId;
-      const window = await readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId });
-      if (!window || !acceptsConversationWindow(generation, conversationId, window)) return;
+      const window = await readPreparedRecoveryWindow(desktop, conversationId, receipt, generation);
+      if (!window) return;
       setConversation(windowConversation(window));
       setHasEarlier(window.hasEarlier);
     } catch (reason) {
