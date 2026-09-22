@@ -36,6 +36,12 @@ test("打开韩立会话前准备恢复，并仅写入目标业务会话", () =>
   assert.doesNotMatch(service.match(/async prepareRecovery\(\)[\s\S]*?\n  }\n\n  /)?.[0] || "", /chat\.send/);
 });
 
+test("缺少历史线程关联时不借用人物当前线程", () => {
+  const prepareRecovery = service.match(/async prepareRecovery[\s\S]*?\n  }\n\n  /)?.[0] || "";
+  assert.match(prepareRecovery, /if \(!linkedSession\)[\s\S]*?verification-incomplete/);
+  assert.doesNotMatch(prepareRecovery, /activeConversationSession\(/);
+});
+
 test("恢复记录保留回合、条目与客户消息关联，并仅由可重试状态开放重试", () => {
   assert.match(service, /affectedMessageId,/);
   assert.match(memoryPort, /affectedMessageId\?: string \| null/);
