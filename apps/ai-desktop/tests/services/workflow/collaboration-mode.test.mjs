@@ -2781,6 +2781,16 @@ test("开发人物工作树共享第三方依赖但把仓库内本地包连接�
     assert.equal(probe.sharedDependencyRoot, sourceModules);
     assert.equal(probe.dependencyRoot, realpathSync(path.join(worktree, "apps", "ai-desktop", "node_modules")));
     assert.equal(probe.dependencyLeaseId, "executor-song-yu-g1");
+    // 调度器可能把租约环境传给主工程的只读路径诊断；主工程必须忽略该租约而非误当作 worktree。
+    const sourceProbeModule = pathToFileURL(path.join(repository, "apps", "ai-desktop", "scripts", "dependency-cache.mjs")).href;
+    const sourceProbe = JSON.parse(execFileSync(process.execPath, [
+      "--input-type=module",
+      "-e",
+      `const module = await import(${JSON.stringify(sourceProbeModule)}); process.stdout.write(JSON.stringify(module.resolveDependencyCache()));`,
+    ], { encoding: "utf8", env: { ...process.env, ...lease.environment } }));
+    assert.equal(sourceProbe.projectRoot, repository);
+    assert.equal(sourceProbe.cacheProjectRoot, repository);
+    assert.equal(sourceProbe.dependencyLeaseId, null);
     releaseManagedDependencyLease(lease);
     assert.equal(existsSync(path.join(worktree, "apps", "ai-desktop", "node_modules")), true);
     releaseManagedDependencyLease(validationLease);
