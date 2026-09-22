@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 
-const scriptPath = new URL("../../scripts/reset-collaboration-runtime-data.mjs", import.meta.url);
+// URL.pathname 会保留工作树路径中的 %20；子进程必须接收已解码的文件系统路径。
+const scriptPath = fileURLToPath(new URL("../../scripts/reset-collaboration-runtime-data.mjs", import.meta.url));
 const runtimeTables = [
   "AiDesktopTaskTimelineStream", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineTopic",
   "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionArchiveRecord",
@@ -50,7 +52,7 @@ test("离线清理同时重置旧事件库和当前工作流库，并保留人�
   workflow.exec("INSERT INTO AiDesktopTaskExecution VALUES ('task-old')");
   workflow.close();
 
-  const output = JSON.parse(execFileSync(process.execPath, [scriptPath.pathname,
+  const output = JSON.parse(execFileSync(process.execPath, [scriptPath,
     `--user-data-dir=${userDataRoot}`, `--database-file=${eventsPath}`,
     `--workflow-database-file=${workflowPath}`, "--preserve-conversations",
   ], { encoding: "utf8" }));
