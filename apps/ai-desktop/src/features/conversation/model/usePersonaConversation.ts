@@ -123,7 +123,10 @@ export function usePersonaConversation(personaId: string) {
     const currentConversationId = conversation.conversationId;
     const generation = beginConversationDisplayGeneration(currentConversationId);
     const desktop = getOptionalCollaborationDesktopApi();
-    void readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId })
+    const prepareRecovery = personaId === "han-li" && typeof desktop?.preparePersonaConversationRecovery === "function"
+      ? desktop.preparePersonaConversationRecovery(personaId)
+      : Promise.resolve(undefined);
+    void prepareRecovery.then(() => readPersonaConversationWindow(desktop, personaId, { conversationId: currentConversationId }))
       .then((value) => {
         if (!active || receivedOwnUpdate || !value || !acceptsConversationWindow(generation, currentConversationId, value)) return;
         // 初次读取没有稳定 ID 时，读取到的当前会话成为本代际唯一目标。

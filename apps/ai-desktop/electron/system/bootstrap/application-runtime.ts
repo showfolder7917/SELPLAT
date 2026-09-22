@@ -869,6 +869,7 @@ export async function startApplication(): Promise<void> {
       newChat: () => hanLiCodex!.newChat(),
       activeConversationId: () => hanLiCodex!.activeSession().threadId,
       readThreadRecovery: () => hanLiCodex!.lastThreadRecovery(),
+      recoverExistingSession: () => hanLiCodex!.recoverExistingSession(workspaces.read(), settings.read().locale),
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request, sourceRequestId, options) =>
@@ -1067,22 +1068,6 @@ export async function startApplication(): Promise<void> {
   // 统一人物会话注册表是 IPC 的唯一入口。人物自己的服务仍可保留专属业务能力，但会话读写必须在这里登记。
   const personaConversations = new PersonaConversationFacade();
   personaConversations.register("han-li", hanliRuntime.facade);
-  void (async () => {
-    if (!collaborationMemory || !hanLiCodex) return;
-    const conversation = await collaborationMemory.readPersonaConversation("han-li");
-    if (!conversation.conversationId) return;
-    const recovery = await hanLiCodex.recoverExistingSession(workspaces.read(), settings.read().locale);
-    if (!recovery) return;
-    const currentConversation = await collaborationMemory.readPersonaConversation("han-li");
-    if (currentConversation.conversationId !== conversation.conversationId) return;
-    const saved = await collaborationMemory.recordPersonaConversationRecovery({
-      ownerPersonaId: "han-li", conversationId: conversation.conversationId, status: recovery.status,
-      sourceThreadId: recovery.sourceThreadId, successorThreadId: recovery.successorThreadId,
-      affectedTurnId: recovery.affectedTurnId, affectedItemId: recovery.affectedItemId,
-      summary: recovery.summary, retryable: recovery.status === "retryable", occurredAt: new Date().toISOString(),
-    });
-    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:persona-conversation-changed", saved);
-  })().catch((error) => eventCenter.recordEvent("han-li.conversation.recovery_failed", { message: error instanceof Error ? error.message : String(error) }));
   personaConversations.registerWindowReader((personaId, request) => {
     if (!collaborationMemory) throw new Error("人物会话数据库当前不可用，无法读取历史窗口。");
     return collaborationMemory.readPersonaCustomerDisplayWindow(personaId, request);

@@ -17,6 +17,7 @@ import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semanti
 export interface HanliApplicationPort {
   /** 读取韩立当前业务会话。 */
   conversation(): Promise<PersonaConversationOutDto>;
+  prepareConversationRecovery(): Promise<PersonaConversationOutDto>;
   /** 向韩立当前业务会话发送一条用户消息。 */
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   /** 归档当前业务会话并创建新会话。 */
@@ -90,6 +91,9 @@ export class HanliFacade {
   /** 读取 ownerPersonaId=han-li 的当前业务会话；底层 Codex threadId 不对页面暴露。 */
   conversation(): Promise<PersonaConversationOutDto> {
     return this.#application.conversation();
+  }
+  prepareConversationRecovery(): Promise<PersonaConversationOutDto> {
+    return this.#application.prepareConversationRecovery();
   }
   /** 与韩立自由讨论；人物使用语义记忆精准追问，但不执行工程写入。 */
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> {

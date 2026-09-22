@@ -78,6 +78,10 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#conversation.conversation();
   }
 
+  prepareConversationRecovery(): Promise<PersonaConversationOutDto> {
+    return this.#conversation.prepareRecovery();
+  }
+
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> {
     return this.#conversation.send(request);
   }

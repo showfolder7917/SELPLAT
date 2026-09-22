@@ -20,6 +20,7 @@ test("启动恢复只恢复已有线程，不发送消息或创建替代线程",
   assert.doesNotMatch(source.match(/async recoverExistingSession\([\s\S]*?\n  }\n\n  \/\*\* 只报告/)?.[0] || "", /turn\/start/);
   assert.match(source, /status: "thread-unavailable"[\s\S]*?successorThreadId: null/);
   assert.match(source, /status: "retryable"[\s\S]*?return recovery/);
+  assert.match(source, /#threadAttached\) \{[\s\S]*?status: "verified"/);
 });
 
 test("unknown-turn 与未核验内容不被伪装成恢复成功", () => {

@@ -178,7 +178,9 @@ export class CodexService {
     await this.#ensureReady();
     const developerInstructions = this.#developerInstructions(locale);
     const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
-    if (this.#threadId === activeThreadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return undefined;
+    if (this.#threadId === activeThreadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) {
+      return { status: "verified", sourceThreadId: activeThreadId, successorThreadId: activeThreadId, summary: "已恢复，历史已核对。" };
+    }
     const stored = this.#readStoredSession();
     const preservePersonaThread = this.#options.preserveThreadAcrossWorkspaceChanges === true;
     const resumableThreadId = this.#threadId && (preservePersonaThread || this.#threadWorkspaceSignature === workspaceSignature)

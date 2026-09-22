@@ -33,6 +33,7 @@ export const COLLABORATION_DESKTOP_API_METHODS = [
   "getEvolutionReadRecovery",
   "getEvolutionTopicDossier",
   "getPersonaConversation",
+  "preparePersonaConversationRecovery",
   "getPersonaConversationWindow",
   "retryPersonaCustomerDisplayMessage",
   "onPersonaConversationChanged",
