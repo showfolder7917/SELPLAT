@@ -19,6 +19,7 @@ const migration = read("db/sql/migration-1025-add-persona-conversation-model.sql
 const messageTypeMigration = read("db/sql/migration-1027-add-persona-conversation-message-type.sql");
 const customerDisplayMigration = read("db/sql/migration-1029-add-persona-customer-display-message.sql");
 const customerDisplayVersionMigration = read("db/sql/migration-1030-version-persona-customer-display-message.sql");
+const recoveryMigration = read("db/sql/migration-1033-add-persona-conversation-recovery.sql");
 const loadOrder = read("db/sql/load-order.txt");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
@@ -55,6 +56,21 @@ test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID �
   assert.match(inquiry, /appendPersonaCustomerMessage/);
   assert.doesNotMatch(inquiry, /:assessment/);
   assert.doesNotMatch(read("electron/services/personas/hanli/internal/conversation/hanli-inquiry-checkpoint.ts"), /messageId\.startsWith/);
+});
+
+test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", () => {
+  const windowContract = read("contracts/services/personas/conversation/dto/persona-conversation-window.out.dto.ts");
+  assert.match(recoveryMigration, /CREATE TABLE AiDesktopPersonaConversationRecovery/);
+  assert.match(recoveryMigration, /FOREIGN KEY \(conversationId\) REFERENCES AiDesktopPersonaConversation/);
+  assert.match(loadOrder, /1033\|migration-1033-add-persona-conversation-recovery\.sql/);
+  assert.match(conversationContract, /PersonaConversationRecoveryStatusValue = "verified" \| "unknown-turn" \| "thread-unavailable" \| "retryable" \| "verification-incomplete"/);
+  assert.match(windowContract, /recovery\?: PersonaConversationRecoveryOutDto/);
+  assert.match(collaborationMemoryPort, /recordPersonaConversationRecovery/);
+  assert.match(repository, /recordRecovery\(input:/);
+  assert.match(repository, /readLatestRecovery/);
+  assert.match(hook, /recovery: window\.recovery/);
+  assert.match(hanli, /已恢复，历史已核对/);
+  assert.match(hanli, /hanli-conversation-recovery/);
 });
 
 test("工作流重复进展只能原位更新既有内部消息", () => {

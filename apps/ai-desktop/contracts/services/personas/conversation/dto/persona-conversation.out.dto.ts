@@ -12,6 +12,23 @@ export type PersonaConversationContentRoleValue = "conversation" | "technical-ev
 /** 客户显示投影的读取状态；非 ready 状态绝不允许使用原始正文回退。 */
 export type PersonaCustomerDisplayStateValue = "ready" | "excluded" | "missing" | "failed";
 
+/** Codex 线程恢复的持久化结论；它与客户正文派生状态互不替代。 */
+export type PersonaConversationRecoveryStatusValue = "verified" | "unknown-turn" | "thread-unavailable" | "retryable" | "verification-incomplete";
+
+/** 一条恢复记录始终关联原业务会话，避免新线程伪装成旧线程已完整恢复。 */
+export interface PersonaConversationRecoveryOutDto {
+  recoveryId: string;
+  status: PersonaConversationRecoveryStatusValue;
+  sourceThreadId: string | null;
+  successorThreadId: string | null;
+  affectedTurnId: string | null;
+  affectedItemId: string | null;
+  summary: string;
+  retryable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** 所有人物页面共用的消息协议。 */
 export interface PersonaConversationMessageOutDto {
   messageId: string;
@@ -46,6 +63,8 @@ export interface PersonaConversationOutDto {
   createdAt?: string;
   messages: PersonaConversationMessageOutDto[];
   updatedAt: string;
+  /** 当前会话最近一次 Codex 恢复结论；没有恢复事实时保持为空。 */
+  recovery?: PersonaConversationRecoveryOutDto;
   /** 人物服务组合的真实活动；数据库消息保持独立，不由页面根据等待气泡推断。 */
   activity?: PersonaConversationActivityOutDto;
   /** 只描述本次发送实际装入提示词的字符数；不写入人物消息，也不参与下一轮学习。 */

@@ -68,6 +68,12 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         · 发送上下文 {conversation.contextReadStats.promptCharacters.toLocaleString()} 字
       </p>}
 
+      {conversation.recovery && <section className={`hanli-conversation-recovery ${conversation.recovery.status}`} role="status" aria-live="polite">
+        <strong>{recoveryHeading(conversation.recovery.status)}</strong>
+        <span>{conversation.recovery.summary}</span>
+        {conversation.recovery.retryable && <small>原会话与历史保持不变；可重试恢复。</small>}
+      </section>}
+
       {/* 客户问答区：按发生顺序展示客户提问和韩立回答。 */}
       {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>读取更早消息</button>}
       {controller.messages.map((message) => {
@@ -206,4 +212,14 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
     </form>}
     />
   </section>;
+}
+
+function recoveryHeading(status: NonNullable<HanliConversationWorkspaceProps["conversation"]["recovery"]>["status"]): string {
+  switch (status) {
+    case "verified": return "已恢复，历史已核对";
+    case "unknown-turn": return "恢复记录需要核验";
+    case "thread-unavailable": return "原线程不可恢复";
+    case "retryable": return "恢复失败，可重试";
+    case "verification-incomplete": return "恢复内容尚未核验";
+  }
 }

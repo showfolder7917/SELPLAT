@@ -24,6 +24,7 @@ import type { CodexDynamicToolsPort } from "./internal/dynamic-tools.port.js";
 import { CommandGovernanceFacade as TrustedCommandStore } from "../security/index.js";
 
 type JsonObject = Record<string, unknown>;
+type ThreadRecovery = NonNullable<SendMessageOutDto["threadRecovery"]>;
 
 interface RpcMessage {
   id?: number;
@@ -106,6 +107,7 @@ export class CodexService {
   #threadId: string | undefined;
   #threadWorkspaceSignature: string | undefined;
   #threadAttached = false;
+  #lastThreadRecovery: ThreadRecovery | undefined;
   #activeTurnId: string | undefined;
   #lastError: string | null = null;
   #runtime: CodexRuntime | null = null;
@@ -156,6 +158,12 @@ export class CodexService {
       }
     }
     this.#forgetThread();
+    this.#lastThreadRecovery = undefined;
+  }
+
+  /** 返回刚刚发生的线程恢复结论；普通连续发送不会保留旧轮次的恢复状态。 */
+  lastThreadRecovery(): ThreadRecovery | undefined {
+    return this.#lastThreadRecovery ? { ...this.#lastThreadRecovery } : undefined;
   }
 
   activeSession(): { threadId: string | null } {
@@ -312,11 +320,13 @@ export class CodexService {
     // send 接收的是已经拼装好的内部提示词，用户输入长度由上层各自校验，运输层不再误拦上下文。
     if (!normalizedMessage && attachmentPaths.length === 0) throw new Error("Message or screenshot attachment is required.");
 
+    this.#lastThreadRecovery = undefined;
     await this.#ensureReady();
     await this.cancel();
     const primaryRoot = workspaces.roots.find((root) => root.id === workspaces.primaryId) || workspaces.roots[0];
     if (!primaryRoot) throw new Error("At least one registered workspace is required.");
-    const threadId = await this.#getThread(sandboxMode, workspaces, primaryRoot.path, locale);
+    const thread = await this.#getThread(sandboxMode, workspaces, primaryRoot.path, locale);
+    const threadId = thread.threadId;
     const userTask = normalizedMessage || (locale === "ja" ? "添付画像を確認してください。" : "请阅读并分析附加截图。");
     const input: JsonObject[] = [{
       type: "text",
@@ -327,6 +337,7 @@ export class CodexService {
     input.push(...attachmentPaths.map((filePath) => ({ type: "localImage", path: filePath })));
     this.#activeExecutionMode = executionMode;
     this.#activeWorkspaces = workspaces;
+    let startedTurnId: string | null = null;
     try {
       // 每轮读取最新全局值；人物会话可单独指定模型，但推理强度和服务等级始终沿用全局设置。
       const modelSettings = this.#options.readSettings();
@@ -344,11 +355,31 @@ export class CodexService {
       }));
       const turnId = stringValue(asObject(result.turn).id);
       if (!turnId) throw new Error("Codex harness did not return a turn id.");
+      startedTurnId = turnId;
       this.#activeTurnId = turnId;
-      const response = { ...await this.#waitForTurn(turnId, onStreamEvent), threadId };
+      const completed = await this.#waitForTurn(turnId, onStreamEvent);
+      const recovery = thread.recovery || (completed.agentMessages?.length
+        ? undefined
+        : {
+          status: "verification-incomplete" as const,
+          sourceThreadId: threadId,
+          successorThreadId: threadId,
+          summary: "本轮恢复内容尚未核验；未将空结果显示为已恢复。",
+        });
+      if (recovery) this.#lastThreadRecovery = recovery;
+      const response = { ...completed, threadId, ...(recovery ? { threadRecovery: recovery } : {}) };
       // 官方 rollout 已落盘后再推进检查点；失败由持久源和未更新水位留待下次启动重试。
       await this.#options.onConversationTurnCompleted?.();
       return response;
+    } catch (error) {
+      if (/unknown[\s-]*turn/i.test(errorMessage(error))) {
+        this.#lastThreadRecovery = {
+          status: "unknown-turn", sourceThreadId: threadId, successorThreadId: threadId,
+          affectedTurnId: startedTurnId,
+          summary: "检测到未识别回合；需要按线程和回合记录核验，不表示内容已丢失。",
+        };
+      }
+      throw error;
     } finally {
       this.#activeExecutionMode = null;
       this.#activeWorkspaces = null;
@@ -386,10 +417,10 @@ export class CodexService {
     this.#ready = undefined;
   }
 
-  async #getThread(sandboxMode: SandboxModeValue, workspaces: WorkspaceStateOutDto, cwd: string, locale: LocaleValue): Promise<string> {
+  async #getThread(sandboxMode: SandboxModeValue, workspaces: WorkspaceStateOutDto, cwd: string, locale: LocaleValue): Promise<{ threadId: string; recovery?: ThreadRecovery }> {
     const developerInstructions = this.#developerInstructions(locale);
     const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
-    if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return this.#threadId;
+    if (this.#threadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return { threadId: this.#threadId };
 
     let stored = this.#readStoredSession();
     const preservePersonaThread = this.#options.preserveThreadAcrossWorkspaceChanges === true;
@@ -402,16 +433,29 @@ export class CodexService {
         const threadId = stringValue(asObject(resumed.thread).id) || resumableThreadId;
         this.#rememberThread(threadId, workspaceSignature);
         this.#onThreadLifecycle({ action: "resumed", threadId });
-        return threadId;
+        const recovery: ThreadRecovery = {
+          status: "verified", sourceThreadId: resumableThreadId, successorThreadId: threadId,
+          summary: "已恢复，历史已核对。",
+        };
+        this.#lastThreadRecovery = recovery;
+        return { threadId, recovery };
       } catch (error) {
         if (isMissingCodexThreadError(error)) {
           // 官方明确确认线程不存在时，旧凭据已经无法恢复；只清除该人物的线程指针，业务会话仍保留在 AI Memory。
           this.#onThreadLifecycle({ action: "missing_on_resume", threadId: resumableThreadId, reason: errorMessage(error) });
           this.#forgetThread();
           stored = null;
+          this.#lastThreadRecovery = {
+            status: "thread-unavailable", sourceThreadId: resumableThreadId, successorThreadId: null,
+            summary: "原线程不可恢复；既有会话历史仍可阅读，后续消息会从新线程接续。",
+          };
         } else {
           // 连接故障等未知失败仍保留凭据并让用户重试，避免误丢仍可恢复的任务。
           this.#onThreadLifecycle({ action: "resume_failed", threadId: resumableThreadId, reason: errorMessage(error) });
+          this.#lastThreadRecovery = {
+            status: "retryable", sourceThreadId: resumableThreadId, successorThreadId: null,
+            summary: "恢复当前会话失败，可保留原线程并重试恢复。",
+          };
           throw new Error(`无法恢复当前 Codex 任务：${errorMessage(error)}`);
         }
       }
@@ -447,7 +491,11 @@ export class CodexService {
     if (!threadId) throw new Error("Codex harness did not return a thread id.");
     this.#rememberThread(threadId, workspaceSignature);
     this.#onThreadLifecycle({ action: "started", threadId });
-    return threadId;
+    const recovery = this.#lastThreadRecovery?.status === "thread-unavailable"
+      ? { ...this.#lastThreadRecovery, successorThreadId: threadId }
+      : undefined;
+    if (recovery) this.#lastThreadRecovery = recovery;
+    return { threadId, ...(recovery ? { recovery } : {}) };
   }
 
   #rememberThread(threadId: string, workspaceSignature: string): void {

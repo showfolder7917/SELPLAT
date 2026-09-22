@@ -24,6 +24,7 @@ function windowConversation(window: PersonaConversationWindowOutDto): PersonaCon
     createdAt: window.createdAt,
     messages: window.messages,
     updatedAt: window.updatedAt,
+    recovery: window.recovery,
     activity: window.activity,
   };
 }

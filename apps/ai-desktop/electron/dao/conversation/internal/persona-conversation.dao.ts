@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { writePersonaConversationMessage } from "./persona-conversation-message.dao.js";
 import { writePersonaCustomerDisplayMessage, type PersonaCustomerDisplayProjector } from "./persona-customer-display-message.dao.js";
 
-import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, PersonaCustomerDisplayStateValue, ReadPersonaConversationWindowInDto } from "../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationRecoveryOutDto, PersonaConversationRecoveryStatusValue, PersonaConversationWindowOutDto, PersonaCustomerDisplayStateValue, ReadPersonaConversationWindowInDto } from "../../../../contracts/services/personas/conversation/index.js";
 import type { DatabasePort } from "../../platform/index.js";
 
 /**
@@ -61,6 +61,7 @@ export class SqlitePersonaConversationDao {
         createdAt: header.createdAt,
         messages: rows.map(mapMessage),
         updatedAt: header.updatedAt,
+        ...recoveryProperty(readLatestRecovery(connection, ownerPersonaId, header.conversationId)),
       };
     });
   }
@@ -78,7 +79,8 @@ export class SqlitePersonaConversationDao {
       const rows = connection.prepare(customerDisplayRowsSql("ORDER BY source.sequenceNumber"))
         .all({ $owner: owner, $conversation: conversation }) as unknown as Array<Record<string, unknown>>;
       return { ownerPersonaId: owner, conversationId: header.conversationId, selectedModel: header.selectedModel, createdAt: header.createdAt,
-        messages: rows.map(mapCustomerDisplayMessage), updatedAt: header.updatedAt };
+        messages: rows.map(mapCustomerDisplayMessage), updatedAt: header.updatedAt,
+        ...recoveryProperty(readLatestRecovery(connection, owner, header.conversationId)) };
     });
   }
 
@@ -105,7 +107,8 @@ export class SqlitePersonaConversationDao {
           AND (display.displayState IS NULL OR display.displayState<>'excluded') AND source.sequenceNumber<$earliest LIMIT 1
       `).get({ $owner: owner, $conversation: conversation, $earliest: earliest }));
       return { ownerPersonaId: owner, conversationId: header.conversationId, selectedModel: header.selectedModel, createdAt: header.createdAt,
-        updatedAt: header.updatedAt, messages, hasEarlier };
+        updatedAt: header.updatedAt, messages, hasEarlier,
+        ...recoveryProperty(readLatestRecovery(connection, owner, header.conversationId)) };
     });
   }
 
@@ -188,6 +191,55 @@ export class SqlitePersonaConversationDao {
     return this.read(owner, conversation);
   }
 
+  /** 线程恢复结论独立写入，不覆盖业务消息、客户显示派生或事件审计。 */
+  recordRecovery(input: {
+    ownerPersonaId: string;
+    conversationId: string;
+    status: PersonaConversationRecoveryStatusValue;
+    sourceThreadId?: string | null;
+    successorThreadId?: string | null;
+    affectedTurnId?: string | null;
+    affectedItemId?: string | null;
+    summary: string;
+    retryable: boolean;
+    occurredAt: string;
+  }): PersonaConversationOutDto {
+    if (!this.database) throw new Error("AI Memory 数据库当前不可用，无法保存会话恢复记录。");
+    const owner = requiredPersonaId(input.ownerPersonaId);
+    const conversation = requiredConversationId(input.conversationId);
+    const summary = input.summary.trim();
+    if (!summary) throw new Error("会话恢复记录缺少可读结论。");
+    this.database.transaction((connection) => {
+      connection.prepare(`UPDATE AiDesktopPersonaConversation SET updatedAt=$updatedAt
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`).run({
+        $ownerPersonaId: owner, $conversationId: conversation, $updatedAt: input.occurredAt,
+      });
+      const changed = connection.prepare("SELECT changes() AS count").get() as { count: number };
+      if (changed.count === 0) throw new Error("当前人物会话不存在，不能保存恢复记录。");
+      connection.prepare(`INSERT INTO AiDesktopPersonaConversationRecovery (
+        recoveryId, ownerPersonaId, conversationId, status, sourceThreadId, successorThreadId,
+        affectedTurnId, affectedItemId, summary, retryable, createdAt, updatedAt
+      ) VALUES (
+        $recoveryId, $ownerPersonaId, $conversationId, $status, $sourceThreadId, $successorThreadId,
+        $affectedTurnId, $affectedItemId, $summary, $retryable, $createdAt, $updatedAt
+      )`).run({
+        $recoveryId: `persona-recovery-${randomUUID()}`,
+        $ownerPersonaId: owner,
+        $conversationId: conversation,
+        $status: input.status,
+        $sourceThreadId: nullable(input.sourceThreadId),
+        $successorThreadId: nullable(input.successorThreadId),
+        $affectedTurnId: nullable(input.affectedTurnId),
+        $affectedItemId: nullable(input.affectedItemId),
+        $summary: summary,
+        $retryable: input.retryable ? 1 : 0,
+        $createdAt: input.occurredAt,
+        $updatedAt: input.occurredAt,
+      });
+    });
+    return this.read(owner, conversation);
+  }
+
   private activeConversationId(ownerPersonaId: string): string | null {
     if (!this.database) return null;
     return this.database.withConnection((connection) => {
@@ -254,6 +306,30 @@ export class SqlitePersonaConversationDao {
 
 interface HeaderRow { conversationId: string; selectedModel: string | null; createdAt: string; updatedAt: string; }
 
+function readLatestRecovery(connection: DatabaseSync, ownerPersonaId: string, conversationId: string): PersonaConversationRecoveryOutDto | undefined {
+  const row = connection.prepare(`SELECT recoveryId, status, sourceThreadId, successorThreadId, affectedTurnId, affectedItemId,
+    summary, retryable, createdAt, updatedAt FROM AiDesktopPersonaConversationRecovery
+    WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId
+    ORDER BY updatedAt DESC, recoveryId DESC LIMIT 1`).get({ $ownerPersonaId: ownerPersonaId, $conversationId: conversationId }) as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  return {
+    recoveryId: String(row.recoveryId),
+    status: row.status as PersonaConversationRecoveryStatusValue,
+    sourceThreadId: nullable(row.sourceThreadId),
+    successorThreadId: nullable(row.successorThreadId),
+    affectedTurnId: nullable(row.affectedTurnId),
+    affectedItemId: nullable(row.affectedItemId),
+    summary: String(row.summary),
+    retryable: Number(row.retryable) === 1,
+    createdAt: String(row.createdAt),
+    updatedAt: String(row.updatedAt),
+  };
+}
+
+function recoveryProperty(recovery: PersonaConversationRecoveryOutDto | undefined): Pick<PersonaConversationOutDto, "recovery"> {
+  return recovery ? { recovery } : {};
+}
+
 /** 数据库行只在这里转换成公共 DTO，人物页面不需要理解 JSON 字段。 */
 function mapMessage(row: Record<string, unknown>): PersonaConversationMessageOutDto {
   return {
@@ -308,6 +384,10 @@ function normalizedWindowLimit(value: number | undefined): number {
 function normalizedModel(value: string | null | undefined): string | null {
   const model = value?.trim() || "";
   return model || null;
+}
+
+function nullable(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
 }
 
 function requiredPersonaId(value: string): string {

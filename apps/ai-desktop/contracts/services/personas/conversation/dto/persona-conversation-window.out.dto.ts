@@ -1,5 +1,5 @@
 import type { PersonaConversationActivityOutDto } from "./persona-conversation-activity.out.dto.js";
-import type { PersonaConversationMessageOutDto } from "./persona-conversation.out.dto.js";
+import type { PersonaConversationMessageOutDto, PersonaConversationRecoveryOutDto } from "./persona-conversation.out.dto.js";
 
 /** Renderer 请求人物会话窗口时使用的稳定游标；只允许向更早的序号补载。 */
 export interface ReadPersonaConversationWindowInDto {
@@ -21,6 +21,8 @@ export interface PersonaConversationWindowOutDto {
   messages: PersonaConversationMessageOutDto[];
   /** 人物运行时已有的可见活动投影；消息窗口读取不会根据内容自行推断。 */
   activity?: PersonaConversationActivityOutDto;
+  /** 当前业务会话最近一次 Codex 恢复结论，不从客户正文或事件审计推断。 */
+  recovery?: PersonaConversationRecoveryOutDto;
   /** 当前窗口前是否仍有更早历史。 */
   hasEarlier: boolean;
 }
