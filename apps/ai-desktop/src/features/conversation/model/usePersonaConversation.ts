@@ -170,9 +170,11 @@ export function usePersonaConversation(personaId: string) {
     const removeListener = desktop?.onPersonaConversationChanged((value) => {
       if (!active) return;
       if (value.ownerPersonaId === personaId) {
-        receivedOwnUpdate = true;
         // 恢复已确认目标会话后，订阅刷新也必须读取同一窗口，不能回退闭包中的旧 ID。
         const targetConversationId = conversationDisplay.current.targetConversationId ?? currentConversationId;
+        // 同一人物的其他会话更新不能抢占当前会话的恢复回执；否则会抑制当前恢复窗口的读取。
+        if (targetConversationId && value.conversationId !== targetConversationId) return;
+        receivedOwnUpdate = true;
         void readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId })
           .then((window) => {
             if (active && window && acceptsConversationWindow(generation, targetConversationId, window)) {

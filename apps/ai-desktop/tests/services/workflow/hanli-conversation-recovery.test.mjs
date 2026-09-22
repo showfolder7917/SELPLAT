@@ -69,6 +69,8 @@ test("恢复回执确定窗口目标，订阅与重试不会用旧会话覆盖�
   assert.match(model, /expectedConversationId && conversationId !== expectedConversationId/);
   assert.match(model, /prepareRecovery\.then\(\(receipt\) => active[\s\S]*?readPreparedRecoveryWindow\(desktop, currentConversationId, receipt, generation\)/);
   assert.match(model, /targetConversationId = conversationDisplay\.current\.targetConversationId \?\? currentConversationId/);
+  assert.match(model, /targetConversationId && value\.conversationId !== targetConversationId\) return;/);
+  assert.match(model, /同一人物的其他会话更新不能抢占当前会话的恢复回执/);
   assert.match(model, /const window = await readPreparedRecoveryWindow\(desktop, conversationId, receipt, generation\)/);
 });
 
