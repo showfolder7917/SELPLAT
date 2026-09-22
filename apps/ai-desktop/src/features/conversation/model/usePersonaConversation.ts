@@ -130,11 +130,17 @@ export function usePersonaConversation(personaId: string) {
   ): Promise<PersonaConversationWindowOutDto | undefined> {
     const conversationId = receipt?.conversationId || expectedConversationId;
     // 已经显示特定会话时，恢复不能把另一个活动会话的结果覆盖到当前页面。
-    if (expectedConversationId && conversationId !== expectedConversationId) return undefined;
+    if (expectedConversationId && conversationId !== expectedConversationId) {
+      throw new Error("恢复结果属于另一会话，未覆盖当前会话。");
+    }
     if (conversationDisplay.current.generation !== generation) return undefined;
     conversationDisplay.current = { generation, targetConversationId: conversationId };
     const window = await readPersonaConversationWindow(desktop, personaId, { conversationId });
-    return window && acceptsConversationWindow(generation, conversationId, window) ? window : undefined;
+    if (!window) throw new Error("恢复后未读取到客户显示窗口。");
+    if (acceptsConversationWindow(generation, conversationId, window)) return window;
+    // 新会话已开始显示时，旧恢复的迟到结果无需向客户报告为错误。
+    if (conversationDisplay.current.generation !== generation) return undefined;
+    throw new Error("恢复后的客户显示窗口不属于当前会话。");
   }
 
   useEffect(() => {
