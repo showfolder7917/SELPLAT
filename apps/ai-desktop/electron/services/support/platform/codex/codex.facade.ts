@@ -26,6 +26,11 @@ import { CommandGovernanceFacade as TrustedCommandStore } from "../security/inde
 type JsonObject = Record<string, unknown>;
 type ThreadRecovery = NonNullable<SendMessageOutDto["threadRecovery"]>;
 
+interface UnknownTurnDiagnostic {
+  turnId: string;
+  itemId: string;
+}
+
 interface RpcMessage {
   id?: number;
   method?: string;
@@ -113,6 +118,7 @@ export class CodexService {
   #lastError: string | null = null;
   #lastHarnessError: string | null = null;
   #lastHarnessDiagnostic: string | null = null;
+  #lastUnknownTurnDiagnostic: UnknownTurnDiagnostic | undefined;
   #runtime: CodexRuntime | null = null;
   #storageReady: Promise<void> | undefined;
   #activeExecutionMode: ManagedExecutionModeValue | null = null;
@@ -162,11 +168,18 @@ export class CodexService {
     }
     this.#forgetThread();
     this.#lastThreadRecovery = undefined;
+    // 诊断只能关联到本次 turn，绝不能把旧 stderr 的条目写到后续会话恢复记录。
+    this.#lastUnknownTurnDiagnostic = undefined;
   }
 
   /** 返回刚刚发生的线程恢复结论；普通连续发送不会保留旧轮次的恢复状态。 */
   lastThreadRecovery(): ThreadRecovery | undefined {
     return this.#lastThreadRecovery ? { ...this.#lastThreadRecovery } : undefined;
+  }
+
+  /** stderr 回调可在等待 turn 完成期间写入诊断；经方法读取避免同步控制流把它误判为恒定 undefined。 */
+  #readUnknownTurnDiagnostic(): UnknownTurnDiagnostic | undefined {
+    return this.#lastUnknownTurnDiagnostic;
   }
 
   activeSession(): { threadId: string | null; workspaceSignature: string | null } {
@@ -410,6 +423,8 @@ export class CodexService {
     if (!normalizedMessage && attachmentPaths.length === 0) throw new Error("Message or screenshot attachment is required.");
 
     this.#lastThreadRecovery = undefined;
+    // 每次发送前清空上一轮诊断，避免旧 stderr 的条目写到新请求的恢复记录。
+    this.#lastUnknownTurnDiagnostic = undefined;
     await this.#ensureReady();
     await this.cancel();
     const primaryRoot = workspaces.roots.find((root) => root.id === workspaces.primaryId) || workspaces.roots[0];
@@ -462,10 +477,15 @@ export class CodexService {
       return response;
     } catch (error) {
       if (/unknown[\s-]*turn/i.test(errorMessage(error))) {
+        const diagnostic = this.#readUnknownTurnDiagnostic();
+        const affectedItemId = diagnostic?.turnId === startedTurnId ? diagnostic.itemId : undefined;
         this.#lastThreadRecovery = {
           status: "unknown-turn", sourceThreadId: threadId, successorThreadId: threadId,
           affectedTurnId: startedTurnId,
-          summary: "检测到未识别回合；需要按线程和回合记录核验，不表示内容已丢失。",
+          ...(affectedItemId ? { affectedItemId } : {}),
+          summary: affectedItemId
+            ? "检测到未识别回合；可按线程、回合和条目记录核验，不表示内容已丢失。"
+            : "检测到未识别回合；需要按线程和回合记录核验，不表示内容已丢失。",
         };
       }
       throw error;
@@ -701,6 +721,8 @@ export class CodexService {
       if (!message) return;
       const diagnostic = message.slice(-2_000);
       this.#lastHarnessDiagnostic = diagnostic;
+      const unknownTurnDiagnostic = readUnknownTurnDiagnostic(diagnostic);
+      if (unknownTurnDiagnostic) this.#lastUnknownTurnDiagnostic = unknownTurnDiagnostic;
       this.#onThreadLifecycle({ action: "harness_diagnostic", detail: diagnostic, severity: codexStderrSeverity(diagnostic) });
       // 上游 WARN 是可审计诊断，不是使请求失败的错误；退出时必须保留真实退出原因。
       if (codexStderrSeverity(diagnostic) !== "warn") this.#lastHarnessError = diagnostic;
@@ -1098,6 +1120,23 @@ function codexStderrSeverity(message: string): "warn" | "error" {
     }
   });
   return warningsOnly ? "warn" : "error";
+}
+
+/** 仅在同一条结构化 WARN 同时给出未知 turn 与条目时，才允许把条目关联到恢复事实。 */
+function readUnknownTurnDiagnostic(message: string): UnknownTurnDiagnostic | undefined {
+  for (const record of message.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)) {
+    try {
+      const payload = asObject(JSON.parse(record));
+      if (stringValue(payload.level)?.toUpperCase() !== "WARN") continue;
+      const fields = asObject(payload.fields);
+      const itemId = stringValue(fields.item_id)?.trim();
+      const unknownTurnId = stringValue(fields.message)?.match(/unknown turn id [`"]([^`"]+)[`"]/)?.[1];
+      if (unknownTurnId && itemId) return { turnId: unknownTurnId, itemId };
+    } catch {
+      // 非结构化 stderr 仍作为诊断保存，但不能伪造 turn/item 关联。
+    }
+  }
+  return undefined;
 }
 
 function normalizeAccount(result: JsonObject): CodexAccountOutDto {
