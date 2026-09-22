@@ -38,7 +38,9 @@ function resolveManagedDependencyLease({ appRoot, projectRoot, applicationName, 
   const leaseId = process.env.AI_DESKTOP_DEPENDENCY_LEASE_ID;
   if (!leaseId) return null;
   if (!/^[a-zA-Z0-9._-]+$/.test(leaseId)) throw new Error("Managed dependency lease id is invalid");
-  const sourceProjectRoot = resolveRegisteredWorktreeSourceRoot(projectRoot);
+  // 主工程会继承执行器环境时，不能消费只属于隔离工作树的租约；回退到自身缓存。
+  const sourceProjectRoot = resolveRegisteredWorktreeSourceRoot(projectRoot, { allowSourceProjectRoot: true });
+  if (!sourceProjectRoot) return null;
   const sourceApplicationRoot = path.join(sourceProjectRoot, "apps", applicationName);
   const sourceLockPath = path.join(sourceApplicationRoot, "package-lock.json");
   if (!existsSync(sourceLockPath)) throw new Error("Managed dependency source package-lock.json is missing");
@@ -48,12 +50,13 @@ function resolveManagedDependencyLease({ appRoot, projectRoot, applicationName, 
 }
 
 /** 共享缓存根只从 Git 已登记 worktree 的公共仓库目录推导，禁止租约或调用方直接提供任意路径。 */
-function resolveRegisteredWorktreeSourceRoot(projectRoot) {
+function resolveRegisteredWorktreeSourceRoot(projectRoot, { allowSourceProjectRoot = false } = {}) {
   const common = spawnGit(projectRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   const commonDirectory = path.resolve(projectRoot, common);
   if (path.basename(commonDirectory) !== ".git") throw new Error("Managed dependency lease requires a standard Git common directory");
   const sourceProjectRoot = path.dirname(commonDirectory);
   if (path.resolve(sourceProjectRoot) === path.resolve(projectRoot)) {
+    if (allowSourceProjectRoot) return null;
     throw new Error("Managed dependency lease is only valid for an isolated worktree");
   }
   const worktrees = spawnGit(sourceProjectRoot, ["worktree", "list", "--porcelain"])
