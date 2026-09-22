@@ -21,6 +21,8 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(runtimeSource, /taskCollaborationCriterionIds[\s\S]*requiresTaskCollaborationSurface/);
   assert.match(operationSource, /type: "open-task-panel"[\s\S]*type: "close-task-panel"[\s\S]*type: "open-task-collaboration"/);
   assert.match(acceptanceSource, /taskCollaborationCriterionIds\.has\(criterionId\)[\s\S]*不能由自由讨论页判定产品结果/);
+  assert.match(acceptanceSource, /taskCollaborationAction[\s\S]*coveredCriterionIds\.some\(\(criterionId\) => !taskCollaborationCriterionIds\.has\(criterionId\)\)[\s\S]*任务协作群操作只能核对任务卡条件/);
+  assert.match(acceptanceSource, /不能由任务协作群页面截图裁决，应先导航到该条件要求的页面/);
   assert.match(acceptanceSource, /navigateTaskCollaboration[\s\S]*button\.section-toggle\[aria-controls="developer-task-list"\][\s\S]*button\.collaboration-task-group-entry/);
   assert.match(acceptanceSource, /async function navigateTaskCollaboration[\s\S]*waitForPanel[\s\S]*task-panel-not-open[\s\S]*task-panel-not-closed[\s\S]*task-group-not-visible/);
   assert.match(acceptanceSource, /taskCollaborationVisible: true/);

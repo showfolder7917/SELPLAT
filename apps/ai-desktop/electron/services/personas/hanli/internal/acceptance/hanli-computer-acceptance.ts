@@ -312,6 +312,14 @@ export class HanliComputerAcceptanceRunner {
                 if (finding?.layoutStatus !== "blocked" && !evidence.isTaskCollaborationEvidence(finding?.layoutEvidenceId)) {
                   throw new Error(`${criterionId}的布局结论必须在任务协作群页面截图上裁决，不能由自由讨论页判定产品结果`);
                 }
+              } else {
+                // 非任务卡条件必须在其实际页面裁决，避免任务协作群截图遮蔽人物会话恢复状态。
+                if (finding?.status !== "blocked" && evidence.isTaskCollaborationEvidence(finding?.evidenceId)) {
+                  throw new Error(`${criterionId}不能由任务协作群页面截图裁决，应先导航到该条件要求的页面`);
+                }
+                if (finding?.layoutStatus !== "blocked" && evidence.isTaskCollaborationEvidence(finding?.layoutEvidenceId)) {
+                  throw new Error(`${criterionId}的布局结论不能由任务协作群页面截图裁决，应先导航到该条件要求的页面`);
+                }
               }
             }
             const containsFailure = findings.some((item) => item.status === "failed" || item.layoutStatus === "failed");
@@ -360,6 +368,11 @@ export class HanliComputerAcceptanceRunner {
             throw new Error("本轮达到40步操作上限，需保留证据并说明未完成项。");
           }
           const coveredCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, true);
+          const taskCollaborationAction = args.action === "open-task-collaboration"
+            || args.action === "scroll-task-collaboration" || args.action === "toggle-task-audit-card";
+          if (taskCollaborationAction && coveredCriterionIds.some((criterionId) => !taskCollaborationCriterionIds.has(criterionId))) {
+            throw new Error("任务协作群操作只能核对任务卡条件；人物会话条件须先导航到对应会话页面。");
+          }
           window.show();
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
