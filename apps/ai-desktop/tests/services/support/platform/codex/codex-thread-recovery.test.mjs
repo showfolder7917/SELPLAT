@@ -37,3 +37,12 @@ test("unknown-turn 与未核验内容不被伪装成恢复成功", () => {
   assert.match(source, /status: "verification-incomplete"/);
   assert.match(source, /未将空结果显示为已恢复/);
 });
+
+test("结构化 WARN 保留为诊断，不覆盖子进程退出原因", () => {
+  assert.match(source, /#lastHarnessDiagnostic/);
+  assert.match(source, /action: "harness_diagnostic"/);
+  assert.match(source, /codexStderrSeverity\(diagnostic\) !== "warn"/);
+  assert.match(source, /const exit = `Codex harness exited/);
+  assert.match(source, /function codexStderrSeverity\(message: string\): "warn" \| "error"/);
+  assert.match(source, /\.level\)\?\.toUpperCase\(\) === "WARN"/);
+});
