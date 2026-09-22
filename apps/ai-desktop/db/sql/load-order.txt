@@ -32,3 +32,4 @@
 1030|migration-1030-version-persona-customer-display-message.sql|允许客户显示派生按净化规则版本安全重算
 1031|migration-1031-add-corpus-ingestion-job.sql|持久化自动入库的恢复状态与重试事实
 1032|migration-1032-evolution-state-version-10.sql|允许专题演化状态从 v8/v9 平滑升级到 v10
+1033|migration-1033-add-persona-conversation-recovery.sql|持久化人物业务会话的 Codex 恢复结论与线程接续关系

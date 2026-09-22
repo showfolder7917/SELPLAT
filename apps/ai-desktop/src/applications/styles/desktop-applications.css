@@ -468,6 +468,10 @@ button { color: inherit; }
 /* 韩立页给时间线和输入区分配独立网格行，末条无需依赖浮层留白才能完整显示。 */
 .hanli-conversation-workspace > .selconversation-root { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
 .hanli-person-chat { grid-row: 1; min-height: 0; }
+.hanli-conversation-recovery { display: grid; gap: 4px; min-width: 0; margin: 0 0 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--sel-theme-accent) 42%, transparent); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: color-mix(in srgb, var(--sel-theme-accent) 8%, var(--sel-theme-workbench-surface)); overflow-wrap: anywhere; }
+.hanli-conversation-recovery span, .hanli-conversation-recovery small { color: var(--sel-theme-workbench-text-muted); }
+.hanli-conversation-recovery.thread-unavailable, .hanli-conversation-recovery.verification-incomplete { border-color: color-mix(in srgb, var(--sel-theme-semantic-warning) 70%, transparent); }
+.hanli-conversation-recovery.retryable { border-color: color-mix(in srgb, var(--sel-theme-semantic-error) 70%, transparent); }
 .hanli-conversation-workspace .hanli-person-composer { position: static; grid-row: 2; min-width: 0; margin: 0 max(28px, 7vw) 24px; }
 .nangong-person-chat { flex: 1 1 0; min-height: 0; }
 @media (max-width: 1180px) { .hanli-conversation-workspace .hanli-person-composer { margin-right: 28px; margin-left: 28px; } }
