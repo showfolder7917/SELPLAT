@@ -23,6 +23,8 @@ export interface PersonaConversationRecoveryOutDto {
   successorThreadId: string | null;
   affectedTurnId: string | null;
   affectedItemId: string | null;
+  /** 与本次恢复结论对应的客户消息；页面用它标注安全可见的位置。 */
+  affectedMessageId: string | null;
   summary: string;
   retryable: boolean;
   createdAt: string;

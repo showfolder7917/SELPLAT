@@ -28,12 +28,15 @@ test("可输入人物会话仅在用户停留底部时跟随新增消息", () =>
 
 test("韩立会话使用页面专属网格行隔离时间线和输入区，不修改共享 SELUI 会话选择器", () => {
   assert.match(hanli, /className="hanli-conversation-workspace"/);
+  assert.match(hanli, /className="hanli-conversation-shell"/);
   assert.match(styles, /\.hanli-conversation-workspace \{ position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; \}/);
-  assert.match(styles, /\.hanli-conversation-workspace > \.selconversation-root \{ position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax\(0, 1fr\) auto; overflow: hidden; \}/);
+  assert.match(styles, /\.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell \{ position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax\(0, 1fr\) auto; overflow: hidden; \}/);
   assert.match(styles, /\.hanli-person-chat \{ grid-row: 1; min-height: 0; \}/);
-  assert.match(styles, /\.hanli-conversation-workspace \.hanli-person-composer \{ position: static; grid-row: 2;/);
-  assert.match(styles, /@media \(max-width: 1180px\) \{ \.hanli-conversation-workspace \.hanli-person-composer \{ margin-right: 28px; margin-left: 28px; \} \}/);
-  assert.match(styles, /@media \(max-width: 720px\) \{ \.hanli-conversation-workspace \.hanli-person-composer \{ margin-right: 20px; margin-left: 20px; \} \}/);
+  assert.match(styles, /\.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell > \.hanli-person-composer \{ position: static; grid-row: 2;/);
+  assert.match(styles, /@media \(max-width: 1180px\) \{ \.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell > \.hanli-person-composer \{ margin-right: 28px; margin-left: 28px; \} \}/);
+  assert.match(styles, /@media \(max-width: 720px\) \{ \.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell > \.hanli-person-composer \{ margin-right: 20px; margin-left: 20px; \} \}/);
+  assert.match(shell, /className\?: string/);
+  assert.match(shell, /selconversation-root\$\{className/);
   assert.match(styles, /\.nangong-person-chat \{ flex: 1 1 0; min-height: 0; \}/);
   assert.match(sharedStyles, /\.selconversation-root \{ position: relative; min-width: 0; min-height: 0; display: contents; \}/);
   assert.match(sharedStyles, /\.selconversation-timeline \{ min-height: 0; overflow-x: hidden; overflow-y: auto;/);

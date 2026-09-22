@@ -73,6 +73,9 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
   // 客户显示派生失败时由统一会话端口在原消息位置重新读取。
   const retryCustomerDisplayMessage = runtime.retryCustomerDisplayMessage;
   const retryingCustomerDisplayMessageIds = runtime.retryingCustomerDisplayMessageIds;
+  // 恢复重试始终由公共会话控制器串行处理，页面不能自行读取或切换线程。
+  const retryRecovery = runtime.retryRecovery;
+  const recovering = runtime.recovering;
 
   /** 用户按发送按钮或提交表单时，完成一整轮韩立对话。 */
   async function send(retrying = pending?.failed === true ? pending : null): Promise<void> {
@@ -294,6 +297,8 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     loadEarlier,
     retryCustomerDisplayMessage,
     retryingCustomerDisplayMessageIds,
+    retryRecovery,
+    recovering,
     // 是否允许发送（canSend）是发送按钮使用的统一判断结果。
     canSend,
     // 消息发送操作（send）执行一次完整的客户到韩立发送流程。

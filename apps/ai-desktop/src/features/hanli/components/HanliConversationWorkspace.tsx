@@ -44,6 +44,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
     <SelUiConversation
     // 页面根节点：固定 ID 供样式、自动化测试和真实页面定位使用。
     id="selConversationHanLiPersonaId"
+    className="hanli-conversation-shell"
     // 页面提交入口：统一会话外壳提交时调用控制 Hook 的发送操作。
     onSubmit={() => void controller.send()}
     // 会话区：页面上半部分，包含空状态、读取统计和客户问答历史。
@@ -68,10 +69,13 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         · 发送上下文 {conversation.contextReadStats.promptCharacters.toLocaleString()} 字
       </p>}
 
-      {conversation.recovery && <section className={`hanli-conversation-recovery ${conversation.recovery.status}`} role="status" aria-live="polite">
+      {conversation.recovery && <section id={`hanli-recovery-${conversation.recovery.recoveryId}`} className={`hanli-conversation-recovery ${conversation.recovery.status}`} role="status" aria-live="polite">
         <strong>{recoveryHeading(conversation.recovery.status)}</strong>
         <span>{conversation.recovery.summary}</span>
+        {(conversation.recovery.affectedTurnId || conversation.recovery.affectedItemId) && <small>核验记录：{conversation.recovery.affectedTurnId ? `回合 ${conversation.recovery.affectedTurnId}` : ""}{conversation.recovery.affectedTurnId && conversation.recovery.affectedItemId ? " · " : ""}{conversation.recovery.affectedItemId ? `条目 ${conversation.recovery.affectedItemId}` : ""}</small>}
+        {conversation.recovery.affectedMessageId && <small>关联的会话消息已在时间线中标注。</small>}
         {conversation.recovery.retryable && <small>原会话与历史保持不变；可重试恢复。</small>}
+        {conversation.recovery.retryable && <button type="button" className="selconversation-action" disabled={controller.recovering} onClick={() => void controller.retryRecovery()}>{controller.recovering ? "正在重试恢复" : "重试恢复"}</button>}
       </section>}
 
       {/* 客户问答区：按发生顺序展示客户提问和韩立回答。 */}
@@ -80,7 +84,8 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         // 消息截图预览（previews）是当前问答消息已经可以直接展示的图片。
         const previews = controller.previewsForMessage(message.messageId);
 
-        return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType}>
+        const isRecoveryAffected = conversation.recovery?.affectedMessageId === message.messageId;
+        return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} {...(isRecoveryAffected ? { "data-recovery-affected": "true", "aria-describedby": `hanli-recovery-${conversation.recovery!.recoveryId}` } : {})}>
           {/* 问答身份区：显示“我”或“韩立”，并标记客户消息的发送状态。 */}
           <header>{message.speakerType === "user"
             ? `我 · ${personaConversationDeliveryLabel(message.deliveryStatus)}`

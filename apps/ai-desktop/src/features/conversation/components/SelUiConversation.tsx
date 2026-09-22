@@ -11,11 +11,13 @@ type ConversationApi = { mount(host: HTMLElement, options: { id: string; readOnl
 /**
  * React 只把人物消息与业务动作放进 SELUI 插槽；回车、输入法合成和控件生命周期统一由 selConversation 接管。
  */
-export function SelUiConversation({ id, timeline, composer, onSubmit }: {
+export function SelUiConversation({ id, timeline, composer, onSubmit, className }: {
   id: string;
   timeline: ReactNode;
   composer: ReactNode;
   onSubmit(): void;
+  /** 人物页可声明自己的布局壳层，避免共享浮层规则接管专属布局流。 */
+  className?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const submitRef = useRef(onSubmit);
@@ -70,5 +72,5 @@ export function SelUiConversation({ id, timeline, composer, onSubmit }: {
     };
   }, [id, readOnly]);
 
-  return <div ref={rootRef} className="selconversation-root">{timeline}{composer}</div>;
+  return <div ref={rootRef} className={`selconversation-root${className ? ` ${className}` : ""}`}>{timeline}{composer}</div>;
 }
