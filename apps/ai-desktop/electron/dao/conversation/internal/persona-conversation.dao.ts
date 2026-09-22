@@ -18,6 +18,30 @@ export class SqlitePersonaConversationDao {
     private readonly customerDisplayProjector: PersonaCustomerDisplayProjector,
   ) {}
 
+  /** 只读取指定业务会话已登记的线程，禁止回退人物当前线程。 */
+  readCodexThread(ownerPersonaId: string, conversationId: string): { threadId: string; workspaceSignature: string } | null {
+    if (!this.database) return null;
+    return this.database.withConnection((connection) => {
+      const row = connection.prepare(`SELECT threadId, workspaceSignature
+      FROM AiDesktopPersonaConversationCodexThread WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId`)
+      .get({ $ownerPersonaId: requiredPersonaId(ownerPersonaId), $conversationId: requiredConversationId(conversationId) }) as { threadId: string; workspaceSignature: string } | undefined;
+      return row || null;
+    });
+  }
+
+  /** 成功启动或恢复后登记线程归属；同一业务会话只保留当前可验证线程。 */
+  linkCodexThread(ownerPersonaId: string, conversationId: string, threadId: string, workspaceSignature: string, occurredAt: string): void {
+    if (!this.database) throw new Error("AI Memory 数据库当前不可用，不能登记会话线程关联。");
+    this.database.withConnection((connection) => connection.prepare(`INSERT INTO AiDesktopPersonaConversationCodexThread
+      (ownerPersonaId, conversationId, threadId, workspaceSignature, linkedAt, updatedAt)
+      VALUES ($ownerPersonaId, $conversationId, $threadId, $workspaceSignature, $occurredAt, $occurredAt)
+      ON CONFLICT(ownerPersonaId, conversationId) DO UPDATE SET threadId=excluded.threadId,
+        workspaceSignature=excluded.workspaceSignature, updatedAt=excluded.updatedAt`).run({
+      $ownerPersonaId: requiredPersonaId(ownerPersonaId), $conversationId: requiredConversationId(conversationId),
+      $threadId: threadId, $workspaceSignature: workspaceSignature, $occurredAt: occurredAt,
+    }));
+  }
+
   /** 读取某个人物的当前活动会话；首次使用或数据库不可用时返回可显示的空会话。 */
   readActive(ownerPersonaId: string): PersonaConversationOutDto {
     if (!this.database) return emptyConversation(ownerPersonaId);
