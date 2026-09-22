@@ -853,9 +853,15 @@ export async function startApplication(): Promise<void> {
     askHanliResultAcceptance: async (prompt, state) => {
       const acceptanceCodex = hanliResultAcceptanceCodex;
       if (!acceptanceCodex) throw new Error("韩立结果验收服务尚未就绪。");
+      // 为源码审查保留本轮实际授权边界，便于区分工作区未传入与模型未读取，不能从结果文字反推。
+      const workspace = mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!);
+      eventCenter.recordEvent("han-li.result_acceptance.workspace_authorized", {
+        primaryId: workspace.primaryId,
+        roots: workspace.roots.map(({ id, name, path: rootPath, permission }) => ({ id, name, path: rootPath, permission })),
+      });
       // 每次重试都从独立空线程开始，避免无效回答和客户对话污染固定输出契约。
       await acceptanceCodex.newChat();
-      return (await acceptanceCodex.send(prompt, state.automationContext.locale, "read-only", mergeWorkspaceState(workspaces.read(), state.automationContext.workspaceState!), [], () => undefined, null)).text;
+      return (await acceptanceCodex.send(prompt, state.automationContext.locale, "read-only", workspace, [], () => undefined, null)).text;
     },
     conversation: {
       send: async (request, prompt, selectedModel, options) => {
