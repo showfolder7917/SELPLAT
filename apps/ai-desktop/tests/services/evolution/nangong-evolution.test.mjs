@@ -2731,6 +2731,40 @@ test("韩立把未知结果验收类型纠正为代码符合性审查后继续�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("韩立缺少源码依据时三次重试持续要求重新读取当前工作区", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-source-evidence-retry-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("源码依据重试"), acceptanceCriteria: ["代码证据可读取"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
+    const missingEvidence = JSON.stringify({
+      mode: "code-conformance",
+      findings: [{ criterionId: "criterion-1", status: "passed", actual: "已经核对。", evidenceReferences: [] }],
+      sourceReview: passedSourceReview,
+    });
+    const accepted = JSON.stringify({
+      mode: "code-conformance",
+      findings: [{ criterionId: "criterion-1", status: "passed", actual: "已读取真实实现。", evidenceReferences: ["electron/services/example.ts:42"] }],
+      sourceReview: passedSourceReview,
+    });
+    // 首次回执用于冻结 code-conformance 计划，后续三次才验证缺少源码依据的重试链。
+    const replies = [accepted, missingEvidence, missingEvidence, accepted];
+    const promptsSeen = [];
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanliResultAcceptance: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    assert.equal(promptsSeen.length, 4);
+    assert.match(promptsSeen[2], /重新读取当前已授权工作区/);
+    assert.match(promptsSeen[2], /每项 finding 和 sourceReview/);
+    assert.equal(result.review.status, "passed");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("韩立结果验收使用专用模型端口，不复用提案判断端口", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-result-acceptance-port-"));
   try {
