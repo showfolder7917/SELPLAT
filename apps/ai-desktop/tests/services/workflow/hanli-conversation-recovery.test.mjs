@@ -24,7 +24,7 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
 });
 
 test("打开韩立会话前准备恢复，并仅写入仍活动的同一业务会话", () => {
-  assert.match(service, /async prepareRecovery\(\)[\s\S]*?memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)/);
+  assert.match(service, /async prepareRecovery\(\)[\s\S]*?const linkedSession = await memory\.readPersonaConversationCodexThread\("han-li", conversation\.conversationId\)[\s\S]*?if \(!linkedSession\) return conversation/);
   assert.match(service, /linkedSession[\s\S]*?chat\.recoverConversationSession\(linkedSession\)/);
   assert.match(service, /const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId !== conversation\.conversationId[\s\S]*?activateRecoveredConversationSession/);
   assert.match(service, /#recordThreadRecovery\(conversation\.conversationId, recovery\)/);
@@ -35,7 +35,7 @@ test("打开韩立会话前准备恢复，并仅写入仍活动的同一业务�
 
 test("韩立完成回合后把实际 Codex 线程绑定到同一业务会话", () => {
   assert.match(service, /const session = chat\.activeConversationSession\(\)[\s\S]*?response\.threadId \|\| session\.threadId/);
-  assert.match(service, /memory\.linkPersonaConversationCodexThread\(\{[\s\S]*?conversationId[\s\S]*?workspaceSignature: session\.workspaceSignature/);
+  assert.match(service, /await memory\.linkPersonaConversationCodexThread\(\{[\s\S]*?conversationId[\s\S]*?workspaceSignature: session\.workspaceSignature/);
   assert.match(memoryPort, /readPersonaConversationCodexThread[\s\S]*?linkPersonaConversationCodexThread/);
 });
 
