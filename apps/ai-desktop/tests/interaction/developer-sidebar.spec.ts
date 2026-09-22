@@ -569,12 +569,12 @@ test("一键清空测试数据必须二次确认且明确保留范围", async ()
   const reopenedResetButton = page.getByRole("button", { name: "一键清空测试数据" });
   await expect(reopenedResetButton).toBeEnabled();
 
-  await page.evaluate(() => (window as any).desktop.setInteractionTestDataResetFailure("运行投影归零断言失败"));
+  await page.evaluate(() => (window as any).desktop.setInteractionTestDataResetFailure("韩立新空会话活动断言失败"));
   await reopenedResetButton.click();
   dialog = page.getByRole("dialog", { name: "一键清空测试数据" });
   await dialog.getByRole("button", { name: "一键清空测试数据" }).click();
   const resetCard = page.locator(".test-data-reset-card");
-  await expect(resetCard.getByRole("alert")).toContainText("运行投影归零断言失败");
+  await expect(resetCard.getByRole("alert")).toContainText("韩立新空会话活动断言失败");
   await expect(resetCard.getByRole("status")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.interactionTestDataResetRestart)).not.toBe("true");
   await page.evaluate(() => (window as any).desktop.setInteractionTestDataResetFailure(null));
