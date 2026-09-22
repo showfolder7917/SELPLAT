@@ -7,6 +7,7 @@ const launcher = readFileSync(new URL("../../启动开发版.command", import.me
 const packageManifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
 const appConfig = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
 const startupContext = readFileSync(new URL("../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
+const mainEntry = readFileSync(new URL("../../electron/main.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../../electron-builder.developer.json", import.meta.url), "utf8");
 const builderConfig = readFileSync(new URL("../../electron-builder.developer.config.cjs", import.meta.url), "utf8");
@@ -110,6 +111,9 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /APP_EXECUTABLE="\$APP_PATH\/Contents\/MacOS\/AI Desktop"/);
   assert.match(launcher, /正在关闭.*旧 AI Desktop 实例/);
   assert.match(launcher, /kill "\$\{EXISTING_PIDS\[@\]\}"/);
+  assert.match(mainEntry, /for \(const signal of \["SIGTERM", "SIGINT"\] as const\) process\.once\(signal, \(\) => app\.quit\(\)\);/);
+  assert.match(mainEntry, /app\.on\("before-quit", \(\) => disposeApplication\(\)\)/);
+  assert.doesNotMatch(mainEntry, /app\.on\("before-quit", disposeApplication\)/);
   assert.match(launcher, /多个版本并行/);
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
   assert.match(launcher, /git -C "\$SELPLAT_ROOT" diff --quiet "\$CONTROLLED_SHA" HEAD --/);
