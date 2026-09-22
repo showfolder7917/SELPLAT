@@ -4,13 +4,18 @@ import { DatabaseSync } from "node:sqlite";
 
 const userDataArgument = process.argv.find((value) => value.startsWith("--user-data-dir="));
 const databaseArgument = process.argv.find((value) => value.startsWith("--database-file="));
-if (!userDataArgument || !databaseArgument || !process.argv.includes("--preserve-conversations")) {
-  throw new Error("必须显式提供 --user-data-dir=<目录>、--database-file=<文件> 和 --preserve-conversations。");
+const workflowDatabaseArgument = process.argv.find((value) => value.startsWith("--workflow-database-file="));
+if (!userDataArgument || !databaseArgument || !workflowDatabaseArgument || !process.argv.includes("--preserve-conversations")) {
+  throw new Error("必须显式提供 --user-data-dir=<目录>、--database-file=<文件>、--workflow-database-file=<文件> 和 --preserve-conversations。");
 }
 const userDataRoot = path.resolve(userDataArgument.slice("--user-data-dir=".length));
 if (path.basename(userDataRoot) !== "ai-desktop") throw new Error("只允许清理名称为 ai-desktop 的 userData 目录。");
 const databasePath = path.resolve(databaseArgument.slice("--database-file=".length));
 if (path.basename(databasePath) !== "events.sqlite3" || path.basename(path.dirname(databasePath)) !== "db") throw new Error("只允许清理 db/events.sqlite3。");
+const workflowDatabasePath = path.resolve(workflowDatabaseArgument.slice("--workflow-database-file=".length));
+if (path.basename(workflowDatabasePath) !== "workflow-control.sqlite3" || path.basename(path.dirname(workflowDatabasePath)) !== "db") {
+  throw new Error("只允许清理 db/workflow-control.sqlite3。");
+}
 const collaborationRoot = path.join(userDataRoot, "collaboration");
 const now = new Date().toISOString();
 
@@ -88,7 +93,63 @@ try {
   throw error;
 }
 database.close();
-process.stdout.write(JSON.stringify({ resetAt: now, preservedConversationMessages: preservedConversationMessageCount, linghuEnabled: linghu.enabled, operationalDatabaseReset: true }));
+
+// 当前专题、审批、任务和时间线已经迁入独立工作流库。离线清理必须与应用内
+// TestDataResetService 使用同一白名单，否则旧任务会在重启后重新投影到页面。
+const workflowDatabase = new DatabaseSync(workflowDatabasePath);
+workflowDatabase.exec("PRAGMA foreign_keys = ON");
+workflowDatabase.exec("BEGIN IMMEDIATE");
+try {
+  const row = workflowDatabase.prepare("SELECT singletonId, stateVersion, stateJson FROM AiDesktopEvolutionState LIMIT 1").get();
+  if (row) {
+    const state = JSON.parse(String(row.stateJson));
+    const resetState = resetEvolutionState(state, now);
+    workflowDatabase.prepare("UPDATE AiDesktopEvolutionState SET stateVersion = $stateVersion, stateJson = $stateJson, updatedAt = $updatedAt WHERE singletonId = $singletonId").run({
+      $singletonId: row.singletonId,
+      $stateVersion: Number(row.stateVersion) + 1,
+      $stateJson: JSON.stringify(resetState),
+      $updatedAt: now,
+    });
+  }
+  for (const table of [
+    "AiDesktopTaskTimelineStream", "AiDesktopTaskTimelineEvent", "AiDesktopTaskTimelineTopic",
+    "AiDesktopEvolutionRoundTask", "AiDesktopEvolutionRound", "AiDesktopEvolutionSourceSnapshot",
+    "AiDesktopEvolutionArchiveRecord", "AiDesktopApprovalGovernance", "AiDesktopApprovalRecord",
+    "AiDesktopTaskExecution", "AiDesktopWorkflowRun", "AiDesktopMemberRuntime", "AiDesktopEvent",
+    "AiDesktopRuntimeSession", "AiDesktopEvolutionDeliberation",
+  ]) workflowDatabase.exec(`DELETE FROM ${table}`);
+  workflowDatabase.exec("COMMIT");
+} catch (error) {
+  workflowDatabase.exec("ROLLBACK");
+  workflowDatabase.close();
+  throw error;
+}
+workflowDatabase.close();
+process.stdout.write(JSON.stringify({
+  resetAt: now,
+  preservedConversationMessages: preservedConversationMessageCount,
+  linghuEnabled: linghu.enabled,
+  operationalDatabaseReset: true,
+  workflowDatabaseReset: true,
+}));
+
+function resetEvolutionState(state, resetAt) {
+  return {
+    ...state,
+    automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null },
+    oneShotConfirmation: null,
+    oneShotRun: null,
+    technicalRecovery: null,
+    automationContext: { workspaceState: null, locale: state?.automationContext?.locale || "zh-CN" },
+    preferenceSnapshotVersion: 0,
+    activeTopicId: null,
+    topics: [],
+    proposals: [],
+    deliberations: [],
+    archiveRecords: [],
+    updatedAt: resetAt,
+  };
+}
 
 function readJson(filePath) {
   const value = JSON.parse(readFileSync(filePath, "utf8"));
