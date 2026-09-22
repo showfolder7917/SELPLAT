@@ -6,6 +6,7 @@ import type { EvolutionStateOutDto } from "../../../../../../contracts/services/
 // 读取人物会话输入输出契约，使韩立服务继续兼容统一人物会话 IPC。
 import type {
   PersonaConversationOutDto,
+  ReadPersonaConversationWindowInDto,
   SendPersonaConversationMessageInDto,
 } from "../../../../../../contracts/services/personas/conversation/index.js";
 // 读取韩立观点值对象，使研讨启动始终携带可追溯的观点快照。
@@ -74,11 +75,11 @@ export class HanliConversationService {
   }
 
   /** 页面显式准备既有会话的线程恢复；窗口读取本身始终无副作用。 */
-  async prepareRecovery(): Promise<PersonaConversationOutDto> {
+  async prepareRecovery(request?: Pick<ReadPersonaConversationWindowInDto, "conversationId">): Promise<PersonaConversationOutDto> {
     const memory = this.#options.memory;
     const chat = this.#options.conversation;
     if (!memory || !chat) throw new Error("韩立会话恢复能力尚未就绪。");
-    const conversation = await memory.readPersonaConversation("han-li");
+    const conversation = await memory.readPersonaConversation("han-li", request?.conversationId);
     if (!conversation.conversationId) return conversation;
     const linkedSession = await memory.readPersonaConversationCodexThread("han-li", conversation.conversationId);
     if (!linkedSession) {

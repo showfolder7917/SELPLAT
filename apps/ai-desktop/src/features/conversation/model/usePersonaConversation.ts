@@ -151,7 +151,7 @@ export function usePersonaConversation(personaId: string) {
     const generation = beginConversationDisplayGeneration(currentConversationId);
     const desktop = getOptionalCollaborationDesktopApi();
     const prepareRecovery = personaId === "han-li" && typeof desktop?.preparePersonaConversationRecovery === "function"
-      ? desktop.preparePersonaConversationRecovery(personaId)
+      ? desktop.preparePersonaConversationRecovery(personaId, { conversationId: currentConversationId })
       : Promise.resolve(undefined);
     void prepareRecovery.then((receipt) => active
       ? readPreparedRecoveryWindow(desktop, currentConversationId, receipt, generation)
@@ -244,7 +244,7 @@ export function usePersonaConversation(personaId: string) {
     setRecovering(true);
     setError("");
     try {
-      const receipt = await desktop.preparePersonaConversationRecovery(personaId);
+      const receipt = await desktop.preparePersonaConversationRecovery(personaId, { conversationId });
       const window = await readPreparedRecoveryWindow(desktop, conversationId, receipt, generation);
       if (!window) return;
       setConversation(windowConversation(window));

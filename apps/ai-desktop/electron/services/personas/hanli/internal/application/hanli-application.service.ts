@@ -4,7 +4,7 @@ import type {
   HanliAcceptanceRunOutDto,
   ReopenHanliAcceptanceInDto,
 } from "../../../../../../contracts/services/personas/hanli/index.js";
-import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
+import type { PersonaConversationOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../../../../contracts/services/personas/conversation/index.js";
 import type { EvolutionAcceptancePlanOutDto, EvolutionMutationInDto, EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "../../../../evolution/index.js";
 import type { HanliApplicationPort } from "../../hanli.facade.js";
@@ -78,8 +78,8 @@ export class HanliApplicationService implements HanliApplicationPort {
     return this.#conversation.conversation();
   }
 
-  prepareConversationRecovery(): Promise<PersonaConversationOutDto> {
-    return this.#conversation.prepareRecovery();
+  prepareConversationRecovery(request?: Pick<ReadPersonaConversationWindowInDto, "conversationId">): Promise<PersonaConversationOutDto> {
+    return this.#conversation.prepareRecovery(request);
   }
 
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto> {
