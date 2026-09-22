@@ -73,6 +73,20 @@ export class HanliConversationService {
     this.#inquiry = new HanliInquiryService(options);
   }
 
+  /** 页面显式准备既有会话的线程恢复；窗口读取本身始终无副作用。 */
+  async prepareRecovery(): Promise<PersonaConversationOutDto> {
+    const memory = this.#options.memory;
+    const chat = this.#options.conversation;
+    if (!memory || !chat) throw new Error("韩立会话恢复能力尚未就绪。");
+    const conversation = await memory.readPersonaConversation("han-li");
+    if (!conversation.conversationId) return conversation;
+    const recovery = await chat.recoverExistingSession();
+    if (!recovery) return conversation;
+    const current = await memory.readPersonaConversation("han-li");
+    if (current.conversationId !== conversation.conversationId) return current;
+    return (await this.#recordThreadRecovery(conversation.conversationId, recovery)) || current;
+  }
+
   /** 读取当前韩立业务会话；数据库不可用时返回结构稳定的空快照。 */
   async conversation(): Promise<PersonaConversationOutDto> {
     // memory 是统一人物会话的权威数据库端口。
@@ -488,8 +502,8 @@ export class HanliConversationService {
   async #recordThreadRecovery(
     conversationId: string,
     recovery: SendMessageOutDto["threadRecovery"] | undefined,
-  ): Promise<void> {
-    if (!recovery) return;
+  ): Promise<PersonaConversationOutDto | undefined> {
+    if (!recovery) return undefined;
     const saved = await this.#options.memory!.recordPersonaConversationRecovery({
       ownerPersonaId: "han-li",
       conversationId,
@@ -503,6 +517,7 @@ export class HanliConversationService {
       occurredAt: new Date().toISOString(),
     });
     this.#options.onPersonaConversationChanged?.(saved);
+    return saved;
   }
 
   /** 把用户对南宫婉范围说明的确认或纠正交回当前内部研讨。 */

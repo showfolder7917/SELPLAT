@@ -3,6 +3,7 @@ import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPe
 /** 每个人物只实现这一组公共会话动作；人物特有业务继续留在自己的 Facade。 */
 export interface PersonaConversationHandler {
   conversation(): Promise<PersonaConversationOutDto>;
+  prepareConversationRecovery?(): Promise<PersonaConversationOutDto>;
   sendConversationMessage(request: SendPersonaConversationMessageInDto): Promise<PersonaConversationOutDto>;
   newConversation(): Promise<PersonaConversationOutDto>;
   selectConversationModel(selectedModel: string | null): Promise<PersonaConversationOutDto>;
@@ -37,6 +38,12 @@ export class PersonaConversationFacade {
 
   conversation(personaId: string): Promise<PersonaConversationOutDto> {
     return this.#requireHandler(personaId).conversation();
+  }
+
+  prepareConversationRecovery(personaId: string): Promise<PersonaConversationOutDto> {
+    const handler = this.#requireHandler(personaId);
+    if (!handler.prepareConversationRecovery) return handler.conversation();
+    return handler.prepareConversationRecovery();
   }
 
   /** 读取当前人物会话的有限窗口；缺少受控读取器时明确阻断，禁止回退全量快照。 */
