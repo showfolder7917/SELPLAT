@@ -78,6 +78,16 @@ export class SqliteCollaborationMemoryDao implements CollaborationMemoryPort {
       : this.#conversations.readActive(ownerPersonaId);
   }
 
+  /** 只读取指定业务会话已登记的 Codex 线程，禁止回退到人物当前线程。 */
+  readPersonaConversationCodexThread(ownerPersonaId: string, conversationId: string): { threadId: string; workspaceSignature: string } | null {
+    return this.#conversations.readCodexThread(ownerPersonaId, conversationId);
+  }
+
+  /** 保存经模型调用确认的线程归属；旧会话消息和恢复事实均不改写。 */
+  linkPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string; workspaceSignature: string; occurredAt: string }): void {
+    this.#conversations.linkCodexThread(input.ownerPersonaId, input.conversationId, input.threadId, input.workspaceSignature, input.occurredAt);
+  }
+
   /** 客户页面、近期上下文和当前观点唯一消费的安全显示投影。 */
   readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto {
     return this.#conversations.readCustomerDisplay(ownerPersonaId, conversationId);

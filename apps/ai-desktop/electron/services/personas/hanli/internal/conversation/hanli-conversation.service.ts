@@ -80,10 +80,15 @@ export class HanliConversationService {
     if (!memory || !chat) throw new Error("韩立会话恢复能力尚未就绪。");
     const conversation = await memory.readPersonaConversation("han-li");
     if (!conversation.conversationId) return conversation;
-    const recovery = await chat.recoverExistingSession();
+    const linkedSession = await memory.readPersonaConversationCodexThread("han-li", conversation.conversationId);
+    if (!linkedSession) return conversation;
+    const recovery = await chat.recoverConversationSession(linkedSession);
     if (!recovery) return conversation;
     const current = await memory.readPersonaConversation("han-li");
     if (current.conversationId !== conversation.conversationId) return current;
+    if (recovery.status === "verified" && recovery.successorThreadId) {
+      chat.activateRecoveredConversationSession(recovery.successorThreadId);
+    }
     return (await this.#recordThreadRecovery(conversation.conversationId, recovery)) || current;
   }
 
@@ -332,12 +337,18 @@ export class HanliConversationService {
       await this.#recordThreadRecovery(conversationId, chat.readThreadRecovery());
       throw error;
     }
-    await this.#recordThreadRecovery(conversationId, response.threadRecovery);
     // 没有稳定 provider 会话标识时不能把模型输出当成完整人物回合。
     if (!response.threadId && !chat.activeConversationId()) {
       // 明确失败使用户原消息进入失败状态，而不是保存无法续接的回复。
       throw new Error("韩立会话没有返回稳定 Codex 线程标识。");
     }
+    const session = chat.activeConversationSession();
+    const threadId = response.threadId || session.threadId;
+    if (!threadId || !session.workspaceSignature) throw new Error("韩立会话没有可登记的 Codex 线程关联。");
+    await memory.linkPersonaConversationCodexThread({
+      ownerPersonaId: "han-li", conversationId, threadId, workspaceSignature: session.workspaceSignature, occurredAt: new Date().toISOString(),
+    });
+    await this.#recordThreadRecovery(conversationId, response.threadRecovery);
     // 解析可见回复、主题判断和可选调查理解。
     let parsed = parseHanliConversationResponse(response.text);
     // 每轮都必须明确选择调查、澄清或仅答复；不能因自动托管关闭而把“会调查”保存成普通回复。

@@ -23,6 +23,14 @@ test("启动恢复只恢复已有线程，不发送消息或创建替代线程",
   assert.match(source, /#threadAttached\) \{[\s\S]*?status: "verified"/);
 });
 
+test("业务会话恢复只 resume 已关联线程，待业务服务确认后才接管人物当前线程", () => {
+  const recovery = source.match(/async recoverConversationSession\([\s\S]*?\n  }\n\n  \/\*\* 业务服务完成会话一致性核对/ )?.[0] || "";
+  assert.match(recovery, /this\.#request\("thread\/resume", \{ threadId: session\.threadId \}\)/);
+  assert.doesNotMatch(recovery, /thread\/start|turn\/start|#rememberThread/);
+  assert.match(source, /activateRecoveredConversationSession\(threadId: string[\s\S]*?this\.#rememberThread/);
+  assert.match(source, /status: "verification-incomplete"[\s\S]*?未将其显示为已恢复/);
+});
+
 test("unknown-turn 与未核验内容不被伪装成恢复成功", () => {
   assert.match(source, /unknown\[\\s-\]\*turn/);
   assert.match(source, /status: "unknown-turn"/);

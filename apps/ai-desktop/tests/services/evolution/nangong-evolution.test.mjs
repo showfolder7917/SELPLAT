@@ -838,9 +838,11 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
       newPersonaConversation() { return { ownerPersonaId: "han-li", conversationId: "hanli-method-thread", messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
       readHanliSemanticContext() { return semanticContext; },
       registerPersonaRound(input) { return { ownerPersonaId: "han-li", conversationId: input.conversationId, messages: [], updatedAt: input.completedAt }; },
+      linkPersonaConversationCodexThread() {},
     },
     conversation: {
       activeConversationId: () => "hanli-provider-thread",
+      activeConversationSession: () => ({ threadId: "hanli-provider-thread", workspaceSignature: "test-workspace" }),
       async send(_request, prompt) {
         sentPrompt = prompt;
         return { threadId: "hanli-provider-thread", itemCount: 1, text: `我会先确认信息缺口。\nHANLI_TOPIC_META={"title":"方法学习","type":"提问方法","switchTopic":false,"userIntent":"优化调查方法","tags":["调查"],"summary":"先确认信息缺口。","inquiry":{"status":"not-needed"}}` };
