@@ -109,7 +109,10 @@ export class CodexService {
   #threadAttached = false;
   #lastThreadRecovery: ThreadRecovery | undefined;
   #activeTurnId: string | undefined;
+  /** 登录状态与子进程诊断分开，避免旧诊断污染账户状态。 */
   #lastError: string | null = null;
+  #lastHarnessError: string | null = null;
+  #lastHarnessDiagnostic: string | null = null;
   #runtime: CodexRuntime | null = null;
   #storageReady: Promise<void> | undefined;
   #activeExecutionMode: ManagedExecutionModeValue | null = null;
@@ -679,6 +682,8 @@ export class CodexService {
     const childEnvironment = createCodexChildEnvironment(process.env, this.#options.codexHome, this.#options.dependencyLeaseId);
     const runtime = await resolveCodexRuntime(childEnvironment);
     this.#runtime = runtime;
+    this.#lastHarnessError = null;
+    this.#lastHarnessDiagnostic = null;
     this.#onThreadLifecycle({ action: "harness_runtime_selected", source: runtime.source, version: runtime.version });
     if (runtime.electronRunAsNode) childEnvironment.ELECTRON_RUN_AS_NODE = "1";
     else delete childEnvironment.ELECTRON_RUN_AS_NODE;
@@ -693,7 +698,12 @@ export class CodexService {
     createInterface({ input: child.stdout }).on("line", (line) => this.#handleLine(line));
     child.stderr.on("data", (chunk: Buffer) => {
       const message = chunk.toString("utf8").trim();
-      if (message) this.#lastError = message.slice(-2_000);
+      if (!message) return;
+      const diagnostic = message.slice(-2_000);
+      this.#lastHarnessDiagnostic = diagnostic;
+      this.#onThreadLifecycle({ action: "harness_diagnostic", detail: diagnostic, severity: codexStderrSeverity(diagnostic) });
+      // 上游 WARN 是可审计诊断，不是使请求失败的错误；退出时必须保留真实退出原因。
+      if (codexStderrSeverity(diagnostic) !== "warn") this.#lastHarnessError = diagnostic;
     });
     child.once("exit", (code, signal) => this.#handleExit(code, signal));
     child.once("error", (error) => this.#handleExit(null, error.message));
@@ -931,7 +941,8 @@ export class CodexService {
   }
 
   #handleExit(code: number | null, signal: string | null): void {
-    const detail = this.#lastError || `Codex harness exited (${code ?? signal ?? "unknown"}).`;
+    const exit = `Codex harness exited (${code ?? signal ?? "unknown"}).`;
+    const detail = this.#lastHarnessError ? `${exit} ${this.#lastHarnessError}` : exit;
     const error = new Error(detail);
     for (const pending of this.#pending.values()) pending.reject(error);
     for (const [turnId, waiter] of this.#turnWaiters) {
@@ -1073,6 +1084,20 @@ function displayValue(value: unknown): string | null {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Codex harness is unavailable.";
+}
+
+/** 仅识别 app-server 按行输出的结构化级别；未知文本继续按错误保留。 */
+function codexStderrSeverity(message: string): "warn" | "error" {
+  const records = message.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (records.length === 0) return "error";
+  const warningsOnly = records.every((record) => {
+    try {
+      return stringValue(asObject(JSON.parse(record)).level)?.toUpperCase() === "WARN";
+    } catch {
+      return false;
+    }
+  });
+  return warningsOnly ? "warn" : "error";
 }
 
 function normalizeAccount(result: JsonObject): CodexAccountOutDto {
