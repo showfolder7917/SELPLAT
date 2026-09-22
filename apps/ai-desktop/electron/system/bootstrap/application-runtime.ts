@@ -973,11 +973,18 @@ export async function startApplication(): Promise<void> {
           acceptanceTimeout,
         ]);
         await sendAcceptanceTurn("hanli.computer-acceptance");
-        const continuation = session.nextContinuation();
-        if (continuation?.kind === "finish-only") {
-          await sendAcceptanceTurn("hanli.computer-acceptance-finalization");
-        } else if (continuation?.kind === "correction") {
-          await sendAcceptanceTurn("hanli.computer-acceptance-correction", { finishRejection: continuation.rejection });
+        // 门面状态机最多补偿三回合：无截图时重试观察、遗漏 finish 时收尾、finish 被拒时纠正。
+        // 每轮都重新读取状态，避免单次 if 把“重试观察后仍需收尾”的合法链路截断。
+        for (let continuationIndex = 0; continuationIndex < 3; continuationIndex += 1) {
+          const continuation = session.nextContinuation();
+          if (!continuation) break;
+          if (continuation.kind === "retry-observation") {
+            await sendAcceptanceTurn("hanli.computer-acceptance");
+          } else if (continuation.kind === "finish-only") {
+            await sendAcceptanceTurn("hanli.computer-acceptance-finalization");
+          } else {
+            await sendAcceptanceTurn("hanli.computer-acceptance-correction", { finishRejection: continuation.rejection });
+          }
         }
       }
       finally { if (timer) clearTimeout(timer); service.dispose(); }

@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const acceptanceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+const acceptanceFacadeSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.facade.ts", "utf8");
+const acceptanceSessionSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-session.facade.ts", "utf8");
+const acceptanceEvidenceSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-evidence.facade.ts", "utf8");
 const continuationPolicySource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-continuation.policy.ts", "utf8");
 const acceptancePrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
 const resultAcceptancePrompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
@@ -38,6 +41,12 @@ test("结果验收计划不申请外部进程或桌面权限", () => {
   assert.match(resultAcceptancePrompt, /页面条件应进入 pageCriterionIds/);
 });
 
+test("初始验收提示词只引用实际注册的交互工具名", () => {
+  assert.match(acceptanceSource, /name: "hanli_computer"/);
+  assert.match(acceptancePrompt, /调用 `hanli_computer` 的 `observe`/);
+  assert.doesNotMatch(acceptancePrompt, /hanli_computer_step/);
+});
+
 test("任务协作群滚动只移动详情面板，并等待窄窗口布局回显", () => {
   const scrollStart = acceptanceSource.indexOf("function scrollTaskCollaboration");
   const scrollEnd = acceptanceSource.indexOf("function readTaskCollaborationSurface", scrollStart);
@@ -55,21 +64,39 @@ test("任务协作群滚动只移动详情面板，并等待窄窗口布局回�
 });
 
 test("韩立首项失败后仍须逐项取得本轮全部条件自己的证据", () => {
-  assert.match(acceptanceSource, /criterionEvidenceIds = new Map<string, Set<string>>/);
+  assert.match(acceptanceEvidenceSource, /#criterionEvidenceIds = new Map<string, Set<string>>/);
   assert.match(acceptanceSource, /validateCriterionCoverage\(args\.criterionIds, criterionIds, true\)/);
-  assert.match(acceptanceSource, /criterionEvidenceIds\.get\(criterionId\)\?\.has\(String\(finding\.evidenceId\)\)/);
+  assert.match(acceptanceSource, /evidence\.hasCriterionEvidence\(criterionId, finding\.evidenceId/);
+  assert.match(acceptanceEvidenceSource, /#criterionEvidenceIds\.get\(criterionId\)\?\.has\(id\)/);
   assert.match(acceptanceSource, /记录当前失败后继续执行其余可安全验收条件，再一次提交完整结果/);
   assert.match(acceptancePrompt, /发现某条失败时先保存该条件证据，然后继续执行其余仍可安全检查的条件/);
   assert.match(resultAcceptancePrompt, /发现一项失败后仍继续检查其余条件，最终一次返回完整 findings/);
   assert.match(eventMemoryRule, /criterion_scoped_action_and_screenshot_coverage/);
   assert.match(eventMemoryRule, /first_failure_preserved_then_all_independent_safe_criteria_continue_in_same_round/);
-  assert.match(eventMemoryRuleMetadata, /rule_version = 5\.163\.0/);
+  assert.match(eventMemoryRuleMetadata, /rule_version = 5\.164\.0/);
   assert.match(aiDesktopRuleIndex, /AI_DESKTOP_EVENT_MEMORY_UI_RULES = .*RUL_AIDesktop事件记忆与统一界面规则\.md/);
 });
 
 test("被拒绝的 finish 仅允许一次受限纠正回合", () => {
-  assert.match(acceptanceSource, /let correctionAttempted = false/);
+  assert.match(acceptanceSessionSource, /#correctionAttempted = false/);
   assert.match(continuationPolicySource, /!input\.finishRejection \|\| input\.correctionAttempted/);
-  assert.match(acceptanceSource, /continuation\?\.kind === "correction"[\s\S]*correctionAttempted = true/);
+  assert.match(acceptanceSessionSource, /continuation\?\.kind === "correction"[\s\S]*#correctionAttempted = true/);
   assert.match(acceptanceSource, /仅可补齐原条件证据后重新提交 finish/);
+});
+
+test("验收入口通过门面隔离 runner、证据账本与可恢复会话状态", () => {
+  assert.match(acceptanceFacadeSource, /class HanliComputerAcceptance[\s\S]*#runner: HanliComputerAcceptanceRunner/);
+  assert.match(acceptanceFacadeSource, /return this\.#runner\.run\(goal, window, model, progress, interactions\)/);
+  assert.match(acceptanceSource, /new HanliAcceptanceEvidenceFacade\(\)/);
+  assert.match(acceptanceSource, /new HanliAcceptanceSessionFacade\(\)/);
+  assert.match(acceptanceEvidenceSource, /archiveScreenshot[\s\S]*bindLatestToCriteria[\s\S]*hasCriterionEvidence/);
+  assert.match(acceptanceSessionSource, /nextContinuation\(hasArchivedScreenshot/);
+  assert.match(eventMemoryRule, /hanli_computer_acceptance_facade_contract = one_public_acceptance_facade/);
+  assert.match(eventMemoryRule, /prompt_tool_name_exactly_matches_registered_dynamic_tool/);
+});
+
+test("首回合未产生截图时会恢复观察而不是直接结束验收", () => {
+  assert.match(continuationPolicySource, /!input\.hasArchivedScreenshot[\s\S]*retry-observation/);
+  assert.match(acceptanceSessionSource, /#observationRecoveryAttempted = true/);
+  assert.match(acceptanceSource, /首回合未调用窗口工具[\s\S]*重新获取真实截图后完成判断/);
 });

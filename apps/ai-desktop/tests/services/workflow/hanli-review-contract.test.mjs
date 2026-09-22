@@ -45,7 +45,8 @@ test("正式页面验收会话拒绝通用审批，普通会话仍保留交互�
   assert.match(approvalHandler, /this\.#options\.approvalRequestPolicy === "reject"[\s\S]*decision: "decline"/);
   assert.ok(approvalHandler.indexOf('this.#options.approvalRequestPolicy === "reject"') < approvalHandler.indexOf("this.#trustedCommands.isTrusted"));
   assert.ok(approvalHandler.indexOf('this.#options.approvalRequestPolicy === "reject"') < approvalHandler.indexOf("this.#approvals.set"));
-  assert.match(computerPrompt, /只能使用 hanli_computer_step/);
+  assert.match(computerPrompt, /只能使用 `hanli_computer`/);
+  assert.doesNotMatch(computerPrompt, /hanli_computer_step/);
   assert.match(computerPrompt, /禁止调用 shell、exec、osascript、System Events、外部窗口枚举或文件修改工具/);
   assert.match(computerPrompt, /不得降级到外部桌面自动化或申请用户审批/);
 });

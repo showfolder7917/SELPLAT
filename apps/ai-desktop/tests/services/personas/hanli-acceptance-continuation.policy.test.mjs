@@ -9,10 +9,19 @@ const result = await build({
 });
 const { selectHanliAcceptanceContinuation } = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
 
-const base = { completed: false, hasArchivedScreenshot: true, finishAttempted: false, finishRejection: "", correctionAttempted: false };
+const base = {
+  completed: false,
+  hasArchivedScreenshot: true,
+  finishAttempted: false,
+  finishRejection: "",
+  finalizationAttempted: false,
+  correctionAttempted: false,
+  observationRecoveryAttempted: false,
+};
 
 test("遗漏 finish 只进入 finish-only 回合", () => {
   assert.deepEqual(selectHanliAcceptanceContinuation(base), { kind: "finish-only" });
+  assert.equal(selectHanliAcceptanceContinuation({ ...base, finalizationAttempted: true }), null);
 });
 
 test("首次被拒绝的 finish 只允许一次纠正回合", () => {
@@ -21,7 +30,8 @@ test("首次被拒绝的 finish 只允许一次纠正回合", () => {
   assert.equal(selectHanliAcceptanceContinuation({ ...rejected, correctionAttempted: true }), null);
 });
 
-test("没有归档截图或已经完成时不能续接", () => {
-  assert.equal(selectHanliAcceptanceContinuation({ ...base, hasArchivedScreenshot: false }), null);
+test("没有归档截图时只允许一次重新观察，已经完成时不能续接", () => {
+  assert.deepEqual(selectHanliAcceptanceContinuation({ ...base, hasArchivedScreenshot: false }), { kind: "retry-observation" });
+  assert.equal(selectHanliAcceptanceContinuation({ ...base, hasArchivedScreenshot: false, observationRecoveryAttempted: true }), null);
   assert.equal(selectHanliAcceptanceContinuation({ ...base, completed: true }), null);
 });

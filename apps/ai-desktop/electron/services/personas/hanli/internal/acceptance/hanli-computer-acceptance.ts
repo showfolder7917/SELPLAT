@@ -3,13 +3,10 @@ import type { BrowserWindow } from "electron";
 import type { CodexDynamicToolsPort } from "../../../../support/platform/codex/index.js";
 import type { AttachmentFacade } from "../../../../support/platform/attachments/index.js";
 import type { HanliComputerAcceptanceInDto, HanliAcceptanceRunOutDto, HanliAcceptanceStepResultOutDto } from "../../../../../../contracts/services/personas/hanli/index.js";
-import { selectHanliAcceptanceContinuation, type HanliAcceptanceContinuation } from "./hanli-acceptance-continuation.policy.js";
-
-// 授权由主进程登记的正式窗口会话实时判断，模型不能扩大权限。
-export type AcceptancePrivateAction = "persona-navigation";
-export interface PageReviewInteractionPort {
-  allows(action: AcceptancePrivateAction): boolean;
-}
+import type { HanliAcceptanceContinuation } from "./hanli-acceptance-continuation.policy.js";
+import { HanliAcceptanceEvidenceFacade } from "./hanli-acceptance-evidence.facade.js";
+import type { PageReviewInteractionPort } from "./hanli-acceptance-page.port.js";
+import { HanliAcceptanceSessionFacade } from "./hanli-acceptance-session.facade.js";
 
 /** 重载同一正式 renderer，并等到主文档完成加载；该动作不切换地址也不触发业务写入。 */
 async function reloadFormalPage(window: BrowserWindow): Promise<void> {
@@ -47,7 +44,7 @@ async function reloadFormalPage(window: BrowserWindow): Promise<void> {
 }
 
 /** 仅提供当前应用窗口的单步输入和真实截图，下一动作由模型看到结果后选择。 */
-export class HanliComputerAcceptance {
+export class HanliComputerAcceptanceRunner {
   /** 当前是否已有一轮窗口验收在执行；同一窗口不允许并发控制。 */
   #active = false;
   /** 截图附件存储门面；保存每一步观察与最终判断引用的真实证据。 */
@@ -90,24 +87,14 @@ export class HanliComputerAcceptance {
     const interactionSteps: HanliAcceptanceStepResultOutDto[] = [];
     // 逐条件结果只保存 finish 或受阻兜底形成的 judgement，供场景编号和证据门禁使用。
     const stepResults: HanliAcceptanceStepResultOutDto[] = [];
-    const evidence: string[] = [];
-    const postInputEvidence = new Set<string>();
-    // 把每张截图与本次动作真正核对的验收条件绑定；finish 不能再用首个失败后的同一张通用截图填满其余条件。
-    const criterionEvidenceIds = new Map<string, Set<string>>();
-    const taskCollaborationEvidenceIds = new Set<string>();
+    const evidence = new HanliAcceptanceEvidenceFacade();
+    const sessionFacade = new HanliAcceptanceSessionFacade();
     let snapshot = "";
     let busy = false;
     let closed = false;
     let inputCount = 0;
     let calls = 0;
     let verdict: "passed" | "failed" | "blocked" = "blocked";
-    let completed = false;
-    // 终态回合复用同一动态工具，但在模型遗漏 finish 时只保留提交判断这一条路径。
-    let finalizationOnly = false;
-    // 仅记录 finish 的受限终态，供未完成验收回到同一提案时区分模型未调用与参数被拒绝。
-    let finishAttempted = false;
-    let finishRejection = "";
-    let correctionAttempted = false;
     // 窄窗口只用于当前验收的固定预设；无论验收如何结束都还原起始尺寸。
     let formalWindowResized = false;
     let coordinateSpace: AcceptanceCoordinateSpace = { screenshot: { width: 1, height: 1 }, viewport: { width: 1, height: 1 } };
@@ -128,11 +115,7 @@ export class HanliComputerAcceptance {
         hasAnnotations: false,
       });
       snapshot = attachment.id;
-      evidence.push(snapshot);
-      if (taskCollaboration.status === "visible") taskCollaborationEvidenceIds.add(snapshot);
-      if (inputCount > 0) {
-        postInputEvidence.add(snapshot);
-      }
+      evidence.archiveScreenshot(snapshot, inputCount, taskCollaboration.status === "visible");
       const criteria: Array<{ id: string; text: string }> = [];
       for (const [index, text] of goal.criteria.entries()) {
         criteria.push({
@@ -237,7 +220,7 @@ export class HanliComputerAcceptance {
         },
       }],
       call: async (_name, raw) => {
-        if (closed || completed || window.isDestroyed()) {
+        if (closed || sessionFacade.completed || window.isDestroyed()) {
           throw new Error("当前验收已结束，交互工具授权已收回。");
         }
         if (busy) {
@@ -253,18 +236,18 @@ export class HanliComputerAcceptance {
           const args = raw as Record<string, unknown>;
           // 提交即使缺少 reason 或最新截图编号，也必须保留为被拒绝的提交尝试。
           attemptedFinish = args?.action === "finish";
-          if (attemptedFinish) finishAttempted = true;
+          if (attemptedFinish) sessionFacade.markFinishAttempted();
           if (!args || typeof args.reason !== "string" || !args.reason.trim()) {
             throw new Error("必须说明当前操作与验收目标的关系");
           }
-          if (finalizationOnly && args.action !== "finish") {
+          if (sessionFacade.onlyFinishAllowed && args.action !== "finish") {
             throw new Error("终态回合只允许提交 finish，不能继续操作应用。");
           }
           if (args.action === "observe") {
             const output = await images();
             const observedCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, false);
             for (const criterionId of observedCriterionIds) {
-              addCriterionEvidence(criterionEvidenceIds, criterionId, snapshot);
+              evidence.bindLatestToCriteria([criterionId]);
             }
             return output;
           }
@@ -306,18 +289,14 @@ export class HanliComputerAcceptance {
               let hasValidEvidence = false;
               let hasValidLayoutEvidence = false;
               if (finding?.status === "blocked") {
-                hasValidEvidence = evidence.includes(String(finding.evidenceId))
-                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.evidenceId)) === true;
+                hasValidEvidence = evidence.hasCriterionEvidence(criterionId, finding.evidenceId, false);
               } else if (finding) {
-                hasValidEvidence = postInputEvidence.has(String(finding.evidenceId))
-                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.evidenceId)) === true;
+                hasValidEvidence = evidence.hasCriterionEvidence(criterionId, finding.evidenceId, true);
               }
               if (finding?.layoutStatus === "blocked") {
-                hasValidLayoutEvidence = evidence.includes(String(finding.layoutEvidenceId))
-                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.layoutEvidenceId)) === true;
+                hasValidLayoutEvidence = evidence.hasCriterionEvidence(criterionId, finding.layoutEvidenceId, false);
               } else if (finding) {
-                hasValidLayoutEvidence = postInputEvidence.has(String(finding.layoutEvidenceId))
-                  && criterionEvidenceIds.get(criterionId)?.has(String(finding.layoutEvidenceId)) === true;
+                hasValidLayoutEvidence = evidence.hasCriterionEvidence(criterionId, finding.layoutEvidenceId, true);
               }
               if (!hasSingleFinding || !hasKnownStatus || !hasActualResult || !hasValidEvidence
                 || !hasKnownLayoutStatus || !hasLayoutResult || !hasValidLayoutEvidence) {
@@ -327,10 +306,10 @@ export class HanliComputerAcceptance {
                 throw new Error(`${criterionId}受阻时必须说明材料、验收能力或运行环境原因；真实页面或安全不符合应填写 failed`);
               }
               if (taskCollaborationCriterionIds.has(criterionId)) {
-                if (finding?.status !== "blocked" && !taskCollaborationEvidenceIds.has(String(finding?.evidenceId))) {
+                if (finding?.status !== "blocked" && !evidence.isTaskCollaborationEvidence(finding?.evidenceId)) {
                   throw new Error(`${criterionId}必须在任务协作群页面截图上裁决，不能由自由讨论页判定产品结果`);
                 }
-                if (finding?.layoutStatus !== "blocked" && !taskCollaborationEvidenceIds.has(String(finding?.layoutEvidenceId))) {
+                if (finding?.layoutStatus !== "blocked" && !evidence.isTaskCollaborationEvidence(finding?.layoutEvidenceId)) {
                   throw new Error(`${criterionId}的布局结论必须在任务协作群页面截图上裁决，不能由自由讨论页判定产品结果`);
                 }
               }
@@ -363,7 +342,7 @@ export class HanliComputerAcceptance {
                 occurredAt: new Date().toISOString(),
               });
             }
-            completed = true;
+            sessionFacade.complete();
             let verdictLabel = "受阻";
             if (verdict === "passed") {
               verdictLabel = "通过";
@@ -509,6 +488,7 @@ export class HanliComputerAcceptance {
           // 前置状态读取不产生页面输入，不能成为通过或失败判断的交互证据。
           inputCount += 1;
           snapshot = "";
+          evidence.clearLatestScreenshot();
           await new Promise((resolve) => setTimeout(resolve, 150));
           const previewEvidence = await window.webContents.executeJavaScript(`(${readImagePreviewState.toString()})()`).catch(() => null);
           const interactionEvidence = {
@@ -522,7 +502,7 @@ export class HanliComputerAcceptance {
           };
           const output = await images(interactionEvidence);
           for (const criterionId of coveredCriterionIds) {
-            addCriterionEvidence(criterionEvidenceIds, criterionId, snapshot);
+            evidence.bindLatestToCriteria([criterionId]);
           }
           const previewActual = formatImagePreviewEvidence(previewEvidence, dragEvidence);
           let operation: HanliAcceptanceStepResultOutDto["operation"];
@@ -573,8 +553,8 @@ export class HanliComputerAcceptance {
           return output;
         } catch (error) {
           // 只保存 finish 的可读校验摘要；不记录模型正文、截图数据或其他工具参数。
-          if (attemptedFinish && !completed) {
-            finishRejection = error instanceof Error ? error.message : String(error);
+          if (attemptedFinish && !sessionFacade.completed) {
+            sessionFacade.rejectFinish(error instanceof Error ? error.message : String(error));
           }
           throw error;
         } finally {
@@ -585,18 +565,12 @@ export class HanliComputerAcceptance {
     try {
       await model(tools, {
         nextContinuation: () => {
-          const continuation = selectHanliAcceptanceContinuation({
-            completed,
-            hasArchivedScreenshot: Boolean(snapshot && evidence.includes(snapshot)),
-            finishAttempted,
-            finishRejection,
-            correctionAttempted,
-          });
-          if (continuation?.kind === "finish-only") {
-            finalizationOnly = true;
+          const continuation = sessionFacade.nextContinuation(evidence.hasArchivedScreenshot);
+          if (continuation?.kind === "retry-observation") {
+            progress("验收模型首回合未调用窗口工具；进入一次受限重试回合，重新获取真实截图后完成判断。");
+          } else if (continuation?.kind === "finish-only") {
             progress("验收模型未提交 finish；进入仅允许 finish 的终态回合，禁止继续操作应用。");
           } else if (continuation?.kind === "correction") {
-            correctionAttempted = true;
             progress("验收模型的 finish 被校验拒绝；进入一次受限纠正回合，仅可补齐原条件证据后重新提交 finish。");
           }
           return continuation;
@@ -609,16 +583,16 @@ export class HanliComputerAcceptance {
       closed = true;
       this.#active = false;
     }
-    if (!completed) {
+    if (!sessionFacade.completed) {
       // 模型正常结束却没有提交 finish 时，已经保存的真实截图不能随着异常丢失。
       // 仅将其归档为受阻，绝不据此推断产品通过或失败；没有截图仍不能构造验收记录。
-      if (!snapshot || !evidence.includes(snapshot)) {
+      if (!evidence.hasArchivedScreenshot) {
         throw new Error("韩立尚未通过交互工具提交完整验收判断，且未留下可归档的真实截图证据。");
       }
-      const finishDiagnostic = !finishAttempted
+      const finishDiagnostic = !sessionFacade.finishAttempted
         ? "验收模型未尝试提交 finish。"
-        : finishRejection
-          ? `验收模型尝试提交 finish，但被现有校验拒绝：${finishRejection}`
+        : sessionFacade.finishRejection
+          ? `验收模型尝试提交 finish，但被现有校验拒绝：${sessionFacade.finishRejection}`
           : "验收模型尝试提交 finish，但未形成完成记录。";
       const actual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的功能结论。${finishDiagnostic}`;
       const layoutActual = `验收模型未通过交互工具提交完整判断，当前条件未形成可归档的布局结论。${finishDiagnostic}`;
@@ -664,7 +638,7 @@ export class HanliComputerAcceptance {
       finalBounds,
       interactionSteps,
       stepResults,
-      evidenceAttachmentIds: evidence,
+      evidenceAttachmentIds: evidence.evidenceIds,
       startedAt,
       completedAt: new Date().toISOString(),
     };
@@ -685,13 +659,6 @@ function validateCriterionCoverage(value: unknown, allowedCriterionIds: string[]
     throw new Error("criterionIds 不能包含重复条件编号。");
   }
   return criterionIds;
-}
-
-/** 保存条件与真实截图的多对多关系，供 finish 阶段逐项阻止通用证据冒充完整验收。 */
-function addCriterionEvidence(index: Map<string, Set<string>>, criterionId: string, evidenceId: string): void {
-  const current = index.get(criterionId) || new Set<string>();
-  current.add(evidenceId);
-  index.set(criterionId, current);
 }
 
 /** 只滚动当前可见任务协作群的详情面板，不能推动页面标题与主要操作离开视口。 */

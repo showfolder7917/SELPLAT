@@ -10,7 +10,7 @@ import type { PersonaConversationOutDto, SendPersonaConversationMessageInDto } f
 import type { EvolutionMutationInDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { AttachmentFacade } from "../../support/platform/attachments/index.js";
 import { HanliApplicationService, type HanliApplicationServiceOptions, type HanliResultAcceptanceReview } from "./internal/application/hanli-application.service.js";
-import { HanliComputerAcceptance, type PageReviewInteractionPort } from "./internal/acceptance/hanli-computer-acceptance.js";
+import { HanliComputerAcceptance, type PageReviewInteractionPort } from "./internal/acceptance/hanli-computer-acceptance.facade.js";
 import { HanliSemanticExtractionRunner } from "./internal/semantic/hanli-semantic-extraction.runner.js";
 
 /** 韩立人物端口只包含自身自由讨论、审批和验收，不包含南宫对话或令狐恢复。 */

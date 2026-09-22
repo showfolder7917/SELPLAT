@@ -104,7 +104,7 @@ export interface HanliApplicationServiceOptions {
   computerAcceptance?: (
     goal: HanliComputerAcceptanceInDto,
     tools: CodexDynamicToolsPort,
-    session: { nextContinuation: () => { kind: "finish-only" } | { kind: "correction"; rejection: string } | null },
+    session: { nextContinuation: () => { kind: "retry-observation" } | { kind: "finish-only" } | { kind: "correction"; rejection: string } | null },
   ) => Promise<void>;
   /** 把人物业务事件和异常写入统一事件中心。 */
   recordEvent(type: string, details: Record<string, unknown>, taskId?: string): void;
