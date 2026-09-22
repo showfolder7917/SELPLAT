@@ -18,3 +18,10 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
   assert.match(service, /recordPersonaConversationRecovery/);
   assert.match(service, /onPersonaConversationChanged\?\.\(saved\)/);
 });
+
+test("启动恢复只写入启动时仍活动的同一韩立业务会话", () => {
+  assert.match(runtime, /const conversation = await collaborationMemory\.readPersonaConversation\("han-li"\)[\s\S]*?hanLiCodex\.recoverExistingSession\(workspaces\.read\(\), settings\.read\(\)\.locale\)/);
+  assert.match(runtime, /const currentConversation = await collaborationMemory\.readPersonaConversation\("han-li"\)[\s\S]*?currentConversation\.conversationId !== conversation\.conversationId/);
+  assert.match(runtime, /recordPersonaConversationRecovery\(\{[\s\S]*?conversationId: conversation\.conversationId/);
+  assert.doesNotMatch(runtime.match(/void \(async \(\) => \{[\s\S]*?\}\)\(\)\.catch\(\(error\)/)?.[0] || "", /sendConversationMessage|hanLiCodex\.send/);
+});

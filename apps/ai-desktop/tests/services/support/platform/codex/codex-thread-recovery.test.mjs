@@ -14,6 +14,14 @@ test("Codex 线程恢复区分已核对、原线程缺失与可重试失败", ()
   assert.match(source, /原线程不可恢复；既有会话历史仍可阅读/);
 });
 
+test("启动恢复只恢复已有线程，不发送消息或创建替代线程", () => {
+  assert.match(source, /async recoverExistingSession\([\s\S]*?this\.#request\("thread\/resume"/);
+  assert.doesNotMatch(source.match(/async recoverExistingSession\([\s\S]*?\n  }\n\n  \/\*\* 只报告/)?.[0] || "", /thread\/start/);
+  assert.doesNotMatch(source.match(/async recoverExistingSession\([\s\S]*?\n  }\n\n  \/\*\* 只报告/)?.[0] || "", /turn\/start/);
+  assert.match(source, /status: "thread-unavailable"[\s\S]*?successorThreadId: null/);
+  assert.match(source, /status: "retryable"[\s\S]*?return recovery/);
+});
+
 test("unknown-turn 与未核验内容不被伪装成恢复成功", () => {
   assert.match(source, /unknown\[\\s-\]\*turn/);
   assert.match(source, /status: "unknown-turn"/);

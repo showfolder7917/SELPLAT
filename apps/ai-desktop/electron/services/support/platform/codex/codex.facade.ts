@@ -171,6 +171,52 @@ export class CodexService {
     return { threadId: this.#threadId || this.#sessions.read()?.threadId || null };
   }
 
+  /** 启动恢复只恢复已有线程，绝不创建线程或发送用户消息。 */
+  async recoverExistingSession(workspaces: WorkspaceStateOutDto, locale: LocaleValue): Promise<ThreadRecovery | undefined> {
+    const activeThreadId = this.activeSession().threadId;
+    if (!activeThreadId) return undefined;
+    await this.#ensureReady();
+    const developerInstructions = this.#developerInstructions(locale);
+    const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
+    if (this.#threadId === activeThreadId && this.#threadWorkspaceSignature === workspaceSignature && this.#threadAttached) return undefined;
+    const stored = this.#readStoredSession();
+    const preservePersonaThread = this.#options.preserveThreadAcrossWorkspaceChanges === true;
+    const resumableThreadId = this.#threadId && (preservePersonaThread || this.#threadWorkspaceSignature === workspaceSignature)
+      ? this.#threadId
+      : stored && (preservePersonaThread || stored.workspaceSignature === workspaceSignature) ? stored.threadId : null;
+    if (!resumableThreadId) return undefined;
+    try {
+      const resumed = asObject(await this.#request("thread/resume", { threadId: resumableThreadId }));
+      const threadId = stringValue(asObject(resumed.thread).id) || resumableThreadId;
+      this.#rememberThread(threadId, workspaceSignature);
+      this.#onThreadLifecycle({ action: "resumed", threadId });
+      const recovery: ThreadRecovery = {
+        status: "verified", sourceThreadId: resumableThreadId, successorThreadId: threadId,
+        summary: "已恢复，历史已核对。",
+      };
+      this.#lastThreadRecovery = recovery;
+      return recovery;
+    } catch (error) {
+      if (isMissingCodexThreadError(error)) {
+        this.#onThreadLifecycle({ action: "missing_on_resume", threadId: resumableThreadId, reason: errorMessage(error) });
+        this.#forgetThread();
+        const recovery: ThreadRecovery = {
+          status: "thread-unavailable", sourceThreadId: resumableThreadId, successorThreadId: null,
+          summary: "原线程不可恢复；既有会话历史仍可阅读，后续消息会从新线程接续。",
+        };
+        this.#lastThreadRecovery = recovery;
+        return recovery;
+      }
+      this.#onThreadLifecycle({ action: "resume_failed", threadId: resumableThreadId, reason: errorMessage(error) });
+      const recovery: ThreadRecovery = {
+        status: "retryable", sourceThreadId: resumableThreadId, successorThreadId: null,
+        summary: "恢复当前会话失败，可保留原线程并重试恢复。",
+      };
+      this.#lastThreadRecovery = recovery;
+      return recovery;
+    }
+  }
+
   /** 只报告本地 app-server 子进程是否仍存活，不发起账号或网络请求。 */
   isAlive(): boolean {
     return Boolean(this.#process && this.#process.exitCode === null && !this.#process.killed);
