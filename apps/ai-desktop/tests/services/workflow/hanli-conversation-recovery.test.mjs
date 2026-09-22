@@ -16,6 +16,9 @@ const model = read("src/features/conversation/model/usePersonaConversation.ts");
 const workspace = read("src/features/hanli/components/HanliConversationWorkspace.tsx");
 const conversationFacade = read("electron/services/personas/conversation/persona-conversation.facade.ts");
 const codex = read("electron/services/support/platform/codex/codex.facade.ts");
+const collaborationMemoryMethods = read("electron/services/support/capabilities/event-center/internal/projection/collaboration-memory-methods.ts");
+const collaborationMemoryProxy = read("electron/services/support/capabilities/event-center/internal/projection/background-collaboration-memory.proxy.ts");
+const collaborationMemoryWorker = read("electron/dao/corpus/internal/background-persistence.worker.ts");
 
 test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新", () => {
   assert.match(ports, /readThreadRecovery\(\): SendMessageOutDto\["threadRecovery"\]/);
@@ -24,6 +27,15 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
   assert.match(service, /catch \(error\) \{[\s\S]*?chat\.readThreadRecovery\(\)/);
   assert.match(service, /recordPersonaConversationRecovery/);
   assert.match(service, /onPersonaConversationChanged\?\.\(saved\)/);
+});
+
+test("恢复所需的人物记忆方法同时经过主进程代理与后台 Worker", () => {
+  for (const method of ["readPersonaConversationCodexThread", "linkPersonaConversationCodexThread", "recordPersonaConversationRecovery"]) {
+    assert.match(collaborationMemoryMethods, new RegExp(`"${method}"`));
+  }
+  assert.match(collaborationMemoryProxy, /isCollaborationMemoryMethod\(property\)/);
+  assert.match(collaborationMemoryWorker, /new Set<string>\(collaborationMemoryMethodNames\)/);
+  assert.match(collaborationMemoryWorker, /collaborationMemory\[method as keyof typeof collaborationMemory\]/);
 });
 
 test("打开韩立会话前准备恢复，并仅写入目标业务会话", () => {
