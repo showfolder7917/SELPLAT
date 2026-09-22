@@ -34,6 +34,14 @@ test("业务会话恢复只 resume 已关联线程，待业务服务确认后才
 test("unknown-turn 与未核验内容不被伪装成恢复成功", () => {
   assert.match(source, /unknown\[\\s-\]\*turn/);
   assert.match(source, /status: "unknown-turn"/);
+  assert.match(source, /#lastUnknownTurnDiagnostic = undefined/);
+  const send = source.match(/async send\([\s\S]*?\n  }\n\n  \/\*\*/)?.[0] || "";
+  assert.match(send, /this\.#lastThreadRecovery = undefined;[\s\S]*?this\.#lastUnknownTurnDiagnostic = undefined;/);
+  assert.match(source, /#readUnknownTurnDiagnostic\(\): UnknownTurnDiagnostic \| undefined/);
+  assert.match(source, /diagnostic\?\.turnId === startedTurnId \? diagnostic\.itemId : undefined/);
+  assert.match(source, /\.\.\.\(affectedItemId \? \{ affectedItemId \} : \{\}\)/);
+  assert.match(source, /function readUnknownTurnDiagnostic\(message: string\): UnknownTurnDiagnostic \| undefined/);
+  assert.match(source, /unknown turn id \[`"\]\(\[\^`"\]\+\)\[`"\]/);
   assert.match(source, /status: "verification-incomplete"/);
   assert.match(source, /未将空结果显示为已恢复/);
 });
