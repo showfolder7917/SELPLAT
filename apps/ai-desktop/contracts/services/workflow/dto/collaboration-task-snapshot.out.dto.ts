@@ -70,6 +70,8 @@ export interface CollaborationTaskSnapshotOutDto {
   constraints: string[];
   /** 用来判断任务是否完成的验收条件。 */
   acceptanceCriteria: string[];
+  /** any-source 接受任意源码变更；production-source 要求至少一项非测试产品实现变更。 */
+  requiredChangeKind?: "any-source" | "production-source";
   /** 产生本任务的会话消息编号。 */
   sourceMessageIds: number[];
   /** 本任务引用的附件标识。 */

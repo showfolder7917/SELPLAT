@@ -27,6 +27,8 @@ export interface ManagedExecutionRequest {
   readChangedFiles?: () => Promise<string[]>;
   /** 令狐可以依据真实技术故障，把同一签发工程内的新文件纳入修复范围。 */
   allowProjectTechnicalRepair?: boolean;
+  /** production-source 要求至少修改一项真实产品实现，测试或文档变更不能单独完成任务。 */
+  requiredChangeKind?: "any-source" | "production-source";
   /** 协作会话已经核对的工作区、规则入口和任务关联事实。 */
   failureRoutingContext?: { diagnosticContext: string; verifiedFacts: string[]; taskRelation: "diagnostic-only" | "gate" | "direct"; stepPurpose?: "diagnostic" | "implementation" | "validation" };
   emit(event: CodexStreamEventOutDto): void;
@@ -97,10 +99,13 @@ export class ManagedTaskExecutor {
       const roundChangedFiles = request.readChangedFiles
         ? await request.readChangedFiles()
         : [...evidence.changedFiles];
-      if (!evidence.roundFailed && roundChangedFiles.length > 0) break;
+      const requiredChangeMissing = !hasRequiredChange(roundChangedFiles, request.requiredChangeKind);
+      if (!evidence.roundFailed && !requiredChangeMissing) break;
       taskMessage = evidence.roundFailed
         ? this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: evidence.failedCommandSummaries().join("\n") || "存在未解决错误" })
-        : this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: "任务要求修改源码，但上一轮没有观察到任何文件变更" });
+        : this.#managedPrompt("继续处理同一任务。", "execution.task-repair", { failures: roundChangedFiles.length === 0
+          ? "任务要求修改源码，但上一轮没有观察到任何文件变更"
+          : "本任务被结构化标记为真实产品缺陷，但上一轮只修改了测试、文档或验证辅助文件。必须继续定位并修改真实产品实现；不得用测试变化代替产品修复。" });
     }
 
     // 协同任务优先读取隔离工作区的真实 Git 状态；普通会话保留流式证据兼容。
@@ -111,7 +116,7 @@ export class ManagedTaskExecutor {
       : [...evidence.changedFiles];
     // 命令失败仍是可分流的技术故障；没有源码差异且没有命令错误说明任务缺少新的实施输入，
     // 只能交由调用方停在未分类门禁，不能伪装成可由令狐重复修复的产品故障。
-    const sourceChangeMissing = !evidence.roundFailed && changedFiles.length === 0;
+    const sourceChangeMissing = !evidence.roundFailed && !hasRequiredChange(changedFiles, request.requiredChangeKind);
     if (evidence.roundFailed || sourceChangeMissing) {
       emitManaged(request, "task-execution", "blocked", taskRound - 1, TASK_ROUNDS,
         sourceChangeMissing ? "未观察到新的源码差异，已停止自动派发修复" : "修改过程仍有未解决错误，已停止自动续跑");
@@ -120,7 +125,9 @@ export class ManagedTaskExecutor {
         ...response,
         managedStatus: "incomplete",
         pendingActions: [sourceChangeMissing
-          ? "任务要求修改源码，但未观察到文件变更；缺少可实施的新失败候选，已停止自动转交"
+          ? changedFiles.length === 0
+            ? "任务要求修改源码，但未观察到文件变更；缺少可实施的新失败候选，已停止自动转交"
+            : "真实产品缺陷只产生了测试、文档或验证辅助文件变更；未观察到产品实现变化，禁止进入自检和发布"
           : evidence.failedCommandSummaries().join("；") || "处理任务阶段未解决错误"],
         restartRequired: false,
         changedFiles,
@@ -348,6 +355,22 @@ export class ManagedTaskExecutor {
   #managedPrompt(message: string, promptId: string, variables: PromptVariables = {}): string {
     return managedPrompt(message, this.prompts.render(promptId, variables));
   }
+}
+
+/** 测试、文档和验证夹具只能证明行为，不能单独充当真实产品缺陷的修复实现。 */
+function hasRequiredChange(files: readonly string[], requiredChangeKind: ManagedExecutionRequest["requiredChangeKind"]): boolean {
+  if (requiredChangeKind !== "production-source") return files.length > 0;
+  return files.some((file) => !isValidationOnlyFile(file));
+}
+
+function isValidationOnlyFile(file: string): boolean {
+  const normalized = file.replaceAll("\\", "/").toLowerCase();
+  return normalized.includes("/tests/")
+    || normalized.startsWith("tests/")
+    || /(^|\/)test(s)?\.[^/]+$/.test(normalized)
+    || /(^|\/)[^/]+\.(test|spec)\.[^/]+$/.test(normalized)
+    || normalized.endsWith(".md")
+    || normalized.includes("/docs/");
 }
 
 /** 同一测试可先后暴露不同断言，仍属于同一客户路径；只用稳定测试名聚合重查触发器。 */

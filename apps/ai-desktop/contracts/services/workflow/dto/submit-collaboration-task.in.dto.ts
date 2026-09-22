@@ -27,6 +27,8 @@ export interface SubmitCollaborationTaskInDto {
   constraints?: string[];
   /** 判断任务完成的验收条件。 */
   acceptanceCriteria?: string[];
+  /** 任务是否必须包含真实产品实现变更；用于阻止只改测试却声称产品缺陷已修复。 */
+  requiredChangeKind?: "any-source" | "production-source";
   /** 产生本任务的会话消息编号。 */
   sourceMessageIds?: number[];
   /** 本任务需要读取的附件标识。 */

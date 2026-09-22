@@ -444,6 +444,8 @@ class CodexExecutorSession implements ExecutorSessionPort {
       readChangedFiles: () => this.#readTaskChangedFiles(task),
       // 令狐负责技术兜底，可以沿真实根因扩展当前签发工程内的文件范围；其他人物仍保持首次范围。
       allowProjectTechnicalRepair: this.#connection.memberId === "linghu-ancestor",
+      // 冻结任务快照决定本轮必须产生何种变更；执行器不再从自然语言猜测产品缺陷门禁。
+      requiredChangeKind: task.snapshot.requiredChangeKind || "any-source",
       failureRoutingContext: {
         ...failureRoutingContext(task),
         verifiedFacts: [

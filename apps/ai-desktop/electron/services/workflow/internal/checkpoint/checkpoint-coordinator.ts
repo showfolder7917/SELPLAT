@@ -538,6 +538,8 @@ function buildCheckpointRepairRequest(
     constraints: [marker, `卡点故障事实：${failureEvent.eventId}`, repairBoundary, ...blockedStepInstructions, ...(repeatedAcceptanceInstruction ? ["两次真实验收未通过时同时调查韩立验收能力和产品实现；只有真实证据证明误判，才可在原授权范围内修改验收能力，原条件与门禁保持不变。"] : []), ...[...new Set([...(topic.exclusions || []), ...(proposal.exclusions || [])])].map((exclusion) => `原确认范围排除项：${exclusion}`), "仅修复已分类且属于原验收范围的真实产品缺陷（以 acceptanceFailureScope 为据）或既有验收能力故障；先调查再修改，保留原任务历史和恢复点。", "前一轮结果未改变原故障时必须明确标记修复方向错误，读取新的运行证据后更换根因假设；禁止重复相同修改或用测试替身代替真实复现。", "每次交接必须点名原专题、具体验收条件、实际结果、期望结果、当前负责人和下一步动作；禁止使用无明确指向的简称。", "不得修改生产数据库、跳过代码测试或统一测试、扩大业务范围、关闭权限门禁；需要用户授权时明确报告具体受阻事项。"],
     // 验收条件要求原因、修复和验证证据全部存在。
     acceptanceCriteria: [...blockedStepInstructions, ...(repeatedAcceptanceInstruction ? ["并列解释韩立两次验收失败的真实依据；若属于验收误判，提供验收能力修复与回归证据；若属于产品缺陷，提供产品修复与原条件复验依据"] : []), "逐项复现并解释 acceptanceFailureScope 中的具体失败条件、实际结果、期望结果及故障所有者", "生产修改必须对应故障分类，且相同复现条件下原现象已经改变；只改验收工具、提示词或假测试不能证明产品缺陷修复", "完成针对性代码测试且不绕过权限和原验收条件", "完成统一测试、运行版本更新和重启健康检查", "提交真实修复与验证证据，并自动返回同一提案的韩立结果验收"],
+    // 产品缺陷使用结构化门禁，不能依靠提示词阻止执行人用测试文件冒充产品修复。
+    requiredChangeKind: acceptanceFailureKind === "product-defect" ? "production-source" : "any-source",
     // 复用原专题已经授权的工作区。
     workspaceState: topic.workspaceState,
     // 复用原专题语言环境。

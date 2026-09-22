@@ -150,6 +150,7 @@ export class CollaborationStore {
         confirmedIntent: normalizedIntent,
         constraints: (request.constraints || []).map((item) => item.trim()).filter(Boolean),
         acceptanceCriteria: (request.acceptanceCriteria || []).map((item) => item.trim()).filter(Boolean),
+        requiredChangeKind: request.requiredChangeKind || "any-source",
         sourceMessageIds: [...new Set(request.sourceMessageIds || [])],
         attachmentIds: [...new Set(request.attachmentIds || [])],
         workspaceState: structuredClone(request.workspaceState),
@@ -537,6 +538,14 @@ function migrateTaskHistory(task: CollaborationTaskOutDto, state: CollaborationS
   const memberName = (memberId: string | null): string => members.find((member) => member.memberId === memberId)?.displayName || "历史成员（名称未记录）";
   const legacy = !Array.isArray(task.flowEvents) || !Array.isArray(task.executionRecords);
   task.historyCompleteness ??= legacy ? "legacy-partial" : "complete";
+  // 结构化字段上线前已经签发的产品缺陷任务保留原冻结约束；只在迁移入口识别这条系统生成标记。
+  // 新任务始终由提交 DTO 直接携带 requiredChangeKind，不依赖自然语言推断。
+  const legacyProductDefect = task.snapshot.constraints.some((item) => item.startsWith("本轮属于真实产品缺陷："));
+  if (!task.snapshot.requiredChangeKind) {
+    task.snapshot.requiredChangeKind = legacyProductDefect ? "production-source" : "any-source";
+  } else if (task.snapshot.requiredChangeKind === "any-source" && legacyProductDefect) {
+    task.snapshot.requiredChangeKind = "production-source";
+  }
   task.initiator ??= null;
   task.automationSource ??= null;
   // 升级前任务没有显式替代关系，统一恢复为空值并由提案聚合执行受控兼容。

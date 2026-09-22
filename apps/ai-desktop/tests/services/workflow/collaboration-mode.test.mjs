@@ -2910,6 +2910,73 @@ test("协同执行人修改源码后由桌面内部验证分支而不再发起 C
   assert.equal(events.some((event) => event.managedExecution?.message.includes("当前任务分支隔离 Playwright 已通过")), true);
 });
 
+test("真实产品缺陷只改测试时继续修复，出现生产代码后才允许进入自检", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  let turnCount = 0;
+  let validationCount = 0;
+  const messages = [];
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修复真实产品缺陷",
+    restartRequired: false,
+    requiredChangeKind: "production-source",
+    emit: () => undefined,
+    runTurn: async (message) => {
+      turnCount += 1;
+      messages.push(message);
+      return { text: "已修改", itemCount: 1 };
+    },
+    readChangedFiles: async () => turnCount < 3
+      ? ["apps/ai-desktop/tests/recovery.test.mjs"]
+      : ["apps/ai-desktop/tests/recovery.test.mjs", "apps/ai-desktop/electron/services/personas/conversation/recovery.ts"],
+    runCodeValidation: async () => { validationCount += 1; },
+  });
+  assert.equal(turnCount, 3);
+  assert.equal(validationCount, 1);
+  assert.equal(result.managedStatus, "code-verified");
+  assert.match(messages[1], /只修改了测试、文档或验证辅助文件/);
+});
+
+test("真实产品缺陷连续只改测试时禁止进入自检和发布", async () => {
+  const executor = new ManagedTaskExecutor(prompts);
+  let validationCount = 0;
+  const result = await executor.run({
+    mode: "task-managed",
+    message: "修复真实产品缺陷",
+    restartRequired: false,
+    requiredChangeKind: "production-source",
+    emit: () => undefined,
+    runTurn: async () => ({ text: "只补了测试", itemCount: 1 }),
+    readChangedFiles: async () => ["apps/ai-desktop/tests/recovery.test.mjs"],
+    runCodeValidation: async () => { validationCount += 1; },
+  });
+  assert.equal(validationCount, 0);
+  assert.equal(result.managedStatus, "incomplete");
+  assert.match(result.pendingActions[0], /未观察到产品实现变化/);
+});
+
+test("字段上线前的真实产品缺陷任务按冻结标记迁移为生产代码门禁", () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "legacy-product-change-gate-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "collaboration.json"));
+    const workspaceState = { primaryId: "workspace", roots: [{ id: "workspace", name: "workspace", path: directory, permission: "workspace-write" }] };
+    const task = store.submitTask({
+      title: "修复旧产品缺陷",
+      problemStatement: "正式页面缺少恢复状态",
+      confirmedIntent: "修复真实产品实现",
+      constraints: ["本轮属于真实产品缺陷：必须先复现实际产品结果，再修改产品实现。"],
+      workspaceState,
+      locale: "zh-CN",
+    });
+    // 旧任务迁移发生在应用重启重新加载持久状态时，而不是同一内存实例的提交瞬间。
+    const state = new CollaborationStore(path.join(directory, "collaboration.json")).state();
+    const persisted = state.tasks.find((item) => item.taskId === task.taskId);
+    assert.equal(persisted?.snapshot.requiredChangeKind, "production-source");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("首次文件范围使用真实 Git 快照且范围冲突立即等待确认", async () => {
   const executor = new ManagedTaskExecutor(prompts);
   let turnCount = 0;
