@@ -70,6 +70,7 @@ export interface HanliApplicationServiceOptions {
     activeConversationId(): string | null;
     /** 返回刚发生的线程恢复结论，供业务会话持久化而非直接读取事件审计。 */
     readThreadRecovery(): SendMessageOutDto["threadRecovery"] | undefined;
+    recoverExistingSession(): Promise<SendMessageOutDto["threadRecovery"] | undefined>;
   };
   /** 完整用户回合入库后异步唤醒韩立客户语义整理。 */
   refreshSemanticMemory?: () => void;

@@ -9,6 +9,9 @@ const read = (relativePath) => readFileSync(path.join(appRoot, relativePath), "u
 const service = read("electron/services/personas/hanli/internal/conversation/hanli-conversation.service.ts");
 const runtime = read("electron/system/bootstrap/application-runtime.ts");
 const ports = read("electron/services/personas/hanli/internal/application/hanli-application.ports.ts");
+const ipc = read("electron/system/ipc/domains/register-collaboration-ipc.ts");
+const preload = read("electron/system/preload/domains/collaboration-bridge.cts");
+const model = read("src/features/conversation/model/usePersonaConversation.ts");
 
 test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新", () => {
   assert.match(ports, /readThreadRecovery\(\): SendMessageOutDto\["threadRecovery"\]/);
@@ -17,4 +20,18 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
   assert.match(service, /catch \(error\) \{[\s\S]*?chat\.readThreadRecovery\(\)/);
   assert.match(service, /recordPersonaConversationRecovery/);
   assert.match(service, /onPersonaConversationChanged\?\.\(saved\)/);
+});
+
+test("打开韩立会话前准备恢复，并仅写入仍活动的同一业务会话", () => {
+  assert.match(service, /async prepareRecovery\(\)[\s\S]*?chat\.recoverExistingSession\(\)/);
+  assert.match(service, /const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId !== conversation\.conversationId/);
+  assert.match(service, /#recordThreadRecovery\(conversation\.conversationId, recovery\)/);
+  assert.match(runtime, /recoverExistingSession: \(\) => hanLiCodex!\.recoverExistingSession\(workspaces\.read\(\), settings\.read\(\)\.locale\)/);
+  assert.doesNotMatch(service.match(/async prepareRecovery\(\)[\s\S]*?\n  }\n\n  /)?.[0] || "", /chat\.send/);
+});
+
+test("页面显式准备恢复后才读取只读窗口", () => {
+  assert.match(ipc, /desktop:prepare-persona-conversation-recovery[\s\S]*?prepareConversationRecovery/);
+  assert.match(preload, /preparePersonaConversationRecovery: \(personaId: string\) => invoke\("desktop:prepare-persona-conversation-recovery"/);
+  assert.match(model, /personaId === "han-li"[\s\S]*?preparePersonaConversationRecovery\(personaId\)[\s\S]*?prepareRecovery\.then\(\(\) => readPersonaConversationWindow/);
 });

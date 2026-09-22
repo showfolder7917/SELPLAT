@@ -840,6 +840,8 @@ contextBridge.exposeInMainWorld("desktop", {
   finishInteractionInquiryRetry: async () => { inquiryFixtureRelease?.(); },
   getInteractionInquiryRequest: async () => structuredClone(inquiryFixtureRequest),
   getPersonaConversation: async (personaId) => readInteractionPersonaConversation(personaId),
+  // 与正式桥接同名的准备动作；该夹具没有持久化线程，因此等价于“没有可恢复线程”的原会话快照。
+  preparePersonaConversationRecovery: async (personaId) => readInteractionPersonaConversation(personaId),
   // 客户页刷新和初次加载都通过窗口契约，避免测试桥接回退暴露原始会话正文。
   getPersonaConversationWindow: async (personaId, request) => {
     const current = await readInteractionPersonaConversation(personaId);

@@ -194,6 +194,8 @@ export interface DesktopApi {
   getEvolutionTopicDossier(topicId: string): Promise<EvolutionTopicDossierOutDto>;
   /** 读取韩立当前固定人物会话。 */
   getPersonaConversation(personaId: string): Promise<PersonaConversationOutDto>;
+  /** 显式准备人物既有会话的恢复记录；窗口读取本身不触发该动作。 */
+  preparePersonaConversationRecovery(personaId: string): Promise<PersonaConversationOutDto>;
   /** 按稳定序号读取有限窗口；不会截断或迁移数据库历史。 */
   getPersonaConversationWindow(personaId: string, request?: ReadPersonaConversationWindowInDto): Promise<PersonaConversationWindowOutDto>;
   /** 在原消息位置重新派生客户显示正文；失败时不得读取原始 content 作为回退。 */
