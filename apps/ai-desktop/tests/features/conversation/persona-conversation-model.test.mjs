@@ -75,6 +75,9 @@ test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", ()
   assert.match(hanli, /已恢复，历史已核对/);
   assert.match(hanli, /hanli-conversation-recovery/);
   assert.match(hanli, /data-recovery-affected/);
+  assert.match(hook, /async function readPreparedRecoveryWindow\([\s\S]*?receipt\?\.conversationId \|\| expectedConversationId/);
+  assert.match(hook, /expectedConversationId && conversationId !== expectedConversationId/);
+  assert.match(hook, /targetConversationId = conversationDisplay\.current\.targetConversationId \?\? currentConversationId/);
 });
 
 test("工作流重复进展只能原位更新既有内部消息", () => {

@@ -41,7 +41,12 @@ export class PersonaConversationFacade {
   }
 
   prepareConversationRecovery(personaId: string): Promise<PersonaConversationOutDto> {
-    const handler = this.#requireHandler(personaId);
+    const normalized = requiredPersonaId(personaId);
+    const handler = this.#requireHandler(normalized);
+    // 韩立页面的恢复状态是正式客户可见结论；缺失处理器必须失败，不能静默显示普通会话。
+    if (!handler.prepareConversationRecovery && normalized === "han-li") {
+      throw new Error("韩立会话恢复处理器尚未就绪。");
+    }
     if (!handler.prepareConversationRecovery) return handler.conversation();
     return handler.prepareConversationRecovery();
   }
