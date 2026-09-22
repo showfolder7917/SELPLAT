@@ -14,6 +14,8 @@ const ipc = read("electron/system/ipc/domains/register-collaboration-ipc.ts");
 const preload = read("electron/system/preload/domains/collaboration-bridge.cts");
 const model = read("src/features/conversation/model/usePersonaConversation.ts");
 const workspace = read("src/features/hanli/components/HanliConversationWorkspace.tsx");
+const conversationFacade = read("electron/services/personas/conversation/persona-conversation.facade.ts");
+const codex = read("electron/services/support/platform/codex/codex.facade.ts");
 
 test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新", () => {
   assert.match(ports, /readThreadRecovery\(\): SendMessageOutDto\["threadRecovery"\]/);
@@ -44,6 +46,22 @@ test("恢复记录保留回合、条目与客户消息关联，并仅由可重�
   assert.match(model, /acceptsConversationWindow\(generation, conversationId, window\)/);
 });
 
+test("恢复回执确定窗口目标，订阅与重试不会用旧会话覆盖当前页面", () => {
+  assert.match(model, /async function readPreparedRecoveryWindow\([\s\S]*?receipt\?\.conversationId \|\| expectedConversationId/);
+  assert.match(model, /expectedConversationId && conversationId !== expectedConversationId/);
+  assert.match(model, /prepareRecovery\.then\(\(receipt\) => active[\s\S]*?readPreparedRecoveryWindow\(desktop, currentConversationId, receipt, generation\)/);
+  assert.match(model, /targetConversationId = conversationDisplay\.current\.targetConversationId \?\? currentConversationId/);
+  assert.match(model, /const window = await readPreparedRecoveryWindow\(desktop, conversationId, receipt, generation\)/);
+});
+
+test("unknown-turn、原线程缺失与普通恢复失败均保留可追溯恢复结论", () => {
+  assert.match(codex, /status: "unknown-turn"[\s\S]*?affectedTurnId: startedTurnId/);
+  assert.match(service, /catch \(error\) \{[\s\S]*?#recordThreadRecovery\(conversationId, chat\.readThreadRecovery\(\), request\.clientMessageId\)/);
+  assert.match(codex, /status: "thread-unavailable"[\s\S]*?既有会话历史仍可阅读/);
+  assert.match(codex, /status: "retryable"[\s\S]*?可保留原线程并重试恢复/);
+  assert.match(workspace, /data-recovery-affected/);
+});
+
 test("韩立完成回合后把实际 Codex 线程绑定到同一业务会话", () => {
   assert.match(service, /const session = chat\.activeConversationSession\(\)[\s\S]*?response\.threadId \|\| session\.threadId/);
   assert.match(service, /await memory\.linkPersonaConversationCodexThread\(\{[\s\S]*?conversationId[\s\S]*?workspaceSignature: session\.workspaceSignature/);
@@ -53,5 +71,6 @@ test("韩立完成回合后把实际 Codex 线程绑定到同一业务会话", (
 test("页面显式准备恢复后才读取只读窗口", () => {
   assert.match(ipc, /desktop:prepare-persona-conversation-recovery[\s\S]*?prepareConversationRecovery/);
   assert.match(preload, /preparePersonaConversationRecovery: \(personaId: string\) => invoke\("desktop:prepare-persona-conversation-recovery"/);
-  assert.match(model, /personaId === "han-li"[\s\S]*?preparePersonaConversationRecovery\(personaId\)[\s\S]*?prepareRecovery\.then\(\(\) => readPersonaConversationWindow/);
+  assert.match(model, /personaId === "han-li"[\s\S]*?preparePersonaConversationRecovery\(personaId\)[\s\S]*?prepareRecovery\.then\(\(receipt\) => active/);
+  assert.match(conversationFacade, /!handler\.prepareConversationRecovery && normalized === "han-li"[\s\S]*?韩立会话恢复处理器尚未就绪/);
 });
