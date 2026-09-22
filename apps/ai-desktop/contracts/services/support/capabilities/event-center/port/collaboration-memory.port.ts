@@ -1,6 +1,6 @@
 /** 事件中心向人物业务提供的最小记忆行为接口。 */
 import type { EvolutionProposalOriginValue, EvolutionProposalTypeValue, EvolutionSourceMessageSnapshotOutDto, EvolutionStateOutDto } from "../../../../evolution/index.js";
-import type { PersonaConversationContentRoleValue, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../personas/conversation/index.js";
+import type { PersonaConversationContentRoleValue, PersonaConversationOutDto, PersonaConversationRecoveryStatusValue, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../personas/conversation/index.js";
 import type { ApprovalMemoryEvidenceOutDto, TrainingCorpusTopicSearchResultOutDto } from "../dto/collaboration-memory.out.dto.js";
 import type { ConversationRoundTopicDecisionInDto } from "../dto/conversation-round-topic-decision.in.dto.js";
 import type { HanliSemanticExtractionInDto } from "../dto/hanli-semantic-extraction.in.dto.js";
@@ -28,6 +28,19 @@ export interface CollaborationMemoryPort {
   readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
   readPersonaCustomerDisplayWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto;
   retryPersonaCustomerDisplayMessage(ownerPersonaId: string, conversationId: string, sourceMessageId: string): void;
+  /** 记录 Codex 线程恢复结论；原消息和客户显示派生均不被改写。 */
+  recordPersonaConversationRecovery(input: {
+    ownerPersonaId: string;
+    conversationId: string;
+    status: PersonaConversationRecoveryStatusValue;
+    sourceThreadId?: string | null;
+    successorThreadId?: string | null;
+    affectedTurnId?: string | null;
+    affectedItemId?: string | null;
+    summary: string;
+    retryable: boolean;
+    occurredAt: string;
+  }): PersonaConversationOutDto;
   newPersonaConversation(ownerPersonaId: string): PersonaConversationOutDto;
   selectPersonaConversationModel(ownerPersonaId: string, conversationId: string, selectedModel: string | null): PersonaConversationOutDto;
   appendPersonaInternalMessage(input: {

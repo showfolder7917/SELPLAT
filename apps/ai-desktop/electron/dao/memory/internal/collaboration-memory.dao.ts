@@ -93,6 +93,11 @@ export class SqliteCollaborationMemoryDao implements CollaborationMemoryPort {
     this.#conversations.retryCustomerDisplayMessage(ownerPersonaId, conversationId, sourceMessageId);
   }
 
+  /** 线程恢复事实由人物服务写入，与客户正文派生和事件中心记录保持独立。 */
+  recordPersonaConversationRecovery(input: Parameters<SqlitePersonaConversationDao["recordRecovery"]>[0]): PersonaConversationOutDto {
+    return this.#conversations.recordRecovery(input);
+  }
+
   /** 建立新的活动业务会话；旧会话只归档，不删除原始消息。 */
   newPersonaConversation(ownerPersonaId: string): PersonaConversationOutDto {
     return this.#conversations.create(ownerPersonaId);

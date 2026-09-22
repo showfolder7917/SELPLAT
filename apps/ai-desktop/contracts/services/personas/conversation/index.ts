@@ -3,6 +3,8 @@ export type { PersonaConversationActivityOutDto } from "./dto/persona-conversati
 /** 人物会话公共契约唯一出口；具体人物契约不得重复定义消息结构。 */
 export type {
   PersonaConversationContentRoleValue,
+  PersonaConversationRecoveryOutDto,
+  PersonaConversationRecoveryStatusValue,
   PersonaCustomerDisplayStateValue,
   PersonaConversationMessageOutDto,
   PersonaConversationOutDto,

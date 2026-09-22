@@ -868,6 +868,7 @@ export async function startApplication(): Promise<void> {
       },
       newChat: () => hanLiCodex!.newChat(),
       activeConversationId: () => hanLiCodex!.activeSession().threadId,
+      readThreadRecovery: () => hanLiCodex!.lastThreadRecovery(),
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request, sourceRequestId, options) =>

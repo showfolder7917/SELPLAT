@@ -12,6 +12,7 @@ import type {
 import type { HanliConversationViewpointValue } from "../../../../../../contracts/services/personas/hanli/index.js";
 // 读取训练主题决定契约，使普通会话仍按统一事件中心格式归档。
 import type { ConversationRoundTopicDecisionInDto, RequirementDiscussionContextOutDto } from "../../../../../../contracts/services/support/capabilities/event-center/index.js";
+import type { SendMessageOutDto } from "../../../../../../contracts/services/support/capabilities/conversation/index.js";
 // 会话 Aggregate 是状态判断的唯一入口，Service 不再检查固定中文邀请文案。
 import { HanliConversationAggregate } from "../../domain/hanli-conversation.aggregate.js";
 // 应用装配端口提供模型、数据库、南宫婉调查和 Workflow 研讨能力。
@@ -310,7 +311,14 @@ export class HanliConversationService {
     // 创建时间记录本轮用户消息真实进入模型调用的时刻。
     const createdAt = new Date().toISOString();
     // 普通韩立模型运行在只读工作区，但可以返回调查请求和观点。
-    const response = await chat.send(request, prompt, conversation.selectedModel);
+    let response;
+    try {
+      response = await chat.send(request, prompt, conversation.selectedModel);
+    } catch (error) {
+      await this.#recordThreadRecovery(conversationId, chat.readThreadRecovery());
+      throw error;
+    }
+    await this.#recordThreadRecovery(conversationId, response.threadRecovery);
     // 没有稳定 provider 会话标识时不能把模型输出当成完整人物回合。
     if (!response.threadId && !chat.activeConversationId()) {
       // 明确失败使用户原消息进入失败状态，而不是保存无法续接的回复。
@@ -474,6 +482,27 @@ export class HanliConversationService {
     this.#options.refreshSemanticMemory?.();
     // 返回数据库权威会话和本轮上下文统计。
     return { ...nextConversation, contextReadStats };
+  }
+
+  /** 恢复结果是业务会话的独立事实，不写入客户正文，也不替代既有事件中心审计。 */
+  async #recordThreadRecovery(
+    conversationId: string,
+    recovery: SendMessageOutDto["threadRecovery"] | undefined,
+  ): Promise<void> {
+    if (!recovery) return;
+    const saved = await this.#options.memory!.recordPersonaConversationRecovery({
+      ownerPersonaId: "han-li",
+      conversationId,
+      status: recovery.status,
+      sourceThreadId: recovery.sourceThreadId,
+      successorThreadId: recovery.successorThreadId,
+      affectedTurnId: recovery.affectedTurnId,
+      affectedItemId: recovery.affectedItemId,
+      summary: recovery.summary,
+      retryable: recovery.status === "retryable",
+      occurredAt: new Date().toISOString(),
+    });
+    this.#options.onPersonaConversationChanged?.(saved);
   }
 
   /** 把用户对南宫婉范围说明的确认或纠正交回当前内部研讨。 */
