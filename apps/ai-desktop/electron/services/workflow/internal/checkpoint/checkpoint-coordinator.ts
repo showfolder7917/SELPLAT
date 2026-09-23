@@ -378,9 +378,10 @@ export class CheckpointCoordinator {
         && item.state !== "cancelled");
       if (newerRepair) {
         const aggregate = new WorkflowCheckpointAggregate(state);
+        aggregate.registerRepairTask(newerRepair.taskId);
         aggregate.exhaust();
         Object.assign(state, aggregate.snapshot());
-        this.#phase(event, state, "exhausted", `后续修复任务 ${newerRepair.taskId} 已接管同一提案；旧卡点停止重开原修复任务。`);
+        this.#phase(event, state, "superseded", `后续修复任务 ${newerRepair.taskId} 已接管同一提案；旧卡点停止重开原修复任务。`);
         return;
       }
     }

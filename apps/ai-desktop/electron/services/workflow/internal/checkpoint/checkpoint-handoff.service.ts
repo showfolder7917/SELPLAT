@@ -58,7 +58,7 @@ export class CheckpointHandoffService {
     const recipients = participants.filter((id) => id !== actorId).map((memberId) => ({ memberId, displayName: this.options.name(memberId) }));
     const title = `第 ${checkpoint.round} 轮卡点处理`;
     const topic = this.options.topic(checkpoint.topicId);
-    const action = ({ reported: "卡点已上报", received: "令狐已接收卡点", repairing: "调查修复任务已派发", testing: "修复已提交测试", returned: "修复结果已返回", resuming: "已交回原步骤继续验证", resolved: "原流程已验证卡点解除", waiting: "卡点待处理", exhausted: "修复轮次已用尽，等待新事实" } as Record<string, string>)[phase] || "卡点进展";
+    const action = ({ reported: "卡点已上报", received: "令狐已接收卡点", repairing: "调查修复任务已派发", testing: "修复已提交测试", returned: "修复结果已返回", resuming: "已交回原步骤继续验证", resolved: "原流程已验证卡点解除", waiting: "卡点待处理", superseded: "后续修复任务已接管", exhausted: "修复轮次已用尽，等待新事实" } as Record<string, string>)[phase] || "卡点进展";
     const sourcePhase = checkpoint.sourcePhase || (typeof event.payload?.phase === "string" ? event.payload.phase : "未知节点");
     const recoveryPoint = checkpoint.recoveryPoint || (typeof event.payload?.recoveryPoint === "string" ? event.payload.recoveryPoint : "未确认");
     const proposalId = checkpoint.proposalId || (typeof event.payload?.proposalId === "string" ? event.payload.proposalId : null);

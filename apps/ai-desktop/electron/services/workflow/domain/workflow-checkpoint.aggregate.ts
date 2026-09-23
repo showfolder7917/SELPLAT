@@ -19,6 +19,8 @@ export type WorkflowCheckpointPhase =
   | "waiting"
   // resolved 表示原流程已经通过复验并解除卡点。
   | "resolved"
+  // superseded 表示后续修复任务已接管，旧卡点不再派发或复验。
+  | "superseded"
   // exhausted 表示三轮修复后停止重复派发。
   | "exhausted";
 

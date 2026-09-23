@@ -773,6 +773,8 @@ test("后续修复任务已接管时旧主卡点不重开已集成任务", async
   f.options.resume = async (id) => { f.effects.resumed.push(id); f.evolution.oneShotRun.status = "running"; return f.evolution; };
   await f.run();
   assert.equal(f.event.payload.checkpoint.exhausted, true);
+  assert.equal(f.event.payload.checkpoint.phase, "superseded");
+  assert.equal(f.event.payload.checkpoint.repairTaskId, "newer-repair");
   assert.equal(latest.payload.checkpoint.repairTaskId, "newer-repair");
   assert.equal(f.effects.refreshed, undefined);
   assert.deepEqual(f.effects.resumed, ["run-1"]);
