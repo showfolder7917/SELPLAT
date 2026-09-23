@@ -1031,7 +1031,18 @@ function guidanceRecoveryFixture(directory, analyze, events) {
     current.state = "blocked";
     current.repairRequiresUserConfirmation = true;
     current.blockingReason = "容量不足";
-    current.integrationFailure = { kind: "infrastructure", detail: "还差108MB", conflictFiles: [], baseSha: "base", resultSha: "result", generation: 178, occurredAt: new Date().toISOString() };
+    current.integrationFailure = {
+      kind: "infrastructure",
+      summary: "容量预检等待保留策略授权",
+      detail: "还差108MB",
+      recoveryAction: "由具有保留策略权限的人员确认可处理的发布物范围。",
+      capacity: { requiredBytes: 1575772160, availableBytes: 1462763520 },
+      conflictFiles: [],
+      baseSha: "base",
+      resultSha: "result",
+      generation: 178,
+      occurredAt: new Date().toISOString(),
+    };
   });
   const storePath = path.join(directory, "linghu.json");
   const createFacade = () => new LinghuAutomationFacade({
@@ -1129,6 +1140,10 @@ test("客户操作指导缺少步骤或包含破坏性操作时拒绝生成继�
     title: "等待客户处理", problem: "存在卡点", reasonCustomerMustAct: "需要客户决定",
     steps: ["执行 git reset --hard"], completionCriteria: ["已完成"],
   }), "fingerprint", linghu), /危险或越权操作/);
+  assert.throws(() => parseCustomerActionGuidance(JSON.stringify({
+    title: "等待客户处理", problem: "当前阻塞需要你确认已完成指定操作。", reasonCustomerMustAct: "只有你能确认外部条件已经满足。",
+    steps: ["核对阻塞说明", "完成指定操作"], completionCriteria: ["操作已完成", "可由令狐复查"],
+  }), "fingerprint", linghu, { workspaceRoot: "/workspace/SELPLAT", affectedFiles: ["apps/ai-desktop/electron/main.ts"], absoluteFilePaths: ["/workspace/SELPLAT/apps/ai-desktop/electron/main.ts"] }), /概括性原因、步骤、完成标准/);
 });
 
 test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失败", async () => {

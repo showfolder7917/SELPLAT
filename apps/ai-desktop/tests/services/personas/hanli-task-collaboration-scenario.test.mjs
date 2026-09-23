@@ -29,5 +29,7 @@ test("完整指导和新阻塞由验收条件准备，复查中仍只接受正�
   assert.match(scenarioSource, /confirm\(webContentsId: number, taskId: string\)[\s\S]*active\.stage !== 1[\s\S]*active\.stage = 2/);
   assert.match(acceptancePortSource, /currentTaskCollaborationScenarioStage[\s\S]*prepareTaskCollaborationScenario/);
   assert.match(acceptanceRunnerSource, /taskCollaborationScenarioTarget[\s\S]*customer-guidance[\s\S]*taskCollaborationScenarioNextAction/);
+  assert.match(scenarioSource, /affectedFiles: \["apps\/ai-desktop\/electron\/services\/workflow\/domain\/current-topic-stage\.projection\.ts"\][\s\S]*完成该文件关联的外部确认[\s\S]*已确认 current-topic-stage\.projection\.ts 关联的外部条件/);
+  assert.doesNotMatch(scenarioSource, /affectedFiles: \["任务协作群卡点记录"\]/);
   assert.doesNotMatch(acceptanceRunnerSource, /advance-task-collaboration-scenario/);
 });
