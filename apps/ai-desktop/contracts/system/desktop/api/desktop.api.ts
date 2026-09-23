@@ -82,8 +82,8 @@ export interface DesktopApi {
   getCodexApprovals(): Promise<CodexApprovalOutDto[]>;
   /** 读取审批治理审计记录。 */
   getApprovalGovernance(): Promise<ApprovalGovernanceRecordOutDto[]>;
-  /** 对指定请求作出允许或拒绝决定。 */
-  resolveCodexApproval(requestId: number, decision: "accept" | "decline"): Promise<ResolveCodexApprovalOutDto>;
+  /** 对指定请求作出允许或拒绝决定；只有明确选择长期信任时才保存命令授权。 */
+  resolveCodexApproval(requestId: number, decision: "accept" | "decline", trustProjectCommand?: boolean): Promise<ResolveCodexApprovalOutDto>;
   /** 读取可信命令数量等脱敏信息。 */
   getTrustedCommandInfo(): Promise<TrustedCommandInfoOutDto>;
   /** 清空已保存的可信命令授权。 */

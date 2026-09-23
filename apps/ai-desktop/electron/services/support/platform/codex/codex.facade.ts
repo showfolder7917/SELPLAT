@@ -851,7 +851,7 @@ export class CodexService {
     if (isCommand && this.#activeExecutionMode === "task-managed" && this.#options.validationOwner === "desktop"
       && command && isDesktopOwnedValidationCommand(command)) {
       this.#respond(id, { decision: "decline" });
-      this.#emitCommandPolicy(id, command, "当前协同任务的固定测试由 AI Desktop 在签发 worktree 内执行，无需 Agent 申请 Playwright 权限。", "completed");
+      this.#emitCommandPolicy(id, command, "当前协同任务的代码测试由 AI Desktop 在签发 worktree 内执行，无需 Agent 重复申请命令授权。", "completed");
       return;
     }
     if (isCommand && command) {
@@ -1167,7 +1167,7 @@ function isManagedBuildOrStartCommand(command: string): boolean {
 
 /** 协同任务只允许桌面主进程触发这些固定验证，Agent 的重复请求直接返回策略结果而不进入审批队列。 */
 function isDesktopOwnedValidationCommand(command: string): boolean {
-  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:typecheck|test:(?:interaction|document))\b|\bplaywright\s+test\b/i.test(command);
+  return /(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:typecheck|test:(?:interaction|document))\b|\bplaywright\s+test\b|\bnode\s+--test(?:\s|$)/i.test(command);
 }
 
 /** 把全局只读开关和逐目录权限合成为官方 app-server 的精确沙箱策略。 */

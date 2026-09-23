@@ -208,13 +208,20 @@ test("多轮托管按真实 turnId 向下新增回复卡并冻结上一轮", () 
   assert.match(interactionSpec, /expect\(positions\)\.toHaveLength\(2\)/);
 });
 
-test("允许项目命令默认建立信任且危险命令不进入持久信任", () => {
+test("命令审批默认只允许本次，持久信任必须由用户单独选择", () => {
   assert.match(codexService, /trustedCommands\.isTrusted/);
   assert.match(codexService, /trustedCommands\.trust/);
-  assert.match(ipc, /decision === "accept"/);
+  assert.match(ipc, /decision === "accept" && trustProjectCommand/);
   assert.match(ipc, /trustResult\.trusted/);
+  assert.match(developerApp, /仅允许本次/);
   assert.match(developerApp, /允许并信任/);
   assert.match(developerApp, /clearTrustedCommands/);
+});
+
+test("协同受管任务的 node --test 由桌面验证链执行，不再反复请求命令信任", () => {
+  assert.match(codexService, /isDesktopOwnedValidationCommand\(command\)/);
+  assert.match(codexService, /node\\s\+--test/);
+  assert.match(codexService, /代码测试由 AI Desktop 在签发 worktree 内执行/);
 });
 
 test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除", () => {

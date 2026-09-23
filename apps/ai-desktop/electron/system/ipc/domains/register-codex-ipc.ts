@@ -66,9 +66,9 @@ export function registerCodexIpc(dependencies: CodexIpcDependencies): void {
     eventCenter.recordEvent("task.cancel_requested", {}, taskId);
     return codex.cancel();
   });
-  handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline") => {
-    if (!Number.isSafeInteger(requestId) || (decision !== "accept" && decision !== "decline")) throw new Error("Invalid Codex approval response.");
-    // 固定项目命令可随“允许”建立信任；文件修改和高风险命令仍由服务层拒绝持久信任。
+  handle("desktop:resolve-codex-approval", (_event, requestId: number, decision: "accept" | "decline", trustProjectCommand = false) => {
+    if (!Number.isSafeInteger(requestId) || (decision !== "accept" && decision !== "decline") || typeof trustProjectCommand !== "boolean") throw new Error("Invalid Codex approval response.");
+    // 一次性允许默认不保存信任；只有明确选择长期信任的固定项目命令才持久化。
     const pendingApproval = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()].find((item) => item.requestId === requestId);
     if (!pendingApproval) {
       seenApprovalRequests.delete(requestId);
@@ -77,8 +77,8 @@ export function registerCodexIpc(dependencies: CodexIpcDependencies): void {
       return { status: "expired", trusted: false } as const;
     }
     const trustResult = requestId >= 1_000_000
-      ? collaborationRegistry.resolveApproval(requestId, decision, decision === "accept")
-      : codex.resolveApproval(requestId, decision, decision === "accept");
+      ? collaborationRegistry.resolveApproval(requestId, decision, decision === "accept" && trustProjectCommand)
+      : codex.resolveApproval(requestId, decision, decision === "accept" && trustProjectCommand);
     workflowRepository?.recordCodexApprovalDecision({
       requestId,
       title: pendingApproval.title,

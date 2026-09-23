@@ -68,10 +68,10 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onLogout, on
     onLogout();
   };
 
-  const resolveApproval = async (decision: "accept" | "decline") => {
+  const resolveApproval = async (decision: "accept" | "decline", trustProjectCommand = false) => {
     if (!approval) return;
-    const result = await getOptionalCodexDesktopApi()?.resolveCodexApproval(approval.requestId, decision);
-    if (result?.status === "resolved" && decision === "accept" && approval.kind === "command" && approval.trustEligible) onTrustedCommandChanged();
+    const result = await getOptionalCodexDesktopApi()?.resolveCodexApproval(approval.requestId, decision, trustProjectCommand);
+    if (result?.status === "resolved" && result.trusted) onTrustedCommandChanged();
     setApproval(null);
   };
 
