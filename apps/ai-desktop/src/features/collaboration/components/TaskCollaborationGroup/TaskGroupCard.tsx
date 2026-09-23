@@ -346,6 +346,7 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
       data-task-timeline-event-type={node.eventType}
       data-task-timeline-started-at={node.startedAt}
       data-task-timeline-status={displayedStatus}
+      data-task-timeline-recorded-status={node.status}
     >
       {/* 节点序号：帮助用户按真实发生顺序阅读完整协作过程。 */}
       <span className="task-timeline-index">{index + 1}</span>

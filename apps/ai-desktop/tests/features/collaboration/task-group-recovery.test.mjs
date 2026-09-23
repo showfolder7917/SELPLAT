@@ -89,6 +89,7 @@ test("当前时间线节点和活动人物摘要消费当前专题阶段，历�
   assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && currentStage\.status === "accepting"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
   assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
   assert.match(taskCardSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);
+  assert.match(taskCardSource, /data-task-timeline-status=\{displayedStatus\}[\s\S]*data-task-timeline-recorded-status=\{node\.status\}/);
   assert.match(taskCardSource, /currentStagePresentation\?\.actor \|\| node\.actor\.displayName[\s\S]*currentStagePresentation\?\.action \|\| node\.action/);
 });
 
