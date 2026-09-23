@@ -25,6 +25,7 @@ import type {
   VersionWorkspacePort as VersionWorkspaceManager,
 } from "../support/capabilities/release/index.js";
 import { createCollaborationResultSummary } from "./internal/result/result-summary.js";
+import { findIntegratedEquivalentRepair } from "./domain/equivalent-repair.js";
 import type { ExecutorFacade } from "../personas/executor/index.js";
 import type { ExecutorFailureRoutingOutDto } from "../../../contracts/services/personas/executor/index.js";
 
@@ -523,6 +524,8 @@ export class CollaborationCoordinator {
   }
 
   resumePendingWork(resumeInterruptedExecution = false): void {
+    // 同提案、同确认目标的后续令狐结果已集成时，旧修复只留审计证据，不再占用令狐或重建工作树。
+    this.#retireSupersededEquivalentRepairs();
     // 旧版曾把本地归属等待误写为源码修复；恢复时先还原为客户处理卡点，避免重启后继续执行无权处理的修改。
     this.#restoreLegacyLocalChangeOwnershipWaits();
     // 应用重建后的统一恢复入口先接续全部可修复失败，再恢复普通执行和集成队列。
@@ -542,6 +545,27 @@ export class CollaborationCoordinator {
       }
     }
     this.#schedule();
+  }
+
+  #retireSupersededEquivalentRepairs(): void {
+    const state = this.state();
+    for (const task of state.tasks.filter((candidate) => !["integrated", "cancelled"].includes(candidate.state))) {
+      const replacement = findIntegratedEquivalentRepair(task, state);
+      if (!replacement) continue;
+      this.#store.updateTask(task.taskId, "task.equivalent_repair_superseded", (current, mutable) => {
+        if (["integrated", "cancelled"].includes(current.state)) return;
+        current.state = "blocked";
+        current.phase = "blocked";
+        current.assignmentId = null;
+        current.executorMemberId = null;
+        current.preferredExecutorMemberId = null;
+        current.integrationFailure = null;
+        current.recoveryTargetState = null;
+        current.blockingReason = `后续等价修复任务 ${replacement.taskId} 已集成；旧工作树与执行记录保留供核对，不再自动派发。`;
+        for (const member of mutable.members.filter((candidate) => candidate.currentTaskId === current.taskId)) releaseMemberFromState(mutable, member.memberId);
+        appendFlow(current, "task.equivalent_repair_superseded", "recovery", "completed", current.blockingReason, null);
+      });
+    }
   }
 
   /** 保留任务结果和原始归属证据，退役旧版错误创建的源码修复状态。 */
@@ -681,6 +705,7 @@ export class CollaborationCoordinator {
   }
 
   #canOperateTask(task: CollaborationTaskOutDto, state: CollaborationStateOutDto): boolean {
+    if (findIntegratedEquivalentRepair(task, state)) return false;
     return this.#taskOperationGuard?.(task, state).allowed ?? true;
   }
 
