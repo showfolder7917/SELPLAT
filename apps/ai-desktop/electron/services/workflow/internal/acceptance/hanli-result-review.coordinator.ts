@@ -10,38 +10,45 @@ export function buildHanliResultReviewContext(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
 ): unknown[] {
-  return tasks.map((task) => ({
-    taskId: task.taskId,
-    requirement: {
-      title: task.snapshot.title,
-      problemStatement: task.snapshot.problemStatement,
-      confirmedIntent: task.snapshot.confirmedIntent,
-      constraints: task.snapshot.constraints,
-      acceptanceCriteria: task.snapshot.acceptanceCriteria,
-    },
-    resultSummary: task.resultSummary,
-    finalResult: task.finalResult,
-    engineeringGate: task.unifiedTest?.status || null,
-    changedFiles: [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))],
-    // 只提供当前任务声明为变更的文件片段；韩立不能借此遍历工作区或读取历史记录。
-    sourceEvidence: readChangedSourceEvidence(task, fallbackWorkspaceState),
-  }));
+  return tasks.map((task) => {
+    const sourceEvidence = readChangedSourceEvidence(task, fallbackWorkspaceState);
+    return {
+      taskId: task.taskId,
+      requirement: {
+        title: task.snapshot.title,
+        problemStatement: task.snapshot.problemStatement,
+        confirmedIntent: task.snapshot.confirmedIntent,
+        constraints: task.snapshot.constraints,
+        acceptanceCriteria: task.snapshot.acceptanceCriteria,
+      },
+      resultSummary: task.resultSummary,
+      finalResult: task.finalResult,
+      engineeringGate: task.unifiedTest?.status || null,
+      changedFiles: [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))],
+      // 只提供当前任务声明为变更的文件片段；韩立不能借此遍历工作区或读取历史记录。
+      sourceEvidence: sourceEvidence.items,
+      sourceEvidenceStatus: sourceEvidence.status,
+    };
+  });
 }
 
 function readChangedSourceEvidence(
   task: CollaborationTaskOutDto,
   fallbackWorkspaceState: WorkspaceStateOutDto,
-): Array<{ file: string; content: string }> {
+): { items: Array<{ file: string; content: string }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" } {
   // 旧任务快照可能早于 workspaceState 字段；只回退到同一专题已持久化的授权范围。
   const workspaceState = task.snapshot.workspaceState || fallbackWorkspaceState;
   const root = workspaceState.roots.find((item) => item.id === workspaceState.primaryId)?.path;
-  if (!root) return [];
-  return [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))].flatMap((file) => {
+  if (!root) return { items: [], status: "workspace-root-unavailable" };
+  const files = [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))].filter((file): file is string => Boolean(file));
+  if (!files.length) return { items: [], status: "no-declared-changed-files" };
+  const items = files.flatMap((file) => {
     if (!file || path.isAbsolute(file)) return [];
     const resolved = path.resolve(root, file);
     if (!resolved.startsWith(`${path.resolve(root)}${path.sep}`)) return [];
     try { return [{ file, content: readFileSync(resolved, "utf8").slice(0, 12_000) }]; } catch { return []; }
   });
+  return { items, status: items.length ? "available" : "declared-files-unreadable" };
 }
 
 /** 合并正式页面结果与独立源码审查，保证每条客户条件只有一个最终结论。 */

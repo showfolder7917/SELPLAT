@@ -141,7 +141,7 @@ export class HanliComputerAcceptanceRunner {
         pageEvidence: { ...pageEvidence, taskCollaboration },
         ...(scenarioStage ? { taskCollaborationScenario: { stage: scenarioStage, nextAction: taskCollaborationScenarioNextAction(scenarioStage) } } : {}),
         instruction: taskCollaborationCriterionIds.size
-          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。taskCollaborationScenario 存在时必须遵守其 nextAction：完整指导与新阻塞在声明对应 criterionIds 的观察前由验收器准备，复查中只能通过页面唯一确认按钮进入；该场景也把成员投影为 idle，成员条件必须观察页面成员状态且不能据此推断流程恢复。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
+          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、当前节点、成员状态及详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。taskCollaborationScenario 存在时必须遵守其 nextAction：完整指导与新阻塞在声明对应 criterionIds 的观察前由验收器准备，复查中只能通过页面唯一确认按钮进入；该场景也把成员投影为 idle，成员条件必须在任务协作群同时观察 memberStates、主卡和入口，不能导航到人物会话后再判断。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。detail-pane-zero-height 表示页面在有界等待后仍为零高度，必须作为真实页面布局失败；not-ready、audit-history-not-ready 或 audit-card-not-ready 只表示验收能力受阻。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
           : "依据当前正式应用截图选择一个只读或安全导航动作。若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
         ...(interactionEvidence ? { interactionEvidence } : {}),
       };
@@ -400,7 +400,7 @@ export class HanliComputerAcceptanceRunner {
               throw new Error("任务协作页滚动距离必须为非零整数且不超过1000。");
             }
             const result = await window.webContents.executeJavaScript(`(${scrollTaskCollaboration.toString()})(${deltaY})`) as Record<string, unknown>;
-            if (result.status !== "scrolled" && result.status !== "at-boundary" && result.status !== "not-ready") {
+            if (result.status !== "scrolled" && result.status !== "at-boundary" && result.status !== "not-ready" && result.status !== "detail-pane-zero-height") {
               throw new Error(`任务协作页未滚动：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
@@ -413,7 +413,7 @@ export class HanliComputerAcceptanceRunner {
               throw new Error("审计卡序号必须是从 0 开始的非负整数。");
             }
             const result = await window.webContents.executeJavaScript(`(${toggleTaskAuditCard.toString()})(${auditCardIndex})`) as Record<string, unknown>;
-            if (result.status !== "opened" && result.status !== "closed") {
+            if (result.status !== "opened" && result.status !== "closed" && result.status !== "audit-history-not-ready" && result.status !== "audit-card-not-ready") {
               throw new Error(`历史审计卡未切换：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
@@ -751,18 +751,26 @@ async function scrollTaskCollaboration(deltaY: number): Promise<Record<string, u
     return {
       pageVisible,
       detailVisible,
+      detailConnected: Boolean(detail?.isConnected),
       pageSize: pageRect ? { width: Math.round(pageRect.width), height: Math.round(pageRect.height) } : null,
       detailSize: detailRect ? { width: Math.round(detailRect.width), height: Math.round(detailRect.height) } : null,
+      detailClientHeight: detail?.clientHeight ?? 0,
+      detailScrollHeight: detail?.scrollHeight ?? 0,
     };
   };
   let surface = readSurface();
-  // 窄窗口调整和折叠区展开会跨帧完成；只等待已触发的页面回显，不读取或改写业务事实。
-  for (let attempt = 0; attempt < 3 && (!surface.pageVisible || !surface.detailVisible); attempt += 1) {
+  // 窄窗口调整和折叠区展开会跨帧完成；有限等待后保留几何事实，不能把稳定零高度伪装为未就绪。
+  for (let attempt = 0; attempt < 12 && (!surface.pageVisible || !surface.detailVisible); attempt += 1) {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     surface = readSurface();
   }
-  if (!page || !detail || !surface.pageVisible || !surface.detailVisible) {
-    return { status: "not-ready", detailConnected: Boolean(detail?.isConnected), ...surface };
+  if (!page || !detail || !surface.pageVisible) {
+    return { status: "not-ready", ...surface };
+  }
+  if (!surface.detailVisible) {
+    return surface.detailConnected
+      ? { status: "detail-pane-zero-height", stableFrames: 12, ...surface }
+      : { status: "not-ready", ...surface };
   }
   const pageScrollTop = page.scrollTop;
   const before = detail.scrollTop;
@@ -788,7 +796,12 @@ async function toggleTaskAuditCard(auditCardIndex: number): Promise<Record<strin
   }
   if (historyTrigger.getAttribute("aria-expanded") !== "true") {
     historyTrigger.click();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    for (let attempt = 0; attempt < 12 && historyTrigger.getAttribute("aria-expanded") !== "true"; attempt += 1) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+  }
+  if (historyTrigger.getAttribute("aria-expanded") !== "true") {
+    return { status: "audit-history-not-ready", auditHistoryExpanded: false };
   }
   const cards = Array.from(auditHistory.querySelectorAll<HTMLElement>(".task-collaboration-audit-history-card"));
   const card = cards[auditCardIndex];
@@ -799,7 +812,20 @@ async function toggleTaskAuditCard(auditCardIndex: number): Promise<Record<strin
   card.scrollIntoView({ block: "nearest" });
   const wasOpen = trigger.getAttribute("aria-expanded") === "true";
   trigger.click();
-  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  for (let attempt = 0; attempt < 12 && trigger.getAttribute("aria-expanded") === (wasOpen ? "true" : "false"); attempt += 1) {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  const cardRect = card.getBoundingClientRect();
+  const cardVisible = cardRect.width > 0 && cardRect.height > 0 && getComputedStyle(card).display !== "none" && getComputedStyle(card).visibility !== "hidden";
+  if (trigger.getAttribute("aria-expanded") === (wasOpen ? "true" : "false") || !cardVisible) {
+    return {
+      status: "audit-card-not-ready",
+      auditCardIndex,
+      auditCardCount: cards.length,
+      auditCardExpanded: trigger.getAttribute("aria-expanded") === "true",
+      auditCardSize: { width: Math.round(cardRect.width), height: Math.round(cardRect.height) },
+    };
+  }
   return {
     status: wasOpen ? "closed" : "opened",
     auditCardIndex,
@@ -821,6 +847,13 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
   const nextStep = page?.querySelector<HTMLElement>(".task-timeline-next-current")?.innerText.trim() || "";
   const guidance = page?.querySelector<HTMLElement>(".task-recovery-guidance")?.innerText.trim() || "";
   const recoveryLabel = page?.querySelector<HTMLButtonElement>("button.task-recovery-continue")?.innerText.trim() || "";
+  const currentTimelineNode = page?.querySelector<HTMLElement>(".task-timeline-node.current");
+  const currentTimelineNodeRect = currentTimelineNode?.getBoundingClientRect();
+  const currentTimelineNodeVisible = Boolean(currentTimelineNode && currentTimelineNodeRect
+    && currentTimelineNodeRect.width > 0 && currentTimelineNodeRect.height > 0
+    && getComputedStyle(currentTimelineNode).display !== "none" && getComputedStyle(currentTimelineNode).visibility !== "hidden");
+  const auditHistory = page?.querySelector<HTMLElement>(".task-collaboration-audit-history");
+  const auditHistoryTrigger = auditHistory?.querySelector<HTMLButtonElement>(":scope > .seldisclosure-root button[data-sel-disclosure-trigger]");
   // 只读取当前页面已渲染的成员导航项，不能通过 IPC 或场景内部状态替代正式页面证据。
   const memberStates = Array.from(document.querySelectorAll<HTMLButtonElement>("#developer-task-list button.collaboration-member"))
     .map((member) => {
@@ -839,11 +872,16 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
     nextStep,
     guidance,
     recoveryLabel,
+    currentTimelineNode: currentTimelineNode?.innerText.trim() || "",
+    currentTimelineNodeVisible,
+    auditHistoryExpanded: auditHistoryTrigger?.getAttribute("aria-expanded") === "true",
     memberStates,
     taskPanelExpanded: panelToggle?.getAttribute("aria-expanded") === "true",
     detailPaneConnected: Boolean(detail?.isConnected),
     detailPaneVisible: detailVisible,
     detailPaneSize: detailRect ? { width: Math.round(detailRect.width), height: Math.round(detailRect.height) } : null,
+    detailPaneClientHeight: detail?.clientHeight ?? 0,
+    detailPaneScrollHeight: detail?.scrollHeight ?? 0,
   };
 }
 

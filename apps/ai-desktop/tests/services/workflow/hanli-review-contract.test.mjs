@@ -17,6 +17,9 @@ test("韩立固定审查正式页面与源码结构", () => {
   assert.match(decision, /韩立缺少独立的源码结构与新手可读性审查结论/);
   assert.match(runtime, /composeHanliResultReview\(plan, review, pageRun\)/);
   assert.match(coordinator, /sourceReview: sourceRun\.sourceReview/);
+  assert.match(coordinator, /sourceEvidenceStatus: sourceEvidence\.status/);
+  assert.match(prompt, /sourceEvidence` 是唯一已授权的源码片段/);
+  assert.match(prompt, /sourceEvidenceStatus=available/);
 });
 
 test("正式页面检查不读取任务时间线或工作区源码", () => {
