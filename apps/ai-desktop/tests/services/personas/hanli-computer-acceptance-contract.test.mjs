@@ -15,6 +15,15 @@ const aiDesktopRuleIndex = readFileSync("ruleengine/rules/local/XUNAN/selplat/�
 const operationSource = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
 const goalSource = readFileSync("contracts/services/personas/hanli/dto/computer-acceptance.in.dto.ts", "utf8");
 const runtimeSource = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
+
+test("正式窗口销毁后释放验收锁并有界重试，不把旧窗口标记为持续验收", () => {
+  assert.match(desktopIpcSource, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
+  assert.match(desktopIpcSource, /const webContentsId = targetWindow\.webContents\.id;[\s\S]*hanliPageReviewGuard\.begin\(webContentsId\)/);
+  assert.match(desktopIpcSource, /finally \{\s*hanliPageReviewGuard\.end\(webContentsId\)/);
+  assert.doesNotMatch(desktopIpcSource, /hanliPageReviewGuard\.end\(targetWindow\.webContents\.id\)/);
+  assert.match(acceptanceSource, /closed = true;[\s\S]*interactions\.endTaskCollaborationScenario\?\.\(\);[\s\S]*this\.#active = false/);
+});
 
 test("任务卡页面验收使用明确目标、语义导航和页面截图门禁", () => {
   assert.match(goalSource, /taskCollaborationCriterionIds/);

@@ -143,24 +143,33 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   };
 
   personaWorkflow.setComputerAcceptanceSession(async (goal, onStarted) => {
-    const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
-    if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
     const identity = { proposalId: goal.proposalId, topicId: goal.topicId, actor: { memberId: "han-li", displayName: "韩立" } };
-    onStarted();
-    hanliPageReviewGuard.begin(targetWindow.webContents.id);
     let run;
-    try {
-      // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面检查只能观察和使用既有安全导航。
-      run = await hanli.executeComputerAcceptance(goal, targetWindow, {
-        allows: (action) => action === "persona-navigation" || action === "task-collaboration-scenario",
-        beginTaskCollaborationScenario: (scenarioGoal, window) => hanliTaskScenario.begin(window, scenarioGoal),
-        currentTaskCollaborationScenarioStage: () => hanliTaskScenario.stageFor(targetWindow.webContents.id),
-        prepareTaskCollaborationScenario: (target) => hanliTaskScenario.prepare(targetWindow.webContents.id, target),
-        endTaskCollaborationScenario: () => hanliTaskScenario.end(targetWindow.webContents.id),
-      });
-    } finally {
-      hanliPageReviewGuard.end(targetWindow.webContents.id);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const targetWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.getTitle() === "AI Desktop");
+      if (!targetWindow) throw new Error("AI Desktop 主窗口不可用，无法执行韩立真实界面验收。");
+      const webContentsId = targetWindow.webContents.id;
+      hanliPageReviewGuard.begin(webContentsId);
+      try {
+        if (attempt === 0) onStarted();
+        // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面检查只能观察和使用既有安全导航。
+        run = await hanli.executeComputerAcceptance(goal, targetWindow, {
+          allows: (action) => action === "persona-navigation" || action === "task-collaboration-scenario",
+          beginTaskCollaborationScenario: (scenarioGoal, window) => hanliTaskScenario.begin(window, scenarioGoal),
+          currentTaskCollaborationScenarioStage: () => hanliTaskScenario.stageFor(webContentsId),
+          prepareTaskCollaborationScenario: (target) => hanliTaskScenario.prepare(webContentsId, target),
+          endTaskCollaborationScenario: () => hanliTaskScenario.end(webContentsId),
+        });
+        break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (attempt === 2 || !/(Object has been destroyed|正式应用窗口已关闭)/u.test(message)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      } finally {
+        hanliPageReviewGuard.end(webContentsId);
+      }
     }
+    if (!run) throw new Error("韩立正式页面验收未返回结果。");
     audit.recordEvent("hanli.acceptance.result_checked", {
       runId: run.runId,
       topicId: run.topicId,

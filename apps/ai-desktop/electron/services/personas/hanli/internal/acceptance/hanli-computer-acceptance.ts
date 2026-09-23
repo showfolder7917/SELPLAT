@@ -89,7 +89,6 @@ export class HanliComputerAcceptanceRunner {
       }
       return interactions.currentTaskCollaborationScenarioStage?.() || null;
     };
-    this.#active = true;
     const runId = `hanli-computer-${randomUUID()}`;
     const startedAt = new Date().toISOString();
     const initialBounds = window.getBounds();
@@ -589,6 +588,7 @@ export class HanliComputerAcceptanceRunner {
         }
       },
     };
+    this.#active = true;
     try {
       await model(tools, {
         nextContinuation: () => {
@@ -604,12 +604,18 @@ export class HanliComputerAcceptanceRunner {
         },
       });
     } finally {
-      if (formalWindowResized && !window.isDestroyed()) {
-        window.setBounds(initialBounds);
-      }
       closed = true;
-      interactions.endTaskCollaborationScenario?.();
-      this.#active = false;
+      try {
+        if (formalWindowResized && !window.isDestroyed()) {
+          window.setBounds(initialBounds);
+        }
+      } finally {
+        try {
+          interactions.endTaskCollaborationScenario?.();
+        } finally {
+          this.#active = false;
+        }
+      }
     }
     if (!sessionFacade.completed) {
       // 模型正常结束却没有提交 finish 时，已经保存的真实截图不能随着异常丢失。
