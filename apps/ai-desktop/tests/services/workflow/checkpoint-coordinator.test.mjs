@@ -753,6 +753,33 @@ test("旧技术主卡点把最新验收证据写回原任务，重启与重复�
   assert.equal(f.collaboration.tasks.length, 1);
 });
 
+test("后续修复任务已接管时旧主卡点不重开已集成任务", async () => {
+  const f = fixture();
+  f.event.payload.operation = "plan_and_dispatch_one_shot";
+  f.event.payload.phase = "distributing";
+  await f.run();
+  f.collaboration.tasks[0].state = "integrated";
+  const latest = {
+    ...structuredClone(f.event), eventId: "new-acceptance-failure", occurredAt: "2026-09-06T00:00:00Z",
+    message: "韩立本轮验收能力受阻",
+    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting",
+      operation: "run_hanli_result_acceptance", acceptanceFailureKind: "acceptance-capability-blocked" },
+  };
+  f.events.push(latest);
+  f.collaboration.tasks.push({
+    taskId: "newer-repair", state: "unified-testing", automationSource: "linghu-safeguard",
+    evolutionProposalId: "proposal-1", snapshot: { constraints: ["卡点标识：run-1:proposal:proposal-1:round:1:event:new-acceptance-failure", "卡点故障事实：new-acceptance-failure"] },
+  });
+  await f.run();
+  assert.equal(f.event.payload.checkpoint.exhausted, true);
+  assert.equal(latest.payload.checkpoint.repairTaskId, "newer-repair");
+  assert.equal(f.effects.refreshed, undefined);
+  assert.deepEqual(f.effects.resumed, []);
+  await f.run();
+  assert.equal(f.effects.refreshed, undefined);
+  assert.equal(f.effects.submitted.length, 1);
+});
+
 test("最新验收需要范围确认时旧技术主卡点不得更新或重启修复", async () => {
   const f = fixture();
   f.event.payload.operation = "plan_and_dispatch_one_shot";

@@ -367,6 +367,23 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "waiting", "原运行并非可自动恢复的受阻状态，保留事实等待明确恢复条件。");
       return;
     }
+    // 同一提案已有后续令狐修复任务时，旧卡点不能再把新验收事实写回已交付的旧任务。
+    // 退出旧主卡点后，后续事件才能成为主记录并沿自己的恢复关系推进。
+    if (state.repairTaskId && !state.exhausted) {
+      const tasks = this.options.collaboration().tasks;
+      const previousRepairIndex = tasks.findIndex((item) => item.taskId === state.repairTaskId);
+      const newerRepair = previousRepairIndex < 0 ? undefined : tasks.slice(previousRepairIndex + 1).find((item) =>
+        item.automationSource === "linghu-safeguard"
+        && item.evolutionProposalId === state.proposalId
+        && item.state !== "cancelled");
+      if (newerRepair) {
+        const aggregate = new WorkflowCheckpointAggregate(state);
+        aggregate.exhaust();
+        Object.assign(state, aggregate.snapshot());
+        this.#phase(event, state, "exhausted", `后续修复任务 ${newerRepair.taskId} 已接管同一提案；旧卡点停止重开原修复任务。`);
+        return;
+      }
+    }
     if (state.exhausted) {
       // 已耗尽卡点只能等待新增事实或人工处理。
       return;
@@ -396,7 +413,10 @@ export class CheckpointCoordinator {
     }
     // 用持久任务标记查重，覆盖创建任务后、保存关联前崩溃的窗口。
     const marker = checkpointRepairMarker(event, state, relatedEvents);
-    const repair = this.options.collaboration().tasks.find((item) => item.taskId === state.repairTaskId || item.snapshot.constraints.includes(marker));
+    const collaborationTasks = this.options.collaboration().tasks;
+    // 持久关联优先于兼容性标记回查；新卡点的旧轮次标记可能与历史任务相同。
+    const repair = collaborationTasks.find((item) => item.taskId === state.repairTaskId)
+      || collaborationTasks.find((item) => item.snapshot.constraints.includes(marker));
     if (repair) {
       const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker);
       const evidenceMarker = `卡点故障事实：${failureEvent.eventId}`;
