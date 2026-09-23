@@ -148,6 +148,7 @@ test("同指纹完整客户指导才签发唯一任务级确认入口", () => {
     attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "提交后由令狐复查。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
   };
   const blocked = task("blocked");
+  blocked.integrationFailure = { conflictFiles: ["apps/ai-desktop/electron/main.ts"] };
   blocked.customerActionGuidance = {
     sourceFingerprint: "failure-current", affectedFiles: ["apps/ai-desktop/electron/main.ts"], problem: "本地修改归属待确认。", reasonCustomerMustAct: "只有客户能确认归属。",
     steps: ["确认该文件属于当前专题。"], completionCriteria: ["确认后提交复查。"], resumeLabel: "确认并请令狐复查",

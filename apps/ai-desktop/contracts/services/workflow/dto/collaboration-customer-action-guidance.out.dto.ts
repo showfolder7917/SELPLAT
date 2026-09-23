@@ -38,10 +38,22 @@ export interface CollaborationCustomerActionGuidanceOutDto {
   createdAt: string;
 }
 
-/** 判断持久化指导是否能安全签发客户确认入口；只接受可定位的真实文件与具体行动事实。 */
+/** 校验指导时只能使用已持久化的卡点事实，不能从模型文字推断文件或授权范围。 */
+export interface CollaborationCustomerActionGuidanceEvidence {
+  affectedFiles: readonly string[];
+  nonFileRecovery: {
+    capacity: unknown;
+    recoveryAction: string | null | undefined;
+    detail: string | null | undefined;
+    summary: string | null | undefined;
+  } | null;
+}
+
+/** 判断持久化指导是否能安全签发客户确认入口；文件型和容量授权型卡点各自保留对应事实门槛。 */
 export function isCompleteCustomerActionGuidance(
   guidance: CollaborationCustomerActionGuidanceOutDto | null | undefined,
   sourceFingerprint: string | null | undefined,
+  evidence: CollaborationCustomerActionGuidanceEvidence = { affectedFiles: [], nonFileRecovery: null },
 ): guidance is CollaborationCustomerActionGuidanceOutDto {
   if (!guidance || !sourceFingerprint || guidance.sourceFingerprint !== sourceFingerprint) return false;
   const files = guidance.affectedFiles || [];
@@ -50,7 +62,16 @@ export function isCompleteCustomerActionGuidance(
     return Boolean(value) && value !== "未识别文件" && value !== "任务协作群卡点记录" && /[./\\]/u.test(value);
   });
   const fields = [guidance.problem, guidance.reasonCustomerMustAct, ...guidance.steps, ...guidance.completionCriteria];
-  return concreteFiles && fields.length >= 4 && fields.every((value) => isSpecificGuidanceText(value));
+  if (fields.length < 4 || !fields.every((value) => isSpecificGuidanceText(value))) return false;
+  if (concreteFiles) return files.every((file) => evidence.affectedFiles.includes(file));
+  return files.length === 0 && hasStructuredNonFileRecovery(evidence.nonFileRecovery);
+}
+
+/** 容量或授权等待没有文件时，仍须有真实容量、恢复动作和可观察的故障说明。 */
+function hasStructuredNonFileRecovery(recovery: CollaborationCustomerActionGuidanceEvidence["nonFileRecovery"]): boolean {
+  return Boolean(recovery?.capacity
+    && recovery.recoveryAction?.trim()
+    && (recovery.detail?.trim() || recovery.summary?.trim()));
 }
 
 /** 概括占位语不构成客户可执行的原因、步骤或完成标准。 */

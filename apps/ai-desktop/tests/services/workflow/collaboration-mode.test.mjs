@@ -1031,7 +1031,18 @@ function guidanceRecoveryFixture(directory, analyze, events) {
     current.state = "blocked";
     current.repairRequiresUserConfirmation = true;
     current.blockingReason = "容量不足";
-    current.integrationFailure = { kind: "infrastructure", detail: "还差108MB", conflictFiles: [], baseSha: "base", resultSha: "result", generation: 178, occurredAt: new Date().toISOString() };
+    current.integrationFailure = {
+      kind: "infrastructure",
+      summary: "容量预检等待保留策略授权",
+      detail: "还差108MB",
+      recoveryAction: "由具有保留策略权限的人员确认可处理的发布物范围。",
+      capacity: { requiredBytes: 1575772160, availableBytes: 1462763520 },
+      conflictFiles: [],
+      baseSha: "base",
+      resultSha: "result",
+      generation: 178,
+      occurredAt: new Date().toISOString(),
+    };
   });
   const storePath = path.join(directory, "linghu.json");
   const createFacade = () => new LinghuAutomationFacade({

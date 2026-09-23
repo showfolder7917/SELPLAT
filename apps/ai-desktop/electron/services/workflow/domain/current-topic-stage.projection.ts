@@ -128,7 +128,10 @@ export function projectCurrentTopicStage(
     const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
     const guidance = blockingTask?.customerActionGuidance || null;
     const guidanceFiles = guidance?.affectedFiles || [];
-    const hasCompleteGuidance = isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint);
+    const hasCompleteGuidance = isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
+      affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
+      nonFileRecovery: null,
+    });
     // 原一次性运行被阻塞本身不代表客户可以恢复。只有当前阻塞任务持有同故障指纹的完整指导，
     // 才能签发任务级确认；否则保持令狐核对中，避免旧运行入口覆盖当前责任。
     const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;

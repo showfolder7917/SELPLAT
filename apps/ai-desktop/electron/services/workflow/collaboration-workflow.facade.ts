@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import type {
+  CollaborationCustomerActionGuidanceEvidence,
   CollaborationMemberOutDto,
   CollaborationParticipantSnapshotOutDto,
   CollaborationFlowEventDetailsOutDto,
@@ -14,6 +15,7 @@ import type {
   SubmitCollaborationTaskInDto,
   SubmitCollaborationTaskOutDto,
 } from "../../../contracts/services/workflow/index.js";
+import { isCompleteCustomerActionGuidance } from "../../../contracts/services/workflow/index.js";
 import type { CodexStreamEventOutDto } from "../../../contracts/services/support/platform/codex/index.js";
 import type { ExecutorSessionPort } from "../../../contracts/services/personas/executor/index.js";
 import { CollaborationDurationLog } from "./internal/collaboration/collaboration-duration.log.js";
@@ -358,6 +360,9 @@ export class CollaborationCoordinator {
     const current = this.#store.task(taskId);
     if (!current.integrationFailure && current.state !== "blocked") throw new Error("当前任务没有可登记的客户处理卡点。");
     if (current.customerActionGuidance?.sourceFingerprint === guidance.sourceFingerprint) return this.state();
+    if (!isCompleteCustomerActionGuidance(guidance, guidance.sourceFingerprint, customerActionGuidanceEvidence(current))) {
+      throw new Error("客户操作指导与当前持久化卡点事实不一致，不能保存继续入口。");
+    }
     return this.#store.updateTask(taskId, "customer.action_required", (task) => {
       task.customerActionGuidance = structuredClone(guidance);
       appendFlow(task, "customer.action_required", "recovery", "waiting", guidance.title, guidance.generatedBy, false, { customerActionGuidance: structuredClone(guidance) });
@@ -1637,6 +1642,22 @@ function sha256(value: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 保存前重建指导证据，避免调用方在分析完成后写入与当前卡点无关的入口。 */
+function customerActionGuidanceEvidence(task: CollaborationTaskOutDto): CollaborationCustomerActionGuidanceEvidence {
+  const failure = task.integrationFailure;
+  return {
+    affectedFiles: failure?.conflictFiles || [],
+    nonFileRecovery: failure?.capacity
+      ? {
+        capacity: failure.capacity,
+        recoveryAction: failure.recoveryAction || null,
+        detail: failure.detail || null,
+        summary: failure.summary || null,
+      }
+      : null,
+  };
 }
 
 /** 权限类失败必须等待真实用户授权，禁止自动循环反复弹出同一审批框。 */
