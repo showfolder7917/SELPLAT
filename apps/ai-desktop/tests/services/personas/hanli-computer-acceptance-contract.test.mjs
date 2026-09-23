@@ -75,10 +75,14 @@ test("任务协作群滚动只移动详情面板，并等待窄窗口布局回�
   assert.match(scrollSource, /getBoundingClientRect/);
   assert.doesNotMatch(scrollSource, /offsetParent/);
   assert.doesNotMatch(scrollSource, /page\.scrollTop\s*=/);
-  assert.match(scrollSource, /attempt < 3[\s\S]*requestAnimationFrame/);
-  assert.match(scrollSource, /detailSize[\s\S]*status: "not-ready"[\s\S]*detailConnected/);
-  assert.match(acceptanceSource, /detailPaneConnected[\s\S]*detailPaneVisible[\s\S]*detailPaneSize/);
-  assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary" && result\.status !== "not-ready"/);
+  assert.match(scrollSource, /attempt < 12[\s\S]*requestAnimationFrame/);
+  assert.match(scrollSource, /detailScrollHeight[\s\S]*detail-pane-zero-height[\s\S]*stableFrames: 12/);
+  assert.match(acceptanceSource, /detailPaneConnected[\s\S]*detailPaneVisible[\s\S]*detailPaneSize[\s\S]*detailPaneScrollHeight/);
+  assert.match(acceptanceSource, /currentTimelineNode[\s\S]*currentTimelineNodeVisible/);
+  assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary" && result\.status !== "not-ready" && result\.status !== "detail-pane-zero-height"/);
+  assert.match(acceptanceSource, /audit-history-not-ready[\s\S]*audit-card-not-ready/);
+  assert.match(acceptancePrompt, /成员空闲条件要在同一张任务协作群截图中同时核对 `memberStates`/);
+  assert.match(acceptancePrompt, /detail-pane-zero-height[\s\S]*真实页面失败/);
 });
 
 test("韩立首项失败后仍须逐项取得本轮全部条件自己的证据", () => {

@@ -165,6 +165,8 @@ function scenarioStage(stage: ActiveScenario["stage"]): HanliTaskCollaborationSc
 
 function createStage(base: CurrentTopicStageOutDto, active: ActiveScenario): CurrentTopicStageOutDto {
   const now = new Date().toISOString();
+  // 只关联已有 current 节点，使窗口专属投影能和主卡、下一流程一起被正式页面观察。
+  const currentTaskId = active.group.nodes.find((node) => node.status === "current" && node.taskId)?.taskId || null;
   const guidance = {
     affectedFiles: ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"],
     problem: "当前专题的恢复入口仍被阻塞，需确认该投影已按本次卡点事实更新。",
@@ -173,7 +175,7 @@ function createStage(base: CurrentTopicStageOutDto, active: ActiveScenario): Cur
     completionCriteria: ["已确认 current-topic-stage.projection.ts 关联的外部条件。", "令狐可据此重新核对当前阻塞。"],
     resumeLabel: "提交确认并请求令狐复查",
   };
-  const common = { ...base, topicId: active.goal.topicId, proposalId: active.goal.proposalId, title: active.goal.title, updatedAt: now, resumeOneShotRunId: null, effectiveTaskIds: [] };
+  const common = { ...base, topicId: active.goal.topicId, proposalId: active.goal.proposalId, title: active.goal.title, updatedAt: now, resumeOneShotRunId: null, effectiveTaskIds: currentTaskId ? [currentTaskId] : [] };
   if (active.stage === 0) return { ...common, status: "failed-pending-repair", summary: "令狐正在核对当前阻塞。", remaining: "尚未形成完整客户操作指导。", waitingFor: "令狐老祖", nextAction: "令狐正在核对；当前无需你操作。", userAction: "none", resumeTaskId: null, customerActionGuidance: null };
   if (active.stage === 1) return { ...common, status: "failed-pending-repair", summary: "需要你完成一项操作后请求令狐复查。", remaining: "等待客户确认。", waitingFor: "你", nextAction: "完成指导中的操作后，提交确认并请求令狐复查。", userAction: "resume", resumeTaskId: active.taskId, customerActionGuidance: guidance };
   if (active.stage === 2) return { ...common, status: "verifying", summary: "已提交确认，令狐正在复查。", remaining: "等待令狐复查结果。", waitingFor: "令狐老祖", nextAction: "令狐正在复查；当前无需你操作。", userAction: "none", resumeTaskId: null, customerActionGuidance: null };
