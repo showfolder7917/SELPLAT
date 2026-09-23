@@ -3,16 +3,17 @@
  * 卡片展示专题摘要、人物时间线节点、人工审批/继续入口和唯一下一流程。
  */
 
-import { memo, useEffect, useState } from "react";
 import type {
   // 时间线专题：渲染专题摘要、状态、节点和下一流程。
   CollaborationTimelineGroupOutDto,
-  // 时间线节点：渲染人物动作、收件人、正文、详情和恢复操作。
-  CollaborationTimelineNodeOutDto,
   // 界面语言：选择中文或日文标签。
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
 import type { CurrentTopicStageOutDto } from "../../../../../contracts/services/evolution/index";
+import { TaskGroupAuditCard } from "./TaskGroupAuditCard";
+import { TaskGroupAcceptanceEvidence } from "./TaskGroupAcceptanceEvidence";
+import { TaskTimelineNode } from "./TaskTimelineNode";
+import { useTimelineNow } from "./timeline-now";
 import {
   // 统一折叠控件：专题卡、人物节点和技术详情都使用相同交互。
   SelUiDisclosure,
@@ -20,25 +21,14 @@ import {
 import {
   // 摘要压缩：节点头部保持一行可扫描文字。
   compactTimelineText,
-  currentStageTimelinePresentation,
-  // 详情标签：按申请、审批、变更或验证证据选择名称。
-  detailLabel,
   // 耗时转换：专题头部显示墙钟总耗时。
   formatTimelineDuration,
   // 专题活动事实：从同一组当前节点生成人数、人物和验收状态。
   groupActivityPresentation,
   // 专题状态：把稳定状态码转换成中日文。
   groupStatusLabel,
-  // 节点耗时：正在执行或等待时随当前时间更新。
-  nodeDurationLabel,
-  // 节点发生时间：审批和集成必须展示真实时间而非仅耗时。
-  nodeOccurredAtLabel,
-  // 节点状态：把完成、当前、等待和失败转换成中日文。
-  nodeStatusLabel,
   // 路径显示保护：把临时候选工作树根替换成稳定逻辑名。
   presentTimelineText,
-  // 收件人摘要：显示前三人和剩余总人数。
-  recipientLabel,
   // 卡片主区域：固定生成事项、处理人、用户操作和下一步。
   taskGroupPrimaryPresentation,
   // 历史兼容筛选：折叠旧数据里的连续重复恢复记录。
@@ -141,17 +131,6 @@ function TimelineDuration({ durationMs, startedAt, running, locale, prefix }: {
   return <small>{prefix} {formatTimelineDuration(visibleDuration, locale)}</small>;
 }
 
-/** 计时生命周期只有一个实现，使用它的组件只更新自己的短文本。 */
-function useTimelineNow(running: boolean): number {
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [running]);
-  return nowMs;
-}
-
 /** 专题卡折叠状态下显示标题、摘要、状态、并行人数和墙钟耗时。 */
 function TaskGroupHeader({
   group,
@@ -218,207 +197,6 @@ function TaskGroupHeader({
   );
 }
 
-/** 节点折叠状态下显示人物、收件人、动作、摘要、耗时和状态。 */
-function TaskNodeHeader({
-  node,
-  presentation,
-  currentStagePresentation,
-  displayedStatus,
-}: {
-  /** 当前时间线节点，提供人物、动作、摘要和状态。 */
-  node: CollaborationTimelineNodeOutDto;
-  /** 卡片显示状态，提供语言和动态计时所需的当前时间。 */
-  presentation: TaskGroupCardPresentation;
-  /** 当前专题阶段提供时，节点主信息只显示它的统一结论。 */
-  currentStagePresentation: ReturnType<typeof currentStageTimelinePresentation>;
-  /** 节点状态与同一阶段投影一致，不能保留原节点的 current 标签。 */
-  displayedStatus: CollaborationTimelineNodeOutDto["status"];
-}) {
-  // 界面语言和当前时间只从统一显示状态读取，不再由父组件分别透传。
-  const { locale } = presentation;
-  // 节点摘要（summary）清理路径并压缩成适合折叠标题的一行文字。
-  const summary = compactTimelineText(presentTimelineText(currentStagePresentation?.summary || node.summary));
-  // 技术详情仍保持折叠，但在节点标题上明确提示其可用，避免完成节点看起来只有摘要。
-  const hasTechnicalDetail = Boolean(node.detail || (node.content && node.content !== node.summary));
-
-  return (
-    // 节点头部根区域把人物动作和处理状态排列成可快速扫描的一行。
-    <span className="task-node-header-content">
-      {/* 节点主要信息区：说明谁对谁执行了什么动作，以及动作摘要。 */}
-      <span className="task-node-main">
-        {/* 人物动作行：按执行者、接收者、动作的阅读顺序展示。 */}
-        <span>
-          {/* 执行者姓名：回答“当前是谁接受或处理这个任务”。 */}
-          <strong>{currentStagePresentation?.actor || node.actor.displayName}</strong>
-          {/* 接收人：只有当前动作确实存在接收对象时才显示。 */}
-          {!currentStagePresentation && node.recipients.length > 0 && <em>{recipientLabel(node)}</em>}
-          {/* 节点动作：显示接受、申请、审批、执行或验证等真实动作。 */}
-          <b>{currentStagePresentation?.action || node.action}</b>
-        </span>
-        {/* 节点摘要：用一行文字说明本次动作正在处理的内容。 */}
-        <small>{summary}</small>
-        {/* 已完成事实直接显示落盘时间，审批和集成不能只显示处理耗时。 */}
-        <small className="task-node-occurred-at">{nodeOccurredAtLabel(node, locale)}</small>
-        {/* 技术详情提示：只说明可查看的证据类型，不把修复过程重新放入主区域。 */}
-        {hasTechnicalDetail && (
-          <small className="task-node-detail-hint">
-            {locale === "ja" ? `${detailLabel(node, locale)}あり` : `可查看${detailLabel(node, locale)}`}
-          </small>
-        )}
-      </span>
-      {/* 节点状态区：把本节点自己的耗时和当前状态放在右侧。 */}
-      <span className="task-node-meta">
-        {/* 节点耗时：执行中或等待中时使用当前时间持续更新。 */}
-        <NodeDuration node={node} locale={locale} />
-        {/* 节点状态：把内部状态码转换为当前语言的可读标签。 */}
-        <b>{nodeStatusLabel(displayedStatus, locale)}</b>
-      </span>
-    </span>
-  );
-}
-
-/** 渲染一个人物时间线节点及其业务操作。 */
-const TaskTimelineNode = memo(function TaskTimelineNode({
-  model,
-  node,
-  index,
-}: {
-  /** 当前专题卡模型，统一提供专题、显示状态和用户操作。 */
-  model: TaskGroupCardModel;
-  /** 当前正在渲染的时间线节点。 */
-  node: CollaborationTimelineNodeOutDto;
-  /** 当前节点在可见时间线中的顺序。 */
-  index: number;
-}) {
-  // 专题数据（group）用于审批窗口标题和节点所属专题判断。
-  const { group } = model;
-  // 显示状态统一提供语言、时间、继续状态和实时正文。
-  const { locale, liveTextByNodeId } = model.presentation;
-  const currentStage = model.presentation.currentTopicStage?.topicId === group.topicId
-    && model.presentation.currentTopicStage?.proposalId === group.proposalId
-    ? model.presentation.currentTopicStage : null;
-  const stagePresentation = currentStageTimelinePresentation(node, currentStage);
-  const displayedStatus = stagePresentation?.status || node.status;
-  // 用户操作统一提供展开查询、展开保存和审批能力；恢复只由专题下一流程承载。
-  const { isNodeOpen, onNodeOpenChange, onManualApproval } = model.actions;
-  // 节点展开状态（nodeOpen）同时尊重后端自动展开提示和用户手动选择。
-  const nodeOpen = isNodeOpen(node.nodeId, node.automaticOpen);
-  // 实时输出属于技术记录，只能在详情中展开查看，不能覆盖节点正文。
-  const liveText = !stagePresentation && node.status === "current" ? liveTextByNodeId[node.nodeId] || "" : "";
-  // 可操作状态（hasAction）决定节点右侧是否需要预留操作区域。
-  const hasAction = Boolean(node.manualApprovalProposalId);
-
-  /** 把当前节点绑定的提案交给工作区打开正式审批窗口。 */
-  const approveCurrentProposal = () => {
-    // 没有提案标识时不允许构造虚假的审批请求。
-    if (!node.manualApprovalProposalId) return;
-    // 审批请求同时携带专题标题和节点正文，供正式审批窗口完整展示。
-    onManualApproval(node.manualApprovalProposalId, group.title, node.content);
-  };
-
-  // 节点操作区只承载与当前节点直接相关的审批操作。
-  const actionButtons = hasAction ? (
-    <span className="task-node-actions">
-      {/* 人工审批入口：仅为绑定了待审批提案的节点显示。 */}
-      {node.manualApprovalProposalId && (
-        <button
-          type="button"
-          className="task-manual-approval"
-          onClick={approveCurrentProposal}
-        >
-          {locale === "ja" ? "手動承認" : "手动审批"}
-        </button>
-      )}
-    </span>
-  ) : undefined;
-  // 节点详情保留完整业务事实和技术记录，主区域只显示投影时已确认的短摘要。
-  const technicalDetail = [
-    node.content ? `${detailLabel(node, locale)}：\n${node.content}` : "",
-    node.detail,
-    liveText ? `实时技术记录：\n${liveText}` : "",
-  ].filter(Boolean).join("\n\n");
-
-  return (
-    // 时间线位置容器使用节点状态控制连线和圆点的视觉状态。
-    <div
-      className={`task-timeline-position ${displayedStatus}`}
-      data-task-timeline-node-id={node.nodeId}
-      data-task-timeline-event-type={node.eventType}
-      data-task-timeline-started-at={node.startedAt}
-      data-task-timeline-status={displayedStatus}
-      data-task-timeline-recorded-status={node.status}
-    >
-      {/* 节点序号：帮助用户按真实发生顺序阅读完整协作过程。 */}
-      <span className="task-timeline-index">{index + 1}</span>
-      {/* 时间线圆点：用节点状态样式连接当前步骤和历史步骤。 */}
-      <i className="task-timeline-dot" aria-hidden="true" />
-      {/* 节点折叠区：头部用于浏览，展开后显示正文、详情和业务操作。 */}
-      <SelUiDisclosure
-        idPrefix="task-collaboration-node"
-        className={`task-timeline-node ${node.kind} ${displayedStatus}`}
-        open={nodeOpen}
-        onOpenChange={(open) => onNodeOpenChange(node.nodeId, open)}
-        trigger={<TaskNodeHeader node={node} presentation={model.presentation} currentStagePresentation={stagePresentation} displayedStatus={displayedStatus} />}
-        action={actionButtons}
-      >
-        {/* 节点正文：当前节点优先显示实时输出，结束后显示数据库正文。 */}
-        <div className="task-node-content">
-          {/* 正文内容：只显示投影器生成的用户摘要，完整过程统一收进详情。 */}
-          <p>{presentTimelineText(node.summary || node.content)}</p>
-        </div>
-        {/* 技术详情入口：没有详情证据的节点不显示空折叠区。 */}
-        {technicalDetail && (
-          <SelUiDisclosure
-            idPrefix="task-node-detail"
-            className="task-node-detail"
-            open={false}
-            trigger={<span>{detailLabel(node, locale)}</span>}
-          >
-            {/* 技术详情正文：保留格式，同时隐藏临时候选工作树的物理路径。 */}
-            <pre>{presentTimelineText(technicalDetail)}</pre>
-          </SelUiDisclosure>
-        )}
-      </SelUiDisclosure>
-    </div>
-  );
-}, (previous, next) => {
-  const previousNode = previous.node;
-  const nextNode = next.node;
-  const previousOpen = previous.model.actions.isNodeOpen(previousNode.nodeId, previousNode.automaticOpen);
-  const nextOpen = next.model.actions.isNodeOpen(nextNode.nodeId, nextNode.automaticOpen);
-  const previousLiveText = previousNode.status === "current"
-    ? previous.model.presentation.liveTextByNodeId[previousNode.nodeId] || ""
-    : "";
-  const nextLiveText = nextNode.status === "current"
-    ? next.model.presentation.liveTextByNodeId[nextNode.nodeId] || ""
-    : "";
-  const previousStage = previous.model.presentation.currentTopicStage?.topicId === previous.model.group.topicId
-    && previous.model.presentation.currentTopicStage?.proposalId === previous.model.group.proposalId
-    ? previous.model.presentation.currentTopicStage : null;
-  const nextStage = next.model.presentation.currentTopicStage?.topicId === next.model.group.topicId
-    && next.model.presentation.currentTopicStage?.proposalId === next.model.group.proposalId
-    ? next.model.presentation.currentTopicStage : null;
-  return previousNode === nextNode
-    && previous.index === next.index
-    && previousOpen === nextOpen
-    && previousLiveText === nextLiveText
-    && previous.model.group.title === next.model.group.title
-    && previous.model.presentation.locale === next.model.presentation.locale
-    && previousStage?.status === nextStage?.status
-    && previousStage?.waitingFor === nextStage?.waitingFor
-    && previousStage?.nextAction === nextStage?.nextAction
-    && previousStage?.summary === nextStage?.summary
-    && previousStage?.userAction === nextStage?.userAction
-    && previous.model.actions.onManualApproval === next.model.actions.onManualApproval;
-});
-
-/** 节点动态耗时和专题动态耗时使用同一条局部刷新规则。 */
-function NodeDuration({ node, locale }: { node: CollaborationTimelineNodeOutDto; locale: LocaleValue }) {
-  const running = !node.completedAt && node.status !== "completed" && node.status !== "failed";
-  const nowMs = useTimelineNow(running);
-  return <>{nodeDurationLabel(node, locale, nowMs)}</>;
-}
-
 /** 一张专题任务卡及其完整人物处理历史。 */
 export function TaskGroupCard({ model }: TaskGroupCardProps) {
   // 专题数据属于卡片的业务输入。
@@ -429,47 +207,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   const { onOpenChange } = model.actions;
   // 已取消专题只保留审计阅读；展开状态仍由专题卡的统一 groupId 状态管理。
   if (group.status === "cancelled" || auditReadOnly) {
-    const primary = taskGroupPrimaryPresentation(group, locale);
-    const auditEvidence = visibleTimelineNodes(group.nodes)
-      .map((node) => `${node.actor.displayName}：${node.detail || node.content || node.summary}`)
-      .filter(Boolean)
-      .join("\n\n");
-    return (
-      // 历史卡只提供事实和证据阅读，不装配当前专题的任何业务操作。
-      <article
-        className="task-collaboration-cancelled-history-card task-collaboration-audit-history-card"
-        aria-label={locale === "ja" ? "監査履歴" : "专题审计历史卡"}
-        data-cancelled-history-card={group.status === "cancelled" || undefined}
-        data-audit-history-card
-        data-task-timeline-topic-id={group.topicId || ""}
-      >
-        <SelUiDisclosure
-          idPrefix="task-collaboration-cancelled-history"
-          className="task-cancelled-history-disclosure"
-          open={open}
-          onOpenChange={onOpenChange}
-          trigger={<span className="task-cancelled-history-header">
-            <span className="task-cancelled-history-status">
-              <strong>{group.status === "cancelled" ? (locale === "ja" ? "取消済み" : "已取消") : (locale === "ja" ? "監査履歴" : "审计历史")}</strong>
-              <span>{group.status === "cancelled" ? (locale === "ja" ? "この案件は取消済みです" : "本专题已取消") : (locale === "ja" ? "この案件は現在の作業領域に含まれません" : "此专题不属于当前工作区")}</span>
-            </span>
-            <strong>{group.title}</strong>
-            <span className="task-cancelled-history-facts">
-              <span><b>{locale === "ja" ? "内容" : "发生事项"}</b><small>{primary.matter}</small></span>
-              <span><b>{locale === "ja" ? "担当" : "处理人和状态"}</b><small>{primary.ownerAndStatus}</small></span>
-              <span><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
-              <span><b>{locale === "ja" ? "次の対応" : "下一步"}</b><small>{primary.nextAction}</small></span>
-            </span>
-          </span>}
-        >
-          <div className="task-cancelled-history-detail">
-            <p>{group.summary}</p>
-            <small>{locale === "ja" ? "このカードは監査履歴としてのみ閲覧できます。" : "此卡仅供查看审计历史，不能执行任何操作。"}</small>
-            {auditEvidence && <pre className="task-cancelled-history-evidence">{auditEvidence}</pre>}
-          </div>
-        </SelUiDisclosure>
-      </article>
-    );
+    return <TaskGroupAuditCard model={model} />;
   }
   // 可见节点（visibleNodes）移除旧数据中的连续重复恢复记录。
   const visibleNodes = visibleTimelineNodes(group.nodes);
@@ -570,48 +308,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
       {open && <>
         {/* 展开后才装载人物节点正文和技术详情；详情面板单独滚动，卡片摘要与下一流程持续可见。 */}
         <div className="task-timeline-detail-pane" onScroll={model.actions.onDetailScroll}>
-          {currentStage && (
-            <section className="task-node-detail">
-              <strong>{locale === "ja" ? "Host 起動受入" : "Host 启动验收"}</strong>
-              <p>{hostStartupAcceptance.status === "passed"
-                ? "Host 启动验收通过：同一启动标识的进程状态与 8080 health 已核验。"
-                : `尚未核验：${hostStartupAcceptance.reason}`}</p>
-              <SelUiDisclosure
-                idPrefix="task-host-startup-evidence"
-                className="task-host-startup-evidence"
-                open={false}
-                trigger={<span>{locale === "ja" ? "起動根拠を表示" : "展开查看本次启动依据"}</span>}
-              >
-                <pre>{[
-                  `启动标识：${hostStartupAcceptance.launchId || "未记录"}`,
-                  `处理人：${hostStartupAcceptance.handler || "未记录"}`,
-                  `启动时间：${hostStartupAcceptance.startedAt || "未记录"}`,
-                  `启动进程：${hostStartupAcceptance.commandStatus === "running" ? "运行中" : hostStartupAcceptance.commandStatus === "exited" ? "已退出" : "未记录"}`,
-                  `退出结果：${hostStartupAcceptance.exitCode ?? "运行中，尚无退出结果"}`,
-                  `8080 health：${hostStartupAcceptance.healthStatus}`,
-                  `响应摘要：${hostStartupAcceptance.healthSummary || "未记录"}`,
-                  `依据快照：${hostStartupAcceptance.evidenceReadable ? "可读取" : "缺失或不可读取"}`,
-                  `证据引用：${hostStartupAcceptance.evidenceReferences.join("；") || "未记录"}`,
-                  `启动脚本归档：${hostStartupAcceptance.launcherSource || "未记录"}`,
-                  `health 响应归档：${hostStartupAcceptance.healthResponse || "未记录"}`,
-                ].join("\n")}</pre>
-              </SelUiDisclosure>
-            </section>
-          )}
-          {currentStage && (
-            <section className="task-node-detail">
-              <strong>{locale === "ja" ? "最終受入根拠" : "最终验收依据"}</strong>
-              {currentStage.finalConclusion ? (
-                <pre>{[
-                  `处理人：${currentStage.finalConclusion.handler}`,
-                  `发生时间：${currentStage.finalConclusion.occurredAt}`,
-                  `验收运行：${currentStage.finalConclusion.acceptanceRunId}`,
-                  `条件结果：${currentStage.finalConclusion.conditionResults.map((item) => `${item.checkId}=${item.status}`).join("；")}`,
-                  `证据引用：${currentStage.finalConclusion.evidenceReferences.join("；")}`,
-                ].join("\n")}</pre>
-              ) : <p>尚未核验：当前不能确认最终验收通过。</p>}
-            </section>
-          )}
+          {currentStage && <TaskGroupAcceptanceEvidence stage={currentStage} host={hostStartupAcceptance} locale={locale} />}
           <div className="task-timeline-list" data-task-timeline-topic-id={group.topicId || ""} data-task-timeline-proposal-id={group.proposalId || ""}>
             {hasStructuredTaskCards ? <>
               {topicNodes.length > 0 && <section className="task-topic-flow" aria-label={locale === "ja" ? "案件フロー" : "专题流程"}>

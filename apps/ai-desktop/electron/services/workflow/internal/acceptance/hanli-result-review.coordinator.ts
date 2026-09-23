@@ -75,12 +75,17 @@ function readChangedSourceEvidence(
     const imports = [...content.matchAll(/\bimport\s+(?:type\s+)?[^;]*?\sfrom\s+["'](\.[^"']+)["']/gu)]
       .map((match) => match[1]);
     return imports.flatMap((specifier) => {
-      if (!specifier.endsWith(".js") || specifier.includes("?")) return [];
-      const candidate = path.resolve(canonicalRoot, path.dirname(file), `${specifier.slice(0, -3)}.ts`);
-      if (!candidate.startsWith(`${canonicalRoot}${path.sep}`)
-        || /(?:^|\/)(?:tests?|__tests__|node_modules)\//u.test(path.relative(canonicalRoot, candidate))) return [];
+      if (specifier.includes("?")) return [];
+      const base = path.resolve(canonicalRoot, path.dirname(file), specifier.endsWith(".js") ? specifier.slice(0, -3) : specifier);
+      const candidates = specifier.endsWith(".js") ? [`${base}.ts`, `${base}.tsx`]
+        : path.extname(specifier) ? [] : [`${base}.ts`, `${base}.tsx`];
+      if (!base.startsWith(`${canonicalRoot}${path.sep}`)
+        || /(?:^|\/)(?:tests?|__tests__|node_modules)\//u.test(path.relative(canonicalRoot, base))) return [];
       try {
-        const canonicalFile = realpathSync(candidate);
+        const canonicalFile = candidates.map((candidate) => {
+          try { return realpathSync(candidate); } catch { return null; }
+        }).find((candidate): candidate is string => candidate !== null);
+        if (!canonicalFile) return [];
         if (!canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)) return [];
         const dependency = path.relative(canonicalRoot, canonicalFile).split(path.sep).join("/");
         const source = readFileSync(canonicalFile, "utf8");

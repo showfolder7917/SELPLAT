@@ -6,6 +6,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const taskCardSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", import.meta.url), "utf8");
+const nodeSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskTimelineNode.tsx", import.meta.url), "utf8");
+const auditSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAuditCard.tsx", import.meta.url), "utf8");
+const evidenceSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx", import.meta.url), "utf8");
 const taskGroupControllerSource = readFileSync(new URL("../../../src/features/collaboration/components/useTaskCollaborationGroup.ts", import.meta.url), "utf8");
 const developerStyles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const applicationRuntimeSource = readFileSync(new URL("../../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
@@ -30,15 +33,15 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   const taskGroupSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url), "utf8");
   assert.match(taskGroupSource, /deliveryReadStatus === "syncing"[\s\S]*正在读取验收依据[\s\S]*不会推进、恢复或改写当前专题状态/);
   assert.match(taskGroupSource, /验收依据暂时无法读取[\s\S]*onClick=\{retryDeliveryRead\}/);
-  assert.match(taskCardSource, /最终验收依据[\s\S]*currentStage\.finalConclusion[\s\S]*尚未核验：当前不能确认最终验收通过/);
-  assert.match(taskCardSource, /task-timeline-detail-pane[\s\S]*最终验收依据[\s\S]*task-timeline-list/s);
-  assert.match(taskCardSource, /Host 启动验收[\s\S]*hostStartupAcceptance\.status === "passed"[\s\S]*启动标识[\s\S]*8080 health/);
-  assert.match(taskCardSource, /hostStartupAcceptance\.reason[\s\S]*hostStartupAcceptance\.evidenceReferences/);
+  assert.match(evidenceSource, /最终验收依据[\s\S]*stage\.finalConclusion[\s\S]*尚未核验：当前不能确认最终验收通过/);
+  assert.match(taskCardSource, /task-timeline-detail-pane[\s\S]*TaskGroupAcceptanceEvidence[\s\S]*task-timeline-list/s);
+  assert.match(evidenceSource, /Host 启动验收[\s\S]*host\.status === "passed"[\s\S]*启动标识[\s\S]*8080 health/);
+  assert.match(evidenceSource, /host\.reason[\s\S]*host\.evidenceReferences/);
   assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
-  assert.match(taskCardSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);
+  assert.match(evidenceSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);
   assert.match(developerStyles, /task-host-startup-evidence > \.seldisclosure-content \{[^}]*max-height: 118px[^}]*overflow-y: auto/);
   assert.match(timelineDisplaySource, /nodeOccurredAtLabel[\s\S]*发生时间[\s\S]*审批依据[\s\S]*代码集成依据/);
-  assert.match(taskCardSource, /nodeOccurredAtLabel\(node, locale\)[\s\S]*detailLabel\(node, locale\)}/);
+  assert.match(nodeSource, /nodeOccurredAtLabel\(node, locale\)[\s\S]*detailLabel\(node, locale\)}/);
   assert.match(hostStartupServiceSource, /GET[\s\S]*host-startup-evidence\/context[\s\S]*topicId[\s\S]*proposalId[\s\S]*当前专题或提案已经变化/);
   assert.match(hostStartupCommandSource, /HOST_EVIDENCE_ENDPOINT\/context\?token=[\s\S]*submit_host_startup_evidence[\s\S]*submit_host_startup_evidence "running"[\s\S]*wait "\$HOST_GRADLE_PID"/);
 });
@@ -55,8 +58,9 @@ test("非当前专题统一归入默认收起审计区，且只提供审计阅�
   assert.match(taskGroupSource, /const activeGroups = establishingTopic[\s\S]*currentTopicStage\?\.topicId[\s\S]*group\.topicId === currentTopicStage\.topicId/);
   assert.match(taskGroupSource, /const auditHistoryGroups = groups\.filter\(\(group\) => !activeGroups\.includes\(group\)\)/);
   assert.match(taskGroupSource, /task-collaboration-audit-history[\s\S]*历史审计[\s\S]*createCardModel\(group, true\)/);
-  const auditBranch = taskCardSource.slice(taskCardSource.indexOf('if (group.status === "cancelled" || auditReadOnly)'), taskCardSource.indexOf("// 可见节点"));
-  assert.match(auditBranch, /data-audit-history-card[\s\S]*<SelUiDisclosure[\s\S]*className="task-cancelled-history-disclosure"[\s\S]*open=\{open\}[\s\S]*onOpenChange=\{onOpenChange\}/);
+  const auditBranch = auditSource;
+  assert.match(taskCardSource, /if \(group\.status === "cancelled" \|\| auditReadOnly\)[\s\S]*TaskGroupAuditCard model=\{model\}/);
+  assert.match(auditBranch, /data-audit-history-card[\s\S]*<SelUiDisclosure[\s\S]*className="task-cancelled-history-disclosure"[\s\S]*open=\{open\}[\s\S]*onOpenChange=\{model\.actions\.onOpenChange\}/);
   assert.match(auditBranch, /task-cancelled-history-detail[\s\S]*group\.summary[\s\S]*仅供查看审计历史/);
   assert.doesNotMatch(auditBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance|onRetireStaleTopic/);
   assert.match(taskGroupControllerSource, /groupOpenOverrides\.get\(group\.groupId\) \?\? \(!auditReadOnly && group\.status !== "cancelled" && group\.groupId === currentGroupId\)/);
@@ -73,14 +77,14 @@ test("无活动技术卡点保留审计历史时明确显示只读空状态", ()
 });
 
 test("审计历史卡在窄窗口仍公开四项事实和只读长证据", () => {
-  const auditBranch = taskCardSource.slice(taskCardSource.indexOf('if (group.status === "cancelled" || auditReadOnly)'), taskCardSource.indexOf("// 可见节点"));
+  const auditBranch = auditSource;
   assert.match(auditBranch, /taskGroupPrimaryPresentation\(group, locale\)[\s\S]*task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
   assert.match(auditBranch, /const auditEvidence = visibleTimelineNodes\(group\.nodes\)[\s\S]*node\.actor\.displayName[\s\S]*task-cancelled-history-evidence/);
   assert.doesNotMatch(auditBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance|onRetireStaleTopic/);
 });
 
 test("令狐处理中的活动技术卡点公开转交原因且不签发恢复入口", () => {
-  const header = taskCardSource.slice(taskCardSource.indexOf("function TaskGroupHeader"), taskCardSource.indexOf("function TaskNodeHeader"));
+  const header = taskCardSource.slice(taskCardSource.indexOf("function TaskGroupHeader"), taskCardSource.indexOf("/** 一张专题任务卡"));
   assert.match(header, /technicalRecoveryReason = currentStage\?\.status === "failed-pending-repair"[\s\S]*currentStage\.userAction === "none"[\s\S]*currentStage\.waitingFor === "令狐老祖"[\s\S]*currentStage\.remaining/);
   assert.match(header, /task-group-primary-handoff-reason[\s\S]*转交原因[\s\S]*technicalRecoveryReason/);
   assert.doesNotMatch(header, /task-recovery-continue|onContinueTask|onResumeAcceptance/);
@@ -91,9 +95,12 @@ test("当前时间线节点和活动人物摘要消费当前专题阶段，历�
   assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*验收期间不把旧执行节点误计为并行人物[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
   assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && node\.nodeId\.startsWith\("acceptance:"\)[\s\S]*"failed-pending-repair"[\s\S]*"verifying"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
   assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
-  assert.match(taskCardSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);
-  assert.match(taskCardSource, /data-task-timeline-status=\{displayedStatus\}[\s\S]*data-task-timeline-recorded-status=\{node\.status\}/);
-  assert.match(taskCardSource, /currentStagePresentation\?\.actor \|\| node\.actor\.displayName[\s\S]*currentStagePresentation\?\.action \|\| node\.action/);
+  assert.match(nodeSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);
+  assert.match(nodeSource, /const displayedSummary = stagePresentation\?\.summary \|\| node\.summary \|\| node\.content/);
+  assert.match(nodeSource, /presentTimelineText\(displayedSummary\)/);
+  assert.match(nodeSource, /发生时记录（不是当前操作）/);
+  assert.match(nodeSource, /data-task-timeline-status=\{displayedStatus\}[\s\S]*data-task-timeline-recorded-status=\{node\.status\}/);
+  assert.match(nodeSource, /currentStagePresentation\?\.actor \|\| node\.actor\.displayName[\s\S]*currentStagePresentation\?\.action \|\| node\.action/);
 });
 
 test("验收后的当前节点沿用客户确认阶段，历史或其他验证节点不被覆盖", async () => {

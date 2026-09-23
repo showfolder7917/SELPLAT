@@ -24,9 +24,16 @@ const taskGroupSource = [
   "../../../src/features/collaboration/components/TaskCollaborationGroup.tsx",
   "../../../src/features/collaboration/components/useTaskCollaborationGroup.ts",
   "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskTimelineNode.tsx",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAuditCard.tsx",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
+  "../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-now.ts",
   "../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const taskGroupCardSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", import.meta.url), "utf8");
+const taskTimelineNodeSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskTimelineNode.tsx", import.meta.url), "utf8");
+const taskAuditSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAuditCard.tsx", import.meta.url), "utf8");
+const timelineNowSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-now.ts", import.meta.url), "utf8");
 const collaborationModelSource = readFileSync(new URL("../../../src/features/collaboration/model/useCollaborationWorkspace.ts", import.meta.url), "utf8");
 const recoveryOperationSource = readFileSync(new URL("../../../src/features/collaboration/model/recovery-operation.ts", import.meta.url), "utf8");
 const collaborationViewModelSource = readFileSync(new URL("../../../src/features/collaboration/model/createCollaborationWorkspaceViewModel.ts", import.meta.url), "utf8");
@@ -99,7 +106,7 @@ test("专题卡使用单一卡片模型归组显示状态和用户操作", () =>
   assert.match(taskGroupSource, /const cardModel: TaskGroupCardModel = \{[\s\S]*presentation: \{[\s\S]*actions: \{/);
   // 卡片组件只接收一个模型参数，后续子节点继续复用同一模型而不重复透传共享依赖。
   assert.match(taskGroupSource, /<TaskGroupCard key=\{group\.groupId\} model=\{cardModel\}/);
-  assert.match(taskGroupSource, /function TaskTimelineNode\([\s\S]*model: TaskGroupCardModel/);
+  assert.match(taskTimelineNodeSource, /function TaskTimelineNode\([\s\S]*model: TaskGroupCardModel/);
 });
 
 test("专题卡内按原始任务、独立问题和修复尝试显示真实层级", () => {
@@ -112,16 +119,17 @@ test("专题卡内按原始任务、独立问题和修复尝试显示真实层�
 test("任务时间线公开稳定时间边界供韩立区分本轮与历史审计", () => {
   assert.match(taskGroupCardSource, /data-task-timeline-topic-id=\{group\.topicId \|\| ""\}/);
   assert.match(taskGroupCardSource, /data-task-timeline-proposal-id=\{group\.proposalId \|\| ""\}/);
-  assert.match(taskGroupCardSource, /data-task-timeline-event-type=\{node\.eventType\}/);
-  assert.match(taskGroupCardSource, /data-task-timeline-started-at=\{node\.startedAt\}/);
-  assert.match(taskGroupCardSource, /data-task-timeline-status=\{displayedStatus\}/);
-  assert.match(taskGroupCardSource, /data-task-timeline-recorded-status=\{node\.status\}/);
+  assert.match(taskTimelineNodeSource, /data-task-timeline-event-type=\{node\.eventType\}/);
+  assert.match(taskTimelineNodeSource, /data-task-timeline-started-at=\{node\.startedAt\}/);
+  assert.match(taskTimelineNodeSource, /data-task-timeline-status=\{displayedStatus\}/);
+  assert.match(taskTimelineNodeSource, /data-task-timeline-recorded-status=\{node\.status\}/);
 });
 
 test("动态耗时只刷新局部文字，不能驱动整页时间线重绘", () => {
   assert.doesNotMatch(taskGroupSource, /const \[nowMs, setNowMs\][\s\S]*useTaskCollaborationGroup/);
-  assert.match(taskGroupCardSource, /function TimelineDuration[\s\S]*window\.setInterval/);
-  assert.match(taskGroupCardSource, /const TaskTimelineNode = memo/);
+  assert.match(taskGroupCardSource, /function TimelineDuration[\s\S]*useTimelineNow\(running\)/);
+  assert.match(timelineNowSource, /window\.setInterval/);
+  assert.match(taskTimelineNodeSource, /const TaskTimelineNode = memo/);
 });
 
 test("协作页面和控制器使用具名模型归组公开依赖", () => {
@@ -205,14 +213,14 @@ test("任务协作群空状态在窄窗口保持单列、换行和容器边界",
 });
 
 test("审计历史在窄窗口保留四项状态和可展开长证据", () => {
-  assert.match(taskGroupCardSource, /task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
-  assert.match(taskGroupCardSource, /task-cancelled-history-evidence/);
+  assert.match(taskAuditSource, /task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
+  assert.match(taskAuditSource, /task-cancelled-history-evidence/);
   assert.match(developerStyles, /task-cancelled-history-facts \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)[\s\S]*task-cancelled-history-evidence \{[\s\S]*max-height: 240px[\s\S]*overflow: auto/);
   assert.match(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*task-cancelled-history-facts \{ grid-template-columns: 1fr; \}/);
 });
 
 test("令狐自动处理的技术卡点在主区域显示转交原因", () => {
-  const header = taskGroupCardSource.slice(taskGroupCardSource.indexOf("function TaskGroupHeader"), taskGroupCardSource.indexOf("function TaskNodeHeader"));
+  const header = taskGroupCardSource.slice(taskGroupCardSource.indexOf("function TaskGroupHeader"), taskGroupCardSource.indexOf("/** 一张专题任务卡"));
   assert.match(header, /failed-pending-repair[\s\S]*userAction === "none"[\s\S]*waitingFor === "令狐老祖"[\s\S]*currentStage\.remaining[\s\S]*转交原因/);
   assert.doesNotMatch(header, /task-recovery-continue/);
 });

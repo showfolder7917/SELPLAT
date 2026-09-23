@@ -34,7 +34,7 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const task = (taskId, files) => ({ taskId, state: "integrated", snapshot: { title: taskId, problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: files }] });
-  const original = task("original", ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts", "../../AGENTS.md", "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"]);
+  const original = task("original", ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts", "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", "../../AGENTS.md", "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"]);
   const repair = task("repair", ["apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"]);
   const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
   const [context] = buildHanliResultReviewContext([repair], workspace, [original, repair]);
@@ -45,6 +45,9 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-technical-recovery.projection.ts"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-read-recovery.ts"));
+  assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskTimelineNode.tsx"));
+  assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAuditCard.tsx"));
+  assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx"));
   assert.ok(sourceFiles.every((file) => file.startsWith("apps/ai-desktop/") && !/(?:^|\/)(?:tests?|__tests__)\//u.test(file)));
   assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
   assert.match(context.sourceEvidence[0].content, /projectCurrentTechnicalRecovery/u);
