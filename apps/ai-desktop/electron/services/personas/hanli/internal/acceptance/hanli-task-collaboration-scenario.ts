@@ -166,11 +166,11 @@ function scenarioStage(stage: ActiveScenario["stage"]): HanliTaskCollaborationSc
 function createStage(base: CurrentTopicStageOutDto, active: ActiveScenario): CurrentTopicStageOutDto {
   const now = new Date().toISOString();
   const guidance = {
-    affectedFiles: ["任务协作群卡点记录"],
-    problem: "当前阻塞需要你确认已完成指定操作。",
-    reasonCustomerMustAct: "只有你能确认外部条件已经满足。",
-    steps: ["核对阻塞说明", "完成指定操作", "提交确认并请求令狐复查"],
-    completionCriteria: ["操作已完成", "可由令狐复查"],
+    affectedFiles: ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"],
+    problem: "当前专题的恢复入口仍被阻塞，需确认该投影已按本次卡点事实更新。",
+    reasonCustomerMustAct: "只有你能确认外部条件已经满足，令狐不能代替你完成该确认。",
+    steps: ["核对 current-topic-stage.projection.ts 对应的阻塞说明。", "完成该文件关联的外部确认。", "提交确认并请求令狐复查。"],
+    completionCriteria: ["已确认 current-topic-stage.projection.ts 关联的外部条件。", "令狐可据此重新核对当前阻塞。"],
     resumeLabel: "提交确认并请求令狐复查",
   };
   const common = { ...base, topicId: active.goal.topicId, proposalId: active.goal.proposalId, title: active.goal.title, updatedAt: now, resumeOneShotRunId: null, effectiveTaskIds: [] };

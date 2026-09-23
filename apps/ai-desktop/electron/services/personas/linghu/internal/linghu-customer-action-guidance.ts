@@ -4,6 +4,7 @@ import type {
   CollaborationCustomerActionGuidanceOutDto,
   CollaborationTaskOutDto,
 } from "../../../../../contracts/services/workflow/index.js";
+import { isCompleteCustomerActionGuidance } from "../../../../../contracts/services/workflow/index.js";
 import type { LinghuAutomaticFlowSnapshotOutDto } from "../../../../../contracts/services/personas/linghu/index.js";
 
 /** 只向令狐提供已经落库的卡点事实，避免模型用猜测补全原因。 */
@@ -13,7 +14,7 @@ export function customerActionFacts(
   sourceFingerprint: string,
 ): Record<string, unknown> {
   const location = customerActionLocation(task);
-  return {
+  const guidance = {
     sourceFingerprint,
     taskId: task.taskId,
     taskTitle: task.snapshot.title,
@@ -78,6 +79,10 @@ export function parseCustomerActionGuidance(
     generatedBy,
     createdAt: new Date().toISOString(),
   };
+  if (!isCompleteCustomerActionGuidance(guidance, sourceFingerprint)) {
+    throw new Error("令狐生成的客户操作指导缺少可定位文件或仍是概括性原因、步骤、完成标准，不能签发继续入口。");
+  }
+  return guidance;
 }
 
 /** 目录和文件来自 Git 结构化证据，不能交给模型猜测或在页面写死。 */

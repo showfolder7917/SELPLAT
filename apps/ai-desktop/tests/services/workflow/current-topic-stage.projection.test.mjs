@@ -161,6 +161,25 @@ test("同指纹完整客户指导才签发唯一任务级确认入口", () => {
   assert.deepEqual(stage.customerActionGuidance?.affectedFiles, ["apps/ai-desktop/electron/main.ts"]);
 });
 
+test("概括性客户指导即使带有同指纹和文件也不签发确认入口", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-2:product-defect", faultFingerprint: "failure-current",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-2"], failureCategory: "product-defect",
+    evidenceReferences: ["event-2"], occurrences: [{ runId: "run-1", taskId: "task-current", occurrenceId: "event-2", reason: "指导不完整", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "令狐继续核对。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const blocked = task("blocked");
+  blocked.customerActionGuidance = {
+    sourceFingerprint: "failure-current", affectedFiles: ["apps/ai-desktop/electron/main.ts"], problem: "当前阻塞需要你确认已完成指定操作。",
+    reasonCustomerMustAct: "只有你能确认外部条件已经满足。", steps: ["核对阻塞说明", "完成指定操作"], completionCriteria: ["操作已完成", "可由令狐复查"], resumeLabel: "提交确认并请求令狐复查",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [blocked] });
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeTaskId, null);
+  assert.equal(stage.customerActionGuidance, null);
+});
+
 test("技术卡点计数依据缺失不会进入监控接管", () => {
   const state = evolution("failed");
   state.technicalRecovery = { issueId: "unverified:topic-current:proposal-current", topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: [], failureCategory: "technical-runtime", evidenceReferences: ["event-2"], occurrences: [], attemptCount: 0, handler: "system", handoffStatus: "basis-unverified", failureReason: "缺少原验收条件", nextAction: "系统重新读取原验收条件与失败依据。", active: true, updatedAt: "2026-09-12T05:00:00.000Z" };

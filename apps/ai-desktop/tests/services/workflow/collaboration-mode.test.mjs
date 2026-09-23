@@ -1129,6 +1129,10 @@ test("客户操作指导缺少步骤或包含破坏性操作时拒绝生成继�
     title: "等待客户处理", problem: "存在卡点", reasonCustomerMustAct: "需要客户决定",
     steps: ["执行 git reset --hard"], completionCriteria: ["已完成"],
   }), "fingerprint", linghu), /危险或越权操作/);
+  assert.throws(() => parseCustomerActionGuidance(JSON.stringify({
+    title: "等待客户处理", problem: "当前阻塞需要你确认已完成指定操作。", reasonCustomerMustAct: "只有你能确认外部条件已经满足。",
+    steps: ["核对阻塞说明", "完成指定操作"], completionCriteria: ["操作已完成", "可由令狐复查"],
+  }), "fingerprint", linghu, { workspaceRoot: "/workspace/SELPLAT", affectedFiles: ["apps/ai-desktop/electron/main.ts"], absoluteFilePaths: ["/workspace/SELPLAT/apps/ai-desktop/electron/main.ts"] }), /概括性原因、步骤、完成标准/);
 });
 
 test("令狐主动巡检关闭时仍自动修复在途任务的统一测试失败", async () => {

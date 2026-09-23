@@ -56,6 +56,8 @@ export type { CollaborationIntegrationBatchOutDto } from "./dto/collaboration-in
 export type { CollaborationIntegrationFailureOutDto } from "./dto/collaboration-integration.out.dto.js";
 // CollaborationCustomerActionGuidanceOutDto 是必须由客户解除卡点时的处理指导。
 export type { CollaborationCustomerActionGuidanceOutDto } from "./dto/collaboration-customer-action-guidance.out.dto.js";
+// isCompleteCustomerActionGuidance 统一判断客户指导能否签发确认入口。
+export { isCompleteCustomerActionGuidance } from "./dto/collaboration-customer-action-guidance.out.dto.js";
 // CollaborationRepairDiagnosisOutDto 是令狐对执行失败的调查结论。
 export type { CollaborationRepairDiagnosisOutDto } from "./dto/collaboration-repair.out.dto.js";
 // CollaborationRequirementPlanOutDto 是任务分析阶段产生的可执行计划。

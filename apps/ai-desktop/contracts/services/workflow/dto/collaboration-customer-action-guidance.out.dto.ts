@@ -37,3 +37,25 @@ export interface CollaborationCustomerActionGuidanceOutDto {
   /** 指导生成的时间。 */
   createdAt: string;
 }
+
+/** 判断持久化指导是否能安全签发客户确认入口；只接受可定位的真实文件与具体行动事实。 */
+export function isCompleteCustomerActionGuidance(
+  guidance: CollaborationCustomerActionGuidanceOutDto | null | undefined,
+  sourceFingerprint: string | null | undefined,
+): guidance is CollaborationCustomerActionGuidanceOutDto {
+  if (!guidance || !sourceFingerprint || guidance.sourceFingerprint !== sourceFingerprint) return false;
+  const files = guidance.affectedFiles || [];
+  const concreteFiles = files.length > 0 && files.every((file) => {
+    const value = file.trim();
+    return Boolean(value) && value !== "未识别文件" && value !== "任务协作群卡点记录" && /[./\\]/u.test(value);
+  });
+  const fields = [guidance.problem, guidance.reasonCustomerMustAct, ...guidance.steps, ...guidance.completionCriteria];
+  return concreteFiles && fields.length >= 4 && fields.every((value) => isSpecificGuidanceText(value));
+}
+
+/** 概括占位语不构成客户可执行的原因、步骤或完成标准。 */
+function isSpecificGuidanceText(value: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  return !/^(?:需要你确认外部条件已经满足|当前阻塞需要你确认已完成指定操作|核对阻塞说明|完成指定操作|操作已完成|可由令狐复查)[。！？.!?]*$/u.test(text);
+}
