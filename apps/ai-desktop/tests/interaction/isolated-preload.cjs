@@ -259,20 +259,20 @@ const synchronizeInteractionCurrentTopicStage = () => {
     topicId: "interaction-timeline", proposalId: "interaction-timeline-proposal",
     status: "failed-pending-repair", title: "已阻塞", summary: "等待从原卡点继续。", repairContent: "", remaining: "等待恢复原任务。",
     waitingFor: "原任务恢复处理", nextAction: "保留失败证据并从原恢复点处理。",
-    userAction: "resume", effectiveTaskIds: ["interaction-task"], missingTaskIds: [], latestAcceptance: null,
+    userAction: "none", resumeOneShotRunId: null, resumeTaskId: null, customerActionGuidance: null, effectiveTaskIds: ["interaction-task"], missingTaskIds: [], latestAcceptance: null,
     deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" }, updatedAt: now,
   };
   if (interruptedTimelineFixtureStatus === "waiting") {
-    evolutionState.currentTopicStage = { ...base, repairContent: "应用重建中断原连接。", remaining: "等待用户继续执行原任务。" };
+    evolutionState.currentTopicStage = { ...base, repairContent: "应用重建中断原连接。", remaining: "等待用户继续执行原任务。", userAction: "resume", resumeTaskId: "interaction-task" };
     return;
   }
   if (customerActionTimelineFixtureEnabled) {
-    evolutionState.currentTopicStage = { ...base, repairContent: "客户本地修改等待复查。", remaining: "等待客户完成本地操作后由令狐复查。", effectiveTaskIds: ["interaction-customer-action-task"] };
+    evolutionState.currentTopicStage = { ...base, repairContent: "客户本地修改等待复查。", remaining: "等待客户完成本地操作后由令狐复查。", userAction: "resume", resumeTaskId: "interaction-customer-action-task", effectiveTaskIds: ["interaction-customer-action-task"], customerActionGuidance: { affectedFiles: ["apps/ai-desktop/electron/main.ts"], problem: "本地修改归属待确认。", reasonCustomerMustAct: "只有客户能确认该修改归属。", steps: ["确认修改属于当前专题"], completionCriteria: ["确认后提交令狐复查"], resumeLabel: "从卡点继续" } };
     return;
   }
   const run = evolutionState.oneShotRun;
   if (run?.topicId === base.topicId && run.proposalId === base.proposalId && run.status === "blocked") {
-    evolutionState.currentTopicStage = { ...base, summary: run.blockingReason || base.summary, remaining: run.blockingReason || base.remaining };
+    evolutionState.currentTopicStage = { ...base, summary: run.blockingReason || base.summary, remaining: run.blockingReason || base.remaining, userAction: "resume", resumeOneShotRunId: run.runId };
     return;
   }
   if (acceptanceTimelineFixtureStatus) {
@@ -772,6 +772,7 @@ contextBridge.exposeInMainWorld("desktop", {
     evolutionState.oneShotRun.status = "running";
     evolutionState.oneShotRun.phase = "accepting";
     evolutionState.oneShotRun.blockingReason = null;
+    synchronizeInteractionCurrentTopicStage();
     return publishNangongEvolution("one-shot.resumed");
   },
   retireStaleEvolutionTopic: async (request) => {

@@ -122,7 +122,7 @@ test("点击继续进入恢复处理中时立即撤销恢复动作", () => {
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
-test("没有阻塞运行但关联任务仍阻塞时签发任务级恢复动作", () => {
+test("没有同指纹完整指导时，关联阻塞任务只显示令狐核对中", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
     issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
@@ -131,10 +131,31 @@ test("没有阻塞运行但关联任务仍阻塞时签发任务级恢复动作",
     attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "等待令狐复核。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
   };
   const stage = projectCurrentTopicStage(state, { tasks: [task("blocked")] });
-  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.userAction, "none");
   assert.equal(stage.resumeOneShotRunId, null);
-  assert.equal(stage.readRecovery.requiresUserAction, true);
+  assert.equal(stage.resumeTaskId, null);
+  assert.equal(stage.readRecovery.requiresUserAction, false);
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
+});
+
+test("同指纹完整客户指导才签发唯一任务级确认入口", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect", faultFingerprint: "failure-current",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "run-1", taskId: "task-current", occurrenceId: "event-1", reason: "原验收失败", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "提交后由令狐复查。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const blocked = task("blocked");
+  blocked.customerActionGuidance = {
+    sourceFingerprint: "failure-current", affectedFiles: ["apps/ai-desktop/electron/main.ts"], problem: "本地修改归属待确认。", reasonCustomerMustAct: "只有客户能确认归属。",
+    steps: ["确认该文件属于当前专题。"], completionCriteria: ["确认后提交复查。"], resumeLabel: "确认并请令狐复查",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [blocked] });
+  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeTaskId, "task-current");
+  assert.equal(stage.readRecovery.requiresUserAction, true);
+  assert.deepEqual(stage.customerActionGuidance?.affectedFiles, ["apps/ai-desktop/electron/main.ts"]);
 });
 
 test("技术卡点计数依据缺失不会进入监控接管", () => {

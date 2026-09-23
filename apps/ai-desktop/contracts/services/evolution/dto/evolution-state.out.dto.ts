@@ -18,6 +18,8 @@ import type { EvolutionTopicOutDto } from "./evolution-topic.out.dto.js";
 /** 当前专题唯一的技术卡点恢复事实；Workflow 异常只保存审计副本，不能再作为页面计数来源。 */
 export interface EvolutionTechnicalRecoveryOutDto {
   issueId: string;
+  /** 当前故障的稳定指纹；旧审计记录缺失时不得签发任务级用户操作。 */
+  faultFingerprint?: string | null;
   topicId: string;
   proposalId: string;
   acceptanceConditionIds: string[];
