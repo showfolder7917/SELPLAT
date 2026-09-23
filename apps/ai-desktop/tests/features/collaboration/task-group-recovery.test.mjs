@@ -19,6 +19,7 @@ test("当前专题的恢复入口只消费交付投影，不再从时间线节�
   assert.doesNotMatch(taskCardSource, /effectiveTaskIds\.at\(-1\)/);
   assert.doesNotMatch(taskCardSource, /technicalRecoveryActive/);
   assert.match(taskCardSource, /task-timeline-next-current[\s\S]*onResumeAcceptance[\s\S]*onContinueTask\(projectedResumeTaskId!/);
+  assert.match(taskCardSource, /currentStage\?\.customerActionGuidance\?\.resumeLabel \|\| "从卡点继续"/);
   assert.doesNotMatch(taskCardSource, /latestActiveRecoveryAction|TaskGroupRecovery|oneShotRecoveryRequired/);
 });
 

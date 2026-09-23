@@ -62,7 +62,7 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
-test("活动技术卡点保留令狐状态；原运行阻塞时签发既有恢复动作", () => {
+test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签发恢复动作", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
     issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
@@ -72,9 +72,10 @@ test("活动技术卡点保留令狐状态；原运行阻塞时签发既有恢�
   };
   state.oneShotRun = { runId: "blocked-recovery", topicId: "topic-current", proposalId: "proposal-current", status: "blocked" };
   const stage = projectCurrentTopicStage(state, { tasks: [task()] });
-  assert.equal(stage.userAction, "resume");
-  assert.equal(stage.resumeOneShotRunId, "blocked-recovery");
-  assert.equal(stage.readRecovery.requiresUserAction, true);
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeOneShotRunId, null);
+  assert.equal(stage.resumeTaskId, null);
+  assert.equal(stage.readRecovery.requiresUserAction, false);
   assert.match(stage.summary, /令狐老祖处理中/);
 });
 
@@ -154,7 +155,9 @@ test("同指纹完整客户指导才签发唯一任务级确认入口", () => {
   const stage = projectCurrentTopicStage(state, { tasks: [blocked] });
   assert.equal(stage.userAction, "resume");
   assert.equal(stage.resumeTaskId, "task-current");
+  assert.equal(stage.resumeOneShotRunId, null);
   assert.equal(stage.readRecovery.requiresUserAction, true);
+  assert.equal(stage.customerActionGuidance?.resumeLabel, "确认并请令狐复查");
   assert.deepEqual(stage.customerActionGuidance?.affectedFiles, ["apps/ai-desktop/electron/main.ts"]);
 });
 
