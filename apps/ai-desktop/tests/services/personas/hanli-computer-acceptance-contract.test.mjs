@@ -44,7 +44,9 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /navigateHanliConversation[\s\S]*requestAnimationFrame[\s\S]*conversation-not-visible/);
   assert.match(acceptanceSource, /open-hanli-conversation[\s\S]*当前正式验收未获韩立会话导航授权[\s\S]*hanliConversation/);
   assert.match(runtimeSource, /具体文件[\s\S]*完成标准[\s\S]*恢复入口[\s\S]*提交确认[\s\S]*令狐复查[\s\S]*成员\.\*空闲[\s\S]*窄窗口[\s\S]*历史/);
-  assert.match(acceptanceSource, /taskCollaborationScenarioTarget[\s\S]*customer-guidance[\s\S]*new-blocker/);
+  assert.match(acceptanceSource, /taskCollaborationScenarioTarget[\s\S]*no-guidance[\s\S]*customer-guidance[\s\S]*new-blocker/);
+  assert.match(acceptanceSource, /targets\.size > 1[\s\S]*不能合并任务协作群的不同场景阶段/);
+  assert.match(acceptanceSource, /没有已持久化完整指导[\s\S]*return "no-guidance"/);
   assert.match(acceptanceSource, /taskCollaborationScenario[\s\S]*nextAction[\s\S]*唯一确认按钮/);
   assert.doesNotMatch(acceptanceSource, /advance-task-collaboration-scenario/);
 });
