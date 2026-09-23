@@ -1515,6 +1515,7 @@ test("打包运行时的两条重启路径都从工程源码目录查找开发�
 });
 
 test("正式发布流程是具备原子落盘与互斥保护的可恢复 Saga 而非单一事务", () => {
+  const collaborationBootstrap = readFileSync(new URL("../../../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
   assert.match(releaseBatchStoreSource, /writeFileSync\(temporary[\s\S]*renameSync\(temporary, target\)/);
   assert.match(integrationPipelineSource, /#acquireRelease[\s\S]*#releaseBatches\.create[\s\S]*releaseDocument\.state = "testing"[\s\S]*publishedExecutable === "developer-script" \? "integrated" : "published"/);
   const publishedState = integrationPipelineSource.indexOf('releaseDocument.state = publishedExecutable === "developer-script" ? "integrated" : "published"');

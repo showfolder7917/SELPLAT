@@ -108,6 +108,10 @@ export interface CurrentTopicStageOutDto {
   userAction: "none" | "confirmation" | "resume";
   /** 当前恢复动作属于一次性专题运行时，提供原运行标识；任务级恢复时为空。 */
   resumeOneShotRunId: string | null;
+  /** 当前投影唯一签发的任务级恢复入口；页面不得从有效任务集合推断。 */
+  resumeTaskId?: string | null;
+  /** 任务级入口对应的完整客户指导；为空时页面不得展示确认动作。 */
+  customerActionGuidance?: { affectedFiles: string[]; problem: string; reasonCustomerMustAct: string; steps: string[]; completionCriteria: string[]; resumeLabel: string } | null;
   /** 读取交付投影或历史证据受阻时使用的唯一恢复政策。 */
   readRecovery: CurrentTopicReadRecoveryOutDto;
   /** 当前有效任务链，供页面关联只读执行记录。 */

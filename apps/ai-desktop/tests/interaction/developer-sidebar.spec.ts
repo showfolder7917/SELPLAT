@@ -109,7 +109,7 @@ test("任务群从卡点继续显示忙碌、失败重试与恢复反馈", async
   await expect(page.getByRole("alert").filter({ hasText: "验收连接仍不可用" })).toBeVisible();
   await page.evaluate(() => (window as any).desktop.setInteractionResumeFixture("success"));
   await resume.click();
-  await expect(page.getByText("已从原卡点继续，请查看后续流程。", { exact: true })).toBeVisible();
+  await expect(page.getByText("已恢复原专题验收，请查看后续流程。", { exact: true })).toBeVisible();
   await expect(resume).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("resume-result.png") });
   await page.evaluate(async () => {
