@@ -94,9 +94,17 @@ test("系统交接未发生且没有活动修复任务时保留原运行的显�
   assert.equal(stage.resumeTaskId, null);
   assert.notEqual(stage.nextAction, "系统重试写入令狐交接。");
 
-  const activeRepair = projectCurrentTopicStage(state, { tasks: [task(), { ...task("unified-testing"), taskId: "repair-active" }] });
+  const activeRepair = projectCurrentTopicStage(state, { tasks: [task(), { ...task("unified-testing"), taskId: "repair-active", replacementForTaskId: "task-current", createdAt: "2026-09-12T04:01:00.000Z" }] });
   assert.equal(activeRepair.userAction, "none");
   assert.equal(activeRepair.resumeOneShotRunId, null);
+
+  const supersededOldBlock = projectCurrentTopicStage(state, { tasks: [
+    task(),
+    { ...task("blocked"), taskId: "repair-old", replacementForTaskId: "task-current", createdAt: "2026-09-12T04:01:00.000Z" },
+    { ...task("integrated"), taskId: "repair-new", replacementForTaskId: "task-current", createdAt: "2026-09-12T04:02:00.000Z" },
+  ] });
+  assert.equal(supersededOldBlock.userAction, "resume");
+  assert.equal(supersededOldBlock.resumeOneShotRunId, "blocked-review");
 });
 
 test("活动技术卡点没有原运行阻塞时不伪造恢复动作", () => {

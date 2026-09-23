@@ -110,13 +110,14 @@ export function projectCurrentTopicStage(
   const technicalRecovery = evolution.technicalRecovery;
   // 活动任务事实优先于同一运行较新的 accepting 时间戳：正在验收不代表已经解除当前阻塞。
   // 先取得当前提案真实阻塞任务和指导，后续再决定旧恢复是否可以退为审计记录。
+  const currentExecution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const blockingTaskIds = technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
     && technicalRecovery.proposalId === proposal.proposalId
-    ? collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
+    ? currentExecution.effectiveTasks.filter((item) => item.evolutionProposalId === proposal.proposalId
       && ["blocked", "test-failed"].includes(item.state))
       .map((item) => item.taskId)
     : [];
-  const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
+  const blockingTask = currentExecution.effectiveTasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
   const guidance = blockingTask?.customerActionGuidance || null;
   const guidanceFiles = guidance?.affectedFiles || [];
   const hasCompleteGuidance = technicalRecovery
@@ -136,7 +137,7 @@ export function projectCurrentTopicStage(
     && run.topicId === (topic?.topicId || proposal.topicId)
     && run.proposalId === proposal.proposalId
     && blockingTask === null
-    && !collaboration.tasks.some((item) => item.evolutionProposalId === proposal.proposalId
+    && !currentExecution.effectiveTasks.some((item) => item.evolutionProposalId === proposal.proposalId
       && !["integrated", "cancelled", "failed"].includes(item.state));
   const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
     && run.topicId === (topic?.topicId || proposal.topicId)
@@ -204,7 +205,7 @@ export function projectCurrentTopicStage(
     };
   }
 
-  const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
+  const execution = currentExecution;
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
   const finalConclusion = readFinalConclusion(evolution, proposal);
   const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
