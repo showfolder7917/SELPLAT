@@ -85,7 +85,7 @@ export function parseCustomerActionGuidance(
     createdAt: new Date().toISOString(),
   };
   if (!isCompleteCustomerActionGuidance(guidance, sourceFingerprint, evidence)) {
-    throw new Error("令狐生成的客户操作指导缺少对应卡点事实或仍是概括性原因、步骤、完成标准，不能签发继续入口。");
+    throw new Error("令狐生成的客户操作指导缺少真实文件，或仍是概括性原因、步骤、完成标准；容量或授权卡点还必须提供对应的结构化恢复事实，不能签发继续入口。");
   }
   return guidance;
 }
