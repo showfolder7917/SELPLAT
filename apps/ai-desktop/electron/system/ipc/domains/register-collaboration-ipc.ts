@@ -14,7 +14,7 @@ import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto, Request
 import type { CollaborationWorkflowFacade as CollaborationCoordinator, CollaborationInteractionPerformancePort, CollaborationNavigationPreferencePort } from "../../../services/workflow/index.js";
 import type { LinghuAutomationFacade } from "../../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../../services/personas/nangong/index.js";
-import type { HanliFacade } from "../../../services/personas/hanli/index.js";
+import type { HanliFacade, HanliTaskCollaborationScenario } from "../../../services/personas/hanli/index.js";
 import type { PersonaConversationFacade } from "../../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../../services/workflow/index.js";
@@ -35,17 +35,19 @@ export function registerCollaborationIpc(
   eventCenter: EventCenterFacade,
   collaborationTimeline: CollaborationTimelineFacade | null,
   refreshWorkflowCheckpoints?: () => Promise<void>,
+  hanliTaskScenario?: HanliTaskCollaborationScenario,
 ): void {
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2]): void => registerEventCenterIpcHandler(eventCenter, channel, handler, "business");
   handle("desktop:get-collaboration-state", async () => collaboration.state());
   // 任务协作群只读取 SQLite 不可变事件；数据库不可用时抛给 EventCenter，禁止退回 JSON 快照拼接旧实现。
-  handle("desktop:get-collaboration-timeline", () => {
+  handle("desktop:get-collaboration-timeline", (event) => {
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
-    return collaborationTimeline.getTimelineSnapshot();
+    return hanliTaskScenario?.timelineFor(event.sender.id, collaborationTimeline.getTimelineSnapshot()) || collaborationTimeline.getTimelineSnapshot();
   });
-  handle("desktop:get-collaboration-timeline-groups", (_event, groupIds: string[]) => {
+  handle("desktop:get-collaboration-timeline-groups", (event, groupIds: string[]) => {
     if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，已阻断旧快照时间线回退。");
-    return collaborationTimeline.getTimelineGroups(Array.isArray(groupIds) ? groupIds.filter((value): value is string => typeof value === "string") : []);
+    const ids = Array.isArray(groupIds) ? groupIds.filter((value): value is string => typeof value === "string") : [];
+    return hanliTaskScenario?.timelineGroupsFor(event.sender.id, ids, collaborationTimeline.getTimelineSnapshot()) || collaborationTimeline.getTimelineGroups(ids);
   });
   handle("desktop:get-collaboration-timeline-projection-status", () => collaborationTimeline?.getProjectionStatus() || { status: "ready", message: "", taskId: null, operation: "none" });
   handle("desktop:retry-collaboration-timeline-projection", () => {
@@ -68,12 +70,19 @@ export function registerCollaborationIpc(
   });
   handle("desktop:set-operating-mode", (_event, mode: DesktopOperatingModeValue) => collaboration.setMode(mode));
   handle("desktop:submit-collaboration-task", (_event, request: SubmitCollaborationTaskInDto) => collaboration.submitTask(request).state);
-  handle("desktop:continue-collaboration-task", (_event, taskId: string) => collaboration.continueTask(taskId));
+  handle("desktop:continue-collaboration-task", (event, taskId: string) => {
+    const scenarioResult = hanliTaskScenario?.confirm(event.sender.id, taskId);
+    if (scenarioResult) return scenarioResult;
+    if (hanliTaskScenario?.isActiveFor(event.sender.id)) {
+      throw new Error("韩立隔离验收场景只接受当前页面签发的确认入口。");
+    }
+    return collaboration.continueTask(taskId);
+  });
   handle("desktop:cancel-collaboration-task", (_event, taskId: string) => collaboration.cancelTask(taskId));
   handle("desktop:get-linghu-automation-state", () => linghuAutomation.state());
   handle("desktop:set-linghu-automation-enabled", (_event, enabled: boolean) => linghuAutomation.setEnabled(enabled === true));
   handle("desktop:new-linghu-display-conversation", () => linghuAutomation.newDisplayConversation());
-  handle("desktop:get-nangong-evolution-state", () => evolution.state());
+  handle("desktop:get-nangong-evolution-state", (event) => hanliTaskScenario?.stateFor(event.sender.id, evolution.state()) || evolution.state());
   handle("desktop:get-nangong-evolution-read-recovery", () => evolution.readRecovery());
   handle("desktop:get-evolution-topic-dossier", (_event, topicId: string) => evolution.dossier(topicId));
   // 人物会话统一通过读取、发送、新建和模型选择四类入口访问；新人物只需注册处理器。
