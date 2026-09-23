@@ -116,6 +116,25 @@ test("验收后的当前节点沿用客户确认阶段，历史或其他验证�
   assert.equal(currentStageTimelinePresentation({ ...acceptanceNode, nodeId: "review:run-1" }, stage), null);
 });
 
+test("客户确认阶段不把旧 current 节点统计为正在执行的人物", async () => {
+  const result = await build({
+    entryPoints: [fileURLToPath(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts", import.meta.url))],
+    bundle: true, format: "cjs", platform: "node", packages: "external", write: false,
+  });
+  const compiled = { exports: {} };
+  new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), compiled, compiled.exports);
+  const group = {
+    topicId: "topic-1", proposalId: "proposal-1", status: "blocked", nodes: [{
+      status: "current", kind: "repair", nodeId: "repair:old", actor: { memberId: "linghu-ancestor", displayName: "令狐老祖" },
+    }],
+  };
+  const stage = { topicId: "topic-1", proposalId: "proposal-1", title: "等待你确认", userAction: "resume", waitingFor: "你" };
+  const waiting = compiled.exports.groupActivityPresentation(group, "zh", stage);
+  assert.deepEqual(waiting, { activeOwnerLabels: [], statusLabel: "等待你确认" });
+  const running = compiled.exports.groupActivityPresentation(group, "zh", { ...stage, userAction: "none" });
+  assert.deepEqual(running.activeOwnerLabels, ["令狐老祖"]);
+});
+
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
   assert.match(collaborationFacadeSource, /subscribe\(listener: CollaborationStateListener\)[\s\S]*#store\.subscribe\(listener\)/);
   assert.match(personaEvolutionSource, /#collaboration\.subscribe\(\(_state, reason\) => this\.#notifyCurrentTopicStageChanged\(reason\)\)/);
