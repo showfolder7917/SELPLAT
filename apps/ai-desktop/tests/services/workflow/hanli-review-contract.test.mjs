@@ -24,6 +24,12 @@ test("韩立固定审查正式页面与源码结构", () => {
   assert.match(prompt, /sourceEvidenceStatus=available/);
 });
 
+test("成员均 idle 的原条件仍归任务协作群同屏验收", () => {
+  assert.match(runtime, /成员\.\*\(\?:空闲\|idle\)/u);
+  assert.match(runtime, /\(\?:空闲\|idle\)\.\*成员/u);
+  assert.match(computer, /taskCollaborationCriterionIds\.has\(criterionId\)/u);
+});
+
 test("源码审查证据覆盖同提案已集成原任务与修复任务，不读取测试或越界文件", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);

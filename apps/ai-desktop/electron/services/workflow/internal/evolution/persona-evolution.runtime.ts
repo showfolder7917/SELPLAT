@@ -951,7 +951,7 @@ export class PersonaEvolutionRuntime {
  * 依赖同一块页面读模型；遗漏这些词会使验收器错误拒绝其安全导航动作。
  */
 function requiresTaskCollaborationSurface(criterion: string): boolean {
-  return /任务协作群|专题卡|任务卡|节点详情|下一流程|定位当前步骤|展开收起|详情滚动|完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口|提交确认|令狐复查|复查.*阻塞|阻塞.*复查|成员.*空闲|空闲.*成员|窄窗口|历史(?:审计|卡)|technicalRecovery/u.test(criterion);
+  return /任务协作群|专题卡|任务卡|节点详情|下一流程|定位当前步骤|展开收起|详情滚动|完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口|提交确认|令狐复查|复查.*阻塞|阻塞.*复查|成员.*(?:空闲|idle)|(?:空闲|idle).*成员|窄窗口|历史(?:审计|卡)|technicalRecovery/u.test(criterion);
 }
 
 function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
