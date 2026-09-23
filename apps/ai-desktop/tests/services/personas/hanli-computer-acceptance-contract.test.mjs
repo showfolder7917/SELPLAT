@@ -48,6 +48,7 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /targets\.size > 1[\s\S]*不能合并任务协作群的不同场景阶段/);
   assert.match(acceptanceSource, /没有已持久化完整指导[\s\S]*return "no-guidance"/);
   assert.match(acceptanceSource, /taskCollaborationScenario[\s\S]*nextAction[\s\S]*唯一确认按钮/);
+  assert.match(acceptanceSource, /#developer-task-list button\.collaboration-member[\s\S]*:scope > span > i[\s\S]*memberStates/);
   assert.doesNotMatch(acceptanceSource, /advance-task-collaboration-scenario/);
 });
 

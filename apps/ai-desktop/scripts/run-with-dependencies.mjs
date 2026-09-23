@@ -39,13 +39,13 @@ try {
       if (prepared.status !== 0) throw new Error(`Node common runtime preparation failed: ${script} (${prepared.status ?? 1})`);
     }
   }
-  runCommand(cache.dependencyRoot, cache.appRoot, controlledNodeCompileCache);
+  runCommand(cache.dependencyRoot, cache.appRoot, controlledNodeCompileCache, controlledProcessTemp);
 } finally {
   // 外层租约统一管理隔离工作树链接；普通命令只回收自己建立的临时链接。
   if (!cache.dependencyLeaseId) detachOwnedDependencyCache(cache);
 }
 
-function runCommand(dependencyRoot, appRoot, nodeCompileCache) {
+function runCommand(dependencyRoot, appRoot, nodeCompileCache, controlledProcessTemp) {
   // 隔离依赖缓存只链接项目依赖的二进制，通常不包含 npm 自己的 npx 包装器。
   // 将 npx 规范化为 npm exec 后，仍由当前 PATH 中的缓存 .bin 解析 tsc、vite 等项目工具。
   const isNpx = command === "npx";
@@ -64,6 +64,8 @@ function runCommand(dependencyRoot, appRoot, nodeCompileCache) {
   const windowsCommandLine = `"${[quoteWindowsArgument(executable), ...commandArguments.map(quoteWindowsArgument)].join(" ")}"`;
   const launchExecutable = usesWindowsCommandInterpreter ? process.env.ComSpec || "cmd.exe" : executable;
   const launchArguments = usesWindowsCommandInterpreter ? ["/d", "/s", "/c", windowsCommandLine] : commandArguments;
+  // 直接测试在隔离工作树中仍须把临时状态留在该工作树缓存，不能继承只读源工程的数据目录。
+  const controlledTestTemporaryRoot = String(process.env.AI_DESKTOP_TEST_TEMP_ROOT || "").trim() || path.dirname(controlledProcessTemp);
   const result = spawnSync(launchExecutable, launchArguments, {
     cwd: appRoot,
     stdio: "inherit",
@@ -75,6 +77,7 @@ function runCommand(dependencyRoot, appRoot, nodeCompileCache) {
       TMPDIR: controlledProcessTemp,
       TMP: controlledProcessTemp,
       TEMP: controlledProcessTemp,
+      AI_DESKTOP_TEST_TEMP_ROOT: controlledTestTemporaryRoot,
       PATH: `${path.join(dependencyRoot, ".bin")}${path.delimiter}${process.env.PATH || ""}`,
     },
   });

@@ -114,7 +114,8 @@ test("任务时间线公开稳定时间边界供韩立区分本轮与历史审�
   assert.match(taskGroupCardSource, /data-task-timeline-proposal-id=\{group\.proposalId \|\| ""\}/);
   assert.match(taskGroupCardSource, /data-task-timeline-event-type=\{node\.eventType\}/);
   assert.match(taskGroupCardSource, /data-task-timeline-started-at=\{node\.startedAt\}/);
-  assert.match(taskGroupCardSource, /data-task-timeline-status=\{node\.status\}/);
+  assert.match(taskGroupCardSource, /data-task-timeline-status=\{displayedStatus\}/);
+  assert.match(taskGroupCardSource, /data-task-timeline-recorded-status=\{node\.status\}/);
 });
 
 test("动态耗时只刷新局部文字，不能驱动整页时间线重绘", () => {

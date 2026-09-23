@@ -139,6 +139,28 @@ test("没有同指纹完整指导时，关联阻塞任务只显示令狐核对�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
+test("较新的验收运行不能覆盖仍在阻塞且没有完整指导的活动卡点", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "old-run", taskId: "task-current", occurrenceId: "event-1", reason: "原验收失败", occurredAt: "2026-09-12T04:50:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "令狐正在核对；当前无需你操作。", active: true, updatedAt: "2026-09-12T04:50:00.000Z",
+  };
+  state.oneShotRun = {
+    runId: "new-acceptance", topicId: "topic-current", proposalId: "proposal-current",
+    status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task("blocked")] });
+
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.waitingFor, "令狐老祖");
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeTaskId, null);
+  assert.equal(stage.resumeOneShotRunId, null);
+});
+
 test("同指纹完整客户指导才签发唯一任务级确认入口", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
