@@ -367,6 +367,17 @@ export class CheckpointCoordinator {
       this.#phase(event, state, "waiting", "原运行并非可自动恢复的受阻状态，保留事实等待明确恢复条件。");
       return;
     }
+    // 早期验收事件尚未建立修复关系时，也不能永远占据主卡点。
+    // 最新独立验收失败拥有当前故障事实；旧记录保留审计，但退出自动派发优先级。
+    if (!state.exhausted && !state.repairTaskId && failureEvent.eventId !== event.eventId
+      && failureEvent.occurredAt > event.occurredAt
+      && isAcceptanceFailureOperation(failureEvent.payload.operation)) {
+      const aggregate = new WorkflowCheckpointAggregate(state);
+      aggregate.exhaust();
+      Object.assign(state, aggregate.snapshot());
+      this.#phase(event, state, "superseded", `新验收失败 ${failureEvent.eventId} 已接管；本条旧记录保留审计，不再抢占主卡点。`);
+      return;
+    }
     // 同一提案已有后续令狐修复任务时，旧卡点不能再把新验收事实写回已交付的旧任务。
     // 退出旧主卡点后，后续事件才能成为主记录并沿自己的恢复关系推进。
     if (state.repairTaskId && !state.exhausted) {

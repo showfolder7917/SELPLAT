@@ -809,6 +809,31 @@ test("已集成旧修复任务遇到新验收失败时退出主卡点并只派�
   assert.equal(f.effects.submitted.length, 2);
 });
 
+test("多条未建立修复任务的旧事件不抢占最新验收故障", async () => {
+  const f = fixture();
+  const earlier = ["old-failure-2", "old-failure-3"].map((eventId, index) => ({
+    ...structuredClone(f.event), eventId, occurredAt: `2026-09-05T0${index + 1}:00:00Z`,
+    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting",
+      operation: "run_hanli_result_acceptance", acceptanceFailureKind: "acceptance-capability-blocked" },
+  }));
+  const latest = {
+    ...structuredClone(f.event), eventId: "latest-product-failure", occurredAt: "2026-09-06T00:00:00Z",
+    message: "窄窗口详情面板高度为零", payload: { runId: "run-1", proposalId: "proposal-1",
+      phase: "accepting", operation: "repair_failed_hanli_acceptance", acceptanceFailureKind: "product-defect" },
+  };
+  f.events.push(...earlier, latest);
+  await f.run();
+  for (const old of [f.event, ...earlier]) {
+    assert.equal(old.payload.checkpoint.phase, "superseded");
+    assert.equal(old.payload.checkpoint.exhausted, true);
+  }
+  assert.equal(latest.payload.checkpoint.phase, "repairing");
+  assert.equal(f.effects.submitted.length, 1);
+  assert.ok(f.effects.submitted[0].constraints.includes("卡点故障事实：latest-product-failure"));
+  await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+});
+
 test("最新验收需要范围确认时旧技术主卡点不得更新或重启修复", async () => {
   const f = fixture();
   f.event.payload.operation = "plan_and_dispatch_one_shot";
