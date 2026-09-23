@@ -384,6 +384,22 @@ export class CheckpointCoordinator {
         return;
       }
     }
+    // 旧主卡点退出时，后续任务可能已用事件专属标记创建，却尚未挂到最新失败事件。
+    // 只允许最新验收事实认领同时携带自身故障身份的任务，不能把旧任务重新视为本轮成果。
+    if (!state.repairTaskId && event.eventId === failureEvent.eventId && isAcceptanceFailureOperation(event.payload.operation)) {
+      const evidenceMarker = `卡点故障事实：${event.eventId}`;
+      const eventScopedRepair = [...this.options.collaboration().tasks].reverse().find((item) =>
+        item.automationSource === "linghu-safeguard"
+        && item.evolutionProposalId === state.proposalId
+        && item.state !== "cancelled"
+        && item.snapshot.constraints.includes(evidenceMarker)
+        && item.snapshot.constraints.some((constraint) => constraint.startsWith("卡点标识：") && constraint.includes(":event:")));
+      if (eventScopedRepair) {
+        const aggregate = new WorkflowCheckpointAggregate(state);
+        aggregate.registerRepairTask(eventScopedRepair.taskId);
+        Object.assign(state, aggregate.snapshot());
+      }
+    }
     if (state.exhausted) {
       // 已耗尽卡点只能等待新增事实或人工处理。
       return;

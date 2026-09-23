@@ -767,17 +767,19 @@ test("后续修复任务已接管时旧主卡点不重开已集成任务", async
   };
   f.events.push(latest);
   f.collaboration.tasks.push({
-    taskId: "newer-repair", state: "unified-testing", automationSource: "linghu-safeguard",
-    evolutionProposalId: "proposal-1", snapshot: { constraints: ["卡点标识：run-1:proposal:proposal-1:round:1:event:new-acceptance-failure", "卡点故障事实：new-acceptance-failure"] },
+    taskId: "newer-repair", state: "integrated", automationSource: "linghu-safeguard",
+    evolutionProposalId: "proposal-1", snapshot: { constraints: ["卡点标识：run-1:proposal:proposal-1:round:1:event:issue-1", "卡点故障事实：new-acceptance-failure"] },
   });
+  f.options.resume = async (id) => { f.effects.resumed.push(id); f.evolution.oneShotRun.status = "running"; return f.evolution; };
   await f.run();
   assert.equal(f.event.payload.checkpoint.exhausted, true);
   assert.equal(latest.payload.checkpoint.repairTaskId, "newer-repair");
   assert.equal(f.effects.refreshed, undefined);
-  assert.deepEqual(f.effects.resumed, []);
+  assert.deepEqual(f.effects.resumed, ["run-1"]);
   await f.run();
   assert.equal(f.effects.refreshed, undefined);
   assert.equal(f.effects.submitted.length, 1);
+  assert.deepEqual(f.effects.resumed, ["run-1"]);
 });
 
 test("最新验收需要范围确认时旧技术主卡点不得更新或重启修复", async () => {
