@@ -784,6 +784,31 @@ test("后续修复任务已接管时旧主卡点不重开已集成任务", async
   assert.deepEqual(f.effects.resumed, ["run-1"]);
 });
 
+test("已集成旧修复任务遇到新验收失败时退出主卡点并只派发一次新修复", async () => {
+  const f = fixture();
+  f.event.payload.operation = "repair_failed_hanli_acceptance";
+  await f.run();
+  f.collaboration.tasks[0].state = "integrated";
+  const latest = {
+    ...structuredClone(f.event), eventId: "new-acceptance-failure", occurredAt: "2026-09-06T00:00:00Z",
+    message: "窄窗口详情面板高度为零", payload: {
+      runId: "run-1", proposalId: "proposal-1", phase: "accepting",
+      operation: "repair_failed_hanli_acceptance", acceptanceFailureKind: "product-defect",
+    },
+  };
+  f.events.push(latest);
+  await f.run();
+  assert.equal(f.event.payload.checkpoint.phase, "superseded");
+  assert.equal(f.event.payload.checkpoint.exhausted, true);
+  assert.equal(latest.payload.checkpoint.phase, "repairing");
+  assert.equal(latest.payload.checkpoint.repairTaskId, "repair-2");
+  assert.equal(f.effects.submitted.length, 2);
+  assert.equal(f.effects.refreshed, undefined);
+  assert.ok(f.effects.submitted[1].constraints.includes("卡点故障事实：new-acceptance-failure"));
+  await f.run();
+  assert.equal(f.effects.submitted.length, 2);
+});
+
 test("最新验收需要范围确认时旧技术主卡点不得更新或重启修复", async () => {
   const f = fixture();
   f.event.payload.operation = "plan_and_dispatch_one_shot";

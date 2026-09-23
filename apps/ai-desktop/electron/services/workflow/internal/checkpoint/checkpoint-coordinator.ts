@@ -371,6 +371,7 @@ export class CheckpointCoordinator {
     // 退出旧主卡点后，后续事件才能成为主记录并沿自己的恢复关系推进。
     if (state.repairTaskId && !state.exhausted) {
       const tasks = this.options.collaboration().tasks;
+      const previousRepair = tasks.find((item) => item.taskId === state.repairTaskId);
       const previousRepairIndex = tasks.findIndex((item) => item.taskId === state.repairTaskId);
       const newerRepair = previousRepairIndex < 0 ? undefined : tasks.slice(previousRepairIndex + 1).find((item) =>
         item.automationSource === "linghu-safeguard"
@@ -382,6 +383,17 @@ export class CheckpointCoordinator {
         aggregate.exhaust();
         Object.assign(state, aggregate.snapshot());
         this.#phase(event, state, "superseded", `后续修复任务 ${newerRepair.taskId} 已接管同一提案；旧卡点停止重开原修复任务。`);
+        return;
+      }
+      // 已集成任务不能再接收后来形成的独立验收失败：任务写入端会拒绝跨恢复点修订。
+      // 先退出旧主卡点，再由新事件建立事件专属修复关系，避免旧处理态永久压住新事实。
+      if (previousRepair?.state === "integrated" && failureEvent.eventId !== event.eventId
+        && isAcceptanceFailureOperation(failureEvent.payload.operation)
+        && !previousRepair.snapshot.constraints.includes(`卡点故障事实：${failureEvent.eventId}`)) {
+        const aggregate = new WorkflowCheckpointAggregate(state);
+        aggregate.exhaust();
+        Object.assign(state, aggregate.snapshot());
+        this.#phase(event, state, "superseded", `已集成修复任务 ${previousRepair.taskId} 不覆盖新验收失败 ${failureEvent.eventId}；新故障接管后续调查。`);
         return;
       }
     }
