@@ -215,7 +215,7 @@ test("任务卡明确显示韩立验收归属，并在专题完成后隐藏处�
     await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
     const card = page.getByText("专题任务 01 · 修订截图按钮可用态", { exact: true }).locator("..").locator("..");
     await expect(card).toContainText("韩立验收中");
-    await expect(card).toContainText("任务执行中 2 人：执行人甲、韩立（验收）");
+    await expect(card).toContainText("任务执行中 1 人：韩立真实验收");
     expect(await card.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.evaluate(async () => {
       await (window as any).desktop.setInteractionAcceptanceTimelineFixture("completed");

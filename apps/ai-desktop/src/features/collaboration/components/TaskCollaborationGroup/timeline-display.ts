@@ -55,7 +55,7 @@ export function groupActivityPresentation(
   // 历史节点保持原样供审计；验收阶段的人物由同一份权威阶段重新投影。
   if (matchingCurrentStage?.userAction === "resume" || matchingCurrentStage?.status === "accepting") activeOwnerLabels.clear();
 
-  // 专题阶段负责唯一的状态结论；并行人物仍必须来自当前节点，不能因为验收开始而遗漏执行人。
+  // 专题阶段负责唯一的状态结论；验收期间不把旧执行节点误计为并行人物。
   if (matchingCurrentStage && activeOwnerLabels.size === 0 && matchingCurrentStage.userAction === "none"
     && ["令狐老祖", "韩立真实验收", "南宫婉"].includes(matchingCurrentStage.waitingFor)) {
     activeOwnerLabels.set(matchingCurrentStage.waitingFor, matchingCurrentStage.waitingFor);
