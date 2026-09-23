@@ -632,7 +632,7 @@ export class PersonaEvolutionRuntime {
         publishAcceptance("received", `工程门禁已经完成，请韩立按客户原要求验收：${proposal.acceptanceCriteria.join("；")}`);
         try {
           const acceptanceTasks = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.#collaboration.state().tasks }).view().effectiveTasks;
-          const implementationEvidence = buildHanliResultReviewContext(acceptanceTasks);
+          const implementationEvidence = buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState);
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
           const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
           const plan = reviewedAcceptance.plan;

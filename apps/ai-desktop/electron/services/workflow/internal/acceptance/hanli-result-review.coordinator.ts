@@ -1,9 +1,15 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { EvolutionAcceptancePlanOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
+import type { WorkspaceStateOutDto } from "../../../../../contracts/services/support/platform/workspace/index.js";
 import type { CollaborationTaskOutDto } from "../../../../../contracts/services/workflow/index.js";
 
 /** 韩立只接收客户要求、交付摘要、工程门禁状态和变更文件，不接收详细测试流水。 */
-export function buildHanliResultReviewContext(tasks: CollaborationTaskOutDto[]): unknown[] {
+export function buildHanliResultReviewContext(
+  tasks: CollaborationTaskOutDto[],
+  fallbackWorkspaceState: WorkspaceStateOutDto,
+): unknown[] {
   return tasks.map((task) => ({
     taskId: task.taskId,
     requirement: {
@@ -17,7 +23,25 @@ export function buildHanliResultReviewContext(tasks: CollaborationTaskOutDto[]):
     finalResult: task.finalResult,
     engineeringGate: task.unifiedTest?.status || null,
     changedFiles: [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))],
+    // 只提供当前任务声明为变更的文件片段；韩立不能借此遍历工作区或读取历史记录。
+    sourceEvidence: readChangedSourceEvidence(task, fallbackWorkspaceState),
   }));
+}
+
+function readChangedSourceEvidence(
+  task: CollaborationTaskOutDto,
+  fallbackWorkspaceState: WorkspaceStateOutDto,
+): Array<{ file: string; content: string }> {
+  // 旧任务快照可能早于 workspaceState 字段；只回退到同一专题已持久化的授权范围。
+  const workspaceState = task.snapshot.workspaceState || fallbackWorkspaceState;
+  const root = workspaceState.roots.find((item) => item.id === workspaceState.primaryId)?.path;
+  if (!root) return [];
+  return [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))].flatMap((file) => {
+    if (!file || path.isAbsolute(file)) return [];
+    const resolved = path.resolve(root, file);
+    if (!resolved.startsWith(`${path.resolve(root)}${path.sep}`)) return [];
+    try { return [{ file, content: readFileSync(resolved, "utf8").slice(0, 12_000) }]; } catch { return []; }
+  });
 }
 
 /** 合并正式页面结果与独立源码审查，保证每条客户条件只有一个最终结论。 */
