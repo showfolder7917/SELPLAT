@@ -941,9 +941,14 @@ export class PersonaEvolutionRuntime {
   }
 }
 
-/** 只识别冻结条件中明确指向任务协作群可见内容的词，不替韩立推断其他页面验收路径。 */
+/**
+ * 只将必须由任务协作群裁决的条件交给该页面。
+ *
+ * 除卡片和时间线本身外，客户确认后的复查、新阻塞、成员空闲、窄窗口和历史审计都
+ * 依赖同一块页面读模型；遗漏这些词会使验收器错误拒绝其安全导航动作。
+ */
 function requiresTaskCollaborationSurface(criterion: string): boolean {
-  return /任务协作群|专题卡|任务卡|节点详情|下一流程|定位当前步骤|展开收起|详情滚动/u.test(criterion);
+  return /任务协作群|专题卡|任务卡|节点详情|下一流程|定位当前步骤|展开收起|详情滚动|提交确认|令狐复查|复查.*阻塞|阻塞.*复查|成员.*空闲|空闲.*成员|窄窗口|历史(?:审计|卡)|technicalRecovery/u.test(criterion);
 }
 
 function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }
