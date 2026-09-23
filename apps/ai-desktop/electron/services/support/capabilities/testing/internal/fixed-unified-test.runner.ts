@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 // path 统一解析源工程、候选工作树和应用目录，兼容 Windows 与 macOS。
 import path from "node:path";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 // 依赖租约让候选工作树安全借用源工程锁哈希缓存，并在结束后释放。
 import {
   acquireManagedDependencyLease,
@@ -299,6 +300,11 @@ export class FixedUnifiedTestRunner {
       SELPLAT_ROOT: this.#sourceProjectRoot,
       GIT_TERMINAL_PROMPT: "0",
     };
+    const packageArea = path.join(this.#buildRoot, "package");
+    mkdirSync(packageArea, { recursive: true });
+    const isolatedPackageRoot = mkdtempSync(path.join(packageArea, "activation-staging-"));
+    environment.AI_DESKTOP_PACKAGE_OUTPUT_ROOT = isolatedPackageRoot;
+    let staged = false;
     delete environment.ELECTRON_RUN_AS_NODE;
     delete environment.NODE_OPTIONS;
     delete environment.NODE_INSPECT_RESUME_ON_START;
@@ -317,9 +323,13 @@ export class FixedUnifiedTestRunner {
           await runNpmScript(desktopRoot, script, environment, this.#scriptTimeoutMs);
           this.#recordEvent(`${this.#eventNamespace}.runtime_activation.completed`, { script, candidateProjectRoot: resolvedProjectRoot, candidateSha });
         }
-        return stageVerifiedDeveloperExecutable(resolveVerifiedDeveloperExecutable(this.#buildRoot), this.#buildRoot, `${releaseBatchId}-runtime`, candidateSha, "activation");
+        const executable = stageVerifiedDeveloperExecutable(resolveVerifiedDeveloperExecutable(this.#buildRoot, isolatedPackageRoot), this.#buildRoot, `${releaseBatchId}-runtime`, candidateSha, "activation");
+        staged = true;
+        return executable;
       });
     } finally {
+      // 只清理已成功复制的本次隔离输入；失败包保留给令狐诊断。
+      if (staged) rmSync(isolatedPackageRoot, { recursive: true, force: true });
       releaseManagedDependencyLease(dependencyLease);
     }
   }
@@ -333,6 +343,8 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
       cwd,
       env: environment,
       shell: false,
+      // npm 启动的构建子进程与 npm 同组，超时时必须一并终止，不能留下写包进程。
+      detached: process.platform !== "win32",
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -344,18 +356,44 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
     child.stderr.on("data", append);
     // 超时由本门禁记录为独立事实，不能混同为脚本自身返回的 SIGTERM。
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMs);
+    let settled = false;
+    let forceTimer: NodeJS.Timeout | null = null;
+    const stopGroup = (signal: NodeJS.Signals) => {
+      try {
+        if (process.platform !== "win32" && child.pid) process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch { /* 已退出的进程组无需再终止。 */ }
+    };
+    const settle = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (forceTimer) clearTimeout(forceTimer);
+      if (error) reject(error);
+      else resolve();
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stopGroup("SIGTERM");
+      forceTimer = setTimeout(() => {
+        stopGroup("SIGKILL");
+        // 即使 npm 不派发 exit，统一测试也必须释放资源并报告超时。
+        settle(new UnifiedTestTimeoutError(script, timeoutMs, output.trim().slice(-4_000)));
+      }, 3_000);
+    }, timeoutMs);
     // 进程创建失败时先清理计时器，再返回原始异常。
-    child.once("error", (error) => { clearTimeout(timer); reject(error); });
+    child.once("error", (error) => settle(error));
     // 退出事件统一解释退出码或信号，并附带最后 4,000 字符证据。
     child.once("exit", (code, signal) => {
-      clearTimeout(timer);
-      if (timedOut) reject(new UnifiedTestTimeoutError(script, timeoutMs, output.trim().slice(-4_000)));
-      else if (code === 0) resolve();
+      if (timedOut) {
+        stopGroup("SIGKILL");
+        settle(new UnifiedTestTimeoutError(script, timeoutMs, output.trim().slice(-4_000)));
+      }
+      else if (code === 0) settle();
       else {
         const capacity = parseDeveloperPackageCapacityBlocked(output);
-        if (capacity) reject(new UnifiedTestCapacityBlockedError(script, capacity));
-        else reject(new Error(`${script} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
+        if (capacity) settle(new UnifiedTestCapacityBlockedError(script, capacity));
+        else settle(new Error(`${script} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
       }
     });
   });

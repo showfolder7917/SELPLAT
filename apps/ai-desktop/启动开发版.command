@@ -66,7 +66,21 @@ fi
 
 APP_NAME="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).name")"
 BUILD_ROOT="$SELPLAT_ROOT/build/$APP_NAME"
-PACKAGE_ROOT="$BUILD_ROOT/package/developer"
+PACKAGE_AREA="$BUILD_ROOT/package"
+RUNS_ROOT="$PACKAGE_AREA/developer-runs"
+if [[ -L "$PACKAGE_AREA" || -L "$RUNS_ROOT" ]]; then
+  echo "[错误] 打包目录不能是符号链接。"
+  exit 1
+fi
+mkdir -p "$PACKAGE_AREA" "$RUNS_ROOT" || exit 1
+RUN_ID="${CONTROLLED_BATCH:-manual-$(date +%Y%m%d%H%M%S)}-$$"
+RUN_PATH="$RUNS_ROOT/$RUN_ID"
+if ! mkdir "$RUN_PATH"; then
+  echo "[错误] 本次隔离打包目录已存在，拒绝覆盖。"
+  exit 1
+fi
+export AI_DESKTOP_PACKAGE_OUTPUT_ROOT="$RUN_PATH"
+PACKAGE_ROOT="$RUN_PATH"
 
 echo "[依赖] 正在核对当前锁文件专属缓存..."
 if ! npm run dependencies:ensure; then
@@ -100,6 +114,14 @@ if ! codesign --verify --deep --strict "$APP_PATH" >/dev/null 2>&1; then
   fi
 fi
 
+# 在旧实例仍可用时完成产物与隔离启动验证；失败保留本次目录供令狐排查。
+if ! npm run verify:package-content || ! npm run verify:mac:developer; then
+  echo "[错误] 隔离包验证失败；旧实例未关闭。诊断包：$RUN_PATH"
+  wait_before_close
+  exit 1
+fi
+unset AI_DESKTOP_PACKAGE_OUTPUT_ROOT
+
 # 默认临时签名会把 designated requirement 写成当前 CDHash，外壳一次重打包就会让已有 TCC 授权失配。
 if ! codesign -d --requirements - "$APP_PATH" 2>&1 | grep -Fq "$EXPECTED_DESIGNATED_REQUIREMENT"; then
   echo "[签名] 正在写入稳定屏幕录制身份..."
@@ -124,11 +146,11 @@ fi
 EXISTING_PIDS=()
 while IFS= read -r EXISTING_PID; do
   [[ -n "$EXISTING_PID" ]] && EXISTING_PIDS+=("$EXISTING_PID")
-done < <(ps -axo pid=,command= | awk -v target="$APP_EXECUTABLE" '
+done < <(ps -axo pid=,command= | awk -v packageRoot="$PACKAGE_AREA/" '
   {
     pid = $1
     sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", $0)
-    if ($0 == target || index($0, target " ") == 1) print pid
+    if (index($0, packageRoot) > 0 && index($0, "/AI Desktop.app/Contents/MacOS/AI Desktop") > 0) print pid
   }
 ')
 if [[ -n "$CONTROLLED_OLD_PID" ]]; then
@@ -167,6 +189,8 @@ fi
 
 echo "[启动] 正在打开最新 AI Desktop.app..."
 LAUNCH_ARGS=("--selplat-root=$SELPLAT_ROOT" "--ai-desktop-variant=developer")
+READY_FILE="$RUN_PATH/.renderer-ready.json"
+LAUNCH_ARGS+=("--ai-desktop-launch-ready-file=$READY_FILE")
 if [[ -n "$CONTROLLED_SHA" ]]; then
   LAUNCH_ARGS+=("--ai-desktop-runtime-sha=$CONTROLLED_SHA" "--ai-desktop-resume-release=$CONTROLLED_BATCH")
   if [[ -n "$CONTROLLED_USER_DATA_DIR" ]]; then LAUNCH_ARGS+=("--ai-desktop-user-data-dir=$CONTROLLED_USER_DATA_DIR"); fi
@@ -175,6 +199,35 @@ open -n "$APP_PATH" --args "${LAUNCH_ARGS[@]}"
 if [[ $? -ne 0 ]]; then
   echo "[错误] AI Desktop.app 启动失败。"
   wait_before_close
+  exit 1
+fi
+
+# 新实例的 Renderer 真正就绪后才回收旧开发包；进程出现本身不算健康。
+NEW_PROCESS_READY=false
+for _ in {1..300}; do
+  if [[ -f "$READY_FILE" ]]; then
+    NEW_PROCESS_READY=true
+    break
+  fi
+  sleep 0.1
+done
+if [[ "$NEW_PROCESS_READY" == true ]]; then
+  for OLD_RUN in "$RUNS_ROOT"/*(N/); do
+    [[ "$OLD_RUN" == "$RUN_PATH" ]] && continue
+    [[ -L "$OLD_RUN" ]] && continue
+    rm -rf -- "$OLD_RUN"
+  done
+  # 旧固定输出不再是运行位置；正式发布接口仍由原有 npm 命令保留。
+  if [[ -d "$PACKAGE_AREA/developer" ]]; then rm -rf -- "$PACKAGE_AREA/developer"; fi
+  # 历史正式发布副本只在新开发版页面就绪后回收；发布归档文档不在此目录。
+  if [[ -d "$PACKAGE_AREA/published" && ! -L "$PACKAGE_AREA/published" ]]; then
+    for OLD_PUBLISHED in "$PACKAGE_AREA/published"/*(N/); do
+      [[ -L "$OLD_PUBLISHED" ]] && continue
+      rm -rf -- "$OLD_PUBLISHED"
+    done
+  fi
+else
+  echo "[错误] 新实例未在 30 秒内报告页面就绪；保留旧包与诊断材料。"
   exit 1
 fi
 

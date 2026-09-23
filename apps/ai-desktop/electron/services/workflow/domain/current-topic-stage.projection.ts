@@ -351,7 +351,7 @@ function readDeliveryGate(evidence: CurrentTopicStageOutDto["deliveryEvidence"])
     return { status: "awaiting-release", summary: "最终候选已通过完整测试，缺少发布结果。", remaining: "缺少发布结果。", waitingFor: "发布服务", nextAction: "发布最终候选，并记录发布结果。" };
   }
   if (evidence.restartHealth === "missing") {
-    return { status: "awaiting-restart-health", summary: "最终候选已发布，缺少重启健康检查结果。", remaining: "缺少重启健康检查结果。", waitingFor: "新版本重启健康检查", nextAction: "完成新版本重启健康检查，并记录结果。" };
+    return { status: "awaiting-restart-health", summary: "候选验证已完成，等待打包与重启健康检查确认发布结果。", remaining: "缺少重启健康检查结果。", waitingFor: "新版本重启健康检查", nextAction: "完成新版本重启健康检查，并记录结果。" };
   }
   if (evidence.acceptance === "passed") return null;
   if (evidence.acceptance === "running") {
@@ -391,7 +391,7 @@ function stageSummary(status: CurrentTopicStageOutDto["status"], executionSummar
   if (status === "failed-pending-repair") return acceptance ? `最新真实验收 ${acceptance.runId} 未通过，等待按原恢复点处理。` : executionSummary;
   if (status === "pending-acceptance") return "当前有效任务已经完成，等待韩立选择适用的结果验收方式。";
   if (status === "awaiting-release") return "最终候选已通过完整测试，等待发布结果。";
-  if (status === "awaiting-restart-health") return "最终候选已发布，等待重启健康检查。";
+  if (status === "awaiting-restart-health") return "候选验证已完成，等待重启健康检查确认发布结果。";
   if (status === "accepting") return "韩立已开始本轮结果验收。";
   if (status === "completed") return "韩立结果验收已经通过，专题已完成。";
   if (status === "completed-unverified") return "尚未核验：当前无法确认最终验收通过。";

@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
+import { resolveDeveloperPackageOutputRoot } from "./developer-package-output.mjs";
 
 if (process.platform !== "darwin") throw new Error("macOS developer signing can only run on macOS.");
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -11,7 +12,7 @@ const sourceProjectRoot = path.resolve(appRoot, "../..");
 const projectRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
 const paths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
 const builder = JSON.parse(readFileSync(path.join(appRoot, "electron-builder.developer.json"), "utf8"));
-const packageRoot = path.join(paths.buildRoot, "package", "developer");
+const packageRoot = resolveDeveloperPackageOutputRoot(paths.buildRoot);
 const macDirectory = readdirSync(packageRoot, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name.startsWith("mac"));
 if (!macDirectory) throw new Error(`Packaged macOS application is unavailable: ${packageRoot}`);
 const applicationPath = path.join(packageRoot, macDirectory.name, `${builder.productName}.app`);

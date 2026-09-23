@@ -6,12 +6,13 @@ import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 import { assertPackagedDistributionParser, packagedDistributionServicePath } from "./package-distribution-parser-gate.mjs";
 import { resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
+import { resolveDeveloperPackageOutputRoot } from "./developer-package-output.mjs";
 
 const require = createRequire(import.meta.url);
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = resolveSelectedWorkspaceRoot(path.resolve(appRoot, "../.."));
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
-const packageRoot = path.join(projectPaths.buildRoot, "package", "developer");
+const packageRoot = resolveDeveloperPackageOutputRoot(projectPaths.buildRoot);
 const macDirectory = existsSync(packageRoot)
   ? readdirSync(packageRoot, { withFileTypes: true }).find((entry) => entry.isDirectory() && entry.name.startsWith("mac"))
   : null;

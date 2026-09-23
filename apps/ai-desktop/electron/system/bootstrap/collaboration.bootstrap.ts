@@ -59,6 +59,10 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     recordEvent: (type, details) => eventCenter.recordEvent(type, details),
   });
   const releaseBatches = createReleaseBatchStore(projectPaths.runningExecutionRoot, projectPaths.archiveLogRoot, projectPaths.buildRoot);
+  for (const batch of collaborationStore.state().integrationBatches) {
+    if (batch.state !== "failed" || batch.failureReason !== "应用重建中断集成，等待用户恢复") continue;
+    releaseBatches.archiveInterruptedBatch(`release-${options.releaseVersion}-g${batch.generation}`, batch.generation, batch.failureReason);
+  }
   const taskTests = createTaskWorktreeTestRunner(
     projectRoot,
     applicationName,
@@ -110,7 +114,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
       const candidateExecutable = unifiedTestResult.executable;
       return {
         // macOS 测试阶段由固定开发脚本在已合并的主工作区重新打包；候选应用留在受控工作树，重启健康后随工作树回收。
-        executable: process.platform === "darwin"
+        executable: candidateExecutable === "developer-script"
           ? candidateExecutable
           : stageVerifiedDeveloperExecutable(candidateExecutable, projectPaths.buildRoot, releaseBatchId, candidate.candidateSha),
         verificationEvidence: unifiedTestResult.verificationEvidence,
@@ -149,5 +153,6 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     versionWorkspaces,
     testResources,
     releaseBatches,
+    versionIntegration,
   };
 }

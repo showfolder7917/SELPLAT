@@ -679,12 +679,30 @@ export async function startApplication(): Promise<void> {
           const child = spawn("/bin/zsh", [developerStartScript, `--release-batch=${releaseBatchId}`, `--runtime-sha=${runtimeSourceSha}`, `--replace-pid=${process.pid}`, ...(isolatedUserData ? [`--user-data-dir=${isolatedUserData}`] : [])], {
             cwd: projectPaths.sourceRoot, detached: true, stdio: ["ignore", output, output],
           });
-          child.on("error", (error) => eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "start_controlled_restart", error, details: { releaseBatchId, restartLog } }));
+          // 开发脚本不经过统一测试 Runner；独立限时器必须覆盖其完整构建与验证阶段。
+          const restartTimeout = setTimeout(() => {
+            const failure = new Error(`开发版打包与重启超过 25 分钟，已终止该脚本进程组；诊断日志：${restartLog}`);
+            try { if (child.pid) process.kill(-child.pid, "SIGTERM"); } catch { /* 脚本已退出。 */ }
+            setTimeout(() => { try { if (child.pid) process.kill(-child.pid, "SIGKILL"); } catch { /* 进程组已退出。 */ } }, 3_000).unref();
+            collaborationContext.versionIntegration.reportDeveloperRestartFailure(releaseBatchId, failure.message);
+            eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "controlled_restart_timeout", error: failure, details: { releaseBatchId, restartLog } });
+          }, 25 * 60_000);
+          restartTimeout.unref();
+          child.on("error", (error) => {
+            clearTimeout(restartTimeout);
+            eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "start_controlled_restart", error, details: { releaseBatchId, restartLog } });
+            collaborationContext.versionIntegration.reportDeveloperRestartFailure(releaseBatchId, `开发版脚本未能启动：${error.message}`);
+          });
           child.on("exit", (code) => {
-            if (code !== 0) eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "controlled_restart", error: new Error(`开发版启动脚本退出码 ${String(code)}`), details: { releaseBatchId, restartLog } });
+            clearTimeout(restartTimeout);
+            if (code !== 0) {
+              const failure = new Error(`开发版启动脚本退出码 ${String(code)}；诊断日志：${restartLog}`);
+              eventCenter.recordException({ kind: "technical", sourceType: "launcher", sourceId: "developer-script", operation: "controlled_restart", error: failure, details: { releaseBatchId, restartLog } });
+              collaborationContext.versionIntegration.reportDeveloperRestartFailure(releaseBatchId, failure.message);
+            }
           });
           child.unref();
-          eventCenter.recordEvent("application.developer_script_restart_scheduled", { reason: "integration_release_published", releaseBatchId, runtimeSourceSha, developerStartScript, restartLog });
+          eventCenter.recordEvent("application.developer_script_restart_scheduled", { reason: "integration_candidate_verified", releaseBatchId, runtimeSourceSha, developerStartScript, restartLog });
         } finally {
           closeSync(output);
         }
@@ -1357,10 +1375,20 @@ export async function startApplication(): Promise<void> {
   let onRendererFailed: ((details: { errorCode: number; errorDescription: string; validatedURL: string }) => void) | undefined = (details) => eventCenter.recordException({
     kind: "technical", sourceType: "system", sourceId: "electron-renderer", operation: "renderer_load", error: new Error(details.errorDescription), details,
   });
+  const launchReadyArgument = process.argv.find((argument) => argument.startsWith("--ai-desktop-launch-ready-file="));
+  const launchReadyFile = launchReadyArgument ? path.resolve(launchReadyArgument.slice("--ai-desktop-launch-ready-file=".length)) : null;
+  if (launchReadyFile) {
+    const expectedRunRoot = path.resolve(path.dirname(process.execPath), "../../../..");
+    const allowedRunRoot = path.join(projectPaths.buildRoot, "package", "developer-runs");
+    if (!expectedRunRoot.startsWith(`${allowedRunRoot}${path.sep}`) || launchReadyFile !== path.join(expectedRunRoot, ".renderer-ready.json")) {
+      throw new Error("开发版页面就绪标记路径无效。");
+    }
+  }
   onRendererReady = () => {
     // 新版本页面成功加载后，才确认“发布并重启”闭环健康。
     const confirmedGenerations = collaboration?.confirmPublishedRestart() || [];
     if (confirmedGenerations.length) eventCenter.recordEvent("application.release_restart_healthy", { confirmedGenerations });
+    if (launchReadyFile) writeFileSync(launchReadyFile, `${JSON.stringify({ status: "ready", recordedAt: new Date().toISOString() })}\n`, "utf8");
   };
   if (healthCheckFile) {
     // 健康检查结果只能写入工程临时材料下的固定目录，防止命令参数任意写文件。

@@ -48,6 +48,35 @@ export class ReleaseBatchStore {
     return document.state === "activating" && document.runtimeActivation?.state === "relaunch-scheduled" ? document : null;
   }
 
+  /** 读取仍在运行的精确批次，不扫描或修改其他发布记录。 */
+  runningDocument(releaseBatchId: string): ReleaseBatchDocumentOutDto | null {
+    if (!/^[a-zA-Z0-9._-]+$/.test(releaseBatchId)) return null;
+    const documentPath = path.join(this.#runningRoot, releaseBatchId, "发布批次文档.json");
+    return existsSync(documentPath) ? JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto : null;
+  }
+
+  /** 新进程恢复时只归档被状态仓库明确判为中断的旧批次，保留候选与失败证据。 */
+  archiveInterruptedBatch(releaseBatchId: string, generation: number, reason: string): void {
+    const document = this.runningDocument(releaseBatchId);
+    if (!document || document.generation !== generation || !["candidate-ready", "testing", "verified", "integrated"].includes(document.state)) return;
+    document.state = "failed";
+    document.failureReason = reason;
+    document.completedAt = new Date().toISOString();
+    this.write(document);
+  }
+
+  /** 开发脚本重启经新进程健康检查后才归档发布成功事实。 */
+  confirmDeveloperRestart(releaseBatchId: string): void {
+    if (!/^[a-zA-Z0-9._-]+$/.test(releaseBatchId)) return;
+    const documentPath = path.join(this.#runningRoot, releaseBatchId, "发布批次文档.json");
+    if (!existsSync(documentPath)) return;
+    const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto;
+    if (document.state !== "integrated" || document.executable !== null) return;
+    document.state = "published";
+    document.completedAt = new Date().toISOString();
+    this.write(document);
+  }
+
   /** 固定开发版装载并通过健康检查后，仅回收本批次预激活临时应用；历史发布包与当前运行应用不在范围内。 */
   retireRuntimeActivationPackage(releaseBatchId: string): void {
     if (!this.#stableBuildRoot || !/^[a-zA-Z0-9._-]+$/.test(releaseBatchId)) return;

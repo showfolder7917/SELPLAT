@@ -4,12 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 import { assertWorkspaceDataPath, resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
+import { resolveDeveloperPackageOutputRoot } from "./developer-package-output.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceProjectRoot = path.resolve(appRoot, "../..");
 const projectRoot = resolveSelectedWorkspaceRoot(sourceProjectRoot);
 const projectPaths = resolveApplicationDataPaths({ selplatRoot: projectRoot, applicationName: resolveApplicationNameFromSourceRoot(appRoot) });
-const releaseRoot = path.join(projectPaths.buildRoot, "package", "developer");
+const releaseRoot = resolveDeveloperPackageOutputRoot(projectPaths.buildRoot);
 const macDirectory = readdirSync(releaseRoot, { withFileTypes: true })
   .find((entry) => entry.isDirectory() && entry.name.startsWith("mac"));
 if (!macDirectory) throw new Error("未找到 macOS 开发版输出目录。");

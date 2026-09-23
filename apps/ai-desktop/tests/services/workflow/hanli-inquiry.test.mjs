@@ -325,6 +325,18 @@ test("结构化理解与可见回复分离，理解不足时保留澄清门禁",
   assert.equal(clarification.inquiry.status, "clarification-required");
   assert.deepEqual(clarification.inquiry.ambiguities, ["需要确认源码还是运行版本"]);
 });
+test("韩立元数据末尾多一个闭合括号仍能派发，其他损坏不能绕过调查门禁", () => {
+  const valid = JSON.stringify({ ...topic, inquiry: understanding });
+  const surplus = parseHanliConversationResponse(`先核实\nHANLI_TOPIC_META=${valid}}`);
+  assert.equal(surplus.reply, "先核实");
+  assert.equal(surplus.inquiry.status, "ready");
+  assert.equal(surplus.inquiry.investigationQuestion, understanding.investigationQuestion);
+  const broken = parseHanliConversationResponse(`先核实\nHANLI_TOPIC_META=${valid.slice(0, -1)},}`);
+  assert.equal(broken.inquiry, undefined);
+  assert.equal(broken.inquiryNotNeeded, undefined);
+  const unrelated = parseHanliConversationResponse(`先核实\nHANLI_TOPIC_META=${valid} extra`);
+  assert.equal(unrelated.inquiry, undefined);
+});
 test("韩立必须解析上下文指代并向客户给出完整准确的交代", () => {
   assert.match(conversationPrompt, /“这个”“这里”“这样改”“修复它”/);
   assert.match(conversationPrompt, /找到它所指的对象、现状问题、期望变化和明确约束/);

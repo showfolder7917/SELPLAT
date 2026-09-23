@@ -101,6 +101,15 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builder, /\{ "from": "db\/sql", "to": "db\/sql", "filter": \["load-order\.txt", "\*\.sql"\] \}/);
   assert.doesNotMatch(launcher, /^if ! npm run build:developer/m);
   assert.match(launcher, /npm run package:mac:developer/);
+  assert.match(launcher, /RUN_PATH="\$RUNS_ROOT\/\$RUN_ID"[\s\S]*mkdir "\$RUN_PATH"/);
+  assert.match(launcher, /export AI_DESKTOP_PACKAGE_OUTPUT_ROOT="\$RUN_PATH"/);
+  assert.match(launcher, /npm run verify:package-content \|\| ! npm run verify:mac:developer/);
+  assert.ok(launcher.indexOf("npm run verify:mac:developer") < launcher.indexOf('kill "${EXISTING_PIDS[@]}"'), "旧进程只能在隔离包验证后关闭");
+  assert.match(launcher, /RUNS_ROOT="\$PACKAGE_AREA\/developer-runs"/);
+  assert.match(launcher, /READY_FILE="\$RUN_PATH\/\.renderer-ready\.json"[\s\S]*--ai-desktop-launch-ready-file=\$READY_FILE/);
+  assert.match(launcher, /NEW_PROCESS_READY[\s\S]*\[\[ -f "\$READY_FILE" \]\][\s\S]*rm -rf -- "\$OLD_RUN"/);
+  assert.match(launcher, /\[\[ -d "\$PACKAGE_AREA\/published" && ! -L "\$PACKAGE_AREA\/published" \]\][\s\S]*rm -rf -- "\$OLD_PUBLISHED"/);
+  assert.match(electronMain, /launchReadyFile[\s\S]*confirmPublishedRestart\(\)[\s\S]*writeFileSync\(launchReadyFile/);
   assert.match(packageManifest.scripts["package:mac:developer"], /npm run build:developer/);
   assert.match(launcher, /codesign --force --deep --sign -/);
   assert.match(launcher, /EXPECTED_DESIGNATED_REQUIREMENT='designated => identifier/);

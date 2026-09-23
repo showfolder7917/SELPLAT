@@ -13,4 +13,4 @@ export type CollaborationFlowEventTypeValue =
   | "integration.merge_conflict" | "integration.candidate_preparation_failed" | "integration.infrastructure_failed" | "integration.conflict_correction_requested"
   | "evolution.task_collected" | "unified_test.started" | "unified_test.passed" | "unified_test.failed" | "unified_test.retry_requested"
   | "unified_test.repair_started" | "unified_test.repair_investigated" | "unified_test.repair_completed" | "unified_test.repair_failed"
-  | "release.published" | "release.restart_healthy";
+  | "release.published" | "release.restart_scheduled" | "release.developer_restart_failed" | "release.restart_healthy";

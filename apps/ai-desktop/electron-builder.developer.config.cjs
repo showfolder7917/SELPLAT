@@ -11,6 +11,14 @@ if (!existsSync(path.join(selplatRoot, ".git")) || !existsSync(manifestPath)) {
 
 const baseConfig = JSON.parse(readFileSync(path.join(applicationRoot, "electron-builder.developer.json"), "utf8"));
 const sourceBundleBuildRoot = path.join(selplatRoot, "build", "ai-desktop");
+const defaultPackageOutputRoot = path.join(sourceBundleBuildRoot, "package", "developer");
+const packageOutputRoot = process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT
+  ? path.resolve(process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT)
+  : defaultPackageOutputRoot;
+const packageArea = path.join(sourceBundleBuildRoot, "package");
+if (packageOutputRoot !== defaultPackageOutputRoot && !packageOutputRoot.startsWith(`${packageArea}${path.sep}`)) {
+  throw new Error(`AI Desktop package output escaped the selected build root: ${packageOutputRoot}`);
+}
 const candidateProjectRoot = path.resolve(applicationRoot, "../..");
 const candidateBuildRoot = path.join(candidateProjectRoot, "build", "ai-desktop");
 const packageInputRoot = process.env.AI_DESKTOP_PACKAGE_INPUT_ROOT
@@ -53,7 +61,7 @@ module.exports = {
     ...baseConfig.directories,
     // projectDir 指向 SELPLAT 根后，应用元数据和 files 相对路径仍以 AI Desktop 应用目录为准。
     app: packageInputRoot,
-    output: path.join(selplatRoot, "build", "ai-desktop", "package", "developer"),
+    output: packageOutputRoot,
   },
   // 开发版打包复用依赖缓存中已经安装并校验过的 Electron，避免再次进入外部下载缓存的解压等待。
   electronDist: path.join(applicationRoot, "node_modules", "electron", "dist"),

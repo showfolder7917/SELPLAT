@@ -149,7 +149,8 @@ export class VersionIntegrationPipeline {
           appendFlow(task, "release.restart_healthy", "integration", "completed", "新版本已重启并通过渲染器健康检查，结果返回南宫婉", currentActor);
         }
       });
-      // 新版本已从固定开发位置加载，预激活候选不再是运行进程；只回收本批次临时副本。
+      this.#releaseBatches.confirmDeveloperRestart(`release-${this.#releaseVersion}-g${generation}`);
+      // 新版本已从独立运行目录加载，预激活候选不再是运行进程；只回收本批次临时副本。
       try {
         this.#releaseBatches.retireRuntimeActivationPackage(`release-${this.#releaseVersion}-g${generation}`);
       } catch (error) {
@@ -170,6 +171,40 @@ export class VersionIntegrationPipeline {
       });
     }
     return generations;
+  }
+
+  /** 打包或启动脚本明确失败时，旧进程把等待重启的任务退回令狐可恢复卡点。 */
+  reportDeveloperRestartFailure(releaseBatchId: string, detail: string): void {
+    const document = this.#releaseBatches.runningDocument(releaseBatchId);
+    if (!document || document.state !== "integrated" || document.executable !== null) return;
+    const state = this.#store.state();
+    const taskIds = document.tasks.map((task) => task.taskId);
+    const active = state.tasks.filter((task) => taskIds.includes(task.taskId) && task.state === "awaiting-restart");
+    if (!active.length) return;
+    const presentation = integrationFailurePresentation("infrastructure", document.generation, detail);
+    this.#store.updateTask(active[0].taskId, "release.developer_restart_failed", (_first, mutable) => {
+      const batch = mutable.integrationBatches.find((item) => item.generation === document.generation);
+      if (batch) { batch.state = "failed"; batch.failureReason = detail; batch.failureKind = "infrastructure"; batch.completedAt = new Date().toISOString(); }
+      const actor = requireActor(mutable, this.#actorMemberId);
+      for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId) && item.state === "awaiting-restart")) {
+        task.state = "blocked";
+        task.blockingReason = presentation.summary;
+        task.recoveryTargetState = "ready-for-integration";
+        task.integrationFailure = {
+          kind: "infrastructure", phase: "release", summary: presentation.summary,
+          impact: presentation.impact, recoveryAction: presentation.recoveryAction,
+          capacity: null, detail, workspaceRoot: null, conflictFiles: [],
+          baseSha: null, resultSha: task.versionWorkspace?.resultSha || null,
+          generation: document.generation, occurredAt: new Date().toISOString(),
+        };
+        appendFlow(task, "release.developer_restart_failed", "integration", "waiting", presentation.summary, actor, false);
+      }
+    });
+    document.state = "failed";
+    document.failureReason = detail;
+    document.completedAt = new Date().toISOString();
+    this.#releaseBatches.write(document);
+    this.schedule();
   }
 
   /** 候选运行包重启后只恢复已归档的原候选，禁止重新组装出另一个 SHA。 */
@@ -212,7 +247,7 @@ export class VersionIntegrationPipeline {
       });
       const verified = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
       document.state = "verified";
-      document.executable = verified.executable;
+      document.executable = verified.executable === "developer-script" ? null : verified.executable;
       this.#releaseBatches.write(document);
       const integrationSha = await this.#workspaces.promoteIntegrationCandidate(candidate);
       const localMergeSha = await this.#workspaces.mergeIntoLocalBranch(integrationSha);
@@ -229,12 +264,12 @@ export class VersionIntegrationPipeline {
           appendFlow(task, "unified_test.passed", "integration", "completed", `${actor.displayName}统一测试通过，等待打包版本重启健康检查`, actor);
         }
       });
-      document.state = "published";
-      document.completedAt = new Date().toISOString();
+      document.state = verified.executable === "developer-script" ? "integrated" : "published";
+      document.completedAt = verified.executable === "developer-script" ? null : new Date().toISOString();
       this.#releaseBatches.write(document);
-      this.#store.updateTask(taskIds[0], "release.published", (_first, mutable) => {
+      this.#store.updateTask(taskIds[0], verified.executable === "developer-script" ? "release.restart_scheduled" : "release.published", (_first, mutable) => {
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          appendFlow(task, "release.published", "integration", "completed", "最终候选已发布，等待新版本重启健康检查", actor);
+          appendFlow(task, verified.executable === "developer-script" ? "release.restart_scheduled" : "release.published", "integration", "completed", verified.executable === "developer-script" ? "候选验证完成，等待开发版脚本打包并重启" : "最终候选已发布，等待新版本重启健康检查", actor);
         }
       });
       publishedExecutable = verified.executable;
@@ -449,7 +484,7 @@ export class VersionIntegrationPipeline {
         return;
       }
       releaseDocument.state = "verified";
-      releaseDocument.executable = publishedExecutable;
+      releaseDocument.executable = publishedExecutable === "developer-script" ? null : publishedExecutable;
       this.#releaseBatches.write(releaseDocument);
       this.#durations.finish(verifySpan, "completed", { releaseEvent: "integration.verified" });
       verifySpan = null;
@@ -488,14 +523,14 @@ export class VersionIntegrationPipeline {
 
       // 原任务工作树必须保留到真实重启确认，失败时仍可在原任务继续修复。
       this.#durations.writeGenerationReport(generation, taskIds);
-      releaseDocument.state = "published";
-      releaseDocument.completedAt = new Date().toISOString();
+      releaseDocument.state = publishedExecutable === "developer-script" ? "integrated" : "published";
+      releaseDocument.completedAt = publishedExecutable === "developer-script" ? null : new Date().toISOString();
       this.#releaseBatches.write(releaseDocument);
-      this.#store.updateTask(taskIds[0], "release.published", (_first, mutable) => {
+      this.#store.updateTask(taskIds[0], publishedExecutable === "developer-script" ? "release.restart_scheduled" : "release.published", (_first, mutable) => {
         // 该回调独立提交发布事实，不能引用统一测试回调内部的局部执行人变量。
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          appendFlow(task, "release.published", "integration", "completed", "最终候选已发布，等待新版本重启健康检查", currentActor);
+          appendFlow(task, publishedExecutable === "developer-script" ? "release.restart_scheduled" : "release.published", "integration", "completed", publishedExecutable === "developer-script" ? "候选验证完成，等待开发版脚本打包并重启" : "最终候选已发布，等待新版本重启健康检查", currentActor);
         }
       });
     } catch (error) {
@@ -583,8 +618,8 @@ export class VersionIntegrationPipeline {
       this.#running = false;
       this.schedule();
     }
-    // 发布只消费已经归档为 published 的稳定可执行文件，失败批次不会触发受控重启。
-    if (publishedExecutable && releaseDocument?.state === "published" && candidate) {
+    // 正式模式消费已发布可执行文件；开发模式消费已集成候选，由脚本完成打包与重启。
+    if (publishedExecutable && (releaseDocument?.state === "published" || (publishedExecutable === "developer-script" && releaseDocument?.state === "integrated")) && candidate) {
       this.#publishRelease(publishedExecutable, releaseBatchId, candidate.candidateSha);
     }
   }

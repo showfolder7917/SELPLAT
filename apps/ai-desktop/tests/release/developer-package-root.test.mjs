@@ -20,6 +20,23 @@ const developerDesktopLauncherSource = readFileSync(new URL("../../scripts/start
 const mainWindowSource = readFileSync(new URL("../../electron/system/window/create-main-window.ts", import.meta.url), "utf8");
 const packageInputSource = readFileSync(new URL("../../scripts/developer-package-input.mjs", import.meta.url), "utf8");
 const packageRunnerSource = readFileSync(new URL("../../scripts/package-developer.mjs", import.meta.url), "utf8");
+
+test("隔离打包输出只允许位于当前工作区构建目录", async () => {
+  const { resolveDeveloperPackageOutputRoot } = await import(new URL("../../scripts/developer-package-output.mjs", import.meta.url));
+  const buildRoot = path.join(applicationRoot, "cache", "test-tmp", "output-boundary");
+  const original = process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT;
+  try {
+    delete process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT;
+    assert.equal(resolveDeveloperPackageOutputRoot(buildRoot), path.join(buildRoot, "package", "developer"));
+    process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT = path.join(buildRoot, "package", "staging-safe");
+    assert.equal(resolveDeveloperPackageOutputRoot(buildRoot), process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT);
+    process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT = path.join(buildRoot, "outside");
+    assert.throws(() => resolveDeveloperPackageOutputRoot(buildRoot), /escaped/);
+  } finally {
+    if (original === undefined) delete process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT;
+    else process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT = original;
+  }
+});
 const managedTestRunnerSource = readFileSync(new URL("../../scripts/run-managed-tests.mjs", import.meta.url), "utf8");
 
 test("全部开发版打包入口自动注入稳定 SELPLAT 工程根", () => {

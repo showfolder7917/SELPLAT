@@ -113,7 +113,14 @@ export function createLinghuRuntime(options: CreateLinghuRuntimeOptions): Linghu
   return {
     memberId: "linghu-ancestor",
     facade,
-    runUnifiedTests: (candidateProjectRoot) => unifiedTests.run(candidateProjectRoot),
+    runUnifiedTests: async (candidateProjectRoot) => {
+      if (options.unifiedTest.deliveryMode === "developer-script") {
+        // 协作集成也必须遵守开发版模式：旧正式打包仅保留显式 formal-release 接口。
+        const validated = await unifiedTests.validate(candidateProjectRoot);
+        return { executable: "developer-script", verificationEvidence: validated.verificationEvidence };
+      }
+      return unifiedTests.run(candidateProjectRoot);
+    },
     prepareRuntimeActivation: (candidateProjectRoot, releaseBatchId, candidateSha) => unifiedTests.prepareRuntimeActivation(candidateProjectRoot, releaseBatchId, candidateSha),
     clearTestData: () => store.clearTestData(),
     assertTestDataCleared: () => store.assertTestDataCleared(),

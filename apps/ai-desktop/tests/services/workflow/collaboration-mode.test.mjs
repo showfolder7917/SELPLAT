@@ -1489,15 +1489,16 @@ test("令狐测试阶段完成固定验证后启动开发版脚本并保留正�
   assert.match(runner, /if \(!includeReleaseGates\) return \{ executable: null, verificationEvidence \}/);
   assert.match(linghuRuntimeSource, /deliveryMode === "developer-script"[\s\S]*await unifiedTests\.validate\(\)[\s\S]*launchDeveloperScript\(\)/);
   assert.match(linghuRuntimeSource, /await unifiedTests\.run\(\)[\s\S]*publishVerifiedPackage\(unifiedTestResult\.executable\)/);
+  assert.match(linghuRuntimeSource, /runUnifiedTests: async \(candidateProjectRoot\)[\s\S]*deliveryMode === "developer-script"[\s\S]*unifiedTests\.validate\(candidateProjectRoot\)[\s\S]*executable: "developer-script"[\s\S]*return unifiedTests\.run\(candidateProjectRoot\)/);
   assert.match(main, /deliveryMode: process\.platform === "darwin" \? "developer-script" : "formal-release"/);
   assert.match(main, /launchDeveloperScript:[\s\S]*启动开发版\.command[\s\S]*execFileSync\("\/usr\/bin\/open"[\s\S]*app\.exit\(0\)/);
   assert.match(main, /publishVerifiedPackage: \(executable\)[\s\S]*app\.relaunch\(\{ execPath: executable[\s\S]*app\.exit\(0\)/);
   assert.match(collaborationBootstrap, /IntegrationReleaseCoordinatorFacade[\s\S]*createReleaseBatchStore[\s\S]*createVersionIntegrationPipeline[\s\S]*acquireRelease[\s\S]*publishRelease/);
-  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*process\.platform === "darwin"[\s\S]*candidateExecutable[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId, candidate\.candidateSha\)/);
+  assert.match(collaborationBootstrap, /runUnifiedTests\(rootPath\)[\s\S]*candidateExecutable === "developer-script"[\s\S]*stageVerifiedDeveloperExecutable\(candidateExecutable, projectPaths\.buildRoot, releaseBatchId, candidate\.candidateSha\)/);
   assert.match(main, /publishRelease: \(executable, releaseBatchId, runtimeSourceSha\)[\s\S]*启动开发版\.command[\s\S]*--release-batch=[\s\S]*--runtime-sha=[\s\S]*--replace-pid=/);
   assert.match(coordinatorSource, /integrationPipeline\.schedule\(\)/);
   assert.doesNotMatch(coordinatorSource, /createReleaseCandidate|promoteIntegrationCandidate|mergeIntoLocalBranch|releaseDocument\.state/);
-  assert.match(integrationPipelineSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*promoteIntegrationCandidate[\s\S]*mergeIntoLocalBranch[\s\S]*releaseDocument\.state = "published"/);
+  assert.match(integrationPipelineSource, /createReleaseCandidate[\s\S]*releaseDocument\.state = "testing"[\s\S]*promoteIntegrationCandidate[\s\S]*mergeIntoLocalBranch[\s\S]*publishedExecutable === "developer-script" \? "integrated" : "published"/);
   assert.doesNotMatch(integrationPipelineSource, /LINGHU_MEMBER_ID|linghu-ancestor|令狐老祖/);
   assert.match(releaseBatchStoreSource, /initiatorMemberId[\s\S]*state: "frozen", initiatorMemberId/);
   assert.doesNotMatch(releaseBatchStoreSource, /linghu-ancestor/);
@@ -1515,10 +1516,13 @@ test("打包运行时的两条重启路径都从工程源码目录查找开发�
 
 test("正式发布流程是具备原子落盘与互斥保护的可恢复 Saga 而非单一事务", () => {
   assert.match(releaseBatchStoreSource, /writeFileSync\(temporary[\s\S]*renameSync\(temporary, target\)/);
-  assert.match(integrationPipelineSource, /#acquireRelease[\s\S]*#releaseBatches\.create[\s\S]*releaseDocument\.state = "testing"[\s\S]*releaseDocument\.state = "published"/);
-  const publishedState = integrationPipelineSource.indexOf('releaseDocument.state = "published"');
+  assert.match(integrationPipelineSource, /#acquireRelease[\s\S]*#releaseBatches\.create[\s\S]*releaseDocument\.state = "testing"[\s\S]*publishedExecutable === "developer-script" \? "integrated" : "published"/);
+  const publishedState = integrationPipelineSource.indexOf('releaseDocument.state = publishedExecutable === "developer-script" ? "integrated" : "published"');
   const restartCall = integrationPipelineSource.lastIndexOf("this.#publishRelease(publishedExecutable");
   assert.ok(publishedState >= 0 && restartCall > publishedState, "发布状态持久化与重启是两个可恢复提交点，不能误称端到端原子事务");
+  assert.match(integrationPipelineSource, /confirmDeveloperRestart\(`release-\$\{this\.#releaseVersion\}-g\$\{generation\}`\)/);
+  assert.match(integrationPipelineSource, /reportDeveloperRestartFailure\(releaseBatchId: string, detail: string\)/);
+  assert.match(collaborationBootstrap, /batch\.failureReason !== "应用重建中断集成，等待用户恢复"[\s\S]*releaseBatches\.archiveInterruptedBatch/);
 });
 
 test("发布重启携带候选源码提交且只由同一运行版本完成健康验收", () => {

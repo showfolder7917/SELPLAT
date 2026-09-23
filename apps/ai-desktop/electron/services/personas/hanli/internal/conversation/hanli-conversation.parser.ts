@@ -69,7 +69,7 @@ export function parseHanliConversationResponse(text: string): ParsedHanliConvers
   // JSON 解析或字段校验失败不能丢失已经生成的可见回复。
   try {
     // value 是模型返回的候选元数据，所有字段仍需逐项校验。
-    const value = JSON.parse(markerText) as Partial<ConversationRoundTopicDecisionInDto> & {
+    const value = parseTopicMetaJson(markerText) as Partial<ConversationRoundTopicDecisionInDto> & {
       // inquiry 是模型可选返回的调查理解候选。
       inquiry?: Partial<HanliInquiryUnderstanding> | { status: "not-needed" };
     };
@@ -125,6 +125,20 @@ export function parseHanliConversationResponse(text: string): ParsedHanliConvers
       topic: pendingTopicDecision(),
     };
   }
+}
+
+/** 仅修复模型偶发多写的尾部闭合括号；正文和字段校验仍由原门禁负责。 */
+function parseTopicMetaJson(markerText: string): unknown {
+  let candidate = markerText.trim();
+  for (let surplus = 0; surplus <= 2; surplus += 1) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch (error) {
+      if (surplus === 2 || !candidate.endsWith("}")) throw error;
+      candidate = candidate.slice(0, -1);
+    }
+  }
+  throw new Error("invalid topic metadata");
 }
 
 /** 校验模型声明的调查理解是否满足澄清或派发门禁。 */
