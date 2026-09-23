@@ -14,13 +14,12 @@ import type { ConfigurePersonaWorkflowInDto, PersonaWorkflowActionInDto, Request
 import type { CollaborationWorkflowFacade as CollaborationCoordinator, CollaborationInteractionPerformancePort, CollaborationNavigationPreferencePort } from "../../../services/workflow/index.js";
 import type { LinghuAutomationFacade } from "../../../services/personas/linghu/index.js";
 import type { NangongFacade } from "../../../services/personas/nangong/index.js";
-import type { HanliFacade } from "../../../services/personas/hanli/index.js";
+import type { HanliFacade, HanliTaskCollaborationScenario } from "../../../services/personas/hanli/index.js";
 import type { PersonaConversationFacade } from "../../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../../services/evolution/index.js";
 import type { PersonaWorkflowFacade } from "../../../services/workflow/index.js";
 import type { EventCenterFacade, EventCenterTimeline as CollaborationTimelineFacade } from "../../../services/support/capabilities/event-center/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
-import type { HanliTaskCollaborationScenario } from "../../../services/personas/hanli/internal/acceptance/hanli-task-collaboration-scenario.js";
 
 /** 协同领域集中登记人物、任务和令狐自动保障通道，总注册器不再感知每个业务动作。 */
 export function registerCollaborationIpc(

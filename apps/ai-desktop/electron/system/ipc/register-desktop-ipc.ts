@@ -15,7 +15,6 @@ import type { TestDataResetResultOutDto } from "../../../contracts/services/supp
 import type { AiMemoryDatabaseStatusOutDto, CorpusIngestionStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
 import type { HanliPageReviewGuard } from "./hanli-page-review-guard.js";
-import { HanliTaskCollaborationScenario } from "../../services/personas/hanli/internal/acceptance/hanli-task-collaboration-scenario.js";
 import { registerSettingsIpc } from "./domains/register-settings-ipc.js";
 import { registerWorkspaceIpc } from "./domains/register-workspace-ipc.js";
 import { registerRulesIpc } from "./domains/register-rules-ipc.js";
@@ -28,7 +27,7 @@ import { ConversationFacade as ConversationDispatchStore } from "../../services/
 import { CollaborationCodexRegistry } from "../../services/support/capabilities/conversation/index.js";
 import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowPersistencePort as WorkflowRepository, type CollaborationNavigationPreferencePort, type CollaborationInteractionPerformancePort } from "../../services/workflow/index.js";
 import { LinghuAutomationFacade } from "../../services/personas/linghu/index.js";
-import type { HanliFacade } from "../../services/personas/hanli/index.js";
+import { HanliTaskCollaborationScenario, type HanliFacade } from "../../services/personas/hanli/index.js";
 import type { NangongFacade } from "../../services/personas/nangong/index.js";
 import type { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../services/evolution/index.js";
