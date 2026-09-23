@@ -126,6 +126,18 @@ export function projectCurrentTopicStage(
     })
     : false;
   const acceptanceBeforeRecovery = readLatestAcceptance(evolution, proposal);
+  // 系统尚未交给令狐、也没有任何当前提案的活动修复任务时，不能把已阻塞的验收
+  // 永久投影为“系统重试写入交接”。只开放原运行的显式复验，不自动派发或扩大范围。
+  const systemOnlyAcceptanceRetry = technicalRecovery?.handler === "system"
+    && technicalRecovery.handoffStatus === "pending"
+    && technicalRecovery.failureCategory === "acceptance-capability-blocked"
+    && acceptanceBeforeRecovery?.status === "failed"
+    && run?.status === "blocked"
+    && run.topicId === (topic?.topicId || proposal.topicId)
+    && run.proposalId === proposal.proposalId
+    && blockingTask === null
+    && !collaboration.tasks.some((item) => item.evolutionProposalId === proposal.proposalId
+      && !["integrated", "cancelled", "failed"].includes(item.state));
   const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
     && run.topicId === (topic?.topicId || proposal.topicId)
     && run.proposalId === proposal.proposalId
@@ -133,7 +145,7 @@ export function projectCurrentTopicStage(
     // 只有当前提案不再有真实阻塞任务时，较新的验收才能使旧技术恢复退为审计。
     && blockingTask === null;
   if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
-    && technicalRecovery.proposalId === proposal.proposalId && !resumedAcceptance) {
+    && technicalRecovery.proposalId === proposal.proposalId && !resumedAcceptance && !systemOnlyAcceptanceRetry) {
     // 部分历史卡点没有绑定一次性运行；仍从当前提案的真实阻塞任务签发同一条受控复核入口。
     const recoveryTaskIds = [...new Set([
       ...technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)),

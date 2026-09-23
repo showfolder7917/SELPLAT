@@ -79,6 +79,26 @@ test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签�
   assert.match(stage.summary, /令狐老祖处理中/);
 });
 
+test("系统交接未发生且没有活动修复任务时保留原运行的显式复验入口", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:acceptance-capability-blocked",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "acceptance-capability-blocked",
+    evidenceReferences: ["event-1"], occurrences: [], attemptCount: 1, handler: "system", handoffStatus: "pending",
+    failureReason: null, nextAction: "系统重试写入令狐交接。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  state.oneShotRun = { runId: "blocked-review", topicId: "topic-current", proposalId: "proposal-current", status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z" };
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeOneShotRunId, "blocked-review");
+  assert.equal(stage.resumeTaskId, null);
+  assert.notEqual(stage.nextAction, "系统重试写入令狐交接。");
+
+  const activeRepair = projectCurrentTopicStage(state, { tasks: [task(), { ...task("unified-testing"), taskId: "repair-active" }] });
+  assert.equal(activeRepair.userAction, "none");
+  assert.equal(activeRepair.resumeOneShotRunId, null);
+});
+
 test("活动技术卡点没有原运行阻塞时不伪造恢复动作", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
