@@ -115,9 +115,6 @@ export function projectCurrentTopicStage(
     && (!acceptanceBeforeRecovery || run.updatedAt > acceptanceBeforeRecovery.occurredAt);
   if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
     && technicalRecovery.proposalId === proposal.proposalId && !resumedAcceptance) {
-    const runBlocked = run?.status === "blocked"
-      && run.topicId === (topic?.topicId || proposal.topicId)
-      && run.proposalId === proposal.proposalId;
     // 部分历史卡点没有绑定一次性运行；仍从当前提案的真实阻塞任务签发同一条受控复核入口。
     const blockingTaskIds = collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
       && ["blocked", "test-failed"].includes(item.state))
@@ -135,7 +132,9 @@ export function projectCurrentTopicStage(
       && guidance?.sourceFingerprint === technicalRecovery.faultFingerprint
       && guidanceFiles.length && guidance.problem.trim() && guidance.reasonCustomerMustAct.trim()
       && guidance.steps.length && guidance.completionCriteria.length);
-    const resumeTaskId = !runBlocked && hasCompleteGuidance ? blockingTask!.taskId : null;
+    // 原一次性运行被阻塞本身不代表客户可以恢复。只有当前阻塞任务持有同故障指纹的完整指导，
+    // 才能签发任务级确认；否则保持令狐核对中，避免旧运行入口覆盖当前责任。
+    const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;
     const monitoring = technicalRecovery.handoffStatus === "monitoring";
     const unverified = technicalRecovery.handoffStatus === "basis-unverified";
     const failed = technicalRecovery.handoffStatus === "failed";
@@ -147,9 +146,9 @@ export function projectCurrentTopicStage(
     return {
       topicId: technicalRecovery.topicId, proposalId: technicalRecovery.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
       summary, repairContent: proposal.content, remaining: technicalRecovery.failureReason || technicalRecovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
-      waitingFor: resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction: resumeTaskId ? technicalRecovery.nextAction : technicalRecovery.nextAction, userAction: runBlocked || resumeTaskId ? "resume" : "none", resumeOneShotRunId: runBlocked ? run.runId : null,
+      waitingFor: resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction: technicalRecovery.nextAction, userAction: resumeTaskId ? "resume" : "none", resumeOneShotRunId: null,
       resumeTaskId, customerActionGuidance: resumeTaskId && guidance ? { affectedFiles: [...guidanceFiles], problem: guidance.problem, reasonCustomerMustAct: guidance.reasonCustomerMustAct, steps: [...guidance.steps], completionCriteria: [...guidance.completionCriteria], resumeLabel: guidance.resumeLabel } : null,
-      readRecovery: readRecovery(runBlocked || resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
+      readRecovery: readRecovery(resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
       effectiveTaskIds: recoveryTaskIds, missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
       hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: technicalRecovery.updatedAt,
     };

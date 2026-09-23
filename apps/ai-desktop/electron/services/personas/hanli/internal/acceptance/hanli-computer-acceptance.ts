@@ -686,14 +686,27 @@ function taskCollaborationScenarioTarget(
   criterionIds: string[],
   coveredCriterionIds: string[],
 ): "customer-guidance" | "new-blocker" | null {
-  const criteria = coveredCriterionIds.flatMap((criterionId) => {
+  const targets = new Set(coveredCriterionIds.flatMap((criterionId) => {
     const index = criterionIds.indexOf(criterionId);
-    return index < 0 ? [] : [goal.criteria[index] || ""];
-  });
-  if (criteria.some((criterion) => /新的阻塞|新(?:的)?原因|覆盖旧(?:指导|文案)|不复用旧/u.test(criterion))) {
+    return index < 0 ? [] : [taskCollaborationScenarioTargetForCriterion(goal.criteria[index] || "")];
+  }).filter((target): target is TaskCollaborationScenarioObservationStage => target !== null));
+  if (targets.size > 1) {
+    throw new Error("同一次页面观察不能合并任务协作群的不同场景阶段；请分别保留无指导、完整指导或新阻塞的截图证据。");
+  }
+  const [target] = targets;
+  return target === "no-guidance" ? null : target || null;
+}
+
+type TaskCollaborationScenarioObservationStage = "no-guidance" | "customer-guidance" | "new-blocker";
+
+function taskCollaborationScenarioTargetForCriterion(criterion: string): TaskCollaborationScenarioObservationStage | null {
+  if (/没有已持久化完整指导|尚未形成完整客户操作指导|指导内容与恢复入口均为空|无完整指导/u.test(criterion)) {
+    return "no-guidance";
+  }
+  if (/新的阻塞|新(?:的)?原因|覆盖旧(?:指导|文案)|不复用旧/u.test(criterion)) {
     return "new-blocker";
   }
-  if (criteria.some((criterion) => /完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口/u.test(criterion))) {
+  if (/完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口/u.test(criterion)) {
     return "customer-guidance";
   }
   return null;
