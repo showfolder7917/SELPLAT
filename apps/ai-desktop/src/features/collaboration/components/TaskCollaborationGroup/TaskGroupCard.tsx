@@ -479,9 +479,8 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
   };
   // 当前投影明确要求客户恢复时，优先使用它签发的原一次性运行标识；普通任务卡点才读取有效任务链。
   const projectedResumeRunId = currentStage?.userAction === "resume" ? currentStage.resumeOneShotRunId : null;
-  const projectedResumeTaskId = currentStage?.userAction === "resume"
-    && !projectedResumeRunId ? currentStage.effectiveTaskIds.at(-1) || null
-    : null;
+  const projectedResumeTaskId = currentStage?.userAction === "resume" && !projectedResumeRunId
+    ? currentStage.resumeTaskId || null : null;
   // 两类恢复共用一个页面忙碌锁，但分别调用各自已有的权威业务入口。
   const projectedRecoveryId = projectedResumeRunId || projectedResumeTaskId;
   const recoveryPending = projectedRecoveryId === model.presentation.continuingTaskId;
@@ -506,6 +505,15 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
         <span className="task-timeline-next-current">
           <span>{currentStage?.nextAction || group.nextStep}</span>
+          {currentStage?.customerActionGuidance && (
+            <span className="task-recovery-guidance">
+              <b>{currentStage.customerActionGuidance.affectedFiles.join("、")}</b>
+              <small>{currentStage.customerActionGuidance.problem}</small>
+              <small>{currentStage.customerActionGuidance.reasonCustomerMustAct}</small>
+              <small>{currentStage.customerActionGuidance.steps.join(" ")}</small>
+              <small>{currentStage.customerActionGuidance.completionCriteria.join(" ")}</small>
+            </span>
+          )}
           {projectedRecoveryId && currentStage?.topicId && currentStage.proposalId && (
             <button
               type="button"

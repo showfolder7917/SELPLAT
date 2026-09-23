@@ -109,9 +109,16 @@ for (const scenario of ["verified", "misclassified", "different-version", "faile
     });
     const restored = new CollaborationStore(file);
     if (scenario === "verified") assert.equal(restored.state().integrationBatches[0].state, "verified", "启动不得把已测试版本误标失败");
-    const pipeline = new VersionIntegrationPipeline({ store: restored, durations, actorMemberId: "linghu-ancestor", loadedRuntimeSha: scenario === "different-version" ? "other-sha" : "candidate-sha" });
+    const confirmedBatches = [];
+    const pipeline = new VersionIntegrationPipeline({
+      store: restored, durations, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1",
+      releaseBatches: { confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId), retireRuntimeActivationPackage: () => undefined },
+      workspaces: { retireWorkspace: async () => undefined },
+      loadedRuntimeSha: scenario === "different-version" ? "other-sha" : "candidate-sha",
+    });
     const expected = ["verified", "misclassified"].includes(scenario);
     assert.deepEqual(pipeline.confirmPublishedRestart(), expected ? [36] : []);
+    assert.deepEqual(confirmedBatches, expected ? ["release-0.1.1-g36"] : []);
     assert.equal(restored.task(task.taskId).state, expected ? "integrated" : "awaiting-restart");
     assert.deepEqual(pipeline.confirmPublishedRestart(), [], "重复健康通知不得重复验收交接");
     pipeline.dispose();

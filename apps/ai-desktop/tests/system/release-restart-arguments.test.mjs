@@ -28,10 +28,13 @@ test("只有正确包真实就绪才结束任务并回收工作树", async () =>
   };
   const store = { state: () => structuredClone(state), updateTask: (id, _reason, update) => update(state.tasks.find((task) => task.taskId === id), state) };
   const retiredStates = [];
-  const options = { store, actorMemberId: "linghu-ancestor", durations: { instant: () => {} }, workspaces: { retireWorkspace: async () => { retiredStates.push(state.tasks[0].state); } } };
+  const confirmedBatches = [];
+  const options = { store, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1", releaseBatches: { confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId), retireRuntimeActivationPackage: () => undefined }, durations: { instant: () => {} }, workspaces: { retireWorkspace: async () => { retiredStates.push(state.tasks[0].state); } } };
   assert.deepEqual(new VersionIntegrationPipeline({ ...options, loadedRuntimeSha: "other-sha" }).confirmPublishedRestart(), []);
+  assert.deepEqual(confirmedBatches, []);
   assert.deepEqual(retiredStates, []);
   assert.deepEqual(new VersionIntegrationPipeline({ ...options, loadedRuntimeSha: "tested-sha" }).confirmPublishedRestart(), [17]);
+  assert.deepEqual(confirmedBatches, ["release-0.1.1-g17"]);
   await Promise.resolve();
   assert.deepEqual(retiredStates, ["integrated"]);
   assert.ok(state.tasks[0].versionWorkspace.retiredAt);

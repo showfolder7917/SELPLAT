@@ -128,7 +128,14 @@ export function projectCurrentTopicStage(
     ])];
     // 历史故障记录只用于保留恢复证据；recovering 表示点击已经受理，按钮必须立即撤销，
     // 只有再次形成 blocked 或 test-failed 的新卡点时才能重新签发。
-    const taskBlocked = blockingTaskIds.length > 0;
+    const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
+    const guidance = blockingTask?.customerActionGuidance || null;
+    const guidanceFiles = guidance?.affectedFiles || [];
+    const hasCompleteGuidance = Boolean(technicalRecovery.faultFingerprint
+      && guidance?.sourceFingerprint === technicalRecovery.faultFingerprint
+      && guidanceFiles.length && guidance.problem.trim() && guidance.reasonCustomerMustAct.trim()
+      && guidance.steps.length && guidance.completionCriteria.length);
+    const resumeTaskId = !runBlocked && hasCompleteGuidance ? blockingTask!.taskId : null;
     const monitoring = technicalRecovery.handoffStatus === "monitoring";
     const unverified = technicalRecovery.handoffStatus === "basis-unverified";
     const failed = technicalRecovery.handoffStatus === "failed";
@@ -140,8 +147,9 @@ export function projectCurrentTopicStage(
     return {
       topicId: technicalRecovery.topicId, proposalId: technicalRecovery.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
       summary, repairContent: proposal.content, remaining: technicalRecovery.failureReason || technicalRecovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
-      waitingFor, nextAction: technicalRecovery.nextAction, userAction: runBlocked || taskBlocked ? "resume" : "none", resumeOneShotRunId: runBlocked ? run.runId : null,
-      readRecovery: readRecovery(runBlocked || taskBlocked ? "resume" : "none", waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
+      waitingFor: resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction: resumeTaskId ? technicalRecovery.nextAction : technicalRecovery.nextAction, userAction: runBlocked || resumeTaskId ? "resume" : "none", resumeOneShotRunId: runBlocked ? run.runId : null,
+      resumeTaskId, customerActionGuidance: resumeTaskId && guidance ? { affectedFiles: [...guidanceFiles], problem: guidance.problem, reasonCustomerMustAct: guidance.reasonCustomerMustAct, steps: [...guidance.steps], completionCriteria: [...guidance.completionCriteria], resumeLabel: guidance.resumeLabel } : null,
+      readRecovery: readRecovery(runBlocked || resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
       effectiveTaskIds: recoveryTaskIds, missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
       hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: technicalRecovery.updatedAt,
     };
@@ -220,6 +228,8 @@ export function projectCurrentTopicStage(
     userAction,
     // 一次性专题阻塞必须携带原运行标识，Renderer 才能调用已有补验恢复入口；任务级卡点继续保持空值。
     resumeOneShotRunId: userAction === "resume" && runBlocked ? run.runId : null,
+    resumeTaskId: null,
+    customerActionGuidance: null,
     readRecovery: readRecovery(userAction, waitingFor, nextAction, updatedAt),
     effectiveTaskIds: execution.effectiveTasks.map((item) => item.taskId),
     missingTaskIds: execution.missingTaskIds,

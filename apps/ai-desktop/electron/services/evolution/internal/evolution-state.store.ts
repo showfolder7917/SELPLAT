@@ -1452,6 +1452,7 @@ function normalizeTechnicalRecovery(
   const { updatedAt: _updatedAt, ...value } = structuredClone(input) as EvolutionTechnicalRecoveryOutDto;
   return {
     ...value,
+    faultFingerprint: typeof value.faultFingerprint === "string" && value.faultFingerprint.trim() ? value.faultFingerprint.trim() : null,
     acceptanceConditionIds: [...new Set(value.acceptanceConditionIds)].sort(),
     evidenceReferences: [...new Set(value.evidenceReferences)].sort(),
     occurrences: [...value.occurrences].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)
