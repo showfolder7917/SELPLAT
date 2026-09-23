@@ -1,3 +1,5 @@
+import type { HanliTaskCollaborationScenarioStage } from "./hanli-task-collaboration-scenario.js";
+
 /** 由主进程登记的正式窗口动作；模型不能扩大权限。 */
 export type AcceptancePrivateAction = "persona-navigation" | "task-collaboration-scenario";
 
@@ -6,6 +8,7 @@ export interface PageReviewInteractionPort {
   allows(action: AcceptancePrivateAction): boolean;
   /** 场景只由正式验收器建立和回收，不能由 Renderer 或普通 IPC 请求。 */
   beginTaskCollaborationScenario?(goal: import("../../../../../../contracts/services/personas/hanli/index.js").HanliComputerAcceptanceInDto, window: import("electron").BrowserWindow): void;
-  advanceTaskCollaborationScenario?(): void;
+  currentTaskCollaborationScenarioStage?(): HanliTaskCollaborationScenarioStage | null;
+  prepareTaskCollaborationScenario?(target: Exclude<HanliTaskCollaborationScenarioStage, "no-guidance" | "reviewing">): void;
   endTaskCollaborationScenario?(): void;
 }
