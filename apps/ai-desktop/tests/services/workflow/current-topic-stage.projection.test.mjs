@@ -79,6 +79,58 @@ test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签�
   assert.match(stage.summary, /令狐老祖处理中/);
 });
 
+test("新一轮真实验收不得复用旧故障指纹的原因和下一步", () => {
+  const state = evolution("failed");
+  const currentAcceptanceId = state.archiveRecords[0].payload.acceptanceRun.runId;
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:acceptance-capability-blocked",
+    faultFingerprint: "nangong-one-shot:one-shot:run_hanli_result_acceptance:proposal-current:hanli-computer-old",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "acceptance-capability-blocked",
+    evidenceReferences: ["event-old"], occurrences: [{ runId: "one-shot", taskId: null, occurrenceId: "event-old", reason: "旧轮次原因", occurredAt: "2026-09-12T04:30:00.000Z" }],
+    attemptCount: 1, handler: "system", handoffStatus: "failed", failureReason: "旧轮次原因", nextAction: "旧轮次下一步", active: true, updatedAt: "2026-09-12T04:30:00.000Z",
+  };
+  state.oneShotRun = { runId: "one-shot", topicId: "topic-current", proposalId: "proposal-current", status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z" };
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+
+  assert.equal(stage.latestAcceptance?.runId, currentAcceptanceId);
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.doesNotMatch(`${stage.summary} ${stage.remaining} ${stage.nextAction}`, /旧轮次/u);
+  assert.equal(stage.resumeTaskId, null);
+});
+
+test("同一真实验收故障指纹仍显示当前恢复事实", () => {
+  const state = evolution("failed");
+  const acceptanceId = state.archiveRecords[0].payload.acceptanceRun.runId;
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:acceptance-capability-blocked",
+    faultFingerprint: `nangong-one-shot:one-shot:run_hanli_result_acceptance:proposal-current:${acceptanceId}`,
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "acceptance-capability-blocked",
+    evidenceReferences: ["event-current"], occurrences: [{ runId: "one-shot", taskId: null, occurrenceId: "event-current", reason: "本轮原因", occurredAt: "2026-09-12T04:43:00.000Z" }],
+    attemptCount: 1, handler: "system", handoffStatus: "failed", failureReason: "本轮原因", nextAction: "本轮下一步", active: true, updatedAt: "2026-09-12T04:43:00.000Z",
+  };
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+
+  assert.equal(stage.remaining, "本轮原因");
+  assert.equal(stage.nextAction, "本轮下一步");
+});
+
+test("新验收落档后旧任务故障即使仍标记活动也不能覆盖当前结论", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
+    faultFingerprint: "old-task-failure", topicId: "topic-current", proposalId: "proposal-current",
+    acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect", evidenceReferences: ["event-old"],
+    occurrences: [{ runId: "old-run", taskId: "task-current", occurrenceId: "event-old", reason: "旧任务故障", occurredAt: "2026-09-12T04:30:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: "旧任务故障",
+    nextAction: "旧任务下一步", active: true, updatedAt: "2026-09-12T04:30:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.doesNotMatch(`${stage.remaining} ${stage.nextAction}`, /旧任务/u);
+});
+
 test("系统交接未发生且没有活动修复任务时保留原运行的显式复验入口", () => {
   const state = evolution("failed");
   state.technicalRecovery = {

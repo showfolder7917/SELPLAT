@@ -34,7 +34,7 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const task = (taskId, files) => ({ taskId, state: "integrated", snapshot: { title: taskId, problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: files }] });
-  const original = task("original", ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts", "../../AGENTS.md", "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"]);
+  const original = task("original", ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts", "apps/ai-desktop/electron/services/workflow/domain/current-topic-technical-recovery.projection.ts", "../../AGENTS.md", "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"]);
   const repair = task("repair", ["apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"]);
   const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
   const [context] = buildHanliResultReviewContext([repair], workspace, [original, repair]);
@@ -42,11 +42,13 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files");
   assert.deepEqual(context.sourceEvidence.map((item) => item.file), [
     "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-technical-recovery.projection.ts",
     "apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts",
   ]);
   assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
-  assert.match(context.sourceEvidence[0].content, /const systemOnlyAcceptanceRetry/u);
-  assert.match(context.sourceEvidence[0].content, /technicalRecovery\.occurrences/u);
+  assert.match(context.sourceEvidence[0].content, /projectCurrentTechnicalRecovery/u);
+  assert.match(context.sourceEvidence[1].content, /const systemOnlyAcceptanceRetry/u);
+  assert.match(context.sourceEvidence[1].content, /recovery\.occurrences/u);
   assert.doesNotMatch(context.sourceEvidence[0].content, /源码中段省略/u);
 });
 

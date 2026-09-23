@@ -1,7 +1,9 @@
 import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import { isCompleteCustomerActionGuidance, type CollaborationStateOutDto, type CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
 import { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { decideCurrentTopicOperation } from "./current-topic-operation.decision.js";
+import { projectCurrentTechnicalRecovery } from "./current-topic-technical-recovery.projection.js";
+import { readCurrentTopicRecovery as readRecovery } from "./current-topic-read-recovery.js";
 
 /**
  * 把专题、提案、有效任务链和最新真实验收事实收敛为唯一当前阶段。
@@ -104,77 +106,11 @@ export function projectCurrentTopicStage(
     };
   }
 
-  // 技术恢复不能覆盖原运行的恢复动作：原运行仍被阻塞时，用户必须能够沿既有受控入口重新核查。
-  // 但原运行已经在旧失败之后重新进入真实验收时，旧恢复记录只保留审计价值；页面必须展示当前验收，
-  // 否则会把已恢复的流程继续显示成“系统恢复处理”，造成负责人、动作和真实运行互相矛盾。
-  const technicalRecovery = evolution.technicalRecovery;
-  // 活动任务事实优先于同一运行较新的 accepting 时间戳：正在验收不代表已经解除当前阻塞。
-  // 先取得当前提案真实阻塞任务和指导，后续再决定旧恢复是否可以退为审计记录。
   const currentExecution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
-  const blockingTaskIds = technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
-    && technicalRecovery.proposalId === proposal.proposalId
-    ? currentExecution.effectiveTasks.filter((item) => item.evolutionProposalId === proposal.proposalId
-      && ["blocked", "test-failed"].includes(item.state))
-      .map((item) => item.taskId)
-    : [];
-  const blockingTask = currentExecution.effectiveTasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
-  const guidance = blockingTask?.customerActionGuidance || null;
-  const guidanceFiles = guidance?.affectedFiles || [];
-  const hasCompleteGuidance = technicalRecovery
-    ? isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
-      affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
-      nonFileRecovery: null,
-    })
-    : false;
-  const acceptanceBeforeRecovery = readLatestAcceptance(evolution, proposal);
-  // 系统尚未交给令狐、也没有任何当前提案的活动修复任务时，不能把已阻塞的验收
-  // 永久投影为“系统重试写入交接”。只开放原运行的显式复验，不自动派发或扩大范围。
-  const systemOnlyAcceptanceRetry = technicalRecovery?.handler === "system"
-    && technicalRecovery.handoffStatus === "pending"
-    && technicalRecovery.failureCategory === "acceptance-capability-blocked"
-    && acceptanceBeforeRecovery?.status === "failed"
-    && run?.status === "blocked"
-    && run.topicId === (topic?.topicId || proposal.topicId)
-    && run.proposalId === proposal.proposalId
-    && blockingTask === null
-    && !currentExecution.effectiveTasks.some((item) => item.evolutionProposalId === proposal.proposalId
-      && !["integrated", "cancelled", "failed"].includes(item.state));
-  const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
-    && run.topicId === (topic?.topicId || proposal.topicId)
-    && run.proposalId === proposal.proposalId
-    && (!acceptanceBeforeRecovery || run.updatedAt > acceptanceBeforeRecovery.occurredAt)
-    // 只有当前提案不再有真实阻塞任务时，较新的验收才能使旧技术恢复退为审计。
-    && blockingTask === null;
-  if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
-    && technicalRecovery.proposalId === proposal.proposalId && !resumedAcceptance && !systemOnlyAcceptanceRetry) {
-    // 部分历史卡点没有绑定一次性运行；仍从当前提案的真实阻塞任务签发同一条受控复核入口。
-    const recoveryTaskIds = [...new Set([
-      ...technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)),
-      ...blockingTaskIds,
-    ])];
-    // 历史故障记录只用于保留恢复证据；recovering 表示点击已经受理，按钮必须立即撤销，
-    // 只有再次形成 blocked 或 test-failed 的新卡点时才能重新签发。
-    // 原一次性运行被阻塞本身不代表客户可以恢复。只有当前阻塞任务持有同故障指纹的完整指导，
-    // 才能签发任务级确认；否则保持令狐核对中，避免旧运行入口覆盖当前责任。
-    const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;
-    const monitoring = technicalRecovery.handoffStatus === "monitoring";
-    const unverified = technicalRecovery.handoffStatus === "basis-unverified";
-    const failed = technicalRecovery.handoffStatus === "failed";
-    const summary = monitoring ? `监控接管复验：同一技术问题已保留 ${technicalRecovery.attemptCount} 轮证据。`
-      : unverified ? "次数依据尚未核验。"
-        : failed ? "令狐转交未完成。"
-          : "令狐老祖处理中。";
-    const waitingFor = monitoring ? "监控接管复验" : unverified || failed ? "系统恢复处理" : "令狐老祖";
-    return {
-      topicId: technicalRecovery.topicId, proposalId: technicalRecovery.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
-      summary, repairContent: proposal.content, remaining: technicalRecovery.failureReason || technicalRecovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
-      waitingFor: resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction: technicalRecovery.nextAction, userAction: resumeTaskId ? "resume" : "none", resumeOneShotRunId: null,
-      resumeTaskId, customerActionGuidance: resumeTaskId && guidance ? { affectedFiles: [...guidanceFiles], problem: guidance.problem, reasonCustomerMustAct: guidance.reasonCustomerMustAct, steps: [...guidance.steps], completionCriteria: [...guidance.completionCriteria], resumeLabel: guidance.resumeLabel } : null,
-      readRecovery: readRecovery(resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, technicalRecovery.nextAction, technicalRecovery.updatedAt),
-      effectiveTaskIds: recoveryTaskIds, missingTaskIds: [], latestAcceptance: readLatestAcceptance(evolution, proposal),
-      hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: technicalRecovery.updatedAt,
-    };
-  }
+  const latestRecoveryAcceptance = readLatestAcceptance(evolution, proposal);
+  const technicalStage = projectCurrentTechnicalRecovery({ evolution, proposal, topic, execution: currentExecution,
+    latestAcceptance: latestRecoveryAcceptance, hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal) });
+  if (technicalStage) return technicalStage;
 
   // 监控者独立验收卡没有分发计划，不套用普通代码交付候选门禁；最终通过仍必须读取唯一结论记录。
   const monitorAcceptanceCard = topic !== null && topic.recoveryPoint?.startsWith("monitor-formal-acceptance-")
@@ -461,15 +397,4 @@ function stageRemaining(status: CurrentTopicStageOutDto["status"], task: Collabo
   if (deliveryGate?.status === status) return deliveryGate.remaining;
   if (status === "failed-pending-repair") return task?.blockingReason || task?.resultSummary?.remaining || "等待处理最新真实验收失败。";
   return task?.resultSummary?.remaining || task?.blockingReason || "";
-}
-
-/** 读取恢复只复用档案投影已经声明的用户操作，不因 Renderer 的本地重试次数升级权限。 */
-function readRecovery(userAction: CurrentTopicStageOutDto["userAction"], waitingFor: string, nextAction: string, updatedAt: string): CurrentTopicStageOutDto["readRecovery"] {
-  const requiresUserAction = userAction !== "none";
-  return {
-    policyId: `${updatedAt}:${userAction}`,
-    waitingFor: requiresUserAction ? waitingFor : "当前交付投影",
-    requiresUserAction,
-    nextAction: requiresUserAction ? `${nextAction} 完成后重新读取当前交付投影。` : "系统将自动重新读取当前交付投影；读取成功后再显示当前结论。",
-  };
 }

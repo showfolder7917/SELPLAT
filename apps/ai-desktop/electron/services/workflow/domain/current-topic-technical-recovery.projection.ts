@@ -1,0 +1,81 @@
+import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import { isCompleteCustomerActionGuidance } from "../../../../contracts/services/workflow/index.js";
+import type { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
+import { readCurrentTopicRecovery } from "./current-topic-read-recovery.js";
+
+type Proposal = EvolutionStateOutDto["proposals"][number];
+type Topic = EvolutionStateOutDto["topics"][number] | null;
+type Execution = ReturnType<ProposalExecutionAggregate["view"]>;
+
+/** 技术恢复仅在仍属于当前故障时占据当前卡片；过期记录保留在审计中。 */
+export function projectCurrentTechnicalRecovery(input: {
+  evolution: EvolutionStateOutDto;
+  proposal: Proposal;
+  topic: Topic;
+  execution: Execution;
+  latestAcceptance: CurrentTopicAcceptanceOutDto | null;
+  hostStartupAcceptance: CurrentTopicStageOutDto["hostStartupAcceptance"];
+}): CurrentTopicStageOutDto | null {
+  const { evolution, proposal, topic, execution, latestAcceptance, hostStartupAcceptance } = input;
+  const recovery = evolution.technicalRecovery;
+  const run = evolution.oneShotRun;
+  const topicId = topic?.topicId || proposal.topicId;
+  if (!recovery?.active || recovery.topicId !== topicId || recovery.proposalId !== proposal.proposalId) return null;
+
+  const blockingTasks = execution.effectiveTasks.filter((item) => item.evolutionProposalId === proposal.proposalId
+    && ["blocked", "test-failed"].includes(item.state));
+  const blockingTask = blockingTasks[0] || null;
+  const newestOccurrence = [...recovery.occurrences].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
+  // 验收故障指纹包含真实验收运行标识。新一轮验收已落档时，旧指纹和旧发生时间
+  // 不能再为当前页面提供 failureReason、nextAction 或任务确认入口。
+  const acceptanceFingerprint = recovery.faultFingerprint?.includes(":run_hanli_result_acceptance:") === true;
+  const recoveryOccurredAt = newestOccurrence?.occurredAt || recovery.updatedAt;
+  const obsoleteAcceptanceRecovery = latestAcceptance !== null
+    && (acceptanceFingerprint
+      ? !recovery.faultFingerprint!.endsWith(`:${latestAcceptance.runId}`)
+      : recoveryOccurredAt < latestAcceptance.occurredAt);
+  if (obsoleteAcceptanceRecovery) return null;
+
+  const guidance = blockingTask?.customerActionGuidance || null;
+  const hasCompleteGuidance = isCompleteCustomerActionGuidance(guidance, recovery.faultFingerprint, {
+    affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [], nonFileRecovery: null,
+  });
+  // 系统未派发修复、没有活动任务时开放原运行复验；复验一旦开始，旧恢复只供审计。
+  const systemOnlyAcceptanceRetry = recovery.handler === "system" && recovery.handoffStatus === "pending"
+    && recovery.failureCategory === "acceptance-capability-blocked" && latestAcceptance?.status === "failed"
+    && run?.status === "blocked" && run.topicId === topicId && run.proposalId === proposal.proposalId
+    && blockingTask === null
+    && !execution.effectiveTasks.some((item) => item.evolutionProposalId === proposal.proposalId
+      && !["integrated", "cancelled", "failed"].includes(item.state));
+  const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
+    && run.topicId === topicId && run.proposalId === proposal.proposalId
+    && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt) && blockingTask === null;
+  if (resumedAcceptance || systemOnlyAcceptanceRetry) return null;
+
+  const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;
+  const monitoring = recovery.handoffStatus === "monitoring";
+  const unverified = recovery.handoffStatus === "basis-unverified";
+  const failed = recovery.handoffStatus === "failed";
+  const summary = monitoring ? `监控接管复验：同一技术问题已保留 ${recovery.attemptCount} 轮证据。`
+    : unverified ? "次数依据尚未核验。" : failed ? "令狐转交未完成。" : "令狐老祖处理中。";
+  const waitingFor = monitoring ? "监控接管复验" : unverified || failed ? "系统恢复处理" : "令狐老祖";
+  const nextAction = recovery.nextAction;
+  return {
+    topicId, proposalId: proposal.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
+    summary, repairContent: proposal.content,
+    remaining: recovery.failureReason || recovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
+    waitingFor: resumeTaskId ? "用户确认后由令狐复查" : waitingFor,
+    nextAction, userAction: resumeTaskId ? "resume" : "none", resumeOneShotRunId: null,
+    resumeTaskId,
+    customerActionGuidance: resumeTaskId && guidance ? {
+      affectedFiles: [...(guidance.affectedFiles || [])], problem: guidance.problem,
+      reasonCustomerMustAct: guidance.reasonCustomerMustAct, steps: [...guidance.steps],
+      completionCriteria: [...guidance.completionCriteria], resumeLabel: guidance.resumeLabel,
+    } : null,
+    readRecovery: readCurrentTopicRecovery(resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction, recovery.updatedAt),
+    effectiveTaskIds: [...new Set([...recovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)), ...blockingTasks.map((item) => item.taskId)])],
+    missingTaskIds: [], latestAcceptance, hostStartupAcceptance,
+    deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" },
+    updatedAt: recovery.updatedAt,
+  };
+}
