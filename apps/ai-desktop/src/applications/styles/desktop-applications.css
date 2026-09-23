@@ -496,10 +496,12 @@ button { color: inherit; }
 
 /* 任务协作群只定义业务排版，展开行为和基础控件状态由 SELUI Disclosure 统一提供。 */
 .task-collaboration-page { min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 22px 24px 72px; color: var(--sel-theme-workbench-text); }
-.task-collaboration-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+.task-collaboration-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; margin-bottom: 16px; }
+.task-collaboration-heading > div { flex: 1 1 240px; min-width: 0; }
 .task-collaboration-heading h1 { margin: 0; color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-title); }
 .task-collaboration-heading p { margin: 6px 0 0; color: var(--sel-theme-workbench-text-muted); }
-.task-collaboration-heading button { margin-left: auto; min-height: 34px; padding: 5px 12px; border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface-soft); cursor: pointer; }
+.task-collaboration-heading button { min-height: 34px; padding: 5px 12px; border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: var(--sel-theme-workbench-surface-soft); cursor: pointer; }
+.task-collaboration-heading button:first-of-type { margin-left: auto; }
 .task-collaboration-heading button:hover, .task-collaboration-heading button:focus-visible { border-color: var(--sel-theme-accent); outline: none; }
 .task-collaboration-heading > span { min-width: 28px; padding: 4px 8px; border-radius: 999px; text-align: center; color: var(--sel-theme-accent); background: var(--sel-theme-workbench-surface-soft); }
 .task-collaboration-groups { min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow: auto; }

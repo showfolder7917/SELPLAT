@@ -132,6 +132,10 @@ test("正式页面允许安全重开并等待加载后返回新截图", () => {
 });
 
 test("正式页面验收可逐张展开只读历史审计卡并保留截图取证", () => {
+  const groupPage = readFileSync("src/features/collaboration/components/TaskCollaborationGroup.tsx", "utf8");
+  assert.match(groupPage, /查看历史审计（\$\{auditHistoryGroups\.length\}）/u);
+  assert.match(groupPage, /auditHistoryRef\.current[\s\S]*groupsPane\.scrollTo/u);
+  assert.match(computerPrompt, /无须先滚完当前专题的长流程/u);
   const operationValues = readFileSync("contracts/services/personas/hanli/value/acceptance.value.ts", "utf8");
   const auditActionStart = computer.indexOf("async function toggleTaskAuditCard");
   const auditActionEnd = computer.indexOf("/** 只读取正式页面中可见的任务协作群标识", auditActionStart);

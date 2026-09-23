@@ -66,6 +66,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const [retryingRead, setRetryingRead] = useState(false);
   const [retryingProjection, setRetryingProjection] = useState(false);
   const [auditHistoryOpen, setAuditHistoryOpen] = useState(false);
+  const auditHistoryRef = useRef<HTMLElement | null>(null);
   /** 已提交状态只对应同一份档案政策；政策变化后不能继续禁用新的人工读取机会。 */
   const [submittedReadPolicyId, setSubmittedReadPolicyId] = useState<string | null>(null);
   const automaticRetryPolicyId = useRef<string | null>(null);
@@ -171,7 +172,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   };
 
   const auditHistory = auditHistoryGroups.length > 0 && (
-    <section className="task-collaboration-audit-history" aria-label={locale === "ja" ? "監査履歴" : "专题审计历史"}>
+    <section ref={auditHistoryRef} className="task-collaboration-audit-history" aria-label={locale === "ja" ? "監査履歴" : "专题审计历史"}>
       <SelUiDisclosure
         idPrefix="task-collaboration-audit-history"
         className="task-collaboration-audit-disclosure"
@@ -370,6 +371,17 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         <button type="button" onClick={locateCurrentStep}>
           {locale === "ja" ? "現在の工程へ" : "定位当前步骤"}
         </button>
+        {auditHistoryGroups.length > 0 && <button type="button" onClick={() => {
+          setAuditHistoryOpen(true);
+          const history = auditHistoryRef.current;
+          const groupsPane = history?.closest<HTMLElement>(".task-collaboration-groups");
+          if (history && groupsPane) groupsPane.scrollTo({
+            top: groupsPane.scrollTop + history.getBoundingClientRect().top - groupsPane.getBoundingClientRect().top,
+            behavior: "smooth",
+          });
+        }}>
+          {locale === "ja" ? `監査履歴を見る（${auditHistoryGroups.length}）` : `查看历史审计（${auditHistoryGroups.length}）`}
+        </button>}
         <span>{groups.length}</span>
       </header>
       {timelineRefreshing && <div className="task-collaboration-refresh-status" role="status" aria-live="polite">
