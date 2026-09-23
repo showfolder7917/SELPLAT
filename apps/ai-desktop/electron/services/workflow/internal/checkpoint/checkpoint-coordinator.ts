@@ -227,7 +227,8 @@ export class CheckpointCoordinator {
     const sameRecovery = previous?.issueId === issueId ? previous : null;
     const attemptCount = sameRecovery ? Math.max(sameRecovery.attemptCount, state.round) : state.round;
     // 次数只是调查历史，不是自动托管的停止条件；只有聚合已确认外部等待或取消导致耗尽时才交给监控。
-    const monitoring = state.phase === "exhausted";
+    const waitingForScenario = failureCategory === "acceptance-precondition-unavailable";
+    const monitoring = state.phase === "exhausted" || waitingForScenario;
     const newestPreviousOccurrence = sameRecovery ? [...sameRecovery.occurrences]
       .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt)
         || (right.occurrenceId || "").localeCompare(left.occurrenceId || ""))[0] : undefined;
@@ -244,7 +245,7 @@ export class CheckpointCoordinator {
       { runId: state.runId, taskId: state.repairTaskId || state.taskId, occurrenceId: event.eventId, reason: state.latestProgress || event.message, occurredAt: previousOccurrence?.occurredAt || event.occurredAt || now },
     ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt)
       || (left.occurrenceId || "").localeCompare(right.occurrenceId || "")).slice(-3);
-    this.#recordTechnicalRecovery({ issueId, faultFingerprint: preservesNewerProjection ? sameRecovery!.faultFingerprint || null : event.fingerprint || null, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory, evidenceReferences: [...new Set([...(sameRecovery ? sameRecovery.evidenceReferences : []), event.eventId])], occurrences, attemptCount, handler: preservesNewerProjection ? sameRecovery!.handler : monitoring ? "monitor" : state.repairTaskId ? "linghu-ancestor" : "system", handoffStatus, failureReason: preservesNewerProjection ? sameRecovery!.failureReason : handoffStatus === "failed" ? state.latestProgress || event.message : null, nextAction: preservesNewerProjection ? sameRecovery!.nextAction : monitoring ? "监控接管复验，并保留本轮依据。" : handoffStatus === "handed-off" ? "等待令狐沿原验收范围调查、修复并复验。" : "系统重试写入令狐交接。", active: true });
+    this.#recordTechnicalRecovery({ issueId, faultFingerprint: preservesNewerProjection ? sameRecovery!.faultFingerprint || null : event.fingerprint || null, topicId: state.topicId, proposalId: state.proposalId, acceptanceConditionIds: conditionIds, failureCategory, evidenceReferences: [...new Set([...(sameRecovery ? sameRecovery.evidenceReferences : []), event.eventId])], occurrences, attemptCount, handler: preservesNewerProjection ? sameRecovery!.handler : monitoring ? "monitor" : state.repairTaskId ? "linghu-ancestor" : "system", handoffStatus, failureReason: preservesNewerProjection ? sameRecovery!.failureReason : handoffStatus === "failed" ? state.latestProgress || event.message : null, nextAction: preservesNewerProjection ? sameRecovery!.nextAction : waitingForScenario ? "等待正式业务自然出现原验收前提，或由用户重新确认验收方案；不派发源码修复。" : monitoring ? "监控接管复验，并保留本轮依据。" : handoffStatus === "handed-off" ? "等待令狐沿原验收范围调查、修复并复验。" : "系统重试写入令狐交接。", active: true });
   }
 
   /** 未分类的验收受阻只保留可恢复事实，不能猜测为产品或验收能力缺陷。 */
@@ -255,11 +256,17 @@ export class CheckpointCoordinator {
   ): void {
     // 缺少结构化分类时只保存恢复状态，不能额外伪造令狐参与。
     const aggregate = new WorkflowCheckpointAggregate(state);
-    aggregate.moveTo("waiting", `验收能力或运行环境受阻：${failureEvent.message}。保留原条件，等待可恢复重跑。`);
+    aggregate.moveTo("waiting", failureEvent.payload.acceptanceFailureKind === "acceptance-precondition-unavailable"
+      ? `正式业务前提尚未出现：${failureEvent.message}。保留原条件，不派发源码修复；等待真实场景或用户重新确认验收方案。`
+      : `验收能力或运行环境受阻：${failureEvent.message}。保留原条件，等待可恢复重跑。`);
     Object.assign(state, aggregate.snapshot());
     // 不经 #phase，避免 CheckpointHandoffService 把等待投影为令狐卡点。
     this.options.save(event.eventId, state);
     event.payload.checkpoint = structuredClone(state);
+    if (failureEvent.payload.acceptanceFailureKind === "acceptance-precondition-unavailable") {
+      // 前提缺失仍要同步当前卡的明确等待原因，不能遗留上一轮“系统重试令狐交接”。
+      this.#publishTechnicalRecovery(event, state);
+    }
   }
 
   /** 收集同一原任务、同一恢复轮次已解除的异常，供唯一完成事实保留完整审计详情。 */

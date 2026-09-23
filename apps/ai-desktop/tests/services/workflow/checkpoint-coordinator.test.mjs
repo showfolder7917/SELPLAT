@@ -111,6 +111,20 @@ test("旧业务选择卡点不抢占后来真实验收故障的自动修复主�
   assert.equal(business.payload.checkpoint.repairTaskId, null);
 });
 
+test("正式业务验收前提未出现时保留卡点而不派发令狐源码修复", async () => {
+  const f = fixture();
+  f.event.payload.operation = "run_hanli_result_acceptance";
+  f.event.payload.acceptanceFailureKind = "acceptance-precondition-unavailable";
+  f.event.message = "当前正式页面没有归属阻塞场景";
+  f.evolution.proposals[0].acceptanceCriteria = ["归属阻塞时的真实页面状态"];
+  await f.run();
+  assert.equal(f.effects.submitted.length, 0);
+  assert.equal(f.event.payload.checkpoint.phase, "waiting");
+  assert.match(f.event.payload.checkpoint.latestProgress, /不派发源码修复/);
+  assert.equal(f.effects.technicalRecoveries.at(-1)?.handler, "monitor");
+  assert.match(f.effects.technicalRecoveries.at(-1)?.nextAction || "", /等待正式业务自然出现原验收前提/);
+});
+
 test("卡点真实派发、重启去重、返回原点后才允许解除", async () => {
   const f = fixture();
   await f.run(); await f.run();

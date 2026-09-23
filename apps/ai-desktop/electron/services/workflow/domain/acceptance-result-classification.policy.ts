@@ -25,5 +25,10 @@ export function classifyAcceptanceRun(run: HanliAcceptanceRunOutDto): Acceptance
   if (!blockedSteps.length && run.sourceReview?.status === "passed") {
     return { disposition: "passed", blockedCriterionIds: [], reason: "全部验收条件已有完整通过记录。" };
   }
+  // 正式业务数据没有出现原条件所需的场景，不等于验收工具坏了，更不能派人修改产品来制造通过。
+  if (blockedSteps.length && blockedSteps.every((step) => step.blockerKind === "scenario-precondition")
+    && run.sourceReview?.status === "passed") {
+    return { disposition: "acceptance-precondition-unavailable", blockedCriterionIds, reason: "正式应用尚未出现原验收条件所需的真实业务前提；保留未验证结果，不派发源码修复。" };
+  }
   return { disposition: "acceptance-capability-or-runtime-blocked", blockedCriterionIds, reason: "正式页面检查能力、源码读取能力或运行环境受阻，尚不能判定为产品缺陷。" };
 }

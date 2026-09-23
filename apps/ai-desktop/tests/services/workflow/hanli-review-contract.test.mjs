@@ -10,6 +10,8 @@ const computer = readFileSync("electron/services/personas/hanli/internal/accepta
 const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
 const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
 const coordinator = readFileSync("electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts", "utf8");
+const classification = await build({ entryPoints: ["electron/services/workflow/domain/acceptance-result-classification.policy.ts"], bundle: true, platform: "node", format: "esm", write: false });
+const { classifyAcceptanceRun } = await import(`data:text/javascript;base64,${Buffer.from(classification.outputFiles[0].text).toString("base64")}`);
 
 test("韩立固定审查正式页面与源码结构", () => {
   assert.match(prompt, /普通客户/);
@@ -28,6 +30,17 @@ test("受阻验收先归档本轮真实结果再进入恢复，当前卡不沿�
   const branch = runtime.slice(runtime.indexOf('if (classification.disposition === "acceptance-capability-or-runtime-blocked")'), runtime.indexOf('if (runResult.status === "failed")'));
   assert.match(branch, /this\.#hanli\.completeAutomaticAcceptance\(runResult,/u);
   assert.ok(branch.indexOf("this.#hanli.completeAutomaticAcceptance(runResult,") < branch.indexOf("this.#blockOneShotFailure("));
+});
+
+test("真实业务前提缺失独立于验收工具故障，不会被当成可修源码缺陷", () => {
+  const run = { sourceReview: { status: "passed" }, stepResults: [
+    { checkId: "criterion-1", status: "blocked", layoutStatus: "blocked", blockerKind: "scenario-precondition" },
+    { checkId: "criterion-2", status: "passed", layoutStatus: "passed" },
+  ] };
+  assert.equal(classifyAcceptanceRun(run).disposition, "acceptance-precondition-unavailable");
+  assert.equal(classifyAcceptanceRun({ ...run, stepResults: [...run.stepResults, { checkId: "criterion-3", status: "blocked", layoutStatus: "blocked", blockerKind: "runtime-environment" }] }).disposition, "acceptance-capability-or-runtime-blocked");
+  assert.match(runtime, /acceptanceFailureKind: "acceptance-precondition-unavailable"/);
+  assert.match(computerPrompt, /blockerKind=scenario-precondition/);
 });
 
 test("成员均 idle 的原条件仍归任务协作群同屏验收", () => {

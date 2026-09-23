@@ -197,8 +197,8 @@ export class HanliComputerAcceptanceRunner {
                   },
                   blockerKind: {
                     type: "string",
-                    enum: ["acceptance-capability", "runtime-environment"],
-                    description: "仅当功能或布局为 blocked 时填写；观察到真实页面或安全不符合时必须使用 failed。",
+                    enum: ["acceptance-capability", "runtime-environment", "scenario-precondition"],
+                    description: "仅当功能或布局为 blocked 时填写；原条件限定的真实业务场景尚未出现且不能安全建立时用 scenario-precondition，验收工具不可用时用 acceptance-capability，运行环境故障用 runtime-environment；观察到真实页面或安全不符合时必须使用 failed。",
                   },
                   actual: { type: "string" },
                   evidenceId: { type: "string" },
@@ -280,7 +280,7 @@ export class HanliComputerAcceptanceRunner {
                 : false;
               const hasBlockedResult = finding?.status === "blocked" || finding?.layoutStatus === "blocked";
               const hasKnownBlockerKind = finding
-                ? ["acceptance-capability", "runtime-environment"].includes(String(finding.blockerKind))
+                ? ["acceptance-capability", "runtime-environment", "scenario-precondition"].includes(String(finding.blockerKind))
                 : false;
               const hasLayoutResult = finding
                 ? typeof finding.layoutActual === "string" && Boolean(finding.layoutActual.trim())

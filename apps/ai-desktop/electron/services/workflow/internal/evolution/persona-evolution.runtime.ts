@@ -681,6 +681,24 @@ export class PersonaEvolutionRuntime {
             this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
             continue;
           }
+          if (classification.disposition === "acceptance-precondition-unavailable") {
+            // 业务前提缺失不是源码缺陷，也不是验收工具故障；保留真实受阻运行供后续同条件复验。
+            this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
+            const reason = runResult.stepResults
+              .filter((step) => step.status === "blocked" || step.layoutStatus === "blocked")
+              .map((step) => `${step.checkId}：${step.actual}`)
+              .join("\n");
+            publishAcceptance("failed", {
+              summary: "真实业务前提尚未出现",
+              content: "原验收条件尚不能在当前正式业务状态下裁决；不派发源码修复，也不宣称通过。",
+              detail: `未验证条件与实际结果：\n${reason}`,
+            });
+            return this.#blockOneShotFailure("technical", "run_hanli_result_acceptance", new Error(reason), reason, {
+              evidenceAttachmentIds: runResult.evidenceAttachmentIds,
+              acceptanceRunId: runResult.runId,
+              acceptanceFailureKind: "acceptance-precondition-unavailable",
+            }, runResult.runId);
+          }
           if (classification.disposition === "acceptance-capability-or-runtime-blocked") {
             // 未形成产品失败结论仍是本轮真实验收事实。先归档受阻结果，再进入技术恢复；
             // 否则当前卡会继续引用上一轮失败，恢复指纹也无法对准最新运行。

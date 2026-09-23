@@ -19,10 +19,10 @@ export type HanliAcceptanceOperationValue =
 export type HanliAcceptanceEvidenceModeValue = "page-experience" | "code-conformance";
 
 /** 页面条件受阻时的可审计原因；产品实际不符合必须使用 failed，不能伪装成受阻。 */
-export type HanliAcceptanceBlockerKindValue = "acceptance-capability" | "runtime-environment";
+export type HanliAcceptanceBlockerKindValue = "acceptance-capability" | "runtime-environment" | "scenario-precondition";
 
 /** 验收运行写入共同状态前的唯一业务分流结论。 */
-export type HanliAcceptanceDispositionValue = "passed" | "product-or-safety-failure" | "acceptance-capability-or-runtime-blocked";
+export type HanliAcceptanceDispositionValue = "passed" | "product-or-safety-failure" | "acceptance-capability-or-runtime-blocked" | "acceptance-precondition-unavailable";
 
 /**
  * 韩立结果验收的运行方式。mixed 只汇总逐条件的两类证据，任何方式都不创建隔离验收环境。
