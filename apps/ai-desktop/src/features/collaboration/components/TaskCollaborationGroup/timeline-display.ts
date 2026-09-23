@@ -73,7 +73,10 @@ export function currentStageTimelinePresentation(
   if (node.status !== "current" || !currentStage) return null;
   // 申请、审批等历史节点即使暂时处于 current，也不是当前专题阶段的承载者；保留其发送者、收件人和审计动作。
   const matchesCurrentTask = node.taskId !== null && currentStage.effectiveTaskIds.includes(node.taskId);
-  const matchesAcceptance = node.kind === "verification" && currentStage.status === "accepting";
+  // 验收节点仍为 current 时，原验收受阻后的客户确认和令狐复查同样属于当前专题阶段。
+  // 不能只在 accepting 投影，导致主卡已切换而节点仍写“韩立正在真实操作验收”。
+  const matchesAcceptance = node.kind === "verification" && node.nodeId.startsWith("acceptance:")
+    && ["accepting", "failed-pending-repair", "verifying"].includes(currentStage.status);
   if (!matchesCurrentTask && !matchesAcceptance) return null;
   return {
     actor: currentStage.waitingFor,

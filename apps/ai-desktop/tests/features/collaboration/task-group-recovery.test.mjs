@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { build } from "esbuild";
+import { createRequire } from "node:module";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const taskCardSource = readFileSync(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", import.meta.url), "utf8");
 const taskGroupControllerSource = readFileSync(new URL("../../../src/features/collaboration/components/useTaskCollaborationGroup.ts", import.meta.url), "utf8");
@@ -86,11 +89,31 @@ test("令狐处理中的活动技术卡点公开转交原因且不签发恢复�
 test("当前时间线节点和活动人物摘要消费当前专题阶段，历史节点不覆盖当前责任", () => {
   assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*currentStage: CurrentTopicStageOutDto \| null[\s\S]*matchingCurrentStage/);
   assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*并行人物仍必须来自当前节点[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
-  assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && currentStage\.status === "accepting"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
+  assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && node\.nodeId\.startsWith\("acceptance:"\)[\s\S]*"failed-pending-repair"[\s\S]*"verifying"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
   assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
   assert.match(taskCardSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);
   assert.match(taskCardSource, /data-task-timeline-status=\{displayedStatus\}[\s\S]*data-task-timeline-recorded-status=\{node\.status\}/);
   assert.match(taskCardSource, /currentStagePresentation\?\.actor \|\| node\.actor\.displayName[\s\S]*currentStagePresentation\?\.action \|\| node\.action/);
+});
+
+test("验收后的当前节点沿用客户确认阶段，历史或其他验证节点不被覆盖", async () => {
+  const result = await build({
+    entryPoints: [fileURLToPath(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts", import.meta.url))],
+    bundle: true, format: "cjs", platform: "node", packages: "external", write: false,
+  });
+  const compiled = { exports: {} };
+  new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), compiled, compiled.exports);
+  const { currentStageTimelinePresentation } = compiled.exports;
+  const stage = {
+    status: "failed-pending-repair", effectiveTaskIds: [], waitingFor: "你", nextAction: "确认是否继续",
+    summary: "需要你确认验收结果", userAction: "resume",
+  };
+  const acceptanceNode = { status: "current", taskId: null, kind: "verification", nodeId: "acceptance:run-1" };
+  assert.deepEqual(currentStageTimelinePresentation(acceptanceNode, stage), {
+    actor: "你", action: "确认是否继续", summary: "需要你确认验收结果", status: "waiting",
+  });
+  assert.equal(currentStageTimelinePresentation({ ...acceptanceNode, status: "completed" }, stage), null);
+  assert.equal(currentStageTimelinePresentation({ ...acceptanceNode, nodeId: "review:run-1" }, stage), null);
 });
 
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
