@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { EvolutionAcceptancePlanOutDto } from "../../../../../contracts/services/evolution/index.js";
 import type { HanliAcceptanceRunOutDto } from "../../../../../contracts/services/personas/hanli/index.js";
@@ -9,9 +9,10 @@ import type { CollaborationTaskOutDto } from "../../../../../contracts/services/
 export function buildHanliResultReviewContext(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
+  proposalSourceTasks: CollaborationTaskOutDto[] = tasks,
 ): unknown[] {
   return tasks.map((task) => {
-    const sourceEvidence = readChangedSourceEvidence(task, fallbackWorkspaceState);
+    const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState);
     return {
       taskId: task.taskId,
       requirement: {
@@ -25,28 +26,39 @@ export function buildHanliResultReviewContext(
       finalResult: task.finalResult,
       engineeringGate: task.unifiedTest?.status || null,
       changedFiles: [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))],
-      // 只提供当前任务声明为变更的文件片段；韩立不能借此遍历工作区或读取历史记录。
+      // 只提供同一提案已集成任务声明过的源码片段；后续修复不能抹掉原交付源码证据。
       sourceEvidence: sourceEvidence.items,
       sourceEvidenceStatus: sourceEvidence.status,
+      sourceEvidenceScope: "integrated-proposal-task-files",
     };
   });
 }
 
 function readChangedSourceEvidence(
-  task: CollaborationTaskOutDto,
+  tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
 ): { items: Array<{ file: string; content: string }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" } {
-  // 旧任务快照可能早于 workspaceState 字段；只回退到同一专题已持久化的授权范围。
-  const workspaceState = task.snapshot.workspaceState || fallbackWorkspaceState;
-  const root = workspaceState.roots.find((item) => item.id === workspaceState.primaryId)?.path;
+  // 本次专题的授权工作区是唯一读取根；任务快照不得把证据读取扩展到其他工作区。
+  const root = fallbackWorkspaceState.roots.find((item) => item.id === fallbackWorkspaceState.primaryId)?.path;
   if (!root) return { items: [], status: "workspace-root-unavailable" };
-  const files = [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))].filter((file): file is string => Boolean(file));
+  const files = [...new Set(tasks.filter((task) => task.state === "integrated")
+    .flatMap((task) => task.executionRecords.flatMap((record) => record.changedFiles)))]
+    .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file)
+      && !/(?:^|\/)(?:tests?|__tests__)\//u.test(file));
   if (!files.length) return { items: [], status: "no-declared-changed-files" };
-  const items = files.flatMap((file) => {
-    if (!file || path.isAbsolute(file)) return [];
-    const resolved = path.resolve(root, file);
-    if (!resolved.startsWith(`${path.resolve(root)}${path.sep}`)) return [];
-    try { return [{ file, content: readFileSync(resolved, "utf8").slice(0, 12_000) }]; } catch { return []; }
+  let canonicalRoot: string;
+  try { canonicalRoot = realpathSync(root); } catch { return { items: [], status: "workspace-root-unavailable" }; }
+  const items = files.slice(0, 30).flatMap((file) => {
+    if (path.isAbsolute(file)) return [];
+    const resolved = path.resolve(canonicalRoot, file);
+    if (!resolved.startsWith(`${canonicalRoot}${path.sep}`)) return [];
+    try {
+      const canonicalFile = realpathSync(resolved);
+      if (!canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)) return [];
+      const content = readFileSync(canonicalFile, "utf8");
+      return [{ file, content: content.length <= 18_000
+        ? content : `${content.slice(0, 9_000)}\n[中段省略；以下为文件末段]\n${content.slice(-9_000)}` }];
+    } catch { return []; }
   });
   return { items, status: items.length ? "available" : "declared-files-unreadable" };
 }

@@ -10,6 +10,7 @@ const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.
 
 test("韩立任务协作群场景只向绑定窗口投影成员空闲，并在结束时恢复真实快照", () => {
   assert.match(scenarioSource, /collaborationStateFor\(webContentsId: number, actual: CollaborationStateOutDto\)/);
+  assert.match(scenarioSource, /stateFor\(webContentsId: number, actual: EvolutionStateOutDto\)[\s\S]*oneShotRun: null[\s\S]*currentTopicStage: createStage/);
   assert.match(scenarioSource, /if \(!this\.isActiveFor\(webContentsId\)\) return actual/);
   assert.match(scenarioSource, /state: "idle"[\s\S]*currentTaskId: null[\s\S]*blockingReason: null/);
   assert.match(scenarioSource, /return this\.collaborationStateFor\(webContentsId, this\.readCollaborationState\(\)\)/);

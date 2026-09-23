@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { build } from "esbuild";
 
 const prompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8");
 const computerPrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
@@ -20,6 +22,23 @@ test("韩立固定审查正式页面与源码结构", () => {
   assert.match(coordinator, /sourceEvidenceStatus: sourceEvidence\.status/);
   assert.match(prompt, /sourceEvidence` 是唯一已授权的源码片段/);
   assert.match(prompt, /sourceEvidenceStatus=available/);
+});
+
+test("源码审查证据覆盖同提案已集成原任务与修复任务，不读取测试或越界文件", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const task = (taskId, files) => ({ taskId, state: "integrated", snapshot: { title: taskId, problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: files }] });
+  const original = task("original", ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts", "../../AGENTS.md", "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"]);
+  const repair = task("repair", ["apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"]);
+  const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
+  const [context] = buildHanliResultReviewContext([repair], workspace, [original, repair]);
+  assert.equal(context.sourceEvidenceStatus, "available");
+  assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files");
+  assert.deepEqual(context.sourceEvidence.map((item) => item.file), [
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
+    "apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts",
+  ]);
+  assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
 });
 
 test("正式页面检查不读取任务时间线或工作区源码", () => {

@@ -83,7 +83,9 @@ export class HanliTaskCollaborationScenario {
   stateFor(webContentsId: number, actual: EvolutionStateOutDto): EvolutionStateOutDto {
     const active = this.#active;
     if (!active || active.webContentsId !== webContentsId) return actual;
-    return { ...actual, currentTopicStage: createStage(active.baseState.currentTopicStage!, active) };
+    // 场景窗口已把协作成员投影为空闲；真实一次性运行的 actor 不能在左侧栏再次覆盖该窗口状态。
+    // 原运行仍保持在持久存储和其他窗口中，验收结束后立即恢复真实投影。
+    return { ...actual, oneShotRun: null, currentTopicStage: createStage(active.baseState.currentTopicStage!, active) };
   }
 
   timelineFor(webContentsId: number, actual: CollaborationTimelineSnapshotOutDto): CollaborationTimelineSnapshotOutDto {
