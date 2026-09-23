@@ -348,10 +348,15 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    // 只保留最近 16,000 字符，避免长构建输出无限占用主进程内存。
+    // 尾部用于诊断命令退出；失败用例另行逐条保留，避免长测试输出冲掉最早的失败。
     let output = "";
+    const failures = new TestFailureEvidenceCollector();
     // stdout 与 stderr 使用同一追加器，失败信息保留真实发生顺序的近似尾部。
-    const append = (chunk: Buffer) => { output = `${output}${chunk.toString("utf8")}`.slice(-16_000); };
+    const append = (chunk: Buffer) => {
+      const text = chunk.toString("utf8");
+      output = `${output}${text}`.slice(-16_000);
+      failures.append(text);
+    };
     child.stdout.on("data", append);
     child.stderr.on("data", append);
     // 超时由本门禁记录为独立事实，不能混同为脚本自身返回的 SIGTERM。
@@ -393,10 +398,56 @@ function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEn
       else {
         const capacity = parseDeveloperPackageCapacityBlocked(output);
         if (capacity) settle(new UnifiedTestCapacityBlockedError(script, capacity));
-        else settle(new Error(`${script} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${output.trim().slice(-4_000)}`));
+        else settle(new Error(`${script} 失败（${signal ? `信号 ${signal}` : `退出码 ${code ?? "unknown"}`}）：${failures.summary()}${output.trim().slice(-4_000)}`));
       }
     });
   });
+}
+
+/** 从完整输出流提取每个 TAP 失败块；大段成功日志仍只保留尾部。 */
+class TestFailureEvidenceCollector {
+  readonly #blocks: string[] = [];
+  #line = "";
+  #active = "";
+  #omitted = 0;
+
+  append(chunk: string): void {
+    const parts = chunk.split("\n");
+    for (const [index, part] of parts.entries()) {
+      if (index > 0) {
+        this.#consumeLine(this.#line);
+        this.#line = "";
+      }
+      this.#line = `${this.#line}${part}`.slice(-8_000);
+    }
+  }
+
+  summary(): string {
+    if (this.#line) this.#consumeLine(this.#line);
+    this.#flush();
+    if (this.#blocks.length === 0) return "";
+    const omitted = this.#omitted > 0 ? `\n另有 ${this.#omitted} 个失败块未纳入摘要。` : "";
+    return `\n本轮全部已捕获的失败用例：\n${this.#blocks.join("\n\n")}${omitted}\n最后输出：\n`;
+  }
+
+  #consumeLine(raw: string): void {
+    const line = raw.replace(/\r$/, "");
+    if (/^\s*not ok \d+ - /.test(line)) {
+      this.#flush();
+      this.#active = line.slice(0, 1_000);
+      return;
+    }
+    if (!this.#active) return;
+    if (this.#active.length < 5_000) this.#active += `\n${line}`.slice(0, 5_000 - this.#active.length);
+    if (line.trim() === "...") this.#flush();
+  }
+
+  #flush(): void {
+    if (!this.#active) return;
+    if (this.#blocks.length < 30) this.#blocks.push(this.#active);
+    else this.#omitted += 1;
+    this.#active = "";
+  }
 }
 
 function positiveTimeout(value: number | undefined, fallback: number): number {

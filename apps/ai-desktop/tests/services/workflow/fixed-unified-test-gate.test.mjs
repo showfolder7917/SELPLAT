@@ -87,6 +87,41 @@ test("独立验证一次收齐全部失败且不进入发布链", async () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("长输出仍把同一脚本的早晚失败用例一次交给修复", async () => {
+  mkdirSync(controlledTestRoot, { recursive: true });
+  const root = mkdtempSync(path.join(controlledTestRoot, "full-failure-evidence-"));
+  const appRoot = path.join(root, "apps", "ai-desktop");
+  mkdirSync(appRoot, { recursive: true });
+  const script = [
+    "process.stdout.write('not ok 1 - early-contract\\n  ---\\n  location: early.test.mjs:10\\n  error: early mismatch\\n  ...\\n');",
+    "process.stdout.write('passed-noise\\n'.repeat(3000));",
+    "process.stdout.write('not ok 2 - late-contract\\n  ---\\n  location: late.test.mjs:20\\n  error: late mismatch\\n  ...\\n');",
+    "process.exit(1);",
+  ].join("");
+  writeFileSync(path.join(appRoot, "package.json"), JSON.stringify({ scripts: {
+    test: `node -e ${JSON.stringify(script)}`,
+    "test:interaction": "node -e \"process.exit(0)\"",
+    "test:collaboration": "node -e \"process.exit(0)\"",
+    "test:managed": "node -e \"process.exit(0)\"",
+  }}));
+  writeAcceptancePlanCandidate(root);
+  const runner = new FixedUnifiedTestRunner({
+    sourceProjectRoot: root, applicationName: "ai-desktop", buildRoot: path.join(root, "build"),
+    initiatorMemberId: "linghu-ancestor", eventNamespace: "gate",
+    recordEvent: () => undefined,
+    testResources: { run: async (_request, execute) => execute() },
+  });
+  try {
+    await assert.rejects(runner.validate(), (error) => {
+      assert.equal(error.name, "UnifiedTestAggregateError");
+      assert.deepEqual(error.failures.map((failure) => failure.script), ["test"]);
+      assert.match(error.message, /early-contract[\s\S]*early\.test\.mjs:10/);
+      assert.match(error.message, /late-contract[\s\S]*late\.test\.mjs:20/);
+      return true;
+    });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("固定测试超时保留脚本、时限和最后输出，不再误报为普通 SIGTERM", async () => {
   const root = mkdtempSync(path.join(controlledTestRoot, "unified-test-timeout-"));
   const appRoot = path.join(root, "apps", "ai-desktop");
