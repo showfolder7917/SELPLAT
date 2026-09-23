@@ -51,9 +51,9 @@ export function groupActivityPresentation(
     activeOwnerLabels.set(node.actor.memberId, `${node.actor.displayName}${roleLabel}`);
   }
 
-  // 当前权威阶段已要求客户确认时，旧 current 节点不是仍在执行的人物占用。
-  // 历史节点保持原样供审计，专题角标不能继续把令狐显示为“任务执行中”。
-  if (matchingCurrentStage?.userAction === "resume") activeOwnerLabels.clear();
+  // 当前阶段由韩立验收或等待客户确认时，旧 current 节点不能冒充正在执行的人物。
+  // 历史节点保持原样供审计；验收阶段的人物由同一份权威阶段重新投影。
+  if (matchingCurrentStage?.userAction === "resume" || matchingCurrentStage?.status === "accepting") activeOwnerLabels.clear();
 
   // 专题阶段负责唯一的状态结论；并行人物仍必须来自当前节点，不能因为验收开始而遗漏执行人。
   if (matchingCurrentStage && activeOwnerLabels.size === 0 && matchingCurrentStage.userAction === "none"

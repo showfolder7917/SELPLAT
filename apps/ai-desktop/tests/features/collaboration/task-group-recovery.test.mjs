@@ -133,6 +133,10 @@ test("客户确认阶段不把旧 current 节点统计为正在执行的人物",
   assert.deepEqual(waiting, { activeOwnerLabels: [], statusLabel: "等待你确认" });
   const running = compiled.exports.groupActivityPresentation(group, "zh", { ...stage, userAction: "none" });
   assert.deepEqual(running.activeOwnerLabels, ["令狐老祖"]);
+  const accepting = compiled.exports.groupActivityPresentation(group, "zh", {
+    ...stage, status: "accepting", userAction: "none", waitingFor: "韩立真实验收", title: "韩立验收中",
+  });
+  assert.deepEqual(accepting, { activeOwnerLabels: ["韩立真实验收"], statusLabel: "韩立验收中" });
 });
 
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
