@@ -3,6 +3,9 @@ import type { EvolutionStateOutDto, CurrentTopicStageOutDto } from "../../../../
 import type { CollaborationStateOutDto, CollaborationTimelineGroupOutDto, CollaborationTimelineSnapshotOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import type { HanliComputerAcceptanceInDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
+/** 验收器只读观察的窗口绑定阶段；真实客户确认仍只能由页面按钮触发。 */
+export type HanliTaskCollaborationScenarioStage = "no-guidance" | "customer-guidance" | "reviewing" | "new-blocker";
+
 /**
  * 韩立正式验收期间的内存专题场景。
  *
@@ -38,13 +41,28 @@ export class HanliTaskCollaborationScenario {
     this.#publish("acceptance-scenario.no-guidance");
   }
 
-  /** 场景步骤由验收器显式推进，不能由页面或普通 IPC 任意跳转。 */
-  advance(webContentsId: number): void {
+  /** 当前场景阶段只供正式验收器提示下一安全动作，Renderer 与普通 IPC 不可写入。 */
+  stageFor(webContentsId: number): HanliTaskCollaborationScenarioStage | null {
+    const active = this.#active;
+    return active && active.webContentsId === webContentsId ? scenarioStage(active.stage) : null;
+  }
+
+  /**
+   * 只由验收器按当前条件准备不含客户确认的观察阶段。
+   *
+   * 示例：完整指导条件把“无指导”准备为“完整指导”；新阻塞条件只能在真实确认后的
+   * “复查中”阶段准备。第 1 到第 2 阶段不在这里处理，必须点击页面唯一确认按钮。
+   */
+  prepare(webContentsId: number, target: Exclude<HanliTaskCollaborationScenarioStage, "no-guidance" | "reviewing">): void {
     const active = this.#requireActive(webContentsId);
-    if (active.stage === 0) active.stage = 1;
-    else if (active.stage === 2) active.stage = 3;
-    else throw new Error("当前验收场景不能推进；请先观察或提交当前唯一确认入口。");
-    this.#publish("acceptance-scenario.advance");
+    if (target === "customer-guidance" && active.stage === 0) {
+      active.stage = 1;
+    } else if (target === "new-blocker" && active.stage === 2) {
+      active.stage = 3;
+    } else if (scenarioStage(active.stage) !== target) {
+      throw new Error("当前验收条件尚未满足场景阶段顺序；请先观察或点击当前页面唯一确认入口。");
+    }
+    this.#publish(`acceptance-scenario.prepared.${target}`);
   }
 
   /** 当前窗口进入场景时，普通继续入口必须仍被阻断。 */
@@ -137,6 +155,13 @@ type ActiveScenario = {
   stage: 0 | 1 | 2 | 3;
   taskId: string;
 };
+
+function scenarioStage(stage: ActiveScenario["stage"]): HanliTaskCollaborationScenarioStage {
+  if (stage === 0) return "no-guidance";
+  if (stage === 1) return "customer-guidance";
+  if (stage === 2) return "reviewing";
+  return "new-blocker";
+}
 
 function createStage(base: CurrentTopicStageOutDto, active: ActiveScenario): CurrentTopicStageOutDto {
   const now = new Date().toISOString();

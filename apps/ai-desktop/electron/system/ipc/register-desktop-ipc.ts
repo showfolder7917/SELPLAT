@@ -154,7 +154,8 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       run = await hanli.executeComputerAcceptance(goal, targetWindow, {
         allows: (action) => action === "persona-navigation" || action === "task-collaboration-scenario",
         beginTaskCollaborationScenario: (scenarioGoal, window) => hanliTaskScenario.begin(window, scenarioGoal),
-        advanceTaskCollaborationScenario: () => hanliTaskScenario.advance(targetWindow.webContents.id),
+        currentTaskCollaborationScenarioStage: () => hanliTaskScenario.stageFor(targetWindow.webContents.id),
+        prepareTaskCollaborationScenario: (target) => hanliTaskScenario.prepare(targetWindow.webContents.id, target),
         endTaskCollaborationScenario: () => hanliTaskScenario.end(targetWindow.webContents.id),
       });
     } finally {

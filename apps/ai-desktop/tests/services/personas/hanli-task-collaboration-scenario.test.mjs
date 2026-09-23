@@ -4,6 +4,7 @@ import test from "node:test";
 
 const scenarioSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-task-collaboration-scenario.ts", "utf8");
 const acceptanceRunnerSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
+const acceptancePortSource = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-acceptance-page.port.ts", "utf8");
 const collaborationIpcSource = readFileSync("electron/system/ipc/domains/register-collaboration-ipc.ts", "utf8");
 const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
 
@@ -20,4 +21,13 @@ test("成员投影通过既有读取与订阅通道同步，不改变普通协�
   assert.match(collaborationIpcSource, /desktop:get-collaboration-state[\s\S]*collaborationStateFor\(event\.sender\.id, collaboration\.state\(\)\)/);
   assert.match(collaborationIpcSource, /desktop:continue-collaboration-task[\s\S]*hanliTaskScenario\?\.confirm[\s\S]*韩立隔离验收场景只接受当前页面签发的确认入口[\s\S]*collaboration\.continueTask/);
   assert.match(desktopIpcSource, /desktop:collaboration-state[\s\S]*state: collaborationState[\s\S]*taskIds: \[\]/);
+});
+
+test("完整指导和新阻塞由验收条件准备，复查中仍只接受正式页面确认", () => {
+  assert.match(scenarioSource, /stageFor\(webContentsId: number\)[\s\S]*scenarioStage/);
+  assert.match(scenarioSource, /prepare\(webContentsId: number, target:[\s\S]*customer-guidance[\s\S]*active\.stage === 0[\s\S]*new-blocker[\s\S]*active\.stage === 2/);
+  assert.match(scenarioSource, /confirm\(webContentsId: number, taskId: string\)[\s\S]*active\.stage !== 1[\s\S]*active\.stage = 2/);
+  assert.match(acceptancePortSource, /currentTaskCollaborationScenarioStage[\s\S]*prepareTaskCollaborationScenario/);
+  assert.match(acceptanceRunnerSource, /taskCollaborationScenarioTarget[\s\S]*customer-guidance[\s\S]*taskCollaborationScenarioNextAction/);
+  assert.doesNotMatch(acceptanceRunnerSource, /advance-task-collaboration-scenario/);
 });

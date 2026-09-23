@@ -82,6 +82,13 @@ export class HanliComputerAcceptanceRunner {
     if (taskCollaborationCriterionIds.size && interactions.allows("task-collaboration-scenario")) {
       interactions.beginTaskCollaborationScenario?.(goal, window);
     }
+    const prepareTaskCollaborationScenario = (coveredCriterionIds: string[]) => {
+      const target = taskCollaborationScenarioTarget(goal, criterionIds, coveredCriterionIds);
+      if (target && interactions.allows("task-collaboration-scenario")) {
+        interactions.prepareTaskCollaborationScenario?.(target);
+      }
+      return interactions.currentTaskCollaborationScenarioStage?.() || null;
+    };
     this.#active = true;
     const runId = `hanli-computer-${randomUUID()}`;
     const startedAt = new Date().toISOString();
@@ -126,14 +133,16 @@ export class HanliComputerAcceptanceRunner {
           text,
         });
       }
+      const scenarioStage = interactions.currentTaskCollaborationScenarioStage?.() || null;
       const observation = {
         observationId: snapshot,
         size: screenshotSize,
         coordinateSpace,
         criteria,
         pageEvidence: { ...pageEvidence, taskCollaboration },
+        ...(scenarioStage ? { taskCollaborationScenario: { stage: scenarioStage, nextAction: taskCollaborationScenarioNextAction(scenarioStage) } } : {}),
         instruction: taskCollaborationCriterionIds.size
-          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
+          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。taskCollaborationScenario 存在时必须遵守其 nextAction：完整指导与新阻塞在声明对应 criterionIds 的观察前由验收器准备，复查中只能通过页面唯一确认按钮进入。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
           : "依据当前正式应用截图选择一个只读或安全导航动作。若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
         ...(interactionEvidence ? { interactionEvidence } : {}),
       };
@@ -155,13 +164,13 @@ export class HanliComputerAcceptanceRunner {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许重载当前正式页面；原验收条件明确要求时，允许在当前人物会话内新建或重新建立会话并保留旧记录。禁止发送消息、修改设置、操作任务流程或修改条件未授权的数据。每次动作返回新截图，禁止批量操作。隔离场景已启用时，可使用 advance-task-collaboration-scenario 在“无指导→完整指导”或“复查中→新阻塞”之间推进；用户确认必须仍点击正式页面唯一按钮。",
+        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许重载当前正式页面；原验收条件明确要求时，允许在当前人物会话内新建或重新建立会话并保留旧记录。禁止发送消息、修改设置、操作任务流程或修改条件未授权的数据。每次动作返回新截图，禁止批量操作。隔离场景已启用时，观察回执会给出当前阶段与下一安全动作；用户确认仍必须点击正式页面唯一按钮。",
         inputSchema: {
           type: "object",
           properties: {
             action: {
               type: "string",
-              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "toggle-task-audit-card", "open-task-panel", "close-task-panel", "open-task-collaboration", "open-hanli-conversation", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "advance-task-collaboration-scenario", "key", "hover", "finish"],
+              enum: ["observe", "click", "drag", "scroll", "scroll-task-collaboration", "toggle-task-audit-card", "open-task-panel", "close-task-panel", "open-task-collaboration", "open-hanli-conversation", "scroll-settings-panel", "resize-formal-window", "reload-formal-page", "key", "hover", "finish"],
             },
             observationId: { type: "string", description: "除 observe 外必须原样填写最近一次工具回执中的 observationId；它是截图身份，不能使用步骤编号或自己生成的值。" },
             x: { type: "integer" },
@@ -247,8 +256,9 @@ export class HanliComputerAcceptanceRunner {
             throw new Error("终态回合只允许提交 finish，不能继续操作应用。");
           }
           if (args.action === "observe") {
-            const output = await images();
             const observedCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, false);
+            prepareTaskCollaborationScenario(observedCriterionIds);
+            const output = await images();
             for (const criterionId of observedCriterionIds) {
               evidence.bindLatestToCriteria([criterionId]);
             }
@@ -372,11 +382,11 @@ export class HanliComputerAcceptanceRunner {
           }
           const coveredCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, true);
           const taskCollaborationAction = args.action === "open-task-collaboration"
-            || args.action === "scroll-task-collaboration" || args.action === "toggle-task-audit-card"
-            || args.action === "advance-task-collaboration-scenario";
+            || args.action === "scroll-task-collaboration" || args.action === "toggle-task-audit-card";
           if (taskCollaborationAction && coveredCriterionIds.some((criterionId) => !taskCollaborationCriterionIds.has(criterionId))) {
             throw new Error("任务协作群操作只能核对任务卡条件；人物会话条件须先导航到对应会话页面。");
           }
+          prepareTaskCollaborationScenario(coveredCriterionIds);
           window.show();
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
@@ -385,13 +395,7 @@ export class HanliComputerAcceptanceRunner {
           let hanliConversationEvidence: Record<string, unknown> | null = null;
           let windowResizeEvidence: Record<string, unknown> | null = null;
           let pageReloadEvidence: Record<string, unknown> | null = null;
-          if (args.action === "advance-task-collaboration-scenario") {
-            if (!interactions.allows("task-collaboration-scenario") || !interactions.advanceTaskCollaborationScenario) {
-              throw new Error("当前正式验收未获隔离任务协作群场景授权。");
-            }
-            interactions.advanceTaskCollaborationScenario();
-            taskCollaborationEvidence = { status: "advanced" };
-          } else if (args.action === "scroll-task-collaboration") {
+          if (args.action === "scroll-task-collaboration") {
             const deltaY = Number(args.deltaY);
             if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
               throw new Error("任务协作页滚动距离必须为非零整数且不超过1000。");
@@ -670,6 +674,33 @@ export class HanliComputerAcceptanceRunner {
 }
 
 /** 校验模型声明的本步验收覆盖范围；真实页面动作必须指向至少一条原条件。 */
+/** 当前条件需要的非确认场景阶段；语义只覆盖已冻结的任务协作群验收条件。 */
+function taskCollaborationScenarioTarget(
+  goal: HanliComputerAcceptanceInDto,
+  criterionIds: string[],
+  coveredCriterionIds: string[],
+): "customer-guidance" | "new-blocker" | null {
+  const criteria = coveredCriterionIds.flatMap((criterionId) => {
+    const index = criterionIds.indexOf(criterionId);
+    return index < 0 ? [] : [goal.criteria[index] || ""];
+  });
+  if (criteria.some((criterion) => /新的阻塞|新(?:的)?原因|覆盖旧(?:指导|文案)|不复用旧/u.test(criterion))) {
+    return "new-blocker";
+  }
+  if (criteria.some((criterion) => /完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口/u.test(criterion))) {
+    return "customer-guidance";
+  }
+  return null;
+}
+
+/** 将当前隔离阶段转为验收器必须遵守的下一安全动作。 */
+function taskCollaborationScenarioNextAction(stage: string): string {
+  if (stage === "no-guidance") return "可先核对无指导状态；核对完整指导时，以对应 criterionIds 观察，验收器会准备完整指导快照。";
+  if (stage === "customer-guidance") return "核对完整指导和唯一入口；要进入复查中，必须点击当前页面的唯一确认按钮。";
+  if (stage === "reviewing") return "核对令狐复查中且未显示完成；核对新阻塞时，以对应 criterionIds 观察，验收器会准备新阻塞快照。";
+  return "核对新的阻塞原因、下一步和旧指导未被复用；不得再点击恢复入口。";
+}
+
 function validateCriterionCoverage(value: unknown, allowedCriterionIds: string[], required: boolean): string[] {
   if (value === undefined && !required) return [];
   if (!Array.isArray(value) || (required && value.length === 0)) {
