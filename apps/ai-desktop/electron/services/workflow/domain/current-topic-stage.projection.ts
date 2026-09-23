@@ -1,5 +1,5 @@
 import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
-import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
+import { isCompleteCustomerActionGuidance, type CollaborationStateOutDto, type CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
 import { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { decideCurrentTopicOperation } from "./current-topic-operation.decision.js";
 
@@ -128,10 +128,10 @@ export function projectCurrentTopicStage(
     const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
     const guidance = blockingTask?.customerActionGuidance || null;
     const guidanceFiles = guidance?.affectedFiles || [];
-    const hasCompleteGuidance = Boolean(technicalRecovery.faultFingerprint
-      && guidance?.sourceFingerprint === technicalRecovery.faultFingerprint
-      && guidanceFiles.length && guidance.problem.trim() && guidance.reasonCustomerMustAct.trim()
-      && guidance.steps.length && guidance.completionCriteria.length);
+    const hasCompleteGuidance = isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
+      affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
+      nonFileRecovery: null,
+    });
     // 原一次性运行被阻塞本身不代表客户可以恢复。只有当前阻塞任务持有同故障指纹的完整指导，
     // 才能签发任务级确认；否则保持令狐核对中，避免旧运行入口覆盖当前责任。
     const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;

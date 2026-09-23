@@ -14,7 +14,7 @@ import type { TestResourceCoordinatorStateOutDto } from "../../../../contracts/s
 import { LINGHU_AUTOMATION_MODULES, LINGHU_SAFEGUARD_INSTRUCTIONS, LinghuAutomationStore } from "./internal/linghu-automation.store.js";
 // 纯分析函数独立在无副作用模块内，Facade 只编排决策与动作。
 import { automaticFlowSnapshots, faultFingerprint, moduleCompletionReport, moduleInstruction, moduleLabel, taskHumanReport, testResourceContext } from "./internal/linghu-flow.analyzer.js";
-import { customerActionFacts, customerActionLocation, parseCustomerActionGuidance } from "./internal/linghu-customer-action-guidance.js";
+import { customerActionFacts, customerActionGuidanceEvidence, customerActionLocation, parseCustomerActionGuidance } from "./internal/linghu-customer-action-guidance.js";
 // 基础设施异常类型留在 internal，外部只能通过 Facade 的静态判断入口识别。
 import { isUnifiedTestCapacityBlockedError, isUnifiedTestInfrastructureError } from "../../support/capabilities/testing/index.js";
 
@@ -458,7 +458,14 @@ export class LinghuAutomationFacade {
           ? { attempt: previousFailure.attempts + 1, validationError: previousFailure.detail }
           : null,
       });
-      const guidance = parseCustomerActionGuidance(text, fingerprint, { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" }, customerActionLocation(task));
+      const location = customerActionLocation(task);
+      const guidance = parseCustomerActionGuidance(
+        text,
+        fingerprint,
+        { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" },
+        location,
+        customerActionGuidanceEvidence(task, location),
+      );
       // 分析期间原任务可能已经推进；只允许同一故障的结果登记到原等待节点。
       const currentTask = this.#collaboration.state().tasks.find((candidate) => candidate.taskId === task.taskId);
       const currentSnapshot = automaticFlowSnapshots(this.#collaboration.state(), this.state().activeTaskId, new Date().toISOString())

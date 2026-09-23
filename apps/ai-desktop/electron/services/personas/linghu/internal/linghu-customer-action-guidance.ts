@@ -1,9 +1,11 @@
 import path from "node:path";
 
 import type {
+  CollaborationCustomerActionGuidanceEvidence,
   CollaborationCustomerActionGuidanceOutDto,
   CollaborationTaskOutDto,
 } from "../../../../../contracts/services/workflow/index.js";
+import { isCompleteCustomerActionGuidance } from "../../../../../contracts/services/workflow/index.js";
 import type { LinghuAutomaticFlowSnapshotOutDto } from "../../../../../contracts/services/personas/linghu/index.js";
 
 /** 只向令狐提供已经落库的卡点事实，避免模型用猜测补全原因。 */
@@ -46,6 +48,10 @@ export function parseCustomerActionGuidance(
   sourceFingerprint: string,
   generatedBy: CollaborationCustomerActionGuidanceOutDto["generatedBy"],
   location?: ReturnType<typeof customerActionLocation>,
+  evidence: CollaborationCustomerActionGuidanceEvidence = {
+    affectedFiles: location?.affectedFiles || [],
+    nonFileRecovery: null,
+  },
 ): CollaborationCustomerActionGuidanceOutDto {
   const candidate = extractJsonObject(text);
   const input = JSON.parse(candidate) as Record<string, unknown>;
@@ -64,7 +70,7 @@ export function parseCustomerActionGuidance(
     const match = forbiddenInstruction.exec(value);
     if (match) throw new Error(`令狐生成的客户操作指导包含危险或越权操作，已拒绝展示。字段 ${field} 命中 ${JSON.stringify(match[0])}；请保留权限边界，用明确的允许范围和可观察结果重新表述，不复述被拒绝的操作。`);
   }
-  return {
+  const guidance = {
     guidanceId: `customer-action:${sourceFingerprint}`,
     sourceFingerprint,
     title,
@@ -77,6 +83,29 @@ export function parseCustomerActionGuidance(
     resumeLabel: "从卡点继续",
     generatedBy,
     createdAt: new Date().toISOString(),
+  };
+  if (!isCompleteCustomerActionGuidance(guidance, sourceFingerprint, evidence)) {
+    throw new Error("令狐生成的客户操作指导缺少对应卡点事实或仍是概括性原因、步骤、完成标准，不能签发继续入口。");
+  }
+  return guidance;
+}
+
+/** 文件与容量授权事实都来自同一任务快照，生成器不能用文本自行补全任一类证据。 */
+export function customerActionGuidanceEvidence(
+  task: CollaborationTaskOutDto,
+  location = customerActionLocation(task),
+): CollaborationCustomerActionGuidanceEvidence {
+  const failure = task.integrationFailure;
+  return {
+    affectedFiles: location.affectedFiles,
+    nonFileRecovery: failure?.capacity
+      ? {
+        capacity: failure.capacity,
+        recoveryAction: failure.recoveryAction || null,
+        detail: failure.detail || null,
+        summary: failure.summary || null,
+      }
+      : null,
   };
 }
 
