@@ -35,12 +35,8 @@ export function groupActivityPresentation(
   locale: LocaleValue,
   currentStage: CurrentTopicStageOutDto | null = null,
 ): GroupActivityPresentation {
-  // 当前专题已有唯一阶段时，不能让旧“current”节点重新定义处理人。
-  if (currentStage?.topicId === group.topicId && currentStage.proposalId === group.proposalId) {
-    const activeOwnerLabels = currentStage.userAction === "none" && ["令狐老祖", "韩立真实验收", "南宫婉"].includes(currentStage.waitingFor)
-      ? [currentStage.waitingFor] : [];
-    return { activeOwnerLabels, statusLabel: currentStage.title };
-  }
+  const matchingCurrentStage = currentStage?.topicId === group.topicId && currentStage.proposalId === group.proposalId
+    ? currentStage : null;
   const activeOwnerLabels = new Map<string, string>();
   let acceptanceNode: CollaborationTimelineNodeOutDto | undefined;
 
@@ -55,7 +51,12 @@ export function groupActivityPresentation(
     activeOwnerLabels.set(node.actor.memberId, `${node.actor.displayName}${roleLabel}`);
   }
 
-  const statusLabel = group.status === "verifying" && acceptanceNode
+  // 专题阶段负责唯一的状态结论；并行人物仍必须来自当前节点，不能因为验收开始而遗漏执行人。
+  if (matchingCurrentStage && activeOwnerLabels.size === 0 && matchingCurrentStage.userAction === "none"
+    && ["令狐老祖", "韩立真实验收", "南宫婉"].includes(matchingCurrentStage.waitingFor)) {
+    activeOwnerLabels.set(matchingCurrentStage.waitingFor, matchingCurrentStage.waitingFor);
+  }
+  const statusLabel = matchingCurrentStage ? matchingCurrentStage.title : group.status === "verifying" && acceptanceNode
     ? locale === "ja" ? `${acceptanceNode.actor.displayName}が受入確認中` : `${acceptanceNode.actor.displayName}验收中`
     : groupStatusLabel(group.status, locale);
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
@@ -70,6 +71,10 @@ export function currentStageTimelinePresentation(
   currentStage: CurrentTopicStageOutDto | null,
 ): CurrentStageTimelinePresentation | null {
   if (node.status !== "current" || !currentStage) return null;
+  // 申请、审批等历史节点即使暂时处于 current，也不是当前专题阶段的承载者；保留其发送者、收件人和审计动作。
+  const matchesCurrentTask = node.taskId !== null && currentStage.effectiveTaskIds.includes(node.taskId);
+  const matchesAcceptance = node.kind === "verification" && currentStage.status === "accepting";
+  if (!matchesCurrentTask && !matchesAcceptance) return null;
   return {
     actor: currentStage.waitingFor,
     action: currentStage.nextAction,
