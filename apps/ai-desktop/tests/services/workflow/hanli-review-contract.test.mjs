@@ -45,6 +45,19 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
     "apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts",
   ]);
   assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
+  assert.match(context.sourceEvidence[0].content, /const systemOnlyAcceptanceRetry/u);
+  assert.match(context.sourceEvidence[0].content, /technicalRecovery\.occurrences/u);
+  assert.doesNotMatch(context.sourceEvidence[0].content, /源码中段省略/u);
+});
+
+test("已登记但在本版本退役的验收场景文件明确标记缺失，不沿用旧源码", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const removed = "apps/ai-desktop/electron/services/personas/hanli/internal/acceptance/hanli-task-collaboration-scenario.ts";
+  const task = { taskId: "original", state: "integrated", snapshot: { title: "original", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [removed] }] };
+  const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
+  const [context] = buildHanliResultReviewContext([task], workspace);
+  assert.deepEqual(context.sourceEvidence, [{ file: removed, content: "[当前授权工作区不存在该源码文件；不能沿用旧实现作为本版本证据]" }]);
 });
 
 test("正式页面检查不读取任务时间线或工作区源码", () => {

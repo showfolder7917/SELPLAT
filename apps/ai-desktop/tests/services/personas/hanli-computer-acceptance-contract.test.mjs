@@ -20,9 +20,9 @@ const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.
 test("正式窗口销毁后释放验收锁并有界重试，不把旧窗口标记为持续验收", () => {
   assert.match(desktopIpcSource, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
   assert.match(desktopIpcSource, /const webContentsId = targetWindow\.webContents\.id;[\s\S]*hanliPageReviewGuard\.begin\(webContentsId\)/);
-  assert.match(desktopIpcSource, /hanliTaskScenario\.end\(webContentsId\);\s*\} finally \{\s*hanliPageReviewGuard\.end\(webContentsId\)/);
+  assert.match(desktopIpcSource, /finally \{\s*hanliPageReviewGuard\.end\(webContentsId\)/);
   assert.doesNotMatch(desktopIpcSource, /hanliPageReviewGuard\.end\(targetWindow\.webContents\.id\)/);
-  assert.match(acceptanceSource, /closed = true;[\s\S]*interactions\.endTaskCollaborationScenario\?\.\(\);[\s\S]*this\.#active = false/);
+  assert.match(acceptanceSource, /closed = true;[\s\S]*this\.#active = false/);
 });
 
 test("任务卡页面验收使用明确目标、语义导航和页面截图门禁", () => {
@@ -43,11 +43,9 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /panel\.querySelectorAll[\s\S]*button\.collaboration-member[\s\S]*startsWith\("韩立"\)/);
   assert.match(acceptanceSource, /navigateHanliConversation[\s\S]*requestAnimationFrame[\s\S]*conversation-not-visible/);
   assert.match(acceptanceSource, /open-hanli-conversation[\s\S]*当前正式验收未获韩立会话导航授权[\s\S]*hanliConversation/);
-  assert.match(runtimeSource, /具体文件[\s\S]*完成标准[\s\S]*恢复入口[\s\S]*提交确认[\s\S]*令狐复查[\s\S]*成员\.\*空闲[\s\S]*窄窗口[\s\S]*历史/);
-  assert.match(acceptanceSource, /taskCollaborationScenarioTarget[\s\S]*no-guidance[\s\S]*customer-guidance[\s\S]*new-blocker/);
-  assert.match(acceptanceSource, /targets\.size > 1[\s\S]*不能合并任务协作群的不同场景阶段/);
-  assert.match(acceptanceSource, /没有已持久化完整指导[\s\S]*return "no-guidance"/);
-  assert.match(acceptanceSource, /taskCollaborationScenario[\s\S]*nextAction[\s\S]*唯一确认按钮/);
+  assert.match(runtimeSource, /具体文件[\s\S]*完成标准[\s\S]*恢复入口[\s\S]*提交确认[\s\S]*令狐复查[\s\S]*成员\.\*\(\?:空闲\|idle\)[\s\S]*窄窗口[\s\S]*历史/);
+  assert.match(acceptanceSource, /所有状态必须来自当前正式业务数据/);
+  assert.doesNotMatch(acceptanceSource, /taskCollaborationScenarioTarget|TaskCollaborationScenario/);
   assert.match(acceptanceSource, /#developer-task-list button\.collaboration-member[\s\S]*:scope > span > i[\s\S]*memberStates/);
   assert.doesNotMatch(acceptanceSource, /advance-task-collaboration-scenario/);
 });

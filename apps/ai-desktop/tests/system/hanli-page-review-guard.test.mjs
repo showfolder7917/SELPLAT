@@ -33,13 +33,13 @@ test("页面检查结束后不限制客户正常工作区操作", () => {
   assert.doesNotThrow(() => guard.assertWorkspaceFileAllowed(1));
 });
 
-test("正式验收窗口不接收后台实时阶段覆盖，只接受场景专用快照", () => {
+test("正式验收窗口接收真实阶段更新，但隐藏无关审批并拒绝业务写入", () => {
   const runtime = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
   const ipc = readFileSync(new URL("../../electron/system/ipc/domains/register-codex-ipc.ts", import.meta.url), "utf8");
   assert.match(runtime, /collaboration-timeline-changed", event\)/);
   assert.match(runtime, /desktop:collaboration-state", \{ state, reason, taskIds \}/);
   assert.match(runtime, /desktop:evolution-state", \{ state, reason, topicId, proposalId \}/);
-  assert.equal((runtime.match(/!hanliPageReviewGuard\.isReviewing\(window\.webContents\.id\)/g) || []).length, 3);
-  assert.match(runtime, /window\.isDestroyed\(\) \|\| hanliPageReviewGuard\.isReviewing\(window\.webContents\.id\)/);
+  assert.doesNotMatch(runtime, /!hanliPageReviewGuard\.isReviewing\(window\.webContents\.id\)/);
+  assert.doesNotMatch(runtime, /window\.isDestroyed\(\) \|\| hanliPageReviewGuard\.isReviewing\(window\.webContents\.id\)/);
   assert.match(ipc, /if \(hanliPageReviewGuard\.isReviewing\(event\.sender\.id\)\) return \[\];/);
 });

@@ -224,7 +224,7 @@ export async function startApplication(): Promise<void> {
   const projectRoot = startupProjectRoot;
   const applicationName = startupApplicationName;
   const projectPaths = startupProjectPaths;
-  // 验收窗口必须从启动装配开始拦截后台推送；场景自己的窗口专用快照仍由 IPC 装配层发送。
+  // 验收窗口只限制危险交互；正式业务状态仍实时推送，避免验收看到冻结的旧页面。
   const hanliPageReviewGuard = new HanliPageReviewGuard();
   persistenceContext = await createPersistenceContext({
     projectRoot,
@@ -233,7 +233,7 @@ export async function startApplication(): Promise<void> {
     migrationSqlRoot: app.isPackaged ? path.join(process.resourcesPath, "db", "sql") : undefined,
     eventCenter,
     onTimelineChanged: (event) => {
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed() && !hanliPageReviewGuard.isReviewing(window.webContents.id)) {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
         window.webContents.send("desktop:collaboration-timeline-changed", event);
       }
     },
@@ -742,7 +742,7 @@ export async function startApplication(): Promise<void> {
         }
       }
       for (const window of BrowserWindow.getAllWindows()) {
-        if (window.isDestroyed() || hanliPageReviewGuard.isReviewing(window.webContents.id)) continue;
+        if (window.isDestroyed()) continue;
         window.webContents.send("desktop:collaboration-state", { state, reason, taskIds });
       }
       // 桌面模式只改变显示选择，不应唤醒演化状态机或触发数据库全量重写。
@@ -1154,7 +1154,7 @@ export async function startApplication(): Promise<void> {
   const evolutionRuntime = createEvolutionRuntime(personaEvolution);
   // 协作事实变化由 Evolution Runtime 重算当前专题投影；组合根只负责把已生成快照送到窗口。
   personaEvolution.subscribeCurrentTopicStage((state, reason) => {
-    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed() && !hanliPageReviewGuard.isReviewing(window.webContents.id)) {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:evolution-state", { state, reason, topicId: null, proposalId: null });
     }
   });
@@ -1175,7 +1175,7 @@ export async function startApplication(): Promise<void> {
       const messageId = `hanli-workflow-status:${run.runId}:${progressIdentity}`;
       void publishHanliInternalStatus(messageId, workflowStatus, run.updatedAt, proposalId || topicId || run.runId, true);
     }
-    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed() && !hanliPageReviewGuard.isReviewing(window.webContents.id)) {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) {
       window.webContents.send("desktop:evolution-state", { state, reason, topicId, proposalId });
     }
   });

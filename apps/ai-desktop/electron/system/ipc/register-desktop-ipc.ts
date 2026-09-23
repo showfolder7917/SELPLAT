@@ -27,7 +27,7 @@ import { ConversationFacade as ConversationDispatchStore } from "../../services/
 import { CollaborationCodexRegistry } from "../../services/support/capabilities/conversation/index.js";
 import { CollaborationWorkflowFacade as CollaborationCoordinator, type WorkflowPersistencePort as WorkflowRepository, type CollaborationNavigationPreferencePort, type CollaborationInteractionPerformancePort } from "../../services/workflow/index.js";
 import { LinghuAutomationFacade } from "../../services/personas/linghu/index.js";
-import { HanliTaskCollaborationScenario, type HanliFacade } from "../../services/personas/hanli/index.js";
+import type { HanliFacade } from "../../services/personas/hanli/index.js";
 import type { NangongFacade } from "../../services/personas/nangong/index.js";
 import type { PersonaConversationFacade } from "../../services/personas/conversation/index.js";
 import type { EvolutionFacade } from "../../services/evolution/index.js";
@@ -154,11 +154,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         if (attempt === 0) onStarted();
         // 正式窗口不授予测试消息、恢复动作或私有截图能力；页面检查只能观察和使用既有安全导航。
         run = await hanli.executeComputerAcceptance(goal, targetWindow, {
-          allows: (action) => action === "persona-navigation" || action === "task-collaboration-scenario",
-          beginTaskCollaborationScenario: (scenarioGoal, window) => hanliTaskScenario.begin(window, scenarioGoal),
-          currentTaskCollaborationScenarioStage: () => hanliTaskScenario.stageFor(webContentsId),
-          prepareTaskCollaborationScenario: (target) => hanliTaskScenario.prepare(webContentsId, target),
-          endTaskCollaborationScenario: () => hanliTaskScenario.end(webContentsId),
+          allows: (action) => action === "persona-navigation",
         });
         break;
       } catch (error) {
@@ -166,12 +162,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         if (attempt === 2 || !/(Object has been destroyed|正式应用窗口已关闭)/u.test(message)) throw error;
         await new Promise((resolve) => setTimeout(resolve, 1_000));
       } finally {
-        try {
-          // runner 初始化中途失败时也必须撤销窗口专用场景，避免下一次验收无法建立场景。
-          hanliTaskScenario.end(webContentsId);
-        } finally {
-          hanliPageReviewGuard.end(webContentsId);
-        }
+        hanliPageReviewGuard.end(webContentsId);
       }
     }
     if (!run) throw new Error("韩立正式页面验收未返回结果。");
@@ -309,22 +300,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   });
   registerSettingsIpc(settings, eventCenter);
   registerWorkspaceIpc(workspaces, eventCenter, hanliPageReviewGuard);
-  let hanliScenarioTimelineVersion = 1_000_000_000;
-  const hanliTaskScenario = new HanliTaskCollaborationScenario(
-    () => evolution.state(),
-    () => {
-      if (!collaborationTimeline) throw new Error("任务协作群数据库不可用，不能建立验收场景。");
-      return collaborationTimeline.getTimelineSnapshot();
-    },
-    () => collaboration.state(),
-    (window, state, timeline, collaborationState, reason) => {
-      window.webContents.send("desktop:evolution-state", { state, reason, topicId: state.currentTopicStage?.topicId || null, proposalId: state.currentTopicStage?.proposalId || null });
-      window.webContents.send("desktop:collaboration-state", { state: collaborationState, reason, taskIds: [] });
-      const group = timeline.groups.find((item) => item.topicId === state.currentTopicStage?.topicId && item.proposalId === state.currentTopicStage?.proposalId);
-      if (group) window.webContents.send("desktop:collaboration-timeline-changed", { committedAt: state.updatedAt, groupIds: [group.groupId], groupVersions: { [group.groupId]: ++hanliScenarioTimelineVersion } });
-    },
-  );
-  registerCollaborationIpc(collaboration, collaborationNavigationPreference, collaborationInteractionPerformance, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints, hanliTaskScenario);
+  registerCollaborationIpc(collaboration, collaborationNavigationPreference, collaborationInteractionPerformance, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
   registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, hanliPageReviewGuard, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {

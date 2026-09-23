@@ -11,8 +11,9 @@ export function buildHanliResultReviewContext(
   fallbackWorkspaceState: WorkspaceStateOutDto,
   proposalSourceTasks: CollaborationTaskOutDto[] = tasks,
 ): unknown[] {
+  // 同一提案只读取一次已授权源码；大文件的中段也必须可见，否则旧恢复分支会被首尾截取漏掉。
+  const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState);
   return tasks.map((task) => {
-    const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState);
     return {
       taskId: task.taskId,
       requirement: {
@@ -56,9 +57,15 @@ function readChangedSourceEvidence(
       const canonicalFile = realpathSync(resolved);
       if (!canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)) return [];
       const content = readFileSync(canonicalFile, "utf8");
-      return [{ file, content: content.length <= 18_000
-        ? content : `${content.slice(0, 9_000)}\n[中段省略；以下为文件末段]\n${content.slice(-9_000)}` }];
-    } catch { return []; }
+      // 保留 48 KiB 内的整文件，避免从首尾剪裁掉与原条件对应的中间实现。
+      // 更大的文件仍明确标注省略，不能把片段当作完整源码验收。
+      return [{ file, content: content.length <= 48_000
+        ? content : `${content.slice(0, 20_000)}\n[源码中段省略，当前片段不足以证明整文件行为]\n${content.slice(-20_000)}` }];
+    } catch (error) {
+      // 已声明的旧文件缺失也是当前源码事实，不能静默略去并让审查者误以为仍有该实现。
+      const missing = typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+      return missing ? [{ file, content: "[当前授权工作区不存在该源码文件；不能沿用旧实现作为本版本证据]" }] : [];
+    }
   });
   return { items, status: items.length ? "available" : "declared-files-unreadable" };
 }

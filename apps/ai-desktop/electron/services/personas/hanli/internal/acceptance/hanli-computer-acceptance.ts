@@ -79,16 +79,6 @@ export class HanliComputerAcceptanceRunner {
     if ([...taskCollaborationCriterionIds].some((criterionId) => !criterionIds.includes(criterionId))) {
       throw new Error("任务协作群页面条件必须属于当前正式页面验收目标。");
     }
-    if (taskCollaborationCriterionIds.size && interactions.allows("task-collaboration-scenario")) {
-      interactions.beginTaskCollaborationScenario?.(goal, window);
-    }
-    const prepareTaskCollaborationScenario = (coveredCriterionIds: string[]) => {
-      const target = taskCollaborationScenarioTarget(goal, criterionIds, coveredCriterionIds);
-      if (target && interactions.allows("task-collaboration-scenario")) {
-        interactions.prepareTaskCollaborationScenario?.(target);
-      }
-      return interactions.currentTaskCollaborationScenarioStage?.() || null;
-    };
     const runId = `hanli-computer-${randomUUID()}`;
     const startedAt = new Date().toISOString();
     const initialBounds = window.getBounds();
@@ -132,16 +122,14 @@ export class HanliComputerAcceptanceRunner {
           text,
         });
       }
-      const scenarioStage = interactions.currentTaskCollaborationScenarioStage?.() || null;
       const observation = {
         observationId: snapshot,
         size: screenshotSize,
         coordinateSpace,
         criteria,
         pageEvidence: { ...pageEvidence, taskCollaboration },
-        ...(scenarioStage ? { taskCollaborationScenario: { stage: scenarioStage, nextAction: taskCollaborationScenarioNextAction(scenarioStage) } } : {}),
         instruction: taskCollaborationCriterionIds.size
-          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、当前节点、成员状态及详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。taskCollaborationScenario 存在时必须遵守其 nextAction：完整指导与新阻塞在声明对应 criterionIds 的观察前由验收器准备，复查中只能通过页面唯一确认按钮进入；该场景也把成员投影为 idle，成员条件必须在任务协作群同时观察 memberStates、主卡和入口，不能导航到人物会话后再判断。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。detail-pane-zero-height 表示页面在有界等待后仍为零高度，必须作为真实页面布局失败；not-ready、audit-history-not-ready 或 audit-card-not-ready 只表示验收能力受阻。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
+          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、当前节点、成员状态及详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。所有状态必须来自当前正式业务数据；未实际发生的客户确认或新阻塞不得模拟，也不得点击任务恢复入口。成员条件在任务协作群同屏观察 memberStates、主卡和入口。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。detail-pane-zero-height 表示页面在有界等待后仍为零高度，必须作为真实页面布局失败；not-ready、audit-history-not-ready 或 audit-card-not-ready 只表示验收能力受阻。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
           : "依据当前正式应用截图选择一个只读或安全导航动作。若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
         ...(interactionEvidence ? { interactionEvidence } : {}),
       };
@@ -163,7 +151,7 @@ export class HanliComputerAcceptanceRunner {
       definitions: [{
         type: "function",
         name: "hanli_computer",
-        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许重载当前正式页面；原验收条件明确要求时，允许在当前人物会话内新建或重新建立会话并保留旧记录。禁止发送消息、修改设置、操作任务流程或修改条件未授权的数据。每次动作返回新截图，禁止批量操作。隔离场景已启用时，观察回执会给出当前阶段与下一安全动作；用户确认仍必须点击正式页面唯一按钮。",
+        description: "观察当前正式 AI Desktop 窗口，基于最新截图执行一个只读或安全导航动作，或提交带证据的验收判断。每个页面动作必须声明本步实际核对的 criterionIds；发现失败后仍须继续其余可安全执行条件，最后一次提交完整结果。每条条件必须独立提交功能结果和布局结果，不能以操作成功代替。允许重载当前正式页面；原验收条件明确要求时，允许在当前人物会话内新建或重新建立会话并保留旧记录。禁止发送消息、修改设置、操作任务流程或修改条件未授权的数据。每次动作返回新截图，禁止批量操作。未实际发生的业务状态须如实报告受阻，不能用临时场景替代。",
         inputSchema: {
           type: "object",
           properties: {
@@ -256,7 +244,6 @@ export class HanliComputerAcceptanceRunner {
           }
           if (args.action === "observe") {
             const observedCriterionIds = validateCriterionCoverage(args.criterionIds, criterionIds, false);
-            prepareTaskCollaborationScenario(observedCriterionIds);
             const output = await images();
             for (const criterionId of observedCriterionIds) {
               evidence.bindLatestToCriteria([criterionId]);
@@ -385,7 +372,6 @@ export class HanliComputerAcceptanceRunner {
           if (taskCollaborationAction && coveredCriterionIds.some((criterionId) => !taskCollaborationCriterionIds.has(criterionId))) {
             throw new Error("任务协作群操作只能核对任务卡条件；人物会话条件须先导航到对应会话页面。");
           }
-          prepareTaskCollaborationScenario(coveredCriterionIds);
           window.show();
           window.focus();
           let dragEvidence: Record<string, unknown> | null = null;
@@ -475,7 +461,7 @@ export class HanliComputerAcceptanceRunner {
             assertPointInsideWindow(point.x, point.y, width, height, "换算后的坐标必须位于当前应用窗口内。");
             if (args.action === "click") {
               // 只用DOM做安全拦截，绝不通过DOM替模型定位或断言成功。
-              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${interactions.allows("persona-navigation")},${interactions.allows("task-collaboration-scenario")}))`) as "allowed" | "missed" | "restricted";
+              const clickStatus = await window.webContents.executeJavaScript(`(${readNavigationClickStatus.toString()})(${point.x},${point.y},(x,y) => (${safeNavigationClick.toString()})(x,y,${interactions.allows("persona-navigation")}))`) as "allowed" | "missed" | "restricted";
               if (closed) {
                 throw new Error("验收已终止，未执行点击。");
               }
@@ -611,7 +597,6 @@ export class HanliComputerAcceptanceRunner {
         }
       } finally {
         try {
-          interactions.endTaskCollaborationScenario?.();
         } finally {
           this.#active = false;
         }
@@ -680,46 +665,6 @@ export class HanliComputerAcceptanceRunner {
 }
 
 /** 校验模型声明的本步验收覆盖范围；真实页面动作必须指向至少一条原条件。 */
-/** 当前条件需要的非确认场景阶段；语义只覆盖已冻结的任务协作群验收条件。 */
-function taskCollaborationScenarioTarget(
-  goal: HanliComputerAcceptanceInDto,
-  criterionIds: string[],
-  coveredCriterionIds: string[],
-): "customer-guidance" | "new-blocker" | null {
-  const targets = new Set(coveredCriterionIds.flatMap((criterionId) => {
-    const index = criterionIds.indexOf(criterionId);
-    return index < 0 ? [] : [taskCollaborationScenarioTargetForCriterion(goal.criteria[index] || "")];
-  }).filter((target): target is TaskCollaborationScenarioObservationStage => target !== null));
-  if (targets.size > 1) {
-    throw new Error("同一次页面观察不能合并任务协作群的不同场景阶段；请分别保留无指导、完整指导或新阻塞的截图证据。");
-  }
-  const [target] = targets;
-  return target === "no-guidance" ? null : target || null;
-}
-
-type TaskCollaborationScenarioObservationStage = "no-guidance" | "customer-guidance" | "new-blocker";
-
-function taskCollaborationScenarioTargetForCriterion(criterion: string): TaskCollaborationScenarioObservationStage | null {
-  if (/没有已持久化完整指导|尚未形成完整客户操作指导|指导内容与恢复入口均为空|无完整指导/u.test(criterion)) {
-    return "no-guidance";
-  }
-  if (/新的阻塞|新(?:的)?原因|覆盖旧(?:指导|文案)|不复用旧/u.test(criterion)) {
-    return "new-blocker";
-  }
-  if (/完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口/u.test(criterion)) {
-    return "customer-guidance";
-  }
-  return null;
-}
-
-/** 将当前隔离阶段转为验收器必须遵守的下一安全动作。 */
-function taskCollaborationScenarioNextAction(stage: string): string {
-  if (stage === "no-guidance") return "可先核对无指导状态；核对完整指导时，以对应 criterionIds 观察，验收器会准备完整指导快照。";
-  if (stage === "customer-guidance") return "核对完整指导和唯一入口；要进入复查中，必须点击当前页面的唯一确认按钮。";
-  if (stage === "reviewing") return "核对令狐复查中且未显示完成；核对新阻塞时，以对应 criterionIds 观察，验收器会准备新阻塞快照。";
-  return "核对新的阻塞原因、下一步和旧指导未被复用；不得再点击恢复入口。";
-}
-
 function validateCriterionCoverage(value: unknown, allowedCriterionIds: string[], required: boolean): string[] {
   if (value === undefined && !required) return [];
   if (!Array.isArray(value) || (required && value.length === 0)) {
@@ -1012,12 +957,11 @@ function readNavigationClickStatus(x: number, y: number, isAllowed: (x: number, 
   return isAllowed(x, y) ? "allowed" : "restricted";
 }
 
-function safeNavigationClick(x: number, y: number, allowNavigation = false, allowScenario = false): boolean {
+function safeNavigationClick(x: number, y: number, allowNavigation = false): boolean {
   const node = document.elementFromPoint(x, y)?.closest("button,[role=tab],[role=treeitem]");
   if (!node || !allowNavigation) {
     return false;
   }
-  if (allowScenario && node.matches("button.task-recovery-continue[data-task-recovery-id^=hanli-acceptance-scenario]") && node.closest(".task-timeline-next-current")) return true;
   // 折叠标题可能含历史“审批通过”等文字，按真实只读控件身份判断，不按内容误拦截。
   if (node.matches("button[data-sel-disclosure-trigger]") && node.closest("[data-sel-disclosure]")) return true;
   const label = (node.getAttribute("aria-label") || node.getAttribute("title") || node.textContent || "").trim();
