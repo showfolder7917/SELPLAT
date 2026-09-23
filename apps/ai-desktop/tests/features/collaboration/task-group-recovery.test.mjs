@@ -83,6 +83,14 @@ test("令狐处理中的活动技术卡点公开转交原因且不签发恢复�
   assert.doesNotMatch(header, /task-recovery-continue|onContinueTask|onResumeAcceptance/);
 });
 
+test("当前时间线节点和活动人物摘要消费当前专题阶段，历史节点不覆盖当前责任", () => {
+  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*currentStage: CurrentTopicStageOutDto \| null[\s\S]*旧“current”节点重新定义处理人/);
+  assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
+  assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
+  assert.match(taskCardSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);
+  assert.match(taskCardSource, /currentStagePresentation\?\.actor \|\| node\.actor\.displayName[\s\S]*currentStagePresentation\?\.action \|\| node\.action/);
+});
+
 test("协作任务状态变化会通过正式订阅重新推送按最新任务事实生成的交付投影", () => {
   assert.match(collaborationFacadeSource, /subscribe\(listener: CollaborationStateListener\)[\s\S]*#store\.subscribe\(listener\)/);
   assert.match(personaEvolutionSource, /#collaboration\.subscribe\(\(_state, reason\) => this\.#notifyCurrentTopicStageChanged\(reason\)\)/);

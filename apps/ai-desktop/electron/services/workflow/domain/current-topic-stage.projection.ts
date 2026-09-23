@@ -108,30 +108,37 @@ export function projectCurrentTopicStage(
   // 但原运行已经在旧失败之后重新进入真实验收时，旧恢复记录只保留审计价值；页面必须展示当前验收，
   // 否则会把已恢复的流程继续显示成“系统恢复处理”，造成负责人、动作和真实运行互相矛盾。
   const technicalRecovery = evolution.technicalRecovery;
+  // 活动任务事实优先于同一运行较新的 accepting 时间戳：正在验收不代表已经解除当前阻塞。
+  // 先取得当前提案真实阻塞任务和指导，后续再决定旧恢复是否可以退为审计记录。
+  const blockingTaskIds = technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
+    && technicalRecovery.proposalId === proposal.proposalId
+    ? collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
+      && ["blocked", "test-failed"].includes(item.state))
+      .map((item) => item.taskId)
+    : [];
+  const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
+  const guidance = blockingTask?.customerActionGuidance || null;
+  const guidanceFiles = guidance?.affectedFiles || [];
+  const hasCompleteGuidance = Boolean(technicalRecovery) && isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
+    affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
+    nonFileRecovery: null,
+  });
   const acceptanceBeforeRecovery = readLatestAcceptance(evolution, proposal);
   const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
     && run.topicId === (topic?.topicId || proposal.topicId)
     && run.proposalId === proposal.proposalId
-    && (!acceptanceBeforeRecovery || run.updatedAt > acceptanceBeforeRecovery.occurredAt);
+    && (!acceptanceBeforeRecovery || run.updatedAt > acceptanceBeforeRecovery.occurredAt)
+    // 只有当前提案不再有真实阻塞任务时，较新的验收才能使旧技术恢复退为审计。
+    && blockingTask === null;
   if (technicalRecovery?.active && technicalRecovery.topicId === (topic?.topicId || proposal.topicId)
     && technicalRecovery.proposalId === proposal.proposalId && !resumedAcceptance) {
     // 部分历史卡点没有绑定一次性运行；仍从当前提案的真实阻塞任务签发同一条受控复核入口。
-    const blockingTaskIds = collaboration.tasks.filter((item) => item.evolutionProposalId === proposal.proposalId
-      && ["blocked", "test-failed"].includes(item.state))
-      .map((item) => item.taskId);
     const recoveryTaskIds = [...new Set([
       ...technicalRecovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)),
       ...blockingTaskIds,
     ])];
     // 历史故障记录只用于保留恢复证据；recovering 表示点击已经受理，按钮必须立即撤销，
     // 只有再次形成 blocked 或 test-failed 的新卡点时才能重新签发。
-    const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
-    const guidance = blockingTask?.customerActionGuidance || null;
-    const guidanceFiles = guidance?.affectedFiles || [];
-    const hasCompleteGuidance = isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
-      affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
-      nonFileRecovery: null,
-    });
     // 原一次性运行被阻塞本身不代表客户可以恢复。只有当前阻塞任务持有同故障指纹的完整指导，
     // 才能签发任务级确认；否则保持令狐核对中，避免旧运行入口覆盖当前责任。
     const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;
