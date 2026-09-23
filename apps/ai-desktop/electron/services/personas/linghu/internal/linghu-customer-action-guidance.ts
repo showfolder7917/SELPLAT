@@ -14,7 +14,7 @@ export function customerActionFacts(
   sourceFingerprint: string,
 ): Record<string, unknown> {
   const location = customerActionLocation(task);
-  const guidance = {
+  return {
     sourceFingerprint,
     taskId: task.taskId,
     taskTitle: task.snapshot.title,
@@ -65,7 +65,7 @@ export function parseCustomerActionGuidance(
     const match = forbiddenInstruction.exec(value);
     if (match) throw new Error(`令狐生成的客户操作指导包含危险或越权操作，已拒绝展示。字段 ${field} 命中 ${JSON.stringify(match[0])}；请保留权限边界，用明确的允许范围和可观察结果重新表述，不复述被拒绝的操作。`);
   }
-  return {
+  const guidance = {
     guidanceId: `customer-action:${sourceFingerprint}`,
     sourceFingerprint,
     title,
