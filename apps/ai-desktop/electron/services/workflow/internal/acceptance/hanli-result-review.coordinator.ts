@@ -17,7 +17,20 @@ export function buildHanliResultReviewContext(tasks: CollaborationTaskOutDto[]):
     finalResult: task.finalResult,
     engineeringGate: task.unifiedTest?.status || null,
     changedFiles: [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))],
+    // 只提供当前任务声明为变更的文件片段；韩立不能借此遍历工作区或读取历史记录。
+    sourceEvidence: readChangedSourceEvidence(task),
   }));
+}
+
+function readChangedSourceEvidence(task: CollaborationTaskOutDto): Array<{ file: string; content: string }> {
+  const root = task.snapshot.workspaceState.roots.find((item) => item.id === task.snapshot.workspaceState.primaryId)?.path;
+  if (!root) return [];
+  return [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))].flatMap((file) => {
+    if (!file || path.isAbsolute(file)) return [];
+    const resolved = path.resolve(root, file);
+    if (!resolved.startsWith(`${path.resolve(root)}${path.sep}`)) return [];
+    try { return [{ file, content: readFileSync(resolved, "utf8").slice(0, 12_000) }]; } catch { return []; }
+  });
 }
 
 /** 合并正式页面结果与独立源码审查，保证每条客户条件只有一个最终结论。 */
@@ -50,3 +63,5 @@ export function composeHanliResultReview(
     stepResults,
   };
 }
+import { readFileSync } from "node:fs";
+import path from "node:path";

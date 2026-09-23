@@ -141,7 +141,7 @@ export class HanliComputerAcceptanceRunner {
         pageEvidence: { ...pageEvidence, taskCollaboration },
         ...(scenarioStage ? { taskCollaborationScenario: { stage: scenarioStage, nextAction: taskCollaborationScenarioNextAction(scenarioStage) } } : {}),
         instruction: taskCollaborationCriterionIds.size
-          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。taskCollaborationScenario 存在时必须遵守其 nextAction：完整指导与新阻塞在声明对应 criterionIds 的观察前由验收器准备，复查中只能通过页面唯一确认按钮进入。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
+          ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。taskCollaborationScenario 存在时必须遵守其 nextAction：完整指导与新阻塞在声明对应 criterionIds 的观察前由验收器准备，复查中只能通过页面唯一确认按钮进入；该场景也把成员投影为 idle，成员条件必须观察页面成员状态且不能据此推断流程恢复。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
           : "依据当前正式应用截图选择一个只读或安全导航动作。若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
         ...(interactionEvidence ? { interactionEvidence } : {}),
       };
@@ -787,7 +787,8 @@ async function toggleTaskAuditCard(auditCardIndex: number): Promise<Record<strin
     return { status: "audit-history-unavailable" };
   }
   if (historyTrigger.getAttribute("aria-expanded") !== "true") {
-    return { status: "audit-history-collapsed" };
+    historyTrigger.click();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   }
   const cards = Array.from(auditHistory.querySelectorAll<HTMLElement>(".task-collaboration-audit-history-card"));
   const card = cards[auditCardIndex];
@@ -877,11 +878,19 @@ async function navigateTaskCollaboration(action: string): Promise<Record<string,
   if (!expanded) return { status: "task-panel-collapsed", taskPanelExpanded: false, taskCollaborationVisible: taskCollaborationVisible() };
   const entry = panel.querySelector<HTMLButtonElement>("button.collaboration-task-group-entry");
   if (!entry) return { status: "task-group-entry-unavailable" };
-  if (taskCollaborationVisible()) return { status: "already-visible", taskPanelExpanded: true, taskCollaborationVisible: true };
+  if (taskCollaborationVisible()) {
+    const groupTrigger = document.querySelector<HTMLButtonElement>(".task-collaboration-group > .seldisclosure-root > button[data-sel-disclosure-trigger]");
+    if (groupTrigger?.getAttribute("aria-expanded") !== "true") groupTrigger?.click();
+    return { status: "already-visible", taskPanelExpanded: true, taskCollaborationVisible: true };
+  }
   entry.click();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await nextFrame();
-    if (taskCollaborationVisible()) return { status: "navigated", taskPanelExpanded: true, taskCollaborationVisible: true };
+    if (taskCollaborationVisible()) {
+      const groupTrigger = document.querySelector<HTMLButtonElement>(".task-collaboration-group > .seldisclosure-root > button[data-sel-disclosure-trigger]");
+      if (groupTrigger?.getAttribute("aria-expanded") !== "true") groupTrigger?.click();
+      return { status: "navigated", taskPanelExpanded: true, taskCollaborationVisible: true };
+    }
   }
   return {
     status: "task-group-not-visible",
