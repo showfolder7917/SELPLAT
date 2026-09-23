@@ -10,11 +10,11 @@ export function buildHanliResultReviewContext(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
   proposalSourceTasks: CollaborationTaskOutDto[] = tasks,
-): unknown[] {
+): unknown {
   // 同一提案只读取一次已授权源码；大文件的中段也必须可见，否则旧恢复分支会被首尾截取漏掉。
   const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState);
-  return tasks.map((task) => {
-    return {
+  return {
+    tasks: tasks.map((task) => ({
       taskId: task.taskId,
       requirement: {
         title: task.snapshot.title,
@@ -27,12 +27,12 @@ export function buildHanliResultReviewContext(
       finalResult: task.finalResult,
       engineeringGate: task.unifiedTest?.status || null,
       changedFiles: [...new Set(task.executionRecords.flatMap((record) => record.changedFiles))],
-      // 只提供同一提案已集成任务声明过的源码及其受限直接依赖；后续修复不能抹掉原交付源码证据。
-      sourceEvidence: sourceEvidence.items,
-      sourceEvidenceStatus: sourceEvidence.status,
-      sourceEvidenceScope: "integrated-proposal-task-files-and-direct-imports",
-    };
-  });
+    })),
+    // 同一批源码只传一次；任务越多也不会重复挤掉判定模块的上下文。
+    sourceEvidence: sourceEvidence.items,
+    sourceEvidenceStatus: sourceEvidence.status,
+    sourceEvidenceScope: "integrated-proposal-task-files-and-two-level-relative-imports",
+  };
 }
 
 function readChangedSourceEvidence(
@@ -67,10 +67,9 @@ function readChangedSourceEvidence(
       return missing ? [{ file, content: "[当前授权工作区不存在该源码文件；不能沿用旧实现作为本版本证据]" }] : [];
     }
   });
-  // 源文件抽成同目录小模块后，静态直连实现也必须随声明文件一起给韩立，
-  // 否则审查者只看到调用点，会把真正的恢复判定误判为缺失。只读同一授权工作区的
-  // 一层相对 import；不跟随任意路径、测试目录、包依赖或递归导入。
-  const importedFiles = declaredItems.flatMap(({ file, content }) => {
+  // 阶段入口可能先委托给技术恢复判定器，再由判定器读取恢复记录。
+  // 只沿静态相对 import 向下两层；不读取测试、包依赖或工作区外的文件。
+  const readDirectImports = (sources: Array<{ file: string; content: string }>) => sources.flatMap(({ file, content }) => {
     if (content.startsWith("[当前授权工作区不存在")) return [];
     const imports = [...content.matchAll(/\bimport\s+(?:type\s+)?[^;]*?\sfrom\s+["'](\.[^"']+)["']/gu)]
       .map((match) => match[1]);
@@ -94,7 +93,9 @@ function readChangedSourceEvidence(
       } catch { return []; }
     });
   });
-  const items = [...new Map([...declaredItems, ...importedFiles].map((item) => [item.file, item])).values()].slice(0, 30);
+  const firstLevel = readDirectImports(declaredItems);
+  const secondLevel = readDirectImports(firstLevel);
+  const items = [...new Map([...declaredItems, ...firstLevel, ...secondLevel].map((item) => [item.file, item])).values()].slice(0, 48);
   return { items, status: items.length ? "available" : "declared-files-unreadable" };
 }
 

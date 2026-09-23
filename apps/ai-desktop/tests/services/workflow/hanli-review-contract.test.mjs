@@ -20,7 +20,7 @@ test("韩立固定审查正式页面与源码结构", () => {
   assert.match(runtime, /composeHanliResultReview\(plan, review, pageRun\)/);
   assert.match(coordinator, /sourceReview: sourceRun\.sourceReview/);
   assert.match(coordinator, /sourceEvidenceStatus: sourceEvidence\.status/);
-  assert.match(prompt, /sourceEvidence` 是唯一已授权的源码片段/);
+  assert.match(prompt, /sourceEvidence` 是唯一已授权、去重后的源码片段/);
   assert.match(prompt, /sourceEvidenceStatus=available/);
 });
 
@@ -37,9 +37,11 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   const original = task("original", ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts", "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx", "../../AGENTS.md", "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"]);
   const repair = task("repair", ["apps/ai-desktop/electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"]);
   const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
-  const [context] = buildHanliResultReviewContext([repair], workspace, [original, repair]);
+  const context = buildHanliResultReviewContext([original, repair], workspace, [original, repair]);
+  assert.deepEqual(context.tasks.map((item) => item.taskId), ["original", "repair"]);
+  assert.ok(context.tasks.every((item) => item.sourceEvidence === undefined));
   assert.equal(context.sourceEvidenceStatus, "available");
-  assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files-and-direct-imports");
+  assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files-and-two-level-relative-imports");
   const sourceFiles = context.sourceEvidence.map((item) => item.file);
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-technical-recovery.projection.ts"));
@@ -48,6 +50,7 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskTimelineNode.tsx"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAuditCard.tsx"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx"));
+  assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts"));
   assert.ok(sourceFiles.every((file) => file.startsWith("apps/ai-desktop/") && !/(?:^|\/)(?:tests?|__tests__)\//u.test(file)));
   assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
   assert.match(context.sourceEvidence[0].content, /projectCurrentTechnicalRecovery/u);
@@ -63,7 +66,7 @@ test("已登记但在本版本退役的验收场景文件明确标记缺失，�
   const removed = "apps/ai-desktop/electron/services/personas/hanli/internal/acceptance/hanli-task-collaboration-scenario.ts";
   const task = { taskId: "original", state: "integrated", snapshot: { title: "original", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [removed] }] };
   const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
-  const [context] = buildHanliResultReviewContext([task], workspace);
+  const context = buildHanliResultReviewContext([task], workspace);
   assert.deepEqual(context.sourceEvidence, [{ file: removed, content: "[当前授权工作区不存在该源码文件；不能沿用旧实现作为本版本证据]" }]);
 });
 
