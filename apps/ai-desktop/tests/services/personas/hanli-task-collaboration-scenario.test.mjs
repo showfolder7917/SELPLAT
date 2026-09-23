@@ -33,3 +33,9 @@ test("完整指导和新阻塞由验收条件准备，复查中仍只接受正�
   assert.doesNotMatch(scenarioSource, /affectedFiles: \["任务协作群卡点记录"\]/);
   assert.doesNotMatch(acceptanceRunnerSource, /advance-task-collaboration-scenario/);
 });
+
+test("窗口专属阶段只关联既有当前节点，供主卡和时间线同屏核对", () => {
+  assert.match(scenarioSource, /const currentTaskId = active\.group\.nodes\.find\(\(node\) => node\.status === "current" && node\.taskId\)\?\.taskId \|\| null/);
+  assert.match(scenarioSource, /effectiveTaskIds: currentTaskId \? \[currentTaskId\] : \[\]/);
+  assert.doesNotMatch(scenarioSource, /continueTask\(/);
+});
