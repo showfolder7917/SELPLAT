@@ -19,7 +19,17 @@ const pathDiagnosticScript = "scripts/resolve-application-paths.mjs";
 
 test("发布、签名、验证和规则构建共用所选工作区门面", () => {
   for (const relative of workspaceDataToolScripts) {
-    assert.match(readFileSync(path.join(appRoot, relative), "utf8"), /resolveSelectedWorkspaceRoot|output:\s*path\.join\(selplatRoot/u, relative);
+    const source = readFileSync(path.join(appRoot, relative), "utf8");
+    if (relative !== "electron-builder.developer.config.cjs") {
+      assert.match(source, /resolveSelectedWorkspaceRoot/u, relative);
+      continue;
+    }
+    const directOutput = /output:\s*path\.join\(selplatRoot/u.test(source);
+    const guardedOutput = /const defaultPackageOutputRoot = path\.join\(sourceBundleBuildRoot, "package", "developer"\);/u.test(source)
+      && /const packageOutputRoot = process\.env\.AI_DESKTOP_PACKAGE_OUTPUT_ROOT/u.test(source)
+      && /packageOutputRoot !== defaultPackageOutputRoot && !packageOutputRoot\.startsWith\(`\$\{packageArea\}\$\{path\.sep\}`\)/u.test(source)
+      && /output:\s*packageOutputRoot/u.test(source);
+    assert.ok(directOutput || guardedOutput, `${relative} 必须把开发包输出限制在所选工作区的构建目录内。`);
   }
 });
 
