@@ -16,7 +16,7 @@ export class HanliTaskCollaborationScenario {
     private readonly readState: () => EvolutionStateOutDto,
     private readonly readTimeline: () => CollaborationTimelineSnapshotOutDto,
     private readonly readCollaborationState: () => CollaborationStateOutDto,
-    private readonly publish: (window: BrowserWindow, state: EvolutionStateOutDto, timeline: CollaborationTimelineSnapshotOutDto, reason: string) => void,
+    private readonly publish: (window: BrowserWindow, state: EvolutionStateOutDto, timeline: CollaborationTimelineSnapshotOutDto, collaborationState: CollaborationStateOutDto, reason: string) => void,
   ) {}
 
   begin(window: BrowserWindow, goal: HanliComputerAcceptanceInDto): void {
@@ -58,8 +58,8 @@ export class HanliTaskCollaborationScenario {
     if (!active || active.webContentsId !== webContentsId || active.taskId !== taskId || active.stage !== 1) return null;
     active.stage = 2;
     this.#publish("acceptance-scenario.confirmed");
-    // 返回真实协作快照但不调用 continueTask，页面操作不会写入任何任务事实。
-    return this.readCollaborationState();
+    // 返回窗口专用快照但不调用 continueTask，页面操作不会写入任何任务事实。
+    return this.collaborationStateFor(webContentsId, this.readCollaborationState());
   }
 
   stateFor(webContentsId: number, actual: EvolutionStateOutDto): EvolutionStateOutDto {
@@ -80,11 +80,32 @@ export class HanliTaskCollaborationScenario {
     return { ...snapshot, groups: snapshot.groups.filter((group) => groupIds.includes(group.groupId)) };
   }
 
+  /**
+   * 成员空闲条件也只能在隔离窗口中投影；真实协作任务和成员占用事实始终保持原样。
+   *
+   * 任务列表保留真实内容，避免验收场景伪造任务完成；只移除成员当前占用，让页面能
+   * 核对“全员空闲不会额外签发恢复入口”的显示规则。
+   */
+  collaborationStateFor(webContentsId: number, actual: CollaborationStateOutDto): CollaborationStateOutDto {
+    if (!this.isActiveFor(webContentsId)) return actual;
+    return {
+      ...actual,
+      members: actual.members.map((member) => ({
+        ...member,
+        state: "idle",
+        role: null,
+        phase: null,
+        currentTaskId: null,
+        blockingReason: null,
+      })),
+    };
+  }
+
   end(webContentsId: number): void {
     const active = this.#active;
     if (!active || active.webContentsId !== webContentsId) return;
     this.#active = null;
-    if (!active.window.isDestroyed()) this.publish(active.window, this.readState(), this.readTimeline(), "acceptance-scenario.ended");
+    if (!active.window.isDestroyed()) this.publish(active.window, this.readState(), this.readTimeline(), this.readCollaborationState(), "acceptance-scenario.ended");
   }
 
   #requireActive(webContentsId: number): ActiveScenario {
@@ -96,7 +117,13 @@ export class HanliTaskCollaborationScenario {
   #publish(reason: string): void {
     const active = this.#active;
     if (!active || active.window.isDestroyed()) return;
-    this.publish(active.window, this.stateFor(active.webContentsId, this.readState()), this.timelineFor(active.webContentsId, this.readTimeline()), reason);
+    this.publish(
+      active.window,
+      this.stateFor(active.webContentsId, this.readState()),
+      this.timelineFor(active.webContentsId, this.readTimeline()),
+      this.collaborationStateFor(active.webContentsId, this.readCollaborationState()),
+      reason,
+    );
   }
 }
 
