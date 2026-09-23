@@ -18,6 +18,7 @@ const codexSessionStore = readFileSync(new URL("../../../electron/services/suppo
 const codexThreadLifecycle = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-thread-lifecycle.policy.ts", import.meta.url), "utf8");
 const taskWorktreeTestRunner = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
 const collaborationSessions = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+const collaborationWorkflow = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const electronMain = [
   "../../../electron/system/bootstrap/application-runtime.ts",
   "../../../electron/system/bootstrap/capabilities.bootstrap.ts",
@@ -222,6 +223,12 @@ test("协同受管任务的 node --test 由桌面验证链执行，不再反复�
   assert.match(codexService, /isDesktopOwnedValidationCommand\(command\)/);
   assert.match(codexService, /node\\s\+--test/);
   assert.match(codexService, /代码测试由 AI Desktop 在签发 worktree 内执行/);
+});
+
+test("无源码差异的旧合并冲突停止自动重复签发修复工作树", () => {
+  const conflictScheduler = collaborationWorkflow.slice(collaborationWorkflow.indexOf("#scheduleMergeConflictCorrections(state:"), collaborationWorkflow.indexOf("#scheduleExecutionRepairs(state:"));
+  assert.match(conflictScheduler, /candidate\.blockingReason\?\.startsWith\("执行结果缺少结构化失败分类，已停止自动派发："\)/);
+  assert.match(conflictScheduler, /current\.blockingReason\?\.startsWith\("执行结果缺少结构化失败分类，已停止自动派发："\)/);
 });
 
 test("AI Desktop 重建后恢复当前线程且用户新建任务时明确删除", () => {

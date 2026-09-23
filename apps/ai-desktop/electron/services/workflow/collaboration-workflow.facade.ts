@@ -631,14 +631,19 @@ export class CollaborationCoordinator {
   /** Git 合并冲突是确定的代码修正停点；无需等待主动巡检或人工点击，直接签发令狐修正版。 */
   #scheduleMergeConflictCorrections(state: CollaborationStateOutDto): void {
     if (this.#disposed || state.mode !== "collaboration") return;
-    const task = state.tasks.find((candidate) => ["blocked", "recovering"].includes(candidate.state) && candidate.integrationFailure?.kind === "merge-conflict" && this.#canOperateTask(candidate, state));
+    const task = state.tasks.find((candidate) => ["blocked", "recovering"].includes(candidate.state)
+      && candidate.integrationFailure?.kind === "merge-conflict"
+      // 新工作树没有产生源码差异时，旧冲突证据不能再驱动无限次同内容修复。
+      && !candidate.blockingReason?.startsWith("执行结果缺少结构化失败分类，已停止自动派发：")
+      && this.#canOperateTask(candidate, state));
     if (!task || this.#mergeConflictCorrectionRuns.has(task.taskId)) return;
     this.#mergeConflictCorrectionRuns.add(task.taskId);
     queueMicrotask(() => {
       try {
         if (this.#disposed) return;
         const current = this.state().tasks.find((candidate) => candidate.taskId === task.taskId);
-        if (!current || !["blocked", "recovering"].includes(current.state) || current.integrationFailure?.kind !== "merge-conflict") return;
+        if (!current || !["blocked", "recovering"].includes(current.state) || current.integrationFailure?.kind !== "merge-conflict"
+          || current.blockingReason?.startsWith("执行结果缺少结构化失败分类，已停止自动派发：")) return;
         const linghu = requireMember(this.state(), LINGHU_MEMBER_ID);
         this.continueTask(task.taskId, linghu);
       } finally {
