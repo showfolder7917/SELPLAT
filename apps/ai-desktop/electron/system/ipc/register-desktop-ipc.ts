@@ -302,8 +302,9 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       return collaborationTimeline.getTimelineSnapshot();
     },
     () => collaboration.state(),
-    (window, state, timeline, reason) => {
+    (window, state, timeline, collaborationState, reason) => {
       window.webContents.send("desktop:evolution-state", { state, reason, topicId: state.currentTopicStage?.topicId || null, proposalId: state.currentTopicStage?.proposalId || null });
+      window.webContents.send("desktop:collaboration-state", { state: collaborationState, reason, taskIds: [] });
       const group = timeline.groups.find((item) => item.topicId === state.currentTopicStage?.topicId && item.proposalId === state.currentTopicStage?.proposalId);
       if (group) window.webContents.send("desktop:collaboration-timeline-changed", { committedAt: state.updatedAt, groupIds: [group.groupId], groupVersions: { [group.groupId]: ++hanliScenarioTimelineVersion } });
     },
