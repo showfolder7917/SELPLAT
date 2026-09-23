@@ -66,7 +66,9 @@ export function projectCurrentTopicStage(
   else if (execution.blocked) status = "failed-pending-repair";
   else if (execution.nextStatus === "verifying") status = "verifying";
 
-  const userAction = status === "awaiting-confirmation" ? "confirmation" : status === "failed-pending-repair" && (taskNeedsConfirmation || runBlocked) ? "resume" : "none";
+  // 当前任务另有真实阻塞时，旧一次性运行的恢复入口不能抢在任务归属判定前签发。
+  // 任务级客户动作只能由已核对故障关联与完整指导的技术恢复投影签发。
+  const userAction = status === "awaiting-confirmation" ? "confirmation" : status === "failed-pending-repair" && runBlocked && !execution.blocked ? "resume" : "none";
   const updatedAt = [proposal.updatedAt, task?.updatedAt, latestAcceptance?.occurredAt].filter((item): item is string => Boolean(item)).sort().at(-1) || evolution.updatedAt;
   const waitingFor = stageWaitingFor(status, deliveryGate);
   const nextAction = stageNextAction(status, deliveryGate);

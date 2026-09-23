@@ -26,6 +26,13 @@ export function projectCurrentTechnicalRecovery(input: {
     && ["blocked", "test-failed"].includes(item.state));
   const blockingTask = blockingTasks[0] || null;
   const newestOccurrence = [...recovery.occurrences].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
+  // 专题级恢复档案不自动属于任意新阻塞任务。只有当前任务正是故障发生时的任务，
+  // 且此后没有更新的失败事实，才能把旧档案的原因和下一步投影到当前卡片。
+  if (blockingTask && newestOccurrence?.taskId !== blockingTask.taskId) return null;
+  const latestTaskFailure = blockingTask?.flowEvents.filter((event) => event.error || event.status === "failed")
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
+  if (latestTaskFailure && newestOccurrence && latestTaskFailure.occurredAt > newestOccurrence.occurredAt) return null;
+  if (blockingTask?.customerActionGuidance && blockingTask.customerActionGuidance.sourceFingerprint !== recovery.faultFingerprint) return null;
   // 验收故障指纹包含真实验收运行标识。新一轮验收已落档时，旧指纹和旧发生时间
   // 不能再为当前页面提供 failureReason、nextAction 或任务确认入口。
   const acceptanceFingerprint = recovery.faultFingerprint?.includes(":run_hanli_result_acceptance:") === true;

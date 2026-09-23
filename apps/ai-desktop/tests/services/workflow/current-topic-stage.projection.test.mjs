@@ -131,6 +131,40 @@ test("新验收落档后旧任务故障即使仍标记活动也不能覆盖当�
   assert.doesNotMatch(`${stage.remaining} ${stage.nextAction}`, /旧任务/u);
 });
 
+test("新阻塞任务不能借用旧任务技术恢复的原因、下一步和继续入口", () => {
+  const state = evolution("failed");
+  state.oneShotRun = { runId: "blocked-run", topicId: "topic-current", proposalId: "proposal-current", status: "blocked", phase: "blocked" };
+  state.technicalRecovery = {
+    issueId: "old-task-recovery", faultFingerprint: "old-task-failure", topicId: "topic-current", proposalId: "proposal-current",
+    acceptanceConditionIds: ["criterion-4"], failureCategory: "product-defect", evidenceReferences: ["old-event"],
+    occurrences: [{ runId: "blocked-run", taskId: "task-old", occurrenceId: "old-event", reason: "旧任务原因", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: "旧任务原因",
+    nextAction: "旧任务下一步", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const current = { ...task("blocked"), blockingReason: "新任务原因", updatedAt: "2026-09-12T06:00:00.000Z" };
+  const stage = projectCurrentTopicStage(state, { tasks: [current] });
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.remaining, "新任务原因");
+  assert.doesNotMatch(`${stage.summary} ${stage.nextAction}`, /旧任务/u);
+  assert.equal(stage.userAction, "none");
+  assert.equal(stage.resumeOneShotRunId, null);
+});
+
+test("同一任务出现更新的失败事实后不沿用旧恢复动作", () => {
+  const state = evolution("failed");
+  state.technicalRecovery = {
+    issueId: "old-failure", faultFingerprint: "old-failure", topicId: "topic-current", proposalId: "proposal-current",
+    acceptanceConditionIds: ["criterion-4"], failureCategory: "product-defect", evidenceReferences: ["old-event"],
+    occurrences: [{ runId: "run-old", taskId: "task-current", occurrenceId: "old-event", reason: "旧任务原因", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: "旧任务原因",
+    nextAction: "旧任务下一步", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const current = { ...task("blocked"), blockingReason: "新失败原因", flowEvents: [{ type: "task.failed", status: "failed", error: true, occurredAt: "2026-09-12T06:00:00.000Z" }] };
+  const stage = projectCurrentTopicStage(state, { tasks: [current] });
+  assert.equal(stage.remaining, "新失败原因");
+  assert.doesNotMatch(`${stage.summary} ${stage.nextAction}`, /旧任务/u);
+});
+
 test("系统交接未发生且没有活动修复任务时保留原运行的显式复验入口", () => {
   const state = evolution("failed");
   state.technicalRecovery = {
