@@ -92,7 +92,7 @@ test("令狐处理中的活动技术卡点公开转交原因且不签发恢复�
 
 test("当前时间线节点和活动人物摘要消费当前专题阶段，历史节点不覆盖当前责任", () => {
   assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*currentStage: CurrentTopicStageOutDto \| null[\s\S]*matchingCurrentStage/);
-  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*验收期间不把旧执行节点误计为并行人物[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
+  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*历史 current 节点只留在审计里[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
   assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && node\.nodeId\.startsWith\("acceptance:"\)[\s\S]*"failed-pending-repair"[\s\S]*"verifying"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
   assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
   assert.match(nodeSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);
@@ -138,8 +138,12 @@ test("客户确认阶段不把旧 current 节点统计为正在执行的人物",
   const stage = { topicId: "topic-1", proposalId: "proposal-1", title: "等待你确认", userAction: "resume", waitingFor: "你" };
   const waiting = compiled.exports.groupActivityPresentation(group, "zh", stage);
   assert.deepEqual(waiting, { activeOwnerLabels: [], statusLabel: "等待你确认" });
-  const running = compiled.exports.groupActivityPresentation(group, "zh", { ...stage, userAction: "none" });
+  const running = compiled.exports.groupActivityPresentation(group, "zh", { ...stage, status: "executing", userAction: "none", waitingFor: "令狐老祖" });
   assert.deepEqual(running.activeOwnerLabels, ["令狐老祖"]);
+  const blockedSystem = compiled.exports.groupActivityPresentation(group, "zh", {
+    ...stage, status: "failed-pending-repair", userAction: "none", waitingFor: "系统恢复处理",
+  });
+  assert.deepEqual(blockedSystem.activeOwnerLabels, []);
   const accepting = compiled.exports.groupActivityPresentation(group, "zh", {
     ...stage, status: "accepting", userAction: "none", waitingFor: "韩立真实验收", title: "韩立验收中",
   });

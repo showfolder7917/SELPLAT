@@ -95,6 +95,22 @@ function fixture() {
   return { event, events, evolution, collaboration, effects, options, run: () => new CheckpointCoordinator(options).process(events) };
 }
 
+test("旧业务选择卡点不抢占后来真实验收故障的自动修复主记录", async () => {
+  const f = fixture();
+  f.event.payload.operation = "run_hanli_result_acceptance";
+  f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
+  const business = {
+    ...structuredClone(f.event), eventId: "old-business-choice", category: "business-exception",
+    occurredAt: "2026-09-04T00:00:00Z", message: "旧人工范围选择等待确认",
+    payload: { runId: "run-1", proposalId: "proposal-1", phase: "accepting", operation: "review_acceptance_failure_scope" },
+  };
+  f.events.unshift(business);
+  await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
+  assert.equal(business.payload.checkpoint.repairTaskId, null);
+});
+
 test("卡点真实派发、重启去重、返回原点后才允许解除", async () => {
   const f = fixture();
   await f.run(); await f.run();

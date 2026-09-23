@@ -51,12 +51,11 @@ export function groupActivityPresentation(
     activeOwnerLabels.set(node.actor.memberId, `${node.actor.displayName}${roleLabel}`);
   }
 
-  // 当前阶段由韩立验收或等待客户确认时，旧 current 节点不能冒充正在执行的人物。
-  // 历史节点保持原样供审计；验收阶段的人物由同一份权威阶段重新投影。
-  if (matchingCurrentStage?.userAction === "resume" || matchingCurrentStage?.status === "accepting") activeOwnerLabels.clear();
-
-  // 专题阶段负责唯一的状态结论；验收期间不把旧执行节点误计为并行人物。
-  if (matchingCurrentStage && activeOwnerLabels.size === 0 && matchingCurrentStage.userAction === "none"
+  // 当前专题一旦有权威阶段，历史 current 节点只留在审计里；不能让已受阻的旧人物
+  // 抢占“任务执行中”人数。只有阶段本身明确处于执行、验证或验收时才显示处理人。
+  if (matchingCurrentStage) activeOwnerLabels.clear();
+  if (matchingCurrentStage?.userAction === "none"
+    && ["executing", "verifying", "accepting"].includes(matchingCurrentStage.status)
     && ["令狐老祖", "韩立真实验收", "南宫婉"].includes(matchingCurrentStage.waitingFor)) {
     activeOwnerLabels.set(matchingCurrentStage.waitingFor, matchingCurrentStage.waitingFor);
   }

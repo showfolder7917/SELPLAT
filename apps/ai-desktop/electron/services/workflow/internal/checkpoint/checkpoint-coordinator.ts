@@ -430,10 +430,11 @@ export class CheckpointCoordinator {
     }
     // 同一运行可以承载用户后来确认的新提案；只有同一提案的卡点才能共享修复记录。
 
-    // 使用命名比较器选择已经建立修复任务或最早出现的主卡点。
-    relatedEvents.sort(compareCheckpointPriority);
-    // 第一条记录是同一原运行的唯一主卡点。
-    const primary = relatedEvents[0];
+    // 业务选择异常只留待人工处理，不能凭发生时间占住自动验收修复的主卡点。
+    // 否则后来真实验收受阻会永远被旧 business-exception 判成“已有卡点”。
+    const repairableEvents = relatedEvents.filter((item) => item.category !== "business-exception");
+    repairableEvents.sort(compareCheckpointPriority);
+    const primary = repairableEvents[0];
     if (primary && primary.eventId !== event.eventId) {
       this.#phase(event, state, "waiting", `同一原流程已有卡点 ${primary.eventId} 正在处理，本条保留关联，不重复派发。`);
       return;
