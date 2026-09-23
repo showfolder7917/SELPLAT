@@ -326,7 +326,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
   );
   registerCollaborationIpc(collaboration, collaborationNavigationPreference, collaborationInteractionPerformance, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints, hanliTaskScenario);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });
-  registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState });
+  registerCodexIpc({ appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, hanliPageReviewGuard, activeAuditTasks, publishDispatchState });
   handle("desktop:prepare-screen-capture", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const display = parent ? screen.getDisplayMatching(parent.getBounds()) : screen.getPrimaryDisplay();

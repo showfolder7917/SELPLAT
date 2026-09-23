@@ -11,6 +11,11 @@ export class HanliPageReviewGuard {
     if (this.#activeWebContentsId === webContentsId) this.#activeWebContentsId = null;
   }
 
+  /** 验收共用正式窗口时，其他人物的命令审批暂不覆盖韩立正在检查的页面。 */
+  isReviewing(webContentsId: number): boolean {
+    return this.#activeWebContentsId === webContentsId;
+  }
+
   /** 页面检查只允许读取产品状态与安全导航，工作区源码由独立只读代码审查通道读取。 */
   assertIpcAllowed(webContentsId: number, channel: string): void {
     if (this.#activeWebContentsId !== webContentsId) return;

@@ -12,6 +12,7 @@ import type { SettingsFacade as SettingsStore } from "../../../services/support/
 import type { CommandGovernanceFacade as TrustedCommandStore } from "../../../services/support/platform/security/index.js";
 import type { WorkspaceFacade as WorkspaceStore } from "../../../services/support/platform/workspace/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
+import type { HanliPageReviewGuard } from "../hanli-page-review-guard.js";
 
 interface CodexIpcDependencies {
   appRoot: string;
@@ -23,13 +24,14 @@ interface CodexIpcDependencies {
   dispatch: ConversationDispatchStore;
   workflowRepository: WorkflowRepository | null;
   eventCenter: EventCenterFacade;
+  hanliPageReviewGuard: HanliPageReviewGuard;
   activeAuditTasks: Map<number, string>;
   publishDispatchState(): unknown;
 }
 
 /** 注册 Codex 领域 handler；审批只记录必要元数据，用户答案正文不会进入业务日志。 */
 export function registerCodexIpc(dependencies: CodexIpcDependencies): void {
-  const { appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, activeAuditTasks, publishDispatchState } = dependencies;
+  const { appRoot, codex, collaborationRegistry, trustedCommands, settings, workspaces, dispatch, workflowRepository, eventCenter, hanliPageReviewGuard, activeAuditTasks, publishDispatchState } = dependencies;
   const seenApprovalRequests = new Set<number>();
   const approvalAuditTasks = new Map<number, string>();
   const handle = <Arguments extends unknown[]>(channel: string, handler: Parameters<typeof registerEventCenterIpcHandler<Arguments>>[2], boundary: "business" | "technical" | "auto" = "auto") => registerEventCenterIpcHandler(eventCenter, channel, handler, boundary);
@@ -43,7 +45,9 @@ export function registerCodexIpc(dependencies: CodexIpcDependencies): void {
     return login;
   });
   handle("desktop:logout-codex", () => codex.logout());
-  handle("desktop:get-codex-approvals", () => {
+  handle("desktop:get-codex-approvals", (event) => {
+    // 只遮挡当前验收窗口中的审批投影，不撤销请求，也不允许只读会话代替客户作出授权。
+    if (hanliPageReviewGuard.isReviewing(event.sender.id)) return [];
     const approvals = [...codex.pendingApprovals(), ...collaborationRegistry.pendingApprovals()];
     for (const approval of approvals) {
       if (seenApprovalRequests.has(approval.requestId)) continue;
