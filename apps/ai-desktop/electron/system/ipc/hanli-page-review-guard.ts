@@ -19,7 +19,8 @@ export class HanliPageReviewGuard {
     }
     const readOnly = /^(desktop:(get|list)-|desktop:resolve-effective-rule$|desktop:read-attachment-previews$)/u.test(channel);
     const navigation = channel === "desktop:set-operating-mode";
-    if (readOnly || navigation) return;
+    const scenarioContinuation = channel === "desktop:continue-collaboration-task";
+    if (readOnly || navigation || scenarioContinuation) return;
     throw new Error("韩立检查页面时只允许读取和安全导航，不能修改正式业务数据。");
   }
 
