@@ -20,7 +20,7 @@ const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.
 test("正式窗口销毁后释放验收锁并有界重试，不把旧窗口标记为持续验收", () => {
   assert.match(desktopIpcSource, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
   assert.match(desktopIpcSource, /const webContentsId = targetWindow\.webContents\.id;[\s\S]*hanliPageReviewGuard\.begin\(webContentsId\)/);
-  assert.match(desktopIpcSource, /finally \{\s*hanliPageReviewGuard\.end\(webContentsId\)/);
+  assert.match(desktopIpcSource, /hanliTaskScenario\.end\(webContentsId\);\s*\} finally \{\s*hanliPageReviewGuard\.end\(webContentsId\)/);
   assert.doesNotMatch(desktopIpcSource, /hanliPageReviewGuard\.end\(targetWindow\.webContents\.id\)/);
   assert.match(acceptanceSource, /closed = true;[\s\S]*interactions\.endTaskCollaborationScenario\?\.\(\);[\s\S]*this\.#active = false/);
 });

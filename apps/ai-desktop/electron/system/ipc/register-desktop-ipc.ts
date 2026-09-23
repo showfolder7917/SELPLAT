@@ -166,7 +166,12 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
         if (attempt === 2 || !/(Object has been destroyed|正式应用窗口已关闭)/u.test(message)) throw error;
         await new Promise((resolve) => setTimeout(resolve, 1_000));
       } finally {
-        hanliPageReviewGuard.end(webContentsId);
+        try {
+          // runner 初始化中途失败时也必须撤销窗口专用场景，避免下一次验收无法建立场景。
+          hanliTaskScenario.end(webContentsId);
+        } finally {
+          hanliPageReviewGuard.end(webContentsId);
+        }
       }
     }
     if (!run) throw new Error("韩立正式页面验收未返回结果。");
