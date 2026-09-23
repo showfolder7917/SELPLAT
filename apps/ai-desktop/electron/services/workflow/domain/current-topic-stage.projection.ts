@@ -119,10 +119,12 @@ export function projectCurrentTopicStage(
   const blockingTask = collaboration.tasks.find((item) => blockingTaskIds.includes(item.taskId)) || null;
   const guidance = blockingTask?.customerActionGuidance || null;
   const guidanceFiles = guidance?.affectedFiles || [];
-  const hasCompleteGuidance = Boolean(technicalRecovery) && isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
-    affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
-    nonFileRecovery: null,
-  });
+  const hasCompleteGuidance = technicalRecovery
+    ? isCompleteCustomerActionGuidance(guidance, technicalRecovery.faultFingerprint, {
+      affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [],
+      nonFileRecovery: null,
+    })
+    : false;
   const acceptanceBeforeRecovery = readLatestAcceptance(evolution, proposal);
   const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
     && run.topicId === (topic?.topicId || proposal.topicId)
