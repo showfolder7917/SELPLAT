@@ -405,6 +405,12 @@ export function projectCollaborationFlowEvent(
     completedAt: event.occurredAt, automaticOpen: true, manualApprovalProposalId: null,
   })]);
 
+  if (event.type === "task.equivalent_repair_superseded") return projection("blocked", [fact({
+    nodeId: `superseded:${task.taskId}:${event.eventId}`, kind: "repair", actor, recipients: [initiator], status: "completed", action: "后续等价修复已接管",
+    summary: event.summary, content: event.summary, detail: task.blockingReason || "", startedAt: event.occurredAt,
+    completedAt: event.occurredAt, automaticOpen: false, manualApprovalProposalId: null,
+  })]);
+
   if (event.type === "task.interrupted" || event.type === "task.recovery_requested" || event.type === "integration.conflict_correction_requested" || event.type === "unified_test.retry_requested") {
     const waiting = event.type === "task.interrupted";
     const facts = [fact({

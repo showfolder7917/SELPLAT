@@ -5,7 +5,7 @@ export type CollaborationFlowEventTypeValue =
   | "technical_analysis.ready" | "execution.started" | `worker.phase.${Exclude<CollaborationWorkerPhaseValue, null>}`
   | "executor.self_test_started" | "executor.self_test_passed" | "executor.self_test_failed"
   | "executor.self_repair_started" | "executor.self_repair_completed" | "executor.self_repair_failed"
-  | "task.code_verified" | "task.blocked" | "task.cancelled" | "task.interrupted" | "task.recovery_requested" | "task.scope_revised" | "task.failure_evidence_updated"
+  | "task.code_verified" | "task.blocked" | "task.cancelled" | "task.interrupted" | "task.recovery_requested" | "task.scope_revised" | "task.failure_evidence_updated" | "task.equivalent_repair_superseded"
   | "execution.diagnostic_correction"
   | "customer.action_required"
   | "execution.repair_queued" | "execution.repair_started" | "execution.repair_investigated" | "execution.repair_completed" | "execution.repair_waiting"
