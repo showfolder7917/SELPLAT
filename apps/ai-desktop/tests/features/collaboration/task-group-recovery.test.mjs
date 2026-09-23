@@ -88,7 +88,7 @@ test("令狐处理中的活动技术卡点公开转交原因且不签发恢复�
 
 test("当前时间线节点和活动人物摘要消费当前专题阶段，历史节点不覆盖当前责任", () => {
   assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*currentStage: CurrentTopicStageOutDto \| null[\s\S]*matchingCurrentStage/);
-  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*并行人物仍必须来自当前节点[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
+  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*验收期间不把旧执行节点误计为并行人物[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
   assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && node\.nodeId\.startsWith\("acceptance:"\)[\s\S]*"failed-pending-repair"[\s\S]*"verifying"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
   assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
   assert.match(taskCardSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);

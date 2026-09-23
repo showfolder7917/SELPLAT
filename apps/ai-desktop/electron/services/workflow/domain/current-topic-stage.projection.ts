@@ -3,6 +3,7 @@ import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../..
 import { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { decideCurrentTopicOperation } from "./current-topic-operation.decision.js";
 import { projectCurrentTechnicalRecovery } from "./current-topic-technical-recovery.projection.js";
+import { projectTopicPreparationStage } from "./current-topic-preparation.projection.js";
 import { readCurrentTopicRecovery as readRecovery } from "./current-topic-read-recovery.js";
 
 /**
@@ -14,72 +15,12 @@ export function projectCurrentTopicStage(
   collaboration: CollaborationStateOutDto,
 ): CurrentTopicStageOutDto {
   const run = evolution.oneShotRun;
-  const independentEstablishment = run?.topicEstablishmentMode === "independent-switch" && !run.topicId && !run.proposalId;
-  if (independentEstablishment && run?.status === "blocked") {
-    return {
-      topicId: null, proposalId: null, status: "topic-establishment-failed", title: "新专题建立失败",
-      summary: run.blockingReason || "新专题尚未建立，旧专题仍只保留审计记录。", repairContent: "", remaining: run.blockingReason || "建立新专题时出现未完成步骤。",
-      waitingFor: "系统恢复处理", nextAction: "保留建立失败证据并处理当前失败原因。", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "系统恢复处理", "保留建立失败证据并处理当前失败原因。", run.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
-    };
-  }
-  // 已经绑定专题和提案的当前运行拥有交付阶段；后来产生但尚未确立的研讨不能把它覆盖成
-  // 无专题的“等待确认”。独立专题切换必须先由状态机显式退役原运行，投影不在这里猜测切换。
-  const activeProposalRun = Boolean(evolution.oneShotRun?.topicId && evolution.oneShotRun?.proposalId
-    && evolution.oneShotRun.status !== "completed");
-  const awaitingConfirmation = !activeProposalRun && hasPendingConfirmation(evolution);
-  // questioning 研讨已经写入 Evolution，但尚未形成专题和提案；页面只能通过当前阶段读取这项事实。
-  const activeDeliberation = !activeProposalRun
-    ? [...evolution.deliberations].reverse().find((item) => item.status === "questioning" && item.topicId === null) || null
-    : null;
   const proposalId = evolution.oneShotRun?.proposalId || null;
   const proposal = proposalId ? evolution.proposals.find((item) => item.proposalId === proposalId) || null : null;
   const topic = proposal ? evolution.topics.find((item) => item.topicId === proposal.topicId) || null : null;
-
-  if (awaitingConfirmation) {
-    return {
-      topicId: null, proposalId: null, status: "awaiting-confirmation", title: "等待用户确认",
-      summary: "南宫婉已经给出本轮范围说明，等待用户确认。", repairContent: "", remaining: "等待用户确认范围说明。",
-      waitingFor: "用户确认", nextAction: "确认当前范围说明后继续。", userAction: "confirmation",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("confirmation", "用户确认", "确认当前范围说明后继续。", confirmationUpdatedAt(evolution)),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: confirmationUpdatedAt(evolution),
-    };
-  }
-
-  if (activeDeliberation) {
-    return {
-      topicId: null, proposalId: null, status: "deliberating", title: "南宫婉正在内部研讨",
-      summary: "韩立已确认当前问题，南宫婉正在与韩立核实范围和影响。", repairContent: "", remaining: "等待本轮内部研讨形成可执行范围。",
-      waitingFor: "南宫婉内部研讨", nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "南宫婉内部研讨", "系统会继续当前研讨；形成可执行范围后再显示确认。", activeDeliberation.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: activeDeliberation.updatedAt,
-    };
-  }
-
-  if (independentEstablishment && run?.status === "running") {
-    return {
-      topicId: null, proposalId: null, status: "establishing-topic", title: "正在建立新专题",
-      summary: "旧专题已经退出当前区，系统正在继续研讨并建立新的独立专题。", repairContent: "", remaining: "等待新的专题及其提案建立。",
-      waitingFor: "系统正在处理", nextAction: "系统将继续当前研讨；建立完成后显示新的专题卡。", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "系统正在处理", "系统将继续当前研讨；建立完成后显示新的专题卡。", run.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: run.updatedAt,
-    };
-  }
-
-  if (!proposal) {
-    return {
-      topicId: null, proposalId: null, status: "not-run", title: "暂无修复任务", summary: "当前没有可展示的专题提案。", repairContent: "", remaining: "",
-      waitingFor: "南宫婉", nextAction: "等待形成可执行专题。", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "当前交付投影", "系统将自动重新读取当前交付投影。", evolution.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
-    };
-  }
+  const preparation = projectTopicPreparationStage(evolution, proposal !== null);
+  if (preparation) return preparation;
+  if (!proposal) throw new Error("当前专题准备阶段缺少未建立提案的投影。");
 
   // 已取消链只能作为历史展示，绝不能被当前专题投影重新包装成恢复、审批或验收入口。
   const operation = decideCurrentTopicOperation(evolution, collaboration, {
@@ -87,24 +28,8 @@ export function projectCurrentTopicStage(
     proposalId: proposal.proposalId,
     runId: evolution.oneShotRun?.runId || null,
   });
-  if (operation.kind === "cancelled") {
-    return {
-      topicId: operation.topicId, proposalId: operation.proposalId, status: "cancelled", title: topic?.title || proposal.title,
-      summary: operation.message, repairContent: "", remaining: "", waitingFor: "当前无需操作", nextAction: "本专题已取消", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "当前无需操作", "本专题已取消", evolution.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
-    };
-  }
-  if (operation.kind === "unavailable") {
-    return {
-      topicId: operation.topicId, proposalId: operation.proposalId, status: "not-run", title: "当前专题读取受阻",
-      summary: operation.message, repairContent: "", remaining: operation.message, waitingFor: "当前专题状态", nextAction: "重新读取当前专题状态后再决定后续操作。", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", "当前专题状态", "重新读取当前专题状态后再决定后续操作。", evolution.updatedAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
-    };
-  }
+  const operationStage = projectOperationStage(operation, evolution, proposal, topic);
+  if (operationStage) return operationStage;
 
   const currentExecution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const latestRecoveryAcceptance = readLatestAcceptance(evolution, proposal);
@@ -112,34 +37,8 @@ export function projectCurrentTopicStage(
     latestAcceptance: latestRecoveryAcceptance, hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal) });
   if (technicalStage) return technicalStage;
 
-  // 监控者独立验收卡没有分发计划，不套用普通代码交付候选门禁；最终通过仍必须读取唯一结论记录。
-  const monitorAcceptanceCard = topic !== null && topic.recoveryPoint?.startsWith("monitor-formal-acceptance-")
-    && proposal.distributionPlan === null
-    && proposal.distributedTaskIds.length === 0
-    && run?.topicId === topic.topicId
-    && run.proposalId === proposal.proposalId;
-  if (monitorAcceptanceCard) {
-    const occurredAt = run.completedAt || run.updatedAt;
-    const finalConclusion = readFinalConclusion(evolution, proposal);
-    const latestAcceptance = readLatestAcceptance(evolution, proposal);
-    const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
-    const verified = topic.status === "completed" && proposal.status === "completed"
-      && finalConclusion !== null && latestAcceptance?.status === "passed";
-    const failed = topic.status === "supplement-required" || run.status === "blocked" || latestAcceptance?.status === "failed";
-    return {
-      topicId: topic.topicId, proposalId: proposal.proposalId,
-      status: verified ? "completed" : topic.status === "completed" ? "completed-unverified" : failed ? "failed-pending-repair" : "pending-acceptance", title: topic.title,
-      summary: verified ? (proposal.resultSummary || "正式页面验收通过，专题已完成。")
-        : topic.status === "completed" ? "完成状态缺少可追溯验收记录，尚未核验。"
-          : failed ? "独立页面验收未通过，等待核对失败证据。" : "正式版本已交付，等待独立页面验收。", repairContent: proposal.content,
-      remaining: verified ? "" : "缺少当前专题的唯一最终验收结论及通过记录。", waitingFor: verified ? "当前无需操作" : "韩立独立验收",
-      nextAction: verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", userAction: "none",
-      resumeOneShotRunId: null,
-      readRecovery: readRecovery("none", verified ? "当前无需操作" : "韩立独立验收", verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", occurredAt),
-      effectiveTaskIds: [], missingTaskIds: [], latestAcceptance, finalConclusion,
-      hostStartupAcceptance, deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
-    };
-  }
+  const monitorStage = projectMonitorAcceptanceStage(evolution, proposal, topic);
+  if (monitorStage) return monitorStage;
 
   const execution = currentExecution;
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
@@ -158,7 +57,7 @@ export function projectCurrentTopicStage(
     && run.proposalId === proposal.proposalId;
   const failedAcceptance = latestAcceptance?.status === "failed" || latestAcceptance?.status === "blocked";
   let status: CurrentTopicStageOutDto["status"] = "executing";
-  if (awaitingConfirmation || taskNeedsConfirmation) status = "awaiting-confirmation";
+  if (taskNeedsConfirmation) status = "awaiting-confirmation";
   else if (runBlocked) status = "failed-pending-repair";
   else if (acceptanceStarted) status = "accepting";
   else if (failedAcceptance) status = "failed-pending-repair";
@@ -195,6 +94,61 @@ export function projectCurrentTopicStage(
     hostStartupAcceptance,
     deliveryEvidence,
     updatedAt,
+  };
+}
+
+/** 已取消链只保留历史，不重新包装成恢复、审批或验收入口。 */
+function projectOperationStage(
+  operation: ReturnType<typeof decideCurrentTopicOperation>,
+  evolution: EvolutionStateOutDto,
+  proposal: EvolutionStateOutDto["proposals"][number],
+  topic: EvolutionStateOutDto["topics"][number] | null,
+): CurrentTopicStageOutDto | null {
+  if (operation.kind === "cancelled") return {
+    topicId: operation.topicId, proposalId: operation.proposalId, status: "cancelled", title: topic?.title || proposal.title,
+    summary: operation.message, repairContent: "", remaining: "", waitingFor: "当前无需操作", nextAction: "本专题已取消", userAction: "none",
+    resumeOneShotRunId: null,
+    readRecovery: readRecovery("none", "当前无需操作", "本专题已取消", evolution.updatedAt),
+    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+  };
+  if (operation.kind === "unavailable") return {
+    topicId: operation.topicId, proposalId: operation.proposalId, status: "not-run", title: "当前专题读取受阻",
+    summary: operation.message, repairContent: "", remaining: operation.message, waitingFor: "当前专题状态", nextAction: "重新读取当前专题状态后再决定后续操作。", userAction: "none",
+    resumeOneShotRunId: null,
+    readRecovery: readRecovery("none", "当前专题状态", "重新读取当前专题状态后再决定后续操作。", evolution.updatedAt),
+    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+  };
+  return null;
+}
+
+/** 监控者独立验收卡没有分发计划，不套用普通代码候选门禁。 */
+function projectMonitorAcceptanceStage(
+  evolution: EvolutionStateOutDto,
+  proposal: EvolutionStateOutDto["proposals"][number],
+  topic: EvolutionStateOutDto["topics"][number] | null,
+): CurrentTopicStageOutDto | null {
+  const run = evolution.oneShotRun;
+  if (!topic?.recoveryPoint?.startsWith("monitor-formal-acceptance-") || proposal.distributionPlan !== null
+    || proposal.distributedTaskIds.length !== 0 || run?.topicId !== topic.topicId || run.proposalId !== proposal.proposalId) return null;
+  const occurredAt = run.completedAt || run.updatedAt;
+  const finalConclusion = readFinalConclusion(evolution, proposal);
+  const latestAcceptance = readLatestAcceptance(evolution, proposal);
+  const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
+  const verified = topic.status === "completed" && proposal.status === "completed"
+    && finalConclusion !== null && latestAcceptance?.status === "passed";
+  const failed = topic.status === "supplement-required" || run.status === "blocked" || latestAcceptance?.status === "failed";
+  return {
+    topicId: topic.topicId, proposalId: proposal.proposalId,
+    status: verified ? "completed" : topic.status === "completed" ? "completed-unverified" : failed ? "failed-pending-repair" : "pending-acceptance", title: topic.title,
+    summary: verified ? (proposal.resultSummary || "正式页面验收通过，专题已完成。")
+      : topic.status === "completed" ? "完成状态缺少可追溯验收记录，尚未核验。"
+        : failed ? "独立页面验收未通过，等待核对失败证据。" : "正式版本已交付，等待独立页面验收。", repairContent: proposal.content,
+    remaining: verified ? "" : "缺少当前专题的唯一最终验收结论及通过记录。", waitingFor: verified ? "当前无需操作" : "韩立独立验收",
+    nextAction: verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", userAction: "none",
+    resumeOneShotRunId: null,
+    readRecovery: readRecovery("none", verified ? "当前无需操作" : "韩立独立验收", verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", occurredAt),
+    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance, finalConclusion,
+    hostStartupAcceptance, deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
   };
 }
 
@@ -325,16 +279,6 @@ function readDeliveryGate(evidence: CurrentTopicStageOutDto["deliveryEvidence"])
     return { status: "accepting", summary: "韩立已开始本轮结果验收。", remaining: "等待真实验收结果。", waitingFor: "韩立真实验收", nextAction: "等待韩立记录本轮真实验收结果。" };
   }
   return { status: "pending-acceptance", summary: "最终候选已完成测试、发布和重启健康检查，缺少真实验收结果。", remaining: "缺少真实验收结果。", waitingFor: "韩立真实验收", nextAction: "韩立按真实路径验收最终候选，并记录结果。" };
-}
-
-function hasPendingConfirmation(evolution: EvolutionStateOutDto): boolean {
-  const pendingDeliberation = evolution.deliberations.some((item) => item.status === "ready-to-establish"
-    && Boolean(item.rounds.at(-1)?.confirmation) && !item.rounds.at(-1)?.confirmation?.reply);
-  return pendingDeliberation || evolution.oneShotConfirmation?.status === "awaiting-user-confirmation";
-}
-
-function confirmationUpdatedAt(evolution: EvolutionStateOutDto): string {
-  return evolution.oneShotConfirmation?.createdAt || evolution.deliberations.flatMap((item) => item.rounds).at(-1)?.confirmation?.offeredAt || evolution.updatedAt;
 }
 
 function readLatestAcceptance(evolution: EvolutionStateOutDto, proposal: EvolutionStateOutDto["proposals"][number]): CurrentTopicAcceptanceOutDto | null {
