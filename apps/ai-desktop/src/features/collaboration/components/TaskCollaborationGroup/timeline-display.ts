@@ -11,6 +11,7 @@ import type {
   // 界面语言：选择中文或日文文案。
   LocaleValue,
 } from "../../../../../contracts/system/desktop/index";
+import type { CurrentTopicStageOutDto } from "../../../../../contracts/services/evolution/index";
 
 /** 专题头部当前活动的显示事实，人数和姓名始终来自同一组当前节点。 */
 export type GroupActivityPresentation = {
@@ -20,11 +21,22 @@ export type GroupActivityPresentation = {
   statusLabel: string;
 };
 
+/** 当前节点的展示覆盖层；只改变活动阶段的读模型，不改写时间线归档。 */
+export type CurrentStageTimelinePresentation = {
+  actor: string;
+  action: string;
+  summary: string;
+  status: CollaborationTimelineNodeOutDto["status"];
+};
+
 /** 从当前节点生成专题头部活动事实，避免人数统计与人物名称使用不同来源。 */
 export function groupActivityPresentation(
   group: CollaborationTimelineGroupOutDto,
   locale: LocaleValue,
+  currentStage: CurrentTopicStageOutDto | null = null,
 ): GroupActivityPresentation {
+  const matchingCurrentStage = currentStage?.topicId === group.topicId && currentStage.proposalId === group.proposalId
+    ? currentStage : null;
   const activeOwnerLabels = new Map<string, string>();
   let acceptanceNode: CollaborationTimelineNodeOutDto | undefined;
 
@@ -39,10 +51,36 @@ export function groupActivityPresentation(
     activeOwnerLabels.set(node.actor.memberId, `${node.actor.displayName}${roleLabel}`);
   }
 
-  const statusLabel = group.status === "verifying" && acceptanceNode
+  // 专题阶段负责唯一的状态结论；并行人物仍必须来自当前节点，不能因为验收开始而遗漏执行人。
+  if (matchingCurrentStage && activeOwnerLabels.size === 0 && matchingCurrentStage.userAction === "none"
+    && ["令狐老祖", "韩立真实验收", "南宫婉"].includes(matchingCurrentStage.waitingFor)) {
+    activeOwnerLabels.set(matchingCurrentStage.waitingFor, matchingCurrentStage.waitingFor);
+  }
+  const statusLabel = matchingCurrentStage ? matchingCurrentStage.title : group.status === "verifying" && acceptanceNode
     ? locale === "ja" ? `${acceptanceNode.actor.displayName}が受入確認中` : `${acceptanceNode.actor.displayName}验收中`
     : groupStatusLabel(group.status, locale);
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
+}
+
+/**
+ * 当前时间线节点展示同一份阶段投影，避免旧节点的处理人和动作与卡片主区域冲突。
+ * 原始节点仍完整保留在详情和审计历史中。
+ */
+export function currentStageTimelinePresentation(
+  node: CollaborationTimelineNodeOutDto,
+  currentStage: CurrentTopicStageOutDto | null,
+): CurrentStageTimelinePresentation | null {
+  if (node.status !== "current" || !currentStage) return null;
+  // 申请、审批等历史节点即使暂时处于 current，也不是当前专题阶段的承载者；保留其发送者、收件人和审计动作。
+  const matchesCurrentTask = node.taskId !== null && currentStage.effectiveTaskIds.includes(node.taskId);
+  const matchesAcceptance = node.kind === "verification" && currentStage.status === "accepting";
+  if (!matchesCurrentTask && !matchesAcceptance) return null;
+  return {
+    actor: currentStage.waitingFor,
+    action: currentStage.nextAction,
+    summary: currentStage.summary,
+    status: currentStage.userAction === "resume" ? "waiting" : "current",
+  };
 }
 
 /** 任务卡主区域固定展示的四项用户信息。 */

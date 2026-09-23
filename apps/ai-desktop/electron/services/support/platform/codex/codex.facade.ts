@@ -851,7 +851,7 @@ export class CodexService {
     if (isCommand && this.#activeExecutionMode === "task-managed" && this.#options.validationOwner === "desktop"
       && command && isDesktopOwnedValidationCommand(command)) {
       this.#respond(id, { decision: "decline" });
-      this.#emitCommandPolicy(id, command, "当前协同任务的代码测试由 AI Desktop 在签发 worktree 内执行，无需 Agent 重复申请命令授权。", "completed");
+      this.#emitCommandPolicy(id, command, "当前协同任务的代码测试由 AI Desktop 在签发 worktree 内执行，无需 Agent 申请 Playwright 权限；也无需重复申请命令授权。", "completed");
       return;
     }
     if (isCommand && command) {

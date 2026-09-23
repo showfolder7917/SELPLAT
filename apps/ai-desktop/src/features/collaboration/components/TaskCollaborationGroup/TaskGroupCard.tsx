@@ -20,6 +20,7 @@ import {
 import {
   // 摘要压缩：节点头部保持一行可扫描文字。
   compactTimelineText,
+  currentStageTimelinePresentation,
   // 详情标签：按申请、审批、变更或验证证据选择名称。
   detailLabel,
   // 耗时转换：专题头部显示墙钟总耗时。
@@ -163,7 +164,7 @@ function TaskGroupHeader({
     ? presentation.currentTopicStage : null;
   const groupStopped = currentStage?.status === "completed" || currentStage?.status === "completed-unverified" || currentStage?.status === "cancelled" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
-  const activity = groupActivityPresentation(group, locale);
+  const activity = groupActivityPresentation(group, locale, currentStage);
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。
   const primary = currentStage ? {
     matter: currentStage.summary,
@@ -221,16 +222,22 @@ function TaskGroupHeader({
 function TaskNodeHeader({
   node,
   presentation,
+  currentStagePresentation,
+  displayedStatus,
 }: {
   /** 当前时间线节点，提供人物、动作、摘要和状态。 */
   node: CollaborationTimelineNodeOutDto;
   /** 卡片显示状态，提供语言和动态计时所需的当前时间。 */
   presentation: TaskGroupCardPresentation;
+  /** 当前专题阶段提供时，节点主信息只显示它的统一结论。 */
+  currentStagePresentation: ReturnType<typeof currentStageTimelinePresentation>;
+  /** 节点状态与同一阶段投影一致，不能保留原节点的 current 标签。 */
+  displayedStatus: CollaborationTimelineNodeOutDto["status"];
 }) {
   // 界面语言和当前时间只从统一显示状态读取，不再由父组件分别透传。
   const { locale } = presentation;
   // 节点摘要（summary）清理路径并压缩成适合折叠标题的一行文字。
-  const summary = compactTimelineText(presentTimelineText(node.summary));
+  const summary = compactTimelineText(presentTimelineText(currentStagePresentation?.summary || node.summary));
   // 技术详情仍保持折叠，但在节点标题上明确提示其可用，避免完成节点看起来只有摘要。
   const hasTechnicalDetail = Boolean(node.detail || (node.content && node.content !== node.summary));
 
@@ -242,11 +249,11 @@ function TaskNodeHeader({
         {/* 人物动作行：按执行者、接收者、动作的阅读顺序展示。 */}
         <span>
           {/* 执行者姓名：回答“当前是谁接受或处理这个任务”。 */}
-          <strong>{node.actor.displayName}</strong>
+          <strong>{currentStagePresentation?.actor || node.actor.displayName}</strong>
           {/* 接收人：只有当前动作确实存在接收对象时才显示。 */}
-          {node.recipients.length > 0 && <em>{recipientLabel(node)}</em>}
+          {!currentStagePresentation && node.recipients.length > 0 && <em>{recipientLabel(node)}</em>}
           {/* 节点动作：显示接受、申请、审批、执行或验证等真实动作。 */}
-          <b>{node.action}</b>
+          <b>{currentStagePresentation?.action || node.action}</b>
         </span>
         {/* 节点摘要：用一行文字说明本次动作正在处理的内容。 */}
         <small>{summary}</small>
@@ -264,7 +271,7 @@ function TaskNodeHeader({
         {/* 节点耗时：执行中或等待中时使用当前时间持续更新。 */}
         <NodeDuration node={node} locale={locale} />
         {/* 节点状态：把内部状态码转换为当前语言的可读标签。 */}
-        <b>{nodeStatusLabel(node.status, locale)}</b>
+        <b>{nodeStatusLabel(displayedStatus, locale)}</b>
       </span>
     </span>
   );
@@ -287,12 +294,17 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
   const { group } = model;
   // 显示状态统一提供语言、时间、继续状态和实时正文。
   const { locale, liveTextByNodeId } = model.presentation;
+  const currentStage = model.presentation.currentTopicStage?.topicId === group.topicId
+    && model.presentation.currentTopicStage?.proposalId === group.proposalId
+    ? model.presentation.currentTopicStage : null;
+  const stagePresentation = currentStageTimelinePresentation(node, currentStage);
+  const displayedStatus = stagePresentation?.status || node.status;
   // 用户操作统一提供展开查询、展开保存和审批能力；恢复只由专题下一流程承载。
   const { isNodeOpen, onNodeOpenChange, onManualApproval } = model.actions;
   // 节点展开状态（nodeOpen）同时尊重后端自动展开提示和用户手动选择。
   const nodeOpen = isNodeOpen(node.nodeId, node.automaticOpen);
   // 实时输出属于技术记录，只能在详情中展开查看，不能覆盖节点正文。
-  const liveText = node.status === "current" ? liveTextByNodeId[node.nodeId] || "" : "";
+  const liveText = !stagePresentation && node.status === "current" ? liveTextByNodeId[node.nodeId] || "" : "";
   // 可操作状态（hasAction）决定节点右侧是否需要预留操作区域。
   const hasAction = Boolean(node.manualApprovalProposalId);
 
@@ -329,11 +341,12 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
   return (
     // 时间线位置容器使用节点状态控制连线和圆点的视觉状态。
     <div
-      className={`task-timeline-position ${node.status}`}
+      className={`task-timeline-position ${displayedStatus}`}
       data-task-timeline-node-id={node.nodeId}
       data-task-timeline-event-type={node.eventType}
       data-task-timeline-started-at={node.startedAt}
-      data-task-timeline-status={node.status}
+      data-task-timeline-status={displayedStatus}
+      data-task-timeline-recorded-status={node.status}
     >
       {/* 节点序号：帮助用户按真实发生顺序阅读完整协作过程。 */}
       <span className="task-timeline-index">{index + 1}</span>
@@ -342,10 +355,10 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
       {/* 节点折叠区：头部用于浏览，展开后显示正文、详情和业务操作。 */}
       <SelUiDisclosure
         idPrefix="task-collaboration-node"
-        className={`task-timeline-node ${node.kind} ${node.status}`}
+        className={`task-timeline-node ${node.kind} ${displayedStatus}`}
         open={nodeOpen}
         onOpenChange={(open) => onNodeOpenChange(node.nodeId, open)}
-        trigger={<TaskNodeHeader node={node} presentation={model.presentation} />}
+        trigger={<TaskNodeHeader node={node} presentation={model.presentation} currentStagePresentation={stagePresentation} displayedStatus={displayedStatus} />}
         action={actionButtons}
       >
         {/* 节点正文：当前节点优先显示实时输出，结束后显示数据库正文。 */}
@@ -379,12 +392,23 @@ const TaskTimelineNode = memo(function TaskTimelineNode({
   const nextLiveText = nextNode.status === "current"
     ? next.model.presentation.liveTextByNodeId[nextNode.nodeId] || ""
     : "";
+  const previousStage = previous.model.presentation.currentTopicStage?.topicId === previous.model.group.topicId
+    && previous.model.presentation.currentTopicStage?.proposalId === previous.model.group.proposalId
+    ? previous.model.presentation.currentTopicStage : null;
+  const nextStage = next.model.presentation.currentTopicStage?.topicId === next.model.group.topicId
+    && next.model.presentation.currentTopicStage?.proposalId === next.model.group.proposalId
+    ? next.model.presentation.currentTopicStage : null;
   return previousNode === nextNode
     && previous.index === next.index
     && previousOpen === nextOpen
     && previousLiveText === nextLiveText
     && previous.model.group.title === next.model.group.title
     && previous.model.presentation.locale === next.model.presentation.locale
+    && previousStage?.status === nextStage?.status
+    && previousStage?.waitingFor === nextStage?.waitingFor
+    && previousStage?.nextAction === nextStage?.nextAction
+    && previousStage?.summary === nextStage?.summary
+    && previousStage?.userAction === nextStage?.userAction
     && previous.model.actions.onManualApproval === next.model.actions.onManualApproval;
 });
 

@@ -821,12 +821,25 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
   const nextStep = page?.querySelector<HTMLElement>(".task-timeline-next-current")?.innerText.trim() || "";
   const guidance = page?.querySelector<HTMLElement>(".task-recovery-guidance")?.innerText.trim() || "";
   const recoveryLabel = page?.querySelector<HTMLButtonElement>("button.task-recovery-continue")?.innerText.trim() || "";
+  // 只读取当前页面已渲染的成员导航项，不能通过 IPC 或场景内部状态替代正式页面证据。
+  const memberStates = Array.from(document.querySelectorAll<HTMLButtonElement>("#developer-task-list button.collaboration-member"))
+    .map((member) => {
+      const rect = member.getBoundingClientRect();
+      const visible = rect.width > 0 && rect.height > 0 && getComputedStyle(member).display !== "none" && getComputedStyle(member).visibility !== "hidden";
+      return {
+        name: member.querySelector<HTMLElement>(":scope > span")?.innerText.trim() || "",
+        presence: member.querySelector<HTMLElement>(":scope > span > i")?.className || "",
+        label: member.querySelector<HTMLElement>(":scope > small")?.innerText.trim() || "",
+        visible,
+      };
+    }).filter((member) => member.visible);
   return {
     status: visible ? "visible" : "hidden",
     primary,
     nextStep,
     guidance,
     recoveryLabel,
+    memberStates,
     taskPanelExpanded: panelToggle?.getAttribute("aria-expanded") === "true",
     detailPaneConnected: Boolean(detail?.isConnected),
     detailPaneVisible: detailVisible,
