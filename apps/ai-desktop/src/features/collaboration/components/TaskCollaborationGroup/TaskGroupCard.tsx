@@ -527,7 +527,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
               <i className={recoveryPending ? "ri-loader-4-line" : "ri-play-circle-line"} aria-hidden="true" />
               {recoveryPending
                 ? locale === "ja" ? "復旧中…" : "恢复中…"
-                : "从卡点继续"}
+                : currentStage?.customerActionGuidance?.resumeLabel || "从卡点继续"}
             </button>
           )}
           {staleActiveTopic && group.topicId && group.proposalId && (
