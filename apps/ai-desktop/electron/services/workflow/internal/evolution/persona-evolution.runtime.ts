@@ -682,6 +682,9 @@ export class PersonaEvolutionRuntime {
             continue;
           }
           if (classification.disposition === "acceptance-capability-or-runtime-blocked") {
+            // 未形成产品失败结论仍是本轮真实验收事实。先归档受阻结果，再进入技术恢复；
+            // 否则当前卡会继续引用上一轮失败，恢复指纹也无法对准最新运行。
+            this.#hanli.completeAutomaticAcceptance(runResult, `one-shot-result:${run.runId}:${proposal.proposalId}:${runResult.runId}`);
             const reason = runResult.stepResults
               .filter((step) => step.status === "blocked" || step.layoutStatus === "blocked")
               .map((step) => `${step.checkId}：${step.actual}`)

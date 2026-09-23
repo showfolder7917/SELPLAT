@@ -24,6 +24,12 @@ test("韩立固定审查正式页面与源码结构", () => {
   assert.match(prompt, /sourceEvidenceStatus=available/);
 });
 
+test("受阻验收先归档本轮真实结果再进入恢复，当前卡不沿用上一轮", () => {
+  const branch = runtime.slice(runtime.indexOf('if (classification.disposition === "acceptance-capability-or-runtime-blocked")'), runtime.indexOf('if (runResult.status === "failed")'));
+  assert.match(branch, /this\.#hanli\.completeAutomaticAcceptance\(runResult,/u);
+  assert.ok(branch.indexOf("this.#hanli.completeAutomaticAcceptance(runResult,") < branch.indexOf("this.#blockOneShotFailure("));
+});
+
 test("成员均 idle 的原条件仍归任务协作群同屏验收", () => {
   assert.match(runtime, /成员\.\*\(\?:空闲\|idle\)/u);
   assert.match(runtime, /\(\?:空闲\|idle\)\.\*成员/u);
