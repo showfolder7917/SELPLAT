@@ -259,6 +259,19 @@ test("客户操作方案保留在等待节点，唯一继续按钮位于下一�
   const resume = page.locator(".task-timeline-next-current").getByRole("button", { name: "从卡点继续", exact: true });
   await expect(resume).toBeVisible();
   await expect(page.locator(".task-group-recovery")).toHaveCount(0);
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1000, 700));
+  const group = page.locator(".task-collaboration-group").first();
+  const detailPane = group.locator(".task-timeline-detail-pane");
+  await expect(resume).toBeInViewport();
+  await expect(detailPane).toBeVisible();
+  const detailGeometry = await detailPane.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop };
+  });
+  expect(detailGeometry.clientHeight, "完整指导不能将窄窗口详情面板压缩为零高度").toBeGreaterThan(0);
+  expect(detailGeometry.scrollHeight, "详情面板必须保留可阅读的流程内容").toBeGreaterThanOrEqual(detailGeometry.clientHeight);
+  expect(await group.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
   await resume.click();
   await expect(page.getByRole("button", { name: "从卡点继续", exact: true })).toHaveCount(0);
   await expect(waitingNode).toHaveCount(0);

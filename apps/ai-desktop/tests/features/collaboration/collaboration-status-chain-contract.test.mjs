@@ -230,9 +230,11 @@ test("长任务详情只在卡片内容区滚动并保留主操作", () => {
   assert.match(developerStyles, /\.task-collaboration-groups \{[\s\S]*display: flex[\s\S]*flex-direction: column[\s\S]*overflow: auto/);
   assert.match(developerStyles, /\.task-collaboration-group \{[\s\S]*flex: 0 0 auto[\s\S]*min-height: 0/);
   assert.match(developerStyles, /\.task-collaboration-history \{[\s\S]*flex: 0 0 auto/);
-  assert.match(developerStyles, /\.task-collaboration-group\[data-sel-disclosure-open="true"\] \{[\s\S]*flex: 0 0 min\(100%, 560px\)[\s\S]*min-height: 280px/);
-  assert.match(developerStyles, /\.task-collaboration-group > \.seldisclosure-content \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\)[\s\S]*overflow: hidden/);
+  assert.match(developerStyles, /\.task-collaboration-group\[data-sel-disclosure-open="true"\] \{[\s\S]*flex: 0 0 560px[\s\S]*min-height: 560px/);
+  assert.match(developerStyles, /\.task-collaboration-group > \.seldisclosure-content \{[\s\S]*grid-template-rows: minmax\(0, 1fr\) minmax\(140px, 1fr\)[\s\S]*overflow: hidden/);
   assert.match(developerStyles, /\.task-timeline-detail-pane \{[\s\S]*min-height: 0[\s\S]*overflow: auto/);
+  assert.match(developerStyles, /\.task-timeline-next \{[\s\S]*max-height: 240px[\s\S]*overflow-y: auto/);
+  assert.match(developerStyles, /\.task-recovery-guidance \{[\s\S]*max-height: 112px[\s\S]*overflow-y: auto/);
   assert.match(taskGroupSource, /closest<HTMLElement>\("\.task-timeline-detail-pane"\)[\s\S]*detailPane\.scrollTo/);
   assert.doesNotMatch(taskGroupSource, /scrollIntoView\(/);
   assert.match(taskGroupSource, /timelineProjectionUnavailable[\s\S]*重试进度更新/);

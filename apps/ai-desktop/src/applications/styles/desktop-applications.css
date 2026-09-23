@@ -528,7 +528,7 @@ button { color: inherit; }
 .task-cancelled-history-evidence { max-height: 240px; min-width: 0; margin: 0; padding: 10px; overflow: auto; color: var(--sel-theme-workbench-text-muted); background: var(--sel-theme-workbench-surface); font: inherit; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-collaboration-group { flex: 0 0 auto; min-height: 0; border-color: var(--sel-theme-control-line-soft); background: color-mix(in srgb, var(--sel-theme-workbench-surface-soft) 72%, transparent); }
 /* 展开卡片占用任务列表的可用高度，保证下一流程后的详情行有真实高度可供内部滚动。 */
-.task-collaboration-group[data-sel-disclosure-open="true"] { display: grid; flex: 0 0 min(100%, 560px); grid-template-rows: auto minmax(0, 1fr); min-height: 280px; }
+.task-collaboration-group[data-sel-disclosure-open="true"] { display: grid; flex: 0 0 560px; grid-template-rows: auto minmax(0, 1fr); min-height: 560px; }
 .task-collaboration-group > .selui-disclosure-heading > .seldisclosure-trigger { min-height: 72px; padding: 14px 16px; }
 .selui-disclosure-heading { display: flex; align-items: center; }
 .selui-disclosure-heading > .seldisclosure-trigger { min-width: 0; }
@@ -545,7 +545,7 @@ button { color: inherit; }
 .task-group-facts b { color: var(--sel-theme-accent); }
 .task-group-facts em { color: var(--sel-theme-workbench-text); font-style: normal; }
 .task-group-facts small { color: var(--sel-theme-workbench-text-muted); }
-.task-collaboration-group > .seldisclosure-content { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; padding: 0 16px 16px; }
+.task-collaboration-group > .seldisclosure-content { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) minmax(140px, 1fr); overflow: hidden; padding: 0 16px 16px; }
 .task-timeline-detail-pane { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .task-timeline-list { position: relative; display: grid; gap: 8px; padding: 8px 0 8px 38px; }
 .task-timeline-list::before { position: absolute; top: 0; bottom: 0; left: 17px; width: 1px; content: ""; background: var(--sel-theme-control-line-soft); }
@@ -612,10 +612,11 @@ button { color: inherit; }
 .task-host-startup-evidence { min-width: 0; margin-top: 8px; border: 1px solid var(--sel-theme-control-line-soft); border-radius: var(--sel-theme-radius-control); }
 .task-host-startup-evidence > .seldisclosure-content { min-width: 0; max-height: 118px; padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
 .task-host-startup-evidence pre { margin: 0; color: var(--sel-theme-workbench-text-muted); font: inherit; line-height: 1.65; white-space: pre-wrap; }
-.task-timeline-next { display: grid; grid-template-columns: 12px max-content minmax(0, 1fr); align-items: start; column-gap: 10px; row-gap: 6px; margin: 12px 0 0 38px; padding: 12px 4px; color: var(--sel-theme-workbench-text-muted); }
+.task-timeline-next { max-height: 240px; min-height: 0; display: grid; grid-template-columns: 12px max-content minmax(0, 1fr); align-items: start; column-gap: 10px; row-gap: 6px; margin: 12px 0 0 38px; padding: 12px 4px; overflow-y: auto; overscroll-behavior: contain; color: var(--sel-theme-workbench-text-muted); }
 .task-timeline-next > i { width: 12px; height: 12px; border: 2px solid var(--sel-theme-control-line-soft); border-radius: 50%; }
 .task-timeline-next strong { color: var(--sel-theme-workbench-text); white-space: nowrap; }
 .task-timeline-next-current { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.task-recovery-guidance { max-height: 112px; min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
 .task-timeline-next > small { grid-column: 2 / -1; overflow-wrap: anywhere; }
 .task-collaboration-empty { width: min(100%, 480px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 8px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
 .task-topic-establishment { width: min(100%, 560px); min-width: 0; display: grid; align-content: center; justify-items: center; gap: 10px; margin: 0 auto; padding: 24px 16px; min-height: 320px; color: var(--sel-theme-workbench-text-muted); text-align: center; }
