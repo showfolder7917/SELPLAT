@@ -1056,7 +1056,7 @@ export class CollaborationCoordinator {
     taskId: string,
     memberId: string,
     assignmentId: string | null,
-    result: { text: string; pendingActions: string[]; authorizedFiles: string[] },
+    result: { text: string; pendingActions: string[]; changedFiles: string[]; authorizedFiles: string[] },
   ): Promise<void> {
       this.#setTaskAndMemberPhase(taskId, "executing", "finalizing");
       // 提交前再次读取真实 Git 状态，避免最后一次复测后出现未上报的范围外文件。
