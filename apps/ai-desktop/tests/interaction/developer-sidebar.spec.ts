@@ -66,6 +66,61 @@ test.afterAll(async () => {
   await application?.close();
 });
 
+test("700px 正式窗口内韩立发送失败提示与重试入口完整可见", async ({}, testInfo) => {
+  test.setTimeout(45_000);
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(700, 700));
+  await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([700, 700]);
+  try {
+    await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+    await page.locator("#developer-task-list").getByRole("button", { name: /韩立/ }).click();
+    await page.evaluate(() => (window as any).desktop.setInteractionHanliSendFailures(1));
+    const input = page.getByRole("textbox", { name: "给韩立发送消息" });
+    const message = "窄窗口发送失败后保留原文和重试入口";
+    await input.fill(message);
+    await page.getByRole("button", { name: "发送给韩立" }).click();
+    const error = page.locator(".hanli-person-composer .composer-error");
+    await expect(error).toContainText("隔离测试发送失败");
+    const retry = error.getByRole("button", { name: "重试发送" });
+    await expect(retry).toBeInViewport();
+    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    const geometry = await page.evaluate(() => {
+      const composer = document.querySelector(".hanli-person-composer");
+      const error = composer?.querySelector(".composer-error");
+      const input = composer?.querySelector("textarea");
+      const retry = error?.querySelector("button");
+      const timeline = document.querySelector(".hanli-person-chat");
+      if (!composer || !error || !input || !retry || !timeline) return null;
+      const errorBox = error.getBoundingClientRect();
+      const inputBox = input.getBoundingClientRect();
+      const retryBox = retry.getBoundingClientRect();
+      return {
+        viewportWidth: innerWidth,
+        pageScrollWidth: document.documentElement.scrollWidth,
+        errorRight: errorBox.right,
+        errorBottom: errorBox.bottom,
+        inputTop: inputBox.top,
+        retryRight: retryBox.right,
+        retryBottom: retryBox.bottom,
+        timelineBottom: timeline.getBoundingClientRect().bottom,
+      };
+    });
+    expect(geometry).not.toBeNull();
+    expect(geometry!.viewportWidth).toBeLessThan(720);
+    expect(geometry!.pageScrollWidth).toBeLessThanOrEqual(geometry!.viewportWidth);
+    expect(geometry!.errorRight).toBeLessThanOrEqual(geometry!.viewportWidth);
+    expect(geometry!.retryRight).toBeLessThanOrEqual(geometry!.viewportWidth);
+    expect(geometry!.retryBottom).toBeLessThanOrEqual(geometry!.inputTop);
+    expect(geometry!.errorBottom).toBeLessThanOrEqual(geometry!.inputTop);
+    expect(geometry!.timelineBottom).toBeLessThanOrEqual(geometry!.inputTop);
+  } catch (error) {
+    await page.screenshot({ path: testInfo.outputPath("hanli-700px-failure.png") });
+    throw error;
+  } finally {
+    await page.evaluate(() => (window as any).desktop.setInteractionHanliSendFailures(0)).catch(() => undefined);
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980)).catch(() => undefined);
+  }
+});
+
 test("窄窗口 Host 启动依据可独立滚到末尾", async () => {
   await page.addStyleTag({ path: path.resolve("src/applications/styles/desktop-applications.css") });
   const geometry = await page.evaluate(() => {

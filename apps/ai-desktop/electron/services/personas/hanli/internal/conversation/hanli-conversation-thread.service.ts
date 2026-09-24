@@ -76,10 +76,26 @@ export class HanliConversationThreadService {
     if (bound) return this.#activateBound(bound);
 
     const created = await this.chat.startDetachedConversationSession();
-    const claimed = await this.memory.claimPersonaConversationCodexThread({
-      ownerPersonaId, conversationId, threadId: created.threadId,
-      workspaceSignature: created.workspaceSignature, occurredAt: new Date().toISOString(),
-    });
+    let claimed: boolean;
+    try {
+      claimed = await this.memory.claimPersonaConversationCodexThread({
+        ownerPersonaId, conversationId, threadId: created.threadId,
+        workspaceSignature: created.workspaceSignature, occurredAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      try {
+        // 数据库可能已经提交认领才返回错误；先查归属，精确解绑后才能删除远端线程。
+        const current = await this.memory.readPersonaConversationCodexThread(ownerPersonaId, conversationId);
+        if (current?.threadId === created.threadId) {
+          const unlinked = await this.memory.unlinkPersonaConversationCodexThread({ ownerPersonaId, conversationId, threadId: created.threadId });
+          if (!unlinked) throw new Error("认领异常后无法确认新线程已解除绑定，保留远端线程供恢复。");
+        }
+        await this.chat.deleteDetachedConversationSession(created.threadId);
+      } catch (cleanupError) {
+        throw new Error(`${error instanceof Error ? error.message : String(error)}；${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+      }
+      throw error;
+    }
     if (claimed) {
       this.chat.activateConversationSession(created);
       return { ...created, createdByRequest: true };

@@ -131,14 +131,18 @@ export class HanliApplicationService implements HanliApplicationPort {
   /** 页面型组合正式页面检查与源码审查；非页面型只执行源码审查。 */
   async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview> {
     let proposal = requireProposal(this.#store.state(), proposalId);
+    let reclassifiedConditionIds: string[] = [];
     if (proposal.acceptancePlan?.version === 1) {
       // 冻结的旧计划属于已退役能力，不能恢复、升级或继续消费；先审计退役，再按当前正式能力新建计划。
       this.#store.retireLegacyAcceptancePlan(proposalId);
       proposal = requireProposal(this.#store.state(), proposalId);
+    } else {
+      reclassifiedConditionIds = this.#store.retireScenarioBlockedAcceptancePlan(proposalId);
+      if (reclassifiedConditionIds.length) proposal = requireProposal(this.#store.state(), proposalId);
     }
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
     const routingReview = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
-    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview);
+    const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview, reclassifiedConditionIds);
     this.#store.saveAcceptancePlan(proposalId, plan);
     // 代码结论可能要求核对计划本身，必须在计划落盘后重新读取权威提案再审查。
     const frozenProposal = requireProposal(this.#store.state(), proposalId);
@@ -311,8 +315,8 @@ export class HanliApplicationService implements HanliApplicationPort {
 }
 
 /** 把韩立的首次分类冻结成提案版本事实；后续复验必须继续消费该计划。 */
-function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAcceptanceRunOutDto): EvolutionAcceptancePlanOutDto {
-  const pageConditionIds = review.mode === "mixed" ? review.pageCriterionIds || [] : [];
+function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAcceptanceRunOutDto, reclassifiedConditionIds: string[] = []): EvolutionAcceptancePlanOutDto {
+  const pageConditionIds = review.mode === "mixed" ? (review.pageCriterionIds || []).filter((id) => !reclassifiedConditionIds.includes(id)) : [];
   const now = new Date().toISOString();
   const roundId = `acceptance-round-${crypto.randomUUID()}`;
   return {

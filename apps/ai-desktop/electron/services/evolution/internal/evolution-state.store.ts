@@ -939,6 +939,37 @@ export class EvolutionStateStore {
     }, { retiredPlanId: previous.planId, retiredAcceptanceRoundId: previous.currentRoundId, retiredVersion: previous.version, nextOwner: "han-li" });
   }
 
+  /** 只把已证实无法在只读正式页面建立场景的条件转回代码验收；旧计划和失败记录完整留档。 */
+  retireScenarioBlockedAcceptancePlan(proposalId: string): string[] {
+    const proposal = requireProposal(this.#state, proposalId);
+    const previous = proposal.acceptancePlan;
+    if (!previous) {
+      if (proposal.status !== "pending-acceptance") return [];
+      const retired = [...this.#state.archiveRecords].reverse().find((record) =>
+        record.proposalId === proposalId && record.eventType === "acceptance.scenario_blocked_plan_retired");
+      return Array.isArray(retired?.payload.reclassifiedConditionIds)
+        ? retired.payload.reclassifiedConditionIds.filter((id): id is string => typeof id === "string") : [];
+    }
+    if (proposal.status !== "pending-acceptance" || previous.version !== 2) return [];
+    const resultRecord = [...this.#state.archiveRecords].reverse().find((record) =>
+      record.proposalId === proposalId && record.eventType === "acceptance.result_checked"
+      && (record.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined)?.planId === previous.planId);
+    const result = resultRecord?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
+    if (!result || result.status === "passed" || result.acceptanceRoundId !== previous.currentRoundId) return [];
+    const demotedConditionIds = result.stepResults
+      .filter((step) => step.evidenceMode === "page-experience" && step.status === "blocked" && step.blockerKind === "scenario-precondition"
+        && previous.conditions.some((condition) => condition.conditionId === step.checkId && condition.evidenceType === "page-experience"))
+      .map((step) => step.checkId);
+    if (!demotedConditionIds.length) return [];
+    this.#commit("acceptance.scenario_blocked_plan_retired", proposal.topicId, proposalId, (state) => {
+      requireProposal(state, proposalId).acceptancePlan = null;
+    }, {
+      retiredPlan: structuredClone(previous), sourceAcceptanceRecordId: resultRecord!.recordId,
+      sourceRunId: result.runId, reclassifiedConditionIds: demotedConditionIds, nextOwner: "han-li",
+    });
+    return demotedConditionIds;
+  }
+
   /** 已完成专题只可显式建立新的验收轮次；不复用阻塞运行的 resumeOneShotRun。 */
   reopenCompletedAcceptance(topicId: string, proposalId: string, reason: string, sourceRecordId: string): EvolutionStateOutDto {
     const proposal = requireProposal(this.#state, proposalId);
@@ -1544,6 +1575,7 @@ function archiveTitle(reason: string): string {
     "proposal.progress_reconciled": "专题执行状态更新",
     "proposal.result_decided": "韩立完成实施结果验收",
     "acceptance.legacy_plan_retired": "韩立退役冻结的旧验收计划并按当前能力重新规划",
+    "acceptance.scenario_blocked_plan_retired": "审计退役无法安全建立页面场景的验收计划",
     "acceptance.result_checked": "韩立完成适用的结果验收",
     "conversation.topic_group_replied": "专题群收到用户消息与南宫婉回复",
     "one-shot.activity": "一次性演化当前动作更新",

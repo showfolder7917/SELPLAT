@@ -5,6 +5,7 @@ import { HanliInquiryService } from "../../../../../build/ai-desktop/electron/el
 import { nangongInquiryResult, nangongInquiryWithCorrection } from "../../../../../build/ai-desktop/electron/electron/services/personas/nangong/index.js";
 import { parseHanliConversationResponse } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.parser.js";
 import { HanliConversationService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation.service.js";
+import { HanliConversationThreadService } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-conversation-thread.service.js";
 import { presentHanliTaskStatus, presentHanliWorkflowStatus } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-task-status.presenter.js";
 
 import { buildHanliRecentConversation } from "../../../../../build/ai-desktop/electron/electron/services/personas/hanli/internal/conversation/hanli-method-context.js";
@@ -590,6 +591,52 @@ test("普通韩立会话复用已认领线程，不为同一业务会话再创�
 
   assert.deepEqual(f.threadEvents, ["recover:existing-thread", "activate:existing-thread"]);
   assert.deepEqual(f.threadBindings.get("original"), { threadId: "existing-thread", workspaceSignature: "test-workspace" });
+});
+
+test("线程认领抛错时只回收本次新建线程，提交后抛错须先精确解绑", async () => {
+  for (const committedBeforeThrow of [false, true]) {
+    const events = [];
+    let binding = null;
+    const memory = {
+      readPersonaConversationCodexThread: async () => binding,
+      claimPersonaConversationCodexThread: async ({ threadId, workspaceSignature }) => {
+        events.push("claim");
+        if (committedBeforeThrow) binding = { threadId, workspaceSignature };
+        throw new Error("认领失败");
+      },
+      unlinkPersonaConversationCodexThread: async ({ threadId }) => {
+        events.push("unlink");
+        if (binding?.threadId !== threadId) return false;
+        binding = null;
+        return true;
+      },
+    };
+    const chat = {
+      startDetachedConversationSession: async () => ({ threadId: "new-thread", workspaceSignature: "workspace" }),
+      deleteDetachedConversationSession: async () => { events.push("delete"); },
+    };
+    const threads = new HanliConversationThreadService(memory, chat);
+    await assert.rejects(threads.ensure("han-li", "new-conversation"), /认领失败/);
+    assert.deepEqual(events, committedBeforeThrow ? ["claim", "unlink", "delete"] : ["claim", "delete"]);
+    assert.equal(binding, null);
+  }
+});
+
+test("认领异常后若无法确认解绑，绝不删除仍可能绑定的远端线程", async () => {
+  const events = [];
+  let reads = 0;
+  const memory = {
+    readPersonaConversationCodexThread: async () => (++reads === 1 ? null : { threadId: "new-thread", workspaceSignature: "workspace" }),
+    claimPersonaConversationCodexThread: async () => { throw new Error("认领失败"); },
+    unlinkPersonaConversationCodexThread: async () => false,
+  };
+  const chat = {
+    startDetachedConversationSession: async () => ({ threadId: "new-thread", workspaceSignature: "workspace" }),
+    deleteDetachedConversationSession: async () => { events.push("delete"); },
+  };
+  const threads = new HanliConversationThreadService(memory, chat);
+  await assert.rejects(threads.ensure("han-li", "new-conversation"), /保留远端线程供恢复/);
+  assert.deepEqual(events, []);
 });
 
 test("普通韩立会话发送失败时回收本次线程并解除精确绑定", async () => {

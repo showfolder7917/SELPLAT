@@ -107,6 +107,7 @@ let linghuAutomationState = {
 };
 let evolutionState = { version: 8, automationSettings: { maxRoundsPerTopic: 5, maxCorrectionRounds: 5 }, automationRuntime: { status: "idle", completedRounds: 0, correctionRounds: 0, stopReason: null, startedAt: null, pausedAt: null }, oneShotConfirmation: null, oneShotRun: null, automationContext: { workspaceState: null, locale: "zh-CN" }, preferenceSnapshotVersion: 0, activeTopicId: null, topics: [], proposals: [], deliberations: [], archiveRecords: [], conversation: { ownerPersonaId: "nangong-wan", conversationId: "nangong-conversation-isolated", messages: [], updatedAt: "2026-08-24T00:00:00.000Z" }, updatedAt: "2026-08-24T00:00:00.000Z" };
 let hanliConversation = { ownerPersonaId: "han-li", conversationId: "hanli-conversation-isolated", messages: [], updatedAt: "2026-09-02T00:00:00.000Z" };
+let hanliSendFailures = 0;
 // 隔离测试沿用正式窗口边界：页面只能取得客户可见消息，内部研讨仍只通过专用投影读取。
 const toPersonaCustomerDisplayWindow = (conversation) => ({
   ownerPersonaId: conversation.ownerPersonaId,
@@ -840,6 +841,7 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   finishInteractionInquiryRetry: async () => { inquiryFixtureRelease?.(); },
   getInteractionInquiryRequest: async () => structuredClone(inquiryFixtureRequest),
+  setInteractionHanliSendFailures: async (count) => { hanliSendFailures = count; },
   getPersonaConversation: async (personaId) => readInteractionPersonaConversation(personaId),
   // 与正式桥接同名的准备动作；该夹具没有持久化线程，因此等价于“没有可恢复线程”的原会话快照。
   preparePersonaConversationRecovery: async (personaId) => readInteractionPersonaConversation(personaId),
@@ -924,6 +926,10 @@ contextBridge.exposeInMainWorld("desktop", {
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (hanliSendFailures > 0) {
+      hanliSendFailures -= 1;
+      throw new Error("隔离测试发送失败：请检查消息重试后是否仍保留原文与可见入口。");
+    }
     const now = new Date().toISOString();
     const userMessageId = request.clientMessageId || `hanli-user-${Date.now()}`;
     const sequenceNumber = hanliConversation.messages.length;

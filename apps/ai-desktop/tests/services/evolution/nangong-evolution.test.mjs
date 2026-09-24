@@ -2654,6 +2654,82 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("只读页面无法建立场景时审计退役计划，保留旧结果并只重分类受阻条件", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-scenario-plan-retire-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("正式页面只读条件受阻"), acceptanceCriteria: ["清空后发送首条消息", "源码认领线程"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    state = store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    const now = new Date().toISOString();
+    const plan = {
+      version: 2, planId: "scenario-plan", topicId: state.activeTopicId, proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: [
+        { conditionId: "criterion-1", criterion: "清空后发送首条消息", evidenceType: "page-experience", completionRequirement: "正式页面只读" },
+        { conditionId: "criterion-2", criterion: "源码认领线程", evidenceType: "code-conformance", completionRequirement: "源码审查" },
+      ],
+      rounds: [{ roundId: "scenario-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+      currentRoundId: "scenario-round", createdAt: now,
+    };
+    store.saveAcceptancePlan(proposalId, plan);
+    const run = computerRun("scenario-run", state.activeTopicId, proposalId, "blocked", "scenario-shot", plan);
+    run.stepResults[0].status = "blocked";
+    run.stepResults[0].blockerKind = "scenario-precondition";
+    run.stepResults[1].status = "passed";
+    store.recordAcceptanceRun(run);
+    assert.deepEqual(store.retireScenarioBlockedAcceptancePlan(proposalId), ["criterion-1"]);
+    state = store.state();
+    assert.equal(state.proposals.at(-1).acceptancePlan, null);
+    const retired = state.archiveRecords.at(-1);
+    assert.equal(retired.eventType, "acceptance.scenario_blocked_plan_retired");
+    assert.equal(retired.payload.retiredPlan.planId, plan.planId);
+    assert.equal(retired.payload.sourceRunId, "scenario-run");
+    assert.deepEqual(retired.payload.reclassifiedConditionIds, ["criterion-1"]);
+    assert.equal(state.archiveRecords.some((record) => record.eventType === "acceptance.result_checked" && record.payload.acceptanceRun.runId === "scenario-run"), true);
+    assert.deepEqual(store.retireScenarioBlockedAcceptancePlan(proposalId), ["criterion-1"], "首次重规划失败后仍可从审计记录恢复分区");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("复验只将受阻页面条件改为代码条件，不改写其他正式页面条件", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-scenario-plan-review-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    let state = store.createTopic({ ...topicRequest("只读页面场景重分类"), acceptanceCriteria: ["清空后发送首条消息", "正式页面打开对话窗口"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    state = store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    const now = new Date().toISOString();
+    const plan = {
+      version: 2, planId: "review-scenario-plan", topicId: state.activeTopicId, proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: state.proposals.at(-1).acceptanceCriteria.map((criterion, index) => ({ conditionId: `criterion-${index + 1}`, criterion, evidenceType: "page-experience", completionRequirement: "正式页面只读" })),
+      rounds: [{ roundId: "review-scenario-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+      currentRoundId: "review-scenario-round", createdAt: now,
+    };
+    store.saveAcceptancePlan(proposalId, plan);
+    const run = computerRun("review-scenario-run", state.activeTopicId, proposalId, "blocked", "review-scenario-shot", plan);
+    run.stepResults[0].status = "blocked";
+    run.stepResults[0].blockerKind = "scenario-precondition";
+    run.stepResults[1].status = "passed";
+    store.recordAcceptanceRun(run);
+    const replies = [
+      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], findings: [], sourceReview: passedSourceReview }),
+      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-2"], findings: [{ criterionId: "criterion-1", status: "passed", actual: "隔离环境发送测试覆盖首条消息。", evidenceReferences: ["tests/interaction/developer-sidebar.spec.ts"] }], sourceReview: passedSourceReview }),
+    ];
+    const hanli = createHanliRuntime({
+      store, prompts, memory: null, screenshots: {},
+      askHanliResultAcceptance: async () => replies.shift(),
+      recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
+    }).facade;
+    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "隔离测试和修复已提交" });
+    assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["code-conformance", "page-experience"]);
+    assert.deepEqual(result.review.stepResults.map((step) => step.checkId), ["criterion-1"]);
+    assert.equal(store.state().archiveRecords.some((record) => record.eventType === "acceptance.scenario_blocked_plan_retired"), true);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("旧计划把发送消息误列为页面条件时退役旧计划并重新冻结当前计划", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-acceptance-plan-v2-retire-"));
   try {
