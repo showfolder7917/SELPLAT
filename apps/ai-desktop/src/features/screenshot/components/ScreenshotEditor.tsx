@@ -8,6 +8,7 @@ import {
   Square20Regular,
 } from "@fluentui/react-icons";
 
+import { fixedUiText } from "../../../../contracts/foundation/index";
 import type { LocaleValue, ScreenCaptureOutDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
@@ -22,11 +23,6 @@ interface ScreenshotEditorProps {
   onCancel(): void;
   onComplete(originalDataUrl: string, annotatedDataUrl: string, hasAnnotations: boolean): Promise<void>;
 }
-
-const editorLabels = {
-  ja: { select: "範囲を選択", selectHint: "ドラッグして切り取る範囲を選択してください", annotate: "赤で注釈", done: "完了", pen: "ペン", rectangle: "四角", undo: "元に戻す", clear: "描画をすべて消去", clearConfirm: "すべての赤い注釈を消去しますか？", cancel: "キャンセル", back: "戻る", saving: "保存中..." },
-  "zh-CN": { select: "选择截图区域", selectHint: "拖动鼠标框选需要截取的区域", annotate: "红色标注", done: "完成", pen: "画笔", rectangle: "方框", undo: "撤销", clear: "清空绘画框", clearConfirm: "确定清空全部红色绘画标注吗？", cancel: "取消", back: "返回", saving: "正在保存..." },
-} as const;
 
 const resizeHandles: ResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
@@ -52,7 +48,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
   const selectionOriginRef = useRef<Point | null>(null);
   const interactionRef = useRef<ActiveInteraction | null>(null);
   const annotationIdRef = useRef(0);
-  const text = editorLabels[locale === "ja" ? "ja" : "zh-CN"];
+  const text = (key: Parameters<typeof fixedUiText>[1]) => fixedUiText(locale, key);
   const annotations = annotationHistory[annotationHistory.length - 1] ?? [];
   const selectedRectangle = selectedRectangleId
     ? annotations.find((annotation): annotation is RectangleAnnotation => annotation.type === "rectangle" && annotation.id === selectedRectangleId)
@@ -85,7 +81,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
       drawAnnotations(image, [], null, null, null, canvas);
       setBaseImageReady(true);
       window.requestAnimationFrame(() => syncCanvasViewport(canvas, setCanvasViewport));
-    }).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to load screenshot image."));
+    }).catch((caught) => setError(caught instanceof Error ? caught.message : text("screenshotLoadFailed")));
     return () => { disposed = true; };
   }, [croppedDataUrl, phase]);
 
@@ -371,7 +367,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
   };
 
   const clear = async () => {
-    if (!await selUi.confirm({ title: text.clear, message: text.clearConfirm, tone: "danger" })) return;
+    if (!await selUi.confirm({ title: text("screenshotClear"), message: text("screenshotClearConfirm"), tone: "danger" })) return;
     setAnnotationHistory([[]]);
     setSelectedRectangleId(null);
     setRectangleTransformPreview(null);
@@ -389,23 +385,23 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
       drawAnnotations(image, annotations, null, null, null, canvas);
       await onComplete(croppedDataUrl, canvas.toDataURL("image/png"), annotations.length > 0);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to save screenshot");
+      setError(caught instanceof Error ? caught.message : text("screenshotSaveFailed"));
       setSaving(false);
     }
   };
 
-  return <section className={`screenshot-overlay ${phase === "select" ? `select-only ${selection ? "has-selection" : ""}` : ""}`} role="dialog" aria-modal="true" aria-label={phase === "select" ? text.select : text.annotate}>
+  return <section className={`screenshot-overlay ${phase === "select" ? `select-only ${selection ? "has-selection" : ""}` : ""}`} role="dialog" aria-modal="true" aria-label={phase === "select" ? text("screenshotSelect") : text("screenshotAnnotate")}>
     {phase === "annotate" && <header className="screenshot-header" onPointerDown={() => setSelectedRectangleId(null)}>
-      <div><strong>{text.annotate}</strong><span>{croppedSize.width} × {croppedSize.height}</span></div>
+      <div><strong>{text("screenshotAnnotate")}</strong><span>{croppedSize.width} × {croppedSize.height}</span></div>
       <div className="screenshot-window-controls">
-        <button type="button" title="最大化/还原" onClick={() => getOptionalSystemDesktopApi()?.windowControl("maximize")}><Square20Regular /></button>
-        <button type="button" title={text.cancel} onClick={onCancel}><Dismiss20Regular /></button>
+        <button type="button" title={text("screenshotWindowControl")} onClick={() => getOptionalSystemDesktopApi()?.windowControl("maximize")}><Square20Regular /></button>
+        <button type="button" title={text("screenshotCancel")} onClick={onCancel}><Dismiss20Regular /></button>
       </div>
     </header>}
 
     {phase === "select" ? <div className="screenshot-select-stage">
       <div className="screenshot-source" onPointerDown={beginSelection} onPointerMove={moveSelection} onPointerUp={finishSelection}>
-        <img ref={imageRef} src={capture.dataUrl} draggable={false} alt="Captured screen" />
+        <img ref={imageRef} src={capture.dataUrl} draggable={false} alt={text("screenshotCapturedScreen")} />
         {selection && <div className="screenshot-selection" style={{ left: selection.x, top: selection.y, width: selection.width, height: selection.height }}><span>{Math.round(selection.width)} × {Math.round(selection.height)}</span></div>}
       </div>
     </div> : <div className="screenshot-annotate-stage" onPointerDown={(event) => {
@@ -413,7 +409,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
     }}>
       <canvas
         ref={canvasRef}
-        aria-label={text.annotate}
+        aria-label={text("screenshotAnnotate")}
         onPointerDown={beginCanvasInteraction}
         onPointerMove={moveCanvasInteraction}
         onPointerUp={finishCanvasInteraction}
@@ -427,7 +423,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
           key={handle}
           type="button"
           className={`screenshot-resize-handle handle-${handle}`}
-          aria-label={`调整红框-${handle}`}
+          aria-label={text("screenshotResizeAnnotation").replace("{handle}", handle)}
           onPointerDown={(event) => beginResize(event, handle)}
           onPointerMove={moveResize}
           onPointerUp={finishResize}
@@ -435,21 +431,21 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
         />)}
       </div>}
       {annotationActionPosition && <div className="screenshot-annotation-actions" style={annotationActionPosition} onPointerDown={(event) => event.stopPropagation()}>
-        <button type="button" className="primary" disabled={saving} onClick={() => void complete()}>{saving ? text.saving : text.done}</button>
-        <button type="button" disabled={saving} onClick={cancelSelectedRectangle}>{text.cancel}</button>
+        <button type="button" className="primary" disabled={saving} onClick={() => void complete()}>{saving ? text("screenshotSaving") : text("screenshotDone")}</button>
+        <button type="button" disabled={saving} onClick={cancelSelectedRectangle}>{text("screenshotCancel")}</button>
       </div>}
     </div>}
 
     {phase === "annotate" && <footer className="screenshot-toolbar" onPointerDown={() => setSelectedRectangleId(null)}>
       <div className="screenshot-tools">
-        <button type="button" className={tool === "pen" ? "active" : ""} onClick={() => setTool("pen")}><Pen24Regular />{text.pen}</button>
-        <button type="button" className={tool === "rectangle" ? "active" : ""} onClick={() => setTool("rectangle")}><DrawShape24Regular />{text.rectangle}</button>
-        <button type="button" disabled={annotationHistory.length <= 1} onClick={undo}><ArrowUndo24Regular />{text.undo}</button>
-        <button type="button" onClick={() => void clear()}><Eraser24Regular />{text.clear}</button>
+        <button type="button" className={tool === "pen" ? "active" : ""} onClick={() => setTool("pen")}><Pen24Regular />{text("screenshotPen")}</button>
+        <button type="button" className={tool === "rectangle" ? "active" : ""} onClick={() => setTool("rectangle")}><DrawShape24Regular />{text("screenshotRectangle")}</button>
+        <button type="button" disabled={annotationHistory.length <= 1} onClick={undo}><ArrowUndo24Regular />{text("screenshotUndo")}</button>
+        <button type="button" onClick={() => void clear()}><Eraser24Regular />{text("screenshotClear")}</button>
       </div>
       <div className="screenshot-actions">
         {error && <span>{error}</span>}
-        <button type="button" disabled={saving} onClick={() => void returnToSelection()}>{text.back}</button>
+        <button type="button" disabled={saving} onClick={() => void returnToSelection()}>{text("screenshotBack")}</button>
       </div>
     </footer>}
   </section>;
