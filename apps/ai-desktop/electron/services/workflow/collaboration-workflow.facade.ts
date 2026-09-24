@@ -547,6 +547,28 @@ export class CollaborationCoordinator {
     this.#schedule();
   }
 
+  /** 托管启动时复查旧文件归属等待；只有真实主工作区已无未提交修改才重试原结果集成。 */
+  async resumeResolvedLocalChangeOwnershipWaits(proposalId: string): Promise<void> {
+    const candidates = this.state().tasks.filter((task) => task.state === "blocked"
+      && task.evolutionProposalId === proposalId
+      && task.integrationFailure?.kind === "local-change-ownership"
+      && task.customerActionGuidance
+      && task.versionWorkspace?.resultSha);
+    if (!candidates.length) return;
+    // 读取失败不是已完成客户操作；任何仍未提交的文件也必须保持原等待和原证据。
+    const uncommittedFiles = await this.#workspaces.readLocalUncommittedFiles();
+    if (uncommittedFiles.length > 0 || this.#disposed) return;
+    for (const candidate of candidates) {
+      const currentState = this.state();
+      const current = currentState.tasks.find((task) => task.taskId === candidate.taskId);
+      if (!current || current.state !== "blocked" || current.evolutionProposalId !== proposalId
+        || current.integrationFailure?.kind !== "local-change-ownership"
+        || !current.customerActionGuidance || current.versionWorkspace?.resultSha !== candidate.versionWorkspace?.resultSha
+        || !this.#canOperateTask(current, currentState)) continue;
+      this.continueTask(current.taskId, { memberId: LINGHU_MEMBER_ID, displayName: "令狐老祖" });
+    }
+  }
+
   #retireSupersededEquivalentRepairs(): void {
     const state = this.state();
     for (const task of state.tasks.filter((candidate) => !["integrated", "cancelled"].includes(candidate.state))) {

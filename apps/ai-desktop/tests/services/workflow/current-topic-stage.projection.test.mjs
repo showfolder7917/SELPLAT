@@ -298,6 +298,36 @@ test("同指纹完整客户指导才签发唯一任务级确认入口", () => {
   assert.deepEqual(stage.customerActionGuidance?.affectedFiles, ["apps/ai-desktop/electron/main.ts"]);
 });
 
+test("原修复任务较新的文件归属指导不与专题验收指纹混用", () => {
+  const state = evolution("failed");
+  state.oneShotRun = { runId: "run-1", topicId: "topic-current", proposalId: "proposal-current", status: "blocked", phase: "blocked" };
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect", faultFingerprint: "acceptance-failure",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
+    evidenceReferences: ["event-1"], occurrences: [{ runId: "run-1", taskId: "task-current", occurrenceId: "event-1", reason: "原验收失败", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "令狐正在修复。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const blocked = task("blocked");
+  blocked.blockingReason = "本地文件归属待确认";
+  blocked.integrationFailure = { kind: "local-change-ownership", conflictFiles: ["apps/ai-desktop/electron/main.ts"] };
+  blocked.customerActionGuidance = {
+    guidanceId: "guidance-current", sourceFingerprint: "task-ownership-failure", affectedFiles: ["apps/ai-desktop/electron/main.ts"],
+    problem: "本地文件归属待确认。", reasonCustomerMustAct: "只有文件所有者能确认这份修改属于哪个任务。",
+    steps: ["核对 main.ts 对应的本地提交。"], completionCriteria: ["main.ts 不再有未提交修改。"], resumeLabel: "从卡点继续",
+  };
+  blocked.flowEvents = [
+    { type: "integration.local_change_ownership_blocked", status: "failed", error: true, occurredAt: "2026-09-12T05:01:00.000Z" },
+    { type: "customer.action_required", status: "waiting", error: false, occurredAt: "2026-09-12T05:02:00.000Z", details: { customerActionGuidance: blocked.customerActionGuidance } },
+  ];
+  const stage = projectCurrentTopicStage(state, { tasks: [blocked] });
+  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeTaskId, "task-current");
+  assert.match(stage.remaining, /本地文件归属/);
+
+  blocked.flowEvents.push({ type: "integration.failed", status: "failed", error: true, occurredAt: "2026-09-12T05:03:00.000Z" });
+  assert.equal(projectCurrentTopicStage(state, { tasks: [blocked] }).resumeTaskId, null);
+});
+
 test("概括性客户指导即使带有同指纹和文件也不签发确认入口", () => {
   const state = evolution("failed");
   state.technicalRecovery = {

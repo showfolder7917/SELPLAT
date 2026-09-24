@@ -2020,6 +2020,45 @@ test("本地修改归属未形成客户操作指导时禁止进入虚假恢复",
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("自动托管只在主工作区已清洁时续接原文件归属卡点", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "ownership-clean-resume-"));
+  let coordinator;
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    store.setMode("collaboration");
+    const submitted = store.submitTask({ title: "文件归属复查", problemStatement: "合并前检查本地修改", confirmedIntent: "确认文件归属后继续原结果集成。", workspaceState, locale: "zh-CN", evolutionProposalId: "proposal-current" });
+    store.updateTask(submitted.taskId, "fixture.ownership_blocked", (task) => {
+      task.state = "blocked";
+      task.blockingReason = "本地修改尚未提交";
+      task.versionWorkspace = { workspaceId: "worktree", rootPath: directory, branchName: "codex/test", baseSha: "base", resultSha: "result", createdAt: new Date().toISOString(), retiredAt: null };
+      task.integrationFailure = { kind: "local-change-ownership", detail: "main.ts 尚未提交", conflictFiles: ["main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() };
+      task.customerActionGuidance = { guidanceId: "guidance-current", sourceFingerprint: "task-failure", title: "请处理 main.ts",
+        problem: "main.ts 的本地修改尚未提交。", reasonCustomerMustAct: "只有客户可以确认本地文件归属。", affectedFiles: ["main.ts"],
+        steps: ["将 main.ts 提交到所属任务。"], completionCriteria: ["主工作区不再有未提交修改。"], resumeLabel: "从卡点继续",
+        generatedBy: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, createdAt: new Date().toISOString() };
+    });
+    let localFiles = ["main.ts"];
+    coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => undefined, start: () => "span", instant: () => undefined, interruptOpenSpans: () => undefined },
+      workspaces: { readLocalUncommittedFiles: async () => localFiles },
+      executor: new ExecutorFacade({ createExecutor: async () => { throw new Error("已有结果不得重建执行人"); } }),
+      integrationPipeline: { finishWaitingTask: () => undefined, trackWaitingTask: () => undefined, schedule: () => undefined, dispose: () => undefined },
+      emitState: () => undefined, emitStream: () => undefined,
+    });
+    await coordinator.resumeResolvedLocalChangeOwnershipWaits("proposal-current");
+    assert.equal(store.task(submitted.taskId).state, "blocked");
+    localFiles = [];
+    await coordinator.resumeResolvedLocalChangeOwnershipWaits("different-proposal");
+    assert.equal(store.task(submitted.taskId).state, "blocked");
+    await coordinator.resumeResolvedLocalChangeOwnershipWaits("proposal-current");
+    assert.equal(store.task(submitted.taskId).state, "ready-for-integration");
+    assert.equal(store.task(submitted.taskId).customerActionGuidance, null);
+    assert.equal(store.task(submitted.taskId).versionWorkspace.resultSha, "result");
+    assert.equal(store.task(submitted.taskId).flowEvents.at(-1).type, "task.recovery_requested");
+  } finally { await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("恢复旧版本地归属修复状态时只等待客户处理，不启动令狐源码修复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "ownership-no-source-repair-"));
   let coordinator;

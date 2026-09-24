@@ -1447,6 +1447,14 @@ export async function startApplication(): Promise<void> {
   const evolutionAtResume = evolutionStateStore.state();
   collaboration.resumePendingWork(evolutionAtResume.oneShotRun?.status === "running"
     && evolutionAtResume.automationRuntime.status === "running");
+  if (evolutionAtResume.automationSettings.automaticCustodyEnabled === true
+    && evolutionAtResume.oneShotRun?.status === "blocked" && evolutionAtResume.oneShotRun.proposalId) {
+    // 托管只重试已消失的本地脏文件前置条件；不能把未知文件归属当作客户确认。
+    void collaboration.resumeResolvedLocalChangeOwnershipWaits(evolutionAtResume.oneShotRun.proposalId).catch((error) => {
+      eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "collaboration-recovery",
+        operation: "resume_resolved_local_change_ownership", error });
+    });
+  }
   personaRegistry.startAll();
   personaWorkflowRuntime.start();
   workflowSupervisor?.start();

@@ -29,10 +29,24 @@ export function projectCurrentTechnicalRecovery(input: {
   // 专题级恢复档案不自动属于任意新阻塞任务。只有当前任务正是故障发生时的任务，
   // 且此后没有更新的失败事实，才能把旧档案的原因和下一步投影到当前卡片。
   if (blockingTask && newestOccurrence?.taskId !== blockingTask.taskId) return null;
+  const guidance = blockingTask?.customerActionGuidance || null;
+  const guidanceEvent = blockingTask?.flowEvents.filter((event) => event.type === "customer.action_required"
+    && event.details?.customerActionGuidance?.guidanceId === guidance?.guidanceId
+    && event.details?.customerActionGuidance?.sourceFingerprint === guidance?.sourceFingerprint)
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
+  // 令狐的任务卡点指纹与专题验收指纹属于不同故障域。较新的客户指导只需绑定
+  // 原修复任务、当前结构化失败和持久化指导事件，不能拿专题指纹否定任务入口。
+  const taskGuidanceComplete = blockingTask?.state === "blocked"
+    && blockingTask.integrationFailure?.kind === "local-change-ownership"
+    && Boolean(guidanceEvent)
+    && isCompleteCustomerActionGuidance(guidance, guidance?.sourceFingerprint, {
+      affectedFiles: blockingTask.integrationFailure.conflictFiles || [], nonFileRecovery: null,
+    });
   const latestTaskFailure = blockingTask?.flowEvents.filter((event) => event.error || event.status === "failed")
     .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
-  if (latestTaskFailure && newestOccurrence && latestTaskFailure.occurredAt > newestOccurrence.occurredAt) return null;
-  if (blockingTask?.customerActionGuidance && blockingTask.customerActionGuidance.sourceFingerprint !== recovery.faultFingerprint) return null;
+  if (latestTaskFailure && newestOccurrence && latestTaskFailure.occurredAt > newestOccurrence.occurredAt
+    && (!taskGuidanceComplete || !guidanceEvent || guidanceEvent.occurredAt < latestTaskFailure.occurredAt)) return null;
+  if (guidance && guidance.sourceFingerprint !== recovery.faultFingerprint && !taskGuidanceComplete) return null;
   // 验收故障指纹包含真实验收运行标识。新一轮验收已落档时，旧指纹和旧发生时间
   // 不能再为当前页面提供 failureReason、nextAction 或任务确认入口。
   const acceptanceFingerprint = recovery.faultFingerprint?.includes(":run_hanli_result_acceptance:") === true;
@@ -41,10 +55,10 @@ export function projectCurrentTechnicalRecovery(input: {
     && (acceptanceFingerprint
       ? !recovery.faultFingerprint!.endsWith(`:${latestAcceptance.runId}`)
       : recoveryOccurredAt < latestAcceptance.occurredAt);
-  if (obsoleteAcceptanceRecovery) return null;
+  if (obsoleteAcceptanceRecovery && (!taskGuidanceComplete || !guidanceEvent
+    || guidanceEvent.occurredAt <= latestAcceptance!.occurredAt)) return null;
 
-  const guidance = blockingTask?.customerActionGuidance || null;
-  const hasCompleteGuidance = isCompleteCustomerActionGuidance(guidance, recovery.faultFingerprint, {
+  const hasCompleteGuidance = taskGuidanceComplete || isCompleteCustomerActionGuidance(guidance, recovery.faultFingerprint, {
     affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [], nonFileRecovery: null,
   });
   // 系统未派发修复、没有活动任务时开放原运行复验；复验一旦开始，旧恢复只供审计。
@@ -70,9 +84,11 @@ export function projectCurrentTechnicalRecovery(input: {
   return {
     topicId, proposalId: proposal.proposalId, status: "failed-pending-repair", title: topic?.title || proposal.title,
     summary, repairContent: proposal.content,
-    remaining: recovery.failureReason || recovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
+    remaining: taskGuidanceComplete ? blockingTask!.blockingReason || guidance!.problem
+      : recovery.failureReason || recovery.occurrences.at(-1)?.reason || "没有待处理技术卡点。",
     waitingFor: resumeTaskId ? "用户确认后由令狐复查" : waitingFor,
-    nextAction, userAction: resumeTaskId ? "resume" : "none", resumeOneShotRunId: null,
+    nextAction: taskGuidanceComplete ? "完成文件归属处理后，从原任务卡点继续，由令狐复查。" : nextAction,
+    userAction: resumeTaskId ? "resume" : "none", resumeOneShotRunId: null,
     resumeTaskId,
     customerActionGuidance: resumeTaskId && guidance ? {
       affectedFiles: [...(guidance.affectedFiles || [])], problem: guidance.problem,
