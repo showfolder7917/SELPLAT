@@ -28,6 +28,10 @@ export interface CollaborationMemoryPort {
   readPersonaConversationCodexThread(ownerPersonaId: string, conversationId: string): { threadId: string; workspaceSignature: string } | null;
   /** 成功启动或恢复后将真实 Codex 线程绑定到同一业务会话。 */
   linkPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string; workspaceSignature: string; occurredAt: string }): void;
+  /** 仅当活动会话尚未绑定线程时认领本次新建线程；返回 false 时调用方必须读取获胜绑定。 */
+  claimPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string; workspaceSignature: string; occurredAt: string }): boolean;
+  /** 仅解除仍指向本次线程的关联，避免失败补偿误删后续请求的获胜绑定。 */
+  unlinkPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string }): boolean;
   /** 客户正文读取只能经过该投影端口；原始会话仍只用于审计、提取和内部事实。 */
   readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto;
   readPersonaCustomerDisplayWindow(ownerPersonaId: string, request: ReadPersonaConversationWindowInDto): PersonaConversationWindowOutDto;

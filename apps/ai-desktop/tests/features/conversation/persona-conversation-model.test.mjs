@@ -174,6 +174,8 @@ test("人物普通发送失败后保留稳定客户消息编号并提供同编�
   assert.match(nangongController, /async function retrySend\(\)/);
   assert.match(nangongController, /await sendChat\(undefined, outgoingMessage\)/);
   assert.match(hanliView, /重试发送/);
+  assert.match(hanliView, /className="composer-error-actions"/);
+  assert.match(hanliController, /retrying\?\.messageId \|\| `hanli-message-\$\{crypto\.randomUUID\(\)\}`/);
   assert.match(nangongView, /重试发送/);
 });
 

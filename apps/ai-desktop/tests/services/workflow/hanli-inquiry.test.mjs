@@ -63,6 +63,9 @@ function customerDisplaySnapshot(conversation) {
 
 function fixture(investigate, explain = async () => ({ text: "源码已经修改，但当前运行版本尚未确认。建议先确认运行版本再复验。" }), assess = async () => conclude) {
   const messages = [], order = [], discussionContexts = [], events = [], activities = [];
+  // 共享替身也按业务会话保存线程归属，避免测试绕过新增的条件认领端口。
+  const threadBindings = new Map(), threadEvents = [];
+  let nextThreadSequence = 0;
   // 模拟持久化会话头：读取不会改变 updatedAt，只有成功写入消息才推进该值。
   let updatedAt = "2026-01-01T00:00:00.000Z";
   const snapshot = (id = "original") => ({ ownerPersonaId: "han-li", selectedModel: "selected-model", conversationId: id, messages: structuredClone(messages), updatedAt });
@@ -86,8 +89,21 @@ function fixture(investigate, explain = async () => ({ text: "源码已经修改
     appendPersonaInternalMessage: (message) => { append({ ...message, messageType: "internal-deliberation" }); order.push(message.messageId); return snapshot(message.conversationId); },
     appendPersonaRecoveryCheckpoint: (message) => { append({ ...message, messageType: "internal-recovery", speakerType: "system", speakerPersonaId: null, replyToMessageId: message.requestId }); order.push(message.messageId); return snapshot(message.conversationId); },
     appendPersonaCustomerMessage: (message) => { append({ ...message, messageType: "customer-visible", speakerType: "persona" }); order.push(message.messageId); return snapshot(message.conversationId); },
-    // 普通回合只验证业务流程；线程关联的 SQLite 持久化由专门恢复测试覆盖。
-    linkPersonaConversationCodexThread: () => undefined,
+    // 线程读取、认领和解绑与 Worker 端口保持同一会话级语义。
+    readPersonaConversationCodexThread: (_owner, conversationId) => threadBindings.get(conversationId) || null,
+    claimPersonaConversationCodexThread: ({ conversationId, threadId, workspaceSignature }) => {
+      if (threadBindings.has(conversationId)) return false;
+      threadBindings.set(conversationId, { threadId, workspaceSignature });
+      threadEvents.push(`claim:${conversationId}:${threadId}`);
+      return true;
+    },
+    unlinkPersonaConversationCodexThread: ({ conversationId, threadId }) => {
+      const bound = threadBindings.get(conversationId);
+      if (!bound || bound.threadId !== threadId) return false;
+      threadBindings.delete(conversationId);
+      threadEvents.push(`unlink:${conversationId}:${threadId}`);
+      return true;
+    },
     recordRequirementDiscussionContext: (context) => { discussionContexts.push(structuredClone(context)); order.push("discussion-context-recorded"); },
   };
   const options = {
@@ -109,8 +125,23 @@ function fixture(investigate, explain = async () => ({ text: "源码已经修改
     recordEvent: (type, details) => events.push({ type, details }),
     investigateWithNangong: (...args) => { order.push("dispatched"); return investigate(...args); },
   };
+  const threadedConversation = (conversation) => ({
+    startDetachedConversationSession: async () => {
+      const threadId = `fixture-thread-${++nextThreadSequence}`;
+      threadEvents.push(`start:${threadId}`);
+      return { threadId, workspaceSignature: "test-workspace" };
+    },
+    activateConversationSession: ({ threadId }) => { threadEvents.push(`activate:${threadId}`); },
+    deleteDetachedConversationSession: async (threadId) => { threadEvents.push(`delete:${threadId}`); },
+    recoverConversationSession: async ({ threadId }) => {
+      threadEvents.push(`recover:${threadId}`);
+      return { status: "verified", successorThreadId: threadId, summary: "已恢复测试会话。" };
+    },
+    readThreadRecovery: () => undefined,
+    ...conversation,
+  });
   return { service: new HanliInquiryService(options), createService: () => new HanliInquiryService(options),
-    messages, memory, order, discussionContexts, events, activities };
+    messages, memory, order, discussionContexts, events, activities, threadBindings, threadEvents, threadedConversation };
 }
 
 test("韩立测试内存通过客户显示端口隔离内部消息并保留派生状态", () => {
@@ -347,6 +378,7 @@ test("韩立必须解析上下文指代并向客户给出完整准确的交代",
 });
 test("韩立理解不足时先询问客户，收到澄清后仍以最初问题派发南宫婉", async () => {
   const messages = [];
+  const threadBindings = new Map();
   let dispatches = 0;
   let conversationCalls = 0;
   let secondRecentConversation = "";
@@ -365,13 +397,27 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
     },
     appendPersonaInternalMessage: (message) => { messages.push({ ...message, messageType: "internal-deliberation", speakerType: "persona" }); return snapshot(message.createdAt); },
     appendPersonaRecoveryCheckpoint: (message) => { messages.push({ ...message, messageType: "internal-recovery", speakerType: "system", speakerPersonaId: null, replyToMessageId: message.requestId }); return snapshot(message.createdAt); },
-    linkPersonaConversationCodexThread: () => undefined,
+    readPersonaConversationCodexThread: (_owner, conversationId) => threadBindings.get(conversationId) || null,
+    claimPersonaConversationCodexThread: ({ conversationId, threadId, workspaceSignature }) => {
+      if (threadBindings.has(conversationId)) return false;
+      threadBindings.set(conversationId, { threadId, workspaceSignature });
+      return true;
+    },
+    unlinkPersonaConversationCodexThread: ({ conversationId, threadId }) => {
+      if (threadBindings.get(conversationId)?.threadId !== threadId) return false;
+      threadBindings.delete(conversationId);
+      return true;
+    },
   };
   const clarification = { ...understanding, status: "clarification-required", ambiguities: ["需要确认源码还是当前运行版本"], investigationQuestion: undefined };
   const service = new HanliConversationService({
     store: { state: () => ({ deliberations: [], automationSettings: {} }) }, memory,
     prompts: { render: (id, variables) => JSON.stringify({ id, variables }) },
     conversation: {
+      startDetachedConversationSession: async () => ({ threadId: "clarification-thread", workspaceSignature: "test-workspace" }),
+      activateConversationSession: () => undefined,
+      deleteDetachedConversationSession: async () => undefined,
+      recoverConversationSession: async ({ threadId }) => ({ status: "verified", successorThreadId: threadId, summary: "已恢复测试会话。" }),
       activeConversationId: () => "provider-thread",
       activeConversationSession: () => ({ threadId: "provider-thread", workspaceSignature: "test-workspace" }),
       newChat: async () => {},
@@ -401,6 +447,7 @@ test("韩立理解不足时先询问客户，收到澄清后仍以最初问题�
 
 test("韩立形成观点时发布当前中立上下文但不直接启动工作流", async () => {
   const messages = [], recorded = [];
+  const threadBindings = new Map();
   let starts = 0;
   const prior = {
     contextId: "inquiry-u1", ownerPersonaId: "han-li", conversationId: "discussion-thread", sourceRequestId: "u1",
@@ -420,13 +467,29 @@ test("韩立形成观点时发布当前中立上下文但不直接启动工作�
       { messageId: round.userMessageId, messageType: "customer-visible", speakerType: "user", speakerPersonaId: null, content: round.userContent },
       { messageId: round.personaMessageId, messageType: "customer-visible", speakerType: "persona", speakerPersonaId: "han-li", content: round.personaContent },
     ); return snapshot(); },
-    linkPersonaConversationCodexThread: () => undefined,
+    readPersonaConversationCodexThread: (_owner, conversationId) => threadBindings.get(conversationId) || null,
+    claimPersonaConversationCodexThread: ({ conversationId, threadId, workspaceSignature }) => {
+      if (threadBindings.has(conversationId)) return false;
+      threadBindings.set(conversationId, { threadId, workspaceSignature });
+      return true;
+    },
+    unlinkPersonaConversationCodexThread: ({ conversationId, threadId }) => {
+      if (threadBindings.get(conversationId)?.threadId !== threadId) return false;
+      threadBindings.delete(conversationId);
+      return true;
+    },
   };
   const decision = { ...topic, userIntent: "根据已核实的长消息问题形成修正方案", inquiry: { status: "not-needed" } };
   const service = new HanliConversationService({
     store: { state: () => ({ deliberations: [], automationSettings: {} }) }, memory,
     prompts: { render: (_id, variables) => JSON.stringify(variables) },
-    conversation: { activeConversationId: () => "provider-thread", activeConversationSession: () => ({ threadId: "provider-thread", workspaceSignature: "test-workspace" }), newChat: async () => {}, send: async () => ({ threadId: "provider-thread", itemCount: 1, text: `可以按已核实结果继续确定修正。\nHANLI_TOPIC_META=${JSON.stringify(decision)}` }) },
+    conversation: {
+      startDetachedConversationSession: async () => ({ threadId: "discussion-thread", workspaceSignature: "test-workspace" }),
+      activateConversationSession: () => undefined,
+      deleteDetachedConversationSession: async () => undefined,
+      recoverConversationSession: async ({ threadId }) => ({ status: "verified", successorThreadId: threadId, summary: "已恢复测试会话。" }),
+      activeConversationId: () => "provider-thread", activeConversationSession: () => ({ threadId: "provider-thread", workspaceSignature: "test-workspace" }), newChat: async () => {}, send: async () => ({ threadId: "provider-thread", itemCount: 1, text: `可以按已核实结果继续确定修正。\nHANLI_TOPIC_META=${JSON.stringify(decision)}` }),
+    },
     startInternalDeliberation: async () => { starts += 1; return { continuous: true }; },
     recordEvent: () => {}, refreshSemanticMemory: () => {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
   });
@@ -467,7 +530,7 @@ test("自动托管开启时就绪的自然语言请求只启动一次内部研�
     memory: f.memory,
     store: { state: () => state },
     prompts: { render: (id) => id },
-    conversation: {
+    conversation: f.threadedConversation({
       activeConversationId: () => "provider",
       activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }),
       send: async (_request, prompt) => {
@@ -476,7 +539,7 @@ test("自动托管开启时就绪的自然语言请求只启动一次内部研�
         if (prompt === "hanli.inquiry-response") return { threadId: "provider", text: "调查结论：源码已修改，但当前运行版本尚未确认。" };
         return { threadId: "provider", text: `消息区独立滚动，输入区固定可见，加载和错误状态明确。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` };
       },
-    },
+    }),
     startInternalDeliberation: async (_request, sourceRequestId, options) => {
       starts += 1;
       assert.equal(sourceRequestId, request.clientMessageId);
@@ -508,6 +571,50 @@ test("自动托管开启时就绪的自然语言请求只启动一次内部研�
   assert.match(explicitConfirmation.messages.at(-1).content, /正在内部研讨中，无需重复启动/);
 });
 
+test("普通韩立会话复用已认领线程，不为同一业务会话再创建线程", async () => {
+  const f = fixture(async () => { throw new Error("普通会话不应派发调查"); });
+  f.threadBindings.set("original", { threadId: "existing-thread", workspaceSignature: "test-workspace" });
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({ deliberations: [], automationSettings: {} }) },
+    prompts: { render: (id) => id },
+    conversation: f.threadedConversation({ send: async () => ({
+      threadId: "existing-thread",
+      text: `当前观点已经形成。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: { status: "not-needed" } })}`,
+    }) }),
+    recordEvent: () => {},
+  });
+
+  await service.send(request);
+
+  assert.deepEqual(f.threadEvents, ["recover:existing-thread", "activate:existing-thread"]);
+  assert.deepEqual(f.threadBindings.get("original"), { threadId: "existing-thread", workspaceSignature: "test-workspace" });
+});
+
+test("普通韩立会话发送失败时回收本次线程并解除精确绑定", async () => {
+  const f = fixture(async () => { throw new Error("普通会话不应派发调查"); });
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({ deliberations: [], automationSettings: {} }) },
+    prompts: { render: (id) => id },
+    conversation: f.threadedConversation({ send: async () => { throw new Error("模型发送失败"); } }),
+    recordEvent: () => {},
+  });
+
+  await assert.rejects(service.send(request), /模型发送失败/);
+
+  assert.deepEqual(f.threadEvents, [
+    "start:fixture-thread-1",
+    "claim:original:fixture-thread-1",
+    "activate:fixture-thread-1",
+    "delete:fixture-thread-1",
+    "unlink:original:fixture-thread-1",
+  ]);
+  assert.equal(f.threadBindings.has("original"), false);
+});
+
 test("托管中的客户纠正复用原运行并持久化修订范围", async () => {
   const f = fixture(async () => findings);
   const revisions = [];
@@ -522,14 +629,14 @@ test("托管中的客户纠正复用原运行并持久化修订范围", async ()
       oneShotRun: { runId: "run-4", proposalId: "proposal-4", status: "running" },
     }) },
     prompts: { render: (id) => id },
-    conversation: {
+    conversation: f.threadedConversation({
       activeConversationId: () => "provider",
       activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }),
       send: async (_request, prompt) => ({ threadId: "provider", text:
         prompt === "hanli.inquiry-assessment" ? JSON.stringify({ ...conclude, answeredQuestion: "测试台保持通用，不承担韩立验收" })
           : prompt === "hanli.inquiry-response" ? "调查结论：当前运行版本尚未确认。"
             : `测试台保持通用工具，令狐读取内部证据完成验收。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, inquiry: understanding })}` }),
-    },
+    }),
     startInternalDeliberation: async () => { throw new Error("不能创建重复研讨"); },
     reviseActiveRepairScope: async (revision) => {
       revisions.push(revision);
@@ -564,14 +671,14 @@ test("自动托管中的明确新专题不写回旧任务并启动独立运行",
       oneShotRun: { runId: "old-run", proposalId: "old-proposal", status: "running" },
     }) },
     prompts: { render: (id) => id },
-    conversation: {
+    conversation: f.threadedConversation({
       activeConversationId: () => "provider",
       activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }),
       send: async (_request, prompt) => ({ threadId: "provider", text:
         prompt === "hanli.inquiry-assessment" ? JSON.stringify({ ...conclude, answeredQuestion: "作为新的独立专题启动" })
           : prompt === "hanli.inquiry-response" ? "调查结论：当前运行版本尚未确认。"
             : `前一专题已经结束，现在独立调查一次完成能力。\nHANLI_TOPIC_META=${JSON.stringify({ ...topic, switchTopic: true, inquiry: understanding })}` }),
-    },
+    }),
     reviseActiveRepairScope: async () => { revisions += 1; throw new Error("不得修订旧任务"); },
     startInternalDeliberation: async (_request, sourceRequestId, options) => {
       starts.push({ sourceRequestId, options });
@@ -585,6 +692,7 @@ test("自动托管中的明确新专题不写回旧任务并启动独立运行",
 
   assert.equal(revisions, 0);
   assert.deepEqual(starts, [{ sourceRequestId: "new-topic", options: { switchTopic: true } }]);
+  assert.deepEqual(f.threadEvents, ["start:fixture-thread-1", "claim:original:fixture-thread-1", "activate:fixture-thread-1"]);
   assert.equal(result.messages.at(-1).messageId, "hanli-control:automatic:new-topic");
 });
 
@@ -644,7 +752,7 @@ test("托管纠偏补全同一回合的就绪决定后复用原运行", async ()
     store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true },
       oneShotRun: { runId: "original-run", proposalId: "original-proposal", status: "running" } }) },
     prompts: { render: (_id, vars) => JSON.stringify(vars) },
-    conversation: { activeConversationId: () => "provider", activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }), send: async (_r, prompt) => {
+    conversation: f.threadedConversation({ activeConversationId: () => "provider", activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }), send: async (_r, prompt) => {
       calls++;
       if (calls === 1) return { threadId: "provider", text: "应补真实交互证据。\nHANLI_TOPIC_META=" + JSON.stringify(topic) };
       if (calls === 2) {
@@ -653,7 +761,7 @@ test("托管纠偏补全同一回合的就绪决定后复用原运行", async ()
       }
       if (calls === 3) return { threadId: "provider", text: JSON.stringify(conclude) };
       return { threadId: "provider", text: "调查结论：当前运行版本尚未确认。" };
-    } },
+    } }),
     reviseActiveRepairScope: async value => { revisions.push(value); return { updated: true, message: "已更新原任务" }; },
     startInternalDeliberation: async () => { throw new Error("不得新建"); },
     investigateWithNangong: async () => { throw new Error("补全就绪决定后不应进入只读调查服务"); },
@@ -682,10 +790,10 @@ test("托管回合连续遗漏决定不能伪装已交接，明确纯答复不�
       store: { state: () => ({ deliberations: [], automationSettings: { automaticCustodyEnabled: true },
         oneShotRun: { runId: "run", proposalId: "proposal", status: "blocked" } }) },
       prompts: { render: () => "原消息" },
-      conversation: { activeConversationId: () => "provider", activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }), send: async () => {
+      conversation: f.threadedConversation({ activeConversationId: () => "provider", activeConversationSession: () => ({ threadId: "provider", workspaceSignature: "test-workspace" }), send: async () => {
         calls++;
         return { threadId: "provider", text: "当前暂无完成证据。\nHANLI_TOPIC_META=" + JSON.stringify({ ...topic, ...(explicit ? { inquiry: { status: "not-needed" } } : {}) }) };
-      } },
+      } }),
       reviseActiveRepairScope: async () => { revisions++; },
       recordEvent() {},
     });

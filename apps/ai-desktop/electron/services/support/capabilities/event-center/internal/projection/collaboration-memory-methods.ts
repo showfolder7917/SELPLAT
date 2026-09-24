@@ -7,7 +7,7 @@ export const collaborationMemoryMethodNames = [
   "readRequirementDiscussionContext", "registerNangongRound", "claimHanliCorpusExtractions",
   "completeHanliCorpusExtraction", "failHanliCorpusExtraction", "readHanliSemanticContext",
   "recordVerifiedInspectionExperience", "readPersonaConversation", "readPersonaCustomerDisplayConversation",
-  "readPersonaConversationCodexThread", "linkPersonaConversationCodexThread", "recordPersonaConversationRecovery",
+  "readPersonaConversationCodexThread", "linkPersonaConversationCodexThread", "claimPersonaConversationCodexThread", "unlinkPersonaConversationCodexThread", "recordPersonaConversationRecovery",
   "readPersonaCustomerDisplayWindow", "retryPersonaCustomerDisplayMessage", "newPersonaConversation",
   "selectPersonaConversationModel", "appendPersonaInternalMessage", "updatePersonaInternalProgress",
   "appendPersonaRecoveryCheckpoint", "appendPersonaCustomerMessage", "registerPersonaRound",

@@ -88,6 +88,16 @@ export class SqliteCollaborationMemoryDao implements CollaborationMemoryPort {
     this.#conversations.linkCodexThread(input.ownerPersonaId, input.conversationId, input.threadId, input.workspaceSignature, input.occurredAt);
   }
 
+  /** 把刚创建的线程条件认领给仍活动且尚未绑定的会话。 */
+  claimPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string; workspaceSignature: string; occurredAt: string }): boolean {
+    return this.#conversations.claimCodexThread(input.ownerPersonaId, input.conversationId, input.threadId, input.workspaceSignature, input.occurredAt);
+  }
+
+  /** 仅精确解除本次线程的业务关联，补偿不触碰归档会话或并发获胜线程。 */
+  unlinkPersonaConversationCodexThread(input: { ownerPersonaId: string; conversationId: string; threadId: string }): boolean {
+    return this.#conversations.unlinkCodexThread(input.ownerPersonaId, input.conversationId, input.threadId);
+  }
+
   /** 客户页面、近期上下文和当前观点唯一消费的安全显示投影。 */
   readPersonaCustomerDisplayConversation(ownerPersonaId: string, conversationId?: string | null): PersonaConversationOutDto {
     return this.#conversations.readCustomerDisplay(ownerPersonaId, conversationId);
