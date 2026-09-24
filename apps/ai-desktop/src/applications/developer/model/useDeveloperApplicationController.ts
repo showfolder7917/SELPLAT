@@ -30,7 +30,7 @@ export function useDeveloperApplicationController() {
 
   // 设置先提供语言和沙箱模式，后续控制器共享这些配置。
   const settings = useDesktopSettings(settingsOpen || testConsoleOpen);
-  const text = developerApplicationLabels[settings.locale];
+  const text = developerApplicationLabels[settings.locale === "ja" ? "ja" : "zh-CN"];
   const sidebar = useDeveloperSidebar(settings.locale);
   const diagnostics = useDesktopDiagnostics(settingsOpen || testConsoleOpen, settings.locale);
 

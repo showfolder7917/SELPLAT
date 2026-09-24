@@ -21,7 +21,7 @@ import type { CurrentTopicReadRecoveryOutDto, EvolutionMutationInDto, EvolutionS
 import type { DecideHanliProposalInDto, DecideHanliResultInDto, HanliAcceptanceRunOutDto } from "../../../services/personas/hanli/index.js";
 import type { PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto, SendPersonaConversationMessageInDto } from "../../../services/personas/conversation/index.js";
 import type { ConvertNangongConversationToTopicInDto, CreateNangongProposalInDto, CreateNangongTopicInDto, GenerateNangongTopicDraftInDto, NangongTopicDraftOutDto, ReviseNangongProposalInDto, UpdateNangongTopicInDto } from "../../../services/personas/nangong/index.js";
-import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
+import type { DesktopSettingsOutDto, DesktopSettingsReadOutDto, UpdateDesktopSettingsInDto } from "../../../services/support/platform/settings/index.js";
 import type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotAttachmentPreviewOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../../services/support/platform/attachments/index.js";
 import type { WorkspaceDirectoryOutDto, WorkspaceFileOpenOutDto, WorkspaceStateOutDto, WorkspaceSystemFileOpenFailedOutDto } from "../../../services/support/platform/workspace/index.js";
 import type { ResolvedRuntimeRuleOutDto, RuleBundleStatusOutDto, RuntimeRuleOutDto } from "../../../services/support/capabilities/rules/index.js";
@@ -49,7 +49,7 @@ export interface DesktopApi {
   /** 从最近完整 Codex 回合启动语义补齐；重复调用运行中的任务只返回当前进度。 */
   startCorpusSemanticBackfill(limit?: number): Promise<CorpusSemanticBackfillStatusOutDto>;
   /** 读取当前桌面设置快照。 */
-  getSettings(): Promise<DesktopSettingsOutDto>;
+  getSettings(): Promise<DesktopSettingsReadOutDto>;
   /** 合并并持久化允许修改的桌面设置字段。 */
   updateSettings(settings: UpdateDesktopSettingsInDto): Promise<DesktopSettingsOutDto>;
   /** 读取已登记工作区和当前主工作区。 */

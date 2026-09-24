@@ -9,7 +9,7 @@
 /** 应用可启动的产品形态；当前只允许进入开发者工作台。 */
 export const APP_VARIANTS = ["developer"] as const;
 /** 界面文案、日期格式和 AI 回复可使用的语言区域。 */
-export const LOCALES = ["ja", "zh-CN"] as const;
+export const LOCALES = ["ja", "zh-CN", "en"] as const;
 /** Codex 执行命令时可采用的文件系统沙箱级别。 */
 export const SANDBOX_MODES = ["read-only", "workspace-write"] as const;
 /** 单个已注册工作区允许只读访问或写入的授权级别。 */

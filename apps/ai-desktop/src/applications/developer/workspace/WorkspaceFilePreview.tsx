@@ -2,9 +2,10 @@ import { Copy16Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import { useState } from "react";
 
 import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
+import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 
 type WorkspaceFilePreviewProps = {
-  locale: "zh-CN" | "ja";
+  locale: LocaleValue;
   preview: WorkspaceFilePreviewState;
   onClose: () => void;
 };

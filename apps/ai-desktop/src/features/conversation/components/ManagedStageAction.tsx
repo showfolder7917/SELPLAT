@@ -31,7 +31,7 @@ export function ManagedStageAction({ message, locale, actionable, onAdvance }: M
     "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
   };
   const target = current === "test-managed" ? null : nextManagedMode(current);
-  const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale];
+  const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale === "ja" ? "ja" : "zh-CN"];
   const Icon = message.actionTriggered ? ArrowClockwise24Regular : target === "requirement-managed" ? CheckmarkCircle24Regular : target === "task-managed" ? Play24Regular : Beaker24Regular;
   return <div className="managed-stage-action">
     {target && <button type="button" className={`stage-advance ${message.actionTriggered ? "triggered" : ""}`} disabled={!actionable || message.streaming} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button>}

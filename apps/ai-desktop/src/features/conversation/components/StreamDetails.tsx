@@ -8,7 +8,7 @@ export function managedModeLabel(mode: ManagedExecutionModeValue, locale: Locale
     "task-managed": { ja: "変更を実行", "zh-CN": "执行修改" },
     "test-managed": { ja: "結果を検証", "zh-CN": "验证结果" },
   };
-  return labelsByMode[mode][locale];
+  return labelsByMode[mode][locale === "ja" ? "ja" : "zh-CN"];
 }
 
 export function StreamDetails({ message, locale }: { message: Message; locale: LocaleValue }) {

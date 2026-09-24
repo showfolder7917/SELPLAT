@@ -11,7 +11,9 @@ export function ScreenshotApplicationSection({ viewModel }: ScreenshotApplicatio
   if (viewModel.state === "error") {
     return (
       <main className="screenshot-window-error" role="alert">
+        <h1>{viewModel.title}</h1>
         <p>{viewModel.message}</p>
+        <details><summary>{viewModel.technicalDetailsLabel}</summary><pre>{viewModel.technicalDetail}</pre></details>
         <button type="button" onClick={viewModel.onClose}>{viewModel.closeLabel}</button>
       </main>
     );
