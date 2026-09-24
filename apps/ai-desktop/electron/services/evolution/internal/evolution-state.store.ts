@@ -511,6 +511,26 @@ export class EvolutionStateStore {
     }, { deliberationId, phase: "preparing-topic", status: "running", nextOwner: "han-li" });
   }
 
+  /** 仅恢复建题前因人物线程写入者暂占而误阻塞的原运行，不新建运行或专题。 */
+  resumePreTopicWriterWait(): EvolutionStateOutDto {
+    const current = this.#state.oneShotRun;
+    if (!current || current.status !== "blocked" || current.topicId || current.proposalId
+      || !current.sourceRequestId || !/active writer/i.test(current.blockingReason || "")) {
+      throw new Error("当前没有可自动恢复的建题前写入等待。");
+    }
+    const now = new Date().toISOString();
+    return this.#commit("one-shot.resumed", null, null, (state) => {
+      Object.assign(state.oneShotRun!, {
+        status: "running", phase: "preparing-topic", actor: "han-li", actorName: "韩立",
+        action: "等待原人物会话写入者释放后继续建立专题", blockingReason: null,
+        resumeMode: null, completedAt: null, updatedAt: now,
+      });
+      state.automationRuntime.status = "running";
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.stopReason = null;
+    }, { runId: current.runId, sourceRequestId: current.sourceRequestId, reason: "pre-topic-writer-wait" });
+  }
+
   resumeOneShotRun(): EvolutionStateOutDto {
     const current = this.#state.oneShotRun;
     if (!current || current.status === "completed" || (current.status !== "blocked" && this.#state.automationRuntime.status !== "paused") || !current.topicId || !current.proposalId) throw new Error("当前没有可原位恢复的一次性演化卡点。");

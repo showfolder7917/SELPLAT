@@ -141,6 +141,8 @@ export class PersonaEvolutionRuntime {
   #running = false;
   /** 当前是否正在执行人工恢复，防止重复继续。 */
   #resuming = false;
+  /** 停止后禁止仍在运行的异步推进重新挂载续行计时器。 */
+  #stopped = false;
   /** Electron 窗口层注入的真实应用验收执行器。 */
   #computerAcceptanceSession: ((goal: HanliComputerAcceptanceInDto, onStarted: () => void) => Promise<HanliAcceptanceRunOutDto>) | null = null;
   /** 当前专题投影订阅者只接收协作事实驱动的只读刷新。 */
@@ -286,10 +288,11 @@ export class PersonaEvolutionRuntime {
   }
 
   /** 启动一次立即检查和三十秒周期检查；重复调用不会创建第二个计时器。 */
-  start(): void { if (!this.#timer) { void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
+  start(): void { if (!this.#timer) { this.#stopped = false; void this.#tick(); this.#timer = setInterval(() => void this.#tick(), 30_000); } }
 
   /** 停止自动检查；已持久化的专题和恢复点不会被清除。 */
   stop(): void {
+    this.#stopped = true;
     if (this.#timer) clearInterval(this.#timer);
     if (this.#continuationTimer) clearTimeout(this.#continuationTimer);
     this.#timer = null;
@@ -376,6 +379,7 @@ export class PersonaEvolutionRuntime {
   }
 
   #scheduleContinuation(delayMs = 1_000): void {
+    if (this.#stopped) return;
     if (this.#running) {
       this.#queuedContinuationDelayMs = this.#queuedContinuationDelayMs === null
         ? delayMs
@@ -777,7 +781,8 @@ export class PersonaEvolutionRuntime {
   #blockOneShotFailure(kind: "technical" | "business", operation: string, error: unknown, reason: string, details: Record<string, unknown> = {}, occurrenceId: string | null = null): EvolutionStateOutDto {
     const state = this.state();
     const run = state.oneShotRun;
-    const topicId = run?.topicId || state.activeTopicId;
+    // 新运行尚未建题时不能借用上一轮已完成专题作为异常归属。
+    const topicId = run ? run.topicId : state.activeTopicId;
     this.#recordFailure({
       kind,
       sourceType: kind === "business" ? "member" : "system",
@@ -786,7 +791,7 @@ export class PersonaEvolutionRuntime {
       error,
       correlationId: topicId || run?.runId || null,
       fingerprint: createOneShotFailureFingerprint({ runId: run?.runId || null, proposalId: run?.proposalId || null, operation, occurrenceId }),
-      flowImpact: "blocked",
+      flowImpact: topicId ? "blocked" : "none",
       details: { runId: run?.runId || null, topicId: topicId || null, proposalId: run?.proposalId || null, phase: run?.phase || null, recoveryPoint: run?.action || null, ...details },
     });
     return this.#store.blockOneShotRun(reason);
@@ -800,6 +805,11 @@ export class PersonaEvolutionRuntime {
     const tickRunId = this.state().oneShotRun?.runId || null;
     try {
       let state = this.state();
+      // 旧版本把暂时的线程写入占用落成了终态；只恢复同一来源请求的建题前运行。
+      if (state.oneShotRun?.status === "blocked" && !state.oneShotRun.topicId && !state.oneShotRun.proposalId
+        && state.oneShotRun.sourceRequestId && /active writer/i.test(state.oneShotRun.blockingReason || "")) {
+        state = this.#store.resumePreTopicWriterWait();
+      }
       if (state.automationRuntime.status === "running") {
         // 自动返修只消费当前活动专题。历史 rejected 提案是审计事实，不是待办队列；
         // 扫描所有历史版本会在新专题运行时把已封存卡重新激活。
@@ -943,7 +953,14 @@ export class PersonaEvolutionRuntime {
     } catch (error) {
       const state = this.state();
       if (state.oneShotRun?.status === "running" && state.oneShotRun.runId === tickRunId) {
-        this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);
+        // thread/resume 尚未取得写入权，模型轮次没有开始；保留原请求等待释放，不制造阻塞专题卡。
+        if (!state.oneShotRun.topicId && !state.oneShotRun.proposalId
+          && /无法恢复当前 Codex 任务：.*active writer/i.test(error instanceof Error ? error.message : String(error))) {
+          this.#store.updateOneShotRun("preparing-topic", "han-li", "韩立", "等待原人物会话写入者释放后继续建立专题", null, null);
+          this.#scheduleContinuation(5_000);
+        } else {
+          this.#blockOneShotFailure("technical", "nangong_evolution_tick", error, `南宫婉自动推进失败：${error instanceof Error ? error.message : String(error)}`);
+        }
       } else {
         this.#recordFailure({
           kind: "technical",

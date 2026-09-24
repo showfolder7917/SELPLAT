@@ -505,6 +505,33 @@ test("独立专题建立中和建立失败不退化为空任务或旧专题恢�
   assert.match(stage.summary, /缺少可用事实/);
 });
 
+test("普通研讨建题前失败显示真实原因，不误报暂无修复任务", () => {
+  const state = evolution("missing");
+  state.oneShotRun = {
+    runId: "ordinary-pre-topic", topicId: null, proposalId: null,
+    status: "blocked", phase: "blocked", topicEstablishmentMode: "ordinary-deliberation",
+    blockingReason: "无法恢复当前 Codex 任务：active writer", updatedAt: "2026-09-24T11:14:32.157Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [] });
+  assert.equal(stage.status, "topic-establishment-failed");
+  assert.equal(stage.topicId, null);
+  assert.match(stage.summary, /active writer/);
+  assert.equal(stage.userAction, "none");
+});
+
+test("普通研讨等待写入者时仍显示建题阶段，不把旧卡点当当前专题", () => {
+  const state = evolution("missing");
+  state.oneShotRun = {
+    runId: "ordinary-writer-wait", topicId: null, proposalId: null,
+    status: "running", phase: "preparing-topic", topicEstablishmentMode: "ordinary-deliberation",
+    action: "等待原人物会话写入者释放后继续建立专题", updatedAt: "2026-09-24T11:14:32.157Z",
+  };
+  const stage = projectCurrentTopicStage(state, { tasks: [] });
+  assert.equal(stage.status, "establishing-topic");
+  assert.equal(stage.topicId, null);
+  assert.match(stage.summary, /当前请求/);
+});
+
 test("真实验收进行中优先于已经完成的提案状态", () => {
   const state = evolution("passed");
   state.proposals[0].status = "completed";

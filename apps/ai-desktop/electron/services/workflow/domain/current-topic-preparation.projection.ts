@@ -4,8 +4,9 @@ import { readCurrentTopicRecovery } from "./current-topic-read-recovery.js";
 /** 尚未确立可执行提案时的唯一阶段；建立、研讨和确认不参与交付判定。 */
 export function projectTopicPreparationStage(evolution: EvolutionStateOutDto, hasProposal: boolean): CurrentTopicStageOutDto | null {
   const run = evolution.oneShotRun;
-  const independent = run?.topicEstablishmentMode === "independent-switch" && !run.topicId && !run.proposalId;
-  if (independent && run.status === "blocked") return stage({
+  const preTopicRun = Boolean(run && !run.topicId && !run.proposalId);
+  const independent = preTopicRun && run?.topicEstablishmentMode === "independent-switch";
+  if (preTopicRun && run?.status === "blocked") return stage({
     status: "topic-establishment-failed", title: "新专题建立失败",
     summary: run.blockingReason || "新专题尚未建立，旧专题仍只保留审计记录。",
     remaining: run.blockingReason || "建立新专题时出现未完成步骤。", waitingFor: "系统恢复处理",
@@ -30,9 +31,11 @@ export function projectTopicPreparationStage(evolution: EvolutionStateOutDto, ha
     nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。", updatedAt: deliberation.updatedAt,
   });
 
-  if (independent && run.status === "running") return stage({
+  if (preTopicRun && run?.status === "running") return stage({
     status: "establishing-topic", title: "正在建立新专题",
-    summary: "旧专题已经退出当前区，系统正在继续研讨并建立新的独立专题。",
+    summary: independent
+      ? "旧专题已经退出当前区，系统正在继续研讨并建立新的独立专题。"
+      : "系统正在沿当前请求研讨并建立新专题；历史卡点仅保留审计。",
     remaining: "等待新的专题及其提案建立。", waitingFor: "系统正在处理",
     nextAction: "系统将继续当前研讨；建立完成后显示新的专题卡。", updatedAt: run.updatedAt,
   });

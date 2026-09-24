@@ -1006,6 +1006,52 @@ test("验收阻塞和暂停从同一提案继续，不重建任务且拒绝重�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("建题前写入占用只恢复原来源请求，不重新建立专题或覆盖历史专题", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "pre-topic-writer-wait-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const run = store.beginOneShotRun(workspaceState, "zh-CN", "hanli-original-request").oneShotRun;
+    store.blockOneShotRun("南宫婉自动推进失败：无法恢复当前 Codex 任务：thread already has an active writer");
+    const resumed = store.resumePreTopicWriterWait();
+    assert.equal(resumed.oneShotRun.runId, run.runId);
+    assert.equal(resumed.oneShotRun.sourceRequestId, "hanli-original-request");
+    assert.equal(resumed.oneShotRun.status, "running");
+    assert.equal(resumed.oneShotRun.topicId, null);
+    assert.equal(resumed.oneShotRun.proposalId, null);
+    assert.equal(resumed.topics.length, 0);
+    assert.equal(resumed.automationRuntime.status, "running");
+    assert.throws(() => store.resumePreTopicWriterWait(), /没有可自动恢复/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("研讨线程写入暂占保持原运行等待，不产生阻塞异常或虚假专题", async () => {
+  const store = evolutionStore(`writer-wait-runtime-${Date.now()}`);
+  const failures = [];
+  const runId = store.beginOneShotRun(workspaceState, "zh-CN", "original-i18n-request").oneShotRun.runId;
+  store.beginDeliberation("writer-wait-deliberation", [{ content: "国际化专题", source: "codex", role: "user", capturedAt: new Date().toISOString() }], "如何完成三语国际化？", "用户已确认需求");
+  let attempts = 0;
+  const facade = new PersonaEvolutionRuntime({
+    store, prompts, collaboration: { state: () => ({ tasks: [], members: [] }), subscribe: () => () => {} },
+    conversation, recordEvent() {}, recordFailure: (failure) => failures.push(failure),
+    askHanliDeliberation: async () => JSON.stringify({ decision: "continue", assessment: "继续调查", nextQuestion: "如何核实？", questionReason: "需要证据" }),
+    askNangongDeliberation: async () => {
+      attempts += 1;
+      throw new Error("无法恢复当前 Codex 任务：thread already has an active writer");
+    },
+  });
+  try {
+    facade.start();
+    for (let index = 0; index < 30 && attempts < 1; index += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(attempts, 1);
+    const state = facade.state();
+    assert.equal(state.oneShotRun.runId, runId);
+    assert.equal(state.oneShotRun.status, "running");
+    assert.equal(state.oneShotRun.topicId, null);
+    assert.equal(state.topics.length, 0);
+    assert.equal(failures.length, 0);
+  } finally { facade.stop(); }
+});
+
 test("可恢复验收卡点不能被普通专题确认覆盖，明确退役后才允许新运行", () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "blocked-run-overwrite-guard-"));
   try {
