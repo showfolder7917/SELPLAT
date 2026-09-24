@@ -829,6 +829,9 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
   assert.doesNotMatch(recentConversation, /乙{100}/);
 
   const events = [];
+  // 普通发送先为业务会话认领模型线程；替身保留与持久化端口相同的唯一绑定语义。
+  const threadBindings = new Map();
+  const threadEvents = [];
   let sentPrompt = "";
   const service = new HanliConversationService({
     store: evolutionStore(path.join(controlledTestRoot, "hanli-method-context-state")), prompts,
@@ -838,9 +841,28 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
       newPersonaConversation() { return { ownerPersonaId: "han-li", conversationId: "hanli-method-thread", messages: [], updatedAt: "2026-09-03T00:00:00.000Z" }; },
       readHanliSemanticContext() { return semanticContext; },
       registerPersonaRound(input) { return { ownerPersonaId: "han-li", conversationId: input.conversationId, messages: [], updatedAt: input.completedAt }; },
-      linkPersonaConversationCodexThread() {},
+      readPersonaConversationCodexThread(_ownerPersonaId, conversationId) { return threadBindings.get(conversationId) || null; },
+      claimPersonaConversationCodexThread({ conversationId, threadId, workspaceSignature }) {
+        if (threadBindings.has(conversationId)) return false;
+        threadBindings.set(conversationId, { threadId, workspaceSignature });
+        threadEvents.push(`claim:${conversationId}:${threadId}`);
+        return true;
+      },
+      unlinkPersonaConversationCodexThread({ conversationId, threadId }) {
+        if (threadBindings.get(conversationId)?.threadId !== threadId) return false;
+        threadBindings.delete(conversationId);
+        threadEvents.push(`unlink:${conversationId}:${threadId}`);
+        return true;
+      },
     },
     conversation: {
+      startDetachedConversationSession: async () => {
+        threadEvents.push("start:hanli-provider-thread");
+        return { threadId: "hanli-provider-thread", workspaceSignature: "test-workspace" };
+      },
+      activateConversationSession({ threadId }) { threadEvents.push(`activate:${threadId}`); },
+      deleteDetachedConversationSession: async (threadId) => { threadEvents.push(`delete:${threadId}`); },
+      recoverConversationSession: async ({ threadId }) => ({ status: "verified", successorThreadId: threadId, summary: "已恢复测试会话。" }),
       activeConversationId: () => "hanli-provider-thread",
       activeConversationSession: () => ({ threadId: "hanli-provider-thread", workspaceSignature: "test-workspace" }),
       async send(_request, prompt) {
@@ -858,6 +880,12 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
   assert.equal(events.at(-1).payload.contextReadStats.promptCharacters, sentPrompt.length);
   assert.match(sentPrompt, /hanli_method_learning_context/);
   assert.doesNotMatch(sentPrompt, /不得进入方法上下文的客户目标/);
+  assert.deepEqual(threadEvents, [
+    "start:hanli-provider-thread",
+    "claim:hanli-method-thread:hanli-provider-thread",
+    "activate:hanli-provider-thread",
+  ]);
+  assert.deepEqual(threadBindings.get("hanli-method-thread"), { threadId: "hanli-provider-thread", workspaceSignature: "test-workspace" });
   assert.match(hanliConversationPromptSource, /不得把方法样本当成相似案例/);
   assert.match(hanliConversationWorkspaceSource, /本轮读取：方法资料/);
 });
