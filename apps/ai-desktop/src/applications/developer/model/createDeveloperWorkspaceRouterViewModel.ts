@@ -1,3 +1,4 @@
+import { fixedUiText } from "../../../../contracts/foundation";
 import type { DeveloperWorkspaceRouterProps } from "./developerWorkspaceRouterTypes";
 import type { DeveloperWorkspaceRouterController } from "./useDeveloperWorkspaceRouterController";
 
@@ -71,7 +72,7 @@ export type DeveloperWorkspacePageViewModel =
 /** 把稳定页签键转换成客户可读标题。 */
 function tabTitle(controller: DeveloperWorkspaceRouterController): string {
   if (controller.tabId === "main") return "Codex Chat";
-  if (controller.tabId === "group") return "任务协作群";
+  if (controller.tabId === "group") return fixedUiText(controller.props.locale, "collaborationTaskGroup");
   return controller.props.collaboration.navigation.selectedMember?.displayName || "韩立";
 }
 
@@ -102,7 +103,7 @@ export function createDeveloperWorkspaceRouterViewModel(
         collaboration,
         tabAction: {
           visible: true,
-          label: props.locale === "ja" ? "Codex セッションを新しく作り直す" : "重新建立一个 Codex 会话",
+          label: fixedUiText(props.locale, "newCodexSession"),
           disabled: false,
           busy: false,
           onClick: () => { void props.codex.startNewTask(); },
@@ -120,7 +121,7 @@ export function createDeveloperWorkspaceRouterViewModel(
         isCurrentPage: key === controller.tabId,
         tabAction: {
           visible: true,
-          label: "重新建立韩立对话",
+          label: fixedUiText(props.locale, "newHanliConversation"),
           disabled: props.hanli.newConversationBusy || props.hanli.sending,
           busy: props.hanli.newConversationBusy,
           onClick: () => { void props.hanli.startNewConversation(); },
@@ -140,7 +141,7 @@ export function createDeveloperWorkspaceRouterViewModel(
         screenshot: props.screenshot,
         tabAction: {
           visible: true,
-          label: props.locale === "ja" ? "南宮婉の会話を新しく作り直す" : "重新建立南宫婉对话",
+          label: fixedUiText(props.locale, "newNangongConversation"),
           disabled: props.nangong.newConversationBusy || props.nangong.sending,
           busy: props.nangong.newConversationBusy,
           onClick: () => { void props.nangong.startNewConversation(); },
@@ -151,7 +152,7 @@ export function createDeveloperWorkspaceRouterViewModel(
     const tabAction = memberId === "linghu-ancestor"
       ? {
         visible: true,
-        label: props.locale === "ja" ? "令狐老祖の会話を新しく作り直す" : "重新建立令狐老祖对话",
+        label: fixedUiText(props.locale, "newLinghuConversation"),
         disabled: controller.linghuDisplayConversation.busy,
         busy: controller.linghuDisplayConversation.busy,
         onClick: () => { void controller.linghuDisplayConversation.start(); },

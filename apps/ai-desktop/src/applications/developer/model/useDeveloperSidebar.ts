@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 
 /** 侧栏宽度边界：既保证导航文字可读，也避免挤占右侧工作区。 */
@@ -14,8 +15,7 @@ function clampWidth(width: number): number {
 
 /** 根据语言和当前状态生成侧栏开关说明。 */
 function getToggleLabel(locale: LocaleValue, collapsed: boolean): string {
-  if (locale === "ja") return collapsed ? "サイドバーを展開" : "サイドバーを折りたたむ";
-  return collapsed ? "展开侧栏" : "折叠侧栏";
+  return fixedUiText(locale, collapsed ? "sidebarExpand" : "sidebarCollapse");
 }
 
 /** 集中管理左侧栏的显示、宽度、鼠标拖动和键盘操作。 */

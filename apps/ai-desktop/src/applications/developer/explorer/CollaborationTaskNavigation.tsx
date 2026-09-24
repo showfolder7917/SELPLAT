@@ -9,6 +9,7 @@ import {
   Branch24Regular,
 } from "@fluentui/react-icons";
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type {
   // 界面语言决定任务群和人物状态使用中文还是日文。
   LocaleValue,
@@ -71,7 +72,7 @@ export function CollaborationTaskNavigation({
       >
         <span>
           <Branch24Regular />
-          {locale === "ja" ? "タスク協同グループ" : "任务协作群"}
+          {fixedUiText(locale, "collaborationTaskGroup")}
         </span>
         <strong>{timeline?.groups.length || 0}</strong>
       </button>
@@ -112,7 +113,7 @@ export function CollaborationTaskNavigation({
                 <i className={display.presence} />
                 {member.displayName}
               </span>
-              <small>{saving ? (locale === "ja" ? "保存中" : "保存中") : display.label}</small>
+              <small>{saving ? fixedUiText(locale, "saving") : display.label}</small>
             </button>
           );
         })}
