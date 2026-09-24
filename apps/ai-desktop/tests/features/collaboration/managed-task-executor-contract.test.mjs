@@ -58,6 +58,8 @@ const interactionPreload = readFileSync(new URL("../../interaction/isolated-prel
 const interactionSpec = readFileSync(new URL("../../interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const audit = readFileSync(new URL("../../../electron/services/support/capabilities/event-center/internal/audit/business-audit-log.ts", import.meta.url), "utf8");
 const dispatchStore = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/conversation-dispatch.store.ts", import.meta.url), "utf8");
+const managedStageAction = readFileSync(new URL("../../../src/features/conversation/components/ManagedStageAction.tsx", import.meta.url), "utf8");
+const fixedUiText = readFileSync(new URL("../../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
 
 test("已签发专题的执行授权随任务交接而非要求执行人重复索取 1", () => {
   assert.match(executorExecutionPrompt, /授权衔接：\{\{authorizationContext\}\}/u);
@@ -174,12 +176,18 @@ test("屏幕录制权限恢复只允许用户通过 macOS 专用无参数 IPC �
 
 test("内部策略按确认推进但界面不再暴露四种托管模式和返回切换", () => {
   assert.match(developerApp, /useState<ManagedExecutionModeValue>\("conversation-managed"\)/);
-  assert.match(developerApp, /就是这意思/);
-  assert.match(developerApp, /按这个方案执行/);
-  assert.match(developerApp, /测试一下/);
-  assert.match(developerApp, /重新分析需求/);
-  assert.match(developerApp, /重新执行/);
-  assert.match(developerApp, /重新测试/);
+  assert.match(managedStageAction, /"conversation-managed": "managedStageConfirmIntent"/);
+  assert.match(managedStageAction, /"requirement-managed": "managedStageExecutePlan"/);
+  assert.match(managedStageAction, /"task-managed": "managedStageTest"/);
+  assert.match(managedStageAction, /"conversation-managed": "managedStageReanalyze"/);
+  assert.match(managedStageAction, /"requirement-managed": "managedStageRerun"/);
+  assert.match(managedStageAction, /"test-managed": "managedStageRetest"/);
+  assert.match(fixedUiText, /managedStageConfirmIntent: "就是这意思"/);
+  assert.match(fixedUiText, /managedStageExecutePlan: "按这个方案执行"/);
+  assert.match(fixedUiText, /managedStageTest: "测试一下"/);
+  assert.match(fixedUiText, /managedStageReanalyze: "重新分析需求"/);
+  assert.match(fixedUiText, /managedStageRerun: "重新执行"/);
+  assert.match(fixedUiText, /managedStageRetest: "重新测试"/);
   assert.doesNotMatch(developerApp, /回到会话托管/);
   assert.doesNotMatch(developerApp, /回到任务托管/);
   assert.match(chatMessageModel, /normalized === "1"/);
