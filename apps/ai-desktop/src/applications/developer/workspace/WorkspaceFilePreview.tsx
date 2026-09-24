@@ -1,6 +1,7 @@
 import { Copy16Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import { useState } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation/index";
 import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
 import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 
@@ -14,29 +15,27 @@ type WorkspaceFilePreviewProps = {
 export function WorkspaceFilePreview({ locale, preview, onClose }: WorkspaceFilePreviewProps) {
   const [copying, setCopying] = useState(false);
   if (!preview.preview && !preview.error) return null;
-  const text = locale === "ja"
-    ? { title: "ファイルプレビュー", close: "ファイルプレビューを閉じる", copy: "内容をコピー", copied: "ファイル内容をコピーしました。", copyFailed: "ファイル内容をコピーできませんでした。" }
-    : { title: "文件预览", close: "关闭文件预览", copy: "复制完整内容", copied: "已复制文件内容。", copyFailed: "无法复制文件内容。" };
+  const text = (key: Parameters<typeof fixedUiText>[1]) => fixedUiText(locale, key);
 
   async function copyContent() {
     if (copying) return;
     setCopying(true);
     try {
       const copied = await window.sel?.core?.copyText?.(preview.preview?.content || "");
-      window.sel?.core?.toast?.(copied ? text.copied : text.copyFailed, copied ? "success" : "error");
+      window.sel?.core?.toast?.(copied ? text("workspaceContentCopied") : text("workspaceCopyFailed"), copied ? "success" : "error");
     } catch {
-      window.sel?.core?.toast?.(text.copyFailed, "error");
+      window.sel?.core?.toast?.(text("workspaceCopyFailed"), "error");
     } finally {
       setCopying(false);
     }
   }
 
-  return <section className="workspace-file-preview-panel" aria-label={text.title}>
+  return <section className="workspace-file-preview-panel" aria-label={text("workspaceFilePreview")}>
     <header>
-      <div><strong>{preview.preview?.relativePath || text.title}</strong></div>
+      <div><strong>{preview.preview?.relativePath || text("workspaceFilePreview")}</strong></div>
       <div>
-        {preview.preview && <button type="button" aria-label={text.copy} title={text.copy} disabled={copying} onClick={() => { void copyContent(); }}><Copy16Regular /></button>}
-        <button type="button" aria-label={text.close} title={text.close} onClick={onClose}><Dismiss16Regular /></button>
+        {preview.preview && <button type="button" aria-label={text("workspaceCopyContent")} title={text("workspaceCopyContent")} disabled={copying} onClick={() => { void copyContent(); }}><Copy16Regular /></button>}
+        <button type="button" aria-label={text("workspaceCloseFilePreview")} title={text("workspaceCloseFilePreview")} onClick={onClose}><Dismiss16Regular /></button>
       </div>
     </header>
     {preview.error ? <p role="alert">{preview.error}</p> : <pre>{preview.preview?.content}</pre>}

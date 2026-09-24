@@ -14,6 +14,8 @@ const builderConfig = readFileSync(new URL("../../electron-builder.developer.con
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
 const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
+const streamDetails = readFileSync(new URL("../../src/features/conversation/components/StreamDetails.tsx", import.meta.url), "utf8");
+const fixedUiText = readFileSync(new URL("../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
 const developerApp = [
   "../../src/applications/developer/DeveloperApplication.tsx",
   "../../src/features/conversation/components/CodexConversationWorkspace.tsx",
@@ -161,10 +163,15 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
 test("执行亮点只在运行中闪烁，结束后变暗并显示完成语义", () => {
   assert.match(developerCss, /\.stream-current\.running > i \{ animation: stream-status-pulse/);
   assert.match(developerCss, /\.stream-current\.completed > i[^}]+box-shadow: none/s);
-  assert.match(developerApp, /意图分析完成/);
-  assert.match(developerApp, /需求分析完成/);
-  assert.match(developerApp, /执行与代码验证完成/);
-  assert.match(developerApp, /测试完成/);
+  assert.match(streamDetails, /"conversation-managed": "streamConversationCompleted"/);
+  assert.match(streamDetails, /"requirement-managed": "streamRequirementCompleted"/);
+  assert.match(streamDetails, /"task-managed": "streamTaskCompleted"/);
+  assert.match(streamDetails, /"test-managed": "streamTestCompleted"/);
+  assert.match(streamDetails, /return fixedUiText\(locale, mode \? labelsByMode\[mode\] \|\| "streamCompleted" : "streamCompleted"\)/);
+  assert.match(fixedUiText, /streamConversationCompleted: "意图分析完成"/);
+  assert.match(fixedUiText, /streamRequirementCompleted: "需求分析完成"/);
+  assert.match(fixedUiText, /streamTaskCompleted: "执行与代码验证完成"/);
+  assert.match(fixedUiText, /streamTestCompleted: "测试完成"/);
 });
 
 test("回复卡及内部执行面板不允许撑出消息边界", () => {

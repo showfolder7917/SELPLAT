@@ -45,4 +45,6 @@ test("文件内容在右侧主工作区阅读，左侧只保留目录树", () =>
   assert.match(preview, /if \(copying\) return/);
   assert.match(preview, /disabled=\{copying\}/);
   assert.match(preview, /finally \{\s*setCopying\(false\)/);
+  assert.match(preview, /fixedUiText/);
+  assert.doesNotMatch(preview, /locale === "ja"/);
 });
