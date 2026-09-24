@@ -1088,6 +1088,8 @@ export class CollaborationCoordinator {
           execution.status = "code-verified";
           execution.completedAt = current.codeVerifiedAt;
           execution.result = result.text;
+          // 流式 diff 可能只包含最后一次工具事件；最终 Git 集合才是交付文件的权威清单。
+          execution.changedFiles = normalizeChangedFiles(result.changedFiles);
         }
         if (returnsToNangong) {
           current.returnedToNangongAt = current.codeVerifiedAt;

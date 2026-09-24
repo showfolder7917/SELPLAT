@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { EvolutionAcceptancePlanOutDto } from "../../../../../contracts/services/evolution/index.js";
@@ -43,7 +44,11 @@ function readChangedSourceEvidence(
   const root = fallbackWorkspaceState.roots.find((item) => item.id === fallbackWorkspaceState.primaryId)?.path;
   if (!root) return { items: [], status: "workspace-root-unavailable" };
   const files = [...new Set(tasks.filter((task) => task.state === "integrated")
-    .flatMap((task) => task.executionRecords.flatMap((record) => record.changedFiles)))]
+    .flatMap((task) => [
+      ...task.executionRecords.flatMap((record) => record.changedFiles),
+      // 已集成的旧记录可能只保存最后一次流式 diff；签发基线至结果提交可恢复完整清单。
+      ...readIntegratedCommitFiles(root, task),
+    ]))]
     .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file)
       && !/(?:^|\/)(?:tests?|__tests__)\//u.test(file));
   if (!files.length) return { items: [], status: "no-declared-changed-files" };
@@ -97,6 +102,28 @@ function readChangedSourceEvidence(
   const secondLevel = readDirectImports(firstLevel);
   const items = [...new Map([...declaredItems, ...firstLevel, ...secondLevel].map((item) => [item.file, item])).values()].slice(0, 48);
   return { items, status: items.length ? "available" : "declared-files-unreadable" };
+}
+
+function readIntegratedCommitFiles(root: string, task: CollaborationTaskOutDto): string[] {
+  const baseSha = task.versionWorkspace?.baseSha;
+  const resultSha = task.versionWorkspace?.resultSha;
+  if (!baseSha || !resultSha || !/^[a-f0-9]{40}$/u.test(baseSha) || !/^[a-f0-9]{40}$/u.test(resultSha)) return [];
+  try {
+    // 只有已进入当前工作区历史的结果提交才允许作为正式页面审查的源码范围。
+    execFileSync("git", ["merge-base", "--is-ancestor", resultSha, "HEAD"], {
+      cwd: root,
+      stdio: "ignore",
+    });
+    const committed = execFileSync("git", ["diff", "--name-only", "-z", `${baseSha}..${resultSha}`], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 1_048_576,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return committed.split("\0").filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 /** 合并正式页面结果与独立源码审查，保证每条客户条件只有一个最终结论。 */

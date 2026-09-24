@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { build } from "esbuild";
@@ -77,6 +79,49 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   assert.match(technicalSource, /const systemOnlyAcceptanceRetry/u);
   assert.match(technicalSource, /recovery\.occurrences/u);
   assert.doesNotMatch(context.sourceEvidence[0].content, /源码中段省略/u);
+});
+
+test("已提交任务的流式清单只剩测试文件时从签发提交恢复源码证据", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(path.join(parent, "hanli-review-commits-"));
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q");
+    const source = "apps/ai-desktop/electron/services/personas/hanli/thread.ts";
+    const testFile = "apps/ai-desktop/tests/hanli-thread.test.mjs";
+    mkdirSync(path.dirname(path.join(root, source)), { recursive: true });
+    mkdirSync(path.dirname(path.join(root, testFile)), { recursive: true });
+    writeFileSync(path.join(root, source), "export const threadOwner = 'before';\n");
+    git("add", ".");
+    git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "baseline");
+    const baseSha = git("rev-parse", "HEAD");
+    writeFileSync(path.join(root, source), "export const threadOwner = 'current-conversation';\n");
+    writeFileSync(path.join(root, testFile), "// verification only\n");
+    git("add", ".");
+    git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "result");
+    const resultSha = git("rev-parse", "HEAD");
+    const task = {
+      taskId: "integrated-task",
+      state: "integrated",
+      snapshot: { title: "thread ownership", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] },
+      executionRecords: [{ changedFiles: [testFile] }],
+      versionWorkspace: { baseSha, resultSha },
+    };
+    const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] });
+    assert.equal(context.sourceEvidenceStatus, "available");
+    assert.deepEqual(context.sourceEvidence.map((item) => item.file), [source]);
+    assert.match(context.sourceEvidence[0].content, /current-conversation/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("执行完成时以完整 Git 结果覆盖最后一次流式 diff", () => {
+  const workflow = readFileSync("electron/services/workflow/collaboration-workflow.facade.ts", "utf8");
+  assert.match(workflow, /execution\.changedFiles = normalizeChangedFiles\(result\.changedFiles\)/u);
 });
 
 test("已登记但在本版本退役的验收场景文件明确标记缺失，不沿用旧源码", async () => {
