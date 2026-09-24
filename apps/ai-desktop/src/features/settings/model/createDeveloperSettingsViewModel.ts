@@ -4,30 +4,6 @@ import { auditStatusText, formatBytes, reasoningEffortLabel } from "./settings-f
 import { fixedUiText } from "../../../../contracts/foundation/index";
 import type { DeveloperSettingsSectionController } from "./useDeveloperSettingsSectionController";
 
-/** 测试数据清理文案必须明确保留范围和重启影响。 */
-const testDataResetCopy = {
-  ja: {
-    title: "テストデータ",
-    summary: "データベース内のテストトピック、タスク、承認、イベント、実行状態",
-    detail: "人物の会話、学習メモリ、ログイン、設定、ワークスペース、ルール、ソースコードは保持されます。完了後にアプリを再起動します。",
-    action: "テストデータを一括消去",
-    busy: "消去中…",
-    confirm: "AI Desktop 内部のテスト実行データを消去しますか？この操作は元に戻せません。古い承認参照も消去され、提案や復元には使用できなくなります。人物の会話、学習メモリ、ログイン、設定、ワークスペース、信頼済みコマンド、ルール、ソースコード、監査ファイルは削除されません。",
-    restart: "結果を確認して再起動",
-    restartConfirm: "表示されている消去結果を確認しました。現在のアプリを再起動しますか？",
-  },
-  "zh-CN": {
-    title: "测试数据",
-    summary: "数据库中的测试专题、任务、审批、事件和运行状态",
-    detail: "保留人物对话、训练记忆、登录、设置、工作区、规则和源码；完成后自动重启应用。",
-    action: "一键清空测试数据",
-    busy: "正在清空…",
-    confirm: "确定一键清空 AI Desktop 内部的测试运行数据吗？此操作不可撤销。旧审批参考也会被清除，之后不能再用于建议或恢复。不会删除人物对话、训练记忆、登录、设置、工作区、可信命令、规则、源码和工程审计文件。",
-    restart: "确认结果并重启",
-    restartConfirm: "我已确认本次实际清理结果，现在按受控路径重启应用。是否继续？",
-  },
-} as const;
-
 /** 把设置 Controller 数据转换成纯 View 可以直接展示的分区模型。 */
 export function createDeveloperSettingsViewModel(
   props: DeveloperSettingsFeatureProps,
@@ -35,26 +11,23 @@ export function createDeveloperSettingsViewModel(
 ) {
   const { settings, diagnostics, status, text } = props;
   const locale = settings.locale;
-  const resetCopy = testDataResetCopy[locale === "ja" ? "ja" : "zh-CN"];
-  const resetCategoryLabels = locale === "ja"
-    ? { collaboration: "協同実行状態", evolution: "進化実行状態", linghu: "令狐実行状態", workflow: "イベントとワークフロー投影" }
-    : { collaboration: "协作运行状态", evolution: "演化运行状态", linghu: "令狐运行状态", workflow: "事件与工作流投影" };
+  const copy = (key: Parameters<typeof fixedUiText>[1]) => fixedUiText(locale, key);
+  const format = (key: Parameters<typeof fixedUiText>[1], values: Record<string, string | number>) => Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, String(value)), copy(key));
+  const resetCategoryLabels = { collaboration: copy("resetCategoryCollaboration"), evolution: copy("resetCategoryEvolution"), linghu: copy("resetCategoryLinghu"), workflow: copy("resetCategoryWorkflow") };
   const resetResult = diagnostics.testDataResetResult;
   const selectedModelName = settings.selectedModel?.displayName
-    || (locale === "ja" ? "Codex の既定値" : "Codex 默认");
+    || copy("modelDefault");
   const runtimeDescription = status.runtime
-    ? `${status.runtime.source === "downloaded" ? "校验下载" : "安装包内置"} Codex ${status.runtime.version}`
+    ? `${copy(status.runtime.source === "downloaded" ? "modelRuntimeDownloaded" : "modelRuntimeBundled")} Codex ${status.runtime.version}`
     : status.connected ? "openai/codex app-server" : status.error || "Harness offline";
   const astraAppeared = settings.modelCatalog.models.some((model) => `${model.id} ${model.displayName}`.toLocaleLowerCase().includes("astra"));
   const modelCatalogStatus = settings.modelCatalogLoading
-    ? (locale === "ja" ? "モデル一覧を読み込み中…" : "正在读取模型列表…")
+    ? copy("modelCatalogLoading")
     : settings.modelCatalogLoaded
-      ? (locale === "ja"
-        ? `モデル一覧を取得しました（${settings.modelCatalog.models.length}件）・Astra ${astraAppeared ? "あり" : "なし"}`
-        : `已读取 ${settings.modelCatalog.models.length} 个模型 · Astra${astraAppeared ? "已出现" : "未出现"}`)
+      ? format("modelCatalogLoaded", { count: settings.modelCatalog.models.length, astra: copy(astraAppeared ? "modelCatalogAstraPresent" : "modelCatalogAstraMissing") })
       : "";
   const auditSummary = diagnostics.auditInfo?.latestTask
-    ? `${auditStatusText(diagnostics.auditInfo.latestTask.status, locale)} · ${diagnostics.auditInfo.latestTask.reasons.length} ${locale === "ja" ? "件の理由" : "项原因"}`
+    ? `${auditStatusText(diagnostics.auditInfo.latestTask.status, locale)} · ${format("auditReasonCount", { count: diagnostics.auditInfo.latestTask.reasons.length })}`
     : text.noAuditTask;
 
   return {
@@ -71,65 +44,53 @@ export function createDeveloperSettingsViewModel(
       onLogout: props.onLogout,
     },
     testData: {
-      title: resetCopy.title,
-      summary: resetCopy.summary,
-      detail: resetCopy.detail,
-      actionLabel: diagnostics.testDataResetting ? resetCopy.busy : resetCopy.action,
+      title: copy("testDataTitle"), summary: copy("testDataSummary"), detail: copy("testDataDetail"),
+      actionLabel: diagnostics.testDataResetting ? copy("testDataBusy") : copy("testDataAction"),
       error: diagnostics.testDataResetError,
       busy: diagnostics.testDataResetting || Boolean(resetResult),
       result: resetResult && {
-        summary: locale === "ja" ? `実行記録を ${resetResult.clearedRecordCount} 件消去しました。` : `已清除 ${resetResult.clearedRecordCount} 条运行记录。`,
+        summary: format("testDataResult", { count: resetResult.clearedRecordCount }),
         categories: resetResult.clearedCategories.map((item) => ({ label: resetCategoryLabels[item.category], count: item.clearedRecordCount })),
-        candidates: locale === "ja"
-          ? `候補ブランチ ${resetResult.clearedCandidateBranchCount} 件・Worktree ${resetResult.clearedCandidateWorktreeCount} 件を処理しました。`
-          : `已处理候选分支 ${resetResult.clearedCandidateBranchCount} 个、工作树 ${resetResult.clearedCandidateWorktreeCount} 个。`,
+        candidates: format("testDataCandidates", { branches: resetResult.clearedCandidateBranchCount, worktrees: resetResult.clearedCandidateWorktreeCount }),
         warnings: resetResult.candidateCleanupWarnings,
-        retained: resetCopy.detail,
-        restartLabel: resetCopy.restart,
-        onRestart: () => { void controller.confirmTestDataResetRestart(resetCopy.restart, resetCopy.restartConfirm); },
+        retained: copy("testDataDetail"), restartLabel: copy("testDataRestart"),
+        onRestart: () => { void controller.confirmTestDataResetRestart(copy("testDataRestart"), copy("testDataRestartConfirm")); },
       },
-      onClear: () => { void controller.clearTestData(resetCopy.action, resetCopy.confirm); },
+      onClear: () => { void controller.clearTestData(copy("testDataAction"), copy("testDataConfirm")); },
     },
     model: {
-      title: locale === "ja" ? "グローバルモデル設定" : "全局模型配置",
-      summary: locale === "ja" ? "すべての会話と協同タスクに適用" : "对所有会话与协同任务生效",
+      title: copy("modelSettingsTitle"), summary: copy("modelSettingsSummary"),
       selectedModelName,
-      defaultModelLabel: locale === "ja" ? "既定モデル" : "默认模型",
+      // 标签供辅助技术定位模型选择器；占位项仍使用独立的 Codex 默认资源。
+      defaultModelLabel: copy("modelDefaultLabel"),
       defaultModel: settings.defaultModel || "",
       modelCatalogLoading: settings.modelCatalogLoading,
       modelCatalogStatus,
       defaultOptionLabel: settings.modelCatalogLoading
-        ? (locale === "ja" ? "モデルを読み込み中…" : "正在读取模型…")
-        : (locale === "ja" ? "Codex の既定値" : "Codex 默认"),
+        ? copy("modelLoading") : copy("modelDefault"),
       includesConfiguredModel: settings.modelCatalog.models.some((model) => model.id === settings.defaultModel),
       models: settings.modelCatalog.models,
       onDefaultModelChange: settings.selectDefaultModel,
-          effortLabel: locale === "ja" ? "推論の強度" : "推理强度",
-          effortDefaultLabel: locale === "ja" ? "モデルの既定値" : "模型默认",
+          effortLabel: copy("modelEffort"), effortDefaultLabel: copy("modelEffortDefault"),
       reasoningEffort: settings.reasoningEffort || "",
       supportedEfforts: settings.supportedEfforts.map((effort) => ({ value: effort, label: reasoningEffortLabel(effort, locale) })),
       onReasoningEffortChange: (value: string) => settings.updateSettings({ reasoningEffort: (value || null) as ReasoningEffortValue | null }),
-      speedLabel: locale === "ja" ? "推論速度" : "推理速度",
+      speedLabel: copy("modelSpeed"),
       serviceTier: settings.serviceTier,
-      standardSpeedLabel: locale === "ja" ? "標準" : "标准",
-      fastSpeedLabel: locale === "ja" ? "高速" : "快速",
+      standardSpeedLabel: copy("modelStandardSpeed"), fastSpeedLabel: copy("modelFastSpeed"),
       fastServiceTierSupported: settings.fastServiceTierSupported,
       onServiceTierChange: (value: string) => settings.updateSettings({ serviceTier: value as ModelServiceTierValue }),
       modelUnavailableError: settings.configuredModelUnavailable
-        ? (locale === "ja" ? "保存済みモデルは現在利用できません。別のモデルを選択してください。" : "已保存的模型当前不可用，请重新选择。")
+        ? copy("modelUnavailable")
         : "",
       speedUnavailableError: settings.configuredSpeedUnavailable
-        ? (locale === "ja" ? "選択中のモデルは高速処理に対応していません。標準速度へ変更してください。" : "当前模型不支持快速处理，请切换为标准速度。")
+        ? copy("modelSpeedUnavailable")
         : "",
       description: settings.selectedModel?.description || "",
       settingsError: settings.modelSettingsError,
     },
     corpus: {
-      title: locale === "ja" ? "Codex 会話の学習登録" : "Codex 聊天训练入库",
-      stateLabel: settings.codexAppCorpusIngestionEnabled ? (locale === "ja" ? "有効" : "已开启") : (locale === "ja" ? "無効" : "未开启"),
-      detail: locale === "ja"
-        ? "現在の SELPLAT ワークスペースに属する完了済みの各ターンだけを登録し、システム指示・ツール出力・ファイル注入は除外します。"
-        : "只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库，排除系统指令、工具输出和文件注入内容。",
+      title: copy("corpusTitle"), stateLabel: copy(settings.codexAppCorpusIngestionEnabled ? "corpusEnabled" : "corpusDisabled"), detail: copy("corpusDetail"),
       // 默认显示 Worker 持久化的自动入库状态；只有当前按钮触发的补齐任务才能临时接管回显。
       statusMessage: settings.corpusStatusFocus === "semantic-backfill"
         ? settings.corpusSemanticBackfill?.message || settings.corpusIngestion?.message || ""
@@ -139,12 +100,10 @@ export function createDeveloperSettingsViewModel(
         : "",
       // 自动入库与历史补齐是独立任务；无论当前按钮回显什么，都持续展示 Worker 的已提交状态。
       ingestionStatusMessage: settings.corpusIngestion?.message
-        ? `${locale === "ja" ? "自動登録" : "自动入库"}：${settings.corpusIngestion.message}`
+        ? `${copy("corpusIngestionPrefix")}：${settings.corpusIngestion.message}`
         : "",
       ingestionEnabled: settings.codexAppCorpusIngestionEnabled,
-      toggleLabel: settings.codexAppCorpusIngestionEnabled ? (locale === "ja" ? "登録を停止" : "停止入库") : (locale === "ja" ? "登録を開始" : "开启入库"),
-      backfillLabel: settings.corpusSemanticBackfill?.state === "running" ? (locale === "ja" ? "補完中…" : "正在补齐…") : (locale === "ja" ? "履歴を一括補完" : "补齐历史摘要"),
-      backfillAriaLabel: locale === "ja" ? "履歴の AI 要約を一括補完" : "一键补齐历史 AI 摘要",
+      toggleLabel: copy(settings.codexAppCorpusIngestionEnabled ? "corpusStop" : "corpusStart"), backfillLabel: copy(settings.corpusSemanticBackfill?.state === "running" ? "corpusBackfillBusy" : "corpusBackfill"), backfillAriaLabel: copy("corpusBackfillAria"),
       backfillBusy: settings.corpusSemanticBackfill?.state === "running",
       onToggle: () => settings.updateSettings({ codexAppCorpusIngestionEnabled: !settings.codexAppCorpusIngestionEnabled }),
       onBackfill: () => { void settings.startCorpusSemanticBackfill(); },

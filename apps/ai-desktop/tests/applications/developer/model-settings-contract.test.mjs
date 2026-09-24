@@ -23,6 +23,12 @@ const migratedFixedUi = [
   read("src/features/conversation/components/ManagedStageAction.tsx"),
   read("src/features/screenshot/components/ScreenshotEditor.tsx"),
   read("src/applications/developer/workspace/WorkspaceFilePreview.tsx"),
+  read("src/applications/developer/model/useDeveloperApplicationController.ts"),
+  read("src/applications/developer/model/createDeveloperViewModel.ts"),
+  read("src/features/settings/model/createDeveloperSettingsViewModel.ts"),
+  read("src/features/settings/model/settings-formatters.ts"),
+  read("src/features/settings/model/useDesktopSettings.ts"),
+  read("src/features/settings/components/SettingsFloatingPanel.tsx"),
 ].join("\n");
 const service = read("electron/services/support/platform/codex/codex.facade.ts");
 const collaboration = read("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts");
@@ -68,6 +74,9 @@ test("迁移范围内的固定界面只通过统一资源解析，不保留局�
   assert.doesNotMatch(migratedFixedUi, /editorLabels|firstLabels|repeatLabels|const japanese|const chinese/);
   assert.doesNotMatch(migratedFixedUi, /locale === "ja" \? "ja" : "zh-CN"/);
   assert.match(fixedUiText, /CONTROLLED_MISSING_TEXT = "缺少固定界面文案"/);
+  assert.match(fixedUiText, /resolveFixedUiText/);
+  assert.doesNotMatch(migratedFixedUi, /developerApplicationLabels|testDataResetCopy/);
+  assert.doesNotMatch(migratedFixedUi, /locale === "ja"/);
 });
 
 test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () => {
@@ -75,7 +84,7 @@ test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () =>
   assert.match(store, /codexAppCorpusIngestionEnabled: false/);
   assert.match(store, /value\.codexAppCorpusIngestionEnabled === true/);
   assert.match(store, /typeof patch\.codexAppCorpusIngestionEnabled === "boolean"/);
-  assert.match(developer, /Codex 聊天训练入库/);
+  assert.match(fixedUiText, /corpusTitle: "Codex 聊天训练入库"/);
   assert.match(developer, /ingestionEnabled: settings\.codexAppCorpusIngestionEnabled/);
   assert.match(developer, /aria-pressed=\{corpus\.ingestionEnabled\}/);
 });
@@ -98,9 +107,9 @@ test("模型目录来自官方 app-server 并按模型能力渲染推理强度�
   assert.match(developer, /supportedEfforts\.map/);
   assert.match(developer, /fastServiceTierSupported/);
   assert.match(developer, /modelCatalogStatus/);
-  assert.match(developer, /Astra.*已出现/);
-  assert.match(developer, /Astra.*未出现/);
-  assert.match(developer, /无法读取模型列表/);
+  assert.match(fixedUiText, /modelCatalogAstraPresent: "已出现"/);
+  assert.match(fixedUiText, /modelCatalogAstraMissing: "未出现"/);
+  assert.match(fixedUiText, /modelCatalogFailed: "无法读取模型列表/);
   assert.match(developer, /const nextServiceTier = model\?\.supportedServiceTiers\?\.includes\(serviceTier\) \? serviceTier : "default"/);
   assert.match(developer, /selectedModel\?\.supportedServiceTiers\?\.includes\("fast"\) === true/);
   assert.match(interactionPreload, /supportedServiceTiers: \["default", "fast"\]/);

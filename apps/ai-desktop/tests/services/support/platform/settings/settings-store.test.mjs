@@ -11,7 +11,7 @@ import { controlledTestRoot } from "#test-paths";
 const store = readFileSync(new URL("../../../../../electron/services/support/platform/settings/internal/settings.store.ts", import.meta.url), "utf8");
 const resource = readFileSync(new URL("../../../../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
 const transformedResource = await transform(resource, { format: "esm", loader: "ts", target: "es2022" });
-const { fixedUiText } = await import(`data:text/javascript;base64,${Buffer.from(transformedResource.code).toString("base64")}`);
+const { fixedUiText, resolveFixedUiText } = await import(`data:text/javascript;base64,${Buffer.from(transformedResource.code).toString("base64")}`);
 
 async function loadSettingsStore(root) {
   const result = await build({
@@ -39,12 +39,16 @@ test("固定界面资源提供三语、中文回退和受控缺键诊断", () =>
   assert.match(resource, /"zh-CN"/);
   assert.match(resource, /\bja:/);
   assert.match(resource, /\ben:/);
-  assert.match(resource, /FIXED_UI_TEXT\["zh-CN"\]\[key\]/);
+  assert.match(resource, /catalog\["zh-CN"\]\?\.\[entry\]/);
   assert.match(resource, /missingText/);
   assert.equal(fixedUiText("en", "workspaceFilePreview"), "File preview");
   assert.equal(fixedUiText("zh-CN", "screenshotResizeAnnotation"), "调整红框-{handle}");
+  assert.equal(fixedUiText("zh-CN", "modelDefaultLabel"), "默认模型");
+  assert.equal(fixedUiText("zh-CN", "modelDefault"), "Codex 默认");
   assert.equal(fixedUiText("fr", "workspaceFilePreview"), "文件预览");
   assert.equal(fixedUiText("en", "retiredFixedKey"), "[缺少固定界面文案: retiredFixedKey]");
+  assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案", developerSettings: "连接与执行设置" }, en: {} }, "en", "developerSettings"), "连接与执行设置");
+  assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案" }, en: {} }, "en", "developerSettings"), "[缺少固定界面文案: developerSettings]");
 });
 
 test("语言设置持久化三语并在读取失败时保留原文件", async () => {

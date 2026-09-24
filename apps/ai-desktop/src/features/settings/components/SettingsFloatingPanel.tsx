@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 
 import type { LocaleValue } from "../../../../contracts/system/desktop/index";
+import { fixedUiText } from "../../../../contracts/foundation";
 
 type SelFloatingPanelController = {
   body: HTMLElement;
@@ -36,10 +37,8 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
     content.append(scrollStack);
     const controller = floatingPanel.mount(host, {
       id: "developer-settings",
-      title: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
-      label: locale === "ja" ? "接続と実行設定" : "连接与执行设置",
-      openLabel: locale === "ja" ? "接続と実行設定を開く" : "打开连接与执行设置",
-      closeLabel: locale === "ja" ? "接続と実行設定を閉じる" : "关闭连接与执行设置",
+      title: fixedUiText(locale, "developerSettings"), label: fixedUiText(locale, "developerSettings"),
+      openLabel: fixedUiText(locale, "developerSettingsOpen"), closeLabel: fixedUiText(locale, "developerSettingsClose"),
       content,
       classes: { control: "dev-settings-control", trigger: "activity-settings", panel: "dev-settings" },
       resizable: {
@@ -47,10 +46,9 @@ export function SettingsFloatingPanel({ locale, open, onOpenChange, children }: 
         maxWidth: MAXIMUM_WIDTH,
         right: true,
         labels: {
-          left: locale === "ja" ? "設定パネルの幅を調整" : "调整设置面板宽度",
-          right: locale === "ja" ? "右側から設定パネルの幅を調整" : "从右侧调整设置面板宽度",
+          left: fixedUiText(locale, "settingsPanelResize"), right: fixedUiText(locale, "settingsPanelResizeRight"),
         },
-        resetLabel: locale === "ja" ? "ダブルクリックで既定の幅に戻す" : "双击恢复默认宽度",
+        resetLabel: fixedUiText(locale, "settingsPanelResizeReset"),
       },
       onOpenChange,
     });
