@@ -1,6 +1,7 @@
 import type { LocaleValue, ModelServiceTierValue, ReasoningEffortValue, SandboxModeValue } from "../../../../contracts/system/desktop/index";
 import type { DeveloperSettingsFeatureProps } from "../components/DeveloperSettingsFeature.types";
 import { auditStatusText, formatBytes, reasoningEffortLabel } from "./settings-formatters";
+import { fixedUiText } from "../../../../contracts/foundation/index";
 import type { DeveloperSettingsSectionController } from "./useDeveloperSettingsSectionController";
 
 /** 测试数据清理文案必须明确保留范围和重启影响。 */
@@ -34,7 +35,7 @@ export function createDeveloperSettingsViewModel(
 ) {
   const { settings, diagnostics, status, text } = props;
   const locale = settings.locale;
-  const resetCopy = testDataResetCopy[locale];
+  const resetCopy = testDataResetCopy[locale === "ja" ? "ja" : "zh-CN"];
   const resetCategoryLabels = locale === "ja"
     ? { collaboration: "協同実行状態", evolution: "進化実行状態", linghu: "令狐実行状態", workflow: "イベントとワークフロー投影" }
     : { collaboration: "协作运行状态", evolution: "演化运行状态", linghu: "令狐运行状态", workflow: "事件与工作流投影" };
@@ -151,9 +152,20 @@ export function createDeveloperSettingsViewModel(
     preferences: {
       locale,
       sandboxMode: settings.sandboxMode,
+      languageLabel: fixedUiText(locale, "language"),
+      saving: settings.localeSaving,
+      savingLabel: fixedUiText(locale, "languageSaving"),
+      saveError: settings.localeSaveError,
+      retryLabel: fixedUiText(locale, "retry"),
+      dismissLabel: fixedUiText(locale, "dismiss"),
+      readRecovered: settings.settingsReadRecovered,
+      readRecoveredLabel: fixedUiText(locale, "settingsReadRecovered"),
       readOnlyLabel: text.readOnly,
       writeLabel: text.write,
-      onLocaleChange: (value: string) => settings.updateSettings({ locale: value as LocaleValue }),
+      onLocaleChange: (value: string) => settings.updateLocale(value as LocaleValue),
+      onRetryLocale: settings.retryLocale,
+      onDismissLocaleError: settings.dismissLocaleSaveError,
+      onDismissReadRecovered: settings.dismissSettingsReadRecovered,
       onSandboxModeChange: (value: string) => settings.updateSettings({ sandboxMode: value as SandboxModeValue }),
     },
     diagnostics: {

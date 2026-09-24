@@ -52,7 +52,7 @@ export function ScreenshotEditor({ capture, locale, onCancel, onComplete }: Scre
   const selectionOriginRef = useRef<Point | null>(null);
   const interactionRef = useRef<ActiveInteraction | null>(null);
   const annotationIdRef = useRef(0);
-  const text = editorLabels[locale];
+  const text = editorLabels[locale === "ja" ? "ja" : "zh-CN"];
   const annotations = annotationHistory[annotationHistory.length - 1] ?? [];
   const selectedRectangle = selectedRectangleId
     ? annotations.find((annotation): annotation is RectangleAnnotation => annotation.type === "rectangle" && annotation.id === selectedRectangleId)

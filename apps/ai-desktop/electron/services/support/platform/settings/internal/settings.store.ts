@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import {
   MODEL_SERVICE_TIERS,
@@ -6,7 +6,7 @@ import {
   type ModelServiceTierValue,
   type ReasoningEffortValue,
 } from "../../../../../../contracts/foundation/index.js";
-import type { DesktopSettingsOutDto } from "../../../../../../contracts/services/support/platform/settings/index.js";
+import type { DesktopSettingsOutDto, DesktopSettingsReadOutDto } from "../../../../../../contracts/services/support/platform/settings/index.js";
 
 export const DEFAULT_AI_DESKTOP_MODEL = "gpt-5.6-terra";
 const SETTINGS_SCHEMA_VERSION = 2;
@@ -34,28 +34,44 @@ export class SettingsStore {
 
   read(): DesktopSettingsOutDto {
     try {
+      return this.#readStored();
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  /** IPC 读取保留恢复来源，避免 Renderer 把文件读取故障误解为用户选择了默认日文。 */
+  readForRenderer(): DesktopSettingsReadOutDto {
+    if (!existsSync(this.#filePath)) return { settings: { ...DEFAULT_SETTINGS }, source: "default" };
+    try {
+      return { settings: this.#readStored(), source: "stored" };
+    } catch {
+      return { settings: { ...DEFAULT_SETTINGS }, source: "recovered" };
+    }
+  }
+
+  #readStored(): DesktopSettingsOutDto {
       const value = JSON.parse(readFileSync(this.#filePath, "utf8")) as StoredDesktopSettings;
       // 旧版本没有模型迁移标记；仅把旧的空默认值升级为 Terra，之后仍允许用户主动选择 Codex 默认。
       const defaultModel = Number(value.settingsSchemaVersion || 0) >= 1
         ? validModel(value.defaultModel)
         : validModel(value.defaultModel) || DEFAULT_AI_DESKTOP_MODEL;
       return {
-        locale: value.locale === "zh-CN" ? "zh-CN" : "ja",
+        locale: value.locale === "zh-CN" || value.locale === "en" ? value.locale : "ja",
         sandboxMode: value.sandboxMode === "workspace-write" ? "workspace-write" : "read-only",
         defaultModel,
         reasoningEffort: validReasoningEffort(value.reasoningEffort),
         serviceTier: validServiceTier(value.serviceTier) || "default",
         codexAppCorpusIngestionEnabled: value.codexAppCorpusIngestionEnabled === true,
       };
-    } catch {
-      return { ...DEFAULT_SETTINGS };
-    }
   }
 
   update(patch: Partial<DesktopSettingsOutDto>): DesktopSettingsOutDto {
+    // 已存在文件无法读取时禁止写入，避免默认值覆盖用户原有设置。
+    if (existsSync(this.#filePath)) this.#readStored();
     const current = this.read();
     const next: DesktopSettingsOutDto = {
-      locale: patch.locale === "ja" || patch.locale === "zh-CN" ? patch.locale : current.locale,
+      locale: patch.locale === "ja" || patch.locale === "zh-CN" || patch.locale === "en" ? patch.locale : current.locale,
       sandboxMode: patch.sandboxMode === "read-only" || patch.sandboxMode === "workspace-write"
         ? patch.sandboxMode
         : current.sandboxMode,

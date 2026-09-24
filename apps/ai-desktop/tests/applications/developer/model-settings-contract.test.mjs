@@ -17,6 +17,7 @@ const contracts = [
   read("contracts/services/support/platform/codex/dto/codex.out.dto.ts"),
 ].join("\n");
 const store = read("electron/services/support/platform/settings/internal/settings.store.ts");
+const fixedUiText = read("contracts/foundation/i18n/fixed-ui-text.ts");
 const service = read("electron/services/support/platform/codex/codex.facade.ts");
 const collaboration = read("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts");
 const developer = [
@@ -36,6 +37,7 @@ const harnessRule = [
 ].join("\n");
 
 test("全局设置持久化默认模型、推理强度和速度，人物会话字段不进入设置协议", () => {
+  assert.match(contracts, /"ja", "zh-CN", "en"/);
   assert.match(contracts, /defaultModel: string \| null/);
   assert.match(contracts, /reasoningEffort: ReasoningEffortValue \| null/);
   assert.match(contracts, /serviceTier: ModelServiceTierValue/);
@@ -43,6 +45,14 @@ test("全局设置持久化默认模型、推理强度和速度，人物会话�
   assert.match(store, /DEFAULT_AI_DESKTOP_MODEL = "gpt-5\.6-terra"/);
   assert.match(store, /validModel\(value\.defaultModel\) \|\| DEFAULT_AI_DESKTOP_MODEL/);
   assert.doesNotMatch(contracts, /selectedModel/);
+});
+
+test("语言设置以独立状态保存并在读取失败时保留 Renderer 初始语言", () => {
+  assert.match(developer, /localeSaving/);
+  assert.match(developer, /localeSaveError/);
+  assert.match(developer, /settingsReadRecovered/);
+  assert.match(developer, /result\.source === "recovered"/);
+  assert.match(fixedUiText, /fixedUiText/);
 });
 
 test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () => {

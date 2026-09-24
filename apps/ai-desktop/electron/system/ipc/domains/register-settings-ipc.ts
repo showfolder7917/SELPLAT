@@ -5,7 +5,7 @@ import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 /** 设置领域独立登记读写通道，并把每次全局执行策略变更写入业务审计。 */
 export function registerSettingsIpc(settings: SettingsStore, eventCenter: EventCenterFacade): void {
-  registerEventCenterIpcHandler(eventCenter, "desktop:get-settings", () => settings.read(), "business");
+  registerEventCenterIpcHandler(eventCenter, "desktop:get-settings", () => settings.readForRenderer(), "business");
   registerEventCenterIpcHandler(eventCenter, "desktop:update-settings", (_event, patch: UpdateDesktopSettingsInDto) => {
     const result = settings.update(patch);
     eventCenter.recordEvent("settings.updated", {

@@ -1,10 +1,14 @@
 import type { ScreenshotApplicationController } from "./useScreenshotApplicationController";
+import { fixedUiText } from "../../../../contracts/foundation/index";
 
 /** 截图窗口的显示模型使用状态联合，避免 View 再次判断业务字段组合。 */
 export type ScreenshotApplicationViewModel =
   | {
     state: "error";
+    title: string;
     message: string;
+    technicalDetail: string;
+    technicalDetailsLabel: string;
     closeLabel: string;
     onClose: () => void;
   }
@@ -28,8 +32,11 @@ export function createScreenshotApplicationViewModel(
   if (controller.error) {
     return {
       state: "error",
-      message: controller.error,
-      closeLabel: controller.locale === "ja" ? "閉じる" : "关闭",
+      title: controller.error.kind === "settings" ? fixedUiText(controller.locale, "screenshotSettingsReadTitle") : fixedUiText(controller.locale, "screenshotSettingsReadTitle"),
+      message: controller.error.kind === "settings" ? fixedUiText(controller.locale, "screenshotSettingsReadDetail") : fixedUiText(controller.locale, "screenshotSettingsReadDetail"),
+      technicalDetail: controller.error.technicalDetail,
+      technicalDetailsLabel: fixedUiText(controller.locale, "technicalDetails"),
+      closeLabel: fixedUiText(controller.locale, "close"),
       onClose: () => { void controller.cancel(); },
     };
   }
@@ -37,7 +44,7 @@ export function createScreenshotApplicationViewModel(
   if (!controller.capture) {
     return {
       state: "loading",
-      loadingLabel: controller.locale === "ja" ? "スクリーンショットを読み込み中" : "正在加载截图",
+      loadingLabel: fixedUiText(controller.locale, "loadingScreenshot"),
     };
   }
 
