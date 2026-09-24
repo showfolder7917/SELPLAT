@@ -144,7 +144,10 @@ test("开发包运行器只在打包期间使用和清理实体化输入", () =>
 test("隔离工作树的托管静态测试使用临时数据工作区", () => {
   assert.match(packageManifest.scripts["test:managed"], /scripts\/run-managed-tests\.mjs/);
   assert.match(managedTestRunnerSource, /isCollaborationWorktree/);
+  assert.match(managedTestRunnerSource, /const needsTemporaryWorkspace = isCollaborationWorktree\(sourceProjectRoot\)/);
   assert.match(managedTestRunnerSource, /SELPLAT_ROOT: temporaryWorkspace/);
+  assert.match(managedTestRunnerSource, /AI_DESKTOP_TEST_TEMP_ROOT: path\.join\(temporaryWorkspace, "cache", "ai-desktop", "test-tmp"\)/);
+  assert.match(managedTestRunnerSource, /process\.platform === "darwin" \? "\/private\/tmp" : os\.tmpdir\(\)/);
   assert.match(managedTestRunnerSource, /finally[\s\S]*rmSync\(temporaryWorkspace/);
 });
 

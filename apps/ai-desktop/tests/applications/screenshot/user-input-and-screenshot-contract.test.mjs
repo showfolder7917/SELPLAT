@@ -51,6 +51,8 @@ test("截图编辑器使用可编辑红框并只在选中状态显示完成取�
   assert.match(developerApp, /currentOptions\.setAttachments\(destinationRef\.current/);
   assert.match(developerApp, /composerRef\.current\?\.focus\(\)/);
   assert.match(ipc, /hasAnnotations: request\.hasAnnotations === true/);
+  assert.match(screenshotEditor, /fixedUiText/);
+  assert.doesNotMatch(screenshotEditor, /editorLabels|locale === "ja" \? "ja" : "zh-CN"/);
 });
 
 test("macOS 截图预热返回结构化权限结果并提供可恢复入口", () => {

@@ -18,6 +18,12 @@ const contracts = [
 ].join("\n");
 const store = read("electron/services/support/platform/settings/internal/settings.store.ts");
 const fixedUiText = read("contracts/foundation/i18n/fixed-ui-text.ts");
+const migratedFixedUi = [
+  read("src/features/conversation/components/StreamDetails.tsx"),
+  read("src/features/conversation/components/ManagedStageAction.tsx"),
+  read("src/features/screenshot/components/ScreenshotEditor.tsx"),
+  read("src/applications/developer/workspace/WorkspaceFilePreview.tsx"),
+].join("\n");
 const service = read("electron/services/support/platform/codex/codex.facade.ts");
 const collaboration = read("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts");
 const developer = [
@@ -53,6 +59,15 @@ test("语言设置以独立状态保存并在读取失败时保留 Renderer 初�
   assert.match(developer, /settingsReadRecovered/);
   assert.match(developer, /result\.source === "recovered"/);
   assert.match(fixedUiText, /fixedUiText/);
+  assert.match(developer, /\.then\(\(settings\) => \{ applySettings\(settings\); setPendingLocale\(null\); \}\)/);
+  assert.doesNotMatch(developer, /setLocale\(nextLocale\)/);
+});
+
+test("迁移范围内的固定界面只通过统一资源解析，不保留局部语言词典", () => {
+  assert.match(migratedFixedUi, /fixedUiText/);
+  assert.doesNotMatch(migratedFixedUi, /editorLabels|firstLabels|repeatLabels|const japanese|const chinese/);
+  assert.doesNotMatch(migratedFixedUi, /locale === "ja" \? "ja" : "zh-CN"/);
+  assert.match(fixedUiText, /CONTROLLED_MISSING_TEXT = "缺少固定界面文案"/);
 });
 
 test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () => {

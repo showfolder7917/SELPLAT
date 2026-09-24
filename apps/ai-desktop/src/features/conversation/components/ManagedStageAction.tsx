@@ -1,5 +1,6 @@
 import { ArrowClockwise24Regular, Beaker24Regular, CheckmarkCircle24Regular, Play24Regular } from "@fluentui/react-icons";
 
+import { fixedUiText, type FixedUiTextKey } from "../../../../contracts/foundation/index";
 import type { LocaleValue, ManagedExecutionModeValue } from "../../../../contracts/system/desktop/index";
 import { nextManagedMode, type Message } from "../model/chat-message";
 
@@ -18,20 +19,20 @@ export function ManagedStageAction({ message, locale, actionable, onAdvance }: M
   if (message.collaborationTaskId) return null;
   const current = message.managedMode;
   if (!current) return null;
-  const firstLabels: Record<ManagedExecutionModeValue, { ja: string; "zh-CN": string }> = {
-    "conversation-managed": { ja: "この意図で合っています", "zh-CN": "就是这意思" },
-    "requirement-managed": { ja: "この案で実行", "zh-CN": "按这个方案执行" },
-    "task-managed": { ja: "テストする", "zh-CN": "测试一下" },
-    "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
+  const firstLabelKeys: Record<ManagedExecutionModeValue, FixedUiTextKey> = {
+    "conversation-managed": "managedStageConfirmIntent",
+    "requirement-managed": "managedStageExecutePlan",
+    "task-managed": "managedStageTest",
+    "test-managed": "managedStageRetest",
   };
-  const repeatLabels: typeof firstLabels = {
-    "conversation-managed": { ja: "要件を再分析", "zh-CN": "重新分析需求" },
-    "requirement-managed": { ja: "再実行", "zh-CN": "重新执行" },
-    "task-managed": { ja: "再テスト", "zh-CN": "重新测试" },
-    "test-managed": { ja: "再テスト", "zh-CN": "重新测试" },
+  const repeatLabelKeys: typeof firstLabelKeys = {
+    "conversation-managed": "managedStageReanalyze",
+    "requirement-managed": "managedStageRerun",
+    "task-managed": "managedStageRetest",
+    "test-managed": "managedStageRetest",
   };
   const target = current === "test-managed" ? null : nextManagedMode(current);
-  const label = (message.actionTriggered ? repeatLabels : firstLabels)[current][locale === "ja" ? "ja" : "zh-CN"];
+  const label = fixedUiText(locale, (message.actionTriggered ? repeatLabelKeys : firstLabelKeys)[current]);
   const Icon = message.actionTriggered ? ArrowClockwise24Regular : target === "requirement-managed" ? CheckmarkCircle24Regular : target === "task-managed" ? Play24Regular : Beaker24Regular;
   return <div className="managed-stage-action">
     {target && <button type="button" className={`stage-advance ${message.actionTriggered ? "triggered" : ""}`} disabled={!actionable || message.streaming} onClick={() => onAdvance(target, label)}><Icon /><span>{label}</span></button>}
