@@ -431,7 +431,8 @@ export class HanliComputerAcceptanceRunner {
             // 全应用布局验收不依赖测试台是否打开；尺寸仍限应用支持的预设。
             if (args.resizePreset === "narrow") {
               // 仅使用应用本身支持的最小窗口预设，保留初始位置，禁止模型提供任意尺寸。
-              window.setBounds({ ...initialBounds, width: 1000, height: 700 });
+              const [minimumWidth, minimumHeight] = window.getMinimumSize();
+              window.setBounds({ ...initialBounds, width: minimumWidth, height: minimumHeight });
               formalWindowResized = true;
               windowResizeEvidence = { preset: "narrow", bounds: window.getBounds() };
             } else if (args.resizePreset === "restore") {

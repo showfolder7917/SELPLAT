@@ -16,6 +16,7 @@ const operationSource = readFileSync("contracts/services/personas/hanli/value/ac
 const goalSource = readFileSync("contracts/services/personas/hanli/dto/computer-acceptance.in.dto.ts", "utf8");
 const runtimeSource = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
 const desktopIpcSource = readFileSync("electron/system/ipc/register-desktop-ipc.ts", "utf8");
+const mainWindowLayoutSource = readFileSync("electron/system/window/main-window-layout.cts", "utf8");
 
 test("正式窗口销毁后释放验收锁并有界重试，不把旧窗口标记为持续验收", () => {
   assert.match(desktopIpcSource, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
@@ -35,7 +36,9 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /navigateTaskCollaboration[\s\S]*button\.section-toggle\[aria-controls="developer-task-list"\][\s\S]*button\.collaboration-task-group-entry/);
   assert.match(acceptanceSource, /async function navigateTaskCollaboration[\s\S]*waitForPanel[\s\S]*task-panel-not-open[\s\S]*task-panel-not-closed[\s\S]*task-group-not-visible/);
   assert.match(acceptanceSource, /taskCollaborationVisible: true/);
-  assert.match(acceptanceSource, /resize-formal-window[\s\S]*width: 1000, height: 700/);
+  assert.match(mainWindowLayoutSource, /minimum:\s*\{ width: 680, height: 700 \}/);
+  assert.match(acceptanceSource, /resize-formal-window[\s\S]*window\.getMinimumSize\(\)[\s\S]*width: minimumWidth, height: minimumHeight/);
+  assert.match(acceptanceSource, /resizePreset === "restore"[\s\S]*window\.setBounds\(initialBounds\)/);
   assert.match(acceptanceSource, /仅当本步 criterionIds 包含任务卡条件[\s\S]*no-visible-conversation[\s\S]*韩立人物入口[\s\S]*不发送消息、不修改任务或设置/);
   assert.match(operationSource, /type: "open-hanli-conversation"/);
   assert.match(acceptanceSource, /async function navigateHanliConversation[\s\S]*task-panel-unavailable[\s\S]*task-panel-not-open/);
