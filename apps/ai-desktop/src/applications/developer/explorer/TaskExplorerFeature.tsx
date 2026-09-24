@@ -13,6 +13,7 @@ import {
 } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type {
   // 最近任务摘要供单会话导航显示最后一次普通任务。
   AuditTaskSummaryOutDto,
@@ -76,9 +77,8 @@ export function TaskExplorerFeature({
     void changeMode(mode);
   };
 
-  let toggleAction = locale === "ja" ? "展開" : "展开";
-  if (expanded) toggleAction = locale === "ja" ? "折りたたむ" : "折叠";
-  const sectionName = locale === "ja" ? "タスク" : "任务";
+  const toggleAction = fixedUiText(locale, expanded ? "taskCollapse" : "taskExpand");
+  const sectionName = fixedUiText(locale, "taskSection");
 
   let navigationContent: ReactNode;
   if (collaborationMode) {
@@ -111,7 +111,7 @@ export function TaskExplorerFeature({
           onClick={onToggle}
         >
           {expanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
-          <span>{locale === "ja" ? "TASKS" : "任务"}</span>
+          <span>{fixedUiText(locale, "taskSectionHeading")}</span>
         </button>
       </div>
 
