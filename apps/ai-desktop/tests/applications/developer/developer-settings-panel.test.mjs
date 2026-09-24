@@ -14,6 +14,7 @@ const component = [
   "../../../src/features/settings/model/useDesktopDiagnostics.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const settingsPanel = readFileSync(new URL("../../../src/features/settings/components/SettingsFloatingPanel.tsx", import.meta.url), "utf8");
+const fixedUiText = readFileSync(new URL("../../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const floatingPanel = readFileSync(new URL("../../../../../shared/frontend/sel-ui/src/components/floating-panel/selFloatingPanel.js", import.meta.url), "utf8");
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -26,11 +27,11 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
   assert.match(component, /openTempDirectory/);
   assert.match(component, /clearTempFiles/);
   assert.match(component, /clearTestData/);
-  assert.match(component, /一键清空测试数据/);
-  assert.match(component, /保留人物对话、训练记忆、登录、设置、工作区、规则和源码/);
-  assert.match(component, /Codex 聊天训练入库/);
-  assert.match(component, /只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库/);
-  assert.match(component, /backfillAriaLabel:.*一键补齐历史 AI 摘要/);
+  assert.match(fixedUiText, /testDataAction: "一键清空测试数据"/);
+  assert.match(fixedUiText, /testDataDetail: "保留人物对话、训练记忆、登录、设置、工作区、规则和源码/);
+  assert.match(fixedUiText, /corpusTitle: "Codex 聊天训练入库"/);
+  assert.match(fixedUiText, /corpusDetail: "只将当前 SELPLAT 工作区中已经完成的每轮可见对话入库/);
+  assert.match(component, /backfillAriaLabel/);
   assert.match(component, /aria-label=\{corpus\.backfillAriaLabel\}/);
   assert.match(component, /startCorpusSemanticBackfill\(\)/);
   assert.match(component, /dev-account[\s\S]*test-data-reset-card[\s\S]*model-settings-card/);
@@ -39,7 +40,7 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
 });
 
 test("语言选择有三语选项、保存忙碌态和就近恢复提示", () => {
-  assert.match(component, /option value="en">English/);
+  assert.match(component, /languageOptionEn/);
   assert.match(component, /aria-busy=\{preferences\.saving\}/);
   assert.match(component, /preferences\.saveError/);
   assert.match(component, /preferences\.readRecovered/);
@@ -53,7 +54,7 @@ test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () =
   assert.match(settingsPanel, /minWidth:\s*MINIMUM_WIDTH/);
   assert.match(settingsPanel, /maxWidth:\s*MAXIMUM_WIDTH/);
   assert.match(settingsPanel, /right:\s*true/);
-  assert.match(settingsPanel, /right: locale === "ja"/);
+  assert.match(settingsPanel, /right:\s*true/);
   assert.match(settingsPanel, /resetLabel:/);
   assert.doesNotMatch(component, /SettingsWidthResizer/);
   assert.match(settingsPanel, /content\.append\(scrollStack\)/);

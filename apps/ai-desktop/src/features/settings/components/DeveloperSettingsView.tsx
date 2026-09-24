@@ -2,6 +2,7 @@ import { Delete24Regular, FolderOpen24Regular } from "@fluentui/react-icons";
 
 import { RuleManagementFeature } from "../../rules";
 import { ChatGPTLoginAction } from "../../shell";
+import { fixedUiText } from "../../../../contracts/foundation";
 import type { DeveloperSettingsViewModel } from "../model/createDeveloperSettingsViewModel";
 import { SettingsFloatingPanel } from "./SettingsFloatingPanel";
 
@@ -13,6 +14,7 @@ type DeveloperSettingsViewProps = {
 /** 设置浮层的纯 View，不读取业务 Controller 或 Desktop API。 */
 export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps) {
   const { account, testData, model, corpus, preferences, diagnostics } = viewModel;
+  const copy = (key: Parameters<typeof fixedUiText>[1]) => fixedUiText(viewModel.panel.locale, key);
 
   return (
     <SettingsFloatingPanel
@@ -41,7 +43,7 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
         {testData.result && (
           <div className="test-data-reset-result" role="status">
             <strong>{testData.result.summary}</strong>
-            {testData.result.categories.map((category) => <small key={category.label}>{category.label}：{category.count} 条</small>)}
+            {testData.result.categories.map((category) => <small key={category.label}>{category.label}：{category.count} {copy("recordUnit")}</small>)}
             <small>{testData.result.candidates}</small>
             {testData.result.warnings.map((warning) => <em key={warning}>{warning}</em>)}
             <small>{testData.result.retained}</small>
@@ -147,16 +149,16 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
       <label>
         {preferences.languageLabel}
         <select aria-busy={preferences.saving} disabled={preferences.saving} value={preferences.locale} onChange={(event) => preferences.onLocaleChange(event.target.value)}>
-          <option value="zh-CN">简体中文</option>
-          <option value="ja">日本語</option>
-          <option value="en">English</option>
+          <option value="zh-CN">{copy("languageOptionZhCn")}</option>
+          <option value="ja">{copy("languageOptionJa")}</option>
+          <option value="en">{copy("languageOptionEn")}</option>
         </select>
         {preferences.saving && <small role="status">{preferences.savingLabel}</small>}
         {preferences.saveError && <span role="alert">{preferences.saveError} <button type="button" onClick={preferences.onRetryLocale}>{preferences.retryLabel}</button><button type="button" onClick={preferences.onDismissLocaleError}>{preferences.dismissLabel}</button></span>}
         {preferences.readRecovered && <span role="status">{preferences.readRecoveredLabel} <button type="button" onClick={preferences.onDismissReadRecovered}>{preferences.dismissLabel}</button></span>}
       </label>
       <label>
-        Sandbox
+        {copy("sandbox")}
         <select value={preferences.sandboxMode} onChange={(event) => preferences.onSandboxModeChange(event.target.value)}>
           <option value="read-only">{preferences.readOnlyLabel}</option>
           <option value="workspace-write">{preferences.writeLabel}</option>

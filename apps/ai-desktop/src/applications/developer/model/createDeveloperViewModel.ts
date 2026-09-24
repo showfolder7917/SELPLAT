@@ -1,5 +1,6 @@
 import type { DeveloperViewModel } from "./developerViewModelTypes";
 import type { DeveloperApplicationController } from "./useDeveloperApplicationController";
+import { fixedUiText } from "../../../../contracts/foundation";
 
 /** 把数据库诊断状态转换为右侧工作区可以直接显示的恢复提示。 */
 function createMemoryRecoveryViewModel(controller: DeveloperApplicationController) {
@@ -8,12 +9,8 @@ function createMemoryRecoveryViewModel(controller: DeveloperApplicationControlle
   if (!memoryStatus || memoryStatus.state === "ready") return null;
 
   // 中文是默认回退语言，避免未来未知语言产生空白提示。
-  let title = "AI Memory 数据库已停用";
-  let message = memoryStatus.message || "请恢复数据库后重新启动。";
-  if (controller.settings.locale === "ja") {
-    title = "AI Memory データベースは停止中です";
-    message = "設定、移行、または整合性の問題を確認し、元のデータベースを復旧してから再起動してください。";
-  }
+  const title = fixedUiText(controller.settings.locale, "memoryDatabaseDisabledTitle");
+  const message = memoryStatus.message || fixedUiText(controller.settings.locale, "memoryDatabaseDisabledDetail");
 
   return { state: memoryStatus.state, title, message };
 }
@@ -41,7 +38,7 @@ export function createDeveloperViewModel(controller: DeveloperApplicationControl
       minimumWidth: sidebar.minimumWidth,
       maximumWidth: sidebar.maximumWidth,
       toggleLabel: sidebar.toggleLabel,
-      resizeLabel: controller.settings.locale === "ja" ? "サイドバーの幅" : "调整侧栏宽度",
+      resizeLabel: fixedUiText(controller.settings.locale, "sidebarResize"),
       onToggle: sidebar.toggle,
       onPointerResize: sidebar.resizeWithPointer,
       onKeyboardResize: sidebar.resizeWithKeyboard,

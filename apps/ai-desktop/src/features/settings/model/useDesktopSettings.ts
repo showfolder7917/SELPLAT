@@ -48,7 +48,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
     if (typeof desktop.getCorpusIngestionStatus === "function") {
       void desktop.getCorpusIngestionStatus().then(setCorpusIngestion);
     } else {
-      setCorpusIngestion({ state: "stopped", message: "自动入库已停止。", lastSucceededAt: null, retryable: false });
+      setCorpusIngestion({ state: "stopped", message: fixedUiText(locale, "corpusStopped"), lastSucceededAt: null, retryable: false });
     }
     void desktop.getSettings().then((result) => {
       if (result.source === "recovered") {
@@ -84,7 +84,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
         setModelCatalog(catalog);
         setModelCatalogLoaded(true);
       })
-      .catch((error) => setModelSettingsError(readableDesktopError(error, locale === "ja" ? "モデル一覧を取得できません。" : "无法读取模型列表。")))
+      .catch((error) => setModelSettingsError(readableDesktopError(error, fixedUiText(locale, "modelCatalogFailed"))))
       .finally(() => setModelCatalogLoading(false));
   }, [locale, settingsOpen]);
 
@@ -102,7 +102,7 @@ export function useDesktopSettings(settingsOpen: boolean) {
     setModelSettingsError("");
     void getOptionalSystemDesktopApi()?.updateSettings(patch)
       .then(applySettings)
-      .catch((error) => setModelSettingsError(readableDesktopError(error, locale === "ja" ? "設定を保存できません。" : "无法保存全局设置。")));
+      .catch((error) => setModelSettingsError(readableDesktopError(error, fixedUiText(locale, "settingsSaveFailed"))));
   };
 
   const selectDefaultModel = (modelId: string) => {
