@@ -33,6 +33,8 @@ const hanliMethodContext = read("electron/services/personas/hanli/internal/conve
 const nangong = read("src/features/nangong/components/NangongConversationWorkspace.tsx");
 const nangongService = read("electron/services/personas/nangong/internal/conversation/nangong-conversation.service.ts");
 const linghu = read("src/features/linghu/components/LinghuAutomationPanel.tsx");
+const developerWorkspaceRouter = read("src/applications/developer/model/createDeveloperWorkspaceRouterViewModel.ts");
+const fixedUiText = read("contracts/foundation/i18n/fixed-ui-text.ts");
 const harnessRule = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/RUL_AIDesktop协作与自动化规则/requirements.md`);
 
 test("人物会话头以可空 selectedModel 保存并迁移既有数据", () => {
@@ -144,7 +146,8 @@ test("新建人物会话以显示代际拒绝迟到窗口，并仅在南宫婉�
   assert.match(hook, /setNewConversationError\(readableDesktopError\(reason, "无法新建人物会话。"\)\)/);
   assert.match(hook, /newConversationError, error, setError, startNewConversation/);
   assert.match(nangongView, /props\.runtime\.newConversationError/);
-  assert.match(nangongView, /重新建立南宫婉对话/);
+  assert.match(developerWorkspaceRouter, /fixedUiText\(props\.locale, "newNangongConversation"\)/);
+  assert.match(fixedUiText, /newNangongConversation: "重新建立南宫婉对话"/);
   assert.match(nangongView, /props\.runtime\.startNewConversation\(\)/);
 });
 

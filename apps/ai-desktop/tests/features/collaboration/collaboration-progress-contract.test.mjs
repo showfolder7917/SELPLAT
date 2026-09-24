@@ -22,6 +22,7 @@ test("旧任务详情页面和入口整链删除，不保留跳转兼容", () =>
 });
 test("令狐页面只保留自动开关，后台恢复职责仍存在", () => {
   const panel = source("src/features/linghu/components/LinghuAutomationPanel.tsx");
+  const fixedUiText = source("contracts/foundation/i18n/fixed-ui-text.ts");
   const router = [
     source("src/applications/developer/workspace/DeveloperWorkspaceRouter.tsx"),
     source("src/applications/developer/model/useLinghuDisplayConversationController.ts"),
@@ -33,7 +34,14 @@ test("令狐页面只保留自动开关，后台恢复职责仍存在", () => {
   assert.doesNotMatch(panel, /newLinghuDisplayConversation/);
   assert.match(router, /memberId === "linghu-ancestor"/);
   assert.match(router, /newLinghuDisplayConversation/);
-  assert.match(router, /重新建立令狐老祖对话/);
+  assert.match(router, /fixedUiText\(props\.locale, "newLinghuConversation"\)/);
+  assert.match(router, /fixedUiText\(props\.locale, "newCodexSession"\)/);
+  assert.match(router, /fixedUiText\(props\.locale, "newHanliConversation"\)/);
+  assert.match(router, /fixedUiText\(props\.locale, "newNangongConversation"\)/);
+  assert.match(fixedUiText, /newCodexSession: "重新建立一个 Codex 会话"/);
+  assert.match(fixedUiText, /newHanliConversation: "重新建立韩立对话"/);
+  assert.match(fixedUiText, /newNangongConversation: "重新建立南宫婉对话"/);
+  assert.match(fixedUiText, /newLinghuConversation: "重新建立令狐老祖对话"/);
   assert.doesNotMatch(panel, /createPrompt|启动文案|提交修正方案/);
   const facade = source("electron/services/personas/linghu/linghu-automation.facade.ts");
   assert.match(facade, /LINGHU_SAFEGUARD_INSTRUCTIONS/);
