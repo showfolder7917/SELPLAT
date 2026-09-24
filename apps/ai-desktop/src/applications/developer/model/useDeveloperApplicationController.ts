@@ -6,8 +6,8 @@ import { useEvolutionRuntime } from "../../../features/evolution";
 import { useScreenshotCapture, type ScreenshotDestination } from "../../../features/screenshot";
 import { useDesktopDiagnostics, useDesktopSettings } from "../../../features/settings";
 import { useWorkspaceRegistry } from "../../../features/workspace";
+import { fixedUiText } from "../../../../contracts/foundation";
 import { useSelUi } from "../../../theme/SelUiProvider";
-import { developerApplicationLabels } from "./developerApplicationLabels";
 import { useDeveloperSidebar } from "./useDeveloperSidebar";
 import { useDeveloperTooltip } from "./useDeveloperTooltip";
 import type { WorkspaceFilePreviewState } from "../explorer/WorkspaceExplorerFeature.types";
@@ -30,7 +30,10 @@ export function useDeveloperApplicationController() {
 
   // 设置先提供语言和沙箱模式，后续控制器共享这些配置。
   const settings = useDesktopSettings(settingsOpen || testConsoleOpen);
-  const text = developerApplicationLabels[settings.locale === "ja" ? "ja" : "zh-CN"];
+  const text = {
+    title: fixedUiText(settings.locale, "developerTitle"), settings: fixedUiText(settings.locale, "developerSettings"),
+    workspaces: fixedUiText(settings.locale, "workspaceList"), addWorkspace: fixedUiText(settings.locale, "workspaceAdd"), primary: fixedUiText(settings.locale, "workspacePrimary"), makePrimary: fixedUiText(settings.locale, "workspaceMakePrimary"), remove: fixedUiText(settings.locale, "workspaceRemove"), removeConfirm: fixedUiText(settings.locale, "workspaceRemoveConfirm"), minimumWorkspace: fixedUiText(settings.locale, "workspaceMinimum"), readOnly: fixedUiText(settings.locale, "sandboxReadOnly"), write: fixedUiText(settings.locale, "sandboxWrite"), readOnlyTip: fixedUiText(settings.locale, "sandboxReadOnlyTip"), writeTip: fixedUiText(settings.locale, "sandboxWriteTip"), account: fixedUiText(settings.locale, "account"), signedOut: fixedUiText(settings.locale, "signedOut"), signOut: fixedUiText(settings.locale, "signOut"), signIn: fixedUiText(settings.locale, "signIn"), browserOpened: fixedUiText(settings.locale, "browserOpened"), tempFiles: fixedUiText(settings.locale, "tempFiles"), openTemp: fixedUiText(settings.locale, "openTemp"), clearTemp: fixedUiText(settings.locale, "clearTemp"), clearConfirm: fixedUiText(settings.locale, "clearTempConfirm"), trustedCommands: fixedUiText(settings.locale, "trustedCommands"), trustHint: fixedUiText(settings.locale, "trustedCommandsHint"), clearTrustedCommands: fixedUiText(settings.locale, "clearTrustedCommands"), clearTrustedConfirm: fixedUiText(settings.locale, "clearTrustedConfirm"), auditLogs: fixedUiText(settings.locale, "auditLogs"), openAuditLogs: fixedUiText(settings.locale, "openAuditLogs"), noAuditTask: fixedUiText(settings.locale, "noAuditTask"), attachment: fixedUiText(settings.locale, "attachment"), automaticTestTriggered: fixedUiText(settings.locale, "automaticTestTriggered"), screenSourceUnavailable: fixedUiText(settings.locale, "screenSourceUnavailable"),
+  };
   const sidebar = useDeveloperSidebar(settings.locale);
   const diagnostics = useDesktopDiagnostics(settingsOpen || testConsoleOpen, settings.locale);
 
