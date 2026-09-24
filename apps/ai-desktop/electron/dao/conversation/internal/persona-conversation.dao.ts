@@ -42,6 +42,29 @@ export class SqlitePersonaConversationDao {
     }));
   }
 
+  /** 只允许仍为 active 且尚无线程的业务会话认领本次创建的线程。 */
+  claimCodexThread(ownerPersonaId: string, conversationId: string, threadId: string, workspaceSignature: string, occurredAt: string): boolean {
+    if (!this.database) throw new Error("AI Memory 数据库当前不可用，不能认领会话线程关联。");
+    return this.database.withConnection((connection) => connection.prepare(`INSERT INTO AiDesktopPersonaConversationCodexThread
+      (ownerPersonaId, conversationId, threadId, workspaceSignature, linkedAt, updatedAt)
+      SELECT $ownerPersonaId, $conversationId, $threadId, $workspaceSignature, $occurredAt, $occurredAt
+      WHERE EXISTS (SELECT 1 FROM AiDesktopPersonaConversation
+        WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId AND status='active')
+      ON CONFLICT DO NOTHING`).run({
+      $ownerPersonaId: requiredPersonaId(ownerPersonaId), $conversationId: requiredConversationId(conversationId),
+      $threadId: requiredConversationId(threadId), $workspaceSignature: workspaceSignature.trim(), $occurredAt: occurredAt,
+    }).changes === 1);
+  }
+
+  /** 失败补偿只能解除仍由同一业务会话持有的本次线程。 */
+  unlinkCodexThread(ownerPersonaId: string, conversationId: string, threadId: string): boolean {
+    if (!this.database) throw new Error("AI Memory 数据库当前不可用，不能解除会话线程关联。");
+    return this.database.withConnection((connection) => connection.prepare(`DELETE FROM AiDesktopPersonaConversationCodexThread
+      WHERE ownerPersonaId=$ownerPersonaId AND conversationId=$conversationId AND threadId=$threadId`).run({
+      $ownerPersonaId: requiredPersonaId(ownerPersonaId), $conversationId: requiredConversationId(conversationId), $threadId: requiredConversationId(threadId),
+    }).changes === 1);
+  }
+
   /** 读取某个人物的当前活动会话；首次使用或数据库不可用时返回可显示的空会话。 */
   readActive(ownerPersonaId: string): PersonaConversationOutDto {
     if (!this.database) return emptyConversation(ownerPersonaId);

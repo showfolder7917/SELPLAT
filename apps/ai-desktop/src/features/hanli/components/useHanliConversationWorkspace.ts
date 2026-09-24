@@ -26,7 +26,7 @@ function readableDesktopError(error: unknown, fallback: string): string {
   // 标准错误对象（Error）保留真实错误正文，其他未知值使用安全默认提示。
   const message = error instanceof Error ? error.message : fallback;
   // 桌面通信错误前缀不属于业务信息，显示前将它从错误正文中移除。
-  return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
+  return message.replace(/^Error invoking remote method '[^']+':\s*/, "").replace(/\s+/g, " ").trim();
 }
 
 /** 为韩立会话 View 准备页面数据，并提供用户可以触发的操作。 */

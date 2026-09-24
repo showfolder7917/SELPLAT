@@ -191,6 +191,51 @@ export class CodexService {
     };
   }
 
+  /** 创建未接管的业务会话线程；不会读取、覆盖或删除人物当前线程。 */
+  async startDetachedConversationSession(sandboxMode: SandboxModeValue, workspaces: WorkspaceStateOutDto, locale: LocaleValue): Promise<{ threadId: string; workspaceSignature: string }> {
+    await this.#ensureReady();
+    const primaryRoot = workspaces.roots.find((root) => root.id === workspaces.primaryId) || workspaces.roots[0];
+    if (!primaryRoot) throw new Error("At least one registered workspace is required.");
+    const developerInstructions = this.#developerInstructions(locale);
+    const workspaceSignature = JSON.stringify({ workspaces, developerInstructions });
+    const result = asObject(await this.#request("thread/start", {
+      cwd: primaryRoot.path,
+      approvalPolicy: "on-request",
+      approvalsReviewer: "user",
+      sandbox: sandboxMode,
+      ephemeral: false,
+      serviceName: this.#options.serviceName,
+      threadSource: this.#options.threadSource,
+      developerInstructions,
+      ...(this.#options.dynamicTools ? { dynamicTools: this.#options.dynamicTools.definitions } : {}),
+    }));
+    const threadId = stringValue(asObject(result.thread).id);
+    if (!threadId) throw new Error("Codex harness did not return a thread id.");
+    this.#onThreadLifecycle({ action: "started_detached", threadId });
+    return { threadId, workspaceSignature };
+  }
+
+  /** 条件认领成功后才让本次业务会话线程成为该实例的发送目标。 */
+  activateConversationSession(threadId: string, workspaceSignature: string): void {
+    this.#rememberThread(threadId, workspaceSignature);
+  }
+
+  /** 仅删除指定线程，不清理人物当前缓存或任何其他业务会话的恢复凭据。 */
+  async deleteDetachedConversationSession(threadId: string): Promise<void> {
+    await this.#ensureReady();
+    try {
+      await this.#request("thread/delete", { threadId });
+      this.#onThreadLifecycle({ action: "deleted_detached", threadId });
+    } catch (error) {
+      if (isMissingCodexThreadError(error)) {
+        this.#onThreadLifecycle({ action: "missing_on_delete_detached", threadId });
+        return;
+      }
+      this.#onThreadLifecycle({ action: "delete_detached_failed", threadId, reason: errorMessage(error) });
+      throw new Error(`无法回收本次 Codex 线程：${errorMessage(error)}`);
+    }
+  }
+
   /** 只恢复业务会话已关联的线程；调用方确认会话未切换前不更新人物当前线程。 */
   async recoverConversationSession(session: { threadId: string; workspaceSignature: string }, workspaces: WorkspaceStateOutDto, locale: LocaleValue): Promise<ThreadRecovery> {
     await this.#ensureReady();

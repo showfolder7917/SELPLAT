@@ -64,12 +64,12 @@ export interface HanliApplicationServiceOptions {
     /** 向当前韩立模型线程发送一轮完整提示。 */
     send(request: SendPersonaConversationMessageInDto, prompt: string, selectedModel?: string | null,
       options?: { workspacePolicy: "request-snapshot" }): Promise<SendMessageOutDto>;
-    /** 关闭旧模型上下文并建立新的空白线程。 */
-    newChat(): Promise<void>;
-    /** 返回当前 provider 线程标识，仅用于校验会话是否可续接。 */
-    activeConversationId(): string | null;
-    /** 返回当前人物线程及其工作区签名，供已完成回合写入业务会话关联。 */
-    activeConversationSession(): { threadId: string | null; workspaceSignature: string | null };
+    /** 创建尚未接管的专属线程；条件认领前不得影响人物当前线程。 */
+    startDetachedConversationSession(): Promise<{ threadId: string; workspaceSignature: string }>;
+    /** 认领成功后把指定线程作为本实例下一轮发送目标。 */
+    activateConversationSession(session: { threadId: string; workspaceSignature: string }): void;
+    /** 只回收本次创建的指定线程，不触碰人物当前缓存或其他会话。 */
+    deleteDetachedConversationSession(threadId: string): Promise<void>;
     /** 返回刚发生的线程恢复结论，供业务会话持久化而非直接读取事件审计。 */
     readThreadRecovery(): SendMessageOutDto["threadRecovery"] | undefined;
     /** 只 resume 指定业务会话的已关联线程；返回前不接管人物当前线程。 */
