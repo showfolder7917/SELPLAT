@@ -145,11 +145,15 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
 
       {/* 基础偏好区允许切换界面语言和文件系统沙箱权限。 */}
       <label>
-        Language
-        <select value={preferences.locale} onChange={(event) => preferences.onLocaleChange(event.target.value)}>
+        {preferences.languageLabel}
+        <select aria-busy={preferences.saving} disabled={preferences.saving} value={preferences.locale} onChange={(event) => preferences.onLocaleChange(event.target.value)}>
           <option value="zh-CN">简体中文</option>
           <option value="ja">日本語</option>
+          <option value="en">English</option>
         </select>
+        {preferences.saving && <small role="status">{preferences.savingLabel}</small>}
+        {preferences.saveError && <span role="alert">{preferences.saveError} <button type="button" onClick={preferences.onRetryLocale}>{preferences.retryLabel}</button><button type="button" onClick={preferences.onDismissLocaleError}>{preferences.dismissLabel}</button></span>}
+        {preferences.readRecovered && <span role="status">{preferences.readRecoveredLabel} <button type="button" onClick={preferences.onDismissReadRecovered}>{preferences.dismissLabel}</button></span>}
       </label>
       <label>
         Sandbox

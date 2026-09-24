@@ -15,7 +15,7 @@ export type { TrustedCommandInfoOutDto } from "../../services/support/platform/s
 export type { TestDataResetResultOutDto } from "../../services/support/application/index.js";
 export type { AiMemoryDatabaseStateValue, AiMemoryDatabaseStatusOutDto, CorpusIngestionStateValue, CorpusIngestionStatusOutDto, CorpusSemanticBackfillStateValue, CorpusSemanticBackfillStatusOutDto } from "../../services/support/platform/persistence/index.js";
 export type { ScreenCaptureOutDto, ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotAttachmentOutDto, ScreenshotCompletedEventOutDto, ScreenshotSaveInDto, TempDirectoryInfoOutDto } from "../../services/support/platform/attachments/index.js";
-export type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../services/support/platform/settings/index.js";
+export type { DesktopSettingsOutDto, DesktopSettingsReadOutDto, UpdateDesktopSettingsInDto } from "../../services/support/platform/settings/index.js";
 export type { WorkspaceRootOutDto, WorkspaceStateOutDto } from "../../services/support/platform/workspace/index.js";
 
 export type { CodexSessionInfoOutDto, ConversationDispatchStateOutDto, ConversationQueueItemOutDto, EnqueueMessageInDto, SendMessageInDto, SendMessageOutDto } from "../../services/support/capabilities/conversation/index.js";

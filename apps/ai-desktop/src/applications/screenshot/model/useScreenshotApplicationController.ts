@@ -12,7 +12,7 @@ export function useScreenshotApplicationController() {
   // 截图窗口使用与主窗口一致的语言设置。
   const [locale, setLocale] = useState<LocaleValue>("zh-CN");
   // 主进程通信或截图校验失败时显示真实错误。
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ kind: "settings" | "capture"; technicalDetail: string } | null>(null);
 
   useEffect(() => {
     /** 向主进程报告截图窗口已完成的阶段，供运行诊断追踪。 */
@@ -28,7 +28,7 @@ export function useScreenshotApplicationController() {
         const validSize = nextCapture && nextCapture.width >= 1 && nextCapture.height >= 1;
         if (!validPng || !validSize) throw new Error("主进程返回的截图画面无效。");
 
-        setError("");
+        setError(null);
         setCapture(nextCapture);
         setCaptureVersion((current) => current + 1);
         reportStage("renderer-native-frame-received", `${nextCapture.width}x${nextCapture.height}`);
@@ -39,7 +39,7 @@ export function useScreenshotApplicationController() {
         });
       } catch (caught) {
         const message = caught instanceof Error ? caught.message : "无法读取屏幕画面";
-        setError(message);
+        setError({ kind: "capture", technicalDetail: message });
         await getOptionalScreenshotDesktopApi()?.submitScreenCaptureFrameResult({
           requestId: request.requestId,
           width: 0,
@@ -56,10 +56,14 @@ export function useScreenshotApplicationController() {
 
     // 截图窗口没有自己的设置页，只读取主窗口已经保存的语言。
     void getOptionalSystemDesktopApi()?.getSettings()
-      .then((settings) => {
-        if (settings) setLocale(settings.locale);
+      .then((result) => {
+        if (result.source === "recovered") {
+          setError({ kind: "settings", technicalDetail: "Saved language settings could not be read." });
+          return;
+        }
+        setLocale(result.settings.locale);
       })
-      .catch((caught) => setError(caught instanceof Error ? caught.message : "无法打开截图窗口"));
+      .catch((caught) => setError({ kind: "settings", technicalDetail: caught instanceof Error ? caught.message : "Unable to read language settings." }));
 
     return () => removeFrameListener?.();
   }, []);
@@ -68,7 +72,7 @@ export function useScreenshotApplicationController() {
     // 主进程要求重新截图时清空当前画面和错误，回到等待状态。
     return getOptionalScreenshotDesktopApi()?.onScreenCaptureReset(() => {
       setCapture(null);
-      setError("");
+      setError(null);
     });
   }, []);
 

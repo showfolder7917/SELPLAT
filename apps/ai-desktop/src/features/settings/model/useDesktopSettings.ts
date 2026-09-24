@@ -12,6 +12,7 @@ import type {
 } from "../../../../contracts/system/desktop/index";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 import { loadOfficialModelCatalog } from "../../../foundation/model-catalog";
+import { fixedUiText } from "../../../../contracts/foundation/index";
 
 function readableDesktopError(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : fallback;
@@ -34,6 +35,10 @@ export function useDesktopSettings(settingsOpen: boolean) {
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false);
   const [modelCatalogLoading, setModelCatalogLoading] = useState(false);
   const [modelSettingsError, setModelSettingsError] = useState("");
+  const [localeSaving, setLocaleSaving] = useState(false);
+  const [localeSaveError, setLocaleSaveError] = useState("");
+  const [pendingLocale, setPendingLocale] = useState<LocaleValue | null>(null);
+  const [settingsReadRecovered, setSettingsReadRecovered] = useState(false);
 
   useEffect(() => {
     const desktop = getOptionalSystemDesktopApi();
@@ -45,7 +50,13 @@ export function useDesktopSettings(settingsOpen: boolean) {
     } else {
       setCorpusIngestion({ state: "stopped", message: "自动入库已停止。", lastSucceededAt: null, retryable: false });
     }
-    void desktop.getSettings().then(applySettings);
+    void desktop.getSettings().then((result) => {
+      if (result.source === "recovered") {
+        setSettingsReadRecovered(true);
+        return;
+      }
+      applySettings(result.settings);
+    }).catch(() => setSettingsReadRecovered(true));
   }, []);
 
   useEffect(() => {
@@ -103,6 +114,18 @@ export function useDesktopSettings(settingsOpen: boolean) {
     updateSettings({ defaultModel: modelId || null, reasoningEffort: nextEffort, serviceTier: nextServiceTier });
   };
 
+  /** 语言保存只拥有语言控件的忙碌和失败状态，绝不复用模型错误区域。 */
+  const updateLocale = (nextLocale: LocaleValue) => {
+    if (localeSaving || nextLocale === locale) return;
+    setLocaleSaveError("");
+    setPendingLocale(nextLocale);
+    setLocaleSaving(true);
+    void getOptionalSystemDesktopApi()?.updateSettings({ locale: nextLocale })
+      .then((settings) => { applySettings(settings); setPendingLocale(null); })
+      .catch(() => setLocaleSaveError(fixedUiText(locale, "languageSaveFailed")))
+      .finally(() => setLocaleSaving(false));
+  };
+
   const startCorpusSemanticBackfill = async () => {
     // 用户主动补齐时，补齐任务成为本次卡片操作的即时状态来源。
     setCorpusStatusFocus("semantic-backfill");
@@ -131,6 +154,9 @@ export function useDesktopSettings(settingsOpen: boolean) {
     modelCatalogLoaded,
     modelCatalogLoading,
     modelSettingsError,
+    localeSaving,
+    localeSaveError,
+    settingsReadRecovered,
     selectedModel,
     configuredModelUnavailable,
     supportedEfforts,
@@ -141,6 +167,10 @@ export function useDesktopSettings(settingsOpen: boolean) {
       if (Object.hasOwn(patch, "codexAppCorpusIngestionEnabled")) setCorpusStatusFocus("ingestion");
       updateSettings(patch);
     },
+    updateLocale,
+    retryLocale: () => { if (pendingLocale) updateLocale(pendingLocale); },
+    dismissLocaleSaveError: () => setLocaleSaveError(""),
+    dismissSettingsReadRecovered: () => setSettingsReadRecovered(false),
     selectDefaultModel,
     startCorpusSemanticBackfill,
   };

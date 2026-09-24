@@ -38,6 +38,13 @@ test("连接与执行设置不再把本机路径渲染为文本", () => {
   assert.match(component, /openAuditLogDirectory/);
 });
 
+test("语言选择有三语选项、保存忙碌态和就近恢复提示", () => {
+  assert.match(component, /option value="en">English/);
+  assert.match(component, /aria-busy=\{preferences\.saving\}/);
+  assert.match(component, /preferences\.saveError/);
+  assert.match(component, /preferences\.readRecovered/);
+});
+
 test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () => {
   assert.match(component, /@selplat\/sel-ui\/components\/floating-panel/);
   assert.doesNotMatch(component, /shared\/frontend\/sel-ui/);

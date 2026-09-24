@@ -531,7 +531,7 @@ contextBridge.exposeInMainWorld("desktop", {
   getCorpusSemanticBackfillStatus: async () => ({ state: "idle", targetCount: 0, discoveredCount: 0, processedCount: 0, insertedCount: 0, failedCount: 0, message: null, startedAt: null, completedAt: null }),
   getCorpusIngestionStatus: async () => ({ state: "stopped", message: "自动入库已停止。", lastSucceededAt: null, retryable: false }),
   startCorpusSemanticBackfill: async () => ({ state: "completed", targetCount: 2, discoveredCount: 2, processedCount: 2, insertedCount: 2, failedCount: 0, message: "补齐完成：新增 2 条 AI 摘要。", startedAt: "2026-08-28T00:00:00.000Z", completedAt: "2026-08-28T00:00:01.000Z" }),
-  getSettings: async () => ({ ...desktopSettings }),
+  getSettings: async () => ({ settings: { ...desktopSettings }, source: "stored" }),
   updateSettings: async (settings) => { desktopSettings = { ...desktopSettings, ...settings }; return { ...desktopSettings }; },
   getCodexModels: async () => {
     if (codexModelCatalogFailure) throw new Error(codexModelCatalogFailure);
