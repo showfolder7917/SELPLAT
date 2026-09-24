@@ -4,6 +4,7 @@
  * 这里只显示最近一次普通任务，不负责渲染右侧 Codex 会话页面。
  */
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type {
   // 最近任务摘要由诊断控制器读取，本组件只显示请求标题和状态。
   AuditTaskSummaryOutDto,
@@ -28,11 +29,10 @@ export function SingleConversationTaskSummary({
   locale,
 }: SingleConversationTaskSummaryProps) {
   if (!auditTask) {
-    const emptyText = locale === "ja" ? "タスク履歴はまだありません" : "暂无任务记录";
-    return <span className="task-empty">{emptyText}</span>;
+    return <span className="task-empty">{fixedUiText(locale, "taskEmpty")}</span>;
   }
 
-  const fallbackTitle = locale === "ja" ? "新しいタスク" : "新建任务";
+  const fallbackTitle = fixedUiText(locale, "taskNew");
   const taskTitle = auditTask.request || fallbackTitle;
   const taskStatus = auditStatusText(auditTask.status, locale);
 

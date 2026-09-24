@@ -1,5 +1,6 @@
 /** Developer 左侧栏的运行模式开关，只发出选择结果，不保存业务状态。 */
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type {
   // 界面语言决定两个模式按钮使用中文还是日文。
   LocaleValue,
@@ -26,14 +27,14 @@ export function OperatingModeSwitch({
   const selectCollaboration = () => onModeChange("collaboration");
 
   return (
-    <div className="operating-mode-switch" role="group" aria-label={locale === "ja" ? "実行モード" : "运行模式"}>
+    <div className="operating-mode-switch" role="group" aria-label={fixedUiText(locale, "operatingMode")}>
       <button
         type="button"
         className={!collaborationMode ? "active" : ""}
         aria-pressed={!collaborationMode}
         onClick={selectSingleConversation}
       >
-        {locale === "ja" ? "単一会話" : "单会话"}
+        {fixedUiText(locale, "operatingSingleConversation")}
       </button>
       <button
         type="button"
@@ -41,7 +42,7 @@ export function OperatingModeSwitch({
         aria-pressed={collaborationMode}
         onClick={selectCollaboration}
       >
-        {locale === "ja" ? "協同" : "协同模式"}
+        {fixedUiText(locale, "operatingCollaboration")}
       </button>
     </div>
   );
