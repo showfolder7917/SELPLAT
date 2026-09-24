@@ -93,8 +93,7 @@ test("韩立在模型发送前认领专属线程，并在失败时只补偿本�
   assert.doesNotMatch(service, /activeConversationSession\(|linkPersonaConversationCodexThread\(/);
   assert.match(threadService, /startDetachedConversationSession\(\)/);
   assert.match(threadService, /claimPersonaConversationCodexThread/);
-  assert.match(threadService, /deleteDetachedConversationSession\(lease\.threadId\)/);
-  assert.match(threadService, /unlinkPersonaConversationCodexThread/);
+  assert.match(threadService, /const unlinked = await this\.memory\.unlinkPersonaConversationCodexThread\([\s\S]*?if \(!unlinked\) return;[\s\S]*?deleteDetachedConversationSession\(lease\.threadId\)/);
   assert.match(memoryPort, /claimPersonaConversationCodexThread[\s\S]*?unlinkPersonaConversationCodexThread/);
   assert.match(runtime, /let hanliConversationCodex: CodexService/);
   assert.match(runtime, /askHanli: async[\s\S]*?hanLiCodex!\.send/);

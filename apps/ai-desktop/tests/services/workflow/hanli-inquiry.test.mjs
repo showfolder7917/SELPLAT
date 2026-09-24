@@ -609,10 +609,66 @@ test("普通韩立会话发送失败时回收本次线程并解除精确绑定",
     "start:fixture-thread-1",
     "claim:original:fixture-thread-1",
     "activate:fixture-thread-1",
-    "delete:fixture-thread-1",
     "unlink:original:fixture-thread-1",
+    "delete:fixture-thread-1",
   ]);
   assert.equal(f.threadBindings.has("original"), false);
+});
+
+test("普通韩立会话补偿在解绑失败时保留远端线程和可恢复绑定", async () => {
+  const f = fixture(async () => { throw new Error("普通会话不应派发调查"); });
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  f.memory.unlinkPersonaConversationCodexThread = () => { throw new Error("解绑绑定失败"); };
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({ deliberations: [], automationSettings: {} }) },
+    prompts: { render: (id) => id },
+    conversation: f.threadedConversation({
+      send: async () => { throw new Error("模型发送失败"); },
+      deleteDetachedConversationSession: async (threadId) => { f.threadEvents.push(`delete:${threadId}`); },
+    }),
+    recordEvent: () => {},
+  });
+
+  await assert.rejects(service.send(request), /模型发送失败；解绑绑定失败/);
+
+  assert.deepEqual(f.threadEvents, [
+    "start:fixture-thread-1",
+    "claim:original:fixture-thread-1",
+    "activate:fixture-thread-1",
+  ]);
+  assert.deepEqual(f.threadBindings.get("original"), { threadId: "fixture-thread-1", workspaceSignature: "test-workspace" });
+  assert.equal(f.messages.length, 0);
+});
+
+test("普通韩立会话补偿在远端删除失败后解除绑定，允许安全重试", async () => {
+  const f = fixture(async () => { throw new Error("普通会话不应派发调查"); });
+  f.memory.readHanliSemanticContext = () => ({ concerns: [], trajectories: [], inspectionExperiences: [] });
+  const service = new HanliConversationService({
+    memory: f.memory,
+    store: { state: () => ({ deliberations: [], automationSettings: {} }) },
+    prompts: { render: (id) => id },
+    conversation: f.threadedConversation({
+      send: async () => { throw new Error("模型发送失败"); },
+      deleteDetachedConversationSession: async (threadId) => {
+        f.threadEvents.push(`delete:${threadId}`);
+        throw new Error("远端删除失败");
+      },
+    }),
+    recordEvent: () => {},
+  });
+
+  await assert.rejects(service.send(request), /模型发送失败；远端删除失败/);
+
+  assert.deepEqual(f.threadEvents, [
+    "start:fixture-thread-1",
+    "claim:original:fixture-thread-1",
+    "activate:fixture-thread-1",
+    "unlink:original:fixture-thread-1",
+    "delete:fixture-thread-1",
+  ]);
+  assert.equal(f.threadBindings.has("original"), false);
+  assert.equal(f.messages.length, 0);
 });
 
 test("托管中的客户纠正复用原运行并持久化修订范围", async () => {
