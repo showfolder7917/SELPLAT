@@ -24,6 +24,7 @@ import { parseHanliConversationResponse } from "./hanli-conversation.parser.js";
 import { buildHanliMethodContext, buildHanliRecentConversation } from "./hanli-method-context.js";
 // 调查服务负责韩立向南宫婉发起一次只读事实核实并将结果返回人物会话。
 import { HanliInquiryService } from "./hanli-inquiry.service.js";
+import { HanliConversationThreadService } from "./hanli-conversation-thread.service.js";
 
 /** 用户输入 1 后保存到人物会话中的固定业务决定。 */
 const START_DELIBERATION_DECISION: ConversationRoundTopicDecisionInDto = {
@@ -65,6 +66,8 @@ export class HanliConversationService {
   readonly #inquiry: HanliInquiryService;
   /** 同一用户请求只拥有一次模型判断与 Workflow 启动，重复点击共享结果。 */
   readonly #pendingRequests = new Map<string, Promise<PersonaConversationOutDto>>();
+  /** 普通会话线程以业务会话 ID 串行，不能与人物级内部研讨共享发送缓存。 */
+  #conversationThreads: HanliConversationThreadService | undefined;
 
   /** 装配会话外部能力；构造过程不读取数据库，也不启动任何研讨。 */
   constructor(options: HanliApplicationServiceOptions) {
@@ -271,17 +274,13 @@ export class HanliConversationService {
 
   /** 重置模型线程并创建新的空白业务会话，旧会话保留在数据库历史中。 */
   async newConversation(): Promise<PersonaConversationOutDto> {
-    // 模型会话和人物记忆必须同时可用，避免只重置一侧造成身份错位。
-    const chat = this.#options.conversation;
     // memory 负责创建新的稳定业务会话头。
     const memory = this.#options.memory;
-    // 缺少任一能力都无法安全建立新会话。
-    if (!chat || !memory) {
+    // 清空只切换业务会话，不能删除即将归档会话所绑定的历史线程。
+    if (!memory) {
       // 抛出明确错误，界面继续保留当前会话而不是显示假成功。
       throw new Error("韩立自由对话或 AI Memory 尚未接入。");
     }
-    // 先重置韩立模型线程，确保下一轮不会继续使用旧模型上下文。
-    await chat.newChat();
     // 再建立新的业务会话，旧消息只归档不删除。
     return memory.newPersonaConversation("han-li");
   }
@@ -301,6 +300,17 @@ export class HanliConversationService {
 
   /** 普通韩立对话：构造上下文、调用模型、保存结果并更新当前观点事实。 */
   async #continueConversation(
+    request: SendPersonaConversationMessageInDto,
+    conversation: PersonaConversationOutDto,
+    aggregate: HanliConversationAggregate,
+  ): Promise<PersonaConversationOutDto> {
+    const conversationId = conversation.conversationId;
+    if (!conversationId) throw new Error("韩立当前会话尚未建立，不能发送消息。");
+    return this.#threads().run("han-li", conversationId, () => this.#continueConversationAfterThread(request, conversation, aggregate));
+  }
+
+  /** 专属线程已认领后才执行模型调用、解析和回合保存；任一步失败由线程服务精确补偿。 */
+  async #continueConversationAfterThread(
     request: SendPersonaConversationMessageInDto,
     conversation: PersonaConversationOutDto,
     aggregate: HanliConversationAggregate,
@@ -349,17 +359,11 @@ export class HanliConversationService {
       await this.#recordThreadRecovery(conversationId, chat.readThreadRecovery(), request.clientMessageId);
       throw error;
     }
-    // 没有稳定 provider 会话标识时不能把模型输出当成完整人物回合。
-    if (!response.threadId && !chat.activeConversationId()) {
+    // 专属线程已经在发送前认领，响应必须回显实际 provider 线程标识。
+    if (!response.threadId) {
       // 明确失败使用户原消息进入失败状态，而不是保存无法续接的回复。
       throw new Error("韩立会话没有返回稳定 Codex 线程标识。");
     }
-    const session = chat.activeConversationSession();
-    const threadId = response.threadId || session.threadId;
-    if (!threadId || !session.workspaceSignature) throw new Error("韩立会话没有可登记的 Codex 线程关联。");
-    await memory.linkPersonaConversationCodexThread({
-      ownerPersonaId: "han-li", conversationId, threadId, workspaceSignature: session.workspaceSignature, occurredAt: new Date().toISOString(),
-    });
     await this.#recordThreadRecovery(conversationId, response.threadRecovery, request.clientMessageId);
     // 解析可见回复、主题判断和可选调查理解。
     let parsed = parseHanliConversationResponse(response.text);
@@ -519,6 +523,16 @@ export class HanliConversationService {
     this.#options.refreshSemanticMemory?.();
     // 返回数据库权威会话和本轮上下文统计。
     return { ...nextConversation, contextReadStats };
+  }
+
+  /** 延迟构造线程协调器，确保测试或降级装配不会在读取会话时触发外部线程能力。 */
+  #threads(): HanliConversationThreadService {
+    if (this.#conversationThreads) return this.#conversationThreads;
+    const memory = this.#options.memory;
+    const chat = this.#options.conversation;
+    if (!memory || !chat) throw new Error("韩立专属会话线程能力尚未就绪。");
+    this.#conversationThreads = new HanliConversationThreadService(memory, chat);
+    return this.#conversationThreads;
   }
 
   /** 恢复结果是业务会话的独立事实，不写入客户正文，也不替代既有事件中心审计。 */

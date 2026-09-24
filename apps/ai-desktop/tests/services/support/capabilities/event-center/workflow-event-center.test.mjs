@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -14,6 +14,8 @@ import { CheckpointHandoffService } from "../../../../../../../build/ai-desktop/
 import { AcceptanceHandoffService } from "../../../../../../../build/ai-desktop/electron/electron/services/workflow/internal/acceptance/acceptance-handoff.service.js";
 import { derivePersonaCustomerDisplayMessage, PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION } from "../../../../../../../build/ai-desktop/electron/electron/services/support/capabilities/conversation/internal/persona-customer-display-message.projector.js";
 import { appRoot, controlledTestRoot } from "#test-paths";
+
+const personaConversationDaoSource = readFileSync(new URL("../../../../../electron/dao/conversation/internal/persona-conversation.dao.ts", import.meta.url), "utf8");
 
 const customerDisplayProjector = {
   version: PERSONA_CUSTOMER_DISPLAY_DERIVATION_VERSION,
@@ -229,10 +231,31 @@ test("韩立新空会话原子归档旧活动会话并保留旧历史", () => {
     assert.deepEqual(active.messages, []);
     assert.equal(active.recovery, undefined);
     assert.equal(memory.readPersonaConversationCodexThread("han-li", freshConversation.conversationId), null);
+    assert.equal(memory.claimPersonaConversationCodexThread({
+      ownerPersonaId: "han-li", conversationId: freshConversation.conversationId,
+      threadId: "hanli-fresh-thread", workspaceSignature: "workspace-fresh", occurredAt: "2026-09-22T00:00:02.000Z",
+    }), true);
+    assert.equal(memory.claimPersonaConversationCodexThread({
+      ownerPersonaId: "han-li", conversationId: freshConversation.conversationId,
+      threadId: "hanli-losing-thread", workspaceSignature: "workspace-fresh", occurredAt: "2026-09-22T00:00:03.000Z",
+    }), false);
+    assert.equal(memory.unlinkPersonaConversationCodexThread({ ownerPersonaId: "han-li", conversationId: freshConversation.conversationId, threadId: "hanli-losing-thread" }), false);
+    assert.equal(memory.readPersonaConversationCodexThread("han-li", freshConversation.conversationId)?.threadId, "hanli-fresh-thread");
+    assert.equal(memory.claimPersonaConversationCodexThread({
+      ownerPersonaId: "han-li", conversationId: oldConversation.conversationId,
+      threadId: "hanli-archived-thread", workspaceSignature: "workspace-old", occurredAt: "2026-09-22T00:00:04.000Z",
+    }), false);
+    assert.equal(memory.readPersonaConversationCodexThread("han-li", oldConversation.conversationId)?.threadId, "hanli-old-thread");
     assert.equal(old.messages.length, 1);
     assert.equal(old.recovery?.summary, "旧会话恢复记录");
     assert.deepEqual(headers.map((header) => header.status), ["archived", "active"]);
   } finally { fixture.close(); }
+});
+
+test("会话线程 DAO 保留普通绑定并提供条件认领和精确解绑", () => {
+  assert.match(personaConversationDaoSource, /linkCodexThread\(/);
+  assert.match(personaConversationDaoSource, /claimCodexThread\([\s\S]*?status='active'[\s\S]*?ON CONFLICT DO NOTHING/);
+  assert.match(personaConversationDaoSource, /unlinkCodexThread\([\s\S]*?conversationId=\$conversationId AND threadId=\$threadId/);
 });
 
 test("Codex 主人物语料按水位自动入库并在失败后保留旧检查点重试", () => {

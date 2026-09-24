@@ -148,6 +148,8 @@ let codex: CodexService | undefined;
 let nangongCodex: CodexService | undefined;
 let nangongInquiryCodex: CodexService | undefined;
 let hanLiCodex: CodexService | undefined;
+// 普通客户会话与内部审批研讨必须使用不同实例，避免人物级当前线程互相覆盖。
+let hanliConversationCodex: CodexService | undefined;
 // 结果验收必须隔离于客户对话，并在每次请求前丢弃自己的短会话。
 let hanliResultAcceptanceCodex: CodexService | undefined;
 // 研讨和分发当前复用南宫婉会话；不同变量用于表达不同业务场景。
@@ -528,6 +530,24 @@ export async function startApplication(): Promise<void> {
     (details) => eventCenter.recordEvent("han-li.evolution.trusted_command.decision", details),
     (details) => eventCenter.recordEvent("han-li.evolution.thread.lifecycle", details),
   );
+  hanliConversationCodex = new CodexService(
+    projectRoot,
+    trustedCommands,
+    createSqliteCodexSessionDao(workflowDatabase, "han-li-conversation"),
+    {
+      codexHome,
+      serviceName: "selplat_ai_desktop_han_li_conversation",
+      threadSource: "ai-desktop-han-li-conversation",
+      migrateLegacySession: false,
+      sessionStorage: "ai-desktop",
+      validationOwner: "desktop",
+      readSettings: () => settings.read(),
+      readRuleInstructions: readHanliRuleInstructions,
+      preserveThreadAcrossWorkspaceChanges: true,
+    },
+    (details) => eventCenter.recordEvent("han-li.conversation.trusted_command.decision", details),
+    (details) => eventCenter.recordEvent("han-li.conversation.thread.lifecycle", details),
+  );
   hanliResultAcceptanceCodex = new CodexService(
     projectRoot,
     trustedCommands,
@@ -783,7 +803,7 @@ export async function startApplication(): Promise<void> {
     memberId: "han-li",
     memberName: "韩立",
     role: "persona-conversation",
-    service: hanLiCodex,
+    service: hanliConversationCodex,
   });
   // 旧 nangong-evolution.json 仅作为可恢复的历史取证文件保留，生产运行不再读取、写入或回退。
   // 当前专题演化状态以 SQLite 为唯一生产来源。
@@ -888,15 +908,15 @@ export async function startApplication(): Promise<void> {
         const workspace = options?.workspacePolicy === "request-snapshot"
           ? structuredClone(request.workspaceState)
           : mergeWorkspaceState(workspaces.read(), request.workspaceState);
-        return hanLiCodex!.send(prompt, request.locale, "read-only", workspace,
+        return hanliConversationCodex!.send(prompt, request.locale, "read-only", workspace,
           await screenshots.resolveAttachmentPaths(request.attachmentIds || []), () => undefined, null, selectedModel);
       },
-      newChat: () => hanLiCodex!.newChat(),
-      activeConversationId: () => hanLiCodex!.activeSession().threadId,
-      activeConversationSession: () => hanLiCodex!.activeSession(),
-      readThreadRecovery: () => hanLiCodex!.lastThreadRecovery(),
-      recoverConversationSession: (session) => hanLiCodex!.recoverConversationSession(session, workspaces.read(), settings.read().locale),
-      activateRecoveredConversationSession: (threadId) => hanLiCodex!.activateRecoveredConversationSession(threadId, workspaces.read(), settings.read().locale),
+      startDetachedConversationSession: () => hanliConversationCodex!.startDetachedConversationSession("read-only", workspaces.read(), settings.read().locale),
+      activateConversationSession: (session) => hanliConversationCodex!.activateConversationSession(session.threadId, session.workspaceSignature),
+      deleteDetachedConversationSession: (threadId) => hanliConversationCodex!.deleteDetachedConversationSession(threadId),
+      readThreadRecovery: () => hanliConversationCodex!.lastThreadRecovery(),
+      recoverConversationSession: (session) => hanliConversationCodex!.recoverConversationSession(session, workspaces.read(), settings.read().locale),
+      activateRecoveredConversationSession: (threadId) => hanliConversationCodex!.activateRecoveredConversationSession(threadId, workspaces.read(), settings.read().locale),
     },
     refreshSemanticMemory: () => requestHanliSemanticRefresh(),
     startInternalDeliberation: (request, sourceRequestId, options) =>
@@ -1469,6 +1489,7 @@ export function disposeApplication(): void {
   nangongCodex?.dispose();
   nangongInquiryCodex?.dispose();
   hanLiCodex?.dispose();
+  hanliConversationCodex?.dispose();
   hanliResultAcceptanceCodex?.dispose();
   // 南宫婉研讨与分发引用同一服务，不重复关闭。
   corpusSemanticBackfillCodex?.dispose();

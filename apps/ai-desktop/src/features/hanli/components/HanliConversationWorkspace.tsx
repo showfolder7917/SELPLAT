@@ -154,9 +154,9 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         >从原阶段继续排查</button>}
       </div>}
       {/* 新建会话状态区：重新建立韩立会话期间显示真实等待状态。 */}
-      {newConversationBusy && <div role="status">正在关闭当前韩立线程并建立新对话…</div>}
+      {newConversationBusy && <div role="status">正在归档当前会话并建立新对话…</div>}
       {/* 页面错误区：桌面通信或业务处理失败时立即向客户显示原因。 */}
-      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.messages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <button type="button" onClick={() => void controller.retrySend()}>重试发送</button>}</div>}
+      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.messages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <div className="composer-error-actions"><button type="button" onClick={() => void controller.retrySend()}>重试发送</button></div>}</div>}
       {/* 模型目录错误紧邻输入工具区展示，并提供真实重读入口，不再用空值伪装读取成功。 */}
       {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
         <span>{props.runtime.modelCatalogError}</span>

@@ -35,6 +35,9 @@ test("韩立会话使用页面专属网格行隔离时间线和输入区，不�
   assert.match(styles, /\.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell > \.hanli-person-composer \{ position: static; grid-row: 2;/);
   assert.match(styles, /@media \(max-width: 1180px\) \{ \.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell > \.hanli-person-composer \{ margin-right: 28px; margin-left: 28px; \} \}/);
   assert.match(styles, /@media \(max-width: 720px\) \{ \.hanli-conversation-workspace > \.selconversation-root\.hanli-conversation-shell > \.hanli-person-composer \{ margin-right: 20px; margin-left: 20px; \} \}/);
+  assert.match(styles, /\.hanli-person-composer \.composer-error \{ align-items: flex-start; flex-wrap: wrap; overflow-wrap: anywhere; \}/);
+  assert.match(styles, /\.hanli-person-composer \.composer-error span \{ flex: 1 1 220px; min-width: 0; \}/);
+  assert.match(styles, /\.hanli-person-composer \.composer-error-actions \{ flex: 0 0 auto; \}/);
   assert.match(shell, /className\?: string/);
   assert.match(shell, /selconversation-root\$\{className/);
   assert.match(styles, /\.nangong-person-chat \{ flex: 1 1 0; min-height: 0; \}/);

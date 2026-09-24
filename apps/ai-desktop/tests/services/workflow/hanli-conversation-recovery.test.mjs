@@ -22,7 +22,7 @@ const collaborationMemoryWorker = read("electron/dao/corpus/internal/background-
 
 test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新", () => {
   assert.match(ports, /readThreadRecovery\(\): SendMessageOutDto\["threadRecovery"\]/);
-  assert.match(runtime, /readThreadRecovery: \(\) => hanLiCodex!\.lastThreadRecovery\(\)/);
+  assert.match(runtime, /readThreadRecovery: \(\) => hanliConversationCodex!\.lastThreadRecovery\(\)/);
   assert.match(service, /await this\.#recordThreadRecovery\(conversationId, response\.threadRecovery, request\.clientMessageId\)/);
   assert.match(service, /catch \(error\) \{[\s\S]*?chat\.readThreadRecovery\(\)/);
   assert.match(service, /recordPersonaConversationRecovery/);
@@ -30,7 +30,7 @@ test("韩立会话把线程恢复写入同一业务会话并通知窗口刷新",
 });
 
 test("恢复所需的人物记忆方法同时经过主进程代理与后台 Worker", () => {
-  for (const method of ["readPersonaConversationCodexThread", "linkPersonaConversationCodexThread", "recordPersonaConversationRecovery"]) {
+  for (const method of ["readPersonaConversationCodexThread", "claimPersonaConversationCodexThread", "unlinkPersonaConversationCodexThread", "recordPersonaConversationRecovery"]) {
     assert.match(collaborationMemoryMethods, new RegExp(`"${method}"`));
   }
   assert.match(collaborationMemoryProxy, /isCollaborationMemoryMethod\(property\)/);
@@ -43,8 +43,8 @@ test("打开韩立会话前准备恢复，并仅写入目标业务会话", () =>
   assert.match(service, /linkedSession[\s\S]*?chat\.recoverConversationSession\(linkedSession\)/);
   assert.match(service, /const saved = await this\.#recordThreadRecovery\(conversation\.conversationId, recovery\)[\s\S]*?const current = await memory\.readPersonaConversation\("han-li"\)[\s\S]*?current\.conversationId === conversation\.conversationId[\s\S]*?activateRecoveredConversationSession[\s\S]*?return saved \|\| conversation/);
   assert.doesNotMatch(service.match(/async prepareRecovery[\s\S]*?\n  }\n\n  /)?.[0] || "", /current\.conversationId !== conversation\.conversationId\) return current/);
-  assert.match(runtime, /recoverConversationSession: \(session\) => hanLiCodex!\.recoverConversationSession\(session, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
-  assert.match(runtime, /activateRecoveredConversationSession: \(threadId\) => hanLiCodex!\.activateRecoveredConversationSession\(threadId, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
+  assert.match(runtime, /recoverConversationSession: \(session\) => hanliConversationCodex!\.recoverConversationSession\(session, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
+  assert.match(runtime, /activateRecoveredConversationSession: \(threadId\) => hanliConversationCodex!\.activateRecoveredConversationSession\(threadId, workspaces\.read\(\), settings\.read\(\)\.locale\)/);
   assert.doesNotMatch(service.match(/async prepareRecovery\(\)[\s\S]*?\n  }\n\n  /)?.[0] || "", /chat\.send/);
 });
 
@@ -87,10 +87,18 @@ test("unknown-turn、原线程缺失与普通恢复失败均保留可追溯恢�
   assert.match(workspace, /data-recovery-affected/);
 });
 
-test("韩立完成回合后把实际 Codex 线程绑定到同一业务会话", () => {
-  assert.match(service, /const session = chat\.activeConversationSession\(\)[\s\S]*?response\.threadId \|\| session\.threadId/);
-  assert.match(service, /await memory\.linkPersonaConversationCodexThread\(\{[\s\S]*?conversationId[\s\S]*?workspaceSignature: session\.workspaceSignature/);
-  assert.match(memoryPort, /readPersonaConversationCodexThread[\s\S]*?linkPersonaConversationCodexThread/);
+test("韩立在模型发送前认领专属线程，并在失败时只补偿本次创建的线程", () => {
+  const threadService = read("electron/services/personas/hanli/internal/conversation/hanli-conversation-thread.service.ts");
+  assert.match(service, /this\.#threads\(\)\.run\("han-li", conversationId/);
+  assert.doesNotMatch(service, /activeConversationSession\(|linkPersonaConversationCodexThread\(/);
+  assert.match(threadService, /startDetachedConversationSession\(\)/);
+  assert.match(threadService, /claimPersonaConversationCodexThread/);
+  assert.match(threadService, /deleteDetachedConversationSession\(lease\.threadId\)/);
+  assert.match(threadService, /unlinkPersonaConversationCodexThread/);
+  assert.match(memoryPort, /claimPersonaConversationCodexThread[\s\S]*?unlinkPersonaConversationCodexThread/);
+  assert.match(runtime, /let hanliConversationCodex: CodexService/);
+  assert.match(runtime, /askHanli: async[\s\S]*?hanLiCodex!\.send/);
+  assert.match(runtime, /conversation: \{[\s\S]*?hanliConversationCodex!\.send/);
 });
 
 test("页面显式准备恢复后才读取只读窗口", () => {
