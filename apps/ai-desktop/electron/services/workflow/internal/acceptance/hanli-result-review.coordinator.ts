@@ -54,6 +54,8 @@ function readChangedSourceEvidence(
   if (!files.length) return { items: [], status: "no-declared-changed-files" };
   let canonicalRoot: string;
   try { canonicalRoot = realpathSync(root); } catch { return { items: [], status: "workspace-root-unavailable" }; }
+  // 样式文件常把响应式规则放在中段；在可控大小内提供整文件，避免把省略的布局规则误判为无法验收。
+  const evidenceLimit = (file: string) => file.endsWith(".css") ? 120_000 : 48_000;
   const declaredItems = files.slice(0, 30).flatMap((file) => {
     if (path.isAbsolute(file)) return [];
     const resolved = path.resolve(canonicalRoot, file);
@@ -64,7 +66,7 @@ function readChangedSourceEvidence(
       const content = readFileSync(canonicalFile, "utf8");
       // 保留 48 KiB 内的整文件，避免从首尾剪裁掉与原条件对应的中间实现。
       // 更大的文件仍明确标注省略，不能把片段当作完整源码验收。
-      return [{ file, content: content.length <= 48_000
+      return [{ file, content: content.length <= evidenceLimit(file)
         ? content : `${content.slice(0, 20_000)}\n[源码中段省略，当前片段不足以证明整文件行为]\n${content.slice(-20_000)}` }];
     } catch (error) {
       // 已声明的旧文件缺失也是当前源码事实，不能静默略去并让审查者误以为仍有该实现。
@@ -93,7 +95,7 @@ function readChangedSourceEvidence(
         if (!canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)) return [];
         const dependency = path.relative(canonicalRoot, canonicalFile).split(path.sep).join("/");
         const source = readFileSync(canonicalFile, "utf8");
-        return [{ file: dependency, content: source.length <= 48_000
+        return [{ file: dependency, content: source.length <= evidenceLimit(dependency)
           ? source : `${source.slice(0, 20_000)}\n[源码中段省略，当前片段不足以证明整文件行为]\n${source.slice(-20_000)}` }];
       } catch { return []; }
     });
