@@ -63,9 +63,12 @@ export class HanliConversationThreadService {
     if (!lease.createdByRequest) return;
     const current = await this.memory.readPersonaConversationCodexThread(ownerPersonaId, conversationId);
     if (!current || current.threadId !== lease.threadId) return;
-    // 删除失败时保留绑定，让同一消息的重试仍能得到可见且可重试的失败结论。
+    // 先精确解除本地归属：解绑失败时绝不能删除仍被当前会话指向的远端线程。
+    const unlinked = await this.memory.unlinkPersonaConversationCodexThread({ ownerPersonaId, conversationId, threadId: lease.threadId });
+    // 并发切换或归档已改变绑定时，本次请求不再拥有清理权。
+    if (!unlinked) return;
+    // 删除失败会向上保留原始错误；绑定已解除，后续重试可以安全认领新线程。
     await this.chat.deleteDetachedConversationSession(lease.threadId);
-    await this.memory.unlinkPersonaConversationCodexThread({ ownerPersonaId, conversationId, threadId: lease.threadId });
   }
 
   async #ensure(ownerPersonaId: string, conversationId: string): Promise<HanliConversationThreadLease> {
