@@ -32,7 +32,7 @@ export function buildHanliResultReviewContext(
     // 同一批源码只传一次；任务越多也不会重复挤掉判定模块的上下文。
     sourceEvidence: sourceEvidence.items,
     sourceEvidenceStatus: sourceEvidence.status,
-    sourceEvidenceScope: "integrated-proposal-task-files-and-two-level-relative-imports",
+    sourceEvidenceScope: "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
   };
 }
 
@@ -49,11 +49,18 @@ function readChangedSourceEvidence(
       // 已集成的旧记录可能只保存最后一次流式 diff；签发基线至结果提交可恢复完整清单。
       ...readIntegratedCommitFiles(root, task),
     ]))]
-    .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file)
-      && !/(?:^|\/)(?:tests?|__tests__)\//u.test(file));
+    .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file));
   if (!files.length) return { items: [], status: "no-declared-changed-files" };
   let canonicalRoot: string;
   try { canonicalRoot = realpathSync(root); } catch { return { items: [], status: "workspace-root-unavailable" }; }
+  // Renderer 变更的窄窗口验收还需要实际布局样式；该样式不是每次任务的变更文件。
+  const layoutFile = "apps/ai-desktop/src/applications/styles/desktop-applications.css";
+  if (files.some((file) => file.startsWith("apps/ai-desktop/src/"))) {
+    try {
+      const layoutPath = realpathSync(path.resolve(canonicalRoot, layoutFile));
+      if (layoutPath.startsWith(`${canonicalRoot}${path.sep}`) && !files.includes(layoutFile)) files.push(layoutFile);
+    } catch { /* 当前工作区没有该样式时，不伪造布局证据。 */ }
+  }
   // 样式文件常把响应式规则放在中段；在可控大小内提供整文件，避免把省略的布局规则误判为无法验收。
   const evidenceLimit = (file: string) => file.endsWith(".css") ? 120_000 : 48_000;
   const declaredItems = files.slice(0, 30).flatMap((file) => {
@@ -75,7 +82,7 @@ function readChangedSourceEvidence(
     }
   });
   // 阶段入口可能先委托给技术恢复判定器，再由判定器读取恢复记录。
-  // 只沿静态相对 import 向下两层；不读取测试、包依赖或工作区外的文件。
+  // 只沿静态相对 import 向下两层；测试仅限已集成任务声明的文件，不沿导入扩大到测试或包依赖。
   const readDirectImports = (sources: Array<{ file: string; content: string }>) => sources.flatMap(({ file, content }) => {
     if (content.startsWith("[当前授权工作区不存在")) return [];
     const imports = [...content.matchAll(/\bimport\s+(?:type\s+)?[^;]*?\sfrom\s+["'](\.[^"']+)["']/gu)]

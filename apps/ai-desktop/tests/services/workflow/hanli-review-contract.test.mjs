@@ -51,7 +51,7 @@ test("成员均 idle 的原条件仍归任务协作群同屏验收", () => {
   assert.match(computer, /taskCollaborationCriterionIds\.has\(criterionId\)/u);
 });
 
-test("源码审查证据覆盖同提案已集成原任务与修复任务，不读取测试或越界文件", async () => {
+test("源码审查证据覆盖同提案已集成原任务、测试和布局，不读取越界文件", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const task = (taskId, files) => ({ taskId, state: "integrated", snapshot: { title: taskId, problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: files }] });
@@ -62,7 +62,7 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   assert.deepEqual(context.tasks.map((item) => item.taskId), ["original", "repair"]);
   assert.ok(context.tasks.every((item) => item.sourceEvidence === undefined));
   assert.equal(context.sourceEvidenceStatus, "available");
-  assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files-and-two-level-relative-imports");
+  assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports");
   const sourceFiles = context.sourceEvidence.map((item) => item.file);
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-technical-recovery.projection.ts"));
@@ -72,7 +72,9 @@ test("源码审查证据覆盖同提案已集成原任务与修复任务，不�
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAuditCard.tsx"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/timeline-display.ts"));
-  assert.ok(sourceFiles.every((file) => file.startsWith("apps/ai-desktop/") && !/(?:^|\/)(?:tests?|__tests__)\//u.test(file)));
+  assert.ok(sourceFiles.includes("apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"));
+  assert.ok(sourceFiles.includes("apps/ai-desktop/src/applications/styles/desktop-applications.css"));
+  assert.ok(sourceFiles.every((file) => file.startsWith("apps/ai-desktop/")));
   assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
   assert.match(context.sourceEvidence[0].content, /projectCurrentTechnicalRecovery/u);
   const technicalSource = context.sourceEvidence.find((item) => item.file.endsWith("/current-topic-technical-recovery.projection.ts"))?.content || "";
@@ -112,8 +114,8 @@ test("已提交任务的流式清单只剩测试文件时从签发提交恢复�
     };
     const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] });
     assert.equal(context.sourceEvidenceStatus, "available");
-    assert.deepEqual(context.sourceEvidence.map((item) => item.file), [source]);
-    assert.match(context.sourceEvidence[0].content, /current-conversation/u);
+    assert.deepEqual(context.sourceEvidence.map((item) => item.file), [testFile, source]);
+    assert.match(context.sourceEvidence.find((item) => item.file === source)?.content || "", /current-conversation/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

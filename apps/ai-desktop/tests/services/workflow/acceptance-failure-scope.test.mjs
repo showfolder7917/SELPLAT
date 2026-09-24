@@ -132,3 +132,27 @@ test("多个逐项源码失败保留各自文件依据，不伪造页面截图�
   run.stepResults[0].evidenceReferences = [];
   assert.equal(new AcceptanceFailureScopePolicy().review(currentProposal, run).decision, "outside-original-acceptance");
 });
+
+test("多条源码条件中总体审查与逐项失败共享文件时仍沿原条件返修", () => {
+  const expected = ["三语立即一致显示", "三语重启后一致恢复"];
+  const currentProposal = {
+    ...proposal(expected),
+    acceptancePlan: { conditions: expected.map((criterion, index) => ({ conditionId: `criterion-${index + 1}`, criterion, evidenceType: "code-conformance" })) },
+  };
+  const run = failedRun(expected, "criterion-1");
+  run.mode = "code-conformance";
+  run.stepResults = expected.map((criterion, index) => ({
+    ...run.stepResults[0], checkId: `criterion-${index + 1}`, operationIndex: index,
+    evidenceMode: "code-conformance", actual: `${criterion}仍未实现`,
+    evidenceReferences: [`apps/ai-desktop/src/fixed-copy.ts:${index + 10}`],
+    screenshotAttachmentId: null, layoutScreenshotAttachmentId: null, layoutStatus: "not-applicable",
+  }));
+  run.sourceReview = {
+    status: "failed", actual: "旧语言分支仍在", evidenceReferences: ["apps/ai-desktop/src/fixed-copy.ts:50"],
+  };
+  const review = new AcceptanceFailureScopePolicy().review(currentProposal, run);
+  assert.equal(review.decision, "within-original-acceptance");
+  assert.deepEqual(review.defects.map((defect) => defect.checkId), ["criterion-1", "criterion-2"]);
+  run.sourceReview.evidenceReferences = ["apps/ai-desktop/src/unrelated.ts:50"];
+  assert.equal(new AcceptanceFailureScopePolicy().review(currentProposal, run).decision, "outside-original-acceptance");
+});

@@ -48,7 +48,7 @@ export class AcceptanceFailureScopePolicy {
     // 只把明确失败的判断步骤作为产品缺陷；工具受阻沿独立卡点线路处理。
     const failedSteps = run.stepResults.filter((step) => step.status === "failed" || step.layoutStatus === "failed");
     const sourceFailed = run.sourceReview?.status === "failed";
-    // 独立源码审查只在原计划恰有一项源码条件且具备具体文件证据时才能自动归属，禁止猜测多条件范围。
+    // 独立源码审查只有在没有逐项失败证据时才需要唯一源码条件；总体审查不是额外的验收条件。
     const sourceCriterionIndexes = proposal.acceptancePlan?.conditions
       .map((condition, index) => condition.evidenceType === "code-conformance" ? index : -1)
       .filter((index) => index >= 0) || [];
@@ -98,7 +98,10 @@ export class AcceptanceFailureScopePolicy {
         ...(sourceStep ? { sourceReferences } : {}),
       } satisfies AcceptanceFailureDefect;
     });
-    const sourceDefect: AcceptanceFailureDefect | null = sourceFailed && sourceCriterionIndexes.length === 1
+    // 总体审查失败若与至少一项已定位的源码失败指向同一文件，就由这些逐项失败承接，不伪造第八项缺陷。
+    const sourceReviewCoveredBySteps = sourceFailed && Boolean(run.sourceReview?.actual.trim())
+      && sourceReferences.some((reference) => resolvedSteps.some((step) => step?.sourceReferences?.some((item) => sameSourceFile(item, reference))));
+    const sourceDefect: AcceptanceFailureDefect | null = sourceFailed && !sourceReviewCoveredBySteps && sourceCriterionIndexes.length === 1
       && sourceReferences.length > 0 && run.sourceReview?.actual.trim()
       ? {
           checkId: `criterion-${sourceCriterionIndexes[0] + 1}`,
@@ -113,7 +116,7 @@ export class AcceptanceFailureScopePolicy {
     // 没有真实失败，或者任一失败无法定位原条件时，禁止自动进入原范围修复。
     const isWithinOriginalAcceptance = criteriaUnchanged
       && (failedSteps.length > 0 || Boolean(sourceDefect))
-      && (!sourceFailed || Boolean(sourceDefect?.expected))
+      && (!sourceFailed || sourceReviewCoveredBySteps || Boolean(sourceDefect?.expected))
       && resolvedSteps.every((step) => step !== null);
     // 只在范围确认后把完整缺陷列表交给令狐。
     const defects = isWithinOriginalAcceptance
@@ -131,8 +134,8 @@ export class AcceptanceFailureScopePolicy {
     // 范围外结果说明缺少哪一种确定关系，等待客户或后续调查明确。
     const reason = !criteriaUnchanged
       ? "本轮验收条件与原提案验收条件不一致，不能确认新缺陷仍属于原范围。"
-      : sourceFailed && !sourceDefect
-        ? "源码审查失败缺少唯一原始源码条件或具体文件证据，不能猜测修复范围。"
+      : sourceFailed && !sourceReviewCoveredBySteps && !sourceDefect
+        ? "源码审查失败既未与逐项源码失败共享文件依据，也缺少唯一原始源码条件，不能猜测修复范围。"
         : failedSteps.length === 0
         ? "本轮记录没有可提取的真实失败判断，不能据此创建代码修复任务。"
         : "至少一项失败无法对应原提案中的具体验收条件，不能自动扩大修复范围。";
@@ -143,6 +146,11 @@ export class AcceptanceFailureScopePolicy {
       defects: [],
     };
   }
+}
+
+/** 文件行号不是验收范围身份；同一源码文件的不同引用位置仍可互相佐证。 */
+function sameSourceFile(left: string, right: string): boolean {
+  return left.trim().replace(/:\d+(?::\d+)?$/u, "") === right.trim().replace(/:\d+(?::\d+)?$/u, "");
 }
 
 /** 比较两份验收条件是否保持相同顺序和相同内容。 */
