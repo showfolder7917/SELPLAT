@@ -2,6 +2,8 @@
 
 执行引用：{{planReference}}
 
+授权衔接：{{authorizationContext}}
+
 精简实施包：
 {{executionBriefJson}}
 

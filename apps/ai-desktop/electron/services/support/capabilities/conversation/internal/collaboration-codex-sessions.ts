@@ -419,6 +419,9 @@ class CodexExecutorSession implements ExecutorSessionPort {
     };
     const prompt = this.#prompts.render("executor.execution", {
       planReference: `任务 ${task.taskId} / 修订 ${task.taskRevision} / 方案 v${plan.version} / ${plan.contentHash}`,
+      authorizationContext: task.evolutionProposalId && task.sourceEvolutionApprovalId
+        ? `这是同一已签发专题的内部执行续行，审批记录 ${task.sourceEvolutionApprovalId} 已绑定任务 ${task.taskId}。执行人不应因自己的新会话里没有再次收到独立“1”而停下既定源码修改；仅允许执行冻结方案与签发工作区内的技术内容，越出范围仍须停止并报告。`
+        : "当前任务没有已登记的专题审批来源；不能据此推断用户已授权新的修改范围，仍须遵守工程执行确认规则。",
       executionBriefJson: JSON.stringify(executionBrief),
       acceptanceCriteriaJson: JSON.stringify(task.snapshot.acceptanceCriteria),
     });

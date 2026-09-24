@@ -18,6 +18,7 @@ const codexSessionStore = readFileSync(new URL("../../../electron/services/suppo
 const codexThreadLifecycle = readFileSync(new URL("../../../electron/services/support/platform/codex/internal/codex-thread-lifecycle.policy.ts", import.meta.url), "utf8");
 const taskWorktreeTestRunner = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
 const collaborationSessions = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts", import.meta.url), "utf8");
+const executorExecutionPrompt = readFileSync(new URL("../../../prompts/execution/executor-execution.md", import.meta.url), "utf8");
 const collaborationWorkflow = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const electronMain = [
   "../../../electron/system/bootstrap/application-runtime.ts",
@@ -57,6 +58,13 @@ const interactionPreload = readFileSync(new URL("../../interaction/isolated-prel
 const interactionSpec = readFileSync(new URL("../../interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
 const audit = readFileSync(new URL("../../../electron/services/support/capabilities/event-center/internal/audit/business-audit-log.ts", import.meta.url), "utf8");
 const dispatchStore = readFileSync(new URL("../../../electron/services/support/capabilities/conversation/internal/conversation-dispatch.store.ts", import.meta.url), "utf8");
+
+test("已签发专题的执行授权随任务交接而非要求执行人重复索取 1", () => {
+  assert.match(executorExecutionPrompt, /授权衔接：\{\{authorizationContext\}\}/u);
+  assert.match(collaborationSessions, /task\.evolutionProposalId && task\.sourceEvolutionApprovalId/u);
+  assert.match(collaborationSessions, /不应因自己的新会话里没有再次收到独立“1”而停下既定源码修改/u);
+  assert.match(collaborationSessions, /当前任务没有已登记的专题审批来源；不能据此推断用户已授权新的修改范围/u);
+});
 
 test("任务托管只完成代码级验证并硬拦截构建启动", () => {
   assert.match(executor, /task-managed/);
