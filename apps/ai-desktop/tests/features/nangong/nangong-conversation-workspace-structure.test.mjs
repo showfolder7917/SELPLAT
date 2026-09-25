@@ -41,6 +41,16 @@ test("南宫婉空会话按首次使用顺序说明现象、事实和确认边�
   assert.match(view, /空状态提示：按首次使用顺序说明现象与约束、直接事实和原有确认边界/);
 });
 
+test("南宫婉消息头从统一资源解析人物与客户固定文本，未知人物保持原编号", () => {
+  assert.doesNotMatch(view, /const personaNames/);
+  assert.match(view, /personaDisplayName\(props\.locale, message\.speakerPersonaId \|\| "nangong-wan"\)/);
+  assert.match(view, /fixedUiText\(props\.locale, "personaUserHeader"\)/);
+  assert.match(fixedUiText, /personaNameHanli: "韩立"/);
+  assert.match(fixedUiText, /personaNameNangong: "南宫婉"/);
+  assert.match(fixedUiText, /return key \? fixedUiText\(locale, key\) : personaId/);
+  assert.match(view, /<MarkdownMessage text=\{message\.content\}/);
+});
+
 test("南宫婉页面模块的注释先写中文业务名称", () => {
   for (const source of [view, types, controller, activity]) {
     assert.doesNotMatch(source, /^\s*\/\/\s*[A-Za-z][A-Za-z0-9_.-]*\s/gm);

@@ -9,7 +9,7 @@
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 import { useEffect, useRef } from "react";
 
-import { fixedUiText } from "../../../../contracts/foundation";
+import { fixedUiText, personaDisplayName } from "../../../../contracts/foundation";
 import { ConversationMessageImage, MarkdownMessage, personaConversationDeliveryLabel, SelUiConversation } from "../../conversation";
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 import { HanliCustodySwitch } from "./HanliConversationWorkspace/HanliCustodySwitch";
@@ -64,10 +64,11 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
 
       {/* 上下文统计区：显示上一轮真正发送给韩立的各类上下文规模。 */}
       {!controller.busy && conversation.contextReadStats && <p className="hanli-context-read-stats" role="status" aria-live="polite">
-        本轮读取：方法资料 {conversation.contextReadStats.methodCharacters.toLocaleString()} 字
-        · 当前会话 {conversation.contextReadStats.recentConversationCharacters.toLocaleString()} 字
-        · 本轮问题 {conversation.contextReadStats.latestUserMessageCharacters.toLocaleString()} 字
-        · 发送上下文 {conversation.contextReadStats.promptCharacters.toLocaleString()} 字
+        {fixedUiText(props.locale, "hanliContextReadStats")
+          .replace("{method}", conversation.contextReadStats.methodCharacters.toLocaleString())
+          .replace("{conversation}", conversation.contextReadStats.recentConversationCharacters.toLocaleString())
+          .replace("{question}", conversation.contextReadStats.latestUserMessageCharacters.toLocaleString())
+          .replace("{prompt}", conversation.contextReadStats.promptCharacters.toLocaleString())}
       </p>}
 
       {conversation.recovery && <section id={`hanli-recovery-${conversation.recovery.recoveryId}`} className={`hanli-conversation-recovery ${conversation.recovery.status}`} role="status" aria-live="polite">
@@ -76,7 +77,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         {(conversation.recovery.affectedTurnId || conversation.recovery.affectedItemId) && <small>{fixedUiText(props.locale, "technicalDetails")}</small>}
         {conversation.recovery.affectedMessageId && <small>{fixedUiText(props.locale, "conversationRecoverTask")}</small>}
         {conversation.recovery.retryable && <small>{fixedUiText(props.locale, "conversationContinue")}</small>}
-        {conversation.recovery.retryable && <button type="button" className="selconversation-action" disabled={controller.recovering} onClick={() => void controller.retryRecovery()}>{controller.recovering ? "正在重试恢复" : "重试恢复"}</button>}
+        {conversation.recovery.retryable && <button type="button" className="selconversation-action" disabled={controller.recovering} onClick={() => void controller.retryRecovery()}>{fixedUiText(props.locale, controller.recovering ? "hanliRecoveryRetrying" : "hanliRecoveryRetry")}</button>}
       </section>}
 
       {/* 客户问答区：按发生顺序展示客户提问和韩立回答。 */}
@@ -89,8 +90,8 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} {...(isRecoveryAffected ? { "data-recovery-affected": "true", "aria-describedby": `hanli-recovery-${conversation.recovery!.recoveryId}` } : {})}>
           {/* 问答身份区：显示“我”或“韩立”，并标记客户消息的发送状态。 */}
           <header>{message.speakerType === "user"
-            ? `我 · ${personaConversationDeliveryLabel(message.deliveryStatus, props.locale)}`
-            : "韩立"}</header>
+            ? fixedUiText(props.locale, "personaUserHeader").replace("{status}", personaConversationDeliveryLabel(message.deliveryStatus, props.locale))
+            : personaDisplayName(props.locale, "han-li")}</header>
 
           {/* 问答内容区：承载本条消息的截图证据和文字正文。 */}
           <div className="selconversation-message-body">
@@ -113,7 +114,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
               disabled={controller.retryingCustomerDisplayMessageIds.has(message.messageId)}
               aria-busy={controller.retryingCustomerDisplayMessageIds.has(message.messageId)}
               onClick={() => void controller.retryCustomerDisplayMessage(message.messageId)}
-            >{controller.retryingCustomerDisplayMessageIds.has(message.messageId) ? "重新读取中" : "重新读取"}</button>}
+            >{fixedUiText(props.locale, controller.retryingCustomerDisplayMessageIds.has(message.messageId) ? "personaCustomerDisplayReloading" : "personaCustomerDisplayReload")}</button>}
             {/* 失败消息保留原文和附件，并只允许按原编号再次提交。 */}
             {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>{fixedUiText(props.locale, "personaRetrySend")}</button>}
           </div>
@@ -183,7 +184,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         {/* 辅助工具区：包含自动托管、当前窗口截图和隐藏窗口截图。 */}
         <div className="selconversation-tools">
           {/* 自动托管开关：调整韩立后续研讨是否允许持续自动推进。 */}
-          <HanliCustodySwitch onError={onError} />
+          <HanliCustodySwitch locale={props.locale} onError={onError} />
           {/* 对话模型属于输入工具，与自动托管并列；留空明确表示跟随设置页默认模型。 */}
           <label className="selconversation-model-picker" title={fixedUiText(props.locale, "personaConversationModel")}>
             <span>{fixedUiText(props.locale, "personaModel")}</span>

@@ -14,9 +14,12 @@ import {
 // 共享演化状态方法（useEvolutionRuntime）用于读取并刷新自动托管设置。
 import { useEvolutionRuntime } from "../../../evolution";
 import { getOptionalCollaborationDesktopApi } from "../../../../foundation/desktop-api";
+import { fixedUiText, type LocaleValue } from "../../../../../contracts/foundation";
 
 /** 韩立自动托管开关需要由父页面提供的数据结构。 */
 interface HanliCustodySwitchProps {
+  /** 当前页面语言只决定开关固定文本，不改变后端保存的自动化设置。 */
+  locale: LocaleValue;
   /** 当托管设置保存失败时，把可读错误交给韩立会话页面显示。 */
   onError(message: string): void;
 }
@@ -28,6 +31,8 @@ interface HanliCustodySwitchProps {
  * 本开关不会停止已经执行的任务，也不会修改令狐的巡检设置。
  */
 export function HanliCustodySwitch(props: HanliCustodySwitchProps) {
+  // 当前语言（locale）由韩立父页面续传，所有固定文案都从统一资源读取。
+  const locale = props.locale;
   // 错误更新操作（onError）来自韩立会话父页面，用于统一显示本组件的保存问题。
   const onError = props.onError;
 
@@ -66,7 +71,7 @@ export function HanliCustodySwitch(props: HanliCustodySwitchProps) {
       // 没有桌面 API 或后端未返回新状态都属于真实保存失败。
       if (!next) {
         // 抛出业务可读错误，交给下面的统一失败分支处理。
-        throw new Error("自动托管设置未保存");
+        throw new Error(fixedUiText(locale, "hanliCustodySaveUnavailable"));
       }
 
       // 使用后端权威结果刷新页面，避免界面状态与真实设置不一致。
@@ -74,7 +79,7 @@ export function HanliCustodySwitch(props: HanliCustodySwitchProps) {
     // 保存失败处理接住桌面通信失败、后端拒绝或状态刷新异常。
     } catch (error) {
       // 标准错误对象（Error）保留真实原因，未知异常使用稳定的默认说明。
-      const message = error instanceof Error ? error.message : "自动托管设置失败";
+      const message = error instanceof Error ? error.message : fixedUiText(locale, "hanliCustodySaveFailed");
       // 把错误交给父页面的统一错误区域展示。
       onError(message);
     // 保存结束处理保证无论成功还是失败，都可以重新操作开关。
@@ -93,18 +98,18 @@ export function HanliCustodySwitch(props: HanliCustodySwitchProps) {
     // 开关语义（switch）让辅助技术把该按钮理解成可以切换状态的控件。
     role="switch"
     // 无障碍名称（aria-label）为无法看到界面的客户说明开关名称。
-    aria-label="自动托管"
+    aria-label={fixedUiText(locale, "hanliCustody")}
     // 无障碍开关状态（aria-checked）向辅助技术同步后端当前生效的状态。
     aria-checked={enabled}
     // 状态未加载或正在保存时禁用控件，防止无效和重复请求。
     disabled={!state || busy}
     // 悬停说明（title）解释关闭和开启分别会产生什么业务效果。
-    title="关闭：调查后请你确认；开启：在授权范围内依据事实代确认"
+    title={fixedUiText(locale, "hanliCustodyHint")}
     // 点击事件只调用具名方法，让页面结构中不混入后端保存流程。
     onClick={() => void toggleCustody()}
   >
     {/* 开关文字：说明该控件控制的是自动托管功能。 */}
-    <span>自动托管</span>
+    <span>{fixedUiText(locale, "hanliCustody")}</span>
     {/* 开关轨道：只负责视觉表现，辅助技术无需重复读取。 */}
     <i className="selswitch-track" aria-hidden="true">
       {/* 开关滑块：通过样式位置表达当前开启或关闭状态。 */}

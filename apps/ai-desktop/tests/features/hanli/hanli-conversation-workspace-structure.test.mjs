@@ -56,9 +56,24 @@ test("韩立空会话按首次使用顺序说明目标、材料和确认边界",
 
 test("自动托管作为韩立会话专属子模块并使用新手可读结构", () => {
   assert.match(view, /\.\/HanliConversationWorkspace\/HanliCustodySwitch/);
+  assert.match(view, /<HanliCustodySwitch locale=\{props\.locale\} onError=\{onError\}/);
   assert.match(custodySwitch, /韩立会话页面中的“自动托管”子模块/);
+  assert.match(custodySwitch, /locale: LocaleValue/);
   assert.match(custodySwitch, /async function toggleCustody/);
   assert.doesNotMatch(custodySwitch, /onClick=\{async/);
+});
+
+test("韩立会话固定文本由统一资源解析，恢复摘要和消息正文保持原值", () => {
+  for (const key of ["hanliContextReadStats", "hanliRecoveryRetrying", "hanliRecoveryRetry", "personaUserHeader", "personaCustomerDisplayReloading", "personaCustomerDisplayReload", "hanliCustody", "hanliCustodyHint"]) {
+    assert.match(`${view}\n${custodySwitch}`, new RegExp(`fixedUiText\\([^\\n]*?"${key}"`));
+  }
+  assert.match(view, /conversation\.recovery\.summary/);
+  assert.match(view, /<MarkdownMessage text=\{message\.content\}/);
+  assert.match(custodySwitch, /error instanceof Error \? error\.message/);
+  assert.match(fixedUiText, /hanliContextReadStats: "本轮读取：方法资料 \{method\}/);
+  assert.match(fixedUiText, /hanliContextReadStats: "今回の読み取り：メソッド資料 \{method\}/);
+  assert.match(fixedUiText, /hanliContextReadStats: "This turn read: method material \{method\}/);
+  assert.doesNotMatch(custodySwitch, /aria-label="自动托管"|<span>自动托管<\/span>/);
 });
 
 test("韩立页面模块的注释先写中文业务名称", () => {
