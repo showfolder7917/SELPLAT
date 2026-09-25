@@ -1,343 +1,66 @@
-/**
- * 协作页面显示文本转换器。
- *
- * 主进程只提供稳定状态码和原始时间；本文件负责把它们转换成中文或日文。
- * 这里不修改任务状态，也不参与人物调度。
- */
-
-import type {
-  // 协作成员：读取人物当前状态、阶段和更新时间。
-  CollaborationMemberOutDto,
-  // 协作总状态：复用其中的任务状态联合类型，确保文案不会漏掉新状态。
-  CollaborationStateOutDto,
-  // 协作任务：格式化计划、执行记录和真实执行人。
-  CollaborationTaskOutDto,
-  // 界面语言：在中文和日文文案之间选择。
-  LocaleValue,
-} from "../../../../contracts/system/desktop/index";
+import { fixedUiText, type FixedUiTextKey } from "../../../../contracts/foundation";
+import type { CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import type { EvolutionOneShotRunOutDto } from "../../../../contracts/services/evolution/dto/evolution-one-shot-run.out.dto";
 import type { PersonaConversationActivityOutDto } from "../../../../contracts/services/personas/conversation/dto/persona-conversation-activity.out.dto";
 
-/** 协作快照读取结果由人物页和任务群共用。 */
 export type CollaborationStateReadStatus = "syncing" | "ready" | "unavailable";
-
-/** 人物状态显示输入：只接受协作状态存储已发布的成员快照。 */
 export type CollaborationMemberDisplayModelInput = {
-  /** 当前需要显示状态的协作成员；首次同步或读取失败时允许为空。 */
-  member: CollaborationMemberOutDto | null;
-  /** 当前界面语言。 */
-  locale: LocaleValue;
-  /** 协作状态存储的读取结果；页面不能把旧时间线当成当前成员状态。 */
-  status?: CollaborationStateReadStatus;
-  /**
-   * 内部研讨尚未产生执行任务时的权威运行事实。
-   * 这是只读展示投影：不能据此创建任务或改写协作成员存储。
-   */
+  member: CollaborationMemberOutDto | null; locale: LocaleValue; status?: CollaborationStateReadStatus;
   oneShotRun?: Pick<EvolutionOneShotRunOutDto, "actor" | "phase" | "status"> | null;
-  /** 已持久化且尚未建立专题的韩立、南宫婉联合研讨。 */
-  deliberating?: boolean;
-  /** 内部研讨已形成范围说明且正在等待客户确认。 */
-  awaitingDeliberationConfirmation?: boolean;
-  /** 专题建立前的人物排查活动；owner 与 delegate 分别投影韩立判断和南宫婉核实。 */
+  deliberating?: boolean; awaitingDeliberationConfirmation?: boolean;
   inquiryActivity?: Pick<PersonaConversationActivityOutDto, "phase" | "status"> | null;
   inquiryRole?: "owner" | "delegate" | null;
 };
-
 type MemberState = CollaborationMemberOutDto["state"];
 type TaskState = CollaborationStateOutDto["tasks"][number]["state"];
+const text = (locale: LocaleValue, key: FixedUiTextKey) => fixedUiText(locale, key);
+const memberKeys: Record<MemberState, FixedUiTextKey> = { idle:"collaborationMemberIdle", conversation:"collaborationMemberConversation", assigned:"collaborationMemberAssigned", working:"collaborationMemberWorking", retiring:"collaborationMemberRetiring", recovering:"collaborationMemberRecovering", draining:"collaborationMemberDraining", offline:"collaborationMemberOffline" };
+const phaseKeys: Record<NonNullable<CollaborationMemberOutDto["phase"]>, FixedUiTextKey> = { analyzing:"collaborationPhaseAnalyzing", planning:"collaborationPhasePlanning", implementing:"collaborationPhaseImplementing", verifying:"collaborationPhaseVerifying", finalizing:"collaborationPhaseFinalizing", ready:"collaborationPhaseReady", blocked:"collaborationPhaseBlocked", failed:"collaborationPhaseFailed" };
+const taskKeys: Record<TaskState, FixedUiTextKey> = { "queued-executor":"collaborationTaskQueuedExecutor", "preparing-worktree":"collaborationTaskPreparingWorktree", analyzing:"collaborationTaskAnalyzing", executing:"collaborationTaskExecuting", "repairing-execution":"collaborationTaskRepairingExecution", "returned-to-nangong":"collaborationTaskReturnedNangong", "ready-for-integration":"collaborationTaskReadyIntegration", "queued-integration":"collaborationTaskQueuedIntegration", integrating:"collaborationTaskIntegrating", "unified-testing":"collaborationTaskUnifiedTesting", "awaiting-restart":"collaborationTaskAwaitingRestart", "test-failed":"collaborationTaskTestFailed", integrated:"collaborationTaskIntegrated", blocked:"collaborationTaskBlocked", recovering:"collaborationTaskRecovering", cancelled:"collaborationTaskCancelled" };
+const executionKeys: Record<CollaborationTaskOutDto["executionRecords"][number]["status"], FixedUiTextKey> = { assigned:"collaborationExecutionAssigned", analyzing:"collaborationExecutionAnalyzing", executing:"collaborationExecutionExecuting", "code-verified":"collaborationExecutionVerified", transferred:"collaborationExecutionTransferred", blocked:"collaborationExecutionBlocked", cancelled:"collaborationExecutionCancelled" };
 
-/** 普通成员状态的中文文案。 */
-const CHINESE_MEMBER_STATE_LABELS: Record<MemberState, string> = {
-  idle: "空闲",
-  conversation: "会话中",
-  assigned: "已分配",
-  working: "正在执行",
-  retiring: "正在关闭连接",
-  recovering: "等待恢复",
-  draining: "等待退出",
-  offline: "离线",
-};
-
-/** 普通成员状态的日文文案。 */
-const JAPANESE_MEMBER_STATE_LABELS: Record<MemberState, string> = {
-  idle: "待機",
-  conversation: "会話中",
-  assigned: "割当済み",
-  working: "実行中",
-  retiring: "接続終了中",
-  recovering: "復旧待ち",
-  draining: "終了待ち",
-  offline: "オフライン",
-};
-
-/** 协作任务状态的中文文案。 */
-const CHINESE_TASK_STATE_LABELS: Record<TaskState, string> = {
-  "queued-executor": "等待执行人",
-  "preparing-worktree": "准备独立版本",
-  analyzing: "技术分析",
-  executing: "执行修改",
-  "repairing-execution": "令狐修复执行问题",
-  "returned-to-nangong": "已返回南宫婉",
-  "ready-for-integration": "本轮已封存",
-  "queued-integration": "已进入测试批次",
-  integrating: "正在集成",
-  "unified-testing": "令狐老祖正在统一测试",
-  "awaiting-restart": "等待重启确认",
-  "test-failed": "统一测试失败",
-  integrated: "统一测试通过",
-  blocked: "已阻塞",
-  recovering: "等待恢复",
-  cancelled: "已取消",
-};
-
-/** 协作任务状态的日文文案。 */
-const JAPANESE_TASK_STATE_LABELS: Record<TaskState, string> = {
-  "queued-executor": "実行者待ち",
-  "preparing-worktree": "独立版を準備",
-  analyzing: "技術分析",
-  executing: "変更実行中",
-  "repairing-execution": "令狐が実行問題を修復中",
-  "returned-to-nangong": "南宮婉へ返却済み",
-  "ready-for-integration": "ラウンド確定済み",
-  "queued-integration": "テストキュー",
-  integrating: "統合中",
-  "unified-testing": "令狐が統合テスト中",
-  "awaiting-restart": "再起動確認待ち",
-  "test-failed": "統合テスト失敗",
-  integrated: "統合テスト合格",
-  blocked: "ブロック",
-  recovering: "復旧待ち",
-  cancelled: "キャンセル",
-};
-
-/** 工作中人物存在细分阶段时，优先展示比“正在执行”更具体的中文文案。 */
-function memberPhaseLabel(member: CollaborationMemberOutDto): string | null {
-  if (member.state !== "working" || !member.phase) return null;
-
-  const labels = {
-    analyzing: "技术分析中",
-    planning: "整理方案中",
-    implementing: "执行修改中",
-    verifying: "自检中",
-    finalizing: "整理结果中",
-    ready: "等待下一步",
-    blocked: "已阻塞",
-    failed: "处理失败",
-  };
-  return labels[member.phase];
+function memberPhaseLabel(member: CollaborationMemberOutDto, locale: LocaleValue): string | null {
+  return member.state === "working" && member.phase ? text(locale, phaseKeys[member.phase]) : null;
 }
-
-/**
- * 内部研讨与执行任务属于相邻但独立的生命周期。
- * 调查阶段没有任务是正常事实；当权威运行态明确指向某个协作成员时，左侧栏应如实显示该成员正在处理，
- * 不能因为 currentTaskId 尚为空就把其投影为空闲。
- */
-function deliberationMemberDisplay(
-  member: CollaborationMemberOutDto,
-  oneShotRun: CollaborationMemberDisplayModelInput["oneShotRun"],
-  locale: LocaleValue,
-  deliberating = false,
-  awaitingConfirmation = false,
-): { presence: MemberState; label: string } | null {
-  // 已经建立专题时，协作状态中的当前任务仍是成员状态的唯一事实。
+function deliberationMemberDisplay(member: CollaborationMemberOutDto, oneShotRun: CollaborationMemberDisplayModelInput["oneShotRun"], locale: LocaleValue, deliberating = false, awaitingConfirmation = false): { presence: MemberState; label: string } | null {
   if (member.currentTaskId) return null;
-  if (awaitingConfirmation) {
-    return member.memberId === "han-li"
-      ? { presence: "conversation", label: locale === "ja" ? "確認待ち" : "等待你确认" }
-      : null;
-  }
-  // 联合研讨由 currentTopicStage 的持久化投影确认；不能因一次性运行已转换阶段而把南宫婉误显示为空闲。
-  if (member.memberId === "nangong-wan" && deliberating) {
-    return { presence: "working", label: locale === "ja" ? "内部検討中" : "内部研讨中" };
-  }
-  if (!oneShotRun || oneShotRun.status !== "running") return null;
-  if (oneShotRun.actor !== member.memberId) return null;
-
-  const chineseLabels: Partial<Record<EvolutionOneShotRunOutDto["phase"], string>> = {
-    "preparing-topic": "梳理调查问题中",
-    "forming-proposal": "整理方案中",
-    approving: "正在审批",
-    revising: "补充调查中",
-    distributing: "正在分派",
-  };
-  const japaneseLabels: Partial<Record<EvolutionOneShotRunOutDto["phase"], string>> = {
-    "preparing-topic": "調査質問を整理中",
-    "forming-proposal": "提案を整理中",
-    approving: "承認中",
-    revising: "追加調査中",
-    distributing: "タスクを配分中",
-  };
-  const labels = locale === "ja" ? japaneseLabels : chineseLabels;
-  const fallback = locale === "ja" ? "内部検討中" : "内部研讨中";
-  return { presence: "working", label: labels[oneShotRun.phase] || fallback };
+  if (awaitingConfirmation) return member.memberId === "han-li" ? { presence:"conversation", label:text(locale,"collaborationAwaitingConfirmation") } : null;
+  if (member.memberId === "nangong-wan" && deliberating) return { presence:"working", label:text(locale,"collaborationInternalDeliberating") };
+  if (!oneShotRun || oneShotRun.status !== "running" || oneShotRun.actor !== member.memberId) return null;
+  const keys: Partial<Record<EvolutionOneShotRunOutDto["phase"], FixedUiTextKey>> = { "preparing-topic":"collaborationTopicPreparing", "forming-proposal":"collaborationPhasePlanning", approving:"collaborationPhaseVerifying", revising:"collaborationInquiryVerifying", distributing:"collaborationMemberAssigned" };
+  return { presence:"working", label:text(locale, keys[oneShotRun.phase] || "collaborationInternalDeliberating") };
 }
-
-/** 人物会话排查尚未形成专题时，直接使用主进程活动投影，不能回退为协作成员空闲。 */
-function inquiryMemberDisplay(
-  activity: CollaborationMemberDisplayModelInput["inquiryActivity"],
-  role: CollaborationMemberDisplayModelInput["inquiryRole"],
-  locale: LocaleValue,
-): { presence: MemberState; label: string } | null {
+function inquiryMemberDisplay(activity: CollaborationMemberDisplayModelInput["inquiryActivity"], role: CollaborationMemberDisplayModelInput["inquiryRole"], locale: LocaleValue): { presence: MemberState; label: string } | null {
   if (!activity || !role || activity.status === "completed") return null;
-  if (activity.status === "retryable" || activity.status === "interrupted") {
-    return role === "owner"
-      ? { presence: "recovering", label: locale === "ja" ? "調査再開待ち" : "等待恢复排查" }
-      : null;
-  }
-  if (activity.status === "blocked") {
-    return role === "owner"
-      ? { presence: "recovering", label: locale === "ja" ? "調査ブロック" : "排查受阻" }
-      : null;
-  }
+  if (activity.status === "retryable" || activity.status === "interrupted") return role === "owner" ? { presence:"recovering", label:text(locale,"collaborationInquiryRecovering") } : null;
+  if (activity.status === "blocked") return role === "owner" ? { presence:"recovering", label:text(locale,"collaborationInquiryBlocked") } : null;
   if (activity.status !== "running") return null;
-  if (role === "delegate") {
-    return activity.phase === "investigating"
-      ? { presence: "working", label: locale === "ja" ? "読取検証中" : "只读核实中" }
-      : null;
-  }
-  const chineseLabels: Partial<Record<PersonaConversationActivityOutDto["phase"], string>> = {
-    queued: "准备排查中",
-    investigating: "等待核实中",
-    assessing: "研判结果中",
-    explaining: "整理结论中",
-  };
-  const japaneseLabels: Partial<Record<PersonaConversationActivityOutDto["phase"], string>> = {
-    queued: "調査準備中",
-    investigating: "検証待ち",
-    assessing: "結果判定中",
-    explaining: "結論整理中",
-  };
-  const labels = locale === "ja" ? japaneseLabels : chineseLabels;
-  return { presence: "working", label: labels[activity.phase] || (locale === "ja" ? "調査中" : "排查中") };
+  if (role === "delegate") return activity.phase === "investigating" ? { presence:"working", label:text(locale,"collaborationInquiryVerifying") } : null;
+  const keys: Partial<Record<PersonaConversationActivityOutDto["phase"], FixedUiTextKey>> = { queued:"collaborationInquiryPreparing", investigating:"collaborationInquiryWaiting", assessing:"collaborationInquiryAssessing", explaining:"collaborationInquiryExplaining" };
+  return { presence:"working", label:text(locale, keys[activity.phase] || "collaborationInquiryInvestigating") };
 }
-
-/** 左侧人物栏与人物页共用的当前状态模型，只读取成员状态、任务编号和阶段。 */
-export function collaborationMemberDisplayModel(
-  input: CollaborationMemberDisplayModelInput,
-): { presence: MemberState; label: string } {
+export function collaborationMemberDisplayModel(input: CollaborationMemberDisplayModelInput): { presence: MemberState; label: string } {
   const { member, locale, status = "ready", oneShotRun = null } = input;
-  // 成员快照尚未取得或读取失败时，不从历史节点推测人物仍在处理什么。
-  if (!member) {
-    const label = status === "unavailable"
-      ? locale === "ja" ? "状態は未更新です" : "状态暂未更新"
-      : locale === "ja" ? "同期中" : "正在同步";
-    return { presence: "offline", label };
-  }
-  // 运行中的内部研讨是主进程已发布的当前事实，优先于“没有执行任务”的默认空闲显示。
-  const deliberationDisplay = deliberationMemberDisplay(member, oneShotRun, locale, input.deliberating, input.awaitingDeliberationConfirmation);
-  if (deliberationDisplay) return deliberationDisplay;
-  // 已有执行任务时继续以协作存储为权威；只有任务前排查才由人物会话活动补足状态。
-  if (!member.currentTaskId) {
-    const inquiryDisplay = inquiryMemberDisplay(input.inquiryActivity, input.inquiryRole, locale);
-    if (inquiryDisplay) return inquiryDisplay;
-  }
-  // 没有当前任务、也没有归属本人的运行中研讨时，历史状态不能把成员重新投影为忙碌。
+  if (!member) return { presence:"offline", label:text(locale, status === "unavailable" ? "collaborationStateUnavailable" : "collaborationStateSyncing") };
+  const deliberation = deliberationMemberDisplay(member, oneShotRun, locale, input.deliberating, input.awaitingDeliberationConfirmation);
+  if (deliberation) return deliberation;
+  if (!member.currentTaskId) { const inquiry = inquiryMemberDisplay(input.inquiryActivity, input.inquiryRole, locale); if (inquiry) return inquiry; }
   const presence = member.currentTaskId ? member.state : "idle";
-  // 阶段只属于当前在途任务；空闲成员不能继续显示上一轮的阶段。
-  const phaseLabel = member.currentTaskId ? memberPhaseLabel(member) : null;
-  const label = phaseLabel || (locale === "ja"
-    ? JAPANESE_MEMBER_STATE_LABELS[presence]
-    : CHINESE_MEMBER_STATE_LABELS[presence]);
-  return { presence, label };
+  return { presence, label: member.currentTaskId ? memberPhaseLabel(member, locale) || text(locale, memberKeys[presence]) : text(locale, memberKeys[presence]) };
 }
-
-/** 把协作任务状态码转换成当前界面语言的客户文案。 */
-export function collaborationTaskStateLabel(state: TaskState, locale: LocaleValue): string {
-  return locale === "ja" ? JAPANESE_TASK_STATE_LABELS[state] : CHINESE_TASK_STATE_LABELS[state];
-}
-
-/** 从任务执行记录中提取去重后的真实执行人姓名，并保留首次出现顺序。 */
-export function collaborationExecutorNames(task: CollaborationTaskOutDto): string[] {
-  const namesByMemberId = task.executionRecords.map((record) => {
-    return [record.executor.memberId, record.executor.displayName] as const;
-  });
-  return [...new Map(namesByMemberId).values()];
-}
-
-/** 把任务计划状态转换成当前界面语言。 */
-export function collaborationPlanStatusLabel(
-  status: CollaborationTaskOutDto["plans"][number]["status"],
-  locale: LocaleValue,
-): string {
-  const chinese = { "ready-for-execution": "技术分析完成" } as const;
-  const japanese = { "ready-for-execution": "技術分析完了" } as const;
-  return locale === "ja" ? japanese[status] : chinese[status];
-}
-
-/** 把单次执行记录状态转换成当前界面语言。 */
-export function collaborationExecutionStatusLabel(
-  status: CollaborationTaskOutDto["executionRecords"][number]["status"],
-  locale: LocaleValue,
-): string {
-  const chinese = {
-    assigned: "已分配",
-    analyzing: "分析中",
-    executing: "执行中",
-    "code-verified": "代码已验证",
-    transferred: "已转交",
-    blocked: "已阻塞",
-    cancelled: "已取消",
-  } as const;
-  const japanese = {
-    assigned: "割当済み",
-    analyzing: "分析中",
-    executing: "実行中",
-    "code-verified": "コード検証済み",
-    transferred: "引継ぎ済み",
-    blocked: "ブロック",
-    cancelled: "キャンセル",
-  } as const;
-  return locale === "ja" ? japanese[status] : chinese[status];
-}
-
-/** 把 ISO 时间转换成带日期和秒的本地显示文本。 */
+export function collaborationTaskStateLabel(state: TaskState, locale: LocaleValue): string { return text(locale, taskKeys[state]); }
+export function collaborationExecutorNames(task: CollaborationTaskOutDto): string[] { return [...new Map(task.executionRecords.map((record) => [record.executor.memberId, record.executor.displayName] as const)).values()]; }
+export function collaborationPlanStatusLabel(status: CollaborationTaskOutDto["plans"][number]["status"], locale: LocaleValue): string { return text(locale, "collaborationPlanReady"); }
+export function collaborationExecutionStatusLabel(status: CollaborationTaskOutDto["executionRecords"][number]["status"], locale: LocaleValue): string { return text(locale, executionKeys[status]); }
 export function formatCollaborationTime(value: string | null, locale: LocaleValue): string {
   if (!value) return locale === "ja" ? "進行中" : "进行中";
-
-  const parsedTime = new Date(value);
-  if (Number.isNaN(parsedTime.getTime())) return value;
-
-  return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(parsedTime);
+  const parsedTime = new Date(value); if (Number.isNaN(parsedTime.getTime())) return value;
+  return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }).format(parsedTime);
 }
-
-/** 把开始和完成时间转换成“天、小时、分钟、秒”的业务耗时。 */
-export function formatCollaborationDuration(
-  startedAt: string,
-  completedAt: string | null,
-  locale: LocaleValue,
-): string {
+export function formatCollaborationDuration(startedAt: string, completedAt: string | null, locale: LocaleValue): string {
   if (!completedAt) return locale === "ja" ? "進行中" : "进行中";
-
-  const durationMs = Math.max(0, Date.parse(completedAt) - Date.parse(startedAt));
-  if (!Number.isFinite(durationMs)) return "—";
-
-  const totalSeconds = Math.floor(durationMs / 1_000);
-  const days = Math.floor(totalSeconds / 86_400);
-  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const chineseUnits = [
-    days > 0 ? `${days}天` : "",
-    hours > 0 ? `${hours}小时` : "",
-    minutes > 0 ? `${minutes}分钟` : "",
-    `${seconds}秒`,
-  ];
-  const japaneseUnits = [
-    days > 0 ? `${days}日` : "",
-    hours > 0 ? `${hours}時間` : "",
-    minutes > 0 ? `${minutes}分` : "",
-    `${seconds}秒`,
-  ];
-
-  const units = locale === "ja" ? japaneseUnits : chineseUnits;
+  const durationMs=Math.max(0,Date.parse(completedAt)-Date.parse(startedAt)); if (!Number.isFinite(durationMs)) return "—";
+  const seconds=Math.floor(durationMs/1000), days=Math.floor(seconds/86400), hours=Math.floor(seconds%86400/3600), minutes=Math.floor(seconds%3600/60), remainder=seconds%60;
+  const units=locale==="ja" ? [days?`${days}日`:"",hours?`${hours}時間`:"",minutes?`${minutes}分`:"",`${remainder}秒`] : [days?`${days}天`:"",hours?`${hours}小时`:"",minutes?`${minutes}分钟`:"",`${remainder}秒`];
   return units.filter(Boolean).join(" ");
 }
