@@ -887,7 +887,7 @@ test("韩立只学习提问调查扩展方法并回显每轮真实读入字数",
   ]);
   assert.deepEqual(threadBindings.get("hanli-method-thread"), { threadId: "hanli-provider-thread", workspaceSignature: "test-workspace" });
   assert.match(hanliConversationPromptSource, /不得把方法样本当成相似案例/);
-  assert.match(hanliConversationWorkspaceSource, /本轮读取：方法资料/);
+  assert.match(hanliConversationWorkspaceSource, /fixedUiText\(props\.locale, "hanliContextReadStats"\)/);
 });
 
 test("审批、编排和分发服务不再互相代替职责", () => {
