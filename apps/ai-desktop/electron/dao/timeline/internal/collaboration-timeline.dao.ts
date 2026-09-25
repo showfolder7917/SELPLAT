@@ -13,6 +13,8 @@ import type {
 import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contracts/services/workflow/index.js";
 import type { CollaborationTimelineCommit, CollaborationTimelinePersistencePort, CollaborationTimelineStreamCommit } from "../../../services/support/capabilities/event-center/index.js";
 import { projectCollaborationFlowEvent, projectLegacySubmittedFlowCorrection } from "./collaboration-timeline-flow.projector.js";
+import { projectTopicFinalPresentation } from "../../../services/workflow/domain/topic-final-presentation.projection.js";
+import type { TopicLaterPresentationActivity } from "../../../services/workflow/domain/topic-final-presentation.projection.js";
 import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 const NANGONG: CollaborationParticipantSnapshotOutDto = { memberId: "nangong-wan", displayName: "南宫婉" };
@@ -330,16 +332,19 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
       node.summary = "本任务已通过重启健康检查，当前进度见后续节点。";
       node.automaticOpen = false;
     }
-    // 专题终态是所有人物工作的最终边界。多轮验收、恢复和重投影可能留下不同 nodeId 的活动节点；
-    // 只要它们早于最终完成时间，就在读模型中退休，保留原始审计事实且不覆盖完成后新开始的工作。
     const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
     const topicUpdatedAt = String(topic.updatedAt);
-    if (persistedStatus === "completed") {
+    const finalPresentation = projectTopicFinalPresentation({
+      terminal: timelineTerminalFact(rows, persistedStatus),
+      laterActivity: timelineLaterActivity(rows, persistedStatus),
+    });
+    // 统一领域规则确认终态后，只退休更早的活动展示；原始审计事实仍保留在 rows 中。
+    if (finalPresentation?.status === "completed" && finalPresentation.terminalAt) {
       for (const node of nodes) {
-        if (node.startedAt >= topicUpdatedAt || !["current", "waiting"].includes(node.status)) continue;
+        if (node.startedAt >= finalPresentation.terminalAt || !["current", "waiting"].includes(node.status)) continue;
         node.status = "completed";
-        node.completedAt = topicUpdatedAt;
-        node.durationMs = durationMs(node.startedAt, topicUpdatedAt);
+        node.completedAt = finalPresentation.terminalAt;
+        node.durationMs = durationMs(node.startedAt, finalPresentation.terminalAt);
         node.action = "该阶段已结束";
         node.summary = "本专题已完成，当前结果见后续节点。";
         node.automaticOpen = false;
@@ -354,7 +359,12 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
     const completedCount = nodes.filter((node) => node.status === "completed").length;
     const currentNodes = nodes.filter((node) => node.status === "current");
     // 阻塞与取消仍是停止事实；正常运行时必须先收口全部当前工作，才可显示专题完成。
-    const calculated = persistedStatus === "blocked" || persistedStatus === "cancelled" ? persistedStatus
+    const calculated = persistedStatus === "cancelled" ? persistedStatus
+      : finalPresentation?.status === "completed" ? "completed"
+      : finalPresentation?.status === "blocked" ? "blocked"
+      : finalPresentation?.status === "verifying" ? "verifying"
+      : finalPresentation?.status === "running" ? "running"
+      : persistedStatus === "blocked" ? persistedStatus
       : currentNodes.some((node) => node.kind === "verification") ? "verifying"
         : currentNodes.some((node) => node.kind === "approval-application") ? "waiting-approval"
           : currentNodes.length > 0 ? "running"
@@ -365,7 +375,7 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
     const taskCards = taskCardsFromFacts(connection, rows, nodes);
     return {
       groupId: String(topic.groupId), topicId: nullable(topic.topicId), proposalId: nullable(topic.proposalId), title: String(topic.title),
-      status: calculated, summary: [...nodes].reverse().find((node) => node.status === "current")?.summary || nodes.at(-1)?.summary || String(topic.summary),
+      status: calculated, summary: finalPresentation?.summary || [...nodes].reverse().find((node) => node.status === "current")?.summary || nodes.at(-1)?.summary || String(topic.summary),
       nodes, topicNodes, taskCards, executingCount, verifyingCount, waitingCount, completedCount, startedAt: String(topic.startedAt), updatedAt,
       durationMs: durationMs(String(topic.startedAt), calculated === "completed" ? updatedAt : now), ...transition(calculated, nodes),
     };
@@ -387,6 +397,28 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
       manualApprovalProposalId: nullable(row.manualApprovalProposalId),
     };
   }
+}
+
+/** 从已追加的验收事实读取专题终态；无专题卡不参与该规则。 */
+function timelineTerminalFact(rows: Array<Record<string, unknown>>, persistedStatus: CollaborationTimelineGroupOutDto["status"]) {
+  if (persistedStatus !== "completed") return null;
+  // 新事实使用 acceptance.passed；升级前的完成档案保留为已完成验收节点，二者都是同一专题的终态证据。
+  const acceptance = [...rows].reverse().find((row) => String(row.status) === "completed"
+    && (String(row.eventType) === "acceptance.passed" || String(row.kind) === "verification"));
+  if (!acceptance) return null;
+  return { occurredAt: String(acceptance.occurredAt), summary: String(acceptance.summary) };
+}
+
+/** 只读取终态之后的真实活动；同时间戳仍由终态事实稳定收口。 */
+function timelineLaterActivity(rows: Array<Record<string, unknown>>, persistedStatus: CollaborationTimelineGroupOutDto["status"]) {
+  const terminal = timelineTerminalFact(rows, persistedStatus);
+  if (!terminal) return null;
+  const later = [...rows].reverse().find((row) => String(row.occurredAt) > terminal.occurredAt
+    && ["current", "waiting", "failed"].includes(String(row.status)));
+  if (!later) return null;
+  const status: TopicLaterPresentationActivity["status"] = String(later.status) === "failed" || String(later.status) === "waiting" ? "blocked"
+    : String(later.kind) === "verification" ? "verifying" : "running";
+  return { occurredAt: String(later.occurredAt), status, summary: String(later.summary) };
 }
 
 /** 从持久化 taskId 和任务标题建立层级；分类只依赖首次事实顺序，不根据标题文本猜测。 */

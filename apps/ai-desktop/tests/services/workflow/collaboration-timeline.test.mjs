@@ -825,6 +825,38 @@ test("旧状态反推接口和旧表读取已退役", () => {
   assert.doesNotMatch(source, /function flowFact/);
 });
 
+test("历史专题的最终验收结论由统一投影读取，后续活动不会被旧完成覆盖", () => {
+  const fixture = createFixture("topic-final-presentation");
+  try {
+    const base = {
+      groupId: "topic:final-presentation", topicId: "topic-final-presentation", proposalId: "proposal-final-presentation",
+      title: "历史专题", status: "completed", startedAt: fixture.at(1),
+    };
+    fixture.append({
+      eventId: "acceptance-passed", eventType: "acceptance.passed",
+      group: { ...base, summary: "最终验收通过", updatedAt: fixture.at(3) },
+      fact: { nodeId: "acceptance:final", taskId: null, proposalId: base.proposalId, sourceFactKey: "acceptance-passed", kind: "verification",
+        actor: member("han-li", "韩立"), recipients: [], status: "completed", action: "验收通过", summary: "最终验收通过",
+        contentRole: "analysis-output", content: "通过", detailRole: "result-evidence", detail: "真实验收记录", startedAt: fixture.at(3), completedAt: fixture.at(3), automaticOpen: false, manualApprovalProposalId: null, occurredAt: fixture.at(3) },
+    });
+    let group = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(group.status, "completed");
+    assert.equal(group.summary, "最终验收通过");
+
+    fixture.append({
+      eventId: "later-recovery", eventType: "checkpoint.progress",
+      group: { ...base, summary: "旧专题状态未推进", updatedAt: fixture.at(3) },
+      fact: { nodeId: "recovery:later", taskId: "task-later", proposalId: base.proposalId, sourceFactKey: "later-recovery", kind: "repair",
+        actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "current", action: "重新验证", summary: "终态后出现真实恢复活动",
+        contentRole: "analysis-output", content: "重新验证", detailRole: "recovery-conditions", detail: "新的失败事实", startedAt: fixture.at(4), completedAt: null, automaticOpen: true, manualApprovalProposalId: null, occurredAt: fixture.at(4) },
+    });
+    group = fixture.timeline.snapshot(fixture.at(5)).groups[0];
+    assert.equal(group.status, "running");
+    assert.equal(group.summary, "终态后出现真实恢复活动");
+    assert.equal(group.nodes[0].summary, "最终验收通过", "原始审计节点保持不变");
+  } finally { fixture.close(); }
+});
+
 function approvalApplication(fixture, proposalId, offset, action) {
   return businessEvent(fixture, `application:${proposalId}`, proposalId, offset, {
     nodeId: `proposal:${proposalId}`, taskId: null, proposalId, sourceFactKey: `application:${proposalId}`, kind: "approval-application",

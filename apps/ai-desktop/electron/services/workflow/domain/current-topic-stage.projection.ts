@@ -6,6 +6,7 @@ import { projectCurrentTechnicalRecovery } from "./current-topic-technical-recov
 import { emptyCurrentTopicDeliveryEvidence } from "./current-topic-delivery-evidence.js";
 import { projectTopicPreparationStage } from "./current-topic-preparation.projection.js";
 import { readCurrentTopicRecovery as readRecovery } from "./current-topic-read-recovery.js";
+import { projectTopicFinalPresentation } from "./topic-final-presentation.projection.js";
 
 /**
  * 把专题、提案、有效任务链和最新真实验收事实收敛为唯一当前阶段。
@@ -56,21 +57,33 @@ export function projectCurrentTopicStage(
 
   const finalConclusion = readFinalConclusion(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
-  const deliveryGate = readDeliveryGate(deliveryEvidence);
-  const preflightGate = readPreflightGate(deliveryEvidence, execution.effectiveTasks);
-  const stageGate = preflightGate || deliveryGate;
-  const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
   // 完成态后的真实复核仍属于当前专题；运行明确阻塞时不得让旧完成事实覆盖恢复入口。
   const runBlocked = run?.status === "blocked"
     && run.topicId === topic?.topicId
     && run.proposalId === proposal.proposalId;
   const failedAcceptance = latestAcceptance?.status === "failed" || latestAcceptance?.status === "blocked";
+  const finalPresentation = projectTopicFinalPresentation({
+    terminal: finalConclusion ? {
+      occurredAt: finalConclusion.occurredAt,
+      summary: "韩立结果验收已经通过，专题已完成。",
+    } : null,
+    // 当前专题投影已确认这些是真实活动；它们只能在终态之后覆盖旧结论。
+    laterActivity: runBlocked ? { occurredAt: run!.updatedAt, status: "blocked", summary: "当前专题运行受阻，等待按原恢复点处理。" }
+      : acceptanceStarted ? { occurredAt: run!.updatedAt, status: "verifying", summary: "韩立已开始本轮结果验收。" }
+        : failedAcceptance ? { occurredAt: latestAcceptance!.occurredAt, status: "blocked", summary: "最新真实验收未通过，等待按原恢复点处理。" }
+          : execution.blocked ? { occurredAt: task?.updatedAt || evolution.updatedAt, status: "blocked", summary: execution.summary }
+            : null,
+  });
+  const deliveryGate = readDeliveryGate(deliveryEvidence);
+  const preflightGate = readPreflightGate(deliveryEvidence, execution.effectiveTasks);
+  const stageGate = preflightGate || deliveryGate;
+  const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
   let status: CurrentTopicStageOutDto["status"] = "executing";
   if (taskNeedsConfirmation) status = "awaiting-confirmation";
   else if (runBlocked) status = "failed-pending-repair";
   else if (acceptanceStarted) status = "accepting";
   else if (failedAcceptance) status = "failed-pending-repair";
-  else if (proposal.status === "completed") status = finalConclusion ? "completed" : "completed-unverified";
+  else if (proposal.status === "completed") status = finalPresentation?.status === "completed" ? "completed" : "completed-unverified";
   else if (stageGate) status = stageGate.status;
   else if (execution.blocked) status = "failed-pending-repair";
   else if (execution.nextStatus === "verifying") status = "verifying";

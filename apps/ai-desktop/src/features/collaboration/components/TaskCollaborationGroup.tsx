@@ -171,22 +171,6 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
     void onOpenHanliConversation();
   };
 
-  const auditHistory = auditHistoryGroups.length > 0 && (
-    <section ref={auditHistoryRef} className="task-collaboration-audit-history" aria-label={locale === "ja" ? "監査履歴" : "专题审计历史"}>
-      <SelUiDisclosure
-        idPrefix="task-collaboration-audit-history"
-        className="task-collaboration-audit-disclosure"
-        open={auditHistoryOpen}
-        onOpenChange={setAuditHistoryOpen}
-        trigger={<span className="task-collaboration-audit-history-header"><strong>{locale === "ja" ? "監査履歴" : "历史审计"}</strong><span>{locale === "ja" ? `${auditHistoryGroups.length} 件の旧記録` : `${auditHistoryGroups.length} 条旧专题或历史记录`}</span></span>}
-      >
-        <div className="task-collaboration-history-cards">
-          {auditHistoryGroups.map((group) => <TaskGroupCard key={group.groupId} model={createCardModel(group, true)} />)}
-        </div>
-      </SelUiDisclosure>
-    </section>
-  );
-
   const deliveryUnavailable = deliveryReadStatus === "unavailable";
   const deliveryReading = deliveryReadStatus === "syncing";
   const timelineUnavailable = timelineReadStatus === "unavailable";
@@ -248,6 +232,30 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
       .catch(() => undefined)
       .finally(() => setRetryingRead(false));
   };
+
+  // 历史审计是独立读取区域：即使当前没有旧专题，也要在展开后说明读取结果。
+  // 此处位于 retryTimelineRead 初始化之后，失败提示才能安全绑定只读重新读取操作。
+  const auditHistory = groups.length > 0 && (
+    <section ref={auditHistoryRef} className="task-collaboration-audit-history" aria-label={locale === "ja" ? "監査履歴" : "专题审计历史"}>
+      <SelUiDisclosure
+        idPrefix="task-collaboration-audit-history"
+        className="task-collaboration-audit-disclosure"
+        open={auditHistoryOpen}
+        onOpenChange={setAuditHistoryOpen}
+        trigger={<span className="task-collaboration-audit-history-header"><strong>{locale === "ja" ? "監査履歴" : "历史审计"}</strong><span>{locale === "ja" ? `${auditHistoryGroups.length} 件の旧記録` : `${auditHistoryGroups.length} 条旧专题或历史记录`}</span></span>}
+      >
+        <div className="task-collaboration-history-cards">
+          {timelineRefreshing && <p role="status">正在读取历史审计记录…</p>}
+          {timelineUnavailable && <div role="alert">
+            <p>{readError || "历史审计读取失败，正在保留上次成功内容。"}</p>
+            <button type="button" disabled={retryingRead} onClick={retryTimelineRead}>{retryingRead ? "重新读取中…" : "重新读取"}</button>
+          </div>}
+          {auditHistoryGroups.map((group) => <TaskGroupCard key={group.groupId} model={createCardModel(group, true)} />)}
+          {!timelineRefreshing && !timelineUnavailable && auditHistoryGroups.length === 0 && <p role="status">没有可显示的审计记录。</p>}
+        </div>
+      </SelUiDisclosure>
+    </section>
+  );
 
   /** 只重试已失败的时间线投影，旧卡片、展开状态和详情滚动不参与该忙碌锁。 */
   const retryTimelineProjection = () => {
