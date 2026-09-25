@@ -340,6 +340,24 @@ export class VersionWorkspaceManager {
    * 异常或副作用示例：分支、候选 SHA 或基线祖先关系不一致时抛错，绝不回退到已退役候选 worktree。
    */
   async readRetainedCandidateChangedFiles(candidate: IntegrationCandidate): Promise<string[]> {
+    await this.#assertRetainedCandidate(candidate);
+    return splitLines(await this.#gitRaw(this.#repositoryRoot, ["diff", "--name-only", `${candidate.baseSha}..${candidate.candidateSha}`]));
+  }
+
+  /** 候选工作树回收后，仅从稳定仓库内经 SHA 核验的候选分支读取冻结源码。 */
+  async readRetainedCandidateFiles(candidate: IntegrationCandidate, relativePaths: readonly string[]): Promise<Record<string, string>> {
+    await this.#assertRetainedCandidate(candidate);
+    const paths = [...new Set(relativePaths.map(normalizeFile))];
+    if (!paths.length || paths.some((relativePath) => !relativePath || relativePath.startsWith("../") || relativePath.includes("/../"))) {
+      throw new CandidateCompletenessError("保留候选源码路径必须是仓库内的相对路径。");
+    }
+    return Object.fromEntries(await Promise.all(paths.map(async (relativePath) => [
+      relativePath,
+      await this.#gitRaw(this.#repositoryRoot, ["show", `${candidate.candidateSha}:${relativePath}`]),
+    ])));
+  }
+
+  async #assertRetainedCandidate(candidate: IntegrationCandidate): Promise<void> {
     this.#validateCandidateBranch(candidate.branchName);
     const retainedSha = await this.#git(this.#repositoryRoot, ["rev-parse", `refs/heads/${candidate.branchName}`]);
     if (retainedSha !== candidate.candidateSha) {
@@ -349,7 +367,6 @@ export class VersionWorkspaceManager {
     if (baseSha !== candidate.baseSha) {
       throw new CandidateCompletenessError("待恢复候选不再继承批次冻结基线，禁止生成影响范围快照。");
     }
-    return splitLines(await this.#gitRaw(this.#repositoryRoot, ["diff", "--name-only", `${candidate.baseSha}..${candidate.candidateSha}`]));
   }
 
   /** 从固定基线创建可追溯的 release/<version>-rc 候选；只有发布锁持有者可以调用。 */

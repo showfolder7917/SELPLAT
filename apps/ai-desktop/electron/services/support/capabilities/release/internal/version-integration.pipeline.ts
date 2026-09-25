@@ -18,7 +18,8 @@ import {
   type IntegrationCandidate,
   VersionWorkspaceManager,
 } from "./version-workspace.manager.js";
-import { inspectAcceptancePlanCandidateEvidence } from "./integration.verifier.js";
+import { ACCEPTANCE_PLAN_SOURCE_PATHS } from "./acceptance-plan-candidate-source.js";
+import { inspectAcceptancePlanCandidateEvidence, inspectAcceptancePlanCandidateEvidenceFromContents } from "./integration.verifier.js";
 import { executeGit } from "./git-process.js";
 import { requiresRuntimeActivation } from "./runtime-activation.policy.js";
 
@@ -264,6 +265,8 @@ export class VersionIntegrationPipeline {
     let publishedExecutable: string | null = null;
     try {
       const restored = await this.#restoreRuntimeActivationImpactScope(candidate, activation);
+      // 候选已成为当前宿主后，必须由候选自身的验证器重建证据；旧宿主快照不能代表新增门禁。
+      document.candidateEvidence = await this.#inspectRetainedCandidateEvidence(candidate);
       document.state = "testing";
       document.runtimeActivation = { ...activation, impactScope: restored.snapshot, state: "resumed", detail: null, updatedAt: new Date().toISOString() };
       this.#releaseBatches.write(document);
@@ -371,6 +374,18 @@ export class VersionIntegrationPipeline {
   }
 
   /** 已提升候选恢复时优先使用冻结事实；仅为旧宿主文档从稳定仓库的保留分支补写一次快照。 */
+  /** 候选运行时在工作树已回收后，仍从稳定仓库的同一候选 SHA 重建冻结材料。 */
+  async #inspectRetainedCandidateEvidence(candidate: IntegrationCandidate): Promise<ReleaseBatchDocumentOutDto["candidateEvidence"]> {
+    const repositoryPaths = Object.values(ACCEPTANCE_PLAN_SOURCE_PATHS)
+      .map((relativePath) => `apps/ai-desktop/${relativePath}`);
+    const files = await this.#workspaces.readRetainedCandidateFiles(candidate, repositoryPaths);
+    const contents = Object.fromEntries(Object.entries(ACCEPTANCE_PLAN_SOURCE_PATHS).map(([source, relativePath]) => [
+      source,
+      files[`apps/ai-desktop/${relativePath}`],
+    ])) as Record<keyof typeof ACCEPTANCE_PLAN_SOURCE_PATHS, string>;
+    return inspectAcceptancePlanCandidateEvidenceFromContents(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha, contents);
+  }
+
   async #restoreRuntimeActivationImpactScope(candidate: IntegrationCandidate, activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): Promise<{
     files: string[];
     snapshot: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>["impactScope"];
@@ -459,19 +474,10 @@ export class VersionIntegrationPipeline {
       releaseDocument.state = "candidate-ready";
       releaseDocument.candidateBranch = candidate.branchName;
       releaseDocument.candidateSha = candidate.candidateSha;
-      // 门禁前先冻结候选来源、运行器身份和逐项结果；失败后候选工作树会回收，归档仍可复核实际材料。
-      releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
-      this.#releaseBatches.write(releaseDocument);
       // 只有候选确实包含同批冻结结果后才能记录 unified_test.started。
       await this.#workspaces.assertCandidateContainsTaskResults(candidate, tasks);
       const impactScope = await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha);
-      let preflightBlocked = false;
-      this.#store.updateTask(taskIds[0], "preflight.decided", (_first, mutable) => {
-        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          preflightBlocked ||= appendQuickPreflightDecision(task, candidate!, releaseDocument!, impactScope, actor);
-        }
-      });
-      if (preflightBlocked) throw new QuickPreflightError("快速预检发现候选证据问题");
+      // 候选修改验证器时，旧宿主只能冻结候选身份和影响范围，不能以自身旧规则生成候选证据或预检结论。
       if (requiresRuntimeActivation(
         impactScope,
         this.#loadedRuntimeSha,
@@ -517,12 +523,21 @@ export class VersionIntegrationPipeline {
         };
         this.#releaseBatches.write(releaseDocument);
         activationScheduled = true;
-        // app.exit 可能在当前调用栈完成前终止进程；先显式释放跨进程租约，候选工作树则保留给新进程恢复。
         releaseLease?.();
         releaseLease = null;
         this.#activateRuntime(executable, releaseBatchId, candidate.candidateSha);
         return;
       }
+      // 未修改验证器的候选由当前宿主生成证据；失败后候选工作树回收，归档仍可复核实际材料。
+      releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
+      this.#releaseBatches.write(releaseDocument);
+      let preflightBlocked = false;
+      this.#store.updateTask(taskIds[0], "preflight.decided", (_first, mutable) => {
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          preflightBlocked ||= appendQuickPreflightDecision(task, candidate!, releaseDocument!, impactScope, actor);
+        }
+      });
+      if (preflightBlocked) throw new QuickPreflightError("快速预检发现候选证据问题");
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
       reconcileSpan = null;
       // updateTask 的回调会跨越当前控制流；先冻结已校验候选 SHA，避免回调重新读取可空运行态。

@@ -36,6 +36,14 @@ export function readAcceptancePlanCandidateSourceRecords(candidateDesktopRoot: s
     .map(([source, relativePath]) => ({ source, relativePath, content: readAcceptancePlanCandidateSource(candidateDesktopRoot, relativePath) }));
 }
 
+/** 将保留候选分支读取的正文恢复为与工作树读取相同的冻结材料记录。 */
+export function acceptancePlanCandidateSourceRecordsFromContents(
+  contents: Readonly<Record<AcceptancePlanCandidateSourceName, string>>,
+): AcceptancePlanCandidateSourceRecord[] {
+  return (Object.entries(ACCEPTANCE_PLAN_SOURCE_PATHS) as Array<[AcceptancePlanCandidateSourceName, string]>)
+    .map(([source, relativePath]) => ({ source, relativePath, content: contents[source] }));
+}
+
 function readAcceptancePlanCandidateSource(candidateDesktopRoot: string, relativePath: string): string {
   try {
     return readFileSync(path.join(candidateDesktopRoot, relativePath), "utf8");

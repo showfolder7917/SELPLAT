@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { resolveApplicationDataPaths } from "@selplat/node-common-core/path";
 import { resolveLockSpecificDependencyPaths } from "@selplat/node-common-core/lifecycle";
-import { readAcceptancePlanCandidateSources, readAcceptancePlanCandidateSourceRecords } from "./acceptance-plan-candidate-source.ts";
+import { acceptancePlanCandidateSourceRecordsFromContents, readAcceptancePlanCandidateSources, readAcceptancePlanCandidateSourceRecords, type AcceptancePlanCandidateSourceRecord } from "./acceptance-plan-candidate-source.ts";
 import { executeGit } from "./git-process.ts";
 import type { ReleaseBatchCandidateEvidenceOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
 
@@ -246,16 +246,7 @@ export function inspectAcceptancePlanCandidateEvidence(
   const projectRoot = path.resolve(candidateProjectRoot);
   const desktopRoot = path.join(projectRoot, "apps", "ai-desktop");
   try {
-    const records = readAcceptancePlanCandidateSourceRecords(desktopRoot);
-    const sources = Object.fromEntries(records.map(({ source, content }) => [source, content])) as ReturnType<typeof readAcceptancePlanCandidateSources>;
-    return {
-      candidateProjectRoot: projectRoot,
-      candidateSha,
-      loadedRuntimeSha,
-      sourceBlobs: records.map(({ source, relativePath, content }) => ({ source, relativePath, sha256: createHash("sha256").update(content).digest("hex") })),
-      acceptancePlanChecks: acceptancePlanCapabilityChecks(sources).map(([capability, passed]) => ({ capability, passed })),
-      readError: null,
-    };
+    return acceptancePlanCandidateEvidenceFromRecords(projectRoot, candidateSha, loadedRuntimeSha, readAcceptancePlanCandidateSourceRecords(desktopRoot));
   } catch (error) {
     return {
       candidateProjectRoot: projectRoot,
@@ -266,6 +257,34 @@ export function inspectAcceptancePlanCandidateEvidence(
       readError: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/** 候选工作树回收时，候选宿主从稳定仓库的已核验分支重建相同证据。 */
+export function inspectAcceptancePlanCandidateEvidenceFromContents(
+  candidateProjectRoot: string,
+  candidateSha: string | null,
+  loadedRuntimeSha: string | null,
+  contents: Readonly<Record<keyof typeof import("./acceptance-plan-candidate-source.ts").ACCEPTANCE_PLAN_SOURCE_PATHS, string>>,
+): ReleaseBatchCandidateEvidenceOutDto {
+  return acceptancePlanCandidateEvidenceFromRecords(
+    path.resolve(candidateProjectRoot), candidateSha, loadedRuntimeSha,
+    acceptancePlanCandidateSourceRecordsFromContents(contents),
+  );
+}
+
+function acceptancePlanCandidateEvidenceFromRecords(
+  candidateProjectRoot: string,
+  candidateSha: string | null,
+  loadedRuntimeSha: string | null,
+  records: readonly AcceptancePlanCandidateSourceRecord[],
+): ReleaseBatchCandidateEvidenceOutDto {
+  const sources = Object.fromEntries(records.map(({ source, content }) => [source, content])) as ReturnType<typeof readAcceptancePlanCandidateSources>;
+  return {
+    candidateProjectRoot, candidateSha, loadedRuntimeSha,
+    sourceBlobs: records.map(({ source, relativePath, content }) => ({ source, relativePath, sha256: createHash("sha256").update(content).digest("hex") })),
+    acceptancePlanChecks: acceptancePlanCapabilityChecks(sources).map(([capability, passed]) => ({ capability, passed })),
+    readError: null,
+  };
 }
 
 /**
@@ -287,7 +306,7 @@ function acceptancePlanCapabilityChecks(sources: ReturnType<typeof readAcceptanc
 function hasFrozenAcceptanceEvidenceChain(sources: ReturnType<typeof readAcceptancePlanCandidateSources>): boolean {
   const planFreezesPreflightProducer = sources.application.includes("version: 3")
     && sources.application.includes("version-integration.pipeline.ts");
-  const runtimePassesFrozenEvidence = sources.runtime.includes("frozenSourceEvidenceFiles: plan?.sourceEvidenceFiles || []");
+  const runtimePassesFrozenEvidence = /buildHanliResultReviewContext\(\s*acceptanceTasks,\s*topic\.workspaceState,\s*proposalSourceTasks,\s*plan\?\.sourceEvidenceFiles\s*\|\|\s*\[\]\s*,?\s*\)/.test(sources.runtime);
   const preflightProducesRequiredFacts = sources.preflight.includes("appendQuickPreflightDecision")
     && sources.preflight.includes("preflight.issues_found")
     && sources.preflight.includes("preflight.rerun_required");

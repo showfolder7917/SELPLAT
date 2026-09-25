@@ -32,7 +32,12 @@ test("最终候选分别缺少每项验收计划能力时不得进入统一测�
         runResult = composeHanliResultReview(plan, review, pageRun);
       }
       completeAutomaticAcceptance
-      frozenSourceEvidenceFiles: plan?.sourceEvidenceFiles || []`,
+      buildHanliResultReviewContext(
+        acceptanceTasks,
+        topic.workspaceState,
+        proposalSourceTasks,
+        plan?.sourceEvidenceFiles || [],
+      )`,
       projection: "acceptanceRoundId currentRoundId",
       application: "version: 3 version-integration.pipeline.ts",
       preflight: "appendQuickPreflightDecision preflight.issues_found preflight.rerun_required",
@@ -49,6 +54,7 @@ test("最终候选分别缺少每项验收计划能力时不得进入统一测�
       ["自动与人工共用完成门禁", { ...complete, runtime: complete.runtime.replace("completeAutomaticAcceptance", "") }],
       ["失败归因", { ...complete, state: complete.state.replace("plan.conditions.find((condition) => condition.conditionId === step.checkId)", "") }],
       ["v3 冻结验收证据链", { ...complete, application: complete.application.replace("version-integration.pipeline.ts", "") }],
+      ["v3 冻结验收证据链", { ...complete, runtime: complete.runtime.replace("plan?.sourceEvidenceFiles", "undefined") }],
       ["v3 冻结验收证据链", { ...complete, preflight: complete.preflight.replace("preflight.rerun_required", "") }],
       ["v3 冻结验收证据链", { ...complete, prompt: complete.prompt.replace("acceptancePlan.version 为 2 或 3", "acceptancePlan.version 为 2") }],
     ];

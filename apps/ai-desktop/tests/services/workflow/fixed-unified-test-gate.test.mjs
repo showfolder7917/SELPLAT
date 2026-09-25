@@ -37,16 +37,31 @@ function writeAcceptancePlanCandidate(root) {
   const state = path.join(services, "evolution", "internal", "evolution-state.store.ts");
   const runtime = path.join(services, "workflow", "internal", "evolution", "persona-evolution.runtime.ts");
   const projection = path.join(services, "workflow", "domain", "current-topic-stage.projection.ts");
+  const application = path.join(services, "personas", "hanli", "internal", "application", "hanli-application.service.ts");
+  const preflight = path.join(services, "support", "capabilities", "release", "internal", "version-integration.pipeline.ts");
+  const prompt = path.join(root, "apps", "ai-desktop", "prompts", "personas", "hanli", "result-acceptance.md");
   mkdirSync(path.dirname(state), { recursive: true });
   mkdirSync(path.dirname(runtime), { recursive: true });
   mkdirSync(path.dirname(projection), { recursive: true });
+  mkdirSync(path.dirname(application), { recursive: true });
+  mkdirSync(path.dirname(preflight), { recursive: true });
+  mkdirSync(path.dirname(prompt), { recursive: true });
   writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
   writeFileSync(runtime, `if (review.mode === "mixed") {
     const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience");
     runResult = composeHanliResultReview(plan, review, pageRun);
   }
-  completeAutomaticAcceptance`);
+  completeAutomaticAcceptance
+  buildHanliResultReviewContext(
+    acceptanceTasks,
+    topic.workspaceState,
+    proposalSourceTasks,
+    plan?.sourceEvidenceFiles || [],
+  )`);
   writeFileSync(projection, "acceptanceRoundId currentRoundId");
+  writeFileSync(application, "version: 3 version-integration.pipeline.ts");
+  writeFileSync(preflight, "appendQuickPreflightDecision preflight.issues_found preflight.rerun_required");
+  writeFileSync(prompt, "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件");
 }
 
 test("激活暂存清理将 app.asar 作为普通文件而非目录", () => {
