@@ -12,6 +12,7 @@ const computer = readFileSync("electron/services/personas/hanli/internal/accepta
 const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
 const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
 const coordinator = readFileSync("electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts", "utf8");
+const application = readFileSync("electron/services/personas/hanli/internal/application/hanli-application.service.ts", "utf8");
 const classification = await build({ entryPoints: ["electron/services/workflow/domain/acceptance-result-classification.policy.ts"], bundle: true, platform: "node", format: "esm", write: false });
 const { classifyAcceptanceRun } = await import(`data:text/javascript;base64,${Buffer.from(classification.outputFiles[0].text).toString("base64")}`);
 
@@ -94,6 +95,7 @@ test("冻结的验收源码清单在无任务变更时仍作为受限只读证�
   ];
   const context = buildHanliResultReviewContext([], workspace, [], manifest);
   assert.equal(context.sourceEvidenceStatus, "available");
+  assert.deepEqual(context.frozenSourceEvidenceFiles, manifest);
   assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports");
   assert.ok(manifest.every((file) => context.sourceEvidence.some((item) => item.file === file)));
   const missing = "apps/ai-desktop/electron/services/workflow/domain/not-present-for-review.ts";
@@ -101,6 +103,23 @@ test("冻结的验收源码清单在无任务变更时仍作为受限只读证�
   assert.match(missingContext.sourceEvidence[0].content, /当前授权工作区不存在/);
   assert.throws(() => buildHanliResultReviewContext([], workspace, [], ["../outside.ts"]), /越界路径/);
   assert.throws(() => buildHanliResultReviewContext([], workspace, [], [manifest[0], manifest[0]]), /清单无效/);
+});
+
+test("历史终态和页面读取回归测试被冻结为验收必读证据", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
+  const regressions = [
+    "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs",
+    "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
+    "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
+    "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
+  ];
+  const context = buildHanliResultReviewContext([], workspace, [], regressions);
+  assert.equal(context.sourceEvidenceStatus, "available");
+  assert.deepEqual(context.frozenSourceEvidenceFiles, regressions);
+  assert.ok(regressions.every((file) => context.sourceEvidence.some((item) => item.file === file)));
+  for (const file of regressions) assert.match(application, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
 });
 
 test("证据达到四十八项上限时仍完整保留冻结源码清单", async () => {

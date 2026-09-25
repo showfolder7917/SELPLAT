@@ -25,6 +25,8 @@ type ResultAcceptanceEvidence = unknown | ((plan: EvolutionAcceptancePlanOutDto 
 
 // 此清单是验收能力本身的固定只读边界，而非按提示扩展的文件搜索。
 // 它与提案冻结，供条件 1 至 6 审查同一套预检事实、阶段投影、交付门禁和性能样本读取链。
+// 对终态、读取状态和窄窗口布局的断言同样冻结，避免旧任务已经集成后，
+// 韩立只能看到实现而看不到保护该实现的回归边界。
 const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
   "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
@@ -34,6 +36,10 @@ const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
   "apps/ai-desktop/electron/system/ipc/domains/register-collaboration-ipc.ts",
   "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
   "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
+  "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs",
+  "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
+  "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
+  "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
 ] as const;
 
 /** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */
