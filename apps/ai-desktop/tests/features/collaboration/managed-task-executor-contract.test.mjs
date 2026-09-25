@@ -294,9 +294,12 @@ test("会话发送统一排队、显式补充并在重建后显示恢复操作",
   assert.match(ipc, /desktop:enqueue-message/);
   assert.match(ipc, /desktop:supplement-queued-message/);
   assert.match(ipc, /if \(dispatch\.state\(\)\.activeTask\)/);
-  assert.match(developerApp, /补充到当前任务/);
-  assert.match(developerApp, /继续执行/);
-  assert.match(developerApp, /放弃任务/);
+  assert.match(fixedUiText, /conversationSupplementTask: "补充到当前任务"/);
+  assert.match(fixedUiText, /conversationContinue: "继续执行"/);
+  assert.match(fixedUiText, /conversationDiscardTask: "放弃任务"/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationSupplementTask"\)/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationContinue"\)/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationDiscardTask"\)/);
 });
 
 test("Harness 只使用指定版本的内置或校验下载 Codex 并公开实际来源", () => {
