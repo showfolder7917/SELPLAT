@@ -62,7 +62,7 @@ export class ReleaseBatchStore {
     const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto;
     const activation = document.runtimeActivation;
     if (document.state !== "failed" || !activation || activation.state !== "preparing"
-      || activation.candidateSha !== candidateSha || !isStagingCleanupFailure(document.failureReason)) return null;
+      || activation.candidateSha !== candidateSha || !hasFrozenImpactScope(activation) || !isStagingCleanupFailure(document.failureReason)) return null;
     const executable = this.resolveStagedRuntimeActivationExecutable(releaseBatchId, candidateSha);
     if (!executable) return null;
     const originalFailureReason = document.failureReason;
@@ -174,6 +174,13 @@ export class ReleaseBatchStore {
   #hasStablePublishedApplication(releaseBatchId: string): boolean {
     return Boolean(this.#stableBuildRoot && existsSync(path.join(this.#stableBuildRoot, "package", "published", releaseBatchId, "AI Desktop.app")));
   }
+}
+
+/** 已提升包可能在旧宿主失败后失去临时候选工作树，接管前必须确认恢复所需范围已被冻结。 */
+function hasFrozenImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): boolean {
+  const snapshot = activation.impactScope;
+  return Boolean(snapshot && snapshot.baseSha === activation.candidateBaseSha && snapshot.candidateSha === activation.candidateSha
+    && Array.isArray(snapshot.files) && snapshot.files.every((file) => typeof file === "string"));
 }
 
 function isStagingCleanupFailure(reason: string | null): boolean {

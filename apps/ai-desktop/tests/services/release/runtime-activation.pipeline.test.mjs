@@ -51,6 +51,7 @@ test("包外启动器仅恢复来源匹配且仍保留暂存清理失败事实�
     document.candidateSha = candidateSha;
     document.runtimeActivation = {
       state: "preparing", candidateRootPath: "/candidate", candidateBaseSha: "b".repeat(40), candidateSha,
+      impactScope: { baseSha: "b".repeat(40), candidateSha, files: ["electron/main.ts"] },
       executable: null, detail: "旧宿主", updatedAt: new Date().toISOString(),
     };
     document.failureReason = `ENOTDIR: not a directory, rmdir '${path.join(buildRoot, "package", "activation-staging-old", "mac-arm64", "AI Desktop.app", "Contents", "Resources", "app.asar")}'`;
@@ -58,6 +59,11 @@ test("包外启动器仅恢复来源匹配且仍保留暂存清理失败事实�
     releaseBatches.write(document);
 
     assert.equal(releaseBatches.recoverArchivedStagingCleanupFailure(releaseBatchId, `${candidateSha.slice(0, -1)}b`), null);
+    document.runtimeActivation.impactScope.candidateSha = `${candidateSha.slice(0, -1)}b`;
+    releaseBatches.write(document);
+    assert.equal(releaseBatches.recoverArchivedStagingCleanupFailure(releaseBatchId, candidateSha), null, "影响范围快照与候选身份不匹配时不得接管");
+    document.runtimeActivation.impactScope.candidateSha = candidateSha;
+    releaseBatches.write(document);
     const recovered = releaseBatches.recoverArchivedStagingCleanupFailure(releaseBatchId, candidateSha);
     assert.ok(recovered);
     assert.equal(recovered.state, "activating");
@@ -180,6 +186,7 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
     assert.equal(checkpoint.state, "activating");
     assert.equal(checkpoint.runtimeActivation.state, "relaunch-scheduled");
     assert.equal(checkpoint.runtimeActivation.candidateSha, candidateSha);
+    assert.deepEqual(checkpoint.runtimeActivation.impactScope, { baseSha, candidateSha, files: ["apps/ai-desktop/electron/services/support/capabilities/release/internal/integration.verifier.ts"] });
     assert.deepEqual(events.filter((event) => Array.isArray(event) && event[0] === "activate"), [["activate", "/staged/AI Desktop", candidate.releaseBatchId, candidateSha]]);
     assert.ok(events.indexOf("release") < events.findIndex((event) => Array.isArray(event) && event[0] === "activate"), "重启前必须释放跨进程发布锁");
     assert.equal(events.includes("retire"), false, "激活前必须保留原候选工作树");
@@ -196,6 +203,8 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
       prepareRuntimeActivation: async () => { throw new Error("恢复进程不得再次准备运行包"); },
       activateRuntime: () => { throw new Error("恢复进程不得再次激活运行包"); },
     });
+    rmSync(repository, { recursive: true, force: true });
+    assert.equal(existsSync(repository), false, "恢复必须覆盖候选工作树已回收的真实边界");
     await candidateRuntime.resumeRuntimeActivation(candidate.releaseBatchId);
 
     assert.equal(state.tasks[0].state, "awaiting-restart");

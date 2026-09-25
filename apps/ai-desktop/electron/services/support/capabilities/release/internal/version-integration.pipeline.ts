@@ -238,7 +238,7 @@ export class VersionIntegrationPipeline {
       document.state = "testing";
       document.runtimeActivation = { ...activation, state: "resumed", detail: null, updatedAt: new Date().toISOString() };
       this.#releaseBatches.write(document);
-      const impactScope = await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha);
+      const impactScope = restoredImpactScope(activation);
       let preflightBlocked = false;
       this.#store.updateTask(taskIds[0], "preflight.resumed_decided", (_first, mutable) => {
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
@@ -440,6 +440,7 @@ export class VersionIntegrationPipeline {
           candidateRootPath: candidate.rootPath,
           candidateBaseSha: candidate.baseSha,
           candidateSha: candidate.candidateSha,
+          impactScope: { baseSha: candidate.baseSha, candidateSha: candidate.candidateSha, files: [...impactScope] },
           executable: null,
           detail: `候选修改统一测试运行器：已加载 ${this.#loadedRuntimeSha || "未登记"}，候选 ${candidate.candidateSha}。`,
           updatedAt: new Date().toISOString(),
@@ -670,6 +671,16 @@ export class VersionIntegrationPipeline {
 async function candidateChangedFiles(rootPath: string, baseSha: string, candidateSha: string): Promise<string[]> {
   const { stdout } = await executeGit(["diff", "--name-only", `${baseSha}..${candidateSha}`], rootPath);
   return stdout.split(/\r?\n/).filter(Boolean);
+}
+
+/** 已提升包恢复时只消费激活前冻结的候选范围，临时候选工作树可能已被旧宿主回收。 */
+function restoredImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): string[] {
+  const snapshot = activation.impactScope;
+  if (!snapshot || snapshot.baseSha !== activation.candidateBaseSha || snapshot.candidateSha !== activation.candidateSha
+    || !Array.isArray(snapshot.files) || snapshot.files.some((file) => typeof file !== "string")) {
+    throw new Error("待恢复批次缺少与候选身份匹配的已冻结影响范围快照。");
+  }
+  return [...snapshot.files];
 }
 
 function integrationFailurePresentation(

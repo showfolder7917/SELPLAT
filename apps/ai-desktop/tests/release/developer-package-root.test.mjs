@@ -147,6 +147,7 @@ test("隔离工作树的托管静态测试使用临时数据工作区", () => {
   assert.match(managedTestRunnerSource, /const needsTemporaryWorkspace = isCollaborationWorktree\(sourceProjectRoot\)/);
   assert.match(managedTestRunnerSource, /SELPLAT_ROOT: temporaryWorkspace/);
   assert.match(managedTestRunnerSource, /AI_DESKTOP_TEST_TEMP_ROOT: path\.join\(temporaryWorkspace, "cache", "ai-desktop", "test-tmp"\)/);
+  assert.match(managedTestRunnerSource, /AI_DESKTOP_PACKAGE_OUTPUT_ROOT: _releasedPackageOutputRoot/);
   assert.match(managedTestRunnerSource, /process\.platform === "darwin" \? "\/private\/tmp" : os\.tmpdir\(\)/);
   assert.match(managedTestRunnerSource, /finally[\s\S]*rmSync\(temporaryWorkspace/);
 });
