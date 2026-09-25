@@ -26,11 +26,11 @@ import { StreamDetails } from "../StreamDetails";
 import type { CodexConversationTimelineProps } from "../CodexConversationWorkspace.types";
 
 /** 消息头部文字：把客户消息发送状态转成简短可读标记。 */
-function messageHeader(message: Message): string {
-  if (message.role === "assistant") return "CODEX";
-  if (message.status === "sending") return "YOU · 发送中";
-  if (message.status === "failed") return "YOU · 发送失败";
-  return "YOU";
+function messageHeader(message: Message, locale: CodexConversationTimelineProps["locale"]): string {
+  if (message.role === "assistant") return fixedUiText(locale, "conversationAssistantHeader");
+  if (message.status === "sending") return fixedUiText(locale, "conversationUserSendingHeader");
+  if (message.status === "failed") return fixedUiText(locale, "conversationUserFailedHeader");
+  return fixedUiText(locale, "conversationUserHeader");
 }
 
 /** 消息时间线：按发生顺序渲染消息，并把交互操作收敛为具名方法。 */
@@ -108,7 +108,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
             data-role={message.role}
             data-streaming={message.streaming || undefined}
           >
-            <header>{messageHeader(message)}</header>
+            <header>{messageHeader(message, locale)}</header>
             <div className="selconversation-message-body">
               {message.attachments?.length ? (
                 <div className="selconversation-message-attachments">

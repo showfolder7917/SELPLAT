@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
-const source = readFileSync(new URL("../../../src/features/collaboration/model/collaboration-formatters.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { collaborationMemberDisplayModel: display } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const bundled = await build({
+  entryPoints: [fileURLToPath(new URL("../../../src/features/collaboration/model/collaboration-formatters.ts", import.meta.url))],
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  target: "es2022",
+  write: false,
+});
+const { collaborationMemberDisplayModel: display } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
 
 test("每个人的工作中间阶段显示真实阶段而不是笼统正在执行", () => {
   for (const memberId of ["mo-caihuan", "song-yu", "linghu-ancestor"]) {

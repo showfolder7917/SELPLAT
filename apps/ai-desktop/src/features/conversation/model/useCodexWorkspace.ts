@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type { ConversationQueueItemOutDto, LocaleValue, ManagedExecutionModeValue, SandboxModeValue, WorkspaceStateOutDto } from "../../../../contracts/system/desktop/index";
 import type { useCollaborationWorkspace } from "../../collaboration";
 import { clearStoredChat, createAssistantMessage, createUserMessage, managedModeForCommand, type Message } from "./chat-message";
@@ -98,9 +99,9 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
     setLoading(true);
     try {
       const response = await sendMessage({ message, locale: options.locale, sandboxMode: options.sandboxMode, attachmentIds, executionMode: mode, queueItemId: queued?.id })
-        || { text: options.locale === "ja" ? "デスクトップ版でローカル Codex に接続します。" : "桌面版本会在这里返回本地 Codex 的结果。", itemCount: 0 };
+        || { text: fixedUiText(options.locale, "conversationLocalCodexFallback"), itemCount: 0 };
       if (response.disposition === "queued") {
-        setMessages((current) => current.map((item) => item.id === userId ? { ...item, status: "completed" } : item.id === assistantId ? { ...item, status: "queued", text: "消息已进入等待队列。", streaming: false, streamTerminal: true, streamStatus: "queued" } : item));
+        setMessages((current) => current.map((item) => item.id === userId ? { ...item, status: "completed" } : item.id === assistantId ? { ...item, status: "queued", text: fixedUiText(options.locale, "conversationQueued"), streaming: false, streamTerminal: true, streamStatus: "queued" } : item));
         return;
       }
       if (response.threadId) setActiveThreadId(response.threadId);

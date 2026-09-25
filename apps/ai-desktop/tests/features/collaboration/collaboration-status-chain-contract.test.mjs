@@ -48,9 +48,9 @@ test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
   assert.match(developerSource, /message\.collaborationTaskId[\s\S]*messageTask[\s\S]*CollaborationStatusChain/);
   assert.doesNotMatch(developerSource, /activeConversationTask && <CollaborationStatusChain/);
   assert.match(developerSource, /!message\.collaborationTaskId[\s\S]*stream-current/);
-  assert.match(developerSource, /collaboration-status-task-details[\s\S]*任务详细.*initiator\?\.displayName/s);
+  assert.match(developerSource, /collaboration-status-task-details[\s\S]*fixedUiText\(locale, "conversationTaskDetails"\)[\s\S]*task\.snapshot\.confirmedIntent/s);
   assert.doesNotMatch(developerSource, /review-failed[\s\S]*重新审批/);
-  assert.match(developerSource, /test-failed[\s\S]*重新测试/);
+  assert.match(developerSource, /test-failed[\s\S]*fixedUiText\(locale, "conversationRetryTest"\)/);
 });
 
 test("执行失败经令狐修复并固定回到原负责人", () => {
