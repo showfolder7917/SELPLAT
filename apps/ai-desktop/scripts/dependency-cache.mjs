@@ -215,7 +215,8 @@ export function attachDependencyCache() {
       rmSync(details.linkPath, { recursive: true, force: true });
     }
   }
-  if (details.dependencyLeaseId) throw new Error(`Managed dependency lease link is missing: ${details.linkPath}`);
+  // 租约已核对 worktree、来源锁哈希和覆盖层；链接丢失只是可再生的工作树挂载，不能阻断代码验证。
+  // 这里不准备缓存、不修复本地包链接，也不接受任意目标，只重建已验证的当前覆盖层入口。
   mkdirSync(path.dirname(details.linkPath), { recursive: true });
   createDependencyLink(details.dependencyRoot, details.linkPath);
   let ownsBuildLink = false;

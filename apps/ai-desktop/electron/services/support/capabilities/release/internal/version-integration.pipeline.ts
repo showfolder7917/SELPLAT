@@ -235,10 +235,11 @@ export class VersionIntegrationPipeline {
     const releaseLease = await this.#acquireRelease({ releaseBatchId, version: document.version, generation: document.generation, taskIds, initiatorMemberId: actor.memberId });
     let publishedExecutable: string | null = null;
     try {
+      const restored = await this.#restoreRuntimeActivationImpactScope(candidate, activation);
       document.state = "testing";
-      document.runtimeActivation = { ...activation, state: "resumed", detail: null, updatedAt: new Date().toISOString() };
+      document.runtimeActivation = { ...activation, impactScope: restored.snapshot, state: "resumed", detail: null, updatedAt: new Date().toISOString() };
       this.#releaseBatches.write(document);
-      const impactScope = restoredImpactScope(activation);
+      const impactScope = restored.files;
       let preflightBlocked = false;
       this.#store.updateTask(taskIds[0], "preflight.resumed_decided", (_first, mutable) => {
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
@@ -339,6 +340,20 @@ export class VersionIntegrationPipeline {
     }
     // 发布重启必须发生在候选清理和跨进程发布租约释放之后，避免新进程等待旧进程留下的活跃锁。
     if (publishedExecutable) this.#publishRelease(publishedExecutable, releaseBatchId, candidate.candidateSha);
+  }
+
+  /** 已提升候选恢复时优先使用冻结事实；仅为旧宿主文档从稳定仓库的保留分支补写一次快照。 */
+  async #restoreRuntimeActivationImpactScope(candidate: IntegrationCandidate, activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): Promise<{
+    files: string[];
+    snapshot: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>["impactScope"];
+  }> {
+    const snapshot = restoredImpactScope(activation);
+    if (snapshot) return { files: snapshot.files, snapshot };
+    const files = await this.#workspaces.readRetainedCandidateChangedFiles(candidate);
+    return {
+      files,
+      snapshot: { baseSha: activation.candidateBaseSha, candidateSha: activation.candidateSha, files: [...files] },
+    };
   }
 
   async #runNextBatch(): Promise<void> {
@@ -674,13 +689,14 @@ async function candidateChangedFiles(rootPath: string, baseSha: string, candidat
 }
 
 /** 已提升包恢复时只消费激活前冻结的候选范围，临时候选工作树可能已被旧宿主回收。 */
-function restoredImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): string[] {
+function restoredImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>["impactScope"] | null {
   const snapshot = activation.impactScope;
-  if (!snapshot || snapshot.baseSha !== activation.candidateBaseSha || snapshot.candidateSha !== activation.candidateSha
+  if (!snapshot) return null;
+  if (snapshot.baseSha !== activation.candidateBaseSha || snapshot.candidateSha !== activation.candidateSha
     || !Array.isArray(snapshot.files) || snapshot.files.some((file) => typeof file !== "string")) {
     throw new Error("待恢复批次缺少与候选身份匹配的已冻结影响范围快照。");
   }
-  return [...snapshot.files];
+  return { baseSha: snapshot.baseSha, candidateSha: snapshot.candidateSha, files: [...snapshot.files] };
 }
 
 function integrationFailurePresentation(
@@ -826,6 +842,6 @@ function errorMessage(error: unknown): string {
 
 /** 只接受旧宿主在已提升候选后清理激活暂存树时的 Node 文件类型错误。 */
 function isRuntimeActivationStagingCleanupFailure(detail: string): boolean {
-  return detail.includes("ENOTDIR: not a directory, rmdir")
+  return /ENOTDIR: not a directory, (?:rmdir|unlink)/.test(detail)
     && detail.includes(`${path.sep}package${path.sep}activation-staging-`);
 }

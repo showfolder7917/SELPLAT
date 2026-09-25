@@ -62,7 +62,7 @@ export class ReleaseBatchStore {
     const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto;
     const activation = document.runtimeActivation;
     if (document.state !== "failed" || !activation || activation.state !== "preparing"
-      || activation.candidateSha !== candidateSha || !hasFrozenImpactScope(activation) || !isStagingCleanupFailure(document.failureReason)) return null;
+      || activation.candidateSha !== candidateSha || !hasCompatibleOrMissingFrozenImpactScope(activation) || !isStagingCleanupFailure(document.failureReason)) return null;
     const executable = this.resolveStagedRuntimeActivationExecutable(releaseBatchId, candidateSha);
     if (!executable) return null;
     const originalFailureReason = document.failureReason;
@@ -176,13 +176,15 @@ export class ReleaseBatchStore {
   }
 }
 
-/** 已提升包可能在旧宿主失败后失去临时候选工作树，接管前必须确认恢复所需范围已被冻结。 */
-function hasFrozenImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): boolean {
+/** 旧宿主没有快照字段时允许精确候选启动后从保留分支补写；已存在的快照必须完整匹配。 */
+function hasCompatibleOrMissingFrozenImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): boolean {
   const snapshot = activation.impactScope;
+  if (!snapshot) return true;
   return Boolean(snapshot && snapshot.baseSha === activation.candidateBaseSha && snapshot.candidateSha === activation.candidateSha
     && Array.isArray(snapshot.files) && snapshot.files.every((file) => typeof file === "string"));
 }
 
 function isStagingCleanupFailure(reason: string | null): boolean {
-  return Boolean(reason && reason.includes("ENOTDIR: not a directory, rmdir") && reason.includes(`${path.sep}package${path.sep}activation-staging-`));
+  return Boolean(reason && /ENOTDIR: not a directory, (?:rmdir|unlink)/.test(reason)
+    && reason.includes(`${path.sep}package${path.sep}activation-staging-`));
 }

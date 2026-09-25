@@ -4,7 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const APP_NAME = "ai-desktop";
-const FAILURE_MARKER = "ENOTDIR: not a directory, rmdir";
 const STAGING_MARKER = `${path.sep}package${path.sep}activation-staging-`;
 
 /**
@@ -83,7 +82,9 @@ function assertRegularExecutable(filePath, label) {
 }
 
 function isStagingCleanupFailure(reason) {
-  return typeof reason === "string" && reason.includes(FAILURE_MARKER) && reason.includes(STAGING_MARKER);
+  return typeof reason === "string"
+    && /ENOTDIR: not a directory, (?:rmdir|unlink)/.test(reason)
+    && reason.includes(STAGING_MARKER);
 }
 
 function parseArguments(argv) {

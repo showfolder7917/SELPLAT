@@ -30,6 +30,7 @@ registerHooks({
 
 const { ReleaseBatchStore } = await import("../../../electron/services/support/capabilities/release/internal/release-batch.store.ts");
 const { VersionIntegrationPipeline } = await import("../../../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts");
+const { VersionWorkspaceManager } = await import("../../../electron/services/support/capabilities/release/internal/version-workspace.manager.ts");
 
 const git = (root, ...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
@@ -71,6 +72,68 @@ test("包外启动器仅恢复来源匹配且仍保留暂存清理失败事实�
     assert.equal(recovered.runtimeActivation.executable, executable);
     assert.match(recovered.runtimeActivation.detail, /ENOTDIR/u);
     assert.equal(releaseBatches.pendingRuntimeActivation(releaseBatchId)?.candidateSha, candidateSha);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("旧宿主缺少影响范围快照时仍可接管精确的 unlink 暂存清理失败", () => {
+  const directory = path.join(controlledTestRoot, `legacy-runtime-activation-${process.pid}-${Date.now()}`);
+  const running = path.join(directory, "running");
+  const archive = path.join(directory, "archive");
+  const buildRoot = path.join(directory, "build");
+  const releaseBatchId = "release-0.1.1-g468";
+  const candidateSha = "c".repeat(40);
+  const executable = path.join(buildRoot, "package", "activation", `${releaseBatchId}-runtime`, "AI Desktop.app", "Contents", "MacOS", "AI Desktop");
+  try {
+    mkdirSync(path.dirname(executable), { recursive: true });
+    writeFileSync(executable, "candidate executable");
+    writeFileSync(path.join(buildRoot, "package", "activation", `${releaseBatchId}-runtime`, "ai-desktop-runtime-source.json"), `${JSON.stringify({ sourceSha: candidateSha })}\n`);
+    const releaseBatches = new ReleaseBatchStore(running, archive, buildRoot);
+    const document = releaseBatches.create(releaseBatchId, "0.1.1", 468, [], "linghu-ancestor");
+    document.state = "failed";
+    document.candidateSha = candidateSha;
+    document.runtimeActivation = {
+      state: "preparing", candidateRootPath: "/retired-candidate", candidateBaseSha: "d".repeat(40), candidateSha,
+      executable: null, detail: "旧宿主", updatedAt: new Date().toISOString(),
+    };
+    document.failureReason = `ENOTDIR: not a directory, unlink '${path.join(buildRoot, "package", "activation-staging-old", "mac-arm64", "AI Desktop.app", "Contents", "Resources", "app.asar", "dist", "developer", "asset.js")}'`;
+    document.completedAt = new Date().toISOString();
+    releaseBatches.write(document);
+
+    const recovered = releaseBatches.recoverArchivedStagingCleanupFailure(releaseBatchId, candidateSha);
+    assert.ok(recovered);
+    assert.equal(recovered.runtimeActivation.state, "relaunch-scheduled");
+    assert.equal(recovered.runtimeActivation.impactScope, undefined);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("恢复缺少快照时只从稳定仓库保留的候选分支读取影响范围", async () => {
+  const directory = path.join(controlledTestRoot, `retained-impact-scope-${process.pid}-${Date.now()}`);
+  const repository = path.join(directory, "repository");
+  const managedRoot = path.join(directory, "managed");
+  try {
+    mkdirSync(repository, { recursive: true });
+    git(repository, "init");
+    git(repository, "config", "user.name", "AI Desktop Test");
+    git(repository, "config", "user.email", "ai-desktop-test@example.invalid");
+    writeFileSync(path.join(repository, "base.ts"), "export const base = true;\n");
+    git(repository, "add", "-A");
+    git(repository, "commit", "-m", "base");
+    const baseSha = git(repository, "rev-parse", "HEAD");
+    writeFileSync(path.join(repository, "candidate.ts"), "export const candidate = true;\n");
+    git(repository, "add", "-A");
+    git(repository, "commit", "-m", "candidate");
+    const candidateSha = git(repository, "rev-parse", "HEAD");
+    const branchName = "release/0.1.1-rc-g468";
+    git(repository, "branch", branchName, candidateSha);
+    const manager = new VersionWorkspaceManager(repository, managedRoot);
+    const candidate = { generation: 468, releaseBatchId: "release-0.1.1-g468", version: "0.1.1", branchName, rootPath: path.join(directory, "retired-candidate"), baseSha, candidateSha, taskIds: [] };
+    assert.deepEqual(await manager.readRetainedCandidateChangedFiles(candidate), ["candidate.ts"]);
+    git(repository, "branch", "-f", branchName, baseSha);
+    await assert.rejects(() => manager.readRetainedCandidateChangedFiles(candidate), /候选 SHA 不一致/u);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -281,7 +344,7 @@ test("旧宿主清理暂存包失败时仅接管来源匹配的已提升候选",
       store, durations, workspaces, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1", releaseBatches, loadedRuntimeSha: "loaded-old-sha",
       acquireRelease: async () => { events.push("acquire"); return () => events.push("release"); },
       verifyCandidate: async () => { throw new Error("旧运行器不得继续验证候选"); },
-      prepareRuntimeActivation: async () => { throw new Error(`ENOTDIR: not a directory, rmdir '${path.join(buildRoot, "package", "activation-staging-old", "mac-arm64", "AI Desktop.app", "Contents", "Resources", "app.asar")}'`); },
+      prepareRuntimeActivation: async () => { throw new Error(`ENOTDIR: not a directory, unlink '${path.join(buildRoot, "package", "activation-staging-old", "mac-arm64", "AI Desktop.app", "Contents", "Resources", "app.asar", "dist", "developer", "asset.js")}'`); },
       activateRuntime: (executable, batchId, sha) => { events.push(["activate", executable, batchId, sha]); activate(); },
       publishRelease: () => { throw new Error("激活前不得发布"); },
     });
