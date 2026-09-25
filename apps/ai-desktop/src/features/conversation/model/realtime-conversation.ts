@@ -1,3 +1,5 @@
+import { fixedUiText } from "../../../../contracts/foundation";
+import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 export type RealtimeConversationStatus = "sending" | "streaming" | "completed" | "failed" | "queued";
 
 export interface RealtimeConversationMessage {
@@ -14,11 +16,9 @@ export interface RealtimeConversationMessage {
  * sending 表示消息已经交给人物服务、人物回复仍在处理中；它不是“尚未发送”。
  * completed 表示同一条消息已经由持久快照接管。两种成功状态对客户都显示“已发送”。
  */
-export function personaConversationDeliveryLabel(status: "sending" | "completed" | "failed"): "已发送" | "发送失败" {
+export function personaConversationDeliveryLabel(status: "sending" | "completed" | "failed", locale: LocaleValue = "zh-CN"): string {
   // 只有服务明确返回失败时才显示失败；处理中和已持久化都已经完成客户侧发送动作。
-  if (status === "failed") return "发送失败";
-  // 人物是否仍在思考由按钮和活动区表达，不能继续占用消息传递文案。
-  return "已发送";
+  return fixedUiText(locale, status === "failed" ? "personaDeliveryFailed" : "personaDeliverySent");
 }
 
 /**

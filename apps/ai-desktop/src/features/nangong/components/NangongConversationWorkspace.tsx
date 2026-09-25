@@ -19,6 +19,8 @@ import {
   Send24Filled,
 } from "@fluentui/react-icons";
 
+import { fixedUiText } from "../../../../contracts/foundation";
+
 // 消息正文组件（MarkdownMessage）把人物消息渲染成统一格式。
 import { ConversationMessageImage, MarkdownMessage, personaConversationDeliveryLabel } from "../../conversation";
 // 统一会话外壳（SelUiConversation）提供人物会话共用的时间线和输入区结构。
@@ -67,18 +69,18 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
     // 外壳提交入口：调用与页面表单相同的发送方法。
     onSubmit={() => void controller.sendChat()}
     // 会话区：显示后台动作、持续演化确认、直接问答和内部研讨。
-    timeline={<section ref={controller.timelineRef} className="selconversation-timeline nangong-person-chat" aria-label="与南宫婉讨论演化课题">
+    timeline={<section ref={controller.timelineRef} className="selconversation-timeline nangong-person-chat" aria-label={fixedUiText(props.locale, "nangongTimeline")}>
       {/* 后台动作区：展示南宫婉当前调查、阻塞或等待授权的事实。 */}
-      <NangongConversationActivity state={state} approval={approval} />
+      <NangongConversationActivity state={state} approval={approval} locale={props.locale} />
 
       {/* 持续演化确认区：具备启动条件后仍等待客户明确回复 1。 */}
-      {controller.showOneShotConfirmation && <section className="nangong-one-shot-confirmation" role="status" aria-label="本轮演化等待确认">
+      {controller.showOneShotConfirmation && <section className="nangong-one-shot-confirmation" role="status" aria-label={fixedUiText(props.locale, "collaborationAwaitingConfirmation")}>
         {/* 确认标题：说明本轮已经具备启动条件。 */}
-        <strong>本轮已具备启动条件</strong>
+        <strong>{fixedUiText(props.locale, "collaborationPlanReady")}</strong>
         {/* 确认说明：解释回复 1 将产生的持续行为。 */}
-        <span>回复 1 将启动持续自动演化：完成当前课题后继续寻找有证据的新问题，直到暂停或停止。</span>
+        <span>{fixedUiText(props.locale, "collaborationInProgress")}</span>
         {/* 确认按钮：以明确文字“1”进入普通会话发送流程。 */}
-        <button type="button" className="selform-action" disabled={controller.chatBusy || !workspaces} onClick={() => void controller.sendChat("1")}>回复 1 并启动持续演化</button>
+        <button type="button" className="selform-action" disabled={controller.chatBusy || !workspaces} onClick={() => void controller.sendChat("1")}>{fixedUiText(props.locale, "conversationContinue")}</button>
       </section>}
 
       {/* 新会话反馈区：显示后台重新建立人物会话的结果。 */}
@@ -89,28 +91,28 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
         {/* 空状态图标：帮助客户识别当前是人物讨论页面。 */}
         <div className="dev-orb"><Code24Regular /></div>
         {/* 空状态标题：说明当前可以与南宫婉讨论演化方向。 */}
-        <h1>请告诉南宫婉你观察到什么</h1>
+        <h1>{fixedUiText(props.locale, "nangongEmptyTitle")}</h1>
         {/* 空状态提示：按首次使用顺序说明现象与约束、直接事实和原有确认边界。 */}
-        <p>你可以说明需要调查的现象，以及不可改变的约束。</p>
-        <p>请直接提供已经确认的事实、观察结果或截图。</p>
-        <p>南宫婉核实后会形成方案；是否实施仍遵循原有确认规则。</p>
+        <p>{fixedUiText(props.locale, "nangongEmptyGoal")}</p>
+        <p>{fixedUiText(props.locale, "nangongEmptyEvidence")}</p>
+        <p>{fixedUiText(props.locale, "nangongEmptyBoundary")}</p>
       </div>}
 
       {/* 问答与内部研讨区：按真实时间展示当前会话的全部可见消息。 */}
-      {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>读取更早消息</button>}
+      {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>{fixedUiText(props.locale, "personaLoadEarlier")}</button>}
       {controller.visibleMessages.map((message) => {
         // 是否为内部消息（internal）表示当前内容是否来自人物内部研讨。
         const internal = controller.internalIds.has(message.messageId);
         // 人物显示名称（personaName）把内部人物编号转换成客户可以识别的名字。
         const personaName = personaNames[message.speakerPersonaId || "nangong-wan"] || message.speakerPersonaId;
         // 发送状态文字（deliveryLabel）把处理中和已持久化统一显示为已发送，失败仍保留明确提示。
-        const deliveryLabel = personaConversationDeliveryLabel(message.deliveryStatus);
+        const deliveryLabel = personaConversationDeliveryLabel(message.deliveryStatus, props.locale);
         // 内部消息类型文字（internalLabel）区分普通问答、内部研讨和内部交接。
         let internalLabel = "";
         // 内部消息需要在人物名称后显示其真实业务来源。
         if (internal) {
           // 验收消息属于人物之间的内部交接，其他内部消息属于研讨。
-          internalLabel = " · 内部研讨";
+          internalLabel = fixedUiText(props.locale, "nangongInternalDeliberation");
         }
         // 消息身份文字（speakerLabel）是消息头最终显示的客户或人物名称。
         const speakerLabel = message.speakerType === "user" ? `我 · ${deliveryLabel}` : `${personaName}${internalLabel}`;
@@ -124,19 +126,19 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
             {message.attachments.length
               ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} locale={props.locale} />)}</div>
               : message.attachmentIds?.length
-                ? <small>{controller.attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small>
+                ? <small>{controller.attachmentPreviewErrors[message.messageId] || fixedUiText(props.locale, "personaAttachmentRestoring")}</small>
                 : null}
             {/* 消息文字区：统一渲染客户原文和人物回复。 */}
             <MarkdownMessage text={message.content} />
             {/* 失败发送仍绑定原消息身份，重试不会在时间线生成第二条客户消息。 */}
-            {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>重试发送</button>}
+            {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>{fixedUiText(props.locale, "personaRetrySend")}</button>}
             {/* 技术依据只关联到对应研讨消息，以折叠内容展示，不能并入人物正文。 */}
             {(controller.technicalEvidenceByReply.get(message.messageId) || []).map((evidence) => <SelUiDisclosure
               key={evidence.messageId}
               idPrefix={`nangong-evidence-${evidence.messageId}`}
               className="nangong-technical-evidence"
               open={false}
-              trigger="查看技术依据"
+              trigger={fixedUiText(props.locale, "technicalDetails")}
             ><MarkdownMessage text={evidence.content} /></SelUiDisclosure>)}
           </div>
         </article>;
@@ -150,27 +152,27 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       void controller.sendChat();
     }}>
       {/* 课题草稿区：把已经讨论的内容整理成客户可编辑、可确认的结构。 */}
-      {controller.topicDraftOpen && <section className="selform-root" aria-label="整理演化课题">
+      {controller.topicDraftOpen && <section className="selform-root" aria-label={fixedUiText(props.locale, "nangongOrganizeTopic")}>
         {/* 草稿标题区：显示表单用途并提供取消按钮。 */}
-        <header className="selform-header"><strong>整理为演化课题</strong><button type="button" className="selform-action" disabled={controller.topicDraftBusy} onClick={() => controller.setTopicDraftOpen(false)}>取消</button></header>
+        <header className="selform-header"><strong>{fixedUiText(props.locale, "nangongOrganizeTopic")}</strong><button type="button" className="selform-action" disabled={controller.topicDraftBusy} onClick={() => controller.setTopicDraftOpen(false)}>{fixedUiText(props.locale, "close")}</button></header>
         {/* 草稿等待状态：说明南宫婉正在根据当前对话生成字段。 */}
-        {controller.topicDraftBusy && <p role="status">南宫婉正在根据当前对话整理课题草稿…</p>}
+        {controller.topicDraftBusy && <p role="status">{fixedUiText(props.locale, "collaborationPhasePlanning")}</p>}
         {/* 草稿成功反馈：说明表单已经自动填充但仍可编辑。 */}
         {!controller.topicDraftBusy && controller.topicDraftFeedback && <p role="status" className="selform-feedback">{controller.topicDraftFeedback}</p>}
         {/* 自动整理按钮：只生成草稿，不直接创建课题。 */}
-        <button type="button" className="selform-action" disabled={controller.topicDraftBusy} onClick={() => void controller.generateTopicDraft()}>根据当前对话生成草稿</button>
+        <button type="button" className="selform-action" disabled={controller.topicDraftBusy} onClick={() => void controller.generateTopicDraft()}>{fixedUiText(props.locale, "collaborationTopicPreparing")}</button>
         {/* 课题标题字段：填写客户可识别的专题名称。 */}
-        <label className="selform-field">课题标题<input aria-label="课题标题" value={controller.topicDraft.title} onChange={(event) => controller.updateTopicDraft("title", event.currentTarget.value)} /></label>
+        <label className="selform-field">{fixedUiText(props.locale, "collaborationTaskDetails")}<input aria-label={fixedUiText(props.locale, "collaborationTaskDetails")} value={controller.topicDraft.title} onChange={(event) => controller.updateTopicDraft("title", event.currentTarget.value)} /></label>
         {/* 课题目标字段：填写本次演化需要达到的结果。 */}
-        <label className="selform-field">课题目标<textarea aria-label="课题目标" value={controller.topicDraft.goal} onChange={(event) => controller.updateTopicDraft("goal", event.currentTarget.value)} /></label>
+        <label className="selform-field">{fixedUiText(props.locale, "collaborationPlanReady")}<textarea aria-label={fixedUiText(props.locale, "collaborationPlanReady")} value={controller.topicDraft.goal} onChange={(event) => controller.updateTopicDraft("goal", event.currentTarget.value)} /></label>
         {/* 影响范围字段：填写本次允许改变的业务范围。 */}
-        <label className="selform-field">影响范围<input aria-label="课题影响范围" placeholder="多项用逗号分隔" value={controller.topicDraft.scope} onChange={(event) => controller.updateTopicDraft("scope", event.currentTarget.value)} /></label>
+        <label className="selform-field">{fixedUiText(props.locale, "collaborationTaskGroup")}<input aria-label={fixedUiText(props.locale, "collaborationTaskGroup")} placeholder={fixedUiText(props.locale, "conversationInputPlaceholder")} value={controller.topicDraft.scope} onChange={(event) => controller.updateTopicDraft("scope", event.currentTarget.value)} /></label>
         {/* 事实证据字段：记录支持建立课题的已核实事实。 */}
-        <label className="selform-field">事实证据<input aria-label="课题事实证据" placeholder="多项用逗号分隔" value={controller.topicDraft.evidence} onChange={(event) => controller.updateTopicDraft("evidence", event.currentTarget.value)} /></label>
+        <label className="selform-field">{fixedUiText(props.locale, "technicalDetails")}<input aria-label={fixedUiText(props.locale, "technicalDetails")} placeholder={fixedUiText(props.locale, "conversationInputPlaceholder")} value={controller.topicDraft.evidence} onChange={(event) => controller.updateTopicDraft("evidence", event.currentTarget.value)} /></label>
         {/* 验收条件字段：明确什么结果表示课题完成。 */}
-        <label className="selform-field">验收条件<input aria-label="课题验收条件" placeholder="多项用逗号分隔" value={controller.topicDraft.acceptanceCriteria} onChange={(event) => controller.updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label>
+        <label className="selform-field">{fixedUiText(props.locale, "conversationConfirmBeforeContinue")}<input aria-label={fixedUiText(props.locale, "conversationConfirmBeforeContinue")} placeholder={fixedUiText(props.locale, "conversationInputPlaceholder")} value={controller.topicDraft.acceptanceCriteria} onChange={(event) => controller.updateTopicDraft("acceptanceCriteria", event.currentTarget.value)} /></label>
         {/* 保存课题按钮：提交客户检查并确认过的完整草稿。 */}
-        <button type="button" className="selform-action" data-tone="primary" disabled={controller.topicDraftBusy} onClick={() => void controller.convertChat()}>确认保存课题</button>
+        <button type="button" className="selform-action" data-tone="primary" disabled={controller.topicDraftBusy} onClick={() => void controller.convertChat()}>{fixedUiText(props.locale, "conversationConfirm")}</button>
       </section>}
 
       {/* 待发送截图区：发送前展示并允许移除本轮调查截图。 */}
@@ -178,57 +180,57 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
         {/* 调查截图预览：让客户确认本轮实际发送的图片。 */}
         <img src={attachment.dataUrl} alt={attachment.name} />
         {/* 调查截图说明：表明图片会作为本轮事实材料。 */}
-        <figcaption>调查截图</figcaption>
+        <figcaption>{fixedUiText(props.locale, "personaInvestigationScreenshot")}</figcaption>
         {/* 移除截图按钮：只移除当前选中的一张图片。 */}
-        <button type="button" aria-label="移除截图" onClick={() => controller.removeAttachment(attachment.id)}><Dismiss20Regular /></button>
+        <button type="button" aria-label={fixedUiText(props.locale, "personaRemoveScreenshot")} onClick={() => controller.removeAttachment(attachment.id)}><Dismiss20Regular /></button>
       </figure>)}</div>}
 
       {/* 新建会话状态区：重新建立南宫婉会话时显示真实等待状态。 */}
-      {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">正在关闭当前南宫婉线程并建立新对话…</div>}
+      {newConversationBusy && <div className="nangong-conversation-refresh-status" role="status">{fixedUiText(props.locale, "nangongNewConversationBusy")}</div>}
       {/* 页面错误区：展示发送、草稿或桌面通信失败原因。 */}
-      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.visibleMessages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <button type="button" onClick={() => void controller.retrySend()}>重试发送</button>}</div>}
+      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.visibleMessages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <button type="button" onClick={() => void controller.retrySend()}>{fixedUiText(props.locale, "personaRetrySend")}</button>}</div>}
       {/* 新建失败保留旧会话内容，并只提供重新建立南宫婉对话的专用重试入口。 */}
       {props.runtime.newConversationError && <div className="composer-error" role="alert">
         <span>{props.runtime.newConversationError}</span>
-        <button type="button" disabled={newConversationBusy} onClick={() => void props.runtime.startNewConversation()}>重新建立南宫婉对话</button>
+        <button type="button" disabled={newConversationBusy} onClick={() => void props.runtime.startNewConversation()}>{fixedUiText(props.locale, "newNangongConversation")}</button>
       </div>}
       {/* 模型目录失败保留真实原因和重读入口，不把空目录伪装成默认模型正常可用。 */}
       {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
         <span>{props.runtime.modelCatalogError}</span>
-        <button type="button" onClick={() => void props.runtime.reloadModelCatalog()}>重新读取模型</button>
+        <button type="button" onClick={() => void props.runtime.reloadModelCatalog()}>{fixedUiText(props.locale, "personaReloadModel")}</button>
       </div>}
 
       {/* 问答输入区：接收客户文字，也允许粘贴截图。 */}
-      <textarea className="selconversation-input" data-sel-conversation-input aria-label="给南宫婉发送消息" placeholder="描述演化问题、现状和不可改变的约束…（可粘贴截图）" value={controller.chatText} onChange={(event) => controller.setChatText(event.currentTarget.value)} onPaste={controller.pasteImages} />
+      <textarea className="selconversation-input" data-sel-conversation-input aria-label={fixedUiText(props.locale, "nangongInput")} placeholder={fixedUiText(props.locale, "nangongPlaceholder")} value={controller.chatText} onChange={(event) => controller.setChatText(event.currentTarget.value)} onPaste={controller.pasteImages} />
 
       {/* 底部操作区：左侧放调查工具，右侧放主发送按钮。 */}
       <div className="selconversation-footer">
         {/* 辅助工具区：包含两种截图方式和课题整理入口。 */}
         <div className="selconversation-tools">
           {/* 对话模型与其他输入工具保持同一行，避免在输入框上方新增业务区块。 */}
-          <label className="selconversation-model-picker" title="本对话模型">
-            <span>模型</span>
+          <label className="selconversation-model-picker" title={fixedUiText(props.locale, "personaConversationModel")}>
+            <span>{fixedUiText(props.locale, "personaModel")}</span>
             <select
-              aria-label="南宫婉对话模型"
+              aria-label={fixedUiText(props.locale, "personaConversationModel")}
               value={props.conversation.selectedModel || ""}
               disabled={controller.chatBusy || newConversationBusy || props.runtime.modelCatalogLoading || Boolean(props.runtime.modelCatalogError)}
               onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
             >
-              <option value="">{props.runtime.modelCatalogLoading ? "正在读取模型…" : props.runtime.modelCatalogError ? "模型列表不可用" : "跟随默认模型"}</option>
+              <option value="">{props.runtime.modelCatalogLoading ? fixedUiText(props.locale, "personaModelLoading") : props.runtime.modelCatalogError ? fixedUiText(props.locale, "personaModelUnavailable") : fixedUiText(props.locale, "personaFollowDefaultModel")}</option>
               {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
             </select>
           </label>
           {/* 当前屏幕截图：保留 AI Desktop 窗口进行截图。 */}
-          <button type="button" className="screenshot-button" aria-label="截取当前屏幕" data-sel-tooltip="截取当前屏幕" data-sel-tooltip-mode="always" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button>
+          <button type="button" className="screenshot-button" aria-label={fixedUiText(props.locale, "personaCaptureScreen")} data-sel-tooltip={fixedUiText(props.locale, "personaCaptureScreen")} data-sel-tooltip-mode="always" onClick={() => onScreenshot(false)}><Screenshot24Regular /></button>
           {/* 隐藏窗口截图：截图前隐藏 AI Desktop，避免遮挡目标。 */}
-          <button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" data-sel-tooltip="隐藏窗口后截图" data-sel-tooltip-mode="always" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button>
+          <button type="button" className="screenshot-button" aria-label={fixedUiText(props.locale, "personaHiddenCapture")} data-sel-tooltip={fixedUiText(props.locale, "personaHiddenCapture")} data-sel-tooltip-mode="always" onClick={() => onScreenshot(true)}><EyeOff24Regular /></button>
           {/* 课题整理入口：已有会话事实后才允许打开草稿。 */}
-          <button type="button" className="selconversation-action" data-tone="neutral" disabled={!controller.canOpenTopicDraft} onClick={() => controller.setTopicDraftOpen(true)}>整理为演化课题</button>
+          <button type="button" className="selconversation-action" data-tone="neutral" disabled={!controller.canOpenTopicDraft} onClick={() => controller.setTopicDraftOpen(true)}>{fixedUiText(props.locale, "nangongOrganizeTopic")}</button>
         </div>
         {/* 主操作区：只放本轮问答的发送按钮。 */}
         <div className="selconversation-actions">
           {/* 发送按钮：由控制 Hook 统一决定是否具备发送条件。 */}
-          <button type="submit" className="selconversation-action" disabled={!controller.canSend} aria-label={controller.chatBusy ? "调查中" : "发送给南宫婉"}><Send24Filled /></button>
+          <button type="submit" className="selconversation-action" disabled={!controller.canSend} aria-label={controller.chatBusy ? fixedUiText(props.locale, "nangongInvestigating") : fixedUiText(props.locale, "nangongSend")}><Send24Filled /></button>
         </div>
       </div>
     </form>}

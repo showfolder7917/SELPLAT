@@ -4,6 +4,7 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const view = read("../../../src/features/hanli/components/HanliConversationWorkspace.tsx");
+const fixedUiText = read("../../../contracts/foundation/i18n/fixed-ui-text.ts");
 const types = read("../../../src/features/hanli/components/HanliConversationWorkspace.types.ts");
 const controller = read("../../../src/features/hanli/components/useHanliConversationWorkspace.ts");
 const custodySwitch = read("../../../src/features/hanli/components/HanliConversationWorkspace/HanliCustodySwitch.tsx");
@@ -46,9 +47,10 @@ test("韩立会话成为当前页时把焦点交给需求输入框", () => {
 });
 
 test("韩立空会话按首次使用顺序说明目标、材料和确认边界", () => {
-  assert.match(view, /你可以提出问题、目标，或想实现的功能。/);
-  assert.match(view, /直接描述你看到的情况，或附上截图；先说最在意的地方。/);
-  assert.match(view, /必要时韩立会交由南宫婉核实；是否实施仍遵循原有确认规则。/);
+  for (const key of ["hanliEmptyGoal", "hanliEmptyEvidence", "hanliEmptyBoundary"]) assert.match(view, new RegExp(`fixedUiText\\(props\\.locale, "${key}"\\)`));
+  assert.match(fixedUiText, /hanliEmptyGoal: "你可以提出问题、目标，或想实现的功能。"/);
+  assert.match(fixedUiText, /hanliEmptyGoal: "質問、目標、または実現したい機能を伝えてください。"/);
+  assert.match(fixedUiText, /hanliEmptyGoal: "Share a question, goal, or feature you want to build\."/);
   assert.match(view, /空状态说明：按首次使用顺序说明目标、直接材料和原有确认边界/);
 });
 
