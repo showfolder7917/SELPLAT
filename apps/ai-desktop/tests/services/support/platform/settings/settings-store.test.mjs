@@ -52,6 +52,10 @@ test("固定界面资源提供三语、中文回退和受控缺键诊断", () =>
   assert.equal(fixedUiText("ja", "conversationClarificationSubmitFailed"), "確認回答を送信できません。");
   assert.equal(fixedUiText("en", "conversationSupplementTaskFailed"), "Could not add to the current task.");
   assert.equal(fixedUiText("en", "conversationRecoverTaskFailed"), "Could not recover the unfinished task.");
+  assert.equal(fixedUiText("zh-CN", "conversationImagePreviewUnavailable"), "图片预览暂不可用。");
+  assert.equal(fixedUiText("ja", "conversationImagePreviewUnavailable"), "画像プレビューは現在利用できません。");
+  assert.equal(fixedUiText("en", "conversationImagePreviewUnavailable"), "Image preview is currently unavailable.");
+  assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案", conversationImagePreviewUnavailable: "图片预览暂不可用。" }, en: {} }, "en", "conversationImagePreviewUnavailable"), "图片预览暂不可用。");
   assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案", conversationLoginUnavailable: "ChatGPT 登录暂不可用。" }, en: {} }, "en", "conversationLoginUnavailable"), "ChatGPT 登录暂不可用。");
   assert.equal(fixedUiText("fr", "workspaceFilePreview"), "文件预览");
   assert.equal(fixedUiText("en", "retiredFixedKey"), "[缺少固定界面文案: retiredFixedKey]");

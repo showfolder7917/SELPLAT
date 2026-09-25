@@ -11,11 +11,11 @@ import type {
   SandboxModeValue,
 } from "../../../../contracts/system/desktop/index";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
-import { loadOfficialModelCatalog } from "../../../foundation/model-catalog";
+import { isOfficialModelCatalogUnavailableError, loadOfficialModelCatalog } from "../../../foundation/model-catalog";
 import { fixedUiText } from "../../../../contracts/foundation/index";
 
 function readableDesktopError(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : fallback;
+  const message = isOfficialModelCatalogUnavailableError(error) ? fallback : error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
 }
 

@@ -6,7 +6,7 @@ import type { LocaleValue } from "../../../../contracts/system/desktop/index";
 import type { CodexModelOptionOutDto, PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
-import { loadOfficialModelCatalog } from "../../../foundation/model-catalog";
+import { isOfficialModelCatalogUnavailableError, loadOfficialModelCatalog } from "../../../foundation/model-catalog";
 import type { ComposerAttachment } from "./chat-message";
 import { projectPersonaConversation } from "./realtime-conversation";
 
@@ -15,7 +15,7 @@ function emptyConversation(personaId: string): PersonaConversationOutDto {
 }
 
 function readableDesktopError(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : fallback;
+  const message = isOfficialModelCatalogUnavailableError(error) ? fallback : error instanceof Error ? error.message : fallback;
   return message.replace(/^Error invoking remote method '[^']+':\s*/, "");
 }
 
