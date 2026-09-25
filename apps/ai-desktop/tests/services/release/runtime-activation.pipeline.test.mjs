@@ -38,10 +38,21 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
   const repository = path.join(directory, "repository");
   const running = path.join(directory, "running");
   const archive = path.join(directory, "archive");
-  mkdirSync(path.join(repository, "apps/ai-desktop/electron/services/support/capabilities/release/internal"), { recursive: true });
+  const services = path.join(repository, "apps/ai-desktop/electron/services");
+  mkdirSync(path.join(services, "support/capabilities/release/internal"), { recursive: true });
+  mkdirSync(path.join(services, "evolution/internal"), { recursive: true });
+  mkdirSync(path.join(services, "workflow/internal/evolution"), { recursive: true });
+  mkdirSync(path.join(services, "workflow/domain"), { recursive: true });
   try {
     const verifier = path.join(repository, "apps/ai-desktop/electron/services/support/capabilities/release/internal/integration.verifier.ts");
+    const evolutionState = path.join(services, "evolution/internal/evolution-state.store.ts");
+    const evolutionRuntime = path.join(services, "workflow/internal/evolution/persona-evolution.runtime.ts");
+    const projection = path.join(services, "workflow/domain/current-topic-stage.projection.ts");
     writeFileSync(verifier, "export const verifier = 'base';\n");
+    // 激活前仍执行当前候选预检；夹具必须提供真实预检读取的三份验收能力来源。
+    writeFileSync(evolutionState, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
+    writeFileSync(evolutionRuntime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance');
+    writeFileSync(projection, "acceptanceRoundId currentRoundId");
     git(repository, "init");
     git(repository, "config", "user.name", "AI Desktop Test");
     git(repository, "config", "user.email", "ai-desktop-test@example.invalid");
