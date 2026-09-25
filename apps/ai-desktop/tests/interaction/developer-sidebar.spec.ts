@@ -1067,6 +1067,13 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await expect(groupTrigger).toHaveAttribute("aria-expanded", "true");
   await expect(group.locator(":scope > .seldisclosure-content > .task-timeline-detail-pane")).toBeVisible();
   await expect(group.locator(":scope > .seldisclosure-content")).toBeVisible();
+  await expect(group).toContainText("当前候选交付依据");
+  await expect(group).toContainText("候选批次：");
+  await expect(group).toContainText("候选版本：");
+  await expect(group).toContainText("统一测试：");
+  await expect(group).toContainText("发布：");
+  await expect(group).toContainText("重启健康：");
+  await expect(group).toContainText("真实验收：");
   await expect(group.locator(".task-timeline-list")).toHaveAttribute("data-task-timeline-topic-id", "interaction-timeline");
   await expect(group.locator(".task-timeline-list")).toHaveAttribute("data-task-timeline-proposal-id", "interaction-timeline-proposal");
   await expect(group.locator(".task-timeline-node")).toHaveCount(1);

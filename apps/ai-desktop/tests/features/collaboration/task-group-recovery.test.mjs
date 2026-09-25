@@ -38,6 +38,8 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   assert.match(evidenceSource, /Host 启动验收[\s\S]*host\.status === "passed"[\s\S]*启动标识[\s\S]*8080 health/);
   assert.match(evidenceSource, /host\.reason[\s\S]*host\.evidenceReferences/);
   assert.match(evidenceSource, /快速预检与复用依据[\s\S]*候选版本[\s\S]*证据引用[\s\S]*preflight\.issues/);
+  assert.match(evidenceSource, /当前候选交付依据[\s\S]*delivery\.candidate\?\.generation[\s\S]*delivery\.candidate\?\.integrationSha[\s\S]*delivery\.unifiedTest[\s\S]*delivery\.release[\s\S]*delivery\.restartHealth[\s\S]*delivery\.acceptance/);
+  assert.match(evidenceSource, /delivery\.acceptance === "running"[\s\S]*等待韩立记录本轮真实验收结果[\s\S]*不替代最终验收结论/);
   assert.match(taskCardSource, /TaskGroupAcceptanceEvidence[\s\S]*task-timeline-detail-pane/);
   assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
   assert.match(evidenceSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);
