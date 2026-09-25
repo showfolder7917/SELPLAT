@@ -72,6 +72,30 @@ export function projectCollaborationFlowEvent(
     sourceSuffix = "",
   ): ProjectedTimelineFact => ({ ...timelineSemantics(input.kind), ...input, eventType: input.eventType || event.type, sourceSuffix });
 
+  if (event.type.startsWith("preflight.")) {
+    const details = event.details;
+    const started = task.flowEvents.find((item) => item.type === "preflight.started" && item.details?.preflightRound === details?.preflightRound);
+    const issues = details?.preflightIssues || [];
+    const running = event.type === "preflight.started";
+    const failed = event.type === "preflight.issues_found";
+    const action = running ? "快速预检中" : failed ? "快速预检发现问题" : event.type === "preflight.reused" ? "快速预检确认可复用" : "快速预检决定重新执行";
+    const content = [
+      event.summary,
+      issues.length ? `问题集合：${issues.map((issue) => `${issue.category}：${issue.summary}（影响 ${issue.affectedStage}）`).join("；")}` : "",
+      `候选版本：${details?.candidateSha || "未形成"}`,
+      `影响范围：${details?.impactScope?.join("、") || "未记录"}`,
+      `测试输入：${details?.testInputs?.join("、") || "未记录"}`,
+      `证据引用：${details?.evidenceReferences?.join("、") || "未记录"}`,
+    ].filter(Boolean).join("\n");
+    return projection(failed ? "blocked" : running ? "running" : "verifying", [fact({
+      nodeId: `preflight:${task.taskId}:${details?.preflightRound || event.eventId}`,
+      kind: "verification", actor, recipients: [initiator], status: running ? "current" : failed ? "failed" : "completed",
+      action, summary: event.summary, content, detail: issues.map((issue) => `${issue.category} / ${issue.affectedStage}: ${issue.summary}`).join("\n"),
+      startedAt: started?.occurredAt || event.occurredAt, completedAt: running ? null : event.occurredAt,
+      automaticOpen: running || failed, manualApprovalProposalId: null,
+    })]);
+  }
+
   if (event.type.startsWith("executor.self_")) {
     const repair = event.type.startsWith("executor.self_repair_");
     const round = event.details?.validationRound || 1;

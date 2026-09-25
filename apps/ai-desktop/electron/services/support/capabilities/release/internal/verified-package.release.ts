@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readlinkSync, readdirSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
-import { writePublishedRuntimeSourceManifest } from "../../../../../system/bootstrap/published-runtime-source.manifest.js";
+import { readPublishedRuntimeSourceManifest, writePublishedRuntimeSourceManifest } from "../../../../../system/bootstrap/published-runtime-source.manifest.js";
 
 /** 已存在的稳定应用属于发布基础设施占用，不得被归类为候选测试断言失败。 */
 export class StablePublishedApplicationCollisionError extends Error {
@@ -42,6 +42,17 @@ export function stageVerifiedDeveloperExecutable(sourceExecutable: string, stabl
   if (!existsSync(destinationExecutable)) throw new Error("稳定发布目录缺少启动程序。");
   writePublishedRuntimeSourceManifest(destinationRoot, runtimeSourceSha);
   return destinationExecutable;
+}
+
+/** 仅恢复已提升且来源提交匹配的激活包，避免旧宿主清理失败后把其他批次误当作当前候选。 */
+export function resolveStagedRuntimeActivationExecutable(stableBuildRoot: string, releaseBatchId: string, candidateSha: string): string | null {
+  const safeBatchId = releaseBatchId.toLowerCase().replaceAll(/[^a-z0-9._-]+/g, "-").replaceAll(/^-+|-+$/g, "");
+  if (!safeBatchId || safeBatchId !== releaseBatchId) return null;
+  const activationRoot = path.join(path.resolve(stableBuildRoot), "package", "activation", `${safeBatchId}-runtime`);
+  const executable = path.join(activationRoot, "AI Desktop.app", "Contents", "MacOS", "AI Desktop");
+  if (!existsSync(executable)) return null;
+  const resourcesPath = path.join(activationRoot, "AI Desktop.app", "Contents", "Resources");
+  return readPublishedRuntimeSourceManifest(resourcesPath) === candidateSha ? executable : null;
 }
 
 /** 将打包器生成的候选绝对链接转换为稳定应用内的相对链接，拒绝任何指向应用包外部的依赖。 */

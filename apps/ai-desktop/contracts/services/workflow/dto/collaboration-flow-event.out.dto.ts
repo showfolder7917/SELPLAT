@@ -18,6 +18,22 @@ import type { ExecutorFailureRoutingOutDto } from "../../personas/executor/index
 
 /** 流程事件可能携带的补充事实；没有对应事实的字段保持未定义。 */
 export interface CollaborationFlowEventDetailsOutDto {
+  /** 同一任务的一轮快速预检标识；开始、问题和决定事件使用同一标识。 */
+  preflightRound?: string;
+  /** 预检时实际比较的候选提交；尚未形成候选时为 null。 */
+  candidateSha?: string | null;
+  /** 候选相对基线的受影响范围，缺失时禁止复用。 */
+  impactScope?: string[];
+  /** 本轮统一测试所需输入的稳定摘要，缺失时禁止复用。 */
+  testInputs?: string[];
+  /** 支持预检决定的不可变证据引用。 */
+  evidenceReferences?: string[];
+  /** 证据是否可读取且仍与当前候选绑定。 */
+  evidenceValid?: boolean | null;
+  /** 被确认可复用且未受影响的后续阶段。 */
+  reusableStages?: Array<"unified-test" | "release" | "restart-health">;
+  /** 同轮预检发现的问题集合；页面必须整体展示而非逐项猜测。 */
+  preflightIssues?: Array<{ category: string; summary: string; affectedStage: string }>;
   /** 同一执行租约中的验证或自修序号，用于关联开始与结束事件。 */
   validationRound?: number;
   /** 与该事件关联的任务分配标识。 */
@@ -63,7 +79,7 @@ export interface CollaborationFlowEventOutDto {
   /** 事件的标准业务名称。 */
   type: CollaborationFlowEventTypeValue;
   /** 事件发生在任务生命周期的哪个阶段。 */
-  stage: "task" | "analysis" | "execution" | "integration" | "recovery";
+  stage: "task" | "analysis" | "execution" | "preflight" | "integration" | "recovery";
   /** 该事件所描述动作的执行结果。 */
   status: "started" | "completed" | "failed" | "waiting" | "cancelled";
   /** 触发该事件的人物；系统事件为 null。 */

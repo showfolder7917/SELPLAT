@@ -5,13 +5,13 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
-# 无参数保持人工双击行为；受控集成重启必须携带批次、候选提交和旧进程，供新版本核验后原位续接。
+# 无参数保持人工双击行为；受控集成重启必须携带批次、候选提交和旧进程。
 CONTROLLED_BATCH=""
 CONTROLLED_SHA=""
 CONTROLLED_OLD_PID=""
 CONTROLLED_USER_DATA_DIR=""
 if (( $# > 0 )); then
-  if (( $# < 3 || $# > 4 )) || [[ "$1" != --release-batch=* || "$2" != --runtime-sha=* || "$3" != --replace-pid=* ]]; then
+  if (( $# < 3 || $# > 4 )) || [[ "$1" != --release-batch=* ]] || [[ "$2" != --runtime-sha=* || "$3" != --replace-pid=* ]]; then
     echo "[错误] 受控重启参数不完整。"
     exit 1
   fi
@@ -19,7 +19,7 @@ if (( $# > 0 )); then
     echo "[错误] 受控重启参数不完整。"
     exit 1
   fi
-  CONTROLLED_BATCH="${1#--release-batch=}"
+  CONTROLLED_BATCH="${1#*=}"
   CONTROLLED_SHA="${2#--runtime-sha=}"
   CONTROLLED_OLD_PID="${3#--replace-pid=}"
   if (( $# == 4 )); then CONTROLLED_USER_DATA_DIR="${4#--user-data-dir=}"; fi
@@ -45,11 +45,9 @@ LAUNCH_TERMINAL_TTY="$(tty 2>/dev/null || true)"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export SELPLAT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-if [[ -n "$CONTROLLED_SHA" ]]; then
-  if [[ -n "$(git -C "$SELPLAT_ROOT" status --porcelain)" ]] || ! git -C "$SELPLAT_ROOT" diff --quiet "$CONTROLLED_SHA" HEAD --; then
-    echo "[错误] 当前工程源码不是已核验的候选版本，已停止受控重启。"
-    exit 1
-  fi
+if [[ -n "$CONTROLLED_SHA" ]] && { [[ -n "$(git -C "$SELPLAT_ROOT" status --porcelain)" ]] || ! git -C "$SELPLAT_ROOT" diff --quiet "$CONTROLLED_SHA" HEAD --; }; then
+  echo "[错误] 当前工程源码不是已核验的候选版本，已停止受控重启。"
+  exit 1
 fi
 
 if ! command -v node >/dev/null 2>&1; then
@@ -72,6 +70,7 @@ if [[ -L "$PACKAGE_AREA" || -L "$RUNS_ROOT" ]]; then
   echo "[错误] 打包目录不能是符号链接。"
   exit 1
 fi
+
 mkdir -p "$PACKAGE_AREA" "$RUNS_ROOT" || exit 1
 RUN_ID="${CONTROLLED_BATCH:-manual-$(date +%Y%m%d%H%M%S)}-$$"
 RUN_PATH="$RUNS_ROOT/$RUN_ID"

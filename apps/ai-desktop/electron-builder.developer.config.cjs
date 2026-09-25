@@ -42,6 +42,9 @@ const extraResources = baseConfig.extraResources.map((resource) => {
   if (resource.to === "ruleengine") return { ...resource, from: path.join(sourceBundleBuildRoot, "rule-bundle") };
   if (resource.to === "prompts") return { ...resource, from: path.join(sourceBundleBuildRoot, "prompt-bundle") };
   if (resource.to === "db/sql") return { ...resource, from: path.join(applicationRoot, "db", "sql") };
+  if (resource.to === "runtime-activation-recovery.command") {
+    return { ...resource, from: path.join(applicationRoot, "resources", "runtime-activation-recovery.command") };
+  }
   return resource;
 });
 const files = baseConfig.files.map((entry) => {

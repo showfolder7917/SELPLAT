@@ -593,6 +593,7 @@ test("developer package carries external rule and prompt resources", () => {
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "ruleengine"));
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "prompts"));
   assert.ok(builderManifest.extraResources.some((resource) => resource.to === "db/sql"));
+  assert.ok(builderManifest.extraResources.some((resource) => resource.to === "runtime-activation-recovery.command"));
   assert.match(source("electron/system/config/app-config.ts"), /userData"\), "workspace"/);
   assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "ruleengine"/);
   assert.match(source("electron/system/bootstrap/capabilities.bootstrap.ts"), /options\.resourcesPath, "prompts"/);

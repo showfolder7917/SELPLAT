@@ -10,6 +10,7 @@ export type CurrentTopicStageStatusValue =
   | "deliberating"
   | "awaiting-confirmation"
   | "executing"
+  | "preflighting"
   | "verifying"
   | "awaiting-release"
   | "awaiting-restart-health"
@@ -60,6 +61,18 @@ export interface CurrentTopicHostStartupAcceptanceOutDto {
 
 /** 最终候选交付闭环的四项不可互相替代的事实。 */
 export interface CurrentTopicDeliveryEvidenceOutDto {
+  /** 快速预检和复用决定；旧任务没有该事件时明确为 not-recorded。 */
+  preflight: {
+    status: "not-recorded" | "running" | "issues-found" | "rerun-required" | "reused";
+    round: string | null;
+    candidateSha: string | null;
+    impactScope: string[];
+    testInputs: string[];
+    evidenceReferences: string[];
+    evidenceValid: boolean | null;
+    reusableStages: Array<"unified-test" | "release" | "restart-health">;
+    issues: Array<{ category: string; summary: string; affectedStage: string }>;
+  };
   /** 当前有效任务链共同指向的最终候选；缺失时禁止把任意历史结果拼成完成。 */
   candidate: { generation: number; integrationSha: string } | null;
   /** 最终候选的完整统一测试结论。 */

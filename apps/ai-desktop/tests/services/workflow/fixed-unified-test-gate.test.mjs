@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, symlinkSync } from "node:fs";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import test from "node:test";
@@ -29,7 +29,8 @@ registerHooks({
   },
 });
 
-const { FixedUnifiedTestRunner } = await import("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts");
+const { FixedUnifiedTestRunner, cleanupRuntimeActivationStaging } = await import("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts");
+const fixedUnifiedTestRunnerSource = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 
 function writeAcceptancePlanCandidate(root) {
   const services = path.join(root, "apps", "ai-desktop", "electron", "services");
@@ -47,6 +48,22 @@ function writeAcceptancePlanCandidate(root) {
   completeAutomaticAcceptance`);
   writeFileSync(projection, "acceptanceRoundId currentRoundId");
 }
+
+test("激活暂存清理将 app.asar 作为普通文件而非目录", () => {
+  const root = mkdtempSync(path.join(controlledTestRoot, "activation-staging-cleanup-"));
+  const resources = path.join(root, "mac-arm64", "AI Desktop.app", "Contents", "Resources");
+  mkdirSync(resources, { recursive: true });
+  writeFileSync(path.join(resources, "app.asar"), "archive");
+  writeFileSync(path.join(resources, "app.asar.unpacked"), "unpacked");
+  symlinkSync("app.asar", path.join(resources, "app.asar-link"));
+  cleanupRuntimeActivationStaging(root);
+  assert.equal(existsSync(root), false);
+});
+
+test("Electron 激活暂存清理使用实体文件系统绕过 ASAR 虚拟目录", () => {
+  assert.match(fixedUnifiedTestRunnerSource, /createRequire\(import\.meta\.url\)\("original-fs"\)/);
+  assert.match(fixedUnifiedTestRunnerSource, /physicalFileSystem\.rmSync\(entryPath, \{ recursive: true, force: true \}\)/);
+});
 
 test("独立验证一次收齐全部失败且不进入发布链", async () => {
   mkdirSync(controlledTestRoot, { recursive: true });

@@ -20,11 +20,7 @@ const managedTestFiles = [
 
 const temporaryWorkspace = needsTemporaryWorkspace ? createTemporaryWorkspace() : null;
 const managedTestEnvironment = temporaryWorkspace
-  ? {
-    ...process.env,
-    SELPLAT_ROOT: temporaryWorkspace,
-    AI_DESKTOP_TEST_TEMP_ROOT: path.join(temporaryWorkspace, "cache", "ai-desktop", "test-tmp"),
-  }
+  ? createManagedTestEnvironment(temporaryWorkspace)
   : process.env;
 try {
   const result = spawnSync(
@@ -53,4 +49,14 @@ function createTemporaryWorkspace() {
   writeFileSync(path.join(workspaceRoot, "settings.gradle"), "rootProject.name='ai-desktop-managed-tests'\n");
   writeFileSync(path.join(workspaceRoot, "apps", "ai-desktop", "package.json"), '{"name":"ai-desktop"}\n');
   return workspaceRoot;
+}
+
+/** 托管静态测试不能继承上一批发布的隔离打包目录；它只验证当前临时工作区的配置契约。 */
+function createManagedTestEnvironment(temporaryWorkspace) {
+  const { AI_DESKTOP_PACKAGE_OUTPUT_ROOT: _releasedPackageOutputRoot, ...inheritedEnvironment } = process.env;
+  return {
+    ...inheritedEnvironment,
+    SELPLAT_ROOT: temporaryWorkspace,
+    AI_DESKTOP_TEST_TEMP_ROOT: path.join(temporaryWorkspace, "cache", "ai-desktop", "test-tmp"),
+  };
 }

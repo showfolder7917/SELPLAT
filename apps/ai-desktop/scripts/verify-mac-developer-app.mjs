@@ -1,10 +1,11 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveApplicationDataPaths, resolveApplicationNameFromSourceRoot } from "@selplat/node-common-core/path";
 import { assertWorkspaceDataPath, resolveSelectedWorkspaceRoot } from "./selected-workspace-root.mjs";
 import { resolveDeveloperPackageOutputRoot } from "./developer-package-output.mjs";
+import { findDesktopAncestor } from "./runtime-activation-host.mjs";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceProjectRoot = path.resolve(appRoot, "../..");
@@ -82,7 +83,37 @@ try {
     throw new Error(describeHealthCheckFailure(health, `候选包未报告 ready 状态：${healthResult.status || "missing"}`));
   }
   healthCheckPassed = true;
+  scheduleRuntimeActivationRecoveryWatchdog();
 } finally {
   if (healthCheckPassed) rmSync(healthRun, { recursive: true, force: true });
 }
 console.log(`AI Desktop.app 身份、稳定指定要求、内置 Codex ${targetCodexVersion}、OpenAI 签名与隔离启动验证通过：${bundleId}`);
+
+function scheduleRuntimeActivationRecoveryWatchdog() {
+  // 只有预检运行器提供隔离打包根时，健康检查才处于“旧宿主即将提升候选”的自举窗口。
+  if (!String(process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT || "").trim()) return;
+  const receiptRoot = assertWorkspaceDataPath(projectRoot, path.join(projectPaths.temporaryMaterialsRoot, "发布激活恢复观察"));
+  mkdirSync(receiptRoot, { recursive: true });
+  const receiptPath = path.join(receiptRoot, `watchdog-${Date.now()}-${process.pid}.json`);
+  const replacePid = findDesktopAncestor(process.ppid);
+  if (!replacePid) {
+    writeRecoveryWatchdogReceipt(receiptPath, { status: "host-not-found", replacePid: null });
+    return;
+  }
+  const watchdog = path.join(appRoot, "scripts", "runtime-activation-recovery-watchdog.mjs");
+  writeRecoveryWatchdogReceipt(receiptPath, { status: "scheduled", replacePid });
+  const child = spawn(process.execPath, [watchdog, `--selplat-root=${projectRoot}`, `--replace-pid=${replacePid}`, `--receipt-path=${receiptPath}`], {
+    cwd: appRoot,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.once("error", (error) => writeRecoveryWatchdogReceipt(receiptPath, { status: "launch-failed", replacePid, detail: error.message }));
+  child.unref();
+}
+
+function writeRecoveryWatchdogReceipt(destination, entry) {
+  const temporary = `${destination}.${process.pid}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify({ ...entry, occurredAt: new Date().toISOString() })}\n`, "utf8");
+  renameSync(temporary, destination);
+}

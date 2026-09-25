@@ -27,7 +27,7 @@ type CapabilityContext = ReturnType<typeof createCapabilityContext>;
 type CoordinatorOptions = ConstructorParameters<typeof CollaborationWorkflowFacade>[0];
 
 export interface CollaborationBootstrapOptions {
-  startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha" | "resumeReleaseBatchId">;
+  startup: Pick<StartupContext, "projectRoot" | "applicationName" | "projectPaths" | "workspaces" | "eventCenter" | "runtimeSourceSha" | "resumeReleaseBatchId" | "recoverReleaseBatchId">;
   capabilities: Pick<CapabilityContext, "collaborationRoot" | "codexHome" | "trustedCommands" | "screenshots" | "settings" | "prompts" | "rules">;
   linghuSessions: ReturnType<typeof createSqliteCodexSessionDao>;
   releaseVersion: string;
@@ -128,8 +128,13 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
     activateRuntime: options.activateRuntime,
     publishRelease: options.publishRelease,
   });
-  if (options.startup.resumeReleaseBatchId) {
-    void versionIntegration.resumeRuntimeActivation(options.startup.resumeReleaseBatchId).catch((error) => {
+  const recoveryBatchId = options.startup.recoverReleaseBatchId;
+  const resumedBatchId = recoveryBatchId || options.startup.resumeReleaseBatchId;
+  if (recoveryBatchId && !releaseBatches.recoverArchivedStagingCleanupFailure(recoveryBatchId, options.startup.runtimeSourceSha || "")) {
+    throw new Error(`受控启动器未找到可接管的已提升发布批次：${recoveryBatchId}`);
+  }
+  if (resumedBatchId) {
+    void versionIntegration.resumeRuntimeActivation(resumedBatchId).catch((error) => {
       eventCenter.recordException({ kind: "technical", sourceType: "system", sourceId: "runtime-activation", operation: "resume_release_candidate", error });
     });
   }

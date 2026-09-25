@@ -8,7 +8,25 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
   host: CurrentTopicStageOutDto["hostStartupAcceptance"];
   locale: LocaleValue;
 }) {
+  const preflight = stage.deliveryEvidence.preflight;
   return <>
+    <section className="task-node-detail task-preflight-evidence">
+      <strong>{locale === "ja" ? "高速事前確認と再利用根拠" : "快速预检与复用依据"}</strong>
+      <p>{preflight.status === "not-recorded" ? "未记录：历史任务不能推断为预检通过或已复用。"
+        : preflight.status === "running" ? "预检进行中，尚未产生可复用结论。"
+          : preflight.status === "issues-found" ? "预检发现问题，完整统一测试尚未启动。"
+            : preflight.status === "reused" ? `可复用阶段：${preflight.reusableStages.join("、") || "未记录"}。`
+              : "未满足复用条件，将重新执行。"}</p>
+      <pre>{[
+        `预检轮次：${preflight.round || "未记录"}`,
+        `候选版本：${preflight.candidateSha || "未形成或未记录"}`,
+        `影响范围：${preflight.impactScope.join("、") || "未记录"}`,
+        `测试输入：${preflight.testInputs.join("、") || "未记录"}`,
+        `证据有效：${preflight.evidenceValid === null ? "未记录" : preflight.evidenceValid ? "是" : "否"}`,
+        `证据引用：${preflight.evidenceReferences.join("；") || "未记录"}`,
+        `问题集合：${preflight.issues.map((issue) => `${issue.category}：${issue.summary}（影响 ${issue.affectedStage}）`).join("；") || "无"}`,
+      ].join("\n")}</pre>
+    </section>
     <section className="task-node-detail">
       <strong>{locale === "ja" ? "Host 起動受入" : "Host 启动验收"}</strong>
       <p>{host.status === "passed"
