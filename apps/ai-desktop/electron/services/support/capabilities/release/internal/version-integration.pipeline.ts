@@ -128,7 +128,9 @@ export class VersionIntegrationPipeline {
         || (batch.state === "failed" && batch.failureReason === "应用重建中断集成，等待用户恢复"
           && batch.taskIds.every((id) => state.tasks.some((task) => task.taskId === id
             && task.state === "awaiting-restart" && task.unifiedTest?.status === "passed"))))
-        || !batch.integrationSha || batch.integrationSha !== this.#loadedRuntimeSha) continue;
+        || !batch.integrationSha) continue;
+      const loadedBatch = batch.integrationSha === this.#loadedRuntimeSha;
+      if (!loadedBatch) continue;
       const directTaskIds = state.tasks.filter((task) => batch.taskIds.includes(task.taskId)
         && task.integrationGeneration === batch.generation && task.state === "awaiting-restart").map((task) => task.taskId);
       if (directTaskIds.length) {
