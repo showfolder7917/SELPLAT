@@ -352,7 +352,9 @@ test("未授权的数据操作归工程证据，原条件明确要求的当前�
 });
 
 test("冻结的当前验收计划必须逐项复用且不得在结果审查时重新分区", () => {
-  assert.match(prompt, /acceptancePlan\.version 为 2/);
+  assert.match(prompt, /acceptancePlan\.version 为 2 或 3/);
+  assert.match(prompt, /v3 的 `sourceEvidenceFiles` 只定义已授权的验收能力源码边界/);
+  assert.match(prompt, /清单以外文件/);
   assert.match(prompt, /必须逐项照用其中的 evidenceType/);
   assert.match(prompt, /findings 必须逐项覆盖其余 code-conformance 条件/);
   assert.match(prompt, /不存在 page-experience 条件时返回 code-conformance/);

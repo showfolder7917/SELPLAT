@@ -5,6 +5,9 @@ export const ACCEPTANCE_PLAN_SOURCE_PATHS = {
   state: "electron/services/evolution/internal/evolution-state.store.ts",
   runtime: "electron/services/workflow/internal/evolution/persona-evolution.runtime.ts",
   projection: "electron/services/workflow/domain/current-topic-stage.projection.ts",
+  application: "electron/services/personas/hanli/internal/application/hanli-application.service.ts",
+  preflight: "electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
+  prompt: "prompts/personas/hanli/result-acceptance.md",
 } as const;
 
 export type AcceptancePlanCandidateSourceName = keyof typeof ACCEPTANCE_PLAN_SOURCE_PATHS;
@@ -18,7 +21,7 @@ export interface AcceptancePlanCandidateSourceRecord {
 /**
  * 读取验收计划门禁所需的候选源码；
  * 真实传参示例：候选应用根 `/candidate/apps/ai-desktop`；
- * 返回示例：包含 state、runtime 和 projection 三份源码；
+ * 返回示例：包含状态、运行时、计划生成、预检生产者和审查提示词；
  * 异常示例：材料夹具未复制任一必需源码时抛出“最终候选材料不完整”。
  */
 export function readAcceptancePlanCandidateSources(candidateDesktopRoot: string): Record<keyof typeof ACCEPTANCE_PLAN_SOURCE_PATHS, string> {

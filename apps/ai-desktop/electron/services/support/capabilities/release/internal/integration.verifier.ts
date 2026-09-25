@@ -279,7 +279,22 @@ function acceptancePlanCapabilityChecks(sources: ReturnType<typeof readAcceptanc
     ["混合证据汇总", hasMixedEvidenceAggregation(sources.runtime)],
     ["自动与人工共用完成门禁", sources.state.includes("decideResult(proposalId") && sources.runtime.includes("completeAutomaticAcceptance")],
     ["失败归因", sources.state.includes("plan.conditions.find((condition) => condition.conditionId === step.checkId)")],
+    ["v3 冻结验收证据链", hasFrozenAcceptanceEvidenceChain(sources)],
   ];
+}
+
+/** v3 计划必须同时冻结预检生产者，并由运行时与韩立提示词在相同只读边界内消费。 */
+function hasFrozenAcceptanceEvidenceChain(sources: ReturnType<typeof readAcceptancePlanCandidateSources>): boolean {
+  const planFreezesPreflightProducer = sources.application.includes("version: 3")
+    && sources.application.includes("version-integration.pipeline.ts");
+  const runtimePassesFrozenEvidence = sources.runtime.includes("frozenSourceEvidenceFiles: plan?.sourceEvidenceFiles || []");
+  const preflightProducesRequiredFacts = sources.preflight.includes("appendQuickPreflightDecision")
+    && sources.preflight.includes("preflight.issues_found")
+    && sources.preflight.includes("preflight.rerun_required");
+  const promptConsumesV3Boundary = sources.prompt.includes("acceptancePlan.version 为 2 或 3")
+    && sources.prompt.includes("sourceEvidenceFiles")
+    && sources.prompt.includes("清单以外文件");
+  return planFreezesPreflightProducer && runtimePassesFrozenEvidence && preflightProducesRequiredFacts && promptConsumesV3Boundary;
 }
 
 /**
