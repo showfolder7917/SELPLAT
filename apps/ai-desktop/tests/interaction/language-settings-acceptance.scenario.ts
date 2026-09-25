@@ -197,6 +197,49 @@ export function registerLanguageSettingsAcceptanceScenarios(getHarness: () => In
     }
   });
 
+  test("人物会话与自动托管在三语切换后使用统一固定文本", async () => {
+    const { page } = getHarness();
+    const taskList = page.locator("#developer-task-list");
+
+    try {
+      await setSettingsPanelOpen(page, true);
+      const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+      await language.selectOption("ja");
+      await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
+      await setSettingsPanelOpen(page, false);
+
+      // 人物会话仅在协同模式提供；先按当前语言切换，再确认入口真实出现。
+      await taskList.getByRole("button", { name: "協同", exact: true }).click();
+      await expect(taskList.getByRole("button", { name: /韩立/ })).toBeVisible();
+      await taskList.getByRole("button", { name: /韩立/ }).click();
+      const hanliComposer = page.locator(".hanli-person-composer");
+      await expect(hanliComposer.getByRole("textbox", { name: "韓立にメッセージを送る" })).toBeVisible();
+      await expect(hanliComposer.getByRole("switch", { name: "自動管理" })).toBeVisible();
+
+      await setSettingsPanelOpen(page, true);
+      await language.selectOption("en");
+      await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
+      await setSettingsPanelOpen(page, false);
+
+      await expect(hanliComposer.getByRole("textbox", { name: "Send a message to Han Li" })).toBeVisible();
+      await expect(hanliComposer.getByRole("switch", { name: "Automatic custody" })).toBeVisible();
+
+      await taskList.getByRole("button", { name: /南宫婉/ }).click();
+      const nangongComposer = page.locator(".nangong-person-composer");
+      await expect(nangongComposer.getByRole("textbox", { name: "Send a message to Nangong Wan" })).toBeVisible();
+      await page.screenshot({ path: test.info().outputPath("persona-language-empty-states.png"), fullPage: true });
+    } finally {
+      await setSettingsPanelOpen(page, true).catch(() => undefined);
+      const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+      await language.selectOption("zh-CN").catch(() => undefined);
+      await setSettingsPanelOpen(page, false).catch(() => undefined);
+      const singleConversation = taskList.getByRole("button", { name: "单会话", exact: true });
+      if (await singleConversation.getAttribute("aria-pressed").catch(() => null) !== "true") {
+        await singleConversation.click().catch(() => undefined);
+      }
+    }
+  });
+
   test("截图窗口在设置读取恢复时保留原始技术详情", async () => {
     const { application, page } = getHarness();
     const recoveryError = "isolated settings.json: unexpected end of JSON input";
