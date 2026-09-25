@@ -65,9 +65,15 @@ function readChangedSourceEvidence(
   const evidencePriority = (file: string) => {
     if (/^apps\/ai-desktop\/tests\/interaction\/.+\.scenario\.[cm]?[jt]sx?$/u.test(file)) return 0;
     if (file === layoutFile) return 1;
-    if (file.startsWith("apps/ai-desktop/src/")) return 2;
-    if (file.startsWith("apps/ai-desktop/tests/interaction/")) return 3;
-    return 4;
+    // 三语专题的资源、持久化和会话调用方必须在固定名额内；否则韩立只能看到页面，
+    // 却看不到中文回退、缺键诊断或重启恢复的实现及对应测试。
+    if (/^apps\/ai-desktop\/contracts\/foundation\/(?:i18n\/fixed-ui-text|value\/base\.value|index)\.ts$/u.test(file)
+      || /^(?:apps\/ai-desktop\/electron\/services\/support\/platform\/settings\/internal\/settings\.store\.ts|apps\/ai-desktop\/electron\/system\/ipc\/domains\/register-settings-ipc\.ts)$/u.test(file)
+      || /^apps\/ai-desktop\/tests\/(?:services\/support\/platform\/settings\/settings-store|applications\/developer\/model-settings-contract)\.test\.mjs$/u.test(file)) return 2;
+    if (/^apps\/ai-desktop\/src\/features\/(?:conversation|settings)\//u.test(file)) return 3;
+    if (file.startsWith("apps/ai-desktop/src/")) return 4;
+    if (file.startsWith("apps/ai-desktop/tests/interaction/")) return 5;
+    return 6;
   };
   files.sort((left, right) => evidencePriority(left) - evidencePriority(right));
   // 样式文件常把响应式规则放在中段；在可控大小内提供整文件，避免把省略的布局规则误判为无法验收。
@@ -119,7 +125,7 @@ function readChangedSourceEvidence(
       } catch { return []; }
     });
   });
-  const priorityItems = declaredItems.filter((item) => evidencePriority(item.file) < 4);
+  const priorityItems = declaredItems.filter((item) => evidencePriority(item.file) < 5);
   const priorityImports = readDirectImports(priorityItems);
   // 场景引用的生产表面优先进入证据包，但不丢弃既有入口的恢复链。
   const firstLevel = [...new Map([...priorityImports, ...readDirectImports(declaredItems)].map((item) => [item.file, item])).values()];

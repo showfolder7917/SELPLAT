@@ -159,6 +159,33 @@ test("超过三十个已登记文件时保留场景、布局和场景生产表�
   }
 });
 
+test("三语专题在证据上限内优先保留资源回退、设置持久化和会话调用方", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(path.join(parent, "hanli-review-locale-priority-"));
+  try {
+    const resource = "apps/ai-desktop/contracts/foundation/i18n/fixed-ui-text.ts";
+    const store = "apps/ai-desktop/electron/services/support/platform/settings/internal/settings.store.ts";
+    const fallbackTest = "apps/ai-desktop/tests/services/support/platform/settings/settings-store.test.mjs";
+    const composer = "apps/ai-desktop/src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer.tsx";
+    const scenario = "apps/ai-desktop/tests/interaction/language-settings-acceptance.scenario.ts";
+    const generic = Array.from({ length: 40 }, (_, index) => `apps/ai-desktop/src/applications/developer/generic-${index}.ts`);
+    for (const file of [...generic, resource, store, fallbackTest, composer, scenario]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), `// ${file}\n`);
+    }
+    const task = { taskId: "locale-evidence", state: "integrated", snapshot: { title: "three locales", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [...generic, resource, store, fallbackTest, composer, scenario] }] };
+    const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] });
+    const files = context.sourceEvidence.map((item) => item.file);
+    for (const critical of [scenario, resource, store, fallbackTest, composer]) assert.ok(files.includes(critical), `missing ${critical}`);
+    assert.ok(files.length <= 48);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("韩立审查完整读取可控大小的样式文件中段响应式规则", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
