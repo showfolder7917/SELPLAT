@@ -44,8 +44,11 @@ test("终态后的阻塞活动覆盖旧完成，同时间戳活动不覆盖终�
 
 test("历史审计区只展示时间线读取反馈并复用只读重新读取入口", () => {
   const source = readFileSync(fileURLToPath(new URL("../../../src/features/collaboration/components/TaskCollaborationGroup.tsx", import.meta.url)), "utf8");
-  assert.match(source, /timelineRefreshing[\s\S]*正在读取历史审计记录/);
+  assert.match(source, /const auditHistoryRefreshing = timelineReadStatus === "syncing"/);
+  assert.match(source, /const auditHistory = \([\s\S]*auditHistoryRefreshing[\s\S]*正在读取历史审计记录/);
   assert.match(source, /历史审计读取失败[\s\S]*onClick=\{retryTimelineRead\}/);
-  assert.match(source, /没有可显示的审计记录/);
+  assert.match(source, /auditHistoryGroups\.length === 0[\s\S]*没有可显示的审计记录/);
+  const emptyGroupsBranch = source.slice(source.indexOf("if (groups.length === 0)"), source.indexOf("return (", source.indexOf("if (groups.length === 0)")) + 2500);
+  assert.match(emptyGroupsBranch, /task-collaboration-groups[\s\S]*\{auditHistory\}/);
   assert.doesNotMatch(source, /onContinueTask\(.*auditHistory|onResumeAcceptance\(.*auditHistory/s);
 });

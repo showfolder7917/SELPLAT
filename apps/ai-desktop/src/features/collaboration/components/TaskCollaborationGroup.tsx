@@ -175,6 +175,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
   const deliveryReading = deliveryReadStatus === "syncing";
   const timelineUnavailable = timelineReadStatus === "unavailable";
   const timelineRefreshing = timelineReadStatus === "syncing" && groups.length > 0;
+  const auditHistoryRefreshing = timelineReadStatus === "syncing";
   const timelineProjectionUnavailable = model.presentation.timelineProjectionStatus.status === "unavailable";
   const readObstruction = createReadObstructionPresentation({
     deliveryUnavailable,
@@ -235,7 +236,7 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
 
   // 历史审计是独立读取区域：即使当前没有旧专题，也要在展开后说明读取结果。
   // 此处位于 retryTimelineRead 初始化之后，失败提示才能安全绑定只读重新读取操作。
-  const auditHistory = groups.length > 0 && (
+  const auditHistory = (
     <section ref={auditHistoryRef} className="task-collaboration-audit-history" aria-label={locale === "ja" ? "監査履歴" : "专题审计历史"}>
       <SelUiDisclosure
         idPrefix="task-collaboration-audit-history"
@@ -245,13 +246,13 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         trigger={<span className="task-collaboration-audit-history-header"><strong>{locale === "ja" ? "監査履歴" : "历史审计"}</strong><span>{locale === "ja" ? `${auditHistoryGroups.length} 件の旧記録` : `${auditHistoryGroups.length} 条旧专题或历史记录`}</span></span>}
       >
         <div className="task-collaboration-history-cards">
-          {timelineRefreshing && <p role="status">正在读取历史审计记录…</p>}
+          {auditHistoryRefreshing && <p role="status">正在读取历史审计记录…</p>}
           {timelineUnavailable && <div role="alert">
             <p>{readError || "历史审计读取失败，正在保留上次成功内容。"}</p>
             <button type="button" disabled={retryingRead} onClick={retryTimelineRead}>{retryingRead ? "重新读取中…" : "重新读取"}</button>
           </div>}
           {auditHistoryGroups.map((group) => <TaskGroupCard key={group.groupId} model={createCardModel(group, true)} />)}
-          {!timelineRefreshing && !timelineUnavailable && auditHistoryGroups.length === 0 && <p role="status">没有可显示的审计记录。</p>}
+          {!auditHistoryRefreshing && !timelineUnavailable && auditHistoryGroups.length === 0 && <p role="status">没有可显示的审计记录。</p>}
         </div>
       </SelUiDisclosure>
     </section>
@@ -343,19 +344,22 @@ export function TaskCollaborationGroup(props: TaskCollaborationGroupProps) {
         : null;
     return (
       <section className="task-collaboration-page">
-        <div className="task-collaboration-empty">
-          {statusMessage ? <strong role="status">{statusMessage}</strong> : <>
-            <strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong>
-            <span className="task-collaboration-empty-intro">
-              {locale === "ja"
-                ? "申請、承認、配布と実行の履歴がここに表示されます。"
-                : "先点击“找韩立说需求”说明目标；会话会引导你确认需求与范围，之后的任务安排会显示在这里。"}
-            </span>
-            <button type="button" className="task-collaboration-empty-action" onClick={openHanliConversation}>
-              {locale === "ja" ? "韓立に要望を伝える" : "找韩立说需求"}
-            </button>
-            {locale !== "ja" && <span className="task-collaboration-empty-detail">审批、分发、执行和验证会按发生顺序显示在这里。</span>}
-          </>}
+        <div className="task-collaboration-groups">
+          <div className="task-collaboration-empty">
+            {statusMessage ? <strong role="status">{statusMessage}</strong> : <>
+              <strong>{locale === "ja" ? "共同タスクはまだありません" : "暂无专题任务"}</strong>
+              <span className="task-collaboration-empty-intro">
+                {locale === "ja"
+                  ? "申請、承認、配布と実行の履歴がここに表示されます。"
+                  : "先点击“找韩立说需求”说明目标；会话会引导你确认需求与范围，之后的任务安排会显示在这里。"}
+              </span>
+              <button type="button" className="task-collaboration-empty-action" onClick={openHanliConversation}>
+                {locale === "ja" ? "韓立に要望を伝える" : "找韩立说需求"}
+              </button>
+              {locale !== "ja" && <span className="task-collaboration-empty-detail">审批、分发、执行和验证会按发生顺序显示在这里。</span>}
+            </>}
+          </div>
+          {auditHistory}
         </div>
       </section>
     );
