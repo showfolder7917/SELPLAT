@@ -410,7 +410,20 @@ test("页面动作识别不跨句误读技术表述，同句真实操作仍强�
   const bundled = await build({ entryPoints: ["electron/services/personas/hanli/internal/decision/hanli-decision.service.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { requiredFormalPageCriterionIds } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const criteria = [
-    { criterionId: "technical", criterion: "无论依赖展开或证据上限如何，真实变更文件都不能被挤出。页面验收前完成源码审查。" },
+    { criterionId: "period", criterion: "请在当前正式应用中展开。任务卡页面验收。" },
+    { criterionId: "semicolon", criterion: "请点击；任务卡页面验收。" },
+    { criterionId: "question", criterion: "请展开？任务卡页面验收。" },
+    { criterionId: "exclamation", criterion: "请打开！任务卡页面验收。" },
+    { criterionId: "newline", criterion: "请收起\n任务卡页面验收。" },
+    { criterionId: "ascii-period", criterion: "请在当前正式应用中展开. 任务卡页面验收。" },
+    { criterionId: "ascii-semicolon", criterion: "请点击; 任务卡页面验收。" },
+    { criterionId: "ascii-question", criterion: "请展开? 任务卡页面验收。" },
+    { criterionId: "ascii-exclamation", criterion: "请打开! 任务卡页面验收。" },
+    { criterionId: "attribution", criterion: "错误归因必须定位到验收条件分类入口。" },
+    { criterionId: "repair", criterion: "修复应限制动作词与页面对象只在同一句匹配。" },
+    { criterionId: "test", criterion: "测试必须覆盖跨句技术说明和同句页面操作。" },
+    { criterionId: "restart", criterion: "重启后必须继续复用冻结计划的证据类型。" },
+    { criterionId: "return", criterion: "返回验收时既有混合页面结果结构校验必须保持有效。" },
     { criterionId: "interaction", criterion: "在当前正式应用中展开任务卡并点击查看详情按钮。" },
   ];
   assert.deepEqual(requiredFormalPageCriterionIds(criteria), ["interaction"]);
