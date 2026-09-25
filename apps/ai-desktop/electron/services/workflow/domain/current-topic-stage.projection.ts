@@ -249,8 +249,15 @@ function readDeliveryEvidence(tasks: CollaborationTaskOutDto[], collaboration: C
   const batch = generation === null ? null : collaboration.integrationBatches?.find((item) => item.generation === generation) || null;
   const candidate = batch?.integrationSha ? { generation: batch.generation, integrationSha: batch.integrationSha } : null;
   const hasEvent = (task: CollaborationTaskOutDto, type: CollaborationTaskOutDto["flowEvents"][number]["type"]) => task.flowEvents.some((event) => event.type === type && event.status === "completed");
-  const unifiedTest = tasks.every((task) => task.unifiedTest?.status === "passed" && hasEvent(task, "unified_test.passed")) ? "passed"
-    : tasks.some((task) => task.unifiedTest?.status === "failed") ? "failed" : "missing";
+  const hasUnifiedTestFailure = tasks.some((task) => task.unifiedTest?.status === "failed");
+  // 应用重建可能在已通过批次发布期间误启动一个无源码变化的重复批次，并把任务上的瞬时
+  // unifiedTest 状态覆盖为 running。只要任务仍绑定已完成的交付批次且保留真实通过事件，
+  // 交付投影就应读取已完成事实；真实 failed 状态仍优先，不能被历史通过事件掩盖。
+  const completedBatchPreservesPass = batch?.state === "completed" && tasks.every((task) =>
+    task.integrationGeneration === batch.generation && hasEvent(task, "unified_test.passed"));
+  const unifiedTest = hasUnifiedTestFailure ? "failed"
+    : tasks.every((task) => task.unifiedTest?.status === "passed" && hasEvent(task, "unified_test.passed"))
+      || completedBatchPreservesPass ? "passed" : "missing";
   const release = candidate && tasks.every((task) => hasEvent(task, "release.published")) ? "published" : "missing";
   const restartHealth = release === "published" && tasks.every((task) => hasEvent(task, "release.restart_healthy")) ? "passed" : "missing";
   const preflightEvent = tasks.flatMap((task) => task.flowEvents)
