@@ -41,6 +41,8 @@ const migratedFixedUi = [
   read("src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline.tsx"),
   read("src/features/conversation/components/ConversationMessageImage.tsx"),
   read("src/features/conversation/model/useCodexWorkspace.ts"),
+  read("src/features/conversation/model/useCodexInteractionRequests.ts"),
+  read("src/features/conversation/model/useConversationDispatch.ts"),
   read("src/features/conversation/components/CollaborationStatusChain.tsx"),
 ].join("\n");
 const collaborationFormatters = read("src/features/collaboration/model/collaboration-formatters.ts");
@@ -96,6 +98,11 @@ test("迁移范围内的固定界面只通过统一资源解析，不保留局�
   assert.match(migratedFixedUi, /conversationCodexUnavailable/);
   assert.match(migratedFixedUi, /conversationWorkspaceMissing/);
   assert.match(migratedFixedUi, /conversationDiscardFailed/);
+  assert.match(migratedFixedUi, /conversationLoginUnavailable/);
+  assert.match(migratedFixedUi, /conversationClarificationSubmitFailed/);
+  assert.match(migratedFixedUi, /conversationSupplementTaskFailed/);
+  assert.match(migratedFixedUi, /conversationRecoverTaskFailed/);
+  assert.match(migratedFixedUi, /error instanceof Error \? error\.message : fixedUiText/);
   assert.match(collaborationFormatters, /fixedUiText/);
   assert.match(collaborationFormatters, /collaborationTaskStateLabel[\s\S]*taskKeys/);
   assert.match(collaborationFormatters, /collaborationInProgress/);
