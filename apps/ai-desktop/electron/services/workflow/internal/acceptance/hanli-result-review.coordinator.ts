@@ -34,6 +34,8 @@ export function buildHanliResultReviewContext(
     sourceEvidence: sourceEvidence.items,
     sourceEvidenceBatches: sourceEvidence.batches,
     sourceEvidenceStatus: sourceEvidence.status,
+    // 让审查器区分本轮变更与计划冻结的回归边界；两类文件都只能来自同一工作区。
+    frozenSourceEvidenceFiles: [...frozenSourceEvidenceFiles],
     sourceEvidenceScope: frozenSourceEvidenceFiles.length
       ? "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports"
       : "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
