@@ -49,12 +49,13 @@ function readChangedSourceEvidence(
   const root = fallbackWorkspaceState.roots.find((item) => item.id === fallbackWorkspaceState.primaryId)?.path;
   if (!root) return { items: [], batches: [], status: "workspace-root-unavailable" };
   const authorizedFiles = validateFrozenSourceEvidenceFiles(frozenSourceEvidenceFiles);
-  const files = [...new Set([...authorizedFiles, ...tasks.filter((task) => task.state === "integrated")
+  const integratedChangedFiles = tasks.filter((task) => task.state === "integrated")
     .flatMap((task) => [
       ...task.executionRecords.flatMap((record) => record.changedFiles),
       // 已集成的旧记录可能只保存最后一次流式 diff；签发基线至结果提交可恢复完整清单。
       ...readIntegratedCommitFiles(root, task),
-    ])])]
+    ]);
+  const files = [...new Set([...authorizedFiles, ...integratedChangedFiles])]
     .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file));
   if (!files.length) return { items: [], batches: [], status: "no-declared-changed-files" };
   let canonicalRoot: string;
@@ -80,11 +81,19 @@ function readChangedSourceEvidence(
     if (file.startsWith("apps/ai-desktop/tests/interaction/")) return 5;
     return 6;
   };
-  files.sort((left, right) => Number(authorizedFiles.includes(right)) - Number(authorizedFiles.includes(left)) || evidencePriority(left) - evidencePriority(right));
+  const testFile = (file: string) => /(?:^|\/)tests?\//u.test(file);
+  // 已集成任务的生产改动是本轮源码审查的对象，必须先于冻结能力文件和依赖展开。
+  // 测试仍保留为回归证据，但不应挤掉实际生产实现。
+  const changedProductionFiles = new Set(integratedChangedFiles.filter((file): file is string =>
+    typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file) && !testFile(file)));
+  files.sort((left, right) => Number(changedProductionFiles.has(right)) - Number(changedProductionFiles.has(left))
+    || Number(authorizedFiles.includes(right)) - Number(authorizedFiles.includes(left))
+    || Number(testFile(left)) - Number(testFile(right))
+    || evidencePriority(left) - evidencePriority(right));
   // 样式和固定三语资源都可能把验收条件放在中段；在可控大小内提供整文件，避免把省略的实现误判为无法验收。
   const evidenceLimit = (file: string) => file.endsWith(".css") || file === "apps/ai-desktop/contracts/foundation/i18n/fixed-ui-text.ts" ? 120_000 : 48_000;
-  // 固定证据边界内优先保留场景、布局和生产源码，历史清单只能占用剩余名额。
-  const declaredItems = files.slice(0, 30).flatMap((file) => {
+  // 先读取至多 48 项直接声明文件：真实生产改动与冻结项必须在依赖展开前进入候选集。
+  const declaredItems = files.slice(0, 48).flatMap((file) => {
     if (path.isAbsolute(file)) return [];
     const resolved = path.resolve(canonicalRoot, file);
     if (!resolved.startsWith(`${canonicalRoot}${path.sep}`)) return [];
@@ -130,15 +139,27 @@ function readChangedSourceEvidence(
       } catch { return []; }
     });
   });
-  const priorityItems = declaredItems.filter((item) => evidencePriority(item.file) < 5);
-  // 冻结清单是验收计划已经授权的必读证据，不能在依赖展开后再排队；
-  // 否则高优先级页面文件的两层导入会先耗尽 48 项上限，使清单内的后端事实静默消失。
+  const changedProductionItems = declaredItems.filter((item) => changedProductionFiles.has(item.file));
+  // 冻结清单仍是验收计划已经授权的必读证据，但不得抢占本轮实际生产改动。
   const frozenItems = declaredItems.filter((item) => authorizedFiles.includes(item.file));
-  const priorityImports = readDirectImports(priorityItems);
-  // 场景引用的生产表面优先进入证据包，但不丢弃既有入口的恢复链。
-  const firstLevel = [...new Map([...priorityImports, ...readDirectImports(declaredItems)].map((item) => [item.file, item])).values()];
+  const supportingProductionItems = declaredItems.filter((item) => !changedProductionFiles.has(item.file)
+    && !authorizedFiles.includes(item.file) && !testFile(item.file));
+  const testItems = declaredItems.filter((item) => testFile(item.file));
+  // 测试声明的静态导入可补充其覆盖的生产表面，但测试文件本身始终在依赖之后。
+  const dependencyRoots = [...changedProductionItems, ...frozenItems, ...supportingProductionItems];
+  const firstLevel = [...new Map([
+    ...readDirectImports(dependencyRoots),
+    ...readDirectImports(testItems),
+  ].map((item) => [item.file, item])).values()];
   const secondLevel = readDirectImports(firstLevel);
-  const items = [...new Map([...frozenItems, ...priorityItems, ...priorityImports, ...firstLevel, ...secondLevel, ...declaredItems].map((item) => [item.file, item])).values()].slice(0, 48);
+  const items = [...new Map([
+    ...changedProductionItems,
+    ...frozenItems,
+    ...supportingProductionItems,
+    ...firstLevel,
+    ...secondLevel,
+    ...testItems,
+  ].map((item) => [item.file, item])).values()].slice(0, 48);
   const batches = Array.from({ length: Math.ceil(items.length / 16) }, (_, index) => ({
     batch: index + 1,
     files: items.slice(index * 16, (index + 1) * 16).map((item) => item.file),
