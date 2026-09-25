@@ -1058,6 +1058,8 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   const pageRoot = page.getByRole("region", { name: "任务协作群" });
   const group = pageRoot.locator(".task-collaboration-group");
   await expect(group.getByText("专题任务 01 · 修订截图按钮可用态", { exact: true })).toBeVisible();
+  await expect(group).toHaveAttribute("data-task-collaboration-topic-id", "interaction-timeline");
+  await expect(group).toHaveAttribute("data-task-collaboration-proposal-id", "interaction-timeline-proposal");
   const groupTrigger = group.locator(":scope > .selui-disclosure-heading > .seldisclosure-trigger");
   await groupTrigger.click();
   await expect(group.locator(":scope > .seldisclosure-content")).toBeHidden();

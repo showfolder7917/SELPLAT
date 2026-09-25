@@ -4,12 +4,14 @@ type SelDisclosureController = { setOpen(open: boolean): boolean; destroy(): boo
 type SelDisclosureApi = { mount(root: HTMLElement, options: { id: string; open: boolean }): SelDisclosureController | null };
 
 /** 业务页面只提供标题和内容，展开语义、键盘操作和生命周期统一交给 SELUI Disclosure。 */
-export function SelUiDisclosure({ idPrefix, trigger, action, open, className = "", onOpenChange, children }: {
+export function SelUiDisclosure({ idPrefix, trigger, action, open, className = "", rootData = {}, onOpenChange, children }: {
   idPrefix: string;
   trigger: ReactNode;
   action?: ReactNode;
   open: boolean;
   className?: string;
+  /** 调用方可在 Disclosure 根节点公开稳定的只读业务标识，供受限页面导航精确定位。 */
+  rootData?: Record<`data-${string}`, string | undefined>;
   onOpenChange?(open: boolean): void;
   children: ReactNode;
 }) {
@@ -36,7 +38,7 @@ export function SelUiDisclosure({ idPrefix, trigger, action, open, className = "
     };
   }, [id]);
   useEffect(() => { controllerRef.current?.setOpen(open); }, [open]);
-  return <section ref={rootRef} className={`seldisclosure-root ${className}`.trim()} data-sel-disclosure={id}>
+  return <section ref={rootRef} className={`seldisclosure-root ${className}`.trim()} {...rootData} data-sel-disclosure={id}>
     <div className="selui-disclosure-heading"><button type="button" className="seldisclosure-trigger" data-sel-disclosure-trigger aria-expanded={open}>
         <span className="selui-disclosure-trigger-content">{trigger}</span>
         <i className={open ? "ri-arrow-up-s-line" : "ri-arrow-down-s-line"} data-sel-disclosure-icon aria-hidden="true" />

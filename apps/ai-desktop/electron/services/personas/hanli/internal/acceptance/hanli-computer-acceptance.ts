@@ -97,6 +97,8 @@ export class HanliComputerAcceptanceRunner {
     // 窄窗口只用于当前验收的固定预设；无论验收如何结束都还原起始尺寸。
     let formalWindowResized = false;
     let coordinateSpace: AcceptanceCoordinateSpace = { screenshot: { width: 1, height: 1 }, viewport: { width: 1, height: 1 } };
+    // 所有任务协作群读取都固定到本次验收冻结的专题和提案，不能由页面首张历史卡决定证据归属。
+    const taskCollaborationTarget = { topicId: goal.topicId, proposalId: goal.proposalId };
     const images = async (interactionEvidence?: Record<string, unknown>) => {
       if (window.isDestroyed()) {
         throw new Error("正式应用窗口已关闭");
@@ -105,7 +107,7 @@ export class HanliComputerAcceptanceRunner {
       const screenshotSize = bitmap.getSize();
       const viewport = await window.webContents.executeJavaScript(`(${readAcceptanceViewport.toString()})()`).catch(() => screenshotSize) as AcceptanceViewport;
       const pageEvidence = await window.webContents.executeJavaScript(`(${readAcceptancePageEvidence.toString()})()`).catch(() => ({ status: "unavailable" })) as Record<string, unknown>;
-      const taskCollaboration = await window.webContents.executeJavaScript(`(${readTaskCollaborationSurface.toString()})()`).catch(() => ({ status: "unavailable" })) as Record<string, unknown>;
+      const taskCollaboration = await window.webContents.executeJavaScript(`(${readTaskCollaborationSurface.toString()})(${JSON.stringify(taskCollaborationTarget)})`).catch(() => ({ status: "unavailable" })) as Record<string, unknown>;
       coordinateSpace = createAcceptanceCoordinateSpace(screenshotSize, viewport);
       const data = bitmap.toDataURL();
       const attachment = await this.#screenshots.save({
@@ -385,7 +387,7 @@ export class HanliComputerAcceptanceRunner {
             if (!Number.isInteger(args.deltaY) || Math.abs(deltaY) > 1000 || deltaY === 0) {
               throw new Error("任务协作页滚动距离必须为非零整数且不超过1000。");
             }
-            const result = await window.webContents.executeJavaScript(`(${scrollTaskCollaboration.toString()})(${deltaY})`) as Record<string, unknown>;
+            const result = await window.webContents.executeJavaScript(`(${scrollTaskCollaboration.toString()})(${deltaY}, ${JSON.stringify(taskCollaborationTarget)})`) as Record<string, unknown>;
             if (result.status !== "scrolled" && result.status !== "at-boundary" && result.status !== "not-ready" && result.status !== "detail-pane-zero-height") {
               throw new Error(`任务协作页未滚动：${String(result.status)}。`);
             }
@@ -407,8 +409,8 @@ export class HanliComputerAcceptanceRunner {
             if (!interactions.allows("persona-navigation")) {
               throw new Error("当前正式验收未获任务面板导航授权。");
             }
-            const result = await window.webContents.executeJavaScript(`(${navigateTaskCollaboration.toString()})(${JSON.stringify(args.action)})`) as Record<string, unknown>;
-            if (result.status !== "opened" && result.status !== "closed" && result.status !== "already-open" && result.status !== "already-closed" && result.status !== "navigated" && result.status !== "already-visible" && result.status !== "task-panel-not-open" && result.status !== "task-panel-not-closed" && result.status !== "task-group-not-visible") {
+            const result = await window.webContents.executeJavaScript(`(${navigateTaskCollaboration.toString()})(${JSON.stringify(args.action)}, ${JSON.stringify(taskCollaborationTarget)})`) as Record<string, unknown>;
+            if (result.status !== "opened" && result.status !== "closed" && result.status !== "already-open" && result.status !== "already-closed" && result.status !== "navigated" && result.status !== "already-visible" && result.status !== "task-panel-not-open" && result.status !== "task-panel-not-closed" && result.status !== "task-group-not-visible" && result.status !== "task-group-detail-not-ready" && result.status !== "detail-pane-zero-height") {
               throw new Error(`任务协作群导航未完成：${String(result.status)}。`);
             }
             taskCollaborationEvidence = result;
@@ -682,9 +684,11 @@ function validateCriterionCoverage(value: unknown, allowedCriterionIds: string[]
 }
 
 /** 只滚动当前可见任务协作群的详情面板，不能推动页面标题与主要操作离开视口。 */
-async function scrollTaskCollaboration(deltaY: number): Promise<Record<string, unknown>> {
+async function scrollTaskCollaboration(deltaY: number, target: { topicId: string; proposalId: string }): Promise<Record<string, unknown>> {
   const page = document.querySelector<HTMLElement>(".task-collaboration-page");
-  const detail = page?.querySelector<HTMLElement>(".task-timeline-detail-pane");
+  const group = Array.from(page?.querySelectorAll<HTMLElement>(".task-collaboration-group") || []).find((item) => item.dataset.taskCollaborationTopicId === target.topicId
+    && item.dataset.taskCollaborationProposalId === target.proposalId);
+  const detail = group?.querySelector<HTMLElement>(":scope > .seldisclosure-content > .task-timeline-detail-pane");
   const readSurface = () => {
     const pageRect = page?.getBoundingClientRect();
     const pageStyle = page ? getComputedStyle(page) : null;
@@ -710,8 +714,8 @@ async function scrollTaskCollaboration(deltaY: number): Promise<Record<string, u
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     surface = readSurface();
   }
-  if (!page || !detail || !surface.pageVisible) {
-    return { status: "not-ready", ...surface };
+  if (!page || !group || !detail || !surface.pageVisible) {
+    return { status: "not-ready", targetGroupFound: Boolean(group), ...surface };
   }
   if (!surface.detailVisible) {
     return surface.detailConnected
@@ -780,20 +784,22 @@ async function toggleTaskAuditCard(auditCardIndex: number): Promise<Record<strin
 }
 
 /** 只读取正式页面中可见的任务协作群标识；不访问 IPC、任务事实或测试桥。 */
-function readTaskCollaborationSurface(): Record<string, unknown> {
+function readTaskCollaborationSurface(target: { topicId: string; proposalId: string }): Record<string, unknown> {
   const page = document.querySelector<HTMLElement>(".task-collaboration-page");
   const region = page?.closest<HTMLElement>('[role="region"][aria-label="任务协作群"]') || page;
   const rect = page?.getBoundingClientRect();
   const visible = Boolean(page && region && rect && rect.width > 0 && rect.height > 0 && getComputedStyle(page).display !== "none" && getComputedStyle(page).visibility !== "hidden");
-  const detail = page?.querySelector<HTMLElement>(".task-timeline-detail-pane");
+  const group = Array.from(page?.querySelectorAll<HTMLElement>(".task-collaboration-group") || []).find((item) => item.dataset.taskCollaborationTopicId === target.topicId
+    && item.dataset.taskCollaborationProposalId === target.proposalId);
+  const detail = group?.querySelector<HTMLElement>(":scope > .seldisclosure-content > .task-timeline-detail-pane");
   const detailRect = detail?.getBoundingClientRect();
   const detailVisible = Boolean(detail && detailRect && detailRect.width > 0 && detailRect.height > 0 && getComputedStyle(detail).display !== "none" && getComputedStyle(detail).visibility !== "hidden");
   const panelToggle = document.querySelector<HTMLButtonElement>('button.section-toggle[aria-controls="developer-task-list"]');
-  const primary = page?.querySelector<HTMLElement>(".task-group-primary")?.innerText.trim() || "";
-  const nextStep = page?.querySelector<HTMLElement>(".task-timeline-next-current")?.innerText.trim() || "";
-  const guidance = page?.querySelector<HTMLElement>(".task-recovery-guidance")?.innerText.trim() || "";
-  const recoveryLabel = page?.querySelector<HTMLButtonElement>("button.task-recovery-continue")?.innerText.trim() || "";
-  const currentTimelineNode = page?.querySelector<HTMLElement>(".task-timeline-node.current");
+  const primary = group?.querySelector<HTMLElement>(".task-group-primary")?.innerText.trim() || "";
+  const nextStep = group?.querySelector<HTMLElement>(".task-timeline-next-current")?.innerText.trim() || "";
+  const guidance = group?.querySelector<HTMLElement>(".task-recovery-guidance")?.innerText.trim() || "";
+  const recoveryLabel = group?.querySelector<HTMLButtonElement>("button.task-recovery-continue")?.innerText.trim() || "";
+  const currentTimelineNode = group?.querySelector<HTMLElement>(".task-timeline-node.current");
   const currentTimelineNodeRect = currentTimelineNode?.getBoundingClientRect();
   const currentTimelineNodeVisible = Boolean(currentTimelineNode && currentTimelineNodeRect
     && currentTimelineNodeRect.width > 0 && currentTimelineNodeRect.height > 0
@@ -814,6 +820,7 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
     }).filter((member) => member.visible);
   return {
     status: visible ? "visible" : "hidden",
+    targetGroupFound: Boolean(group),
     primary,
     nextStep,
     guidance,
@@ -832,7 +839,7 @@ function readTaskCollaborationSurface(): Record<string, unknown> {
 }
 
 /** 精确操作既有任务面板和任务协作群入口，不暴露任何业务写入控件。 */
-async function navigateTaskCollaboration(action: string): Promise<Record<string, unknown>> {
+async function navigateTaskCollaboration(action: string, target: { topicId: string; proposalId: string }): Promise<Record<string, unknown>> {
   const toggle = document.querySelector<HTMLButtonElement>('button.section-toggle[aria-controls="developer-task-list"]');
   const panel = document.querySelector<HTMLElement>("#developer-task-list");
   if (!toggle || !panel) return { status: "task-panel-unavailable" };
@@ -876,28 +883,41 @@ async function navigateTaskCollaboration(action: string): Promise<Record<string,
   const entry = panel.querySelector<HTMLButtonElement>("button.collaboration-task-group-entry");
   if (!entry) return { status: "task-group-entry-unavailable" };
   // SelUiDisclosure 将专题卡根和 disclosure 根放在同一元素；触发器是根的直接 heading 子项。
-  const ensureCurrentGroupOpen = async (): Promise<boolean> => {
-    const groupTrigger = document.querySelector<HTMLButtonElement>(".task-collaboration-group > .selui-disclosure-heading > button.seldisclosure-trigger[data-sel-disclosure-trigger]");
-    if (!groupTrigger) return false;
+  const ensureCurrentGroupOpen = async (): Promise<Record<string, unknown>> => {
+    const group = () => Array.from(document.querySelectorAll<HTMLElement>(".task-collaboration-group"))
+      .find((item) => item.dataset.taskCollaborationTopicId === target.topicId && item.dataset.taskCollaborationProposalId === target.proposalId);
+    const trigger = () => group()?.querySelector<HTMLButtonElement>(":scope > .selui-disclosure-heading > button.seldisclosure-trigger[data-sel-disclosure-trigger]");
+    const detail = () => group()?.querySelector<HTMLElement>(":scope > .seldisclosure-content > .task-timeline-detail-pane");
+    const groupTrigger = trigger();
+    if (!groupTrigger) return { status: "task-group-detail-not-ready", targetGroupFound: Boolean(group()), detailPaneConnected: false };
     if (groupTrigger.getAttribute("aria-expanded") !== "true") groupTrigger.click();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const detail = document.querySelector<HTMLElement>(".task-collaboration-group .task-timeline-detail-pane");
-      if (groupTrigger.getAttribute("aria-expanded") === "true" && detail?.isConnected) return true;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const targetDetail = detail();
+      const rect = targetDetail?.getBoundingClientRect();
+      const visible = Boolean(targetDetail && rect && rect.width > 0 && rect.height > 0
+        && getComputedStyle(targetDetail).display !== "none" && getComputedStyle(targetDetail).visibility !== "hidden");
+      if (groupTrigger.getAttribute("aria-expanded") === "true" && visible) {
+        return { status: "ready", targetGroupFound: true, detailPaneConnected: true, detailPaneVisible: true, detailPaneSize: { width: Math.round(rect!.width), height: Math.round(rect!.height) } };
+      }
       await nextFrame();
     }
-    return groupTrigger.getAttribute("aria-expanded") === "true"
-      && Boolean(document.querySelector<HTMLElement>(".task-collaboration-group .task-timeline-detail-pane")?.isConnected);
+    const targetDetail = detail();
+    const rect = targetDetail?.getBoundingClientRect();
+    const detailPaneConnected = Boolean(targetDetail?.isConnected);
+    return detailPaneConnected
+      ? { status: "detail-pane-zero-height", targetGroupFound: true, detailPaneConnected, detailPaneVisible: false, detailPaneSize: rect ? { width: Math.round(rect.width), height: Math.round(rect.height) } : null, stableFrames: 12 }
+      : { status: "task-group-detail-not-ready", targetGroupFound: Boolean(group()), detailPaneConnected: false, stableFrames: 12 };
   };
   if (taskCollaborationVisible()) {
-    const detailReady = await ensureCurrentGroupOpen();
-    return { status: detailReady ? "already-visible" : "task-group-detail-not-ready", taskPanelExpanded: true, taskCollaborationVisible: true, detailPaneConnected: detailReady };
+    const detail = await ensureCurrentGroupOpen();
+    return { ...detail, status: detail.status === "ready" ? "already-visible" : detail.status, taskPanelExpanded: true, taskCollaborationVisible: true };
   }
   entry.click();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await nextFrame();
     if (taskCollaborationVisible()) {
-      const detailReady = await ensureCurrentGroupOpen();
-      return { status: detailReady ? "navigated" : "task-group-detail-not-ready", taskPanelExpanded: true, taskCollaborationVisible: true, detailPaneConnected: detailReady };
+      const detail = await ensureCurrentGroupOpen();
+      return { ...detail, status: detail.status === "ready" ? "navigated" : detail.status, taskPanelExpanded: true, taskCollaborationVisible: true };
     }
   }
   return {
