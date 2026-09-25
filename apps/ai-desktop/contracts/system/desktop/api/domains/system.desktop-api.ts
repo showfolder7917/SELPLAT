@@ -17,6 +17,7 @@ export const SYSTEM_DESKTOP_API_METHODS = [
   "startCorpusSemanticBackfill",
   "getSettings",
   "updateSettings",
+  "onSettingsChanged",
   "getWorkspaces",
   "onWorkspaceStateChanged",
   "addWorkspace",

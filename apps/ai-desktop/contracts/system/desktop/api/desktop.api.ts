@@ -52,6 +52,8 @@ export interface DesktopApi {
   getSettings(): Promise<DesktopSettingsReadOutDto>;
   /** 合并并持久化允许修改的桌面设置字段。 */
   updateSettings(settings: UpdateDesktopSettingsInDto): Promise<DesktopSettingsOutDto>;
+  /** 订阅主进程成功保存后的完整设置快照，使独立窗口无需重建即可同步固定界面语言。 */
+  onSettingsChanged(listener: (settings: DesktopSettingsOutDto) => void): () => void;
   /** 读取已登记工作区和当前主工作区。 */
   getWorkspaces(): Promise<WorkspaceStateOutDto>;
   /** 订阅主进程完成的工作区登记变化；用于同步自动验收清理等非 Renderer 发起的更新。 */

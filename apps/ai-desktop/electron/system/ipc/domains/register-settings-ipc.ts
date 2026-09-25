@@ -1,10 +1,14 @@
-import type { UpdateDesktopSettingsInDto } from "../../../../contracts/services/support/platform/settings/index.js";
+import type { DesktopSettingsOutDto, UpdateDesktopSettingsInDto } from "../../../../contracts/services/support/platform/settings/index.js";
 import type { EventCenterFacade } from "../../../services/support/capabilities/event-center/index.js";
 import type { SettingsFacade as SettingsStore } from "../../../services/support/platform/settings/index.js";
 import { registerEventCenterIpcHandler } from "../event-center-ipc.js";
 
 /** 设置领域独立登记读写通道，并把每次全局执行策略变更写入业务审计。 */
-export function registerSettingsIpc(settings: SettingsStore, eventCenter: EventCenterFacade): void {
+export function registerSettingsIpc(
+  settings: SettingsStore,
+  eventCenter: EventCenterFacade,
+  publishSettingsChanged: (settings: DesktopSettingsOutDto) => void,
+): void {
   registerEventCenterIpcHandler(eventCenter, "desktop:get-settings", () => settings.readForRenderer(), "business");
   registerEventCenterIpcHandler(eventCenter, "desktop:update-settings", (_event, patch: UpdateDesktopSettingsInDto) => {
     const result = settings.update(patch);
@@ -16,6 +20,8 @@ export function registerSettingsIpc(settings: SettingsStore, eventCenter: EventC
       serviceTier: result.serviceTier,
       codexAppCorpusIngestionEnabled: result.codexAppCorpusIngestionEnabled,
     });
+    // 仅把已成功持久化的完整快照投影给其他窗口；保存失败时各窗口继续保留旧设置。
+    publishSettingsChanged(result);
     return result;
   }, "business");
 }

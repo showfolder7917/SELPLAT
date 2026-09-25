@@ -532,9 +532,16 @@ contextBridge.exposeInMainWorld("desktop", {
   startCorpusSemanticBackfill: async () => ({ state: "completed", targetCount: 2, discoveredCount: 2, processedCount: 2, insertedCount: 2, failedCount: 0, message: "补齐完成：新增 2 条 AI 摘要。", startedAt: "2026-08-28T00:00:00.000Z", completedAt: "2026-08-28T00:00:01.000Z" }),
   getSettings: async () => ipcRenderer.invoke("interaction:settings-get"),
   updateSettings: async (settings) => ipcRenderer.invoke("interaction:settings-update", settings),
+  onSettingsChanged: (listener) => {
+    const handler = (_event, settings) => listener(settings);
+    ipcRenderer.on("desktop:settings-changed", handler);
+    return () => { ipcRenderer.removeListener("desktop:settings-changed", handler); };
+  },
   setInteractionSettingsReadSource: async (source) => ipcRenderer.invoke("interaction:settings-read-source", source),
   setInteractionSettingsUpdateFailure: async (message) => ipcRenderer.invoke("interaction:settings-update-failure", message),
   setInteractionSettingsUpdateDelay: async (milliseconds) => ipcRenderer.invoke("interaction:settings-update-delay", milliseconds),
+  openInteractionScreenshotWindow: async () => ipcRenderer.invoke("interaction:open-screenshot-window"),
+  closeInteractionScreenshotWindow: async () => ipcRenderer.invoke("interaction:close-screenshot-window"),
   getCodexModels: async () => {
     if (codexModelCatalogFailure) throw new Error(codexModelCatalogFailure);
     return { models: [
@@ -638,6 +645,10 @@ contextBridge.exposeInMainWorld("desktop", {
     if (!screenRecordingSettingsOpened) throw new Error("Screen recording settings were not opened first.");
   },
   captureScreen: async () => null,
+  // 生产截图窗口挂载时会登记这三个生命周期入口；本用例只验证设置投影，不注入画面帧。
+  onScreenCaptureFrameRequested: () => () => undefined,
+  onScreenCaptureReset: () => () => undefined,
+  showScreenshotWindow: async () => undefined,
   // 截图编辑器专项夹具需要跨过真实主进程的窗口尺寸切换，但隔离测试不操作用户窗口。
   enterScreenshotAnnotation: async () => undefined,
   returnScreenshotSelection: async () => undefined,
