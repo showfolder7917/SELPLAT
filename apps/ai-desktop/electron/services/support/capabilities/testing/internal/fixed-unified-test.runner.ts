@@ -2,7 +2,8 @@
 import { spawn } from "node:child_process";
 // path 统一解析源工程、候选工作树和应用目录，兼容 Windows 与 macOS。
 import path from "node:path";
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, rmdirSync, unlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 // 依赖租约让候选工作树安全借用源工程锁哈希缓存，并在结束后释放。
 import {
   acquireManagedDependencyLease,
@@ -336,34 +337,13 @@ export class FixedUnifiedTestRunner {
   }
 }
 
-/** 清理由本次 mkdtemp 创建的激活暂存树；链接和文件均按叶子节点删除。 */
+/** 清理由本次 mkdtemp 创建的激活暂存树；Electron 中绕过 ASAR 虚拟目录解释。 */
 export function cleanupRuntimeActivationStaging(entryPath: string): void {
-  let entry;
-  try {
-    entry = lstatSync(entryPath, { throwIfNoEntry: false });
-  } catch (error) {
-    if (isMissingPath(error)) return;
-    throw error;
-  }
-  if (!entry) return;
-  if (!entry.isDirectory()) {
-    try {
-      unlinkSync(entryPath);
-    } catch (error) {
-      if (!isMissingPath(error)) throw error;
-    }
-    return;
-  }
-  for (const child of readdirSync(entryPath)) cleanupRuntimeActivationStaging(path.join(entryPath, child));
-  try {
-    rmdirSync(entryPath);
-  } catch (error) {
-    if (!isMissingPath(error)) throw error;
-  }
-}
-
-function isMissingPath(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+  // Electron 的 node:fs 会把 app.asar 展开为虚拟目录；original-fs 才会删除磁盘上的归档文件本体。
+  const physicalFileSystem = process.versions.electron
+    ? createRequire(import.meta.url)("original-fs") as typeof import("node:fs")
+    : { rmSync };
+  physicalFileSystem.rmSync(entryPath, { recursive: true, force: true });
 }
 
 function runNpmScript(cwd: string, script: string, environment: NodeJS.ProcessEnv, timeoutMs: number): Promise<void> {

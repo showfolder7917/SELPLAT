@@ -30,6 +30,7 @@ registerHooks({
 });
 
 const { FixedUnifiedTestRunner, cleanupRuntimeActivationStaging } = await import("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts");
+const fixedUnifiedTestRunnerSource = readFileSync(new URL("../../../electron/services/support/capabilities/testing/internal/fixed-unified-test.runner.ts", import.meta.url), "utf8");
 
 function writeAcceptancePlanCandidate(root) {
   const services = path.join(root, "apps", "ai-desktop", "electron", "services");
@@ -57,6 +58,11 @@ test("激活暂存清理将 app.asar 作为普通文件而非目录", () => {
   symlinkSync("app.asar", path.join(resources, "app.asar-link"));
   cleanupRuntimeActivationStaging(root);
   assert.equal(existsSync(root), false);
+});
+
+test("Electron 激活暂存清理使用实体文件系统绕过 ASAR 虚拟目录", () => {
+  assert.match(fixedUnifiedTestRunnerSource, /createRequire\(import\.meta\.url\)\("original-fs"\)/);
+  assert.match(fixedUnifiedTestRunnerSource, /physicalFileSystem\.rmSync\(entryPath, \{ recursive: true, force: true \}\)/);
 });
 
 test("独立验证一次收齐全部失败且不进入发布链", async () => {
