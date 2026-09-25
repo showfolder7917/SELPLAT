@@ -128,30 +128,30 @@ export function CodexConversationComposer(props: CodexConversationComposerProps)
       {/* 任务恢复区：只在后端找到上次可恢复任务时显示。 */}
       {showsRecoverableTask && (
         <div className="dispatch-recovery" role="status">
-          <span>发现上次未完成的任务</span>
+          <span>{fixedUiText(locale, "conversationRecoverTask")}</span>
           <div>
-            <button type="button" onClick={recoverInterruptedTask}>继续执行</button>
-            <button type="button" onClick={discardInterruptedTask}>放弃任务</button>
+            <button type="button" onClick={recoverInterruptedTask}>{fixedUiText(locale, "conversationContinue")}</button>
+            <button type="button" onClick={discardInterruptedTask}>{fixedUiText(locale, "conversationDiscardTask")}</button>
           </div>
         </div>
       )}
       {showsBackgroundTask && (
         <div className="dispatch-background" role="status">
-          任务正在后台执行，完成后将继续处理等待队列。
+          {fixedUiText(locale, "conversationBackgroundTask")}
         </div>
       )}
 
       {/* 等待队列：按发送顺序显示尚未开始的客户请求。 */}
       {queuedSends.length > 0 && (
-        <div className="dispatch-queue" aria-label="等待队列">
+        <div className="dispatch-queue" aria-label={fixedUiText(locale, "conversationQueue")}>
           {queuedSends.map((item, index) => (
             <div key={item.id} className="dispatch-queue-item">
               <span><b>{index + 1}</b>{item.displayText}</span>
               <div>
                 {dispatchState.activeTask?.status === "running" && (
-                  <button type="button" onClick={() => supplementRunningTask(item.id)}>补充到当前任务</button>
+                  <button type="button" onClick={() => supplementRunningTask(item.id)}>{fixedUiText(locale, "conversationSupplementTask")}</button>
                 )}
-                <button type="button" onClick={() => discardQueuedMessage(item.id)}>移除</button>
+                <button type="button" onClick={() => discardQueuedMessage(item.id)}>{fixedUiText(locale, "conversationRemove")}</button>
               </div>
             </div>
           ))}
@@ -190,11 +190,11 @@ export function CodexConversationComposer(props: CodexConversationComposerProps)
 
       {/* 底部工具栏：左侧显示运行模式和截图，右侧显示停止与发送。 */}
       <div className="selconversation-footer">
-        <div className="composer-tools" aria-label="输入工具栏">
+        <div className="composer-tools" aria-label={fixedUiText(locale, "conversationInputTools")}>
           <div className="composer-tool-group composer-context-tools">
             <span><ShieldCheckmark24Regular />{sandboxMode}</span>
             <span className="execution-mode-badge">{managedModeLabel(executionMode, locale)}</span>
-            {queuedSends.length > 0 && <span className="queued-send-count">待发送 {queuedSends.length}</span>}
+            {queuedSends.length > 0 && <span className="queued-send-count">{fixedUiText(locale, "conversationPendingCount").replace("{count}", String(queuedSends.length))}</span>}
           </div>
           <div className="composer-tool-group composer-automation-tools">
             <button
@@ -225,11 +225,11 @@ export function CodexConversationComposer(props: CodexConversationComposerProps)
         </div>
         <div className="selconversation-actions">
           {loading && (
-            <button type="button" className="stop-action" aria-label="停止当前任务" title="停止当前任务" onClick={controller.cancelActiveTurn}>
+            <button type="button" className="stop-action" aria-label={fixedUiText(locale, "conversationStop")} title={fixedUiText(locale, "conversationStop")} onClick={controller.cancelActiveTurn}>
               <Stop24Filled />
             </button>
           )}
-          <button type="button" className="selconversation-action" aria-label={loading ? "排队发送" : "发送"} title={loading ? "排队发送" : "发送"} onClick={() => submitConversation()}>
+          <button type="button" className="selconversation-action" aria-label={fixedUiText(locale, loading ? "conversationQueueSend" : "conversationSend")} title={fixedUiText(locale, loading ? "conversationQueueSend" : "conversationSend")} onClick={() => submitConversation()}>
             <Send24Filled />
           </button>
         </div>
