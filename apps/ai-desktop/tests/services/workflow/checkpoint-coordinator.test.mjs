@@ -517,6 +517,17 @@ test("协调器把同轮多异常收口为一个完成事实，重放稳定且�
   connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineTopic.sql", import.meta.url), "utf8"));
   connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineEvent.sql", import.meta.url), "utf8"));
   connection.exec(readFileSync(new URL("../../../db/sql/schema-AiDesktopTaskTimelineStream.sql", import.meta.url), "utf8"));
+  // 专题快照会读取同专题完成归档；夹具必须声明 DAO 的这项只读持久化依赖。
+  connection.exec(`CREATE TABLE AiDesktopEvolutionArchiveRecord (
+    recordId TEXT PRIMARY KEY,
+    topicId TEXT,
+    proposalId TEXT,
+    taskId TEXT,
+    sequenceNumber INTEGER NOT NULL,
+    eventType TEXT NOT NULL,
+    originalPayloadJson TEXT NOT NULL,
+    occurredAt TEXT NOT NULL
+  ) STRICT`);
   // 时间线任务卡会读取正式任务表的标题；夹具只建本用例实际消费的列。
   connection.exec("CREATE TABLE AiDesktopTaskExecution (taskId TEXT PRIMARY KEY, title TEXT NOT NULL)");
   connection.prepare("INSERT INTO AiDesktopTaskExecution (taskId, title) VALUES ($taskId, $title)")
