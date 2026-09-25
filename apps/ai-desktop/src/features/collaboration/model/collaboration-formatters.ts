@@ -53,12 +53,12 @@ export function collaborationExecutorNames(task: CollaborationTaskOutDto): strin
 export function collaborationPlanStatusLabel(status: CollaborationTaskOutDto["plans"][number]["status"], locale: LocaleValue): string { return text(locale, "collaborationPlanReady"); }
 export function collaborationExecutionStatusLabel(status: CollaborationTaskOutDto["executionRecords"][number]["status"], locale: LocaleValue): string { return text(locale, executionKeys[status]); }
 export function formatCollaborationTime(value: string | null, locale: LocaleValue): string {
-  if (!value) return locale === "ja" ? "進行中" : "进行中";
+  if (!value) return text(locale, "collaborationInProgress");
   const parsedTime = new Date(value); if (Number.isNaN(parsedTime.getTime())) return value;
   return new Intl.DateTimeFormat(locale === "ja" ? "ja-JP" : "zh-CN", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }).format(parsedTime);
 }
 export function formatCollaborationDuration(startedAt: string, completedAt: string | null, locale: LocaleValue): string {
-  if (!completedAt) return locale === "ja" ? "進行中" : "进行中";
+  if (!completedAt) return text(locale, "collaborationInProgress");
   const durationMs=Math.max(0,Date.parse(completedAt)-Date.parse(startedAt)); if (!Number.isFinite(durationMs)) return "—";
   const seconds=Math.floor(durationMs/1000), days=Math.floor(seconds/86400), hours=Math.floor(seconds%86400/3600), minutes=Math.floor(seconds%3600/60), remainder=seconds%60;
   const units=locale==="ja" ? [days?`${days}日`:"",hours?`${hours}時間`:"",minutes?`${minutes}分`:"",`${remainder}秒`] : [days?`${days}天`:"",hours?`${hours}小时`:"",minutes?`${minutes}分钟`:"",`${remainder}秒`];

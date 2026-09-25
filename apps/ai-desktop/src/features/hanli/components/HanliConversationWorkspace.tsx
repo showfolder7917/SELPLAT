@@ -97,7 +97,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
             {previews.length
               ? <div className="selconversation-message-attachments">
                 {/* 单张消息截图：使用稳定附件 ID 关联预览和替代文字。 */}
-                {previews.map((attachment) => <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}
+                {previews.map((attachment) => <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} locale={props.locale} />)}
               </div>
               : message.attachmentIds?.length
                 // 附件恢复状态：存在附件身份但暂时无法显示图片时给出原因。
