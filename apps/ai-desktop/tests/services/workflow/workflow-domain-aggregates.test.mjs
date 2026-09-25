@@ -247,6 +247,21 @@ test("当前恢复任务不覆盖同根最近已交付任务的候选证据来�
   assert.equal(aggregate.currentEffectiveTaskFor("task-original")?.taskId, "task-recovery");
 });
 
+test("轻量任务读取缺少事件集合时仍推进部分返回的验证状态", () => {
+  const returned = task("task-returned", "returned-to-nangong", {
+    evolutionProposalId: "proposal-1", flowEvents: undefined,
+  });
+  const executing = task("task-executing", "executing", {
+    evolutionProposalId: "proposal-1", flowEvents: undefined,
+  });
+  const view = new ProposalExecutionAggregate({
+    proposal: proposal(["task-returned", "task-executing"], "executing"),
+    collaborationTasks: [returned, executing],
+  }).view();
+  assert.equal(view.nextStatus, "verifying");
+  assert.deepEqual(view.deliveryTasks, []);
+});
+
 test("提案执行聚合把有效取消任务与普通阻塞分开输出", () => {
   const cancelled = task("task-cancelled", "cancelled", { evolutionProposalId: "proposal-1" });
   const view = new ProposalExecutionAggregate({ proposal: proposal(["task-cancelled"]), collaborationTasks: [cancelled] }).view();

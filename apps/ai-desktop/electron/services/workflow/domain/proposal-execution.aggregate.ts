@@ -210,10 +210,12 @@ export class ProposalExecutionAggregate {
   /** 判断任务是否已经形成可投影的候选、测试、发布或重启事实；不把纯执行状态误作交付。 */
   #hasDeliveryEvidence(task: CollaborationTaskAggregate): boolean {
     const snapshot = task.snapshot();
+    // 轻量读取模型和旧快照可能尚未保存事件集合；缺失只表示没有这类交付事实。
+    const flowEvents = Array.isArray(snapshot.flowEvents) ? snapshot.flowEvents : [];
     return task.isIntegrated()
       || typeof snapshot.integrationGeneration === "number"
       || snapshot.unifiedTest !== null && snapshot.unifiedTest !== undefined
-      || snapshot.flowEvents.some((event) => ["unified_test.passed", "release.published", "release.restart_healthy"].includes(event.type));
+      || flowEvents.some((event) => ["unified_test.passed", "release.published", "release.restart_healthy"].includes(event.type));
   }
 
   /** 查找指定稳定任务标识对应的任务聚合。 */
