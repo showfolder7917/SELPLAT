@@ -10,9 +10,9 @@ import { decideCurrentTopicOperation } from "../../../../workflow/domain/current
 
 type PlanResult = { summary: string; evidenceBaseSha: string; units: EvolutionDistributionUnitOutDto[] };
 type ParsedJsonObjects = { values: Record<string, unknown>[]; candidateCount: number; hasUnclosedObject: boolean };
-type DistributionPlanFormatKind = "unclosed-object" | "missing-object" | "invalid-object";
+type DistributionPlanFormatKind = "unclosed-object" | "missing-object" | "invalid-object" | "incomplete-plan";
 
-/** 仅表示模型输出格式不能恢复；计划字段不完整仍由既有严格校验拒绝。 */
+/** 仅表示模型输出格式不能恢复；计划字段不完整必须重试，不能绕过严格校验。 */
 class DistributionPlanFormatError extends Error {
   constructor(
     readonly responseLength: number,
@@ -20,14 +20,17 @@ class DistributionPlanFormatError extends Error {
     readonly candidateCount: number,
     /** 外层对象未闭合时，重试反馈必须指明格式类别，不能误称为闭合对象语法错误。 */
     readonly hasUnclosedObject: boolean,
+    /** JSON 已闭合且可解析，但未形成具备执行边界的完整计划。 */
+    readonly hasIncompletePlan = false,
   ) {
-    super("AI 返回的结构化判断不是有效 JSON。");
+    super(hasIncompletePlan ? "AI 返回的任务拆分计划缺少必要字段。" : "AI 返回的结构化判断不是有效 JSON。");
   }
 }
 
 /** 将无内容的解析事实归为稳定类别，供审计和失败恢复读取。 */
 function distributionPlanFormatKind(error: DistributionPlanFormatError): DistributionPlanFormatKind {
   if (error.hasUnclosedObject) return "unclosed-object";
+  if (error.hasIncompletePlan) return "incomplete-plan";
   return error.candidateCount === 0 ? "missing-object" : "invalid-object";
 }
 
@@ -35,6 +38,7 @@ function distributionPlanFormatKind(error: DistributionPlanFormatError): Distrib
 function distributionPlanFormatDetail(kind: DistributionPlanFormatKind, candidateCount: number): string {
   if (kind === "unclosed-object") return "检测到未闭合 JSON 对象";
   if (kind === "missing-object") return "未提取到完整 JSON 对象";
+  if (kind === "incomplete-plan") return "完整 JSON 缺少任务边界或独立验收字段";
   return `提取到 ${candidateCount} 个闭合对象但 JSON 语法无效`;
 }
 
@@ -263,7 +267,8 @@ function parseDistributionPlan(text: string): PlanResult {
   }
   // 外层计划未闭合时，内部任务对象可能单独配平；此时必须走格式重试而非误报拆分冲突。
   if (hasUnclosedObject) throw new DistributionPlanFormatError(text.length, candidateCount, true);
-  throw new Error("南宫婉没有形成包含文件边界和独立验收条件的有效任务拆分计划。");
+  // 闭合 JSON 也可能缺少任务边界、独立验收或调查交接；它仍是可由同一规划任务纠正的格式失败。
+  throw new DistributionPlanFormatError(text.length, candidateCount, false, true);
 }
 
 function normalizeDistributionPlan(value: Record<string, unknown>): PlanResult | null {
