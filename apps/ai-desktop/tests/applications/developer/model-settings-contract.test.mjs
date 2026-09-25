@@ -39,6 +39,7 @@ const migratedFixedUi = [
   read("src/applications/developer/model/createDeveloperWorkspaceRouterViewModel.ts"),
   read("src/applications/developer/model/useDeveloperSidebar.ts"),
   read("src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline.tsx"),
+  read("src/features/conversation/components/ConversationMessageImage.tsx"),
   read("src/features/conversation/model/useCodexWorkspace.ts"),
   read("src/features/conversation/components/CollaborationStatusChain.tsx"),
 ].join("\n");
@@ -91,9 +92,15 @@ test("迁移范围内的固定界面只通过统一资源解析，不保留局�
   assert.doesNotMatch(migratedFixedUi, /developerApplicationLabels|testDataResetCopy/);
   assert.doesNotMatch(migratedFixedUi, /locale === "ja"/);
   assert.match(migratedFixedUi, /conversationAssistantHeader/);
+  assert.match(migratedFixedUi, /conversationImagePreview/);
+  assert.match(migratedFixedUi, /conversationCodexUnavailable/);
+  assert.match(migratedFixedUi, /conversationWorkspaceMissing/);
+  assert.match(migratedFixedUi, /conversationDiscardFailed/);
   assert.match(collaborationFormatters, /fixedUiText/);
   assert.match(collaborationFormatters, /collaborationTaskStateLabel[\s\S]*taskKeys/);
+  assert.match(collaborationFormatters, /collaborationInProgress/);
   assert.doesNotMatch(collaborationFormatters, /CHINESE_|JAPANESE_|chineseLabels|japaneseLabels/);
+  assert.match(fixedUiText, /collaborationInProgress: "进行中"/);
   assert.match(fixedUiText, /testDataClearFailed: "清空测试数据失败。"/);
   assert.match(fixedUiText, /testDataRestartFailed: "无法启动应用重启。"/);
 });
