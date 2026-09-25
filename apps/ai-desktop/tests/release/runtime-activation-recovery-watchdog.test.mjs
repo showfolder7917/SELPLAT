@@ -4,12 +4,13 @@ import path from "node:path";
 import test from "node:test";
 
 import { controlledTestRoot } from "#test-paths";
-import { findDesktopAncestor, findSinglePreparingBatch, watchRuntimeActivationFailure } from "../../scripts/runtime-activation-recovery-watchdog.mjs";
+import { findDesktopAncestor } from "../../scripts/runtime-activation-host.mjs";
+import { findSinglePreparingBatch, watchRuntimeActivationFailure } from "../../scripts/runtime-activation-recovery-watchdog.mjs";
 
-test("观察器在未注入进程查询器时仍可读取默认依赖", async () => {
+test("观察器要求父验证器传入已解析的旧宿主 PID", async () => {
   const projectRoot = fixtureRoot();
   try {
-    assert.deepEqual(await watchRuntimeActivationFailure({ projectRoot }), { status: "not-scheduled" });
+    assert.deepEqual(await watchRuntimeActivationFailure({ projectRoot, replacePid: "81317", receipt: () => undefined }), { status: "not-scheduled" });
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });
   }
@@ -25,6 +26,7 @@ test("候选健康检查观察者只在唯一 preparing 批次归档失败后委
     const calls = [];
     const result = await watchRuntimeActivationFailure({
       projectRoot,
+      replacePid: "99",
       now: (() => { let time = 0; return () => time += 250; })(),
       sleep: async () => {
         const running = path.join(projectRoot, "OPTION", "temp", "ai-desktop", "执行日志", "运行中", "执行", releaseBatchId);
@@ -34,9 +36,6 @@ test("候选健康检查观察者只在唯一 preparing 批次归档失败后委
         rmSync(running, { recursive: true, force: true });
         archived = true;
       },
-      inspectProcess: (pid) => pid === process.ppid
-        ? { parentPid: 99, command: "node verifier" }
-        : { parentPid: 1, command: "/Applications/AI Desktop.app/Contents/MacOS/AI Desktop" },
       recover: (request) => calls.push(request),
       validate: (request) => {
         if (!archived) throw new Error("尚未归档失败事实");
@@ -51,12 +50,15 @@ test("候选健康检查观察者只在唯一 preparing 批次归档失败后委
   }
 });
 
-test("观察者拒绝多个 preparing 批次，且祖先链必须命中桌面宿主", () => {
+test("观察者拒绝多个 preparing 批次，父验证器只传递桌面宿主 PID", () => {
   const projectRoot = fixtureRoot();
   try {
     writePreparingBatch(projectRoot, "release-0.1.1-g1", "a".repeat(40));
     writePreparingBatch(projectRoot, "release-0.1.1-g2", "b".repeat(40));
     assert.equal(findSinglePreparingBatch(projectRoot), null);
+    assert.equal(findDesktopAncestor(5, (pid) => pid === 5
+      ? { parentPid: 99, command: "node verifier" }
+      : { parentPid: 1, command: "/Applications/AI Desktop.app/Contents/MacOS/AI Desktop" }), "99");
     assert.equal(findDesktopAncestor(5, () => ({ parentPid: 1, command: "node" })), null);
   } finally {
     rmSync(projectRoot, { recursive: true, force: true });

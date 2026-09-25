@@ -59,6 +59,7 @@ test("发布恢复由候选包外控制器校验身份后委托已提升包资�
   assert.doesNotMatch(recoveryController, /writeFileSync|renameSync|rmSync/);
   assert.match(recoveryWatchdog, /findSinglePreparingBatch/);
   assert.match(recoveryWatchdog, /requestRuntimeActivationRecovery/);
+  assert.match(recoveryWatchdog, /--replace-pid/);
 });
 
 test("韩立交互式验收超时先返回明确事实，再回收隔离 harness", () => {
@@ -178,6 +179,9 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /scheduleRuntimeActivationRecoveryWatchdog\(\)/);
   assert.match(macVerifier, /AI_DESKTOP_PACKAGE_OUTPUT_ROOT/);
   assert.match(macVerifier, /detached: true/);
+  assert.match(macVerifier, /findDesktopAncestor\(process\.ppid\)/);
+  assert.match(macVerifier, /--replace-pid=\$\{replacePid\}/);
+  assert.match(macVerifier, /发布激活恢复观察/);
   assert.match(packageContentVerifier, /for \(const promptResource of \["manifest\.json", "prompts\.json"\]\)/);
   assert.match(packageContentVerifier, /Packaged prompt resource is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration manifest is missing/);
