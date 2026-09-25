@@ -29,6 +29,15 @@ const migratedFixedUi = [
   read("src/features/settings/model/settings-formatters.ts"),
   read("src/features/settings/model/useDesktopSettings.ts"),
   read("src/features/settings/components/SettingsFloatingPanel.tsx"),
+  read("src/features/settings/model/useDesktopDiagnostics.ts"),
+  read("src/applications/developer/explorer/CollaborationTaskNavigation.tsx"),
+  read("src/applications/developer/explorer/OperatingModeSwitch.tsx"),
+  read("src/applications/developer/explorer/SingleConversationTaskSummary.tsx"),
+  read("src/applications/developer/explorer/TaskExplorerFeature.tsx"),
+  read("src/applications/developer/explorer/WorkspaceExplorerFeature.tsx"),
+  read("src/applications/developer/layout/DeveloperStatusBar.tsx"),
+  read("src/applications/developer/model/createDeveloperWorkspaceRouterViewModel.ts"),
+  read("src/applications/developer/model/useDeveloperSidebar.ts"),
 ].join("\n");
 const service = read("electron/services/support/platform/codex/codex.facade.ts");
 const collaboration = read("electron/services/support/capabilities/conversation/internal/collaboration-codex-sessions.ts");
@@ -77,6 +86,8 @@ test("迁移范围内的固定界面只通过统一资源解析，不保留局�
   assert.match(fixedUiText, /resolveFixedUiText/);
   assert.doesNotMatch(migratedFixedUi, /developerApplicationLabels|testDataResetCopy/);
   assert.doesNotMatch(migratedFixedUi, /locale === "ja"/);
+  assert.match(fixedUiText, /testDataClearFailed: "清空测试数据失败。"/);
+  assert.match(fixedUiText, /testDataRestartFailed: "无法启动应用重启。"/);
 });
 
 test("Codex 桌面语料入库必须由显式开关控制并默认关闭", () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { AiMemoryDatabaseStatusOutDto, AuditLogInfoOutDto, LocaleValue, TempDirectoryInfoOutDto, TestDataResetResultOutDto, TrustedCommandInfoOutDto } from "../../../../contracts/system/desktop/index";
+import { fixedUiText } from "../../../../contracts/foundation/index";
 import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalSystemDesktopApi } from "../../../foundation/desktop-api";
 
@@ -52,7 +53,7 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
       setTestDataResetResult(await desktop.clearTestData());
       setTestDataResetting(false);
     } catch (error) {
-      setTestDataResetError(readableDesktopError(error, locale === "ja" ? "テストデータを消去できませんでした。" : "清空测试数据失败。"));
+      setTestDataResetError(readableDesktopError(error, fixedUiText(locale, "testDataClearFailed")));
       setTestDataResetting(false);
     }
   };
@@ -64,7 +65,7 @@ export function useDesktopDiagnostics(settingsOpen: boolean, locale: LocaleValue
       if (!desktop) throw new Error("桌面接口不可用。");
       await desktop.confirmTestDataResetRestart();
     } catch (error) {
-      setTestDataResetError(readableDesktopError(error, locale === "ja" ? "再起動を開始できませんでした。" : "无法启动应用重启。"));
+      setTestDataResetError(readableDesktopError(error, fixedUiText(locale, "testDataRestartFailed")));
       setTestDataResetting(false);
     }
   };

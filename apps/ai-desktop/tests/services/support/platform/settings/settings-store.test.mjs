@@ -45,6 +45,8 @@ test("固定界面资源提供三语、中文回退和受控缺键诊断", () =>
   assert.equal(fixedUiText("zh-CN", "screenshotResizeAnnotation"), "调整红框-{handle}");
   assert.equal(fixedUiText("zh-CN", "modelDefaultLabel"), "默认模型");
   assert.equal(fixedUiText("zh-CN", "modelDefault"), "Codex 默认");
+  assert.equal(fixedUiText("ja", "testDataClearFailed"), "テストデータを消去できませんでした。");
+  assert.equal(fixedUiText("en", "testDataRestartFailed"), "Could not start the app restart.");
   assert.equal(fixedUiText("fr", "workspaceFilePreview"), "文件预览");
   assert.equal(fixedUiText("en", "retiredFixedKey"), "[缺少固定界面文案: retiredFixedKey]");
   assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案", developerSettings: "连接与执行设置" }, en: {} }, "en", "developerSettings"), "连接与执行设置");
@@ -60,10 +62,14 @@ test("语言设置持久化三语并在读取失败时保留原文件", async ()
     const settings = new SettingsStore(filePath);
     for (const locale of ["zh-CN", "ja", "en"]) {
       assert.equal(settings.update({ locale }).locale, locale);
-      assert.equal(new SettingsStore(filePath).read().locale, locale);
+      const restartedRenderer = new SettingsStore(filePath).readForRenderer();
+      assert.equal(restartedRenderer.source, "stored");
+      assert.equal(restartedRenderer.settings.locale, locale);
     }
     writeFileSync(filePath, "{", "utf8");
-    assert.equal(new SettingsStore(filePath).readForRenderer().source, "recovered");
+    const recoveredRenderer = new SettingsStore(filePath).readForRenderer();
+    assert.equal(recoveredRenderer.source, "recovered");
+    assert.equal(recoveredRenderer.settings.locale, "ja");
     assert.throws(() => new SettingsStore(filePath).update({ locale: "ja" }));
     assert.equal(readFileSync(filePath, "utf8"), "{");
   } finally {
