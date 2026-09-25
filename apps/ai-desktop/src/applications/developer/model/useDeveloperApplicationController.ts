@@ -75,8 +75,8 @@ export function useDeveloperApplicationController() {
   // 协作、人物演化和两个人物会话分别持有自己的业务状态。
   const collaboration = useCollaborationWorkspace();
   const evolution = useEvolutionRuntime();
-  const hanli = usePersonaConversation("han-li");
-  const nangong = usePersonaConversation("nangong-wan");
+  const hanli = usePersonaConversation("han-li", settings.locale);
+  const nangong = usePersonaConversation("nangong-wan", settings.locale);
 
   // 主 Codex 控制器负责登录、审批、任务执行和审计刷新。
   const codex = useCodexWorkspace({

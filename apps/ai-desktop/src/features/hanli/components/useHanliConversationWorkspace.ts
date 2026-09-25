@@ -10,6 +10,7 @@ import { useMemo, type ClipboardEvent } from "react";
 
 // 截图附件类型（ComposerAttachment）表示一张已经保存、可以发送和预览的图片。
 import type { ComposerAttachment } from "../../conversation";
+import { fixedUiText } from "../../../../contracts/foundation";
 // 实时消息合并方法（mergeRealtimeConversationTimeline）把数据库消息与发送中的临时消息合并为一条时间线。
 // 临时消息顺序方法（nextRealtimeConversationSequence）按真实可见顺序号把新消息放到末尾。
 // 人物消息分类方法（projectPersonaConversation）把韩立会话拆成直接对话和内部研讨两类消息。
@@ -127,7 +128,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
       // 没有桌面 API 或后端未返回会话都属于真实发送失败，不能显示假成功。
       if (!next) {
         // 抛出业务可读错误，交给下面的统一失败分支处理。
-        throw new Error("韩立会话服务未返回结果。");
+        throw new Error(fixedUiText(locale, "hanliConversationNoResult"));
       }
 
       // 本轮包含截图时，把内存中的 dataUrl 继续绑定到已经持久化的用户消息。
@@ -145,7 +146,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
       // 保留用户刚才发送的内容，只把临时消息状态改成失败以便用户识别。
       setPending((current) => current ? { ...current, failed: true } : null);
       // 去掉 Electron 技术前缀后，把错误同步给页面错误区。
-      onError(readableDesktopError(sendError, "发送给韩立失败。"));
+      onError(readableDesktopError(sendError, fixedUiText(locale, "hanliSendFailed")));
     // 发送结束处理保证成功和失败都能解除发送锁。
     } finally {
       // 解除发送锁，让客户可以继续下一轮对话或重试。
@@ -164,7 +165,7 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
     if (!canRetryInquiry || !activity || !workspaces) return;
     const original = conversation.messages.find((message) => message.messageId === activity.requestId && message.speakerType === "user");
     if (!original) {
-      onError("找不到原始问题，无法恢复本次排查。");
+      onError(fixedUiText(locale, "hanliInquiryOriginalMissing"));
       return;
     }
     setBusy(true);
@@ -178,10 +179,10 @@ export function useHanliConversationWorkspace(props: HanliConversationWorkspaceP
         workspaceState: workspaces,
         locale,
       });
-      if (!next) throw new Error("排查恢复服务没有返回结果。");
+      if (!next) throw new Error(fixedUiText(locale, "hanliInquiryNoResult"));
       await runtime.acceptCustomerDisplayReceipt(next);
     } catch (error) {
-      onError(readableDesktopError(error, "恢复排查失败。"));
+      onError(readableDesktopError(error, fixedUiText(locale, "hanliInquiryRetryFailed")));
     } finally {
       setBusy(false);
     }
