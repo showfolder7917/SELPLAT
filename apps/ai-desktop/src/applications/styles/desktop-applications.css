@@ -94,6 +94,29 @@ button { color: inherit; }
 .dev-settings-control .dev-settings-scroll-stack { display: grid; min-height: calc(100% + 1px); align-content: start; padding: 14px 18px 32px; box-sizing: border-box; }
 /* 当前设置只允许调宽；SELUI 将右侧热区定位在标题栏下缘，避免覆盖关闭按钮。 */
 .dev-settings-control > .dev-settings .selfloating-resize-bottom, .dev-settings-control > .dev-settings .selfloating-resize-corner { display: none; }
+/* 窄窗口打开设置时为会话区保留独立列，不能让固定浮层覆盖输入和主要操作。 */
+@media (max-width: 720px) {
+  .developer-shell:has(.dev-settings-control > .activity-settings[aria-expanded="true"]) { grid-template-columns: 52px 0 minmax(0, 1fr); }
+  .developer-shell:has(.dev-settings-control > .activity-settings[aria-expanded="true"]) .dev-explorer { visibility: hidden; overflow: hidden; pointer-events: none; }
+  .developer-shell:has(.dev-settings-control > .activity-settings[aria-expanded="true"]) .dev-main { width: calc(100% - 308px); margin-left: 308px; padding-bottom: 2px; }
+  .developer-shell:has(.dev-settings-control > .activity-settings[aria-expanded="true"]) .dev-settings-control > .dev-settings {
+    bottom: 1px;
+    left: 58px !important;
+    min-width: 0;
+    /* SELUI 会写入默认 390px 的行内宽度；300px 能完整容纳双操作按钮，并给会话区留下独立列。 */
+    width: 300px !important;
+    max-width: calc(100vw - 64px);
+    height: min(520px, calc(100vh - 90px));
+  }
+  /* 窄窗口中操作按钮改为独占一行，避免三语标签被双列压缩截断。 */
+  .developer-shell:has(.dev-settings-control > .activity-settings[aria-expanded="true"]) .dev-settings-control .temp-card > div:not(.test-data-reset-result) { grid-template-columns: minmax(0, 1fr); }
+}
+/* 主 Codex 会话与人物会话一致：时间线和输入区各占独立行，滚动区不能延伸到输入框下方。 */
+.codex-conversation-workspace { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+.codex-conversation-workspace > .selconversation-timeline { min-width: 0; min-height: 0; }
+.codex-conversation-workspace > .selconversation-root > .selconversation-composer { position: static; min-width: 0; margin: 0 max(28px, 7vw) 24px; }
+@media (max-width: 1180px) { .codex-conversation-workspace > .selconversation-root > .selconversation-composer { margin-right: 28px; margin-left: 28px; } }
+@media (max-width: 720px) { .codex-conversation-workspace > .selconversation-root > .selconversation-composer { margin-right: 20px; margin-left: 20px; } }
 /* 运行路径可能很长；所有账号项必须收敛在面板网格内，避免按钮中心和文字被推到可视区之外。 */
 .dev-account { min-width: 0; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; padding: 12px; overflow: visible; box-sizing: border-box; border: 1px solid var(--sel-theme-line); border-radius: 8px; background: var(--sel-theme-workbench-input); }.dev-account > * { min-width: 0; max-width: 100%; }.dev-account > span { color: var(--sel-theme-workbench-text-subtle); font-size: var(--sel-theme-font-size-micro); letter-spacing: .08em; text-transform: uppercase; }.dev-account strong { color: var(--sel-theme-workbench-text); font-size: var(--sel-theme-font-size-caption); overflow-wrap: anywhere; }.dev-account small { display: block; color: var(--sel-theme-workbench-text-subtle); overflow-wrap: anywhere; word-break: break-word; }.dev-account em { color: var(--sel-theme-workbench-text-muted); font-size: var(--sel-theme-font-size-micro); font-style: normal; overflow-wrap: anywhere; }.chatgpt-login-action, .dev-account button { min-height: var(--sel-theme-action-height); display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--sel-theme-action-padding-inline); border: 1px solid var(--sel-theme-control-line); border-radius: var(--sel-theme-radius-control); color: var(--sel-theme-workbench-text); background: var(--sel-theme-control-surface); font-size: var(--sel-theme-font-size-body); font-weight: var(--sel-theme-font-weight-regular); line-height: var(--sel-theme-line-height-body); cursor: pointer; }.dev-account button { width: 100%; overflow: hidden; }.chatgpt-login-action > span, .dev-account button > span { display: inline-block; max-width: 100%; color: inherit; font: inherit; line-height: inherit; white-space: nowrap; }.chatgpt-login-action.primary, .dev-account button.primary { border-color: var(--sel-theme-workbench-accent-line); color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); font-weight: var(--sel-theme-font-weight-semibold); }.chatgpt-login-action:hover, .chatgpt-login-action:focus-visible, .dev-account button:hover, .dev-account button:focus-visible { border-color: var(--sel-theme-workbench-accent-line); outline: 0; box-shadow: 0 0 0 1px var(--sel-theme-workbench-accent-line); }.chatgpt-login-action.primary:hover, .chatgpt-login-action.primary:focus-visible, .dev-account button.primary:hover, .dev-account button.primary:focus-visible { color: var(--sel-theme-text-on-accent); background: var(--sel-theme-workbench-accent); }
 .model-settings-card { display: grid; gap: 10px; margin-top: 14px; padding: 12px; border: 1px solid var(--sel-theme-line); border-radius: 10px; background: var(--sel-theme-workbench-input); }

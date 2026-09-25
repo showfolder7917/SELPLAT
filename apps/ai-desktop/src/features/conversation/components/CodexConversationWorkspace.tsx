@@ -17,22 +17,24 @@ export function CodexConversationWorkspace(props: CodexConversationWorkspaceProp
 
   return (
     <>
-      {/* 消息时间线显示客户与 Codex 的完整交流。 */}
-      <CodexConversationTimeline
-        locale={props.locale}
-        controller={props.controller}
-        collaboration={props.collaboration}
-        text={viewModel.text}
-      />
+      <div className="codex-conversation-workspace">
+        {/* 消息时间线显示客户与 Codex 的完整交流。 */}
+        <CodexConversationTimeline
+          locale={props.locale}
+          controller={props.controller}
+          collaboration={props.collaboration}
+          text={viewModel.text}
+        />
 
-      {/* 会话编辑区显示队列、附件、输入框和截图工具。 */}
-      <CodexConversationComposer
-        locale={props.locale}
-        sandboxMode={props.sandboxMode}
-        controller={props.controller}
-        screenshot={props.screenshot}
-        text={viewModel.text}
-      />
+        {/* 会话编辑区显示队列、附件、输入框和截图工具。 */}
+        <CodexConversationComposer
+          locale={props.locale}
+          sandboxMode={props.sandboxMode}
+          controller={props.controller}
+          screenshot={props.screenshot}
+          text={viewModel.text}
+        />
+      </div>
 
       {/* 纯对话框只显示 ViewModel 已经准备好的阻断信息。 */}
       <AutomaticTestDialog viewModel={viewModel.automaticTestDialog} />
