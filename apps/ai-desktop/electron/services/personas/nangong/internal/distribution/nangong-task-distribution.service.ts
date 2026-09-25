@@ -11,6 +11,7 @@ import { decideCurrentTopicOperation } from "../../../../workflow/domain/current
 type PlanResult = { summary: string; evidenceBaseSha: string; units: EvolutionDistributionUnitOutDto[] };
 type ParsedJsonObjects = { values: Record<string, unknown>[]; candidateCount: number; hasUnclosedObject: boolean };
 type DistributionPlanFormatKind = "unclosed-object" | "missing-object" | "invalid-object" | "incomplete-plan";
+type NormalizedDistributionPlan = { plan: PlanResult | null; missingRequiredFields: string[] };
 
 /** 仅表示模型输出格式不能恢复；计划字段不完整必须重试，不能绕过严格校验。 */
 class DistributionPlanFormatError extends Error {
@@ -22,6 +23,8 @@ class DistributionPlanFormatError extends Error {
     readonly hasUnclosedObject: boolean,
     /** JSON 已闭合且可解析，但未形成具备执行边界的完整计划。 */
     readonly hasIncompletePlan = false,
+    /** 仅记录稳定字段名，供同一规划任务纠正；不得包含模型字段值。 */
+    readonly missingRequiredFields: string[] = [],
   ) {
     super(hasIncompletePlan ? "AI 返回的任务拆分计划缺少必要字段。" : "AI 返回的结构化判断不是有效 JSON。");
   }
@@ -35,10 +38,12 @@ function distributionPlanFormatKind(error: DistributionPlanFormatError): Distrib
 }
 
 /** 同一类别同时驱动审计与纠正提示，避免两处条件分支对同一失败给出不同结论。 */
-function distributionPlanFormatDetail(kind: DistributionPlanFormatKind, candidateCount: number): string {
+function distributionPlanFormatDetail(kind: DistributionPlanFormatKind, candidateCount: number, missingRequiredFields: string[]): string {
   if (kind === "unclosed-object") return "检测到未闭合 JSON 对象";
   if (kind === "missing-object") return "未提取到完整 JSON 对象";
-  if (kind === "incomplete-plan") return "完整 JSON 缺少任务边界或独立验收字段";
+  if (kind === "incomplete-plan") return missingRequiredFields.length
+    ? `完整 JSON 缺少或无效字段：${missingRequiredFields.join("、")}`
+    : "完整 JSON 缺少任务边界或独立验收字段";
   return `提取到 ${candidateCount} 个闭合对象但 JSON 语法无效`;
 }
 
@@ -100,7 +105,9 @@ export class NangongTaskDistributionService {
     if (!proposal.distributionPlan || proposal.distributionPlan.validation.decision !== "passed") {
       let feedback = proposal.distributionPlan?.validation.findings.join("；") || "";
       let feedbackKind: "conflict" | "format" = "conflict";
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
+      let formatCorrections = 0;
+      let conflictCorrections = 0;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
         const planningTaskId = `proposal:${proposal.proposalId}`;
         const planningStartedAt = new Date().toISOString();
         this.#publishPlanning(proposal, topic, attempt, "current", "正在生成执行计划并分配执行人", feedback, planningStartedAt);
@@ -125,7 +132,7 @@ export class NangongTaskDistributionService {
           );
           planned = parseDistributionPlan(response);
         } catch (error) {
-          if (error instanceof DistributionPlanFormatError && attempt < 2) {
+          if (error instanceof DistributionPlanFormatError && formatCorrections < 1 && attempt < 3) {
             const formatKind = distributionPlanFormatKind(error);
             // 仅把安全格式诊断反馈给同一规划任务，禁止把模型原文或工作区内容写入审计。
             this.options.recordEvent("nangong.evolution.distribution_format_retry", {
@@ -134,9 +141,10 @@ export class NangongTaskDistributionService {
               hasUnclosedObject: error.hasUnclosedObject, formatKind, reason: error.message,
             });
             // 仅把无内容的格式类别反馈给下一次规划，帮助模型纠正而不泄露原始响应。
-            const formatDetail = distributionPlanFormatDetail(formatKind, error.candidateCount);
+            const formatDetail = distributionPlanFormatDetail(formatKind, error.candidateCount, error.missingRequiredFields);
             feedback = `上一轮${formatDetail}（长度 ${error.responseLength}）。只返回一个完整 JSON 对象，不要附加说明、Markdown、围栏或元数据。`;
             feedbackKind = "format";
+            formatCorrections += 1;
             continue;
           }
           if (error instanceof DistributionPlanFormatError) {
@@ -159,8 +167,10 @@ export class NangongTaskDistributionService {
         this.options.recordEvent("nangong.evolution.distribution_planned", { proposalId, attempt, unitCount: plan.units.length, evidenceBaseSha: plan.evidenceBaseSha, expectedWriteFiles: plan.units.flatMap((unit) => unit.expectedWriteFiles), validationDecision: validation.decision, validationFindings: validation.findings });
         this.options.recordEvent("nangong.distribution_validation.completed", { proposalId, attempt, decision: validation.decision, reason: validation.reason, findings: validation.findings });
         if (validation.decision === "passed") break;
+        if (conflictCorrections >= 1 || attempt >= 3) break;
         feedback = [validation.reason, ...validation.findings].filter(Boolean).join("；");
         feedbackKind = "conflict";
+        conflictCorrections += 1;
       }
     }
 
@@ -261,24 +271,37 @@ export class NangongTaskDistributionService {
 
 function parseDistributionPlan(text: string): PlanResult {
   const { values, candidateCount, hasUnclosedObject } = parseJsonObjects(text);
+  const missingRequiredFields = new Set<string>();
   for (const value of values) {
-    const plan = normalizeDistributionPlan(value);
-    if (plan) return plan;
+    const normalized = normalizeDistributionPlan(value);
+    if (normalized.plan) return normalized.plan;
+    if (looksLikeDistributionPlan(value)) normalized.missingRequiredFields.forEach((field) => missingRequiredFields.add(field));
   }
   // 外层计划未闭合时，内部任务对象可能单独配平；此时必须走格式重试而非误报拆分冲突。
   if (hasUnclosedObject) throw new DistributionPlanFormatError(text.length, candidateCount, true);
   // 闭合 JSON 也可能缺少任务边界、独立验收或调查交接；它仍是可由同一规划任务纠正的格式失败。
-  throw new DistributionPlanFormatError(text.length, candidateCount, false, true);
+  throw new DistributionPlanFormatError(text.length, candidateCount, false, true, [...missingRequiredFields].slice(0, 16));
 }
 
-function normalizeDistributionPlan(value: Record<string, unknown>): PlanResult | null {
+function looksLikeDistributionPlan(value: Record<string, unknown>): boolean {
+  return "summary" in value || "evidenceBaseSha" in value || "units" in value;
+}
+
+function normalizeDistributionPlan(value: Record<string, unknown>): NormalizedDistributionPlan {
+  const missingRequiredFields = new Set<string>();
   const summary = typeof value.summary === "string" ? value.summary.trim().slice(0, 4_000) : "";
+  if (!summary) missingRequiredFields.add("summary");
   const evidenceBaseSha = typeof value.evidenceBaseSha === "string" && /^[0-9a-f]{40}$/u.test(value.evidenceBaseSha.trim())
     ? value.evidenceBaseSha.trim()
     : "";
+  if (!evidenceBaseSha) missingRequiredFields.add("evidenceBaseSha");
   const rawUnits = Array.isArray(value.units) ? value.units : [];
+  if (!rawUnits.length) missingRequiredFields.add("units");
   const units = rawUnits.flatMap((raw): EvolutionDistributionUnitOutDto[] => {
-    if (!raw || typeof raw !== "object") return [];
+    if (!raw || typeof raw !== "object") {
+      missingRequiredFields.add("units[]");
+      return [];
+    }
     const item = raw as Record<string, unknown>;
     const title = typeof item.title === "string" ? item.title.trim().slice(0, 200) : "";
     const scope = typeof item.scope === "string" ? item.scope.trim().slice(0, 8_000) : "";
@@ -301,11 +324,20 @@ function normalizeDistributionPlan(value: Record<string, unknown>): PlanResult |
       && investigation.callChain.length > 0
       && investigation.authoritativeStates.length > 0
       && investigation.verifiedFacts.length > 0;
+    if (!title) missingRequiredFields.add("units[].title");
+    if (!scope) missingRequiredFields.add("units[].scope");
+    if (!acceptanceCriteria.length) missingRequiredFields.add("units[].acceptanceCriteria");
+    if (!expectedWriteFiles.length) missingRequiredFields.add("units[].expectedWriteFiles");
+    if (!independentReason) missingRequiredFields.add("units[].independentReason");
+    if (!investigation.entryPoints.length) missingRequiredFields.add("units[].investigation.entryPoints");
+    if (!investigation.callChain.length) missingRequiredFields.add("units[].investigation.callChain");
+    if (!investigation.authoritativeStates.length) missingRequiredFields.add("units[].investigation.authoritativeStates");
+    if (!investigation.verifiedFacts.length) missingRequiredFields.add("units[].investigation.verifiedFacts");
     return title && scope && acceptanceCriteria.length && expectedWriteFiles.length && independentReason && hasReusableEvidence
       ? [{ title, scope, acceptanceCriteria, expectedWriteFiles, investigation, taskRuleIds, independentReason }]
       : [];
   });
-  return summary && evidenceBaseSha && units.length ? { summary, evidenceBaseSha, units } : null;
+  return { plan: summary && evidenceBaseSha && units.length ? { summary, evidenceBaseSha, units } : null, missingRequiredFields: [...missingRequiredFields] };
 }
 
 function normalizeDraftList(value: unknown): string[] {
