@@ -33,6 +33,7 @@ let interactionDesktopSettings = {
   codexAppCorpusIngestionEnabled: false,
 };
 let interactionSettingsReadSource = "stored";
+let interactionSettingsReadFailure = null;
 let interactionSettingsUpdateFailure = null;
 let interactionSettingsUpdateDelayMs = 0;
 let interactionScreenshotWindow = null;
@@ -47,6 +48,7 @@ function publishInteractionSettingsChanged() {
 ipcMain.handle("interaction:settings-get", () => ({
   settings: structuredClone(interactionDesktopSettings),
   source: interactionSettingsReadSource,
+  recoveryError: interactionSettingsReadSource === "recovered" ? interactionSettingsReadFailure : null,
 }));
 ipcMain.handle("interaction:settings-update", async (_event, settings) => {
   if (interactionSettingsUpdateDelayMs) await new Promise((resolve) => setTimeout(resolve, interactionSettingsUpdateDelayMs));
@@ -57,6 +59,9 @@ ipcMain.handle("interaction:settings-update", async (_event, settings) => {
 });
 ipcMain.handle("interaction:settings-read-source", (_event, source) => {
   interactionSettingsReadSource = source === "recovered" ? "recovered" : "stored";
+});
+ipcMain.handle("interaction:settings-read-failure", (_event, message) => {
+  interactionSettingsReadFailure = message || null;
 });
 ipcMain.handle("interaction:settings-update-failure", (_event, message) => {
   interactionSettingsUpdateFailure = message || null;

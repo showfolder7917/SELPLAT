@@ -4,4 +4,6 @@ import type { DesktopSettingsOutDto } from "./settings.out.dto.js";
 export interface DesktopSettingsReadOutDto {
   settings: DesktopSettingsOutDto;
   source: "stored" | "default" | "recovered";
+  /** 恢复默认设置时保留的原始读取或解析错误；固定界面只在技术详情中展示。 */
+  recoveryError: string | null;
 }

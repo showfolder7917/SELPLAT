@@ -68,7 +68,7 @@ export function useScreenshotApplicationController() {
       .then((result) => {
         if (disposed || receivedSettingsChange) return;
         if (result.source === "recovered") {
-          setError({ kind: "settings", technicalDetail: "Saved language settings could not be read." });
+          setError({ kind: "settings", technicalDetail: result.recoveryError ?? "Saved language settings could not be read." });
           return;
         }
         setLocale(result.settings.locale);

@@ -31,6 +31,7 @@ test("设置读取区分默认值和恢复失败，失败后不会用默认配�
   assert.match(store, /readForRenderer\(\): DesktopSettingsReadOutDto/);
   assert.match(store, /source: "default"/);
   assert.match(store, /source: "recovered"/);
+  assert.match(store, /recoveryError: caught instanceof Error \? caught\.message : String\(caught\)/);
   assert.match(store, /if \(existsSync\(this\.#filePath\)\) this\.#readStored\(\)/);
   assert.match(store, /patch\.locale === "ja" \|\| patch\.locale === "zh-CN" \|\| patch\.locale === "en"/);
 });
@@ -70,6 +71,13 @@ test("语言设置持久化三语并在读取失败时保留原文件", async ()
     const recoveredRenderer = new SettingsStore(filePath).readForRenderer();
     assert.equal(recoveredRenderer.source, "recovered");
     assert.equal(recoveredRenderer.settings.locale, "ja");
+    let expectedRecoveryError = "";
+    try {
+      JSON.parse("{");
+    } catch (caught) {
+      expectedRecoveryError = caught instanceof Error ? caught.message : String(caught);
+    }
+    assert.equal(recoveredRenderer.recoveryError, expectedRecoveryError);
     assert.throws(() => new SettingsStore(filePath).update({ locale: "ja" }));
     assert.equal(readFileSync(filePath, "utf8"), "{");
   } finally {
