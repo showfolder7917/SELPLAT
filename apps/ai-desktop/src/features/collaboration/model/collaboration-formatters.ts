@@ -61,6 +61,6 @@ export function formatCollaborationDuration(startedAt: string, completedAt: stri
   if (!completedAt) return text(locale, "collaborationInProgress");
   const durationMs=Math.max(0,Date.parse(completedAt)-Date.parse(startedAt)); if (!Number.isFinite(durationMs)) return "—";
   const seconds=Math.floor(durationMs/1000), days=Math.floor(seconds/86400), hours=Math.floor(seconds%86400/3600), minutes=Math.floor(seconds%3600/60), remainder=seconds%60;
-  const units=locale==="ja" ? [days?`${days}日`:"",hours?`${hours}時間`:"",minutes?`${minutes}分`:"",`${remainder}秒`] : [days?`${days}天`:"",hours?`${hours}小时`:"",minutes?`${minutes}分钟`:"",`${remainder}秒`];
-  return units.filter(Boolean).join(" ");
+  const unit = (key: FixedUiTextKey, value: number) => text(locale, key).replace("{value}", String(value));
+  return [days ? unit("collaborationDurationDay", days) : "", hours ? unit("collaborationDurationHour", hours) : "", minutes ? unit("collaborationDurationMinute", minutes) : "", unit("collaborationDurationSecond", remainder)].filter(Boolean).join(" ");
 }

@@ -20,6 +20,7 @@ import {
 // 临时消息顺序方法（nextRealtimeConversationSequence）按真实可见顺序号把新消息放到末尾。
 // 人物消息分类方法（projectPersonaConversation）把直接问答与内部研讨消息分开。
 import { mergeRealtimeConversationTimeline, nextRealtimeConversationSequence, projectPersonaConversation } from "../../conversation";
+import { fixedUiText } from "../../../../contracts/foundation";
 // 会话末尾跟随方法（usePersonaConversationTailFollow）让消息区在新增内容后跟随到最新位置。
 import { usePersonaConversationTailFollow } from "../../conversation";
 // 协同桌面入口让人物页面沿同名 Contract、preload 和 IPC 找到南宫 Facade。
@@ -152,7 +153,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     // 异常处理分支（catch）把技术问题转换成客户可以理解的提示。
     } catch (error) {
       // 页面错误区统一展示演化操作失败原因。
-      onError(readableDesktopError(error, "专项演化操作失败。"));
+      onError(readableDesktopError(error, fixedUiText(locale, "nangongEvolutionOperationFailed")));
     }
   }
 
@@ -201,7 +202,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
         },
       );
       // 未返回会话时按真实失败处理。
-      if (!next) throw new Error("南宫婉会话服务未返回结果。");
+      if (!next) throw new Error(fixedUiText(locale, "nangongConversationNoResult"));
       // 已保存客户消息（persisted）定位刚才写入数据库的本轮消息。
       const persisted = next.messages.find((item) => item.messageId === clientMessageId);
       // 有持久消息和截图时继续保存内存预览映射。
@@ -218,7 +219,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
       // 失败消息仍留在时间线中供客户识别。
       setOutgoingMessage((current) => current ? { ...current, failed: true } : null);
       // 页面错误区展示发送失败原因。
-      onError(readableDesktopError(error, "发送给南宫婉失败。"));
+      onError(readableDesktopError(error, fixedUiText(locale, "nangongSendFailed")));
     // 发送结束处理保证成功和失败都解除发送锁。
     } finally {
       // 允许客户继续发送或重试。
@@ -249,7 +250,7 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
     // 任一必填业务字段缺失时明确提示客户补全。
     if (!title || !goal || !scope.length || !evidence.length || !acceptanceCriteria.length) {
       // 错误区说明建立课题所缺少的完整性条件。
-      onError("标题、目标、影响范围、事实证据和验收条件必须完整填写。");
+      onError(fixedUiText(locale, "nangongTopicRequiredFields"));
       // 不向后端发送不完整课题。
       return;
     }
@@ -280,12 +281,12 @@ export function useNangongConversationWorkspace(props: NangongConversationWorksp
         // 把列表字段转换成客户容易继续编辑的逗号分隔文字。
         setTopicDraft({ title: draft.title, goal: draft.goal, scope: draft.scope.join("，"), evidence: draft.evidence.join("，"), acceptanceCriteria: draft.acceptanceCriteria.join("，") });
         // 告诉客户当前表单已经根据对话完成填充。
-        setTopicDraftFeedback("已根据当前对话填充草稿");
+        setTopicDraftFeedback(fixedUiText(locale, "nangongTopicDraftCreated"));
       }
     // 草稿生成失败处理展示真实原因。
     } catch (error) {
       // 页面错误区统一承载错误。
-      onError(readableDesktopError(error, "课题草稿生成失败。"));
+      onError(readableDesktopError(error, fixedUiText(locale, "nangongTopicDraftFailed")));
     // 草稿生成结束处理保证请求完成后恢复按钮。
     } finally {
       // 解除草稿生成锁。

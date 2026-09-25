@@ -49,6 +49,13 @@ test("南宫婉消息头从统一资源解析人物与客户固定文本，未�
   assert.match(fixedUiText, /personaNameNangong: "南宫婉"/);
   assert.match(fixedUiText, /return key \? fixedUiText\(locale, key\) : personaId/);
   assert.match(view, /<MarkdownMessage text=\{message\.content\}/);
+  assert.match(controller, /fixedUiText\(locale, "nangongEvolutionOperationFailed"\)/);
+  assert.match(controller, /fixedUiText\(locale, "nangongConversationNoResult"\)/);
+  assert.match(controller, /fixedUiText\(locale, "nangongSendFailed"\)/);
+  assert.match(controller, /fixedUiText\(locale, "nangongTopicRequiredFields"\)/);
+  assert.match(controller, /fixedUiText\(locale, "nangongTopicDraftCreated"\)/);
+  assert.match(controller, /fixedUiText\(locale, "nangongTopicDraftFailed"\)/);
+  assert.doesNotMatch(controller, /专项演化操作失败。|发送给南宫婉失败。|课题草稿生成失败。/);
 });
 
 test("南宫婉页面模块的注释先写中文业务名称", () => {

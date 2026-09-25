@@ -11,7 +11,7 @@ const bundled = await build({
   target: "es2022",
   write: false,
 });
-const { collaborationMemberDisplayModel: display } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+const { collaborationMemberDisplayModel: display, formatCollaborationDuration } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
 
 test("每个人的工作中间阶段显示真实阶段而不是笼统正在执行", () => {
   for (const memberId of ["mo-caihuan", "song-yu", "linghu-ancestor"]) {
@@ -82,4 +82,14 @@ test("状态尚未取得或更新失败时明确显示同步结果，不读取�
 test("当前任务存在时显示存储中的真实阶段，不由时间线文案覆盖", () => {
   const member = { memberId: "linghu-ancestor", state: "working", currentTaskId: "task-current", phase: "verifying" };
   assert.deepEqual(display({ member, locale: "zh-CN", inquiryActivity: { phase: "investigating", status: "running" }, inquiryRole: "owner" }), { presence: "working", label: "自检中" });
+});
+
+
+test("协作耗时单位由统一资源按三语解析，英文不再回退中文单位", () => {
+  const startedAt = "2026-09-25T00:00:00.000Z";
+  const completedAt = "2026-09-26T01:01:01.000Z";
+  assert.equal(formatCollaborationDuration(startedAt, completedAt, "zh-CN"), "1 天 1 小时 1 分钟 1 秒");
+  assert.equal(formatCollaborationDuration(startedAt, completedAt, "ja"), "1 日 1 時間 1 分 1 秒");
+  assert.equal(formatCollaborationDuration(startedAt, completedAt, "en"), "1 day 1 hour 1 minute 1 second");
+  assert.equal(formatCollaborationDuration(startedAt, null, "en"), "In progress");
 });
