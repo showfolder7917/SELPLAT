@@ -135,6 +135,29 @@ test("证据达到四十八项上限时仍完整保留冻结源码清单", async
   }
 });
 
+test("真实生产改动与冻结清单合计超过四十八项时阻断源码审查", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(path.join(parent, "hanli-review-required-evidence-limit-"));
+  try {
+    const frozen = Array.from({ length: 8 }, (_, index) => `apps/ai-desktop/electron/services/workflow/domain/frozen-${index}.ts`);
+    const changed = Array.from({ length: 48 }, (_, index) => `apps/ai-desktop/electron/services/workflow/internal/evolution/changed-${index}.ts`);
+    for (const file of [...frozen, ...changed]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), "export const evidence = true;\n");
+    }
+    const task = { taskId: "required-evidence-limit", state: "integrated", snapshot: { title: "required", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: changed }] };
+    const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] }, [task], frozen);
+    assert.equal(context.sourceEvidenceStatus, "required-evidence-exceeds-limit");
+    assert.deepEqual(context.sourceEvidence, []);
+    assert.deepEqual(context.sourceEvidenceBatches.flatMap((batch) => batch.files), [...changed, ...frozen]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("已提交任务的流式清单只剩测试文件时从签发提交恢复源码证据", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
