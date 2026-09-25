@@ -48,7 +48,7 @@ function writeAcceptancePlanCandidate(root) {
   mkdirSync(path.dirname(prompt), { recursive: true });
   writeFileSync(state, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
   writeFileSync(runtime, `if (review.mode === "mixed") {
-    const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience");
+    const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience" && item.pageSurface === "task-collaboration");
     runResult = composeHanliResultReview(plan, review, pageRun);
   }
   completeAutomaticAcceptance
@@ -59,9 +59,9 @@ function writeAcceptancePlanCandidate(root) {
     plan?.sourceEvidenceFiles || [],
   )`);
   writeFileSync(projection, "acceptanceRoundId currentRoundId");
-  writeFileSync(application, "version: 3 version-integration.pipeline.ts");
+  writeFileSync(application, "version: 3 version-integration.pipeline.ts pageCriterionSurfaces");
   writeFileSync(preflight, "appendQuickPreflightDecision preflight.issues_found preflight.rerun_required");
-  writeFileSync(prompt, "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件");
+  writeFileSync(prompt, "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件 pageCriterionSurfaces task-collaboration");
 }
 
 test("激活暂存清理将 app.asar 作为普通文件而非目录", () => {

@@ -46,8 +46,8 @@ test("真实业务前提缺失独立于验收工具故障，不会被当成可�
 });
 
 test("成员均 idle 的原条件仍归任务协作群同屏验收", () => {
-  assert.match(runtime, /成员\.\*\(\?:空闲\|idle\)/u);
-  assert.match(runtime, /\(\?:空闲\|idle\)\.\*成员/u);
+  assert.match(runtime, /item\.pageSurface === "task-collaboration"/u);
+  assert.doesNotMatch(runtime, /requiresTaskCollaborationSurface/u);
   assert.match(computer, /taskCollaborationCriterionIds\.has\(criterionId\)/u);
 });
 

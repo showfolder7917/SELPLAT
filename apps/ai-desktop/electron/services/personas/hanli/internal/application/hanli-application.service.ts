@@ -154,6 +154,8 @@ export class HanliApplicationService implements HanliApplicationPort {
     } else {
       reclassifiedConditionIds = this.#store.retireScenarioBlockedAcceptancePlan(proposalId);
       if (reclassifiedConditionIds.length) proposal = requireProposal(this.#store.state(), proposalId);
+      // v3 旧计划没有冻结页面表面时，只在本轮已有验收能力受阻事实的前提下重建；不改写历史计划或结果。
+      if (this.#store.retireAcceptanceCapabilityPlan(proposalId)) proposal = requireProposal(this.#store.state(), proposalId);
     }
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
     const routingReview = await this.#decision.reviewResultAcceptance(proposal, resolveAcceptanceEvidence(implementationEvidence, proposal.acceptancePlan));
@@ -340,7 +342,7 @@ function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAc
     topicId: proposal.topicId,
     proposalId: proposal.proposalId,
     proposalVersion: proposal.version,
-    conditions: acceptancePlanConditions(proposal, pageConditionIds),
+    conditions: acceptancePlanConditions(proposal, pageConditionIds, review.pageCriterionSurfaces || []),
     sourceEvidenceFiles: [...ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES],
     rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
     currentRoundId: roundId,
@@ -353,11 +355,18 @@ function resolveAcceptanceEvidence(evidence: ResultAcceptanceEvidence, plan: Evo
 }
 
 /** 使用稳定条件编号生成唯一证据分区；韩立页面只消费可安全观察的正式页面条件。 */
-function acceptancePlanConditions(proposal: EvolutionProposalOutDto, pageConditionIds: string[]): EvolutionAcceptancePlanOutDto["conditions"] {
+function acceptancePlanConditions(
+  proposal: EvolutionProposalOutDto,
+  pageConditionIds: string[],
+  pageCriterionSurfaces: NonNullable<HanliAcceptanceRunOutDto["pageCriterionSurfaces"]>,
+): EvolutionAcceptancePlanOutDto["conditions"] {
+  const surfaceByCriterionId = new Map(pageCriterionSurfaces.map((item) => [item.criterionId, item.pageSurface]));
   return proposal.acceptanceCriteria.map((criterion, index) => {
     const conditionId = `criterion-${index + 1}`;
     const evidenceType = pageConditionIds.includes(conditionId) ? "page-experience" as const : "code-conformance" as const;
-    return { conditionId, criterion, evidenceType, completionRequirement: evidenceType === "page-experience" ? "正式页面只读截图、功能结果和布局判断均通过" : "源码结构符合条件；发送、恢复与工程验证由令狐门禁负责" };
+    const pageSurface = evidenceType === "page-experience" ? surfaceByCriterionId.get(conditionId) || null : null;
+    if (evidenceType === "page-experience" && !pageSurface) throw new Error(`页面条件 ${conditionId} 缺少已分类的正式页面表面。`);
+    return { conditionId, criterion, evidenceType, pageSurface, completionRequirement: evidenceType === "page-experience" ? "正式页面只读截图、功能结果和布局判断均通过" : "源码结构符合条件；发送、恢复与工程验证由令狐门禁负责" };
   });
 }
 

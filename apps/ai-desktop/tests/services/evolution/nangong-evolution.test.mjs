@@ -2421,14 +2421,16 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
       store,
       collaboration,
       conversation,
-      hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
+      hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"pageCriterionSurfaces":[{"criterionId":"criterion-1","pageSurface":"task-collaboration"}],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
       recordEvent: () => undefined,
       recordFailure: (failure) => resolveRuntimeFailure(failure),
     });
     let acceptanceStarted = false;
-    facade.setComputerAcceptanceSession(async (_goal, onStarted) => {
+    let acceptanceGoal;
+    facade.setComputerAcceptanceSession(async (goal, onStarted) => {
       // 与生产验收器一致：真实页面操作开始时先回调，随后才产生验收结果。
       onStarted();
+      acceptanceGoal = goal;
       acceptanceStarted = true;
       acceptanceRuns += 1;
       return computerRun("recovered-acceptance-run", topicId, correctionProposalId, "passed", "recovered-shot", facade.state().proposals.find((proposal) => proposal.proposalId === correctionProposalId).acceptancePlan);
@@ -2451,6 +2453,7 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
 
     assert.equal(acceptanceStarted, true);
     assert.equal(acceptanceRuns, 1);
+    assert.deepEqual(acceptanceGoal.taskCollaborationCriterionIds, ["criterion-1"], "没有任务协作群关键词的冻结条件仍必须按页面表面获得导航权限");
     assert.equal(state.proposals.at(-1).status, "completed");
     assert.equal(state.oneShotRun.status, "completed");
     assert.equal(state.oneShotRun.phase, "completed");
@@ -2613,12 +2616,14 @@ test("冻结验收计划后才审查计划持久化条件", async () => {
       JSON.stringify({
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
+        pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }],
         findings: [{ criterionId: "criterion-2", status: "failed", actual: "当前专题记录的 acceptancePlan 为 null。", evidenceReferences: ["首次分类尚未冻结计划"] }],
         sourceReview: passedSourceReview,
       }),
       `补充说明 {not-json}，请采用第二个对象。\n\n\`\`\`json\n${JSON.stringify({ mode: "unsupported" })}\n${JSON.stringify({
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
+        pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }],
         findings: [{ criterionId: "criterion-2", status: "passed", actual: "当前专题记录已保存 acceptancePlan，条件编号和证据类型可读取，包含\\\"转义引号\\\"。", evidenceReferences: ["acceptance.plan_frozen"] }],
         sourceReview: passedSourceReview,
       })}\n\`\`\``,
@@ -2655,6 +2660,7 @@ test("模型误报纯源码时仍强制正式应用点击条件进入页面验�
     store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
     const mistakenCodeOnly = JSON.stringify({
       mode: "code-conformance",
+      pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }],
       findings: [
         { criterionId: "criterion-1", status: "passed", actual: "源码显示会切换会话。", evidenceReferences: ["usePersonaConversation.ts"] },
         { criterionId: "criterion-2", status: "passed", actual: "仓储保留旧会话。", evidenceReferences: ["persona-conversation.repository.ts"] },
@@ -2689,6 +2695,7 @@ test("冻结混合计划忽略页面条件的冗余源码结论但仍要求全�
     const routing = JSON.stringify({
       mode: "mixed",
       pageCriterionIds: ["criterion-1"],
+      pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }],
       findings: [
         { criterionId: "criterion-2", status: "passed", actual: "恢复入口只读取交付投影。", evidenceReferences: ["src/features/collaboration"] },
         { criterionId: "criterion-3", status: "passed", actual: "源码职责边界清楚。", evidenceReferences: ["electron/services/workflow"] },
@@ -2698,6 +2705,7 @@ test("冻结混合计划忽略页面条件的冗余源码结论但仍要求全�
     const frozenReviewWithPageFinding = JSON.stringify({
       mode: "mixed",
       pageCriterionIds: ["criterion-1"],
+      pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }],
       findings: [
         { criterionId: "criterion-1", status: "failed", actual: "这是页面条件的冗余源码判断，不能替代正式页面验收。", evidenceReferences: ["src/features/collaboration"] },
         { criterionId: "criterion-2", status: "passed", actual: "恢复入口只读取交付投影。", evidenceReferences: ["src/features/collaboration"] },
@@ -2728,7 +2736,7 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
     state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
     const proposalId = state.proposals.at(-1).proposalId;
     store.markProgress(proposalId, "pending-acceptance", "等待韩立结果验收");
-    const accepted = JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], findings: [], sourceReview: passedSourceReview });
+    const accepted = JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }, { criterionId: "criterion-2", pageSurface: "hanli-conversation" }], findings: [], sourceReview: passedSourceReview });
     const replies = [accepted, accepted];
     const promptsSeen = [];
     const hanli = createHanliRuntime({
@@ -2790,6 +2798,48 @@ test("只读页面无法建立场景时审计退役计划，保留旧结果并�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("旧 v3 缺少页面表面时只在已记录验收能力受阻后退役重建", () => {
+  const key = path.join(controlledTestRoot, "nangong-capability-plan-retire-state.json");
+  try {
+    const store = evolutionStore(key);
+    let state = store.createTopic({ ...topicRequest("冻结页面表面缺失恢复"), acceptanceCriteria: ["当前任务详情可见"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    state = store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    const now = new Date().toISOString();
+    const plan = {
+      version: 3, planId: "capability-plan", topicId: state.activeTopicId, proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: [{ conditionId: "criterion-1", criterion: "当前任务详情可见", evidenceType: "page-experience", pageSurface: "task-collaboration", completionRequirement: "正式页面只读" }],
+      sourceEvidenceFiles: ["apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts"],
+      rounds: [{ roundId: "capability-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+      currentRoundId: "capability-round", createdAt: now,
+    };
+    store.saveAcceptancePlan(proposalId, plan);
+    const run = computerRun("capability-run", state.activeTopicId, proposalId, "blocked", "capability-shot", plan);
+    run.stepResults[0].blockerKind = "scenario-precondition";
+    store.recordAcceptanceRun(run);
+    const persisted = readPersistedState(key);
+    delete persisted.proposals.at(-1).acceptancePlan.conditions[0].pageSurface;
+    writePersistedState(key, persisted);
+    const scenarioBlocked = evolutionStore(key);
+    assert.equal(scenarioBlocked.retireAcceptanceCapabilityPlan(proposalId), false, "场景前提缺失不能触发页面表面计划重建");
+    assert.equal(scenarioBlocked.state().proposals.at(-1).acceptancePlan.planId, plan.planId);
+    const capabilityState = readPersistedState(key);
+    capabilityState.archiveRecords.find((record) => record.eventType === "acceptance.result_checked").payload.acceptanceRun.stepResults[0].blockerKind = "acceptance-capability";
+    writePersistedState(key, capabilityState);
+    const capabilityBlocked = evolutionStore(key);
+    assert.equal(capabilityBlocked.retireAcceptanceCapabilityPlan(proposalId), true);
+    const next = capabilityBlocked.state();
+    assert.equal(next.proposals.at(-1).acceptancePlan, null);
+    const retired = next.archiveRecords.at(-1);
+    assert.equal(retired.eventType, "acceptance.capability_plan_retired");
+    assert.equal(retired.payload.retiredPlan.planId, plan.planId);
+    assert.equal(retired.payload.sourceRunId, "capability-run");
+    assert.equal(next.archiveRecords.some((record) => record.eventType === "acceptance.result_checked" && record.payload.acceptanceRun.runId === "capability-run"), true);
+  } finally { persistedEvolutionStates.delete(key); }
+});
+
 test("复验只将受阻页面条件改为代码条件，不改写其他正式页面条件", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-scenario-plan-review-"));
   try {
@@ -2813,8 +2863,8 @@ test("复验只将受阻页面条件改为代码条件，不改写其他正式�
     run.stepResults[1].status = "passed";
     store.recordAcceptanceRun(run);
     const replies = [
-      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], findings: [], sourceReview: passedSourceReview }),
-      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-2"], findings: [{ criterionId: "criterion-1", status: "passed", actual: "隔离环境发送测试覆盖首条消息。", evidenceReferences: ["tests/interaction/developer-sidebar.spec.ts"] }], sourceReview: passedSourceReview }),
+      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-1", "criterion-2"], pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }, { criterionId: "criterion-2", pageSurface: "hanli-conversation" }], findings: [], sourceReview: passedSourceReview }),
+      JSON.stringify({ mode: "mixed", pageCriterionIds: ["criterion-2"], pageCriterionSurfaces: [{ criterionId: "criterion-2", pageSurface: "hanli-conversation" }], findings: [{ criterionId: "criterion-1", status: "passed", actual: "隔离环境发送测试覆盖首条消息。", evidenceReferences: ["tests/interaction/developer-sidebar.spec.ts"] }], sourceReview: passedSourceReview }),
     ];
     const hanli = createHanliRuntime({
       store, prompts, memory: null, screenshots: {},
@@ -3042,6 +3092,7 @@ test("韩立按页面编号失效原因纠正 mixed 分区后继续冻结计划"
       const accepted = JSON.stringify({
         mode: "mixed",
         pageCriterionIds: ["criterion-1"],
+        pageCriterionSurfaces: [{ criterionId: "criterion-1", pageSurface: "hanli-conversation" }],
         findings: [{ criterionId: "criterion-2", status: "passed", actual: "代码证据已可读取。", evidenceReferences: ["tests/result-acceptance.test.mjs"] }],
         sourceReview: passedSourceReview,
       });
@@ -3157,7 +3208,7 @@ test("自动韩立验收失败保留原提案并进入范围内令狐修复卡�
       store,
       collaboration: { state() { return { tasks: [], members: [] }; } },
       conversation,
-      hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
+      hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"pageCriterionSurfaces":[{"criterionId":"criterion-1","pageSurface":"hanli-conversation"}],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
       recordEvent: () => undefined,
       recordFailure: (failure) => failures.push(failure),
     });

@@ -28,7 +28,7 @@ test("最终候选分别缺少每项验收计划能力时不得进入统一测�
     const complete = {
       state: "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)",
       runtime: `if (review.mode === "mixed") {
-        const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience");
+        const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience" && item.pageSurface === "task-collaboration");
         runResult = composeHanliResultReview(plan, review, pageRun);
       }
       completeAutomaticAcceptance
@@ -39,9 +39,9 @@ test("最终候选分别缺少每项验收计划能力时不得进入统一测�
         plan?.sourceEvidenceFiles || [],
       )`,
       projection: "acceptanceRoundId currentRoundId",
-      application: "version: 3 version-integration.pipeline.ts",
+      application: "version: 3 version-integration.pipeline.ts pageCriterionSurfaces",
       preflight: "appendQuickPreflightDecision preflight.issues_found preflight.rerun_required",
-      prompt: "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件",
+      prompt: "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件 pageCriterionSurfaces task-collaboration",
     };
     writeCandidate(root, complete);
     assert.doesNotThrow(() => verifyAcceptancePlanCapabilities(root));
@@ -55,8 +55,10 @@ test("最终候选分别缺少每项验收计划能力时不得进入统一测�
       ["失败归因", { ...complete, state: complete.state.replace("plan.conditions.find((condition) => condition.conditionId === step.checkId)", "") }],
       ["v3 冻结验收证据链", { ...complete, application: complete.application.replace("version-integration.pipeline.ts", "") }],
       ["v3 冻结验收证据链", { ...complete, runtime: complete.runtime.replace("plan?.sourceEvidenceFiles", "undefined") }],
+      ["v3 冻结验收证据链", { ...complete, runtime: complete.runtime.replace('item.pageSurface === "task-collaboration"', 'item.pageSurface === "hanli-conversation"') }],
       ["v3 冻结验收证据链", { ...complete, preflight: complete.preflight.replace("preflight.rerun_required", "") }],
       ["v3 冻结验收证据链", { ...complete, prompt: complete.prompt.replace("acceptancePlan.version 为 2 或 3", "acceptancePlan.version 为 2") }],
+      ["v3 冻结验收证据链", { ...complete, prompt: complete.prompt.replace("pageCriterionSurfaces", "") }],
     ];
     for (const [capability, candidate] of missingCapabilities) {
       writeCandidate(root, candidate);
