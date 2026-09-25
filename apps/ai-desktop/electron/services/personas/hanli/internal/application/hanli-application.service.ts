@@ -21,6 +21,20 @@ export type HanliResultAcceptanceReview = {
   review: HanliAcceptanceRunOutDto;
 };
 
+type ResultAcceptanceEvidence = unknown | ((plan: EvolutionAcceptancePlanOutDto | null) => unknown);
+
+// 此清单是验收能力本身的固定只读边界，而非按提示扩展的文件搜索。
+// 它与提案冻结，供条件 6 审查同一套阶段投影、交付门禁和性能样本读取链。
+const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
+  "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
+  "apps/ai-desktop/electron/services/workflow/domain/current-topic-delivery-evidence.ts",
+  "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-duration.log.ts",
+  "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-interaction-performance.log.ts",
+  "apps/ai-desktop/electron/system/ipc/domains/register-collaboration-ipc.ts",
+  "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
+  "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
+] as const;
+
 /** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */
 export class HanliApplicationService implements HanliApplicationPort {
   /** Evolution 权威状态端口，所有审批和验收决定都从这里读取及写入。 */
@@ -129,7 +143,7 @@ export class HanliApplicationService implements HanliApplicationPort {
   }
 
   /** 页面型组合正式页面检查与源码审查；非页面型只执行源码审查。 */
-  async reviewResultAcceptance(proposalId: string, implementationEvidence: unknown): Promise<HanliResultAcceptanceReview> {
+  async reviewResultAcceptance(proposalId: string, implementationEvidence: ResultAcceptanceEvidence): Promise<HanliResultAcceptanceReview> {
     let proposal = requireProposal(this.#store.state(), proposalId);
     let reclassifiedConditionIds: string[] = [];
     if (proposal.acceptancePlan?.version === 1) {
@@ -141,12 +155,12 @@ export class HanliApplicationService implements HanliApplicationPort {
       if (reclassifiedConditionIds.length) proposal = requireProposal(this.#store.state(), proposalId);
     }
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
-    const routingReview = await this.#decision.reviewResultAcceptance(proposal, implementationEvidence);
+    const routingReview = await this.#decision.reviewResultAcceptance(proposal, resolveAcceptanceEvidence(implementationEvidence, proposal.acceptancePlan));
     const plan = proposal.acceptancePlan || createAcceptancePlan(proposal, routingReview, reclassifiedConditionIds);
     this.#store.saveAcceptancePlan(proposalId, plan);
     // 代码结论可能要求核对计划本身，必须在计划落盘后重新读取权威提案再审查。
     const frozenProposal = requireProposal(this.#store.state(), proposalId);
-    const review = await this.#decision.reviewResultAcceptance(frozenProposal, implementationEvidence);
+    const review = await this.#decision.reviewResultAcceptance(frozenProposal, resolveAcceptanceEvidence(implementationEvidence, plan));
     return { plan, review };
   }
 
@@ -320,16 +334,21 @@ function createAcceptancePlan(proposal: EvolutionProposalOutDto, review: HanliAc
   const now = new Date().toISOString();
   const roundId = `acceptance-round-${crypto.randomUUID()}`;
   return {
-    version: 2,
+    version: 3,
     planId: `acceptance-plan-${crypto.randomUUID()}`,
     topicId: proposal.topicId,
     proposalId: proposal.proposalId,
     proposalVersion: proposal.version,
     conditions: acceptancePlanConditions(proposal, pageConditionIds),
+    sourceEvidenceFiles: [...ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES],
     rounds: [{ roundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
     currentRoundId: roundId,
     createdAt: now,
   };
+}
+
+function resolveAcceptanceEvidence(evidence: ResultAcceptanceEvidence, plan: EvolutionAcceptancePlanOutDto | null): unknown {
+  return typeof evidence === "function" ? evidence(plan) : evidence;
 }
 
 /** 使用稳定条件编号生成唯一证据分区；韩立页面只消费可安全观察的正式页面条件。 */

@@ -11,9 +11,10 @@ export function buildHanliResultReviewContext(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
   proposalSourceTasks: CollaborationTaskOutDto[] = tasks,
+  frozenSourceEvidenceFiles: readonly string[] = [],
 ): unknown {
   // 同一提案只读取一次已授权源码；大文件的中段也必须可见，否则旧恢复分支会被首尾截取漏掉。
-  const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState);
+  const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState, frozenSourceEvidenceFiles);
   return {
     tasks: tasks.map((task) => ({
       taskId: task.taskId,
@@ -33,23 +34,27 @@ export function buildHanliResultReviewContext(
     sourceEvidence: sourceEvidence.items,
     sourceEvidenceBatches: sourceEvidence.batches,
     sourceEvidenceStatus: sourceEvidence.status,
-    sourceEvidenceScope: "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
+    sourceEvidenceScope: frozenSourceEvidenceFiles.length
+      ? "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports"
+      : "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
   };
 }
 
 function readChangedSourceEvidence(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
+  frozenSourceEvidenceFiles: readonly string[],
 ): { items: Array<{ file: string; content: string }>; batches: Array<{ batch: number; files: string[] }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" } {
   // 本次专题的授权工作区是唯一读取根；任务快照不得把证据读取扩展到其他工作区。
   const root = fallbackWorkspaceState.roots.find((item) => item.id === fallbackWorkspaceState.primaryId)?.path;
   if (!root) return { items: [], batches: [], status: "workspace-root-unavailable" };
-  const files = [...new Set(tasks.filter((task) => task.state === "integrated")
+  const authorizedFiles = validateFrozenSourceEvidenceFiles(frozenSourceEvidenceFiles);
+  const files = [...new Set([...authorizedFiles, ...tasks.filter((task) => task.state === "integrated")
     .flatMap((task) => [
       ...task.executionRecords.flatMap((record) => record.changedFiles),
       // 已集成的旧记录可能只保存最后一次流式 diff；签发基线至结果提交可恢复完整清单。
       ...readIntegratedCommitFiles(root, task),
-    ]))]
+    ])])]
     .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file));
   if (!files.length) return { items: [], batches: [], status: "no-declared-changed-files" };
   let canonicalRoot: string;
@@ -75,7 +80,7 @@ function readChangedSourceEvidence(
     if (file.startsWith("apps/ai-desktop/tests/interaction/")) return 5;
     return 6;
   };
-  files.sort((left, right) => evidencePriority(left) - evidencePriority(right));
+  files.sort((left, right) => Number(authorizedFiles.includes(right)) - Number(authorizedFiles.includes(left)) || evidencePriority(left) - evidencePriority(right));
   // 样式和固定三语资源都可能把验收条件放在中段；在可控大小内提供整文件，避免把省略的实现误判为无法验收。
   const evidenceLimit = (file: string) => file.endsWith(".css") || file === "apps/ai-desktop/contracts/foundation/i18n/fixed-ui-text.ts" ? 120_000 : 48_000;
   // 固定证据边界内优先保留场景、布局和生产源码，历史清单只能占用剩余名额。
@@ -136,6 +141,17 @@ function readChangedSourceEvidence(
     files: items.slice(index * 16, (index + 1) * 16).map((item) => item.file),
   }));
   return { items, batches, status: items.length ? "available" : "declared-files-unreadable" };
+}
+
+/** 计划清单是唯一能补充既有能力文件的入口；调用方不能借由路径绕开已冻结范围。 */
+function validateFrozenSourceEvidenceFiles(files: readonly string[]): string[] {
+  if (!files.length) return [];
+  if (files.length > 12 || new Set(files).size !== files.length) throw new Error("冻结的验收源码证据清单无效。 ");
+  const projectRelativeSource = /^apps\/ai-desktop\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|mjs|css)$/u;
+  if (files.some((file) => !projectRelativeSource.test(file) || file.includes("node_modules"))) {
+    throw new Error("冻结的验收源码证据包含越界路径。 ");
+  }
+  return [...files];
 }
 
 function readIntegratedCommitFiles(root: string, task: CollaborationTaskOutDto): string[] {
