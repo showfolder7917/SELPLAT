@@ -92,6 +92,8 @@ test("任务协作群滚动只移动详情面板，并等待窄窗口布局回�
   assert.match(acceptanceSource, /detailPaneConnected[\s\S]*detailPaneVisible[\s\S]*detailPaneSize[\s\S]*detailPaneScrollHeight/);
   assert.match(acceptanceSource, /currentTimelineNode[\s\S]*currentTimelineNodeVisible/);
   assert.match(acceptanceSource, /result\.status !== "scrolled" && result\.status !== "at-boundary" && result\.status !== "not-ready" && result\.status !== "detail-pane-zero-height"/);
+  assert.match(acceptanceSource, /coversTaskCollaborationCriterion[\s\S]*args\.action === "scroll" \|\| args\.action === "key"[\s\S]*必须使用 scroll-task-collaboration[\s\S]*禁止通用滚动或按键进入历史审计区域/);
+  assert.match(acceptanceSource, /任务卡条件只能使用 scroll-task-collaboration[\s\S]*禁止使用通用 scroll 或方向键把视口带入历史审计卡/);
   assert.match(acceptanceSource, /audit-history-not-ready[\s\S]*audit-card-not-ready/);
   assert.match(acceptancePrompt, /成员空闲条件要在同一张任务协作群截图中同时核对 `memberStates`/);
   assert.match(acceptancePrompt, /detail-pane-zero-height[\s\S]*真实页面失败/);
