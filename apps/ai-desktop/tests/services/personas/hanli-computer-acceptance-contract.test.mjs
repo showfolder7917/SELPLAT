@@ -28,7 +28,8 @@ test("正式窗口销毁后释放验收锁并有界重试，不把旧窗口标�
 
 test("任务卡页面验收使用明确目标、语义导航和页面截图门禁", () => {
   assert.match(goalSource, /taskCollaborationCriterionIds/);
-  assert.match(runtimeSource, /taskCollaborationCriterionIds[\s\S]*requiresTaskCollaborationSurface/);
+  assert.match(runtimeSource, /taskCollaborationCriterionIds[\s\S]*item\.pageSurface === "task-collaboration"/);
+  assert.doesNotMatch(runtimeSource, /requiresTaskCollaborationSurface/);
   assert.match(operationSource, /type: "open-task-panel"[\s\S]*type: "close-task-panel"[\s\S]*type: "open-task-collaboration"/);
   assert.match(acceptanceSource, /taskCollaborationCriterionIds\.has\(criterionId\)[\s\S]*不能由自由讨论页判定产品结果/);
   assert.match(acceptanceSource, /taskCollaborationAction[\s\S]*coveredCriterionIds\.some\(\(criterionId\) => !taskCollaborationCriterionIds\.has\(criterionId\)\)[\s\S]*任务协作群操作只能核对任务卡条件/);
@@ -50,7 +51,7 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /panel\.querySelectorAll[\s\S]*button\.collaboration-member[\s\S]*startsWith\("韩立"\)/);
   assert.match(acceptanceSource, /navigateHanliConversation[\s\S]*requestAnimationFrame[\s\S]*conversation-not-visible/);
   assert.match(acceptanceSource, /open-hanli-conversation[\s\S]*当前正式验收未获韩立会话导航授权[\s\S]*hanliConversation/);
-  assert.match(runtimeSource, /具体文件[\s\S]*完成标准[\s\S]*恢复入口[\s\S]*提交确认[\s\S]*令狐复查[\s\S]*成员\.\*\(\?:空闲\|idle\)[\s\S]*窄窗口[\s\S]*历史/);
+  assert.match(runtimeSource, /item\.evidenceType === "page-experience"[\s\S]*item\.pageSurface === "task-collaboration"/);
   assert.match(acceptanceSource, /所有状态必须来自当前正式业务数据/);
   assert.doesNotMatch(acceptanceSource, /taskCollaborationScenarioTarget|TaskCollaborationScenario/);
   assert.match(acceptanceSource, /#developer-task-list button\.collaboration-member[\s\S]*:scope > span > i[\s\S]*memberStates/);
@@ -62,6 +63,7 @@ test("结果验收计划不申请外部进程或桌面权限", () => {
   assert.match(resultAcceptancePrompt, /禁止调用 `ps`、shell、exec、osascript、System Events、外部窗口枚举或截图命令/);
   assert.match(resultAcceptancePrompt, /禁止为这些动作申请用户审批/);
   assert.match(resultAcceptancePrompt, /页面条件应进入 pageCriterionIds/);
+  assert.match(resultAcceptancePrompt, /pageCriterionSurfaces/);
 });
 
 test("初始验收提示词只引用实际注册的交互工具名", () => {

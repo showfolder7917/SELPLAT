@@ -302,18 +302,22 @@ function acceptancePlanCapabilityChecks(sources: ReturnType<typeof readAcceptanc
   ];
 }
 
-/** v3 计划必须同时冻结预检生产者，并由运行时与韩立提示词在相同只读边界内消费。 */
+/** v3 计划必须同时冻结预检生产者和页面表面，并由运行时与韩立提示词在相同只读边界内消费。 */
 function hasFrozenAcceptanceEvidenceChain(sources: ReturnType<typeof readAcceptancePlanCandidateSources>): boolean {
   const planFreezesPreflightProducer = sources.application.includes("version: 3")
-    && sources.application.includes("version-integration.pipeline.ts");
+    && sources.application.includes("version-integration.pipeline.ts")
+    && sources.application.includes("pageCriterionSurfaces");
   const runtimePassesFrozenEvidence = /buildHanliResultReviewContext\(\s*acceptanceTasks,\s*topic\.workspaceState,\s*proposalSourceTasks,\s*plan\?\.sourceEvidenceFiles\s*\|\|\s*\[\]\s*,?\s*\)/.test(sources.runtime);
+  const runtimeConsumesFrozenPageSurface = sources.runtime.includes('item.pageSurface === "task-collaboration"');
   const preflightProducesRequiredFacts = sources.preflight.includes("appendQuickPreflightDecision")
     && sources.preflight.includes("preflight.issues_found")
     && sources.preflight.includes("preflight.rerun_required");
   const promptConsumesV3Boundary = sources.prompt.includes("acceptancePlan.version 为 2 或 3")
     && sources.prompt.includes("sourceEvidenceFiles")
-    && sources.prompt.includes("清单以外文件");
-  return planFreezesPreflightProducer && runtimePassesFrozenEvidence && preflightProducesRequiredFacts && promptConsumesV3Boundary;
+    && sources.prompt.includes("清单以外文件")
+    && sources.prompt.includes("pageCriterionSurfaces")
+    && sources.prompt.includes("task-collaboration");
+  return planFreezesPreflightProducer && runtimePassesFrozenEvidence && runtimeConsumesFrozenPageSurface && preflightProducesRequiredFacts && promptConsumesV3Boundary;
 }
 
 /**
@@ -322,7 +326,7 @@ function hasFrozenAcceptanceEvidenceChain(sources: ReturnType<typeof readAccepta
  */
 function hasMixedEvidenceAggregation(runtime: string): boolean {
   const entersMixedReview = /if\s*\(\s*review\.mode\s*===\s*["']mixed["']\s*\)/.test(runtime);
-  const separatesPageConditions = /plan\.conditions\.filter\s*\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.evidenceType\s*===\s*["']page-experience["']\s*\)/.test(runtime);
+  const separatesPageConditions = /plan\.conditions\.filter\s*\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.evidenceType\s*===\s*["']page-experience["']/.test(runtime);
   const mergesSourceAndPageReview = /composeHanliResultReview\s*\(\s*plan\s*,\s*review\s*,\s*pageRun\s*\)/.test(runtime);
   return entersMixedReview && separatesPageConditions && mergesSourceAndPageReview;
 }

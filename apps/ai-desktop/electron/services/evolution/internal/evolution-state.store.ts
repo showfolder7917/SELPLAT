@@ -460,6 +460,7 @@ export class EvolutionStateStore {
           version: 2, planId, topicId, proposalId, proposalVersion: 1,
           conditions: acceptanceCriteria.map((criterion, index) => ({
             conditionId: `criterion-${index + 1}`, criterion, evidenceType: "page-experience" as const,
+            pageSurface: null,
             completionRequirement: "正式页面只读截图、功能结果和布局判断均通过",
           })),
           rounds: [{ roundId: acceptanceRoundId, roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
@@ -938,6 +939,7 @@ export class EvolutionStateStore {
     if (proposal.status !== "pending-acceptance") throw new Error("只有待验收提案可以冻结验收计划。 ");
     if (!plan.conditions.length || !plan.currentRoundId || !plan.rounds.some((item) => item.roundId === plan.currentRoundId)) throw new Error("验收计划缺少条件或当前验收轮次。 ");
     if (new Set(plan.conditions.map((item) => item.conditionId)).size !== plan.conditions.length) throw new Error("验收计划条件编号重复。 ");
+    validateAcceptancePageSurfaces(plan);
     validateAcceptanceSourceEvidenceFiles(plan);
     if (proposal.acceptancePlan) {
       if (proposal.acceptancePlan.planId !== plan.planId) throw new Error("同一提案版本已经冻结另一份验收计划。 ");
@@ -989,6 +991,29 @@ export class EvolutionStateStore {
       sourceRunId: result.runId, reclassifiedConditionIds: demotedConditionIds, nextOwner: "han-li",
     });
     return demotedConditionIds;
+  }
+
+  /** 仅退役缺少冻结页面表面且已有同轮验收能力受阻事实的 v3 计划；原计划和失败结果继续保留在档案中。 */
+  retireAcceptanceCapabilityPlan(proposalId: string): boolean {
+    const proposal = requireProposal(this.#state, proposalId);
+    const previous = proposal.acceptancePlan;
+    if (!previous || proposal.status !== "pending-acceptance" || previous.version !== 3) return false;
+    const hasMissingPageSurface = previous.conditions.some((condition) => condition.evidenceType === "page-experience" && !condition.pageSurface);
+    if (!hasMissingPageSurface) return false;
+    const resultRecord = [...this.#state.archiveRecords].reverse().find((record) =>
+      record.proposalId === proposalId && record.eventType === "acceptance.result_checked"
+      && (record.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined)?.planId === previous.planId);
+    const result = resultRecord?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
+    const hasCapabilityBlock = result?.status === "blocked" && result.acceptanceRoundId === previous.currentRoundId
+      && result.stepResults.some((step) => step.evidenceMode === "page-experience" && step.status === "blocked" && step.blockerKind === "acceptance-capability");
+    if (!hasCapabilityBlock) return false;
+    this.#commit("acceptance.capability_plan_retired", proposal.topicId, proposalId, (state) => {
+      requireProposal(state, proposalId).acceptancePlan = null;
+    }, {
+      retiredPlan: structuredClone(previous), sourceAcceptanceRecordId: resultRecord!.recordId,
+      sourceRunId: result.runId, nextOwner: "han-li",
+    });
+    return true;
   }
 
   /** 已完成专题只可显式建立新的验收轮次；不复用阻塞运行的 resumeOneShotRun。 */
@@ -1546,6 +1571,19 @@ function requireProposal(state: EvolutionStateOutDto, proposalId: string) { cons
 function requireAcceptancePlan(proposal: EvolutionProposalOutDto): EvolutionAcceptancePlanOutDto {
   if (!proposal.acceptancePlan) throw new Error("当前提案尚未冻结验收计划，不能记录或完成验收。 ");
   return proposal.acceptancePlan;
+}
+
+/** 新冻结的 v3 页面条件必须具备唯一表面，避免运行时从客户原文猜测导航权限。 */
+function validateAcceptancePageSurfaces(plan: EvolutionAcceptancePlanOutDto): void {
+  if (plan.version !== 3) return;
+  for (const condition of plan.conditions) {
+    if (condition.evidenceType === "page-experience" && !["task-collaboration", "hanli-conversation"].includes(String(condition.pageSurface))) {
+      throw new Error("v3 验收计划的页面条件必须冻结任务协作群或韩立会话表面。 ");
+    }
+    if (condition.evidenceType === "code-conformance" && condition.pageSurface !== null) {
+      throw new Error("v3 验收计划的源码条件不能声明页面表面。 ");
+    }
+  }
 }
 
 /** v3 只允许计划冻结时声明的项目相对源码证据；旧计划保持可读，不能被隐式升级。 */

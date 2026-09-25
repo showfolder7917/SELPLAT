@@ -151,16 +151,22 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
   mkdirSync(path.join(services, "evolution/internal"), { recursive: true });
   mkdirSync(path.join(services, "workflow/internal/evolution"), { recursive: true });
   mkdirSync(path.join(services, "workflow/domain"), { recursive: true });
+  mkdirSync(path.join(services, "personas/hanli/internal/application"), { recursive: true });
+  mkdirSync(path.join(repository, "apps/ai-desktop/prompts/personas/hanli"), { recursive: true });
   try {
     const verifier = path.join(repository, "apps/ai-desktop/electron/services/support/capabilities/release/internal/integration.verifier.ts");
     const evolutionState = path.join(services, "evolution/internal/evolution-state.store.ts");
     const evolutionRuntime = path.join(services, "workflow/internal/evolution/persona-evolution.runtime.ts");
     const projection = path.join(services, "workflow/domain/current-topic-stage.projection.ts");
+    const application = path.join(services, "personas/hanli/internal/application/hanli-application.service.ts");
+    const prompt = path.join(repository, "apps/ai-desktop/prompts/personas/hanli/result-acceptance.md");
     writeFileSync(verifier, "export const verifier = 'base';\n");
     // 激活前仍执行当前候选预检；夹具必须提供真实预检读取的三份验收能力来源。
     writeFileSync(evolutionState, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
-    writeFileSync(evolutionRuntime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance');
+    writeFileSync(evolutionRuntime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience" && item.pageSurface === "task-collaboration"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance');
     writeFileSync(projection, "acceptanceRoundId currentRoundId");
+    writeFileSync(application, "version: 3 version-integration.pipeline.ts pageCriterionSurfaces");
+    writeFileSync(prompt, "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件 pageCriterionSurfaces task-collaboration");
     git(repository, "init");
     git(repository, "config", "user.name", "AI Desktop Test");
     git(repository, "config", "user.email", "ai-desktop-test@example.invalid");
@@ -212,11 +218,11 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
       retireWorkspace: async () => {},
       readRetainedCandidateFiles: async (_candidate, relativePaths) => Object.fromEntries(relativePaths.map((relativePath) => [relativePath, {
         "apps/ai-desktop/electron/services/evolution/internal/evolution-state.store.ts": "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)",
-        "apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts": "if (review.mode === 'mixed') { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === 'page-experience'); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState, proposalSourceTasks, plan?.sourceEvidenceFiles || [])",
+        "apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts": "if (review.mode === 'mixed') { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === 'page-experience' && item.pageSurface === \"task-collaboration\"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState, proposalSourceTasks, plan?.sourceEvidenceFiles || [])",
         "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts": "acceptanceRoundId currentRoundId",
-        "apps/ai-desktop/electron/services/personas/hanli/internal/application/hanli-application.service.ts": "version: 3 version-integration.pipeline.ts",
+        "apps/ai-desktop/electron/services/personas/hanli/internal/application/hanli-application.service.ts": "version: 3 version-integration.pipeline.ts pageCriterionSurfaces",
         "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts": "appendQuickPreflightDecision preflight.issues_found preflight.rerun_required",
-        "apps/ai-desktop/prompts/personas/hanli/result-acceptance.md": "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件",
+        "apps/ai-desktop/prompts/personas/hanli/result-acceptance.md": "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件 pageCriterionSurfaces task-collaboration",
       }[relativePath]])),
     };
     const releaseBatches = new ReleaseBatchStore(running, archive);
@@ -316,7 +322,7 @@ test("旧宿主清理暂存包失败时仅接管来源匹配的已提升候选",
     const projection = path.join(services, "workflow/domain/current-topic-stage.projection.ts");
     writeFileSync(verifier, "export const verifier = 'base';\n");
     writeFileSync(evolutionState, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
-    writeFileSync(evolutionRuntime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance');
+    writeFileSync(evolutionRuntime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience" && item.pageSurface === "task-collaboration"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance');
     writeFileSync(projection, "acceptanceRoundId currentRoundId");
     git(repository, "init");
     git(repository, "config", "user.name", "AI Desktop Test");

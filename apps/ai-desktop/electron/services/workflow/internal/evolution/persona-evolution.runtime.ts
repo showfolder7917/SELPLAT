@@ -655,9 +655,9 @@ export class PersonaEvolutionRuntime {
               if (!criterion) throw new Error(`正式页面检查条件不存在：${criterionId}`);
               return criterion;
             });
-            // 任务卡条件只能由任务协作群页面截图裁决，不能把自由讨论页的缺席当成产品失败。
+            // 任务卡条件只消费计划冻结的页面表面，不能由自由讨论页截图或条件文字推断裁决。
             const taskCollaborationCriterionIds = plan.conditions
-              .filter((item) => item.evidenceType === "page-experience" && requiresTaskCollaborationSurface(item.criterion))
+              .filter((item) => item.evidenceType === "page-experience" && item.pageSurface === "task-collaboration")
               .map((item) => item.conditionId);
             const goal: HanliComputerAcceptanceInDto = {
               topicId: topic.topicId,
@@ -982,16 +982,6 @@ export class PersonaEvolutionRuntime {
       if (queuedDelayMs !== null) this.#scheduleContinuation(queuedDelayMs);
     }
   }
-}
-
-/**
- * 只将必须由任务协作群裁决的条件交给该页面。
- *
- * 除卡片和时间线本身外，客户确认后的复查、新阻塞、成员空闲、窄窗口和历史审计都
- * 依赖同一块页面读模型；遗漏这些词会使验收器错误拒绝其安全导航动作。
- */
-function requiresTaskCollaborationSurface(criterion: string): boolean {
-  return /任务协作群|专题卡|任务卡|节点详情|下一流程|定位当前步骤|展开收起|详情滚动|完整.*(?:客户操作)?指导|客户操作指导|具体文件|完成标准|操作步骤|恢复入口|提交确认|令狐复查|复查.*阻塞|阻塞.*复查|成员.*(?:空闲|idle)|(?:空闲|idle).*成员|窄窗口|历史(?:审计|卡)|technicalRecovery/u.test(criterion);
 }
 
 function requireProposal(state: EvolutionStateOutDto, proposalId: string): EvolutionProposalOutDto { const proposal = state.proposals.find((item) => item.proposalId === proposalId); if (!proposal) throw new Error("演化提案不存在。"); return proposal; }

@@ -5,6 +5,8 @@
  * 禁止职责：不保存截图正文、不替代验收运行，也不直接改变专题完成状态。
  */
 export type EvolutionAcceptanceEvidenceTypeValue = "page-experience" | "code-conformance";
+/** 页面条件在冻结时指定的唯一只读取证表面。 */
+export type EvolutionAcceptancePageSurfaceValue = "task-collaboration" | "hanli-conversation";
 
 export interface EvolutionAcceptancePlanConditionOutDto {
   /** 绑定提案版本的稳定条件编号，例如 criterion-1。 */
@@ -13,6 +15,8 @@ export interface EvolutionAcceptancePlanConditionOutDto {
   criterion: string;
   /** 此条件唯一允许使用的证据类别。 */
   evidenceType: EvolutionAcceptanceEvidenceTypeValue;
+  /** 页面条件必须冻结其实际取证表面；源码条件固定为 null，运行时不得从条件文字猜测。 */
+  pageSurface: EvolutionAcceptancePageSurfaceValue | null;
   /** 完成门禁的可读要求，例如页面截图和布局判断或代码/测试引用。 */
   completionRequirement: string;
 }

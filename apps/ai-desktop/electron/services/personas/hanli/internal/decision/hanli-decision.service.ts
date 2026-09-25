@@ -5,7 +5,7 @@ import type { AsyncCollaborationMemoryPort } from "../../../../../../contracts/s
 import type { EvolutionProposalOutDto, EvolutionStateOutDto } from "../../../../../../contracts/services/evolution/index.js";
 import type { EvolutionStatePort } from "../../../../evolution/index.js";
 import type { PromptLibraryPort } from "../../../../support/capabilities/prompts/index.js";
-import type { HanliAcceptanceRunOutDto } from "../../../../../../contracts/services/personas/hanli/index.js";
+import type { HanliAcceptancePageSurfaceValue, HanliAcceptanceRunOutDto } from "../../../../../../contracts/services/personas/hanli/index.js";
 
 export interface HanliDecisionDependencies {
   /** Evolution 权威状态读取端口。 */
@@ -123,6 +123,15 @@ export class HanliDecisionService {
     if (!frozenPlan && value.mode === "mixed" && pageCriterionIds.length === 0) {
       throw new Error("页面与源码审查必须至少包含一条可在正式页面检查的条件。");
     }
+    const pageCriterionSurfacesResult = pageCriterionIds.length === 0
+      ? { ok: true as const, pageCriterionSurfaces: [] as Array<{ criterionId: string; pageSurface: HanliAcceptancePageSurfaceValue }> }
+      : frozenPlan
+        ? pageCriterionSurfacesFromPlan(frozenPlan.version, frozenPlan.conditions, pageCriterionIds)
+        : pageCriterionSurfacesValidationResult(value.pageCriterionSurfaces, pageCriterionIds);
+    if (!pageCriterionSurfacesResult.ok) {
+      throw new Error(`韩立混合验收计划页面表面${pageCriterionSurfacesResult.error}。`);
+    }
+    const pageCriterionSurfaces = pageCriterionSurfacesResult.pageCriterionSurfaces;
     if (!Array.isArray(value.findings)) {
       throw new Error("韩立代码符合性审查缺少逐项结论。");
     }
@@ -191,7 +200,7 @@ export class HanliDecisionService {
       topicId: proposal.topicId,
       proposalId: proposal.proposalId,
       criteria: [...proposal.acceptanceCriteria],
-      ...(effectiveMode === "mixed" ? { pageCriterionIds } : {}),
+      ...(effectiveMode === "mixed" ? { pageCriterionIds, pageCriterionSurfaces } : {}),
       sourceReview: {
         status: sourceReviewStatus as "passed" | "failed" | "blocked",
         actual: sourceReviewActual,
@@ -300,6 +309,39 @@ function pageCriterionIdsValidationResult(value: unknown, allCriterionIds: strin
   if (new Set(pageCriterionIds).size !== pageCriterionIds.length) return { ok: false, error: "存在重复项" };
   if (pageCriterionIds.some((item) => !allCriterionIds.includes(item))) return { ok: false, error: "包含当前条件外编号" };
   return { ok: true, pageCriterionIds };
+}
+
+/** 首轮分类必须把每个页面条件绑定到唯一的真实取证表面，禁止运行时再从条件文字猜测。 */
+function pageCriterionSurfacesValidationResult(value: unknown, pageCriterionIds: string[])
+  : { ok: true; pageCriterionSurfaces: Array<{ criterionId: string; pageSurface: HanliAcceptancePageSurfaceValue }> } | { ok: false; error: string } {
+  if (!Array.isArray(value)) return { ok: false, error: "必须是数组" };
+  const pageCriterionSurfaces = value as Array<Record<string, unknown>>;
+  if (pageCriterionSurfaces.some((item) => !item || typeof item !== "object" || Array.isArray(item))) return { ok: false, error: "包含非对象项" };
+  if (pageCriterionSurfaces.some((item) => typeof item.criterionId !== "string" || (item.pageSurface !== "task-collaboration" && item.pageSurface !== "hanli-conversation"))) {
+    return { ok: false, error: "包含无效条件编号或页面表面" };
+  }
+  const surfaces = pageCriterionSurfaces as Array<{ criterionId: string; pageSurface: HanliAcceptancePageSurfaceValue }>;
+  if (new Set(surfaces.map((item) => item.criterionId)).size !== surfaces.length) return { ok: false, error: "存在重复条件编号" };
+  if (surfaces.length !== pageCriterionIds.length || surfaces.some((item) => !pageCriterionIds.includes(item.criterionId))) {
+    return { ok: false, error: "必须与页面条件编号一一对应" };
+  }
+  return { ok: true, pageCriterionSurfaces: surfaces };
+}
+
+/** 已冻结计划是复验页面表面的唯一来源；缺失字段必须先由应用层受限退役重建。 */
+function pageCriterionSurfacesFromPlan(
+  planVersion: 1 | 2 | 3,
+  conditions: Array<{ conditionId: string; pageSurface?: HanliAcceptancePageSurfaceValue | null }>,
+  pageCriterionIds: string[],
+): { ok: true; pageCriterionSurfaces: Array<{ criterionId: string; pageSurface: HanliAcceptancePageSurfaceValue }> } | { ok: false; error: string } {
+  const surfaces = pageCriterionIds.map((criterionId) => {
+    const pageSurface = conditions.find((condition) => condition.conditionId === criterionId)?.pageSurface;
+    if (pageSurface) return { criterionId, pageSurface };
+    // v2 归档在页面表面字段出现前已冻结；它只可使用原有韩立会话表面，不能推断或授予任务协作群权限。
+    return planVersion === 2 ? { criterionId, pageSurface: "hanli-conversation" as const } : null;
+  });
+  if (surfaces.some((item) => !item)) return { ok: false, error: "缺少冻结页面表面" };
+  return { ok: true, pageCriterionSurfaces: surfaces as Array<{ criterionId: string; pageSurface: HanliAcceptancePageSurfaceValue }> };
 }
 
 /**
