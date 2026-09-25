@@ -44,6 +44,7 @@ const rendererCollaborationSources = [
   "../../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline.tsx",
 ];
 const developerSource = rendererCollaborationSources.map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const fixedUiTextSource = readFileSync(new URL("../../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
 const coordinatorSource = readFileSync(new URL("../../../electron/services/workflow/collaboration-workflow.facade.ts", import.meta.url), "utf8");
 const integrationPipelineSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/version-integration.pipeline.ts", import.meta.url), "utf8");
 const releaseBatchStoreSource = readFileSync(new URL("../../../electron/services/support/capabilities/release/internal/release-batch.store.ts", import.meta.url), "utf8");
@@ -193,7 +194,8 @@ test("会话卡片绑定真实协作任务并完整显示修复回流与统一�
   assert.match(developerSource, /CollaborationStatusChain/);
   assert.match(developerSource, /node\.actor\.displayName/);
   assert.match(developerSource, /message\.collaborationTaskId[\s\S]*messageTask[\s\S]*CollaborationStatusChain/);
-  assert.match(developerSource, /test-failed[\s\S]*重新测试/);
+  assert.match(fixedUiTextSource, /conversationRetryTest: "重新测试"/);
+  assert.match(developerSource, /test-failed[\s\S]*fixedUiText\(locale, "conversationRetryTest"\)/);
   assert.doesNotMatch(collaborationContractSource, /repairing-review|queued-reviewer/);
   assert.match(collaborationContractSource, /repairing-execution/);
   assert.match(collaborationContractSource, /unified-testing/);
