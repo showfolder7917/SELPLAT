@@ -383,6 +383,16 @@ test("未授权的数据操作归工程证据，原条件明确要求的当前�
   assert.match(decision, /effectiveMode = pageCriterionIds\.length > 0 \? "mixed"/);
 });
 
+test("页面动作识别不跨句误读技术表述，同句真实操作仍强制页面验收", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/personas/hanli/internal/decision/hanli-decision.service.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { requiredFormalPageCriterionIds } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const criteria = [
+    { criterionId: "technical", criterion: "无论依赖展开或证据上限如何，真实变更文件都不能被挤出。页面验收前完成源码审查。" },
+    { criterionId: "interaction", criterion: "在当前正式应用中展开任务卡并点击查看详情按钮。" },
+  ];
+  assert.deepEqual(requiredFormalPageCriterionIds(criteria), ["interaction"]);
+});
+
 test("冻结的当前验收计划必须逐项复用且不得在结果审查时重新分区", () => {
   assert.match(prompt, /acceptancePlan\.version 为 2 或 3/);
   assert.match(prompt, /v3 的 `sourceEvidenceFiles` 只定义已授权的验收能力源码边界/);

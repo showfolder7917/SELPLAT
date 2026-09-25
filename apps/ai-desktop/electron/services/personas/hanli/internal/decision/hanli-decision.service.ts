@@ -349,10 +349,11 @@ function pageCriterionSurfacesFromPlan(
  * 这里只识别原验收条件中已经授权的页面动作与布局观察；失败注入、发送消息、
  * 设置修改和任务操作仍由代码或工程证据验收，不在此扩大韩立权限。
  */
-function requiredFormalPageCriterionIds(criteria: Array<{ criterionId: string; criterion: string }>): string[] {
-  const formalInteraction = /(?:真实|正式|当前)应用.{0,40}(?:点击|打开|关闭|展开|收起|滚动|拖动|选择|新建|重建|重新建立)/;
-  const namedControlInteraction = /(?:点击|打开|关闭|展开|收起|滚动|拖动|选择).{0,40}(?:按钮|页面|任务卡|对话|窗口|面板|标签)/;
-  const visibleLayout = /(?:正常|窄|宽).{0,12}窗口.{0,60}(?:显示|可见|遮挡|布局|滚动)/;
+export function requiredFormalPageCriterionIds(criteria: Array<{ criterionId: string; criterion: string }>): string[] {
+  // 动作词与控件名必须属于同一语句；否则“依赖展开。页面验收”会被误当成页面操作。
+  const formalInteraction = /(?:真实|正式|当前)应用[^。！？；.!?;\r\n]{0,40}(?:点击|打开|关闭|展开|收起|滚动|拖动|选择|新建|重建|重新建立)/;
+  const namedControlInteraction = /(?:点击|打开|关闭|展开|收起|滚动|拖动|选择)[^。！？；.!?;\r\n]{0,40}(?:按钮|页面|任务卡|对话|窗口|面板|标签)/;
+  const visibleLayout = /(?:正常|窄|宽)[^。！？；.!?;\r\n]{0,12}窗口[^。！？；.!?;\r\n]{0,60}(?:显示|可见|遮挡|布局|滚动)/;
   return criteria
     .filter(({ criterion }) => formalInteraction.test(criterion) || namedControlInteraction.test(criterion) || visibleLayout.test(criterion))
     .map(({ criterionId }) => criterionId);
