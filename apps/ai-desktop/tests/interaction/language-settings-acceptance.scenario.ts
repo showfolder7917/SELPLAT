@@ -1,5 +1,11 @@
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 
+/** 仅为源码审查声明本场景实际核对的生产表面，不产生运行时依赖。 */
+export type LanguageSettingsAcceptanceProductionSurfaces = [
+  typeof import("../../src/features/settings/components/DeveloperSettingsView").DeveloperSettingsView,
+  typeof import("../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer").CodexConversationComposer,
+];
+
 type InteractionHarness = {
   application: ElectronApplication;
   page: Page;
