@@ -111,21 +111,25 @@ test("证据达到四十八项上限时仍完整保留冻结源码清单", async
   const root = mkdtempSync(path.join(parent, "hanli-review-frozen-limit-"));
   try {
     const frozen = Array.from({ length: 8 }, (_, index) => `apps/ai-desktop/electron/services/workflow/domain/frozen-${index}.ts`);
+    const changedRuntime = "apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts";
     const renderer = Array.from({ length: 22 }, (_, index) => `apps/ai-desktop/src/features/conversation/saturated-${index}.tsx`);
     const firstLevel = renderer.map((_, index) => `apps/ai-desktop/src/features/conversation/dependency-${index}.ts`);
     const secondLevel = renderer.map((_, index) => `apps/ai-desktop/src/features/conversation/leaf-${index}.ts`);
     const layout = "apps/ai-desktop/src/applications/styles/desktop-applications.css";
-    for (const file of [...frozen, ...renderer, ...firstLevel, ...secondLevel, layout]) mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    for (const file of [...frozen, changedRuntime, ...renderer, ...firstLevel, ...secondLevel, layout]) mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     for (const [index, file] of renderer.entries()) writeFileSync(path.join(root, file), `import { dependency } from "./dependency-${index}.js";\nexport const surface = dependency;\n`);
     for (const [index, file] of firstLevel.entries()) writeFileSync(path.join(root, file), `import { leaf } from "./leaf-${index}.js";\nexport const dependency = leaf;\n`);
     for (const file of secondLevel) writeFileSync(path.join(root, file), "export const leaf = true;\n");
     for (const file of frozen) writeFileSync(path.join(root, file), `export const frozenEvidence = ${JSON.stringify(file)};\n`);
+    writeFileSync(path.join(root, changedRuntime), "export const dynamicCandidate = true;\n");
     writeFileSync(path.join(root, layout), ".saturated { display: grid; }\n");
-    const task = { taskId: "saturated-evidence", state: "integrated", snapshot: { title: "saturated", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: renderer }] };
+    const task = { taskId: "saturated-evidence", state: "integrated", snapshot: { title: "saturated", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [...renderer, changedRuntime] }] };
     const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] }, [task], frozen);
     const files = context.sourceEvidence.map((item) => item.file);
     assert.equal(files.length, 48);
     for (const file of frozen) assert.ok(files.includes(file), `missing frozen evidence ${file}`);
+    assert.ok(files.includes(changedRuntime), "真实生产改动不能被冻结证据或依赖展开挤出");
+    assert.ok(files.indexOf(changedRuntime) < files.indexOf(frozen[0]), "真实生产改动必须先于冻结能力证据进入可消费前部");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -162,7 +166,7 @@ test("已提交任务的流式清单只剩测试文件时从签发提交恢复�
     };
     const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] });
     assert.equal(context.sourceEvidenceStatus, "available");
-    assert.deepEqual(context.sourceEvidence.map((item) => item.file), [testFile, source]);
+    assert.deepEqual(context.sourceEvidence.map((item) => item.file), [source, testFile]);
     assert.match(context.sourceEvidence.find((item) => item.file === source)?.content || "", /current-conversation/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
