@@ -987,14 +987,14 @@ export class PersonaEvolutionRuntime {
 
 
 /** 任务协作群主卡只展示当前投影；固定候选批次必须先通过计划修订替换，不能交给页面验收制造产品失败。 */
-function assertTaskCollaborationCriteriaUseDynamicCandidate(
+export function assertTaskCollaborationCriteriaUseDynamicCandidate(
   criteria: string[],
   criterionIds: string[],
   taskCollaborationCriterionIds: string[],
 ): void {
   const taskCriterionIndexes = criterionIds.flatMap((criterionId, index) => taskCollaborationCriterionIds.includes(criterionId) ? [index] : []);
   const fixedCandidate = taskCriterionIndexes
-    .map((index) => criteria[index])
+    .map((index) => criteria[index].replace(/<!--[\s\S]*?-->/g, ""))
     .find((criterion) => /(?:当前候选|候选批次)\s*(?:为|是)?\s*\d{2,}/.test(criterion));
   if (fixedCandidate) {
     throw new Error("任务协作群页面验收条件绑定了固定候选批次；请先通过既有验收计划修订入口改为‘当前最新已验证候选’，再执行正式页面验收。");

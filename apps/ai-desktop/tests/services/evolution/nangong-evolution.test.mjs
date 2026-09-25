@@ -44,7 +44,7 @@ function waitForEvolutionState(store, predicate, description) {
 }
 
 const [
-  { PersonaEvolutionRuntime: WorkflowPersonaEvolutionRuntime },
+  { PersonaEvolutionRuntime: WorkflowPersonaEvolutionRuntime, assertTaskCollaborationCriteriaUseDynamicCandidate },
   { EvolutionStateStore },
   { EvolutionFlowPolicy: EvolutionFlowOrchestrator },
   { HanliNangongDeliberationService },
@@ -64,6 +64,17 @@ const [
   loadWorkflowSource("electron/services/personas/hanli/internal/conversation/hanli-method-context.ts"),
   loadWorkflowSource("electron/services/personas/nangong/domain/nangong-conversation.aggregate.ts"),
 ]);
+
+test("任务协作群固定候选检测只检查验收正文，不读取语料元数据", () => {
+  const criterionIds = ["criterion-1"];
+  const taskCriterionIds = ["criterion-1"];
+  assert.doesNotThrow(() => assertTaskCollaborationCriteriaUseDynamicCandidate([
+    '主卡显示当前最新已验证候选。\n<!-- SELPLAT_CORPUS_META {"intent":"当前候选496"} -->',
+  ], criterionIds, taskCriterionIds));
+  assert.throws(() => assertTaskCollaborationCriteriaUseDynamicCandidate([
+    '主卡显示当前候选 496。\n<!-- SELPLAT_CORPUS_META {"intent":"当前最新已验证候选"} -->',
+  ], criterionIds, taskCriterionIds), /固定候选批次/);
+});
 
 /**
  * 演进回归直接核验当前工作树的提示词源码，避免把候选源码测试耦合到主工程的旧构建产物。
