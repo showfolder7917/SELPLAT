@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,11 @@ if (!macDirectory) throw new Error(`Packaged developer application is unavailabl
 const asarPath = path.join(packageRoot, macDirectory.name, "AI Desktop.app", "Contents", "Resources", "app.asar");
 const resourcesRoot = path.dirname(asarPath);
 if (!existsSync(asarPath)) throw new Error(`Electron asar is unavailable: ${asarPath}`);
+const recoveryLauncher = path.join(resourcesRoot, "runtime-activation-recovery.command");
+if (!existsSync(recoveryLauncher)) throw new Error(`Packaged runtime activation recovery launcher is missing: ${recoveryLauncher}`);
+if ((statSync(recoveryLauncher).mode & 0o111) === 0) {
+  throw new Error(`Packaged runtime activation recovery launcher is not executable: ${recoveryLauncher}`);
+}
 for (const ruleResource of ["manifest.json"]) {
   const rulePath = path.join(resourcesRoot, "ruleengine", ruleResource);
   if (!existsSync(rulePath)) throw new Error(`Packaged production rule resource is missing: ${rulePath}`);

@@ -12,6 +12,7 @@ const mainEntry = readFileSync(new URL("../../electron/main.ts", import.meta.url
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../../electron-builder.developer.json", import.meta.url), "utf8");
 const builderConfig = readFileSync(new URL("../../electron-builder.developer.config.cjs", import.meta.url), "utf8");
+const packagedRecoveryLauncher = readFileSync(new URL("../../resources/runtime-activation-recovery.command", import.meta.url), "utf8");
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
 const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
@@ -101,6 +102,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builderConfig, /const sourceBundleBuildRoot = path\.join\(selplatRoot, "build", "ai-desktop"\);[\s\S]*resource\.to === "ruleengine".*path\.join\(sourceBundleBuildRoot, "rule-bundle"\)[\s\S]*resource\.to === "prompts".*path\.join\(sourceBundleBuildRoot, "prompt-bundle"\)/);
   assert.match(builderConfig, /const candidateProjectRoot = path\.resolve\(applicationRoot, "\.\.\/\.\."\);[\s\S]*const candidateBuildRoot = path\.join\(candidateProjectRoot, "build", "ai-desktop"\);[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/renderer\/developer"[\s\S]*path\.join\(candidateBuildRoot, "renderer", "developer"\)[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/electron"[\s\S]*path\.join\(candidateBuildRoot, "electron"\)/);
   assert.match(builderConfig, /resource\.to === "db\/sql".*path\.join\(applicationRoot, "db", "sql"\)/);
+  assert.match(builder, /"to": "runtime-activation-recovery\.command"/);
+  assert.match(builderConfig, /resource\.to === "runtime-activation-recovery\.command"[\s\S]*path\.join\(applicationRoot, "resources", "runtime-activation-recovery\.command"\)/);
   assert.match(builder, /\{ "from": "db\/sql", "to": "db\/sql", "filter": \["load-order\.txt", "\*\.sql"\] \}/);
   assert.doesNotMatch(launcher, /^if ! npm run build:developer/m);
   assert.match(launcher, /npm run package:mac:developer/);
@@ -130,10 +133,11 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
   assert.match(launcher, /git -C "\$SELPLAT_ROOT" diff --quiet "\$CONTROLLED_SHA" HEAD --/);
   assert.match(launcher, /--ai-desktop-runtime-sha=\$CONTROLLED_SHA/);
-  assert.match(launcher, /--recover-staged-release=/);
-  assert.match(launcher, /ai-desktop-runtime-source\.json/);
-  assert.match(launcher, /归档批次、候选 SHA、暂存清理失败事实或运行包来源不匹配/);
-  assert.ok(launcher.indexOf('if [[ "$CONTROLLED_MODE" == "recover-staged" ]]') < launcher.indexOf("npm run package:mac:developer"), "已提升包接管不得重新构建候选");
+  assert.doesNotMatch(launcher, /recover-staged-release/);
+  assert.match(packagedRecoveryLauncher, /ai-desktop-runtime-source\.json/);
+  assert.match(packagedRecoveryLauncher, /--ai-desktop-recover-release=\$RELEASE_BATCH/);
+  assert.match(packagedRecoveryLauncher, /归档批次、候选 SHA、暂存清理失败事实或运行包来源不匹配/);
+  assert.doesNotMatch(packagedRecoveryLauncher, /npm run package:mac:developer/);
   assert.match(launcher, /--ai-desktop-user-data-dir=\$CONTROLLED_USER_DATA_DIR/);
   assert.match(electronMain, /isolatedUserDataArgument[\s\S]*--user-data-dir=\$\{isolatedUserData\}/);
   assert.match(appConfig, /--selplat-root=/);
@@ -160,6 +164,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(packageContentVerifier, /Packaged prompt resource is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration manifest is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration is missing/);
+  assert.match(packageContentVerifier, /Packaged runtime activation recovery launcher is missing/);
+  assert.match(packageContentVerifier, /Packaged runtime activation recovery launcher is not executable/);
   assert.match(packageContentVerifier, /filter\(\(entry\) => entry && !entry\.startsWith\("#"\)\)/);
   assert.match(packageContentVerifier, /assertPackagedDistributionParser/);
   assert.match(packageContentVerifier, /packagedDistributionServicePath/);
