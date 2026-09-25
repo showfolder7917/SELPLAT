@@ -24,8 +24,9 @@ export type HanliResultAcceptanceReview = {
 type ResultAcceptanceEvidence = unknown | ((plan: EvolutionAcceptancePlanOutDto | null) => unknown);
 
 // 此清单是验收能力本身的固定只读边界，而非按提示扩展的文件搜索。
-// 它与提案冻结，供条件 6 审查同一套阶段投影、交付门禁和性能样本读取链。
+// 它与提案冻结，供条件 1 至 6 审查同一套预检事实、阶段投影、交付门禁和性能样本读取链。
 const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
+  "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-delivery-evidence.ts",
   "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-duration.log.ts",

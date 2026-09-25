@@ -11,7 +11,7 @@ export interface ReleaseBatchCandidateEvidenceOutDto {
   candidateProjectRoot: string;
   candidateSha: string | null;
   loadedRuntimeSha: string | null;
-  sourceBlobs: Array<{ source: "state" | "runtime" | "projection"; relativePath: string; sha256: string }>;
+  sourceBlobs: Array<{ source: "state" | "runtime" | "projection" | "application" | "preflight" | "prompt"; relativePath: string; sha256: string }>;
   acceptancePlanChecks: Array<{ capability: string; passed: boolean }>;
   readError: string | null;
 }

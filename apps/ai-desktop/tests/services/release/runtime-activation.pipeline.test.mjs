@@ -124,6 +124,7 @@ test("恢复缺少快照时只从稳定仓库保留的候选分支读取影响�
     git(repository, "commit", "-m", "base");
     const baseSha = git(repository, "rev-parse", "HEAD");
     writeFileSync(path.join(repository, "candidate.ts"), "export const candidate = true;\n");
+    writeFileSync(path.join(repository, "evidence.ts"), "export const evidence = true;\n");
     git(repository, "add", "-A");
     git(repository, "commit", "-m", "candidate");
     const candidateSha = git(repository, "rev-parse", "HEAD");
@@ -131,7 +132,8 @@ test("恢复缺少快照时只从稳定仓库保留的候选分支读取影响�
     git(repository, "branch", branchName, candidateSha);
     const manager = new VersionWorkspaceManager(repository, managedRoot);
     const candidate = { generation: 468, releaseBatchId: "release-0.1.1-g468", version: "0.1.1", branchName, rootPath: path.join(directory, "retired-candidate"), baseSha, candidateSha, taskIds: [] };
-    assert.deepEqual(await manager.readRetainedCandidateChangedFiles(candidate), ["candidate.ts"]);
+    assert.deepEqual(await manager.readRetainedCandidateChangedFiles(candidate), ["candidate.ts", "evidence.ts"]);
+    assert.deepEqual(await manager.readRetainedCandidateFiles(candidate, ["evidence.ts"]), { "evidence.ts": "export const evidence = true;\n" });
     git(repository, "branch", "-f", branchName, baseSha);
     await assert.rejects(() => manager.readRetainedCandidateChangedFiles(candidate), /候选 SHA 不一致/u);
   } finally {
@@ -208,6 +210,14 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
       mergeIntoLocalBranch: async () => { events.push("merge"); return "local-merge-sha"; },
       retireCandidate: async () => { events.push("retire"); },
       retireWorkspace: async () => {},
+      readRetainedCandidateFiles: async (_candidate, relativePaths) => Object.fromEntries(relativePaths.map((relativePath) => [relativePath, {
+        "apps/ai-desktop/electron/services/evolution/internal/evolution-state.store.ts": "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)",
+        "apps/ai-desktop/electron/services/workflow/internal/evolution/persona-evolution.runtime.ts": "if (review.mode === 'mixed') { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === 'page-experience'); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState, proposalSourceTasks, plan?.sourceEvidenceFiles || [])",
+        "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts": "acceptanceRoundId currentRoundId",
+        "apps/ai-desktop/electron/services/personas/hanli/internal/application/hanli-application.service.ts": "version: 3 version-integration.pipeline.ts",
+        "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts": "appendQuickPreflightDecision preflight.issues_found preflight.rerun_required",
+        "apps/ai-desktop/prompts/personas/hanli/result-acceptance.md": "acceptancePlan.version 为 2 或 3 sourceEvidenceFiles 清单以外文件",
+      }[relativePath]])),
     };
     const releaseBatches = new ReleaseBatchStore(running, archive);
     const common = {

@@ -2745,6 +2745,7 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
     assert.equal(evidencePlans[0], null, "首次审查只用于条件分区，尚未冻结计划");
     assert.equal(evidencePlans[1].version, 3, "冻结后复核必须使用同一计划的源码清单");
     assert.ok(evidencePlans[1].sourceEvidenceFiles.length > 0);
+    assert.ok(evidencePlans[1].sourceEvidenceFiles.includes("apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts"), "v3 清单必须冻结预检与复用结论的生产入口");
     assert.equal(result.review.mode, "mixed");
     assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "page-experience"]);
     assert.equal(result.review.sourceReview.status, "passed");
@@ -2868,6 +2869,7 @@ test("旧计划把发送消息误列为页面条件时退役旧计划并重新�
     const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "令狐门禁已经完成" });
     assert.equal(result.plan.version, 3);
     assert.ok(result.plan.sourceEvidenceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"));
+    assert.ok(result.plan.sourceEvidenceFiles.includes("apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts"));
     assert.notEqual(result.plan.planId, "legacy-plan");
     assert.notEqual(result.plan.currentRoundId, "legacy-round");
     assert.equal(result.plan.conditions[0].evidenceType, "code-conformance");
