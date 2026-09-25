@@ -62,10 +62,18 @@ function readChangedSourceEvidence(
       if (layoutPath.startsWith(`${canonicalRoot}${path.sep}`) && !files.includes(layoutFile)) files.push(layoutFile);
     } catch { /* 当前工作区没有该样式时，不伪造布局证据。 */ }
   }
+  const evidencePriority = (file: string) => {
+    if (/^apps\/ai-desktop\/tests\/interaction\/.+\.scenario\.[cm]?[jt]sx?$/u.test(file)) return 0;
+    if (file === layoutFile) return 1;
+    if (file.startsWith("apps/ai-desktop/src/")) return 2;
+    if (file.startsWith("apps/ai-desktop/tests/interaction/")) return 3;
+    return 4;
+  };
+  files.sort((left, right) => evidencePriority(left) - evidencePriority(right));
   // 样式文件常把响应式规则放在中段；在可控大小内提供整文件，避免把省略的布局规则误判为无法验收。
   const evidenceLimit = (file: string) => file.endsWith(".css") ? 120_000 : 48_000;
-  // 大型专题的关键交互测试常位于第 30 个文件之后；按每批 16 项分组，但不静默丢弃后续批次。
-  const declaredItems = files.flatMap((file) => {
+  // 固定证据边界内优先保留场景、布局和生产源码，历史清单只能占用剩余名额。
+  const declaredItems = files.slice(0, 30).flatMap((file) => {
     if (path.isAbsolute(file)) return [];
     const resolved = path.resolve(canonicalRoot, file);
     if (!resolved.startsWith(`${canonicalRoot}${path.sep}`)) return [];
@@ -87,8 +95,10 @@ function readChangedSourceEvidence(
   // 只沿静态相对 import 向下两层；测试仅限已集成任务声明的文件，不沿导入扩大到测试或包依赖。
   const readDirectImports = (sources: Array<{ file: string; content: string }>) => sources.flatMap(({ file, content }) => {
     if (content.startsWith("[当前授权工作区不存在")) return [];
-    const imports = [...content.matchAll(/\bimport\s+(?:type\s+)?[^;]*?\sfrom\s+["'](\.[^"']+)["']/gu)]
-      .map((match) => match[1]);
+    const imports = [
+      ...content.matchAll(/\bimport\s+(?:type\s+)?[^;]*?\sfrom\s+["'](\.[^"']+)["']/gu),
+      ...content.matchAll(/\btypeof\s+import\(\s*["'](\.[^"']+)["']\s*\)\s*\.\s*[A-Za-z_$][\w$]*/gu),
+    ].map((match) => match[1]);
     return imports.flatMap((specifier) => {
       if (specifier.includes("?")) return [];
       const base = path.resolve(canonicalRoot, path.dirname(file), specifier.endsWith(".js") ? specifier.slice(0, -3) : specifier);
@@ -109,10 +119,12 @@ function readChangedSourceEvidence(
       } catch { return []; }
     });
   });
-  // 已登记文件较多时先完整覆盖每个变更文件和布局；不再额外展开依赖，把后段关键测试挤出上下文。
-  const firstLevel = files.length > 30 ? [] : readDirectImports(declaredItems);
+  const priorityItems = declaredItems.filter((item) => evidencePriority(item.file) < 4);
+  const priorityImports = readDirectImports(priorityItems);
+  // 场景引用的生产表面优先进入证据包，但不丢弃既有入口的恢复链。
+  const firstLevel = [...new Map([...priorityImports, ...readDirectImports(declaredItems)].map((item) => [item.file, item])).values()];
   const secondLevel = readDirectImports(firstLevel);
-  const items = [...new Map([...declaredItems, ...firstLevel, ...secondLevel].map((item) => [item.file, item])).values()];
+  const items = [...new Map([...priorityItems, ...priorityImports, ...firstLevel, ...secondLevel, ...declaredItems].map((item) => [item.file, item])).values()].slice(0, 48);
   const batches = Array.from({ length: Math.ceil(items.length / 16) }, (_, index) => ({
     batch: index + 1,
     files: items.slice(index * 16, (index + 1) * 16).map((item) => item.file),

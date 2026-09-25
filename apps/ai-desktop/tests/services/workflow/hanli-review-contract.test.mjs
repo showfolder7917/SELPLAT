@@ -75,12 +75,13 @@ test("源码审查证据覆盖同提案已集成原任务、测试和布局，�
   assert.ok(sourceFiles.includes("apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"));
   assert.ok(sourceFiles.includes("apps/ai-desktop/src/applications/styles/desktop-applications.css"));
   assert.ok(sourceFiles.every((file) => file.startsWith("apps/ai-desktop/")));
-  assert.match(context.sourceEvidence[0].content, /currentTopicStage|CurrentTopicStage/u);
-  assert.match(context.sourceEvidence[0].content, /projectCurrentTechnicalRecovery/u);
+  const stageSource = context.sourceEvidence.find((item) => item.file.endsWith("/current-topic-stage.projection.ts"))?.content || "";
+  assert.match(stageSource, /currentTopicStage|CurrentTopicStage/u);
+  assert.match(stageSource, /projectCurrentTechnicalRecovery/u);
   const technicalSource = context.sourceEvidence.find((item) => item.file.endsWith("/current-topic-technical-recovery.projection.ts"))?.content || "";
   assert.match(technicalSource, /const systemOnlyAcceptanceRetry/u);
   assert.match(technicalSource, /recovery\.occurrences/u);
-  assert.doesNotMatch(context.sourceEvidence[0].content, /源码中段省略/u);
+  assert.doesNotMatch(stageSource, /源码中段省略/u);
 });
 
 test("已提交任务的流式清单只剩测试文件时从签发提交恢复源码证据", async () => {
@@ -121,26 +122,37 @@ test("已提交任务的流式清单只剩测试文件时从签发提交恢复�
   }
 });
 
-test("超过三十个已登记文件时按批保留后段交互场景和布局证据", async () => {
+test("超过三十个已登记文件时保留场景、布局和场景生产表面", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, "hanli-review-batches-"));
   try {
-    const files = Array.from({ length: 35 }, (_, index) => `apps/ai-desktop/src/features/settings/batch-${index}.ts`);
     const scenario = "apps/ai-desktop/tests/interaction/language-settings-acceptance.scenario.ts";
+    const settings = "apps/ai-desktop/src/features/settings/components/DeveloperSettingsView.tsx";
+    const composer = "apps/ai-desktop/src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer.tsx";
     const layout = "apps/ai-desktop/src/applications/styles/desktop-applications.css";
-    for (const file of [...files, scenario, layout]) {
+    const changedSource = "apps/ai-desktop/src/applications/developer/entry.ts";
+    const overflow = Array.from({ length: 31 }, (_, index) => `apps/ai-desktop/tests/overflow/overflow-${index}.test.mjs`);
+    for (const file of [...overflow, scenario, settings, composer, layout, changedSource]) {
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-      writeFileSync(path.join(root, file), file === scenario ? "export const laterBatchScenario = true;\n" : file === layout ? ".later-batch-layout { display: grid; }\n" : "export const source = true;\n");
+      const content = file === scenario
+        ? 'export type Surfaces = [typeof import("../../src/features/settings/components/DeveloperSettingsView").DeveloperSettingsView, typeof import("../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer").CodexConversationComposer];\n'
+        : file === settings ? "export function DeveloperSettingsView() { return null; }\n"
+          : file === composer ? "export function CodexConversationComposer() { return null; }\n"
+            : file === layout ? ".later-batch-layout { display: grid; }\n"
+              : "export const source = true;\n";
+      writeFileSync(path.join(root, file), content);
     }
-    const task = { taskId: "many-files", state: "integrated", snapshot: { title: "batch", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [...files, scenario] }] };
+    const task = { taskId: "many-files", state: "integrated", snapshot: { title: "batch", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [...overflow, scenario, changedSource] }] };
     const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] });
     assert.equal(context.sourceEvidenceStatus, "available");
-    assert.ok(context.sourceEvidenceBatches.length >= 3);
     assert.equal(context.sourceEvidenceBatches.flatMap((batch) => batch.files).length, context.sourceEvidence.length);
-    assert.match(context.sourceEvidence.find((item) => item.file === scenario)?.content || "", /laterBatchScenario/u);
+    assert.ok(context.sourceEvidence.length <= 48);
+    assert.ok(context.sourceEvidence.map((item) => item.file).includes(settings));
+    assert.ok(context.sourceEvidence.map((item) => item.file).includes(composer));
+    assert.match(context.sourceEvidence.find((item) => item.file === scenario)?.content || "", /typeof import/u);
     assert.match(context.sourceEvidence.find((item) => item.file === layout)?.content || "", /later-batch-layout/u);
   } finally {
     rmSync(root, { recursive: true, force: true });

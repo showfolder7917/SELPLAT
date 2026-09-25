@@ -63,6 +63,8 @@ test("桌面交互测试使用固定隔离入口并加载生产文件与正式�
   assert.match(sidebarSpec, /正式最小[\s\S]{0,120}minimumWidth/);
   assert.match(languageSettingsScenario, /getMinimumSize\(\)/);
   assert.match(languageSettingsScenario, /toEqual\(\[680, 700\]\)/);
+  assert.match(languageSettingsScenario, /typeof import\("\.\.\/\.\.\/src\/features\/settings\/components\/DeveloperSettingsView"\)/);
+  assert.match(languageSettingsScenario, /typeof import\("\.\.\/\.\.\/src\/features\/conversation\/components\/CodexConversationWorkspace\/CodexConversationComposer"\)/);
   assert.match(sidebarSpec, /设置按钮必须锚定左下/);
   assert.match(sidebarSpec, /设置标题不能竖排/);
   assert.match(viteConfig, /cssCodeSplit: false/);
