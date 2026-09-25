@@ -48,6 +48,11 @@ test("固定界面资源提供三语、中文回退和受控缺键诊断", () =>
   assert.equal(fixedUiText("zh-CN", "modelDefault"), "Codex 默认");
   assert.equal(fixedUiText("ja", "testDataClearFailed"), "テストデータを消去できませんでした。");
   assert.equal(fixedUiText("en", "testDataRestartFailed"), "Could not start the app restart.");
+  assert.equal(fixedUiText("zh-CN", "conversationLoginUnavailable"), "ChatGPT 登录暂不可用。");
+  assert.equal(fixedUiText("ja", "conversationClarificationSubmitFailed"), "確認回答を送信できません。");
+  assert.equal(fixedUiText("en", "conversationSupplementTaskFailed"), "Could not add to the current task.");
+  assert.equal(fixedUiText("en", "conversationRecoverTaskFailed"), "Could not recover the unfinished task.");
+  assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案", conversationLoginUnavailable: "ChatGPT 登录暂不可用。" }, en: {} }, "en", "conversationLoginUnavailable"), "ChatGPT 登录暂不可用。");
   assert.equal(fixedUiText("fr", "workspaceFilePreview"), "文件预览");
   assert.equal(fixedUiText("en", "retiredFixedKey"), "[缺少固定界面文案: retiredFixedKey]");
   assert.equal(resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案", developerSettings: "连接与执行设置" }, en: {} }, "en", "developerSettings"), "连接与执行设置");
