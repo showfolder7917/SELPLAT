@@ -895,3 +895,17 @@ test("最新验收需要范围确认时旧技术主卡点不得更新或重启�
   assert.equal(f.effects.refreshed, undefined);
   assert.deepEqual(f.effects.resumed, []);
 });
+
+test("新验收修复接续同根当前任务而不回跳到最初任务", async () => {
+  const f = fixture();
+  f.evolution.proposals[0].distributedTaskIds = ["task-original"];
+  f.collaboration.tasks.push(
+    { taskId: "task-original", state: "blocked", evolutionProposalId: "proposal-1", replacementForTaskId: null,
+      createdAt: "2026-09-05T00:00:00.000Z", updatedAt: "2026-09-05T00:00:00.000Z", snapshot: { constraints: [] } },
+    { taskId: "task-delivered", state: "integrated", evolutionProposalId: "proposal-1", replacementForTaskId: "task-original",
+      createdAt: "2026-09-05T00:01:00.000Z", updatedAt: "2026-09-05T00:02:00.000Z", snapshot: { constraints: [] } },
+  );
+  await f.run();
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.effects.submitted[0].replacementForTaskId, "task-delivered");
+});
