@@ -38,6 +38,7 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
     cancel: cancelCodex,
   } = conversation;
   const interaction = useCodexInteractionRequests({
+    locale: options.locale,
     browserOpenedMessage: options.browserOpenedMessage,
     onLogout: () => { activeAssistantIdRef.current = null; setMessages([]); },
     onTrustedCommandChanged: options.onTrustedCommandChanged,

@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 
-import type { CodexAccountOutDto, CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexUserInputRequestOutDto } from "../../../../contracts/system/desktop/index";
+import { fixedUiText } from "../../../../contracts/foundation";
+import type { CodexAccountOutDto, CodexApprovalOutDto, CodexHarnessStatusOutDto, CodexUserInputRequestOutDto, LocaleValue } from "../../../../contracts/system/desktop/index";
 import { getOptionalCodexDesktopApi } from "../../../foundation/desktop-api";
 
 const EMPTY_ACCOUNT: CodexAccountOutDto = { authenticated: false, authMode: null, email: null, planType: null, requiresOpenaiAuth: true };
 const EMPTY_STATUS: CodexHarnessStatusOutDto = { connected: false, account: EMPTY_ACCOUNT, error: null, runtime: null };
 
 type InteractionRequestOptions = {
+  locale: LocaleValue;
   browserOpenedMessage: string;
   onLogout: () => void;
   onTrustedCommandChanged: () => void;
 };
 
 /** Codex 账号状态、审批请求和结构化追问的唯一 Renderer 状态所有者。 */
-export function useCodexInteractionRequests({ browserOpenedMessage, onLogout, onTrustedCommandChanged }: InteractionRequestOptions) {
+export function useCodexInteractionRequests({ locale, browserOpenedMessage, onLogout, onTrustedCommandChanged }: InteractionRequestOptions) {
   const [status, setStatus] = useState<CodexHarnessStatusOutDto>(EMPTY_STATUS);
   const [approval, setApproval] = useState<CodexApprovalOutDto | null>(null);
   const [userInputRequest, setUserInputRequest] = useState<CodexUserInputRequestOutDto | null>(null);
@@ -58,7 +60,7 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onLogout, on
       await getOptionalCodexDesktopApi()?.loginWithChatGPT();
       setLoginHint(browserOpenedMessage);
     } catch (error) {
-      setLoginHint(error instanceof Error ? error.message : "ChatGPT login unavailable");
+      setLoginHint(error instanceof Error ? error.message : fixedUiText(locale, "conversationLoginUnavailable"));
     }
   };
 
@@ -89,7 +91,7 @@ export function useCodexInteractionRequests({ browserOpenedMessage, onLogout, on
       await getOptionalCodexDesktopApi()?.resolveCodexUserInput({ requestId: userInputRequest.requestId, answers });
       setUserInputRequest(null);
     } catch (error) {
-      setUserInputError(error instanceof Error ? error.message : "Unable to submit clarification answers.");
+      setUserInputError(error instanceof Error ? error.message : fixedUiText(locale, "conversationClarificationSubmitFailed"));
       setConfirmedQuestionIds((current) => {
         const next = new Set(current);
         next.delete(questionId);

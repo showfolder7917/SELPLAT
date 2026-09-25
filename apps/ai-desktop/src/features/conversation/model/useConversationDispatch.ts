@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import type { ConversationDispatchStateOutDto, EnqueueMessageInDto, LocaleValue, SandboxModeValue } from "../../../../contracts/system/desktop/index";
 import { getOptionalConversationDesktopApi } from "../../../foundation/desktop-api";
 
@@ -55,7 +56,7 @@ export function useConversationDispatch(locale: LocaleValue, sandboxMode: Sandbo
       const next = await getOptionalConversationDesktopApi()?.supplementQueuedMessage(itemId);
       if (next) setState(next);
     } catch (reason) {
-      setError(readableDesktopError(reason, "无法补充到当前任务。"));
+      setError(readableDesktopError(reason, fixedUiText(locale, "conversationSupplementTaskFailed")));
     }
   };
 
@@ -70,7 +71,7 @@ export function useConversationDispatch(locale: LocaleValue, sandboxMode: Sandbo
       const next = await getOptionalConversationDesktopApi()?.recoverConversationTask();
       if (next) setState(next);
     } catch (reason) {
-      setError(readableDesktopError(reason, "无法继续未完成任务。"));
+      setError(readableDesktopError(reason, fixedUiText(locale, "conversationRecoverTaskFailed")));
     }
   };
 
