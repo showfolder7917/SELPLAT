@@ -877,6 +877,71 @@ test("历史专题的已完成验收事实不依赖专题持久状态", () => {
   } finally { fixture.close(); }
 });
 
+test("历史专题的有效完成归档可收口旧摘要，后续活动仍覆盖完成", () => {
+  const fixture = createFixture("topic-completion-archive");
+  try {
+    const group = { groupId: "topic:completion-archive", topicId: "topic-completion-archive", proposalId: "proposal-completion-archive", title: "历史专题", status: "running", startedAt: fixture.at(1) };
+    fixture.append({
+      eventId: "old-revalidation", eventType: "checkpoint.progress",
+      group: { ...group, summary: "重新验证", updatedAt: fixture.at(1) },
+      fact: { nodeId: "recovery:old", taskId: null, proposalId: group.proposalId, sourceFactKey: "old-revalidation", kind: "repair",
+        actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "current", action: "重新验证", summary: "重新验证",
+        contentRole: "analysis-output", content: "旧恢复", detailRole: "recovery-conditions", detail: "旧记录", startedAt: fixture.at(1), completedAt: null, automaticOpen: true, manualApprovalProposalId: null, occurredAt: fixture.at(1) },
+    });
+    appendCompletionArchive(fixture, group.topicId, group.proposalId, "completion-record", fixture.at(3));
+    let snapshot = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(snapshot.status, "completed");
+    assert.equal(snapshot.summary, "专题已完成");
+
+    fixture.append({
+      eventId: "later-recovery", eventType: "checkpoint.progress",
+      group: { ...group, summary: "新的恢复活动", updatedAt: fixture.at(5) },
+      fact: { nodeId: "recovery:later", taskId: null, proposalId: group.proposalId, sourceFactKey: "later-recovery", kind: "repair",
+        actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "current", action: "重新验证", summary: "新的恢复活动",
+        contentRole: "analysis-output", content: "新恢复", detailRole: "recovery-conditions", detail: "新证据", startedAt: fixture.at(5), completedAt: null, automaticOpen: true, manualApprovalProposalId: null, occurredAt: fixture.at(5) },
+    });
+    snapshot = fixture.timeline.snapshot(fixture.at(6)).groups[0];
+    assert.equal(snapshot.status, "running");
+    assert.equal(snapshot.summary, "新的恢复活动");
+  } finally { fixture.close(); }
+});
+
+test("无效或跨提案的完成归档不能收口历史专题", () => {
+  const fixture = createFixture("invalid-completion-archive");
+  try {
+    const group = { groupId: "topic:invalid-completion-archive", topicId: "topic-invalid-completion-archive", proposalId: "proposal-valid", title: "历史专题", status: "running", startedAt: fixture.at(1) };
+    fixture.append({
+      eventId: "current-revalidation", eventType: "checkpoint.progress",
+      group: { ...group, summary: "重新验证", updatedAt: fixture.at(1) },
+      fact: { nodeId: "recovery:current", taskId: null, proposalId: group.proposalId, sourceFactKey: "current-revalidation", kind: "repair",
+        actor: member("linghu-ancestor", "令狐老祖"), recipients: [], status: "current", action: "重新验证", summary: "重新验证",
+        contentRole: "analysis-output", content: "当前恢复", detailRole: "recovery-conditions", detail: "当前证据", startedAt: fixture.at(1), completedAt: null, automaticOpen: true, manualApprovalProposalId: null, occurredAt: fixture.at(1) },
+    });
+    appendCompletionArchive(fixture, group.topicId, "proposal-other", "cross-proposal", fixture.at(2));
+    appendCompletionArchive(fixture, group.topicId, group.proposalId, "missing-evidence", fixture.at(3), { evidenceReferences: [] });
+    const snapshot = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(snapshot.status, "running");
+    assert.equal(snapshot.summary, "重新验证");
+  } finally { fixture.close(); }
+});
+
+function appendCompletionArchive(fixture, topicId, proposalId, recordId, occurredAt, conclusionOverrides = {}) {
+  const conclusion = {
+    recordId,
+    handler: "韩立",
+    occurredAt,
+    acceptanceRunId: `run:${recordId}`,
+    conditionResults: [{ checkId: "criterion-1", status: "passed", evidenceReferences: [`evidence:${recordId}`] }],
+    evidenceReferences: [`evidence:${recordId}`],
+    ...conclusionOverrides,
+  };
+  fixture.database.withConnection((connection) => connection.prepare(`
+    INSERT INTO AiDesktopEvolutionArchiveRecord
+      (recordId, deliberationId, topicId, proposalId, taskId, sequenceNumber, category, eventType, actor, title, originalPayloadJson, occurredAt, recordedAt)
+    VALUES ($recordId, NULL, $topicId, $proposalId, NULL, 1, 'acceptance', 'proposal.result_decided', 'han-li', '韩立完成实施结果验收', $payload, $occurredAt, $occurredAt)
+  `).run({ $recordId: recordId, $topicId: topicId, $proposalId: proposalId, $payload: JSON.stringify({ finalConclusion: conclusion }), $occurredAt: occurredAt }));
+}
+
 function approvalApplication(fixture, proposalId, offset, action) {
   return businessEvent(fixture, `application:${proposalId}`, proposalId, offset, {
     nodeId: `proposal:${proposalId}`, taskId: null, proposalId, sourceFactKey: `application:${proposalId}`, kind: "approval-application",

@@ -14,7 +14,7 @@ import type { CollaborationTimelineBusinessEventOutDto } from "../../../../contr
 import type { CollaborationTimelineCommit, CollaborationTimelinePersistencePort, CollaborationTimelineStreamCommit } from "../../../services/support/capabilities/event-center/index.js";
 import { projectCollaborationFlowEvent, projectLegacySubmittedFlowCorrection } from "./collaboration-timeline-flow.projector.js";
 import { projectTopicFinalPresentation } from "../../../services/workflow/domain/topic-final-presentation.projection.js";
-import type { TopicLaterPresentationActivity } from "../../../services/workflow/domain/topic-final-presentation.projection.js";
+import type { TopicLaterPresentationActivity, TopicTerminalPresentationFact } from "../../../services/workflow/domain/topic-final-presentation.projection.js";
 import type { DatabasePort as SqliteDatabase } from "../../platform/index.js";
 
 const NANGONG: CollaborationParticipantSnapshotOutDto = { memberId: "nangong-wan", displayName: "南宫婉" };
@@ -334,9 +334,10 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
     }
     const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
     const topicUpdatedAt = String(topic.updatedAt);
+    const terminal = timelineTerminalFact(connection, rows, nullable(topic.topicId), nullable(topic.proposalId));
     const finalPresentation = projectTopicFinalPresentation({
-      terminal: timelineTerminalFact(rows),
-      laterActivity: timelineLaterActivity(rows),
+      terminal,
+      laterActivity: timelineLaterActivity(rows, terminal),
     });
     // 统一领域规则确认终态后，只退休更早的活动展示；原始审计事实仍保留在 rows 中。
     if (finalPresentation?.status === "completed" && finalPresentation.terminalAt) {
@@ -400,7 +401,12 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
 }
 
 /** 从已追加的验收事实读取专题终态；无专题卡不参与该规则。 */
-function timelineTerminalFact(rows: Array<Record<string, unknown>>) {
+function timelineTerminalFact(
+  connection: DatabaseSync,
+  rows: Array<Record<string, unknown>>,
+  topicId: string | null,
+  proposalId: string | null,
+): TopicTerminalPresentationFact | null {
   // 只有最终验收通过能收口专题；统一测试、自检等完成验证仍须继续经过发布、健康检查和韩立验收。
   // 升级前的完成档案没有 acceptance.passed 事件类型时，以验收节点和“验收通过”动作识别其同等终态证据。
   const acceptance = [...rows].reverse().find((row) => String(row.status) === "completed" && (
@@ -409,13 +415,15 @@ function timelineTerminalFact(rows: Array<Record<string, unknown>>) {
       && String(row.kind) === "verification"
       && String(row.action).includes("验收通过"))
   ));
-  if (!acceptance) return null;
-  return { occurredAt: String(acceptance.occurredAt), summary: String(acceptance.summary) };
+  const acceptanceTerminal = acceptance ? { occurredAt: String(acceptance.occurredAt), summary: String(acceptance.summary) } : null;
+  const archivedTerminal = archivedCompletionTerminalFact(connection, topicId, proposalId);
+  return [acceptanceTerminal, archivedTerminal]
+    .filter((item): item is TopicTerminalPresentationFact => item !== null)
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0] || null;
 }
 
 /** 只读取终态之后的真实活动；同时间戳仍由终态事实稳定收口。 */
-function timelineLaterActivity(rows: Array<Record<string, unknown>>) {
-  const terminal = timelineTerminalFact(rows);
+function timelineLaterActivity(rows: Array<Record<string, unknown>>, terminal: TopicTerminalPresentationFact | null) {
   if (!terminal) return null;
   const later = [...rows].reverse().find((row) => String(row.occurredAt) > terminal.occurredAt
     && ["current", "waiting", "failed"].includes(String(row.status)));
@@ -423,6 +431,52 @@ function timelineLaterActivity(rows: Array<Record<string, unknown>>) {
   const status: TopicLaterPresentationActivity["status"] = String(later.status) === "failed" || String(later.status) === "waiting" ? "blocked"
     : String(later.kind) === "verification" ? "verifying" : "running";
   return { occurredAt: String(later.occurredAt), status, summary: String(later.summary) };
+}
+
+/** 只接纳同专题同提案、带完整通过证据的归档完成决定；状态字段本身不能充当终态。 */
+function archivedCompletionTerminalFact(connection: DatabaseSync, topicId: string | null, proposalId: string | null): TopicTerminalPresentationFact | null {
+  if (!topicId || !proposalId) return null;
+  const records = connection.prepare(`
+    SELECT recordId, originalPayloadJson, occurredAt
+    FROM AiDesktopEvolutionArchiveRecord
+    WHERE topicId = $topicId AND proposalId = $proposalId AND taskId IS NULL AND eventType = 'proposal.result_decided'
+    ORDER BY occurredAt DESC, sequenceNumber DESC, recordId DESC
+  `).all({ $topicId: topicId, $proposalId: proposalId }) as Array<Record<string, unknown>>;
+  for (const record of records) {
+    const payload = parseJsonObject(String(record.originalPayloadJson));
+    const conclusion = payload?.finalConclusion;
+    if (!conclusion || typeof conclusion !== "object" || Array.isArray(conclusion)) continue;
+    const value = conclusion as Record<string, unknown>;
+    const conditions = value.conditionResults;
+    const evidence = value.evidenceReferences;
+    if (value.recordId !== record.recordId || value.occurredAt !== record.occurredAt
+      || typeof value.handler !== "string" || !value.handler.trim()
+      || typeof value.acceptanceRunId !== "string" || !value.acceptanceRunId
+      || !Array.isArray(conditions) || !conditions.length
+      || !Array.isArray(evidence) || !evidence.length
+      || conditions.some((item) => !completedConditionHasEvidence(item))
+      || evidence.some((item) => typeof item !== "string" || !item.trim())) continue;
+    return { occurredAt: String(record.occurredAt), summary: "专题已完成" };
+  }
+  return null;
+}
+
+function completedConditionHasEvidence(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const condition = value as Record<string, unknown>;
+  const evidence = condition.evidenceReferences;
+  return typeof condition.checkId === "string" && condition.checkId.trim().length > 0
+    && condition.status === "passed" && Array.isArray(evidence) && evidence.length > 0
+    && evidence.every((item) => typeof item === "string" && item.trim().length > 0);
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 从持久化 taskId 和任务标题建立层级；分类只依赖首次事实顺序，不根据标题文本猜测。 */
