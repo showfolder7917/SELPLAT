@@ -28,13 +28,15 @@ export interface EvolutionAcceptanceRoundOutDto {
 }
 
 export interface EvolutionAcceptancePlanOutDto {
-  /** v2 明确把需要发送消息、创建数据或恢复任务的条件归入令狐工程证据，不再交给正式页面验收器执行。 */
-  version: 1 | 2;
+  /** v2 明确把需要发送消息、创建数据或恢复任务的条件归入令狐工程证据，不再交给正式页面验收器执行；v3 冻结受限的只读源码证据清单。 */
+  version: 1 | 2 | 3;
   planId: string;
   topicId: string;
   proposalId: string;
   proposalVersion: number;
   conditions: EvolutionAcceptancePlanConditionOutDto[];
+  /** v3 的项目相对源码证据清单。它在计划冻结时确定，审查器不得从提示、页面或当前工作区猜测额外文件。 */
+  sourceEvidenceFiles?: string[];
   rounds: EvolutionAcceptanceRoundOutDto[];
   currentRoundId: string;
   createdAt: string;

@@ -84,6 +84,25 @@ test("源码审查证据覆盖同提案已集成原任务、测试和布局，�
   assert.doesNotMatch(stageSource, /源码中段省略/u);
 });
 
+test("冻结的验收源码清单在无任务变更时仍作为受限只读证据，并拒绝越界清单", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const workspace = { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] };
+  const manifest = [
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
+    "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-interaction-performance.log.ts",
+  ];
+  const context = buildHanliResultReviewContext([], workspace, [], manifest);
+  assert.equal(context.sourceEvidenceStatus, "available");
+  assert.equal(context.sourceEvidenceScope, "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports");
+  assert.ok(manifest.every((file) => context.sourceEvidence.some((item) => item.file === file)));
+  const missing = "apps/ai-desktop/electron/services/workflow/domain/not-present-for-review.ts";
+  const missingContext = buildHanliResultReviewContext([], workspace, [], [missing]);
+  assert.match(missingContext.sourceEvidence[0].content, /当前授权工作区不存在/);
+  assert.throws(() => buildHanliResultReviewContext([], workspace, [], ["../outside.ts"]), /越界路径/);
+  assert.throws(() => buildHanliResultReviewContext([], workspace, [], [manifest[0], manifest[0]]), /清单无效/);
+});
+
 test("已提交任务的流式清单只剩测试文件时从签发提交恢复源码证据", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
