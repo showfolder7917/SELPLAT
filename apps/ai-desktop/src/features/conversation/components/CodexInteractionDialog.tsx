@@ -1,4 +1,5 @@
 import type { LocaleValue } from "../../../../contracts/system/desktop/index";
+import { fixedUiText } from "../../../../contracts/foundation";
 import type { useCodexWorkspace } from "../model/useCodexWorkspace";
 import { CodexUserInputPanel } from "./CodexUserInputPanel";
 import { SelUiDialog } from "../../../theme/SelUiProvider";
@@ -41,16 +42,16 @@ export function CodexInteractionDialog({ controller, locale }: { controller: Cod
   if (!approval && !userInputRequest) return null;
   // 待答面板不锁住其他任务或输入区，客户仍能查看依据和补充说明。
   if (!approval) return <aside className="codex-user-input-dialog" role="dialog" aria-modal={false}
-    aria-label={locale === "ja" ? "続行前の確認" : "继续前需要确认"}>
-    <h2>{locale === "ja" ? "続行前の確認" : "继续前需要确认"}</h2>
+    aria-label={fixedUiText(locale, "conversationConfirmBeforeContinue")}>
+    <h2>{fixedUiText(locale, "conversationConfirmBeforeContinue")}</h2>
     {userInputRequest && <CodexUserInputPanel request={userInputRequest}
       answers={userInputAnswers} customAnswerIds={customAnswerIds} confirmedQuestionIds={confirmedQuestionIds}
       locale={locale} submitting={userInputSubmitting} onChoose={chooseUserInputAnswer}
       onChooseCustom={chooseCustomUserInput} onCustomChange={changeCustomUserInput} onConfirm={confirmUserInput} />}
     {userInputError && <p role="alert">{userInputError}</p>}
   </aside>;
-  const trustHint = locale === "ja" ? "今回だけ許可するか、同じプロジェクトの同じコマンドを今後も許可するか選択してください。" : "可只允许本次；只有选择“允许并信任”，相同项目和命令下次才会自动允许。";
+  const trustHint = fixedUiText(locale, "conversationTrustHint");
   return <SelUiDialog id="ai-desktop-codex-approval" open={Boolean(approval)} title={approval?.title || "Codex Approval"} kicker="CODEX APPROVAL" dismissible={false} onRequestClose={() => undefined}>
-    {approval && <>{approval.reason && <p className="seldialog-copy">{approval.reason}</p>}{approval.command && <pre className="seldialog-code">{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p className="seldialog-copy">{trustHint}</p>}{approval.details && <details className="seldialog-detail"><summary>Details</summary><pre className="seldialog-code">{approval.details}</pre></details>}<div className="seldialog-actions"><button onClick={() => void resolveApproval("decline")}>{locale === "ja" ? "拒否" : "拒绝"}</button><button data-sel-action="primary" aria-label={locale === "ja" ? "許可" : "允许"} onClick={() => void resolveApproval("accept")}>{locale === "ja" ? "今回だけ許可" : "仅允许本次"}</button>{approval.kind === "command" && approval.trustEligible && <button onClick={() => void resolveApproval("accept", true)}>{locale === "ja" ? "許可して信頼" : "允许并信任"}</button>}</div></>}
+    {approval && <>{approval.reason && <p className="seldialog-copy">{approval.reason}</p>}{approval.command && <pre className="seldialog-code">{approval.command}</pre>}{approval.cwd && <small>{approval.cwd}</small>}{approval.kind === "command" && approval.trustEligible && <p className="seldialog-copy">{trustHint}</p>}{approval.details && <details className="seldialog-detail"><summary>Details</summary><pre className="seldialog-code">{approval.details}</pre></details>}<div className="seldialog-actions"><button onClick={() => void resolveApproval("decline")}>{fixedUiText(locale, "conversationDecline")}</button><button data-sel-action="primary" aria-label={fixedUiText(locale, "conversationAccept")} onClick={() => void resolveApproval("accept")}>{fixedUiText(locale, "conversationAccept")}</button>{approval.kind === "command" && approval.trustEligible && <button onClick={() => void resolveApproval("accept", true)}>{fixedUiText(locale, "conversationAcceptAndTrust")}</button>}</div></>}
   </SelUiDialog>;
 }
