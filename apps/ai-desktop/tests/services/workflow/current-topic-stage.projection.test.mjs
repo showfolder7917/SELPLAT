@@ -83,6 +83,31 @@ test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签�
   });
 });
 
+test("当前恢复状态保留同根最近已交付任务的候选和门禁事实", () => {
+  const state = evolution("missing");
+  const delivered = deliveredCollaboration();
+  delivered.tasks[0].state = "integrated";
+  delivered.tasks[0].updatedAt = "2026-09-12T04:30:00.000Z";
+  const recoveryTask = {
+    ...task("blocked"), taskId: "task-recovery", replacementForTaskId: "task-current",
+    createdAt: "2026-09-12T05:00:00.000Z", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:delivery", topicId: "topic-current", proposalId: "proposal-current",
+    acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect", evidenceReferences: ["event-delivery"],
+    occurrences: [{ runId: "run-delivery", taskId: "task-recovery", occurrenceId: "event-delivery", reason: "新一轮恢复", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: "新一轮恢复",
+    nextAction: "等待令狐处理", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  const stage = projectCurrentTopicStage(state, { ...delivered, tasks: [delivered.tasks[0], recoveryTask] });
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.deliveryEvidence.candidate?.integrationSha, "final-candidate-sha");
+  assert.equal(stage.deliveryEvidence.unifiedTest, "passed");
+  assert.equal(stage.deliveryEvidence.release, "published");
+  assert.equal(stage.deliveryEvidence.restartHealth, "passed");
+  assert.equal(stage.deliveryEvidence.acceptance, "missing");
+});
+
 test("新一轮真实验收不得复用旧故障指纹的原因和下一步", () => {
   const state = evolution("failed");
   const currentAcceptanceId = state.archiveRecords[0].payload.acceptanceRun.runId;

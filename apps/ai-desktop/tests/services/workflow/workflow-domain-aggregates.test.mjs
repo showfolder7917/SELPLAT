@@ -2,15 +2,22 @@
 import assert from "node:assert/strict";
 // 使用 Node 内置测试运行器保持与现有 Workflow 测试一致。
 import test from "node:test";
+import { build } from "esbuild";
+import { fileURLToPath } from "node:url";
 
-// 从 Electron 构建产物读取单任务聚合，验证公开运行时真实使用的代码。
-import { CollaborationTaskAggregate } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/collaboration-task.aggregate.js";
-// 从同一构建产物读取提案执行聚合。
-import { ProposalExecutionAggregate } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/proposal-execution.aggregate.js";
-// 从同一构建产物读取卡点聚合。
-import { WorkflowCheckpointAggregate } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/workflow-checkpoint.aggregate.js";
-// 从同一构建产物读取研讨聚合。
-import { HanliNangongDeliberationAggregate } from "../../../../../build/ai-desktop/electron/electron/services/workflow/domain/hanli-nangong-deliberation.aggregate.js";
+// 在内存中加载当前工作树源码，禁止构建时不能把旧构建产物误报为聚合行为。
+async function loadWorkflowSource(relativePath) {
+  const result = await build({
+    entryPoints: [fileURLToPath(new URL(relativePath, import.meta.url))],
+    bundle: true, format: "esm", platform: "node", target: "es2022", write: false,
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+
+const { CollaborationTaskAggregate } = await loadWorkflowSource("../../../electron/services/workflow/domain/collaboration-task.aggregate.ts");
+const { ProposalExecutionAggregate } = await loadWorkflowSource("../../../electron/services/workflow/domain/proposal-execution.aggregate.ts");
+const { WorkflowCheckpointAggregate } = await loadWorkflowSource("../../../electron/services/workflow/domain/workflow-checkpoint.aggregate.ts");
+const { HanliNangongDeliberationAggregate } = await loadWorkflowSource("../../../electron/services/workflow/domain/hanli-nangong-deliberation.aggregate.ts");
 
 // 创建聚合测试需要的最小协作任务事实。
 function task(taskId, state, overrides = {}) {
@@ -221,6 +228,38 @@ test("提案执行聚合使用已集成修复任务替代阻塞原任务", () =>
   assert.equal(view.blocked, false);
   // 修复集成完成后应直接等待韩立验收。
   assert.equal(view.nextStatus, "pending-acceptance");
+});
+
+test("当前恢复任务不覆盖同根最近已交付任务的候选证据来源", () => {
+  const original = task("task-original", "blocked", { evolutionProposalId: "proposal-1" });
+  const delivered = task("task-delivered", "integrated", {
+    evolutionProposalId: "proposal-1", replacementForTaskId: "task-original",
+    createdAt: "2026-09-06T00:01:00.000Z", updatedAt: "2026-09-06T00:03:00.000Z",
+  });
+  const recovery = task("task-recovery", "executing", {
+    evolutionProposalId: "proposal-1", replacementForTaskId: "task-delivered",
+    createdAt: "2026-09-06T00:04:00.000Z", updatedAt: "2026-09-06T00:04:00.000Z",
+  });
+  const aggregate = new ProposalExecutionAggregate({ proposal: proposal(["task-original"]), collaborationTasks: [original, delivered, recovery] });
+  const view = aggregate.view();
+  assert.deepEqual(view.effectiveTasks.map((item) => item.taskId), ["task-recovery"]);
+  assert.deepEqual(view.deliveryTasks.map((item) => item.taskId), ["task-delivered"]);
+  assert.equal(aggregate.currentEffectiveTaskFor("task-original")?.taskId, "task-recovery");
+});
+
+test("轻量任务读取缺少事件集合时仍推进部分返回的验证状态", () => {
+  const returned = task("task-returned", "returned-to-nangong", {
+    evolutionProposalId: "proposal-1", flowEvents: undefined,
+  });
+  const executing = task("task-executing", "executing", {
+    evolutionProposalId: "proposal-1", flowEvents: undefined,
+  });
+  const view = new ProposalExecutionAggregate({
+    proposal: proposal(["task-returned", "task-executing"], "executing"),
+    collaborationTasks: [returned, executing],
+  }).view();
+  assert.equal(view.nextStatus, "verifying");
+  assert.deepEqual(view.deliveryTasks, []);
 });
 
 test("提案执行聚合把有效取消任务与普通阻塞分开输出", () => {

@@ -22,6 +22,8 @@ export interface ProposalExecutionView {
   originalTaskIds: string[];
   /** 每条原任务链当前真正生效的任务，修复任务可以替代失败任务。 */
   effectiveTasks: CollaborationTaskOutDto[];
+  /** 每条原任务链最近已形成候选或交付门禁事实的任务；仅用于读取已有证据。 */
+  deliveryTasks: CollaborationTaskOutDto[];
   /** 没有原任务或有效替代任务的标识；存在时必须阻塞而不能猜测成功。 */
   missingTaskIds: string[];
   /** 是否至少一条当前有效任务处于失败或取消状态。 */
@@ -84,6 +86,12 @@ export class ProposalExecutionAggregate {
     const effectiveTasks = originalTaskIds
       .map((taskId) => this.#resolveEffectiveTask(taskId))
       .filter((task): task is CollaborationTaskAggregate => task !== null);
+    // 每条根链独立寻找最近已形成候选或交付门禁事实的任务；恢复任务继续负责当前状态，不能抹掉既有事实。
+    const deliveryTaskCandidates = originalTaskIds.map((taskId) => this.#latestDeliveredTask(taskId));
+    // 多原任务提案只有所有根链都有完整交付时才汇总，禁止跨根拼接不完整证据。
+    const deliveryTasks = deliveryTaskCandidates.every((task): task is CollaborationTaskAggregate => task !== null)
+      ? deliveryTaskCandidates
+      : [];
     // 没有解析到有效任务的原标识必须作为缺失事实保留。
     const effectiveRootIds = new Set(effectiveTasks.map((task) => this.#rootTaskId(task)));
     // 逐项核对原分发标识，不能用任务数量相等代替身份校验。
@@ -120,6 +128,8 @@ export class ProposalExecutionAggregate {
       originalTaskIds,
       // 返回任务副本，调用方不能修改聚合内部状态。
       effectiveTasks: effectiveTasks.map((task) => task.snapshot()),
+      // 已交付任务与当前恢复任务分离，页面可以同时呈现恢复状态和当前候选证据。
+      deliveryTasks: deliveryTasks.map((task) => task.snapshot()),
       // 返回新的数组，防止调用方改变缺失记录。
       missingTaskIds: [...missingTaskIds],
       // 输出本轮统一计算得到的阻塞结论。
@@ -176,6 +186,36 @@ export class ProposalExecutionAggregate {
     }
     // 替代关系形成循环代表持久事实损坏，按缺失处理并阻断提案。
     return null;
+  }
+
+  /** 读取指定任务所在根链当前有效任务，供新修复任务接续当前链而非回跳到旧根。 */
+  currentEffectiveTaskFor(taskId: string): CollaborationTaskOutDto | null {
+    const task = this.#findTask(taskId);
+    const rootTaskId = task
+      ? this.#rootTaskId(task)
+      : this.#proposal.distributedTaskIds.includes(taskId) ? taskId : null;
+    return rootTaskId ? this.#resolveEffectiveTask(rootTaskId)?.snapshot() || null : null;
+  }
+
+  /** 在单一原任务链内找到最近已有候选或门禁事实的任务，作为不可被恢复状态覆盖的交付来源。 */
+  #latestDeliveredTask(originalTaskId: string): CollaborationTaskAggregate | null {
+    const delivered = this.#tasks.filter((task) => this.#rootTaskId(task) === originalTaskId && this.#hasDeliveryEvidence(task));
+    delivered.sort((left, right) => {
+      const updatedAt = left.snapshot().updatedAt.localeCompare(right.snapshot().updatedAt);
+      return updatedAt !== 0 ? updatedAt : left.taskId().localeCompare(right.taskId());
+    });
+    return delivered.at(-1) || null;
+  }
+
+  /** 判断任务是否已经形成可投影的候选、测试、发布或重启事实；不把纯执行状态误作交付。 */
+  #hasDeliveryEvidence(task: CollaborationTaskAggregate): boolean {
+    const snapshot = task.snapshot();
+    // 轻量读取模型和旧快照可能尚未保存事件集合；缺失只表示没有这类交付事实。
+    const flowEvents = Array.isArray(snapshot.flowEvents) ? snapshot.flowEvents : [];
+    return task.isIntegrated()
+      || typeof snapshot.integrationGeneration === "number"
+      || snapshot.unifiedTest !== null && snapshot.unifiedTest !== undefined
+      || flowEvents.some((event) => ["unified_test.passed", "release.published", "release.restart_healthy"].includes(event.type));
   }
 
   /** 查找指定稳定任务标识对应的任务聚合。 */

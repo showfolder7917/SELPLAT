@@ -33,19 +33,9 @@ export function projectCurrentTopicStage(
   if (operationStage) return operationStage;
 
   const currentExecution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
-  const latestRecoveryAcceptance = readLatestAcceptance(evolution, proposal);
-  const technicalStage = projectCurrentTechnicalRecovery({ evolution, proposal, topic, execution: currentExecution,
-    latestAcceptance: latestRecoveryAcceptance, hostStartupAcceptance: readHostStartupAcceptance(evolution, proposal) });
-  if (technicalStage) return technicalStage;
-
-  const monitorStage = projectMonitorAcceptanceStage(evolution, proposal, topic);
-  if (monitorStage) return monitorStage;
-
   const execution = currentExecution;
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
-  const finalConclusion = readFinalConclusion(evolution, proposal);
   const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
-  const task = latestEffectiveTask(execution.effectiveTasks);
   // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
   const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
     && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt);
@@ -53,7 +43,19 @@ export function projectCurrentTopicStage(
   const deliveryAcceptance = acceptanceStarted
     ? { runId: run.runId, status: "running" as const, occurredAt: run.updatedAt }
     : latestAcceptance;
-  const deliveryEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, deliveryAcceptance);
+  // 当前恢复任务决定预检状态，最近已交付任务决定候选和交付证据，二者不能互相覆盖。
+  const currentTaskEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, deliveryAcceptance);
+  const deliveredTaskEvidence = readDeliveryEvidence(execution.deliveryTasks, collaboration, deliveryAcceptance);
+  const deliveryEvidence = { ...deliveredTaskEvidence, preflight: currentTaskEvidence.preflight };
+  const technicalStage = projectCurrentTechnicalRecovery({ evolution, proposal, topic, execution,
+    latestAcceptance, hostStartupAcceptance, deliveryEvidence });
+  if (technicalStage) return technicalStage;
+
+  const monitorStage = projectMonitorAcceptanceStage(evolution, proposal, topic);
+  if (monitorStage) return monitorStage;
+
+  const finalConclusion = readFinalConclusion(evolution, proposal);
+  const task = latestEffectiveTask(execution.effectiveTasks);
   const deliveryGate = readDeliveryGate(deliveryEvidence);
   const preflightGate = readPreflightGate(deliveryEvidence, execution.effectiveTasks);
   const stageGate = preflightGate || deliveryGate;
