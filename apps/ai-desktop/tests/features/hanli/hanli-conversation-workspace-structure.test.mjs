@@ -74,6 +74,12 @@ test("韩立会话固定文本由统一资源解析，恢复摘要和消息正�
   assert.match(fixedUiText, /hanliContextReadStats: "今回の読み取り：メソッド資料 \{method\}/);
   assert.match(fixedUiText, /hanliContextReadStats: "This turn read: method material \{method\}/);
   assert.doesNotMatch(custodySwitch, /aria-label="自动托管"|<span>自动托管<\/span>/);
+  assert.match(controller, /fixedUiText\(locale, "hanliConversationNoResult"\)/);
+  assert.match(controller, /fixedUiText\(locale, "hanliSendFailed"\)/);
+  assert.match(controller, /fixedUiText\(locale, "hanliInquiryOriginalMissing"\)/);
+  assert.match(controller, /fixedUiText\(locale, "hanliInquiryNoResult"\)/);
+  assert.match(controller, /fixedUiText\(locale, "hanliInquiryRetryFailed"\)/);
+  assert.doesNotMatch(controller, /发送给韩立失败。|找不到原始问题，无法恢复本次排查。/);
 });
 
 test("韩立页面模块的注释先写中文业务名称", () => {

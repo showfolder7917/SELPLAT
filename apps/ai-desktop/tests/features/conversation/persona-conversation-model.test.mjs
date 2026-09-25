@@ -73,6 +73,21 @@ test("人物名称、固定状态与简体中文回退都由统一资源解析",
   assert.equal(fixedUiRuntime.resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案" }, ja: {} }, "ja", "personaCustomerDisplayReload"), "[缺少固定界面文案: personaCustomerDisplayReload]");
 });
 
+test("人物会话默认错误由统一资源解析，外部异常正文保持原值", () => {
+  const hanliController = read("src/features/hanli/components/useHanliConversationWorkspace.ts");
+  const nangongController = read("src/features/nangong/components/useNangongConversationWorkspace.ts");
+  assert.match(hook, /usePersonaConversation\(personaId: string, locale: LocaleValue\)/);
+  assert.match(hook, /error instanceof Error \? error\.message : fallback/);
+  assert.match(hook, /personaConversationReadFailed/);
+  assert.match(hook, /personaAttachmentUnavailable/);
+  assert.match(hanliController, /fixedUiText\(locale, "hanliSendFailed"\)/);
+  assert.match(nangongController, /fixedUiText\(locale, "nangongSendFailed"\)/);
+  assert.equal(fixedUiRuntime.fixedUiText("zh-CN", "hanliSendFailed"), "发送给韩立失败。");
+  assert.equal(fixedUiRuntime.fixedUiText("ja", "hanliSendFailed"), "韓立への送信に失敗しました。");
+  assert.equal(fixedUiRuntime.fixedUiText("en", "hanliSendFailed"), "Could not send to Han Li.");
+  assert.equal(fixedUiRuntime.fixedUiText("en", "personaConversationReadFailed"), "The persona conversation could not be read.");
+});
+
 test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID 前后缀", () => {
   const projector = read("src/features/conversation/model/realtime-conversation.ts");
   const inquiry = read("electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.ts");
@@ -106,9 +121,11 @@ test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", ()
   assert.match(hanli, /hanli-conversation-recovery/);
   assert.match(hanli, /data-recovery-affected/);
   assert.match(hook, /async function readPreparedRecoveryWindow\([\s\S]*?receipt\?\.conversationId \|\| expectedConversationId/);
-  assert.match(hook, /expectedConversationId && conversationId !== expectedConversationId[\s\S]*?恢复结果属于另一会话，未覆盖当前会话。/);
-  assert.match(hook, /恢复后未读取到客户显示窗口。/);
-  assert.match(hook, /恢复后的客户显示窗口不属于当前会话。/);
+  assert.match(hook, /expectedConversationId && conversationId !== expectedConversationId[\s\S]*?personaRecoveryDifferentConversation/);
+  assert.match(hook, /personaRecoveryWindowMissing/);
+  assert.match(hook, /personaRecoveryWindowMismatch/);
+  assert.match(fixedUiText, /personaRecoveryDifferentConversation: "恢复结果属于另一会话，未覆盖当前会话。"/);
+  assert.match(fixedUiText, /personaRecoveryDifferentConversation: "The recovery result belongs to another conversation/);
   assert.match(hook, /conversationDisplay\.current\.generation !== generation\) return undefined;/);
   assert.match(hook, /targetConversationId = conversationDisplay\.current\.targetConversationId \?\? currentConversationId/);
   assert.match(hook, /preparePersonaConversationRecovery\(personaId, \{ conversationId: currentConversationId \}\)/);
@@ -148,10 +165,11 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.match(hanliAggregate, /this\.#customerDisplayMessages/);
   assert.match(hanliAggregate, /currentMessage\.customerDisplayState !== "ready"/);
   assert.match(hanliMethodContext, /message\.customerDisplayState === "ready"/);
-  assert.match(hook, /客户显示消息窗口读取能力尚未就绪/);
+  assert.match(hook, /fixedUiText\(locale, "personaConversationWindowUnavailable"\)/);
+  assert.match(fixedUiText, /personaConversationWindowUnavailable: "客户会话窗口暂不可用/);
   assert.doesNotMatch(hook, /const conversation = await desktop\.getPersonaConversation\(personaId\)/);
-  assert.match(hook, /新建人物会话后无法读取客户显示消息/);
-  assert.match(hook, /保存人物对话模型后无法读取客户显示消息/);
+  assert.match(hook, /fixedUiText\(locale, "personaConversationNewWindowMissing"\)/);
+  assert.match(hook, /fixedUiText\(locale, "personaConversationModelWindowMissing"\)/);
   assert.match(hook, /acceptCustomerDisplayReceipt/);
   assert.doesNotMatch(hook, /setConversation\(value\)/);
   assert.match(hanli, /customerDisplayState === "missing"/);
@@ -172,7 +190,7 @@ test("新建人物会话以显示代际拒绝迟到窗口，并仅在南宫婉�
   assert.match(hook, /conversationDisplay\.current = \{ generation, targetConversationId: value\.conversationId \};/);
   assert.match(hook, /if \(!acceptsConversationWindow\(generation, value\.conversationId, customerDisplay\)\) return;/);
   assert.match(hook, /const \[newConversationError, setNewConversationError\] = useState\(""\)/);
-  assert.match(hook, /setNewConversationError\(readableDesktopError\(reason, "无法新建人物会话。"\)\)/);
+  assert.match(hook, /setNewConversationError\(readableDesktopError\(reason, fixedUiText\(locale, "personaConversationNewFailed"\)\)\)/);
   assert.match(hook, /newConversationError, error, setError, startNewConversation/);
   assert.match(nangongView, /props\.runtime\.newConversationError/);
   assert.match(developerWorkspaceRouter, /fixedUiText\(props\.locale, "newNangongConversation"\)/);

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation";
+import type { LocaleValue } from "../../../../contracts/system/desktop/index";
+
 import type { CodexModelOptionOutDto, PersonaConversationMessageOutDto, PersonaConversationOutDto, PersonaConversationWindowOutDto, ReadPersonaConversationWindowInDto } from "../../../../contracts/system/desktop/index";
 import { getOptionalCollaborationDesktopApi } from "../../../foundation/desktop-api";
 import { getOptionalScreenshotDesktopApi } from "../../../foundation/desktop-api";
@@ -35,11 +38,12 @@ function windowConversation(window: PersonaConversationWindowOutDto): PersonaCon
 async function readPersonaConversationWindow(
   desktop: ReturnType<typeof getOptionalCollaborationDesktopApi>,
   personaId: string,
+  locale: LocaleValue,
   request?: ReadPersonaConversationWindowInDto,
 ): Promise<PersonaConversationWindowOutDto | undefined> {
   if (!desktop) return undefined;
   if (typeof desktop.getPersonaConversationWindow !== "function") {
-    throw new Error("客户显示消息窗口读取能力尚未就绪，可在服务恢复后重试。");
+    throw new Error(fixedUiText(locale, "personaConversationWindowUnavailable"));
   }
   return desktop.getPersonaConversationWindow(personaId, request);
 }
@@ -61,7 +65,7 @@ export interface PersonaPendingMessage {
  * 3. “新建会话”只归档旧会话并换成新的空会话，不会删除历史记录。
  * 4. 附件和错误属于当前页面临时状态，不写进人物会话主表。
  */
-export function usePersonaConversation(personaId: string) {
+export function usePersonaConversation(personaId: string, locale: LocaleValue) {
   const [conversation, setConversation] = useState<PersonaConversationOutDto>(() => emptyConversation(personaId));
   // 待发送文字属于人物会话而不是页面实例；切换页签卸载长页面时仍要保留客户草稿。
   const [draftText, setDraftText] = useState("");
@@ -131,16 +135,16 @@ export function usePersonaConversation(personaId: string) {
     const conversationId = receipt?.conversationId || expectedConversationId;
     // 已经显示特定会话时，恢复不能把另一个活动会话的结果覆盖到当前页面。
     if (expectedConversationId && conversationId !== expectedConversationId) {
-      throw new Error("恢复结果属于另一会话，未覆盖当前会话。");
+      throw new Error(fixedUiText(locale, "personaRecoveryDifferentConversation"));
     }
     if (conversationDisplay.current.generation !== generation) return undefined;
     conversationDisplay.current = { generation, targetConversationId: conversationId };
-    const window = await readPersonaConversationWindow(desktop, personaId, { conversationId });
-    if (!window) throw new Error("恢复后未读取到客户显示窗口。");
+    const window = await readPersonaConversationWindow(desktop, personaId, locale, { conversationId });
+    if (!window) throw new Error(fixedUiText(locale, "personaRecoveryWindowMissing"));
     if (acceptsConversationWindow(generation, conversationId, window)) return window;
     // 新会话已开始显示时，旧恢复的迟到结果无需向客户报告为错误。
     if (conversationDisplay.current.generation !== generation) return undefined;
-    throw new Error("恢复后的客户显示窗口不属于当前会话。");
+    throw new Error(fixedUiText(locale, "personaRecoveryWindowMismatch"));
   }
 
   useEffect(() => {
@@ -161,11 +165,11 @@ export function usePersonaConversation(personaId: string) {
         setConversation(windowConversation(value));
         setHasEarlier(value.hasEarlier);
       })
-      .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取人物会话。")); });
+      .catch((reason) => { if (active) setError(readableDesktopError(reason, fixedUiText(locale, "personaConversationReadFailed"))); });
     if (personaId === "nangong-wan") {
       void desktop?.getPersonaConversation("han-li")
         .then((value) => { if (active && !receivedInternalUpdate && value) setSharedInternalMessages(projectPersonaConversation(value.messages).internal); })
-        .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法读取内部研讨消息。")); });
+        .catch((reason) => { if (active) setError(readableDesktopError(reason, fixedUiText(locale, "personaInternalDeliberationReadFailed"))); });
     }
     const removeListener = desktop?.onPersonaConversationChanged((value) => {
       if (!active) return;
@@ -175,7 +179,7 @@ export function usePersonaConversation(personaId: string) {
         // 同一人物的其他会话更新不能抢占当前会话的恢复回执；否则会抑制当前恢复窗口的读取。
         if (targetConversationId && value.conversationId !== targetConversationId) return;
         receivedOwnUpdate = true;
-        void readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId })
+        void readPersonaConversationWindow(desktop, personaId, locale, { conversationId: targetConversationId })
           .then((window) => {
             if (active && window && acceptsConversationWindow(generation, targetConversationId, window)) {
               setConversation((current) => ({
@@ -186,7 +190,7 @@ export function usePersonaConversation(personaId: string) {
               setHasEarlier(window.hasEarlier);
             }
           })
-          .catch((reason) => { if (active) setError(readableDesktopError(reason, "无法刷新人物会话。")); });
+          .catch((reason) => { if (active) setError(readableDesktopError(reason, fixedUiText(locale, "personaConversationRefreshFailed"))); });
       }
       if (personaId === "nangong-wan" && value.ownerPersonaId === "han-li") {
         receivedInternalUpdate = true;
@@ -194,7 +198,7 @@ export function usePersonaConversation(personaId: string) {
       }
     });
     return () => { active = false; removeListener?.(); };
-  }, [personaId, conversation.conversationId]);
+  }, [personaId, locale, conversation.conversationId]);
 
   const loadEarlier = useCallback(async () => {
     const earliest = conversation.messages[0];
@@ -202,12 +206,12 @@ export function usePersonaConversation(personaId: string) {
     const generation = conversationDisplay.current.generation;
     const conversationId = conversation.conversationId;
     try {
-      const page = await readPersonaConversationWindow(getOptionalCollaborationDesktopApi(), personaId, { conversationId, beforeSequenceNumber: earliest.sequenceNumber });
+      const page = await readPersonaConversationWindow(getOptionalCollaborationDesktopApi(), personaId, locale, { conversationId, beforeSequenceNumber: earliest.sequenceNumber });
       if (!page || !acceptsConversationWindow(generation, conversationId, page)) return;
       setConversation((current) => ({ ...current, messages: [...page.messages, ...current.messages.filter((message) => !page.messages.some((loaded) => loaded.messageId === message.messageId))] }));
       setHasEarlier(page.hasEarlier);
-    } catch (reason) { setError(readableDesktopError(reason, "无法读取更早消息，请重试。")); }
-  }, [conversation.conversationId, conversation.messages, hasEarlier, personaId]);
+    } catch (reason) { setError(readableDesktopError(reason, fixedUiText(locale, "personaEarlierMessagesReadFailed"))); }
+  }, [conversation.conversationId, conversation.messages, hasEarlier, personaId, locale]);
 
   /** 在同一气泡位置重试客户显示派生；成功后只刷新窗口投影，绝不读取原始正文。 */
   const retryCustomerDisplayMessage = useCallback(async (sourceMessageId: string) => {
@@ -224,7 +228,7 @@ export function usePersonaConversation(personaId: string) {
         setHasEarlier(window.hasEarlier);
       }
     } catch (reason) {
-      setError(readableDesktopError(reason, "无法重新读取客户显示消息，请稍后重试。"));
+      setError(readableDesktopError(reason, fixedUiText(locale, "personaCustomerDisplayReloadFailed")));
     } finally {
       retryingCustomerDisplayMessageIdsRef.current.delete(sourceMessageId);
       setRetryingCustomerDisplayMessageIds((current) => {
@@ -233,7 +237,7 @@ export function usePersonaConversation(personaId: string) {
         return next;
       });
     }
-  }, [conversation.conversationId, personaId]);
+  }, [conversation.conversationId, personaId, locale]);
 
   /** 仅重试当前业务会话的线程恢复；窗口读取仍保持无副作用。 */
   const retryRecovery = useCallback(async () => {
@@ -252,12 +256,12 @@ export function usePersonaConversation(personaId: string) {
       setConversation(windowConversation(window));
       setHasEarlier(window.hasEarlier);
     } catch (reason) {
-      setError(readableDesktopError(reason, "无法重试恢复当前会话。"));
+      setError(readableDesktopError(reason, fixedUiText(locale, "personaRecoveryRetryFailed")));
     } finally {
       recoveryInFlight.current = false;
       setRecovering(false);
     }
-  }, [conversation.conversationId, newConversationBusy, personaId, sending]);
+  }, [conversation.conversationId, newConversationBusy, personaId, sending, locale]);
 
   /**
    * 把发送、恢复或设置操作的原始会话回执收敛为客户安全窗口。
@@ -268,15 +272,15 @@ export function usePersonaConversation(personaId: string) {
   const acceptCustomerDisplayReceipt = useCallback(async (receipt: PersonaConversationOutDto): Promise<PersonaConversationOutDto> => {
     const desktop = getOptionalCollaborationDesktopApi();
     const targetConversationId = receipt.conversationId;
-    if (!desktop || !targetConversationId) throw new Error("人物会话回执缺少可读取的客户会话。");
+    if (!desktop || !targetConversationId) throw new Error(fixedUiText(locale, "personaConversationReceiptMissing"));
     const currentDisplay = conversationDisplay.current;
     const generation = currentDisplay.targetConversationId === targetConversationId
       ? currentDisplay.generation
       : beginConversationDisplayGeneration(targetConversationId);
-    const window = await readPersonaConversationWindow(desktop, personaId, { conversationId: targetConversationId });
-    if (!window) throw new Error("人物会话回执后无法读取客户显示消息。");
+    const window = await readPersonaConversationWindow(desktop, personaId, locale, { conversationId: targetConversationId });
+    if (!window) throw new Error(fixedUiText(locale, "personaConversationReceiptWindowMissing"));
     if (!acceptsConversationWindow(generation, targetConversationId, window)) {
-      throw new Error("客户显示窗口已过期，未覆盖当前会话。");
+      throw new Error(fixedUiText(locale, "personaConversationWindowExpired"));
     }
     const safeConversation = {
       ...windowConversation(window),
@@ -286,7 +290,7 @@ export function usePersonaConversation(personaId: string) {
     setConversation(safeConversation);
     setHasEarlier(window.hasEarlier);
     return safeConversation;
-  }, [personaId]);
+  }, [personaId, locale]);
 
   useEffect(() => {
     let active = true;
@@ -294,10 +298,10 @@ export function usePersonaConversation(personaId: string) {
     setModelCatalogError("");
     void loadOfficialModelCatalog()
       .then((catalog) => { if (active) setModelCatalog(catalog.models); })
-      .catch((reason) => { if (active) setModelCatalogError(readableDesktopError(reason, "无法读取官方模型目录。")); })
+      .catch((reason) => { if (active) setModelCatalogError(readableDesktopError(reason, fixedUiText(locale, "personaModelCatalogReadFailed"))); })
       .finally(() => { if (active) setModelCatalogLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [locale]);
 
   /** 客户主动重读时跳过成功缓存；失败仍保留在模型控件附近，不覆盖会话发送错误。 */
   const reloadModelCatalog = async () => {
@@ -309,7 +313,7 @@ export function usePersonaConversation(personaId: string) {
       setModelCatalog(catalog.models);
     } catch (reason) {
       setModelCatalog([]);
-      setModelCatalogError(readableDesktopError(reason, "无法读取官方模型目录。"));
+      setModelCatalogError(readableDesktopError(reason, fixedUiText(locale, "personaModelCatalogReadFailed")));
     } finally {
       setModelCatalogLoading(false);
     }
@@ -337,11 +341,11 @@ export function usePersonaConversation(personaId: string) {
       ])));
       setAttachmentPreviewErrors(Object.fromEntries(messages.flatMap((message) => {
         const reason = (message.attachmentIds || []).map((id) => unreadable.get(id)).find(Boolean);
-        return reason ? [[message.messageId, attachmentPreviewError(reason)]] : [];
+        return reason ? [[message.messageId, attachmentPreviewError(reason, locale)]] : [];
       })));
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [conversation.messages, sharedInternalMessages]);
+  }, [conversation.messages, sharedInternalMessages, locale]);
 
   const startNewConversation = async () => {
     if (newConversationBusy || newConversationInFlight.current || sending) return;
@@ -355,14 +359,14 @@ export function usePersonaConversation(personaId: string) {
     try {
       const desktop = getOptionalCollaborationDesktopApi();
       const value = await desktop?.newPersonaConversation(personaId);
-      if (!value) throw new Error("新建人物会话服务没有返回结果。");
-      if (!value.conversationId) throw new Error("新建人物会话没有返回有效会话标识。");
+      if (!value) throw new Error(fixedUiText(locale, "personaConversationNewNoResult"));
+      if (!value.conversationId) throw new Error(fixedUiText(locale, "personaConversationNewMissingId"));
       if (conversationDisplay.current.generation !== generation) return;
       // 新建动作只授权这一个新会话的客户显示窗口进入页面。
       conversationDisplay.current = { generation, targetConversationId: value.conversationId };
       // 新建动作只提供会话标识；页面正文必须重新从客户显示窗口读取。
-      const customerDisplay = await readPersonaConversationWindow(desktop, personaId, { conversationId: value.conversationId });
-      if (!customerDisplay) throw new Error("新建人物会话后无法读取客户显示消息。");
+      const customerDisplay = await readPersonaConversationWindow(desktop, personaId, locale, { conversationId: value.conversationId });
+      if (!customerDisplay) throw new Error(fixedUiText(locale, "personaConversationNewWindowMissing"));
       if (!acceptsConversationWindow(generation, value.conversationId, customerDisplay)) return;
       setConversation(windowConversation(customerDisplay));
       setHasEarlier(customerDisplay.hasEarlier);
@@ -372,10 +376,10 @@ export function usePersonaConversation(personaId: string) {
       setAttachmentPreviews({});
       setAttachmentPreviewErrors({});
       setError("");
-      setNewConversationFeedback("已建立新的空白对话。");
+      setNewConversationFeedback(fixedUiText(locale, "personaConversationCreated"));
     } catch (reason) {
       if (conversationDisplay.current.generation === generation) {
-        setNewConversationError(readableDesktopError(reason, "无法新建人物会话。"));
+        setNewConversationError(readableDesktopError(reason, fixedUiText(locale, "personaConversationNewFailed")));
       }
     } finally {
       if (conversationDisplay.current.generation === generation) setNewConversationBusy(false);
@@ -390,15 +394,15 @@ export function usePersonaConversation(personaId: string) {
     try {
       const desktop = getOptionalCollaborationDesktopApi();
       const value = await desktop?.selectPersonaConversationModel(personaId, selectedModel);
-      if (!value) throw new Error("人物会话模型服务没有返回结果。");
+      if (!value) throw new Error(fixedUiText(locale, "personaConversationModelNoResult"));
       // 模型选择的全量回执不参与页面投影，避免旧混合正文借设置操作回流。
-      const customerDisplay = await readPersonaConversationWindow(desktop, personaId, { conversationId: value.conversationId });
-      if (!customerDisplay) throw new Error("保存人物对话模型后无法读取客户显示消息。");
+      const customerDisplay = await readPersonaConversationWindow(desktop, personaId, locale, { conversationId: value.conversationId });
+      if (!customerDisplay) throw new Error(fixedUiText(locale, "personaConversationModelWindowMissing"));
       if (!acceptsConversationWindow(generation, value.conversationId, customerDisplay)) return;
       setConversation(windowConversation(customerDisplay));
       setHasEarlier(customerDisplay.hasEarlier);
     } catch (reason) {
-      setError(readableDesktopError(reason, "无法保存人物对话模型。"));
+      setError(readableDesktopError(reason, fixedUiText(locale, "personaConversationModelSaveFailed")));
     }
   };
 
@@ -410,9 +414,9 @@ export function usePersonaConversation(personaId: string) {
   };
 }
 
-function attachmentPreviewError(reason: string): string {
+function attachmentPreviewError(reason: string, locale: LocaleValue): string {
   return reason === "not-found" || reason === "file-unavailable"
-    ? "附件已被清理，当前无法读取预览。"
-    : reason === "invalid-file" ? "附件文件不是有效 PNG，当前无法读取预览。"
-      : "附件标识无效，当前无法读取预览。";
+    ? fixedUiText(locale, "personaAttachmentUnavailable")
+    : reason === "invalid-file" ? fixedUiText(locale, "personaAttachmentInvalid")
+      : fixedUiText(locale, "personaAttachmentIdInvalid");
 }
