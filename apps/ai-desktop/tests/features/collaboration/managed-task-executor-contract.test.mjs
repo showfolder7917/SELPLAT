@@ -300,6 +300,8 @@ test("会话发送统一排队、显式补充并在重建后显示恢复操作",
   assert.match(developerApp, /fixedUiText\(locale, "conversationSupplementTask"\)/);
   assert.match(developerApp, /fixedUiText\(locale, "conversationContinue"\)/);
   assert.match(developerApp, /fixedUiText\(locale, "conversationDiscardTask"\)/);
+  assert.match(fixedUiText, /conversationPendingCount: "待发送 \{count\}"/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationPendingCount"\)\.replace\("\{count\}", String\(queuedSends\.length\)\)/);
 });
 
 test("Harness 只使用指定版本的内置或校验下载 Codex 并公开实际来源", () => {
