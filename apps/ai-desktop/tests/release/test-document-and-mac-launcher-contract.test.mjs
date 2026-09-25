@@ -16,6 +16,7 @@ const packagedRecoveryLauncher = readFileSync(new URL("../../resources/runtime-a
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
 const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
 const recoveryController = readFileSync(new URL("../../scripts/recover-runtime-activation.mjs", import.meta.url), "utf8");
+const recoveryWatchdog = readFileSync(new URL("../../scripts/runtime-activation-recovery-watchdog.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const streamDetails = readFileSync(new URL("../../src/features/conversation/components/StreamDetails.tsx", import.meta.url), "utf8");
 const fixedUiText = readFileSync(new URL("../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
@@ -56,6 +57,8 @@ test("发布恢复由候选包外控制器校验身份后委托已提升包资�
   assert.match(recoveryController, /--release-batch=\$\{request\.releaseBatchId\}/);
   assert.match(recoveryController, /fileURLToPath\(import\.meta\.url\)/);
   assert.doesNotMatch(recoveryController, /writeFileSync|renameSync|rmSync/);
+  assert.match(recoveryWatchdog, /findSinglePreparingBatch/);
+  assert.match(recoveryWatchdog, /requestRuntimeActivationRecovery/);
 });
 
 test("韩立交互式验收超时先返回明确事实，再回收隔离 harness", () => {
@@ -172,6 +175,9 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /候选包隔离启动失败；保留诊断目录/);
   assert.match(macVerifier, /describeHealthCheckFailure\(health, `候选包未报告 ready 状态：/);
   assert.match(macVerifier, /if \(healthCheckPassed\) rmSync\(healthRun/);
+  assert.match(macVerifier, /scheduleRuntimeActivationRecoveryWatchdog\(\)/);
+  assert.match(macVerifier, /AI_DESKTOP_PACKAGE_OUTPUT_ROOT/);
+  assert.match(macVerifier, /detached: true/);
   assert.match(packageContentVerifier, /for \(const promptResource of \["manifest\.json", "prompts\.json"\]\)/);
   assert.match(packageContentVerifier, /Packaged prompt resource is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration manifest is missing/);

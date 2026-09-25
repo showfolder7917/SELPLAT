@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -82,7 +82,21 @@ try {
     throw new Error(describeHealthCheckFailure(health, `候选包未报告 ready 状态：${healthResult.status || "missing"}`));
   }
   healthCheckPassed = true;
+  scheduleRuntimeActivationRecoveryWatchdog();
 } finally {
   if (healthCheckPassed) rmSync(healthRun, { recursive: true, force: true });
 }
 console.log(`AI Desktop.app 身份、稳定指定要求、内置 Codex ${targetCodexVersion}、OpenAI 签名与隔离启动验证通过：${bundleId}`);
+
+function scheduleRuntimeActivationRecoveryWatchdog() {
+  // 只有预检运行器提供隔离打包根时，健康检查才处于“旧宿主即将提升候选”的自举窗口。
+  if (!String(process.env.AI_DESKTOP_PACKAGE_OUTPUT_ROOT || "").trim()) return;
+  const watchdog = path.join(appRoot, "scripts", "runtime-activation-recovery-watchdog.mjs");
+  const child = spawn(process.execPath, [watchdog, `--selplat-root=${projectRoot}`], {
+    cwd: appRoot,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.unref();
+}
