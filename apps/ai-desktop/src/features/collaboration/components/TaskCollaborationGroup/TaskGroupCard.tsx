@@ -141,7 +141,8 @@ function TaskGroupHeader({
   // 停止状态（groupStopped）决定耗时固定，并且不再显示任何处理中人物。
   const currentStage = presentation.currentTopicStage?.topicId === group.topicId && presentation.currentTopicStage?.proposalId === group.proposalId
     ? presentation.currentTopicStage : null;
-  const groupStopped = currentStage?.status === "completed" || currentStage?.status === "completed-unverified" || currentStage?.status === "cancelled" || group.status === "cancelled";
+  const groupStopped = currentStage?.status === "completed" || currentStage?.status === "completed-unverified"
+    || currentStage?.status === "cancelled" || currentStage?.status === "failed-pending-repair" || group.status === "cancelled";
   // 活动事实（activity）集中生成状态、去重人数和人物名称，三者不会彼此矛盾。
   const activity = groupActivityPresentation(group, locale, currentStage);
   // 四项主区域文案只消费时间线权威状态，避免组件根据技术正文自行猜测。
@@ -179,7 +180,7 @@ function TaskGroupHeader({
       {/* 专题事实区：集中展示状态、并行人数和从开始到现在的总耗时。 */}
       <span className="task-group-facts">
         {/* 专题状态：把稳定状态码转换为当前语言的可读标签。 */}
-        <b>{currentStage ? currentStage.title : activity.statusLabel}</b>
+        <b>{activity.statusLabel}</b>
         {/* 任务执行人数：只描述当前任务节点的执行或验收人物，不表示内部研讨成员。 */}
         {!groupStopped && activity.activeOwnerLabels.length > 0 && (
           <em>{locale === "ja" ? `タスク実行中 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `任务执行中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>

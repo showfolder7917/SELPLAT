@@ -64,8 +64,8 @@ export function projectCurrentTechnicalRecovery(input: {
     affectedFiles: blockingTask?.integrationFailure?.conflictFiles || [], nonFileRecovery: null,
   });
   // 系统未派发修复、没有活动任务时开放原运行复验；复验一旦开始，旧恢复只供审计。
-  const systemOnlyAcceptanceRetry = recovery.handler === "system" && recovery.handoffStatus === "pending"
-    && recovery.failureCategory === "acceptance-capability-blocked" && latestAcceptance?.status === "failed"
+  const blockedAcceptanceRetry = ["acceptance-capability-blocked", "acceptance-precondition-unavailable"].includes(recovery.failureCategory)
+    && latestAcceptance !== null && ["failed", "blocked"].includes(latestAcceptance.status)
     && run?.status === "blocked" && run.topicId === topicId && run.proposalId === proposal.proposalId
     && blockingTask === null
     && !execution.effectiveTasks.some((item) => item.evolutionProposalId === proposal.proposalId
@@ -73,7 +73,7 @@ export function projectCurrentTechnicalRecovery(input: {
   const resumedAcceptance = run?.status === "running" && run.phase === "accepting"
     && run.topicId === topicId && run.proposalId === proposal.proposalId
     && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt) && blockingTask === null;
-  if (resumedAcceptance || systemOnlyAcceptanceRetry) return null;
+  if (resumedAcceptance || blockedAcceptanceRetry) return null;
 
   const resumeTaskId = hasCompleteGuidance ? blockingTask!.taskId : null;
   const monitoring = recovery.handoffStatus === "monitoring";

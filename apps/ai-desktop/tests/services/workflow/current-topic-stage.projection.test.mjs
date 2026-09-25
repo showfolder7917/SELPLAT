@@ -222,6 +222,29 @@ test("系统交接未发生且没有活动修复任务时保留原运行的显�
   assert.equal(supersededOldBlock.resumeOneShotRunId, "blocked-review");
 });
 
+test("正式业务前提受阻进入监控后仍保留原运行的显式复验入口", () => {
+  const state = evolution("blocked");
+  state.technicalRecovery = {
+    issueId: "technical-recovery:topic-current:proposal-current:criterion-1:acceptance-precondition-unavailable",
+    topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"],
+    failureCategory: "acceptance-precondition-unavailable", evidenceReferences: ["event-monitor"],
+    occurrences: [{ runId: "blocked-monitor", taskId: null, occurrenceId: "event-monitor", reason: "真实业务前提尚未出现", occurredAt: "2026-09-12T05:00:00.000Z" }],
+    attemptCount: 1, handler: "monitor", handoffStatus: "monitoring", failureReason: null,
+    nextAction: "等待正式业务自然出现原验收前提。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+  state.oneShotRun = {
+    runId: "blocked-monitor", topicId: "topic-current", proposalId: "proposal-current",
+    status: "blocked", phase: "blocked", updatedAt: "2026-09-12T05:00:00.000Z",
+  };
+
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.equal(stage.userAction, "resume");
+  assert.equal(stage.resumeOneShotRunId, "blocked-monitor");
+  assert.equal(stage.readRecovery.requiresUserAction, true);
+});
+
 test("活动技术卡点没有原运行阻塞时不伪造恢复动作", () => {
   const state = evolution("failed");
   state.technicalRecovery = {

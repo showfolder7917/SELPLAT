@@ -59,10 +59,58 @@ export function groupActivityPresentation(
     && ["令狐老祖", "韩立真实验收", "南宫婉"].includes(matchingCurrentStage.waitingFor)) {
     activeOwnerLabels.set(matchingCurrentStage.waitingFor, matchingCurrentStage.waitingFor);
   }
-  const statusLabel = matchingCurrentStage ? matchingCurrentStage.title : group.status === "verifying" && acceptanceNode
+  const statusLabel = matchingCurrentStage
+    ? matchingCurrentStage.status && matchingCurrentStage.title === group.title
+      ? currentStageStatusLabel(matchingCurrentStage.status, locale)
+      : matchingCurrentStage.title
+    : group.status === "verifying" && acceptanceNode
     ? locale === "ja" ? `${acceptanceNode.actor.displayName}が受入確認中` : `${acceptanceNode.actor.displayName}验收中`
     : groupStatusLabel(group.status, locale);
   return { activeOwnerLabels: [...activeOwnerLabels.values()], statusLabel };
+}
+
+/** 把当前专题阶段转换为短状态，避免把专题标题误当成运行状态重复展示。 */
+export function currentStageStatusLabel(
+  status: CurrentTopicStageOutDto["status"],
+  locale: LocaleValue,
+): string {
+  const chinese: Record<CurrentTopicStageOutDto["status"], string> = {
+    "establishing-topic": "正在建立专题",
+    "topic-establishment-failed": "建立专题失败",
+    deliberating: "研讨中",
+    "awaiting-confirmation": "等待确认",
+    executing: "执行中",
+    preflighting: "快速预检中",
+    verifying: "验证中",
+    "awaiting-release": "等待发布",
+    "awaiting-restart-health": "等待重启检查",
+    "pending-acceptance": "等待验收",
+    accepting: "验收中",
+    completed: "已完成",
+    "completed-unverified": "完成待核验",
+    cancelled: "已取消",
+    "failed-pending-repair": "已阻塞",
+    "not-run": "尚未运行",
+  };
+  const japanese: Record<CurrentTopicStageOutDto["status"], string> = {
+    "establishing-topic": "案件作成中",
+    "topic-establishment-failed": "案件作成失敗",
+    deliberating: "検討中",
+    "awaiting-confirmation": "確認待ち",
+    executing: "実行中",
+    preflighting: "事前確認中",
+    verifying: "検証中",
+    "awaiting-release": "公開待ち",
+    "awaiting-restart-health": "再起動確認待ち",
+    "pending-acceptance": "受入確認待ち",
+    accepting: "受入確認中",
+    completed: "完了",
+    "completed-unverified": "完了・未確認",
+    cancelled: "取消",
+    "failed-pending-repair": "停止",
+    "not-run": "未実行",
+  };
+  return locale === "ja" ? japanese[status] : chinese[status];
 }
 
 /**

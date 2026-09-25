@@ -27,6 +27,8 @@ test("当前专题的恢复入口只消费交付投影，不再从时间线节�
   assert.match(taskCardSource, /task-timeline-next-current[\s\S]*onResumeAcceptance[\s\S]*onContinueTask\(projectedResumeTaskId!/);
   assert.match(taskCardSource, /currentStage\?\.customerActionGuidance\?\.resumeLabel \|\| "从卡点继续"/);
   assert.doesNotMatch(taskCardSource, /latestActiveRecoveryAction|TaskGroupRecovery|oneShotRecoveryRequired/);
+  assert.match(taskCardSource, /currentStage\?\.status === "failed-pending-repair"[\s\S]*running=\{!groupStopped\}/);
+  assert.match(taskCardSource, /<b>\{activity\.statusLabel\}<\/b>/);
 });
 
 test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保留重新读取入口", () => {
@@ -96,7 +98,7 @@ test("令狐处理中的活动技术卡点公开转交原因且不签发恢复�
 
 test("当前时间线节点和活动人物摘要消费当前专题阶段，历史节点不覆盖当前责任", () => {
   assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*currentStage: CurrentTopicStageOutDto \| null[\s\S]*matchingCurrentStage/);
-  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*历史 current 节点只留在审计里[\s\S]*statusLabel = matchingCurrentStage \? matchingCurrentStage\.title/);
+  assert.match(timelineDisplaySource, /function groupActivityPresentation[\s\S]*历史 current 节点只留在审计里[\s\S]*currentStageStatusLabel\(matchingCurrentStage\.status, locale\)/);
   assert.match(timelineDisplaySource, /function currentStageTimelinePresentation[\s\S]*node\.status !== "current"[\s\S]*matchesCurrentTask = node\.taskId !== null && currentStage\.effectiveTaskIds\.includes\(node\.taskId\)[\s\S]*matchesAcceptance = node\.kind === "verification" && node\.nodeId\.startsWith\("acceptance:"\)[\s\S]*"failed-pending-repair"[\s\S]*"verifying"[\s\S]*currentStage\.waitingFor[\s\S]*currentStage\.nextAction/);
   assert.match(taskCardSource, /groupActivityPresentation\(group, locale, currentStage\)/);
   assert.match(nodeSource, /const stagePresentation = currentStageTimelinePresentation\(node, currentStage\)[\s\S]*const displayedStatus = stagePresentation\?\.status \|\| node\.status/);

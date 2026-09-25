@@ -79,7 +79,7 @@ test("源码审查证据覆盖同提案已集成原任务、测试和布局，�
   assert.match(stageSource, /currentTopicStage|CurrentTopicStage/u);
   assert.match(stageSource, /projectCurrentTechnicalRecovery/u);
   const technicalSource = context.sourceEvidence.find((item) => item.file.endsWith("/current-topic-technical-recovery.projection.ts"))?.content || "";
-  assert.match(technicalSource, /const systemOnlyAcceptanceRetry/u);
+  assert.match(technicalSource, /const blockedAcceptanceRetry/u);
   assert.match(technicalSource, /recovery\.occurrences/u);
   assert.doesNotMatch(stageSource, /源码中段省略/u);
 });
