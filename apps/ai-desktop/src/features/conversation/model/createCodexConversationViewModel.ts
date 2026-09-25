@@ -1,4 +1,5 @@
 import type { CodexConversationWorkspaceProps, CodexConversationWorkspaceText } from "../components/CodexConversationWorkspace.types";
+import { fixedUiText } from "../../../../contracts/foundation";
 
 /** 自动测试阻断对话框需要的单项检查结果。 */
 type AutomaticTestCheck = NonNullable<
@@ -29,40 +30,11 @@ export type CodexConversationViewModel = {
 
 /** 根据当前语言返回会话页面完整文案。 */
 function createConversationText(locale: CodexConversationWorkspaceProps["locale"]): CodexConversationWorkspaceText {
-  if (locale === "ja") {
-    return {
-      ready: "Codex harness 接続済み",
-      signedOut: "ChatGPT にログインしてください",
-      signIn: "ChatGPT でログイン",
-      placeholder: "コード、調査、変更内容を入力（画像を貼り付け可能）",
-      attachment: "画像添付",
-      remove: "削除",
-      screenshot: "現在の画面をキャプチャ",
-      hiddenScreenshot: "AI Desktop を隠してキャプチャ",
-      openSettings: "システム設定を開く",
-      automaticTest: "自動テスト",
-      checking: "自動テスト環境を確認中…",
-      readyTest: "自動テスト環境の準備ができました",
-      blocked: "自動テストを開始できません",
-      close: "閉じる",
-    };
-  }
-
   return {
-    ready: "Codex harness 已连接",
-    signedOut: "请先登录 ChatGPT",
-    signIn: "使用 ChatGPT 登录",
-    placeholder: "输入代码、调查或修改任务（可粘贴截图）",
-    attachment: "图片附件",
-    remove: "移除",
-    screenshot: "截取当前屏幕",
-    hiddenScreenshot: "隐藏 AI Desktop 后截图",
-    openSettings: "打开系统设置",
-    automaticTest: "自动测试",
-    checking: "正在检查自动测试环境…",
-    readyTest: "自动测试环境已就绪",
-    blocked: "自动测试开启失败",
-    close: "知道了",
+    ready: fixedUiText(locale, "conversationReady"), signedOut: fixedUiText(locale, "signedOut"), signIn: fixedUiText(locale, "signIn"),
+    placeholder: fixedUiText(locale, "conversationPlaceholder"), attachment: fixedUiText(locale, "attachment"), remove: fixedUiText(locale, "workspaceRemove"),
+    screenshot: fixedUiText(locale, "conversationScreenshot"), hiddenScreenshot: fixedUiText(locale, "conversationHiddenScreenshot"), openSettings: fixedUiText(locale, "conversationOpenSettings"),
+    automaticTest: fixedUiText(locale, "conversationAutomaticTest"), checking: fixedUiText(locale, "conversationChecking"), readyTest: fixedUiText(locale, "conversationReadyTest"), blocked: fixedUiText(locale, "conversationBlocked"), close: fixedUiText(locale, "close"),
   };
 }
 
