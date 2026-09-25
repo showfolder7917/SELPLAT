@@ -51,7 +51,11 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /仅当本步 criterionIds 包含任务卡条件[\s\S]*no-visible-conversation[\s\S]*韩立人物入口[\s\S]*不发送消息、不修改任务或设置/);
   assert.match(acceptanceSource, /任务卡页面条件只能依据当前截图可见的主卡、交付依据、成员状态和详情面板几何裁决[\s\S]*提交号、内部事件关联、历史批次成因和未来复用行为不是页面条件[\s\S]*不得因这些不可见内部事实报告验收能力受阻/);
   assert.match(acceptanceSource, /currentDelivery 给出当前已验证候选及其门禁，是页面批次判断的唯一基线；旧条件中的批次号不得覆盖它/);
-  assert.match(acceptanceSource, /function readCurrentDeliveryEvidence[\s\S]*候选批次：[\s\S]*统一测试：[\s\S]*发布：[\s\S]*重启健康：[\s\S]*真实验收：/);
+  const surfaceStart = acceptanceSource.indexOf("function readTaskCollaborationSurface");
+  const surfaceEnd = acceptanceSource.indexOf("function navigateTaskCollaboration", surfaceStart);
+  const surfaceSource = acceptanceSource.slice(surfaceStart, surfaceEnd);
+  assert.match(surfaceSource, /const currentDelivery = \(\(\) => \{[\s\S]*候选批次：[\s\S]*统一测试：[\s\S]*发布：[\s\S]*重启健康：[\s\S]*真实验收：/);
+  assert.doesNotMatch(surfaceSource, /readCurrentDeliveryEvidence/);
   assert.match(operationSource, /type: "open-hanli-conversation"/);
   assert.match(acceptanceSource, /async function navigateHanliConversation[\s\S]*task-panel-unavailable[\s\S]*task-panel-not-open/);
   assert.match(acceptanceSource, /button\.section-toggle\[aria-controls="developer-task-list"\]/);
