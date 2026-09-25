@@ -58,7 +58,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
       try {
         await controller.submitConfirmedCollaborationTask(message);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "无法提交协同任务。";
+        const errorMessage = error instanceof Error ? error.message : fixedUiText(locale, "conversationSubmitFailed");
         controller.dispatch.setError(errorMessage);
       }
       return;

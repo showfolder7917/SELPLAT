@@ -94,6 +94,7 @@ test("迁移范围内的固定界面只通过统一资源解析，不保留局�
   assert.doesNotMatch(migratedFixedUi, /developerApplicationLabels|testDataResetCopy/);
   assert.doesNotMatch(migratedFixedUi, /locale === "ja"/);
   assert.match(migratedFixedUi, /conversationAssistantHeader/);
+  assert.match(migratedFixedUi, /conversationSubmitFailed/);
   assert.match(migratedFixedUi, /conversationImagePreview/);
   assert.match(migratedFixedUi, /conversationCodexUnavailable/);
   assert.match(migratedFixedUi, /conversationWorkspaceMissing/);
@@ -103,6 +104,7 @@ test("迁移范围内的固定界面只通过统一资源解析，不保留局�
   assert.match(migratedFixedUi, /conversationSupplementTaskFailed/);
   assert.match(migratedFixedUi, /conversationRecoverTaskFailed/);
   assert.match(migratedFixedUi, /error instanceof Error \? error\.message : fixedUiText/);
+  assert.match(migratedFixedUi, /error instanceof Error \? error\.message : fixedUiText\(locale, "conversationSubmitFailed"\)/);
   assert.match(collaborationFormatters, /fixedUiText/);
   assert.match(collaborationFormatters, /collaborationTaskStateLabel[\s\S]*taskKeys/);
   assert.match(collaborationFormatters, /collaborationInProgress/);
