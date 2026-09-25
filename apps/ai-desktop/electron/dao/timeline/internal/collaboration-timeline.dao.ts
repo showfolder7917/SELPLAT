@@ -79,7 +79,7 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
           const legacySourceFactKey = `flow:${event.eventId}`;
           const baseSourceFactKey = event.type === "execution.started" || event.type === "execution.repair_started"
             ? `${legacySourceFactKey}:stage-closure-v4`
-            : event.type.startsWith("unified_test.") || event.type.startsWith("execution.repair_") || event.type === "integration.batch_frozen" || event.type === "release.restart_healthy"
+            : event.type.startsWith("preflight.") || event.type.startsWith("unified_test.") || event.type.startsWith("execution.repair_") || event.type === "integration.batch_frozen" || event.type === "release.restart_healthy"
             ? `${legacySourceFactKey}:visible-rounds-v3`
             : event.type === "task.submitted"
             ? `${legacySourceFactKey}:submission-lifecycle-v2`

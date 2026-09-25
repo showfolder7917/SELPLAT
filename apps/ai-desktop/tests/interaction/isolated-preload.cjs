@@ -234,6 +234,10 @@ const resetInteractionTimelineVariants = () => {
   interactionDeliberationFixtureEnabled = false;
   evolutionState.oneShotRun = null;
 };
+const emptyInteractionDeliveryEvidence = () => ({
+  preflight: { status: "not-recorded", round: null, candidateSha: null, impactScope: [], testInputs: [], evidenceReferences: [], evidenceValid: null, reusableStages: [], issues: [] },
+  candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing",
+});
 // 隔离夹具必须模拟正式 Evolution 运行时提供的当前专题投影；卡片不会从历史节点自行推断恢复入口。
 const synchronizeInteractionCurrentTopicStage = () => {
   if (interactionDeliberationFixtureEnabled) {
@@ -245,7 +249,7 @@ const synchronizeInteractionCurrentTopicStage = () => {
         waitingFor: "南宫婉内部研讨", nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。", userAction: "none",
         resumeOneShotRunId: null, effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null,
         readRecovery: { policyId: `interaction-deliberation:${deliberation.deliberationId}`, waitingFor: "南宫婉内部研讨", requiresUserAction: false, nextAction: "系统会继续当前研讨；形成可执行范围后再显示确认。" },
-        deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" }, updatedAt: deliberation.updatedAt,
+        deliveryEvidence: emptyInteractionDeliveryEvidence(), updatedAt: deliberation.updatedAt,
       };
       return;
     }
@@ -260,7 +264,7 @@ const synchronizeInteractionCurrentTopicStage = () => {
     status: "failed-pending-repair", title: "已阻塞", summary: "等待从原卡点继续。", repairContent: "", remaining: "等待恢复原任务。",
     waitingFor: "原任务恢复处理", nextAction: "保留失败证据并从原恢复点处理。",
     userAction: "none", resumeOneShotRunId: null, resumeTaskId: null, customerActionGuidance: null, effectiveTaskIds: ["interaction-task"], missingTaskIds: [], latestAcceptance: null,
-    deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" }, updatedAt: now,
+    deliveryEvidence: emptyInteractionDeliveryEvidence(), updatedAt: now,
   };
   if (interruptedTimelineFixtureStatus === "waiting") {
     evolutionState.currentTopicStage = { ...base, repairContent: "应用重建中断原连接。", remaining: "等待用户继续执行原任务。", userAction: "resume", resumeTaskId: "interaction-task" };

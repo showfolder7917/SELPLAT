@@ -21,6 +21,8 @@ import { inspectAcceptancePlanCandidateEvidence } from "./integration.verifier.j
 import { executeGit } from "./git-process.js";
 import { requiresRuntimeActivation } from "./runtime-activation.policy.js";
 
+class QuickPreflightError extends Error {}
+
 export interface VersionIntegrationPipelineOptions {
   store: CollaborationStatePort;
   durations: CollaborationDurationPort;
@@ -235,6 +237,14 @@ export class VersionIntegrationPipeline {
       document.state = "testing";
       document.runtimeActivation = { ...activation, state: "resumed", detail: null, updatedAt: new Date().toISOString() };
       this.#releaseBatches.write(document);
+      const impactScope = await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha);
+      let preflightBlocked = false;
+      this.#store.updateTask(taskIds[0], "preflight.resumed_decided", (_first, mutable) => {
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          preflightBlocked ||= appendQuickPreflightDecision(task, candidate, document, impactScope, actor);
+        }
+      });
+      if (preflightBlocked) throw new QuickPreflightError("快速预检发现候选证据问题");
       this.#store.updateTask(taskIds[0], "integration.runtime_activation_resumed", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === document.generation);
         if (batch) batch.state = "integrating";
@@ -274,6 +284,7 @@ export class VersionIntegrationPipeline {
       });
       publishedExecutable = verified.executable;
     } catch (error) {
+      const preflightBlocked = error instanceof QuickPreflightError;
       const failureDetail = errorMessage(error);
       const failurePresentation = integrationFailurePresentation("verification", document.generation, failureDetail);
       document.state = "failed";
@@ -290,7 +301,7 @@ export class VersionIntegrationPipeline {
           batch.completedAt = new Date().toISOString();
         }
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = "test-failed";
+          task.state = preflightBlocked ? "blocked" : "test-failed";
           task.phase = null;
           task.blockingReason = failurePresentation.summary;
           task.recoveryTargetState = "ready-for-integration";
@@ -312,8 +323,10 @@ export class VersionIntegrationPipeline {
             occurredAt: new Date().toISOString(),
           };
           task.currentHandler = participantSnapshot(requireActor(mutable, this.#actorMemberId));
-          task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: failureDetail, startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
-          appendFlow(task, "unified_test.failed", "integration", "failed", failureDetail, actor, true);
+          if (!preflightBlocked) {
+            task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: failureDetail, startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
+            appendFlow(task, "unified_test.failed", "integration", "failed", failureDetail, actor, true);
+          }
         }
       });
       throw error;
@@ -407,8 +420,16 @@ export class VersionIntegrationPipeline {
       this.#releaseBatches.write(releaseDocument);
       // 只有候选确实包含同批冻结结果后才能记录 unified_test.started。
       await this.#workspaces.assertCandidateContainsTaskResults(candidate, tasks);
+      const impactScope = await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha);
+      let preflightBlocked = false;
+      this.#store.updateTask(taskIds[0], "preflight.decided", (_first, mutable) => {
+        for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
+          preflightBlocked ||= appendQuickPreflightDecision(task, candidate!, releaseDocument!, impactScope, actor);
+        }
+      });
+      if (preflightBlocked) throw new QuickPreflightError("快速预检发现候选证据问题");
       if (requiresRuntimeActivation(
-        await candidateChangedFiles(candidate.rootPath, candidate.baseSha, candidate.candidateSha),
+        impactScope,
         this.#loadedRuntimeSha,
         candidate.candidateSha,
       )) {
@@ -539,11 +560,12 @@ export class VersionIntegrationPipeline {
       const mergeConflict = error instanceof MergeConflictError;
       const candidateBranchConflict = error instanceof CandidateBranchConflictError;
       const candidateIncomplete = error instanceof CandidateCompletenessError;
+      const preflightBlocked = error instanceof QuickPreflightError;
       const capacityBlocked = LinghuAutomationFacade.isUnifiedTestCapacityBlockedError(error);
       const capacityFailure = capacityBlocked ? error as { capacity: { fileBytes: number; directoryBytes: number; headroomBytes: number; requiredBytes: number; availableBytes: number } } : null;
       const infrastructureFailure = capacityBlocked || LinghuAutomationFacade.isUnifiedTestInfrastructureError(error) || error instanceof StablePublishedApplicationCollisionError;
-      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : candidateBranchConflict || candidateIncomplete ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
-      const failurePhase = ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
+      const failureKind = ownershipBlocked ? "local-change-ownership" : mergeConflict ? "merge-conflict" : preflightBlocked || candidateBranchConflict || candidateIncomplete ? "candidate-branch-conflict" : infrastructureFailure ? "infrastructure" : "verification";
+      const failurePhase = preflightBlocked || ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete ? "preparation" : infrastructureFailure ? "release" : verifySpan ? "verification" : "release";
       const failurePresentation = integrationFailurePresentation(failureKind, generation, errorMessage(error), capacityFailure, candidateIncomplete);
       // 本地修改归属异常同样必须保留具体文件，不能在进入令狐调查前把证据清空。
       const conflictFiles = ownershipBlocked ? error.conflictFiles : mergeConflict ? error.conflictFiles : [];
@@ -561,7 +583,7 @@ export class VersionIntegrationPipeline {
         }
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
-          task.state = ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete || infrastructureFailure ? "blocked" : "test-failed";
+          task.state = preflightBlocked || ownershipBlocked || mergeConflict || candidateBranchConflict || candidateIncomplete || infrastructureFailure ? "blocked" : "test-failed";
           task.phase = null;
           // 容量不足需要保留策略授权；此标记使自动恢复生成操作指导而不会再次签发源码修复。
           task.repairRequiresUserConfirmation = capacityBlocked;
@@ -578,7 +600,7 @@ export class VersionIntegrationPipeline {
           };
           task.currentHandler = participantSnapshot(currentActor);
           if (failurePhase === "verification" || capacityBlocked) task.unifiedTest = { status: "failed", owner: task.currentHandler, failureReason: errorMessage(error), startedAt: task.unifiedTest?.startedAt || new Date().toISOString(), completedAt: new Date().toISOString() };
-          appendFlow(
+          if (!preflightBlocked) appendFlow(
             task,
             ownershipBlocked ? "integration.local_change_ownership_blocked" : mergeConflict ? "integration.merge_conflict" : candidateBranchConflict || candidateIncomplete ? "integration.candidate_preparation_failed" : infrastructureFailure ? "integration.infrastructure_failed" : "unified_test.failed",
             "integration", ownershipBlocked || mergeConflict || infrastructureFailure ? "waiting" : "failed", failurePresentation.summary, currentActor,
@@ -714,6 +736,48 @@ function appendFlow(
     error,
     details,
   });
+}
+
+/** 候选冻结后只比较结构化事实；任一复用条件缺失均保留原因并重新执行。 */
+function appendQuickPreflightDecision(
+  task: CollaborationTaskOutDto,
+  candidate: IntegrationCandidate,
+  document: ReleaseBatchDocumentOutDto,
+  impactScope: string[],
+  actor: Pick<CollaborationMemberOutDto, "memberId" | "displayName">,
+): boolean {
+  const evidence = document.candidateEvidence;
+  const testInputs = [
+    `candidate:${candidate.candidateSha}`,
+    ...((evidence?.sourceBlobs || []).map((blob) => `${blob.source}:${blob.sha256}`)),
+  ];
+  const evidenceValid = Boolean(evidence && !evidence.readError && evidence.acceptancePlanChecks.every((check) => check.passed));
+  const evidenceReferences = [`release-batch://${document.releaseBatchId}/candidate-evidence`];
+  const previous = [...task.flowEvents].reverse().find((event) => event.type === "preflight.reused" && event.details?.candidateSha === candidate.candidateSha);
+  const previousDetails = previous?.details;
+  const reusable = Boolean(previousDetails?.evidenceValid && evidenceValid
+    && JSON.stringify(previousDetails.impactScope || []) === JSON.stringify(impactScope)
+    && JSON.stringify(previousDetails.testInputs || []) === JSON.stringify(testInputs));
+  const issues = !evidenceValid
+    ? [{ category: "候选证据", summary: evidence?.readError || "候选验收能力证据不完整", affectedStage: "统一测试" }]
+    : reusable ? [] : [{ category: "复用条件", summary: "没有与当前候选、影响范围、测试输入和有效证据同时匹配的可复用结果", affectedStage: "统一测试" }];
+  const details: CollaborationFlowEventDetailsOutDto = {
+    preflightRound: `submission:${task.taskId}`,
+    candidateSha: candidate.candidateSha,
+    impactScope,
+    testInputs,
+    evidenceReferences,
+    evidenceValid,
+    reusableStages: reusable ? previousDetails?.reusableStages || ["unified-test"] : [],
+    preflightIssues: issues,
+  };
+  if (!evidenceValid) {
+    appendFlow(task, "preflight.issues_found", "preflight", "failed", "快速预检发现候选证据问题，完整统一测试尚未启动", actor, true, details);
+    return true;
+  }
+  appendFlow(task, reusable ? "preflight.reused" : "preflight.rerun_required", "preflight", "completed",
+    reusable ? "快速预检确认未受影响阶段可复用，后续门禁继续独立执行" : "快速预检未找到可复用结果，将重新执行完整统一测试", actor, false, details);
+  return false;
 }
 
 function integrationDependenciesSatisfied(task: CollaborationTaskOutDto, state: CollaborationStateOutDto): boolean {

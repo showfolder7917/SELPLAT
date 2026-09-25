@@ -77,6 +77,10 @@ test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签�
   assert.equal(stage.resumeTaskId, null);
   assert.equal(stage.readRecovery.requiresUserAction, false);
   assert.match(stage.summary, /令狐老祖处理中/);
+  assert.deepEqual(stage.deliveryEvidence.preflight, {
+    status: "not-recorded", round: null, candidateSha: null, impactScope: [], testInputs: [],
+    evidenceReferences: [], evidenceValid: null, reusableStages: [], issues: [],
+  });
 });
 
 test("新一轮真实验收不得复用旧故障指纹的原因和下一步", () => {
@@ -640,6 +644,31 @@ test("重启健康只将最终候选交给真实验收，不能单独完成", ()
   const stage = projectCurrentTopicStage(evolution(delivered.acceptanceStatus), delivered);
   assert.equal(stage.status, "accepting");
   assert.equal(stage.waitingFor, "韩立真实验收");
+});
+
+test("预检统一生成当前结论，但不替代后续交付门禁", () => {
+  const current = task("executing");
+  current.flowEvents = [{ type: "preflight.started", status: "started", occurredAt: "2026-09-25T01:00:00.000Z", details: { preflightRound: "round-1" } }];
+  let stage = projectCurrentTopicStage(evolution("missing"), { tasks: [current] });
+  assert.equal(stage.status, "preflighting");
+  assert.match(stage.summary, /预检进行中/);
+  assert.equal(stage.deliveryEvidence.preflight.status, "running");
+
+  current.flowEvents = [{ type: "preflight.issues_found", status: "failed", occurredAt: "2026-09-25T01:01:00.000Z", details: { preflightRound: "round-1", preflightIssues: [{ category: "候选证据", summary: "证据不可读取", affectedStage: "统一测试" }] } }];
+  stage = projectCurrentTopicStage(evolution("missing"), { tasks: [current] });
+  assert.equal(stage.status, "failed-pending-repair");
+  assert.match(stage.remaining, /证据不可读取/);
+
+  current.flowEvents = [{ type: "preflight.rerun_required", status: "completed", occurredAt: "2026-09-25T01:02:00.000Z", details: { candidateSha: "candidate-1", impactScope: ["src/a.ts"], testInputs: ["input-1"], evidenceValid: true, preflightIssues: [{ category: "复用条件", summary: "没有可复用结果", affectedStage: "统一测试" }] } }];
+  stage = projectCurrentTopicStage(evolution("missing"), { tasks: [current] });
+  assert.equal(stage.status, "verifying");
+  assert.match(stage.summary, /将重新执行/);
+
+  current.flowEvents = [{ type: "preflight.reused", status: "completed", occurredAt: "2026-09-25T01:03:00.000Z", details: { candidateSha: "candidate-1", impactScope: ["src/a.ts"], testInputs: ["input-1"], evidenceValid: true, reusableStages: ["unified-test"], evidenceReferences: ["release-batch://g1"] } }];
+  stage = projectCurrentTopicStage(evolution("missing"), { tasks: [current] });
+  assert.equal(stage.status, "verifying");
+  assert.match(stage.summary, /可复用/);
+  assert.equal(stage.deliveryEvidence.unifiedTest, "missing");
 });
 
 test("待验收提案先说明缺少的交付事实，不能提前等待真实验收", () => {

@@ -577,6 +577,8 @@ button { color: inherit; }
 .task-group-facts small { color: var(--sel-theme-workbench-text-muted); }
 .task-collaboration-group > .seldisclosure-content { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) minmax(140px, 1fr); overflow: hidden; padding: 0 16px 16px; }
 .task-timeline-detail-pane { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.task-timeline-detail-pane .task-node-detail { min-width: 0; overflow-wrap: anywhere; }
+.task-timeline-detail-pane .task-node-detail pre { max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; }
 .task-timeline-list { position: relative; display: grid; gap: 8px; padding: 8px 0 8px 38px; }
 .task-timeline-list::before { position: absolute; top: 0; bottom: 0; left: 17px; width: 1px; content: ""; background: var(--sel-theme-control-line-soft); }
 .task-topic-flow, .task-nested-card { min-width: 0; display: grid; gap: 7px; padding: 10px; border: 1px solid var(--sel-theme-control-line-soft); border-radius: var(--sel-theme-radius-control); background: color-mix(in srgb, var(--sel-theme-workbench-surface) 70%, transparent); }

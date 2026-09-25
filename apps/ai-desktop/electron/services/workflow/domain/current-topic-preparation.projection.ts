@@ -1,5 +1,6 @@
 import type { CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import { readCurrentTopicRecovery } from "./current-topic-read-recovery.js";
+import { emptyCurrentTopicDeliveryEvidence } from "./current-topic-delivery-evidence.js";
 
 /** 尚未确立可执行提案时的唯一阶段；建立、研讨和确认不参与交付判定。 */
 export function projectTopicPreparationStage(evolution: EvolutionStateOutDto, hasProposal: boolean): CurrentTopicStageOutDto | null {
@@ -60,7 +61,7 @@ function stage(input: {
     hostStartupAcceptance: { launchId: null, handler: null, startedAt: null, commandStatus: "missing", exitCode: null,
       healthStatus: "missing", healthSummary: null, evidenceReadable: false, evidenceReferences: [], launcherSource: null,
       healthResponse: null, status: "unverified", reason: "尚未记录当前专题的 Host 启动验收依据。" },
-    deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" },
+    deliveryEvidence: emptyCurrentTopicDeliveryEvidence(),
     updatedAt: input.updatedAt,
   };
 }
