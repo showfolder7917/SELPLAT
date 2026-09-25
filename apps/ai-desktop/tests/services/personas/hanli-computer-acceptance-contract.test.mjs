@@ -36,10 +36,14 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /不能由任务协作群页面截图裁决，应先导航到该条件要求的页面/);
   assert.match(acceptanceSource, /navigateTaskCollaboration[\s\S]*button\.section-toggle\[aria-controls="developer-task-list"\][\s\S]*button\.collaboration-task-group-entry/);
   assert.match(acceptanceSource, /async function navigateTaskCollaboration[\s\S]*waitForPanel[\s\S]*task-panel-not-open[\s\S]*task-panel-not-closed[\s\S]*task-group-not-visible/);
-  assert.match(acceptanceSource, /ensureCurrentGroupOpen[\s\S]*\.task-collaboration-group > \.selui-disclosure-heading > button\.seldisclosure-trigger\[data-sel-disclosure-trigger\]/);
-  assert.match(acceptanceSource, /task-timeline-detail-pane[\s\S]*detail\?\.isConnected[\s\S]*task-group-detail-not-ready/);
-  assert.doesNotMatch(acceptanceSource, /\.task-collaboration-group > \.seldisclosure-root > button\[data-sel-disclosure-trigger\]/);
-  assert.doesNotMatch(acceptanceSource, /result\.status !== "task-group-not-visible" && result\.status !== "task-group-detail-not-ready"/);
+  assert.match(acceptanceSource, /taskCollaborationTarget = \{ topicId: goal\.topicId, proposalId: goal\.proposalId \}/);
+  assert.match(acceptanceSource, /dataset\.taskCollaborationTopicId === target\.topicId[\s\S]*dataset\.taskCollaborationProposalId === target\.proposalId/);
+  assert.match(acceptanceSource, /:scope > \.seldisclosure-content > \.task-timeline-detail-pane/);
+  assert.match(acceptanceSource, /attempt < 12[\s\S]*detail-pane-zero-height[\s\S]*task-group-detail-not-ready/);
+  assert.doesNotMatch(acceptanceSource, /document\.querySelector<HTMLButtonElement>\("\.task-collaboration-group > \.selui-disclosure-heading/);
+  assert.match(acceptanceSource, /return \{ \.\.\.detail, status: detail\.status === "ready" \? "already-visible" : detail\.status/);
+  assert.match(acceptanceSource, /return \{ \.\.\.detail, status: detail\.status === "ready" \? "navigated" : detail\.status/);
+  assert.match(acceptanceSource, /result\.status !== "task-group-not-visible"[\s\S]*result\.status !== "task-group-detail-not-ready"[\s\S]*result\.status !== "detail-pane-zero-height"/);
   assert.match(acceptanceSource, /taskCollaborationVisible: true/);
   assert.match(mainWindowLayoutSource, /minimum:\s*\{ width: 680, height: 700 \}/);
   assert.match(acceptanceSource, /resize-formal-window[\s\S]*window\.getMinimumSize\(\)[\s\S]*width: minimumWidth, height: minimumHeight/);
@@ -76,7 +80,8 @@ test("任务协作群滚动只移动详情面板，并等待窄窗口布局回�
   const scrollStart = acceptanceSource.indexOf("function scrollTaskCollaboration");
   const scrollEnd = acceptanceSource.indexOf("function readTaskCollaborationSurface", scrollStart);
   const scrollSource = acceptanceSource.slice(scrollStart, scrollEnd);
-  assert.match(scrollSource, /querySelector<HTMLElement>\("\.task-timeline-detail-pane"\)/);
+  assert.match(scrollSource, /dataset\.taskCollaborationTopicId === target\.topicId[\s\S]*dataset\.taskCollaborationProposalId === target\.proposalId/);
+  assert.match(scrollSource, /:scope > \.seldisclosure-content > \.task-timeline-detail-pane/);
   assert.match(scrollSource, /detail\.scrollTop/);
   assert.match(scrollSource, /pageScrollTop/);
   assert.match(scrollSource, /getBoundingClientRect/);

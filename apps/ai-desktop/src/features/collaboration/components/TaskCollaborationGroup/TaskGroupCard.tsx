@@ -257,6 +257,11 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
     <SelUiDisclosure
       idPrefix="task-collaboration-group"
       className={`task-collaboration-group ${currentStage?.status || group.status}`}
+      rootData={{
+        "data-task-collaboration-group-id": group.groupId,
+        "data-task-collaboration-topic-id": group.topicId || undefined,
+        "data-task-collaboration-proposal-id": group.proposalId || undefined,
+      }}
       open={open}
       onOpenChange={onOpenChange}
       trigger={<TaskGroupHeader group={group} presentation={model.presentation} />}
