@@ -811,7 +811,21 @@ function readTaskCollaborationSurface(target: { topicId: string; proposalId: str
   const deliveryEvidenceVisible = Boolean(deliveryEvidence && deliveryEvidenceRect
     && deliveryEvidenceRect.width > 0 && deliveryEvidenceRect.height > 0
     && getComputedStyle(deliveryEvidence).display !== "none" && getComputedStyle(deliveryEvidence).visibility !== "hidden");
-  const currentDelivery = readCurrentDeliveryEvidence(deliveryEvidence?.innerText || "");
+  // 此函数通过 toString 单独注入页面；解析逻辑必须留在函数体内，不能依赖主进程模块闭包。
+  const currentDelivery = (() => {
+    const lines = (deliveryEvidence?.innerText || "").split("\n").map((line) => line.trim()).filter(Boolean);
+    const read = (...labels: string[]) => {
+      const line = lines.find((item) => labels.some((label) => item.startsWith(label)));
+      return line?.slice(line.indexOf("：") + 1).trim() || null;
+    };
+    return {
+      candidateGeneration: read("候选批次：", "候補バッチ："),
+      unifiedTest: read("统一测试：", "統合テスト："),
+      release: read("发布：", "公開："),
+      restartHealth: read("重启健康：", "再起動ヘルス："),
+      acceptance: read("真实验收：", "実際の受け入れ："),
+    };
+  })();
   const currentTimelineNodeVisible = Boolean(currentTimelineNode && currentTimelineNodeRect
     && currentTimelineNodeRect.width > 0 && currentTimelineNodeRect.height > 0
     && getComputedStyle(currentTimelineNode).display !== "none" && getComputedStyle(currentTimelineNode).visibility !== "hidden");
@@ -849,22 +863,6 @@ function readTaskCollaborationSurface(target: { topicId: string; proposalId: str
     detailPaneSize: detailRect ? { width: Math.round(detailRect.width), height: Math.round(detailRect.height) } : null,
     detailPaneClientHeight: detail?.clientHeight ?? 0,
     detailPaneScrollHeight: detail?.scrollHeight ?? 0,
-  };
-}
-
-/** 从当前可见交付依据读取页面标签，不访问任务状态、IPC 或历史批次。 */
-function readCurrentDeliveryEvidence(value: string): Record<string, string | null> {
-  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
-  const read = (...labels: string[]) => {
-    const line = lines.find((item) => labels.some((label) => item.startsWith(label)));
-    return line?.slice(line.indexOf("：") + 1).trim() || null;
-  };
-  return {
-    candidateGeneration: read("候选批次：", "候補バッチ："),
-    unifiedTest: read("统一测试：", "統合テスト："),
-    release: read("发布：", "公開："),
-    restartHealth: read("重启健康：", "再起動ヘルス："),
-    acceptance: read("真实验收：", "実際の受け入れ："),
   };
 }
 
