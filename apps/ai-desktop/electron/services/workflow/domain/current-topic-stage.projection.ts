@@ -46,14 +46,18 @@ export function projectCurrentTopicStage(
   const finalConclusion = readFinalConclusion(evolution, proposal);
   const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
-  const deliveryEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, latestAcceptance);
+  // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
+  const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
+    && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt);
+  // 运行中的新验收轮次优先于已归档的上一轮结果；否则页面会把“验收中”错误展示为旧轮已通过。
+  const deliveryAcceptance = acceptanceStarted
+    ? { runId: run.runId, status: "running" as const, occurredAt: run.updatedAt }
+    : latestAcceptance;
+  const deliveryEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, deliveryAcceptance);
   const deliveryGate = readDeliveryGate(deliveryEvidence);
   const preflightGate = readPreflightGate(deliveryEvidence, execution.effectiveTasks);
   const stageGate = preflightGate || deliveryGate;
   const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
-  // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
-  const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
-    && (!latestAcceptance || run.updatedAt > latestAcceptance.occurredAt);
   // 完成态后的真实复核仍属于当前专题；运行明确阻塞时不得让旧完成事实覆盖恢复入口。
   const runBlocked = run?.status === "blocked"
     && run.topicId === topic?.topicId
