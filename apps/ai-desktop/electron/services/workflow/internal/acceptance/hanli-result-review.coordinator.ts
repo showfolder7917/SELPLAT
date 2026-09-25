@@ -131,11 +131,14 @@ function readChangedSourceEvidence(
     });
   });
   const priorityItems = declaredItems.filter((item) => evidencePriority(item.file) < 5);
+  // 冻结清单是验收计划已经授权的必读证据，不能在依赖展开后再排队；
+  // 否则高优先级页面文件的两层导入会先耗尽 48 项上限，使清单内的后端事实静默消失。
+  const frozenItems = declaredItems.filter((item) => authorizedFiles.includes(item.file));
   const priorityImports = readDirectImports(priorityItems);
   // 场景引用的生产表面优先进入证据包，但不丢弃既有入口的恢复链。
   const firstLevel = [...new Map([...priorityImports, ...readDirectImports(declaredItems)].map((item) => [item.file, item])).values()];
   const secondLevel = readDirectImports(firstLevel);
-  const items = [...new Map([...priorityItems, ...priorityImports, ...firstLevel, ...secondLevel, ...declaredItems].map((item) => [item.file, item])).values()].slice(0, 48);
+  const items = [...new Map([...frozenItems, ...priorityItems, ...priorityImports, ...firstLevel, ...secondLevel, ...declaredItems].map((item) => [item.file, item])).values()].slice(0, 48);
   const batches = Array.from({ length: Math.ceil(items.length / 16) }, (_, index) => ({
     batch: index + 1,
     files: items.slice(index * 16, (index + 1) * 16).map((item) => item.file),
