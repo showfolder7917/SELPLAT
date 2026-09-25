@@ -27,7 +27,7 @@ function deliberationMemberDisplay(member: CollaborationMemberOutDto, oneShotRun
   if (awaitingConfirmation) return member.memberId === "han-li" ? { presence:"conversation", label:text(locale,"collaborationAwaitingConfirmation") } : null;
   if (member.memberId === "nangong-wan" && deliberating) return { presence:"working", label:text(locale,"collaborationInternalDeliberating") };
   if (!oneShotRun || oneShotRun.status !== "running" || oneShotRun.actor !== member.memberId) return null;
-  const keys: Partial<Record<EvolutionOneShotRunOutDto["phase"], FixedUiTextKey>> = { "preparing-topic":"collaborationInquiryPreparing", "forming-proposal":"collaborationPhasePlanning", approving:"collaborationPhaseVerifying", revising:"collaborationInquiryVerifying", distributing:"collaborationMemberAssigned" };
+  const keys: Partial<Record<EvolutionOneShotRunOutDto["phase"], FixedUiTextKey>> = { "preparing-topic":"collaborationTopicPreparing", "forming-proposal":"collaborationPhasePlanning", approving:"collaborationPhaseVerifying", revising:"collaborationInquiryVerifying", distributing:"collaborationMemberAssigned" };
   return { presence:"working", label:text(locale, keys[oneShotRun.phase] || "collaborationInternalDeliberating") };
 }
 function inquiryMemberDisplay(activity: CollaborationMemberDisplayModelInput["inquiryActivity"], role: CollaborationMemberDisplayModelInput["inquiryRole"], locale: LocaleValue): { presence: MemberState; label: string } | null {
