@@ -63,6 +63,8 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /navigateHanliConversation[\s\S]*requestAnimationFrame[\s\S]*conversation-not-visible/);
   assert.match(acceptanceSource, /open-hanli-conversation[\s\S]*当前正式验收未获韩立会话导航授权[\s\S]*hanliConversation/);
   assert.match(runtimeSource, /item\.evidenceType === "page-experience"[\s\S]*item\.pageSurface === "task-collaboration"/);
+  assert.match(runtimeSource, /assertTaskCollaborationCriteriaUseDynamicCandidate\(pageCriteria, pageCriterionIds, taskCollaborationCriterionIds\)/);
+  assert.match(runtimeSource, /function assertTaskCollaborationCriteriaUseDynamicCandidate[\s\S]*固定候选批次[\s\S]*当前最新已验证候选/);
   assert.match(acceptanceSource, /所有状态必须来自当前正式业务数据/);
   assert.doesNotMatch(acceptanceSource, /taskCollaborationScenarioTarget|TaskCollaborationScenario/);
   assert.match(acceptanceSource, /#developer-task-list button\.collaboration-member[\s\S]*:scope > span > i[\s\S]*memberStates/);
