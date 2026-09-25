@@ -124,3 +124,46 @@ for (const scenario of ["verified", "misclassified", "different-version", "faile
     pipeline.dispose();
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("重启健康复用同结果提交的已验证旧批次，不重复执行被重建中断的新批次", () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "restart-reuse-"));
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask(request);
+    store.updateTask(task.taskId, "fixture.interrupted_duplicate", (current, state) => {
+      current.state = "recovering";
+      current.recoveryTargetState = "unified-testing";
+      current.integrationGeneration = 472;
+      current.versionWorkspace = {
+        workspaceId: "worktree:restart-reuse", rootPath: directory, branchName: "codex/restart-reuse",
+        baseSha: "base", resultSha: "same-task-result", createdAt: new Date().toISOString(), retiredAt: null,
+      };
+      current.unifiedTest = { status: "running", owner: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, failureReason: null, startedAt: new Date().toISOString(), completedAt: null };
+      state.integrationBatches.push(
+        { generation: 471, state: "verified", taskIds: [current.taskId], integrationSha: "loaded-runtime", failureReason: null, createdAt: new Date().toISOString(), completedAt: null },
+        { generation: 472, state: "failed", taskIds: [current.taskId], integrationSha: null, failureReason: "应用重建中断集成，等待用户恢复", createdAt: new Date().toISOString(), completedAt: new Date().toISOString() },
+      );
+    });
+    const confirmedBatches = [];
+    const pipeline = new VersionIntegrationPipeline({
+      store, durations, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1",
+      releaseBatches: {
+        runningDocument: (batchId) => batchId === "release-0.1.1-g471" ? {
+          releaseBatchId: batchId, state: "integrated", candidateSha: "loaded-runtime", executable: null,
+          tasks: [{ taskId: task.taskId, resultSha: "same-task-result" }],
+        } : null,
+        confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId),
+        retireRuntimeActivationPackage() {},
+      },
+      workspaces: { retireWorkspace: async () => undefined }, loadedRuntimeSha: "loaded-runtime",
+    });
+
+    assert.deepEqual(pipeline.confirmPublishedRestart(), [471]);
+    assert.deepEqual(confirmedBatches, ["release-0.1.1-g471"]);
+    assert.equal(store.task(task.taskId).state, "integrated");
+    assert.equal(store.task(task.taskId).integrationGeneration, 471);
+    assert.equal(store.task(task.taskId).recoveryTargetState, null);
+    assert.equal(store.state().integrationBatches.find((batch) => batch.generation === 472).state, "failed");
+    pipeline.dispose();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

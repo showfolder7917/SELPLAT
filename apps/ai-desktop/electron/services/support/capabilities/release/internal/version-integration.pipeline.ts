@@ -121,18 +121,44 @@ export class VersionIntegrationPipeline {
   /** 新版本渲染器真实就绪后再把已发布批次交还南宫婉，禁止重启前伪报完成。 */
   confirmPublishedRestart(): number[] {
     const state = this.#store.state();
-    const generations = state.integrationBatches
-      .filter((batch) => (batch.state === "verified"
+    const restartTaskIds = new Map<number, string[]>();
+    for (const batch of state.integrationBatches) {
+      if (!(batch.state === "verified"
         // 仅恢复被旧启动逻辑误标的发布事实，不接受普通失败或未经测试的版本。
         || (batch.state === "failed" && batch.failureReason === "应用重建中断集成，等待用户恢复"
           && batch.taskIds.every((id) => state.tasks.some((task) => task.taskId === id
             && task.state === "awaiting-restart" && task.unifiedTest?.status === "passed"))))
-        && Boolean(batch.integrationSha)
-        && batch.integrationSha === this.#loadedRuntimeSha
-        && state.tasks.some((task) => task.integrationGeneration === batch.generation && task.state === "awaiting-restart"))
-      .map((batch) => batch.generation);
+        || !batch.integrationSha) continue;
+      const loadedBatch = batch.integrationSha === this.#loadedRuntimeSha;
+      if (!loadedBatch) continue;
+      const directTaskIds = state.tasks.filter((task) => batch.taskIds.includes(task.taskId)
+        && task.integrationGeneration === batch.generation && task.state === "awaiting-restart").map((task) => task.taskId);
+      if (directTaskIds.length) {
+        restartTaskIds.set(batch.generation, directTaskIds);
+        continue;
+      }
+      // 心跳恢复可能在已验证版本启动期间误冻结一个无源码变化的新批次。新进程只能在
+      // 运行 SHA、发布文档中的任务结果提交和当前工作树结果完全一致，且较新批次仅因
+      // 应用重建中断时，复用已经通过的旧批次；任何真实失败或源码变化仍必须重新验证。
+      const releaseBatchId = `release-${this.#releaseVersion}-g${batch.generation}`;
+      const document = this.#releaseBatches.runningDocument(releaseBatchId);
+      if (document?.state !== "integrated" || document.candidateSha !== this.#loadedRuntimeSha) continue;
+      const recoveredTaskIds = state.tasks.filter((task) => {
+        if (!batch.taskIds.includes(task.taskId) || task.state !== "recovering"
+          || task.recoveryTargetState !== "unified-testing"
+          || (task.integrationGeneration ?? 0) <= batch.generation) return false;
+        const recordedTask = document.tasks.find((item) => item.taskId === task.taskId);
+        const interruptedDuplicate = state.integrationBatches.find((candidate) => candidate.generation === task.integrationGeneration
+          && candidate.state === "failed" && candidate.failureReason === "应用重建中断集成，等待用户恢复"
+          && candidate.integrationSha === null && candidate.taskIds.includes(task.taskId));
+        return Boolean(recordedTask?.resultSha && interruptedDuplicate
+          && recordedTask.resultSha === task.versionWorkspace?.resultSha);
+      }).map((task) => task.taskId);
+      if (recoveredTaskIds.length) restartTaskIds.set(batch.generation, recoveredTaskIds);
+    }
+    const generations = [...restartTaskIds.keys()];
     for (const generation of generations) {
-      const taskIds = state.tasks.filter((task) => task.integrationGeneration === generation && task.state === "awaiting-restart").map((task) => task.taskId);
+      const taskIds = restartTaskIds.get(generation) || [];
       if (!taskIds.length) continue;
       this.#store.updateTask(taskIds[0], "release.restart_healthy", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
@@ -141,6 +167,8 @@ export class VersionIntegrationPipeline {
         const currentActor = requireActor(mutable, this.#actorMemberId);
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           task.state = "integrated";
+          task.integrationGeneration = generation;
+          task.recoveryTargetState = null;
           task.currentHandler = participantSnapshot(currentActor);
           task.completedAt = completedAt;
           task.blockingReason = null;
