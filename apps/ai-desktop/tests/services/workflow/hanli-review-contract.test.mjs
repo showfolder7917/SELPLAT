@@ -186,6 +186,19 @@ test("三语专题在证据上限内优先保留资源回退、设置持久化�
   }
 });
 
+test("韩立源码审查完整读取超过通用上限的固定三语资源", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const file = "apps/ai-desktop/contracts/foundation/i18n/fixed-ui-text.ts";
+  const task = { taskId: "fixed-ui-text", state: "integrated", snapshot: { title: "three locales", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [file] }] };
+  const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] });
+  const source = context.sourceEvidence.find((item) => item.file === file)?.content || "";
+  assert.ok(source.length > 48_000);
+  assert.equal(source, readFileSync(path.resolve("../..", file), "utf8"));
+  assert.match(source, /hanliContextReadStats/u);
+  assert.doesNotMatch(source, /源码中段省略/u);
+});
+
 test("韩立审查完整读取可控大小的样式文件中段响应式规则", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
