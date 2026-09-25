@@ -4,6 +4,8 @@ import { expect, test, type ElectronApplication, type Locator, type Page } from 
 export type LanguageSettingsAcceptanceProductionSurfaces = [
   typeof import("../../src/features/settings/components/DeveloperSettingsView").DeveloperSettingsView,
   typeof import("../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationComposer").CodexConversationComposer,
+  typeof import("../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline").CodexConversationTimeline,
+  typeof import("../../src/features/conversation/components/CollaborationStatusChain").CollaborationStatusChain,
 ];
 
 type InteractionHarness = {
