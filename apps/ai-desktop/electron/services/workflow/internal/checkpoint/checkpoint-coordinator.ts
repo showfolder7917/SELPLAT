@@ -2,6 +2,7 @@ import type { CollaborationStateOutDto, WorkflowExceptionRecordOutDto, SubmitCol
 import type { EvolutionStateOutDto, EvolutionTechnicalRecoveryOutDto } from "../../../../../contracts/services/evolution/index.js";
 import { WorkflowCheckpointAggregate, type WorkflowCheckpointState } from "../../domain/workflow-checkpoint.aggregate.js";
 import { ProposalRevisionChain } from "../../domain/proposal-revision-chain.js";
+import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggregate.js";
 import { createTechnicalRecoveryIssueId, isAcceptanceFailureOperation } from "../evolution/one-shot-failure-identity.js";
 import type { CheckpointHandoffService } from "./checkpoint-handoff.service.js";
 import { selectCurrentAcceptanceFailure, selectRepeatedAcceptanceFailures } from "./checkpoint-failure-selection.js";
@@ -469,7 +470,8 @@ export class CheckpointCoordinator {
     const repair = collaborationTasks.find((item) => item.taskId === state.repairTaskId)
       || collaborationTasks.find((item) => item.snapshot.constraints.includes(marker));
     if (repair) {
-      const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker);
+      const request = buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker,
+        this.#currentReplacementTaskId(state, proposal));
       const evidenceMarker = `卡点故障事实：${failureEvent.eventId}`;
       if (repair.state !== "cancelled" && isAcceptanceFailureOperation(failureEvent.payload.operation)
         && !repair.snapshot.constraints.includes(evidenceMarker)) {
@@ -563,13 +565,24 @@ export class CheckpointCoordinator {
       // 下一次监督轮询会继续核对当前任务。
       return;
     }
-    const result = this.options.submitRepair(buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker));
+    const result = this.options.submitRepair(buildCheckpointRepairRequest(state, topic, proposal, failureEvent, repeatedAcceptanceFailures, marker,
+      this.#currentReplacementTaskId(state, proposal)));
     const repairTaskId = result.tasks.find((item) => item.snapshot.constraints.includes(marker))?.taskId || null;
     if (!repairTaskId) throw new Error("未获得真实修复任务标识，不能报告派发完成");
     const aggregate = new WorkflowCheckpointAggregate(state);
     aggregate.registerRepairTask(repairTaskId);
     Object.assign(state, aggregate.snapshot());
     this.#phase(event, state, "repairing", `令狐已接收第 ${state.round} 轮真实调查修复任务 ${state.repairTaskId}。`);
+  }
+
+  /** 新修复必须接续同根当前任务，避免新的验收卡点回跳到最初失败任务形成并列分支。 */
+  #currentReplacementTaskId(
+    state: WorkflowCheckpointState,
+    proposal: EvolutionStateOutDto["proposals"][number],
+  ): string | undefined {
+    if (!state.taskId) return undefined;
+    const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: this.options.collaboration().tasks });
+    return execution.currentEffectiveTaskFor(state.taskId)?.taskId || state.taskId;
   }
 }
 
@@ -582,6 +595,7 @@ function buildCheckpointRepairRequest(
   failureEvent: WorkflowExceptionRecordOutDto,
   repeatedAcceptanceFailures: WorkflowExceptionRecordOutDto[],
   marker: string,
+  replacementForTaskId: string | undefined,
 ): SubmitCollaborationTaskInDto {
   const acceptanceFailureKind = failureEvent.payload.acceptanceFailureKind === "product-defect"
     ? "product-defect"
@@ -627,7 +641,7 @@ function buildCheckpointRepairRequest(
     // 当前提案标识同时作为演化轮次关联。
     evolutionRoundId: proposal.proposalId,
     // 显式保存修复任务替代的原任务，提案聚合在重启后据此选择当前有效任务。
-    replacementForTaskId: state.taskId || undefined,
+    replacementForTaskId,
   };
 }
 

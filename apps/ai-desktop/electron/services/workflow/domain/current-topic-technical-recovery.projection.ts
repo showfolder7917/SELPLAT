@@ -2,7 +2,6 @@ import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionSt
 import { isCompleteCustomerActionGuidance } from "../../../../contracts/services/workflow/index.js";
 import type { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { readCurrentTopicRecovery } from "./current-topic-read-recovery.js";
-import { emptyCurrentTopicDeliveryEvidence } from "./current-topic-delivery-evidence.js";
 
 type Proposal = EvolutionStateOutDto["proposals"][number];
 type Topic = EvolutionStateOutDto["topics"][number] | null;
@@ -16,8 +15,10 @@ export function projectCurrentTechnicalRecovery(input: {
   execution: Execution;
   latestAcceptance: CurrentTopicAcceptanceOutDto | null;
   hostStartupAcceptance: CurrentTopicStageOutDto["hostStartupAcceptance"];
+  /** 已形成的当前候选交付事实；恢复状态不得清空它。 */
+  deliveryEvidence: CurrentTopicStageOutDto["deliveryEvidence"];
 }): CurrentTopicStageOutDto | null {
-  const { evolution, proposal, topic, execution, latestAcceptance, hostStartupAcceptance } = input;
+  const { evolution, proposal, topic, execution, latestAcceptance, hostStartupAcceptance, deliveryEvidence } = input;
   const recovery = evolution.technicalRecovery;
   const run = evolution.oneShotRun;
   const topicId = topic?.topicId || proposal.topicId;
@@ -99,7 +100,8 @@ export function projectCurrentTechnicalRecovery(input: {
     readRecovery: readCurrentTopicRecovery(resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction, recovery.updatedAt),
     effectiveTaskIds: [...new Set([...recovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)), ...blockingTasks.map((item) => item.taskId)])],
     missingTaskIds: [], latestAcceptance, hostStartupAcceptance,
-    deliveryEvidence: emptyCurrentTopicDeliveryEvidence(),
+    // 恢复只改变当前处理状态；候选、统一测试、发布和重启健康仍来自最近已交付任务。
+    deliveryEvidence,
     updatedAt: recovery.updatedAt,
   };
 }
