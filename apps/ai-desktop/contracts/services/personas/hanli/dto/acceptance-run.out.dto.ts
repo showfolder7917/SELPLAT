@@ -6,6 +6,8 @@
  */
 import type { HanliAcceptanceBlockerKindValue, HanliAcceptanceDispositionValue, HanliAcceptanceEvidenceModeValue, HanliAcceptanceModeValue, HanliAcceptanceOperationValue } from "../value/acceptance.value.js";
 
+export type HanliAcceptancePageSurfaceValue = "task-collaboration" | "hanli-conversation";
+
 export interface HanliAcceptanceStepResultOutDto {
   checkId: string;
   /** 该原始条件的权威证据来源；mixed 运行据此分别执行门禁。 */
@@ -49,6 +51,8 @@ export interface HanliAcceptanceRunOutDto {
   criteria: string[];
   /** mixed 预审记录登记待由正式窗口验证的原始条件编号。 */
   pageCriterionIds?: string[];
+  /** 首次分区同时声明每个页面条件的唯一正式取证表面，供计划冻结后直接消费。 */
+  pageCriterionSurfaces?: Array<{ criterionId: string; pageSurface: HanliAcceptancePageSurfaceValue }>;
   /** 韩立对高内聚、低耦合和新手可读性的独立源码审查。旧归档可缺省。 */
   sourceReview?: HanliSourceReviewOutDto;
   status: "passed" | "failed" | "blocked";
