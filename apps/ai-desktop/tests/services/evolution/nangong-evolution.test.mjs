@@ -1632,7 +1632,7 @@ test("分发计划会纠正闭合但字段不完整的 JSON，并保留严格字
     const retry = events.find((event) => event.type === "nangong.evolution.distribution_format_retry");
     assert.deepEqual(retry.details, { proposalId, attempt: 1, responseLength: incompletePlan.length, candidateCount: 3, hasUnclosedObject: false, formatKind: "incomplete-plan", reason: "AI 返回的任务拆分计划缺少必要字段。" });
     assert.equal(JSON.stringify(events).includes(incompletePlan), false);
-    assert.match(retryPrompt, /完整 JSON 缺少任务边界或独立验收字段/);
+    assert.match(retryPrompt, /units\[\]\.acceptanceCriteria/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -1806,6 +1806,35 @@ test("分发计划连续两次字段不完整时阻断且不记录模型原文",
     assert.equal(JSON.stringify(events).includes(incompletePlan), false);
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_retry").map((event) => event.details.formatKind), ["incomplete-plan"]);
     assert.deepEqual(events.filter((event) => event.type === "nangong.evolution.distribution_format_failed").map((event) => event.details), [{ proposalId, attempt: 2, responseLength: incompletePlan.length, candidateCount: 3, hasUnclosedObject: false, formatKind: "incomplete-plan", reason: "AI 返回的任务拆分计划缺少必要字段。" }]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("确定性冲突后字段不完整计划仍获得一次格式纠正", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-dispatch-conflict-then-format-retry-"));
+  try {
+    const store = evolutionStore(path.join(directory, "state.json"));
+    const prompts = []; let attempts = 0; let submitted = 0;
+    const conflictingPlan = distributionPlanJson({ summary: "首轮任务文件重叠。", units: [
+      { title: "修改开发者页面", scope: "调整开发者页面目录", acceptanceCriteria: ["页面可用"], expectedFiles: ["apps/ai-desktop/src/applications/developer"], independentReason: "页面目录改动" },
+      { title: "验证按钮", scope: "验证同一工具栏按钮", acceptanceCriteria: ["按钮通过测试"], expectedFiles: ["apps/ai-desktop/src/applications/developer/DeveloperApplication.tsx"], independentReason: "测试改动" },
+    ] });
+    const incompletePlan = distributionPlanJson({ summary: "次轮缺少验收条件。", units: [{ title: "修复任务拆分", scope: "修复任务拆分重试", acceptanceCriteria: [], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], independentReason: "分发服务集中管理重试" }] });
+    const validPlan = distributionPlanJson({ summary: "第三轮完成单文件修复。", units: [{ title: "修复任务拆分", scope: "修复任务拆分重试", acceptanceCriteria: ["字段不完整计划可安全重试"], expectedFiles: ["apps/ai-desktop/electron/services/personas/nangong/internal/distribution/nangong-task-distribution.service.ts"], independentReason: "分发服务集中管理重试" }] });
+    const facade = new PersonaEvolutionRuntime({
+      store, conversation, recordEvent: () => undefined,
+      collaboration: { submitTask(request) { submitted += 1; return { taskId: "conflict-then-format-task", state: { tasks: [{ taskId: "conflict-then-format-task", evolutionProposalId: request.evolutionProposalId }] } }; } },
+      async planDistribution(prompt) { prompts.push(prompt); attempts += 1; return [conflictingPlan, incompletePlan, validPlan][attempts - 1]; },
+    });
+    let state = facade.createTopic(topicRequest("混合任务拆分失败"));
+    state = facade.createProposal(state.topics[0].topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    facade.decideProposal(proposalId, { mutation: mutation(facade), decision: "approved", advice: "通过" });
+    state = await facade.dispatch(proposalId);
+    assert.equal(attempts, 3);
+    assert.equal(submitted, 1);
+    assert.match(prompts[2], /程序上一轮检测到格式错误/);
+    assert.match(prompts[2], /units\[\]\.acceptanceCriteria/);
+    assert.equal(state.proposals[0].distributionPlan.validation.decision, "passed");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
