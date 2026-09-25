@@ -15,6 +15,7 @@ const builderConfig = readFileSync(new URL("../../electron-builder.developer.con
 const packagedRecoveryLauncher = readFileSync(new URL("../../resources/runtime-activation-recovery.command", import.meta.url), "utf8");
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
 const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
+const recoveryController = readFileSync(new URL("../../scripts/recover-runtime-activation.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const streamDetails = readFileSync(new URL("../../src/features/conversation/components/StreamDetails.tsx", import.meta.url), "utf8");
 const fixedUiText = readFileSync(new URL("../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
@@ -44,6 +45,17 @@ test("共享测试文档使用独占锁、占用身份、心跳和过期恢复",
   assert.match(runner, /heartbeatAt/);
   assert.match(runner, /共享测试正在被 \$\{lock\.executor\} 执行/);
   assert.match(runner, /isStale\(lock\)/);
+});
+
+test("发布恢复由候选包外控制器校验身份后委托已提升包资源", () => {
+  assert.equal(packageManifest.scripts["recover:runtime-activation"], "node scripts/run-with-dependencies.mjs node scripts/recover-runtime-activation.mjs");
+  assert.match(recoveryController, /document\.state !== "failed"/);
+  assert.match(recoveryController, /document\.runtimeActivation\?\.state !== "preparing"/);
+  assert.match(recoveryController, /manifest\.sourceSha !== candidateSha/);
+  assert.match(recoveryController, /runtime-activation-recovery\.command/);
+  assert.match(recoveryController, /--release-batch=\$\{request\.releaseBatchId\}/);
+  assert.match(recoveryController, /fileURLToPath\(import\.meta\.url\)/);
+  assert.doesNotMatch(recoveryController, /writeFileSync|renameSync|rmSync/);
 });
 
 test("韩立交互式验收超时先返回明确事实，再回收隔离 harness", () => {
