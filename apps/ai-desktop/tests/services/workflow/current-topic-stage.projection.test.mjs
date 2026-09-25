@@ -570,7 +570,14 @@ test("真实验收进行中优先于已经完成的提案状态", () => {
   const state = evolution("passed");
   state.proposals[0].status = "completed";
   state.oneShotRun = { proposalId: "proposal-current", status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z" };
-  assert.equal(projectCurrentTopicStage(state, deliveredCollaboration()).status, "accepting");
+  const stage = projectCurrentTopicStage(state, deliveredCollaboration());
+  assert.equal(stage.status, "accepting");
+  assert.equal(stage.deliveryEvidence.candidate.integrationSha, "final-candidate-sha");
+  assert.equal(stage.deliveryEvidence.unifiedTest, "passed");
+  assert.equal(stage.deliveryEvidence.release, "published");
+  assert.equal(stage.deliveryEvidence.restartHealth, "passed");
+  assert.equal(stage.deliveryEvidence.acceptance, "running");
+  assert.equal(stage.nextAction, "等待韩立记录本轮真实验收结果。");
 });
 
 test("验收结果按真实发生时间选择，保留历史顺序不修改输入", () => {

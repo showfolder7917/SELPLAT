@@ -9,6 +9,7 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
   locale: LocaleValue;
 }) {
   const preflight = stage.deliveryEvidence.preflight;
+  const delivery = stage.deliveryEvidence;
   return <>
     <section className="task-node-detail task-preflight-evidence">
       <strong>{locale === "ja" ? "高速事前確認と再利用根拠" : "快速预检与复用依据"}</strong>
@@ -25,6 +26,26 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
         `证据有效：${preflight.evidenceValid === null ? "未记录" : preflight.evidenceValid ? "是" : "否"}`,
         `证据引用：${preflight.evidenceReferences.join("；") || "未记录"}`,
         `问题集合：${preflight.issues.map((issue) => `${issue.category}：${issue.summary}（影响 ${issue.affectedStage}）`).join("；") || "无"}`,
+      ].join("\n")}</pre>
+    </section>
+    <section className="task-node-detail task-delivery-evidence">
+      <strong>{locale === "ja" ? "現在の候補の提供根拠" : "当前候选交付依据"}</strong>
+      <p>{delivery.acceptance === "running"
+        ? "当前候选的交付结果已独立记录，正在等待韩立记录本轮真实验收结果。"
+        : delivery.acceptance === "passed"
+          ? "当前候选已记录真实验收通过结果。"
+          : delivery.acceptance === "failed"
+            ? "当前候选的真实验收未通过；请依据下列独立交付事实查看范围。"
+            : delivery.acceptance === "blocked"
+              ? "当前候选的真实验收受阻；下列交付事实不替代最终验收结论。"
+              : "当前候选尚未形成真实验收结果；下列交付事实不替代最终验收结论。"}</p>
+      <pre>{[
+        `候选批次：${delivery.candidate?.generation ?? "未形成"}`,
+        `候选版本：${delivery.candidate?.integrationSha || "未形成"}`,
+        `统一测试：${delivery.unifiedTest}`,
+        `发布：${delivery.release}`,
+        `重启健康：${delivery.restartHealth}`,
+        `真实验收：${delivery.acceptance}`,
       ].join("\n")}</pre>
     </section>
     <section className="task-node-detail">
