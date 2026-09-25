@@ -761,6 +761,57 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
 });
 
+test("语言保存显示忙碌、成功后投影且失败时保留原语言", async () => {
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+  const languageField = language.locator("xpath=..");
+  await expect(language).toHaveValue("zh-CN");
+
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateDelay(120));
+  await language.selectOption("ja");
+  await expect(language).toHaveAttribute("aria-busy", "true");
+  // 保存成功前仍显示当前已保存的中文语言；成功后才统一投影为目标日文。
+  await expect(languageField.getByRole("status")).toContainText("正在保存语言设置");
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
+  await expect(page.getByRole("group", { name: "実行モード" })).toBeVisible();
+  await expect(language).toHaveValue("ja");
+
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateDelay(0));
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure("隔离设置保存失败"));
+  await language.selectOption("en");
+  await expect(languageField.getByRole("alert")).toContainText("言語設定を保存できません");
+  await expect(language).toHaveValue("ja");
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
+
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure(null));
+  await language.selectOption("en");
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("group", { name: "Execution mode" })).toBeVisible();
+  await expect(language).toHaveValue("en");
+  await page.getByRole("button", { name: "Close connection and execution settings" }).click();
+
+  // 只重挂载 Renderer；设置 DTO 留在隔离主进程，不能代表正式应用重启。
+  await page.reload();
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
+  await page.getByRole("button", { name: "Open connection and execution settings" }).click();
+  await page.getByRole("button", { name: "Close connection and execution settings" }).click();
+
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsReadSource("recovered"));
+  await page.reload();
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "zh-CN");
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const recoveredLanguage = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+  await expect(recoveredLanguage.locator("xpath=..").getByRole("status")).toContainText("无法读取已保存的设置");
+
+  // 恢复夹具的初始中文，避免共享隔离窗口把本用例状态带给后续用例。
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsReadSource("stored"));
+  await recoveredLanguage.selectOption("ja");
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
+  await recoveredLanguage.selectOption("zh-CN");
+  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "zh-CN");
+  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
+});
+
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();

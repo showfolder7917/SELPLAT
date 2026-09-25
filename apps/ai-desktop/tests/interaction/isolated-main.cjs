@@ -22,6 +22,40 @@ const launchDiagnostics = {
 
 ipcMain.handle("interaction:get-launch-diagnostics", () => structuredClone(launchDiagnostics));
 
+// 设置夹具放在隔离主进程，避免 Renderer 重挂载时重新执行 preload 而丢失 API DTO。
+// 这只模拟生产的主进程到 preload 边界；真实磁盘持久化仍由 SettingsStore 测试覆盖。
+let interactionDesktopSettings = {
+  locale: "zh-CN",
+  sandboxMode: "workspace-write",
+  defaultModel: "gpt-5.6-terra",
+  reasoningEffort: "medium",
+  serviceTier: "default",
+  codexAppCorpusIngestionEnabled: false,
+};
+let interactionSettingsReadSource = "stored";
+let interactionSettingsUpdateFailure = null;
+let interactionSettingsUpdateDelayMs = 0;
+
+ipcMain.handle("interaction:settings-get", () => ({
+  settings: structuredClone(interactionDesktopSettings),
+  source: interactionSettingsReadSource,
+}));
+ipcMain.handle("interaction:settings-update", async (_event, settings) => {
+  if (interactionSettingsUpdateDelayMs) await new Promise((resolve) => setTimeout(resolve, interactionSettingsUpdateDelayMs));
+  if (interactionSettingsUpdateFailure) throw new Error(interactionSettingsUpdateFailure);
+  interactionDesktopSettings = { ...interactionDesktopSettings, ...settings };
+  return structuredClone(interactionDesktopSettings);
+});
+ipcMain.handle("interaction:settings-read-source", (_event, source) => {
+  interactionSettingsReadSource = source === "recovered" ? "recovered" : "stored";
+});
+ipcMain.handle("interaction:settings-update-failure", (_event, message) => {
+  interactionSettingsUpdateFailure = message || null;
+});
+ipcMain.handle("interaction:settings-update-delay", (_event, milliseconds) => {
+  interactionSettingsUpdateDelayMs = Math.max(0, Number(milliseconds) || 0);
+});
+
 function recordRendererConsole(event, level, message, line, sourceId) {
   const details = event && typeof event === "object" && "message" in event
     ? event
