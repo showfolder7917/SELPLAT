@@ -624,6 +624,33 @@ test("开发版重启确认后的发布事实与健康事实在验收中同时�
   assert.equal(stage.deliveryEvidence.acceptance, "running");
 });
 
+test("已完成交付批次不被重启期间误启动的重复测试覆盖为缺失", () => {
+  const state = evolution("missing");
+  state.oneShotRun = { proposalId: "proposal-current", status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z" };
+  const collaboration = deliveredCollaboration({ acceptanceStatus: "running" });
+  collaboration.tasks[0].state = "integrated";
+  collaboration.tasks[0].unifiedTest = {
+    status: "running", owner: { memberId: "linghu-ancestor", displayName: "令狐老祖" },
+    failureReason: null, startedAt: "2026-09-12T04:59:00.000Z", completedAt: null,
+  };
+  collaboration.tasks[0].flowEvents.push({
+    type: "task.interrupted", status: "waiting", stage: "recovery", error: true,
+    summary: "应用重建中断原连接，等待用户继续", occurredAt: "2026-09-12T04:59:30.000Z",
+  });
+  collaboration.integrationBatches.push({
+    generation: 8, taskIds: ["task-current"], state: "failed", createdAt: "2026-09-12T04:59:00.000Z",
+    completedAt: "2026-09-12T04:59:30.000Z", integrationSha: null,
+    failureReason: "应用重建中断集成，等待用户恢复",
+  });
+
+  const stage = projectCurrentTopicStage(state, collaboration);
+  assert.equal(stage.status, "accepting");
+  assert.equal(stage.deliveryEvidence.candidate?.generation, 7);
+  assert.equal(stage.deliveryEvidence.unifiedTest, "passed");
+  assert.equal(stage.deliveryEvidence.release, "published");
+  assert.equal(stage.deliveryEvidence.restartHealth, "passed");
+});
+
 test("验收结果按真实发生时间选择，保留历史顺序不修改输入", () => {
   const state = evolution("failed");
   const old = { ...state.archiveRecords[0], occurredAt: "2026-09-12T03:00:00.000Z", payload: { acceptanceRun: { runId: "old-pass", status: "passed" } } };
