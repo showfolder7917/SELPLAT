@@ -44,7 +44,7 @@ function readChangedSourceEvidence(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
   frozenSourceEvidenceFiles: readonly string[],
-): { items: Array<{ file: string; content: string }>; batches: Array<{ batch: number; files: string[] }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" } {
+): { items: Array<{ file: string; content: string }>; batches: Array<{ batch: number; files: string[] }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" | "required-evidence-exceeds-limit" } {
   // 本次专题的授权工作区是唯一读取根；任务快照不得把证据读取扩展到其他工作区。
   const root = fallbackWorkspaceState.roots.find((item) => item.id === fallbackWorkspaceState.primaryId)?.path;
   if (!root) return { items: [], batches: [], status: "workspace-root-unavailable" };
@@ -86,6 +86,18 @@ function readChangedSourceEvidence(
   // 测试仍保留为回归证据，但不应挤掉实际生产实现。
   const changedProductionFiles = new Set(integratedChangedFiles.filter((file): file is string =>
     typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file) && !testFile(file)));
+  const requiredFiles = [...new Set([
+    ...files.filter((file) => changedProductionFiles.has(file)),
+    ...authorizedFiles,
+  ])];
+  const batchesFor = (evidenceFiles: string[]) => Array.from({ length: Math.ceil(evidenceFiles.length / 16) }, (_, index) => ({
+    batch: index + 1,
+    files: evidenceFiles.slice(index * 16, (index + 1) * 16),
+  }));
+  // 真实生产改动和冻结能力文件都是必读事实；超出上下文上限时不能静默丢弃其中任意一类。
+  if (requiredFiles.length > 48) {
+    return { items: [], batches: batchesFor(requiredFiles), status: "required-evidence-exceeds-limit" };
+  }
   files.sort((left, right) => Number(changedProductionFiles.has(right)) - Number(changedProductionFiles.has(left))
     || Number(authorizedFiles.includes(right)) - Number(authorizedFiles.includes(left))
     || Number(testFile(left)) - Number(testFile(right))
@@ -160,10 +172,7 @@ function readChangedSourceEvidence(
     ...secondLevel,
     ...testItems,
   ].map((item) => [item.file, item])).values()].slice(0, 48);
-  const batches = Array.from({ length: Math.ceil(items.length / 16) }, (_, index) => ({
-    batch: index + 1,
-    files: items.slice(index * 16, (index + 1) * 16).map((item) => item.file),
-  }));
+  const batches = batchesFor(items.map((item) => item.file));
   return { items, batches, status: items.length ? "available" : "declared-files-unreadable" };
 }
 
