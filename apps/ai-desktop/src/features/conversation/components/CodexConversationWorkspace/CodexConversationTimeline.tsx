@@ -5,6 +5,7 @@
 
 // 空会话图标来自 Fluent UI，用于让客户快速识别主 Codex 工作区。
 import { Code24Regular } from "@fluentui/react-icons";
+import { fixedUiText } from "../../../../../contracts/foundation";
 // 执行模式值是纯类型，用于约束托管阶段按钮可传回的模式。
 import type { ManagedExecutionModeValue } from "../../../../../contracts/system/desktop/index";
 // 账号登录操作来自桌面壳公开入口，仅在空会话且未登录时显示。
@@ -79,7 +80,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
       {messages.length === 0 && (
         <div className="dev-empty">
           <div className="dev-orb"><Code24Regular /></div>
-          <h1>{locale === "ja" ? "何を作りますか？" : "今天要构建什么？"}</h1>
+          <h1>{fixedUiText(locale, "conversationEmptyTitle")}</h1>
           <p>{interaction.status.account.authenticated ? text.ready : text.signedOut}</p>
           {!interaction.status.account.authenticated && (
             <ChatGPTLoginAction label={text.signIn} onLogin={loginWithChatGPT} />

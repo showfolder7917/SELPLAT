@@ -21,6 +21,7 @@ import {
 } from "@fluentui/react-icons";
 // 表单事件是纯类型，用于阻止浏览器默认提交并转交给会话控制器。
 import type { FormEvent } from "react";
+import { fixedUiText } from "../../../../../contracts/foundation";
 // 会话容器来自 SEL UI，用于连接统一提交事件和实际编辑区。
 import { SelUiConversation } from "../SelUiConversation";
 // 执行模式文案转换器用于显示当前托管阶段。
@@ -179,7 +180,7 @@ export function CodexConversationComposer(props: CodexConversationComposerProps)
               )}
               {screenshot.screenRecordingRestartRequired && (
                 <button type="button" className="primary" disabled={screenshot.screenRecordingRestarting} onClick={restartForScreenRecordingPermission}>
-                  {locale === "ja" ? "AI Desktop を再起動" : "重启 AI Desktop"}
+                  {fixedUiText(locale, "conversationRestart")}
                 </button>
               )}
             </div>

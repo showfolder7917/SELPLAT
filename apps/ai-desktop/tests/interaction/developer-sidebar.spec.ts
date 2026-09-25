@@ -376,7 +376,7 @@ test("南宫婉调查需要 Codex 授权时同时显示页面状态和授权窗�
   const approvalDialog = page.getByRole("dialog", { name: "南宫婉 · 执行调查命令" });
   await expect(approvalDialog).toBeVisible();
   await expect(approvalDialog).toContainText("需要读取当前进程状态以核实断线原因。");
-  await approvalDialog.getByRole("button", { name: "允许", exact: true }).click();
+  await approvalDialog.getByRole("button", { name: "仅允许本次", exact: true }).click();
   await expect(approvalDialog).toBeHidden();
   await expect(page.getByRole("status", { name: "南宫婉等待授权" })).toHaveCount(0);
 
