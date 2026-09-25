@@ -17,6 +17,7 @@ export function TaskGroupAuditCard({ model }: { model: TaskGroupCardModel }) {
       aria-label={locale === "ja" ? "監査履歴" : "专题审计历史卡"}
       data-cancelled-history-card={cancelled || undefined}
       data-audit-history-card
+      data-audit-final-status={group.status}
       data-task-timeline-topic-id={group.topicId || ""}
     >
       <SelUiDisclosure

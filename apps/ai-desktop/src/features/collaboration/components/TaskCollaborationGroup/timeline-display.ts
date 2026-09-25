@@ -109,6 +109,7 @@ export function taskGroupPrimaryPresentation(
   group: CollaborationTimelineGroupOutDto,
   locale: LocaleValue,
 ): TaskGroupPrimaryPresentation {
+  // 历史主结论完全由 DAO 输出的 group 字段决定，页面不再检查节点时间或验收事件。
   const activity = groupActivityPresentation(group, locale);
   const nextOwner = group.nextOwner?.displayName;
   // 历史专题只陈述已保存的时间线事实；当前操作只能由当前专题投影提供。
