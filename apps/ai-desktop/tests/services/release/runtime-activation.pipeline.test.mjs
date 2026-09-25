@@ -387,3 +387,54 @@ test("旧宿主清理暂存包失败时仅接管来源匹配的已提升候选",
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("开发版重启健康确认后补写发布事实，再记录健康事实", () => {
+  const directory = path.join(controlledTestRoot, `developer-restart-publication-${process.pid}-${Date.now()}`);
+  const running = path.join(directory, "running");
+  const archive = path.join(directory, "archive");
+  const releaseBatchId = "release-0.1.1-g490";
+  const candidateSha = "f".repeat(40);
+  const taskId = "developer-restart-task";
+  try {
+    const releaseBatches = new ReleaseBatchStore(running, archive);
+    const document = releaseBatches.create(releaseBatchId, "0.1.1", 490, [{ taskId, snapshot: { title: "开发版重启" } }], "linghu-ancestor");
+    document.state = "integrated";
+    document.candidateSha = candidateSha;
+    releaseBatches.write(document);
+    const state = {
+      mode: "collaboration",
+      members: [{ memberId: "linghu-ancestor", displayName: "令狐老祖" }],
+      tasks: [{
+        taskId, state: "awaiting-restart", integrationGeneration: 490, flowEvents: [{ type: "release.restart_scheduled", status: "completed" }],
+        snapshot: { title: "开发版重启" }, resultSummary: null, finalResult: null, versionWorkspace: null,
+      }],
+      integrationBatches: [{ generation: 490, taskIds: [taskId], state: "verified", integrationSha: candidateSha, failureReason: null }],
+    };
+    const store = {
+      state: () => state,
+      task: (id) => state.tasks.find((task) => task.taskId === id),
+      updateTask: (id, _reason, update) => update(state.tasks.find((task) => task.taskId === id), state),
+    };
+    const pipeline = new VersionIntegrationPipeline({
+      store,
+      durations: { start: () => "span", startWait: () => "wait", finish() {}, instant() {}, writeGenerationReport() {} },
+      workspaces: { retireWorkspace: async () => {} }, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1", releaseBatches,
+      loadedRuntimeSha: candidateSha, verifyCandidate: async () => { throw new Error("不应重新验证"); },
+      acquireRelease: async () => () => {}, prepareRuntimeActivation: async () => { throw new Error("不应重新激活"); },
+      activateRuntime: () => { throw new Error("不应重新启动"); }, publishRelease: () => { throw new Error("不应再次发布"); },
+    });
+
+    assert.deepEqual(pipeline.confirmPublishedRestart(), [490]);
+    assert.equal(state.integrationBatches[0].state, "completed");
+    assert.equal(state.tasks[0].state, "integrated");
+    assert.deepEqual(state.tasks[0].flowEvents.map((event) => event.type), [
+      "release.restart_scheduled", "release.published", "release.restart_healthy",
+    ]);
+    assert.equal(existsSync(path.join(running, releaseBatchId, "发布批次文档.json")), false);
+    const published = JSON.parse(readFileSync(path.join(archive, "发布归档", document.startedAt.slice(0, 7), releaseBatchId, "发布批次文档.json"), "utf8"));
+    assert.equal(published.state, "published");
+    pipeline.dispose();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

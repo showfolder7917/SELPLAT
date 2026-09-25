@@ -161,6 +161,8 @@ export class VersionIntegrationPipeline {
     for (const generation of generations) {
       const taskIds = restartTaskIds.get(generation) || [];
       if (!taskIds.length) continue;
+      // 开发版只有新进程加载同一候选并通过健康检查后才成为已发布版本；等待重启事件不能替代该事实。
+      this.#releaseBatches.confirmDeveloperRestart(`release-${this.#releaseVersion}-g${generation}`);
       this.#store.updateTask(taskIds[0], "release.restart_healthy", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         const completedAt = new Date().toISOString();
@@ -178,10 +180,10 @@ export class VersionIntegrationPipeline {
           task.resultSummary.success = true;
           task.resultSummary.remaining = "无已知遗留内容。";
           task.resultSummary.generatedAt = completedAt;
+          appendFlow(task, "release.published", "integration", "completed", "开发版新进程已加载当前候选，发布批次已确认", currentActor);
           appendFlow(task, "release.restart_healthy", "integration", "completed", "新版本已重启并通过渲染器健康检查，结果返回南宫婉", currentActor);
         }
       });
-      this.#releaseBatches.confirmDeveloperRestart(`release-${this.#releaseVersion}-g${generation}`);
       // 新版本已从独立运行目录加载，预激活候选不再是运行进程；只回收本批次临时副本。
       try {
         this.#releaseBatches.retireRuntimeActivationPackage(`release-${this.#releaseVersion}-g${generation}`);

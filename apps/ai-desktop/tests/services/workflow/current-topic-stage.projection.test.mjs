@@ -605,6 +605,25 @@ test("真实验收进行中优先于已经完成的提案状态", () => {
   assert.equal(stage.nextAction, "等待韩立记录本轮真实验收结果。");
 });
 
+test("开发版重启确认后的发布事实与健康事实在验收中同时可见", () => {
+  const state = evolution("missing");
+  state.oneShotRun = { proposalId: "proposal-current", status: "running", phase: "accepting", updatedAt: "2026-09-12T05:00:00.000Z" };
+  const collaboration = deliveredCollaboration();
+  collaboration.tasks[0].flowEvents = [
+    { type: "unified_test.passed", status: "completed" },
+    { type: "release.restart_scheduled", status: "completed" },
+    { type: "release.published", status: "completed" },
+    { type: "release.restart_healthy", status: "completed" },
+  ];
+  const stage = projectCurrentTopicStage(state, collaboration);
+  assert.equal(stage.status, "accepting");
+  assert.equal(stage.deliveryEvidence.candidate?.integrationSha, "final-candidate-sha");
+  assert.equal(stage.deliveryEvidence.unifiedTest, "passed");
+  assert.equal(stage.deliveryEvidence.release, "published");
+  assert.equal(stage.deliveryEvidence.restartHealth, "passed");
+  assert.equal(stage.deliveryEvidence.acceptance, "running");
+});
+
 test("验收结果按真实发生时间选择，保留历史顺序不修改输入", () => {
   const state = evolution("failed");
   const old = { ...state.archiveRecords[0], occurredAt: "2026-09-12T03:00:00.000Z", payload: { acceptanceRun: { runId: "old-pass", status: "passed" } } };
