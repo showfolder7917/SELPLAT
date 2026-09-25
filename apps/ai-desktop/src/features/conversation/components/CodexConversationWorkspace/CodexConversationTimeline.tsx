@@ -113,7 +113,7 @@ export function CodexConversationTimeline(props: CodexConversationTimelineProps)
               {message.attachments?.length ? (
                 <div className="selconversation-message-attachments">
                   {message.attachments.map((attachment) => (
-                    <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />
+                    <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} locale={locale} />
                   ))}
                 </div>
               ) : null}

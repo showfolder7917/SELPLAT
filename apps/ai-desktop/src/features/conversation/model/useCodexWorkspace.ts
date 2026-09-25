@@ -110,7 +110,7 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
       setMessages((current) => current.map((item) => item.id === userId ? { ...item, status: "completed" } : item.id === completedAssistantId ? { ...item, status: "completed", text: item.text || response.text, streaming: false, streamTerminal: true, streamStatus: "completed" } : item));
       if (automaticTesting.isEnabled() && mode === "task-managed" && "managedStatus" in response && response.managedStatus === "code-verified") void dispatch.enqueueAutomaticTest(completedAssistantId);
     } catch (error) {
-      const messageText = readableDesktopError(error, "Codex unavailable");
+      const messageText = readableDesktopError(error, fixedUiText(options.locale, "conversationCodexUnavailable"));
       const failedAssistantId = activeAssistantIdRef.current || assistantId;
       setMessages((current) => current.map((item) => item.id === userId ? { ...item, status: "failed" } : item.id === failedAssistantId ? { ...item, status: "failed", text: item.text || messageText, streaming: false, streamTerminal: true, streamStatus: "failed", streamError: messageText } : item));
     } finally {
@@ -128,7 +128,7 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
   }, [loading, dispatch.state.activeTask, dispatch.queuedSends, interaction.status.account.authenticated]);
 
   const submitConfirmedCollaborationTask = async (message: Message) => {
-    if (!options.workspaces) throw new Error("协同任务缺少工作区。");
+    if (!options.workspaces) throw new Error(fixedUiText(options.locale, "conversationWorkspaceMissing"));
     const task = await options.collaboration.actions.submitConversationTask(message, messages, options.workspaces, options.locale);
     setMessages((current) => current.map((item) => item.id === message.id ? { ...item, actionTriggered: true, collaborationTaskId: task?.taskId } : item));
   };
@@ -148,7 +148,7 @@ export function useCodexWorkspace(options: CodexWorkspaceOptions) {
       clearStoredChat();
       dispatch.setError("");
     } catch (error) {
-      dispatch.setError(error instanceof Error ? error.message : "无法丢弃当前 Codex 任务。");
+      dispatch.setError(error instanceof Error ? error.message : fixedUiText(options.locale, "conversationDiscardFailed"));
     }
   };
 

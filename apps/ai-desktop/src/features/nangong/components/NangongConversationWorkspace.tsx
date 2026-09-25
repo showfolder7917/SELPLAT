@@ -122,7 +122,7 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
           <div className="selconversation-message-body">
             {/* 消息截图区：附件预览恢复成功后显示全部关联图片。 */}
             {message.attachments.length
-              ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} />)}</div>
+              ? <div className="selconversation-message-attachments">{message.attachments.map((attachment) => <ConversationMessageImage key={attachment.id} src={attachment.dataUrl} alt={attachment.name} locale={props.locale} />)}</div>
               : message.attachmentIds?.length
                 ? <small>{controller.attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small>
                 : null}
