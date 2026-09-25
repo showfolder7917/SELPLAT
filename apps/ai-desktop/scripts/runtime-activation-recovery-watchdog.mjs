@@ -12,7 +12,7 @@ const WATCH_TIMEOUT_MS = 60_000;
  * 候选包健康检查完成后由其验证脚本脱离旧宿主启动。
  * 仅观察一个仍在运行的 preparing 批次；状态归档后仍由现有控制器和包内工具执行接管。
  */
-export async function watchRuntimeActivationFailure({ projectRoot, now = Date.now, sleep = defaultSleep, inspectProcess = inspectProcessTree, validate = validateRequest, recover = requestRuntimeActivationRecovery, receipt = writeReceipt }) {
+export async function watchRuntimeActivationFailure({ projectRoot, now = Date.now, sleep = defaultSleep, inspectProcess = inspectProcessByPid, validate = validateRequest, recover = requestRuntimeActivationRecovery, receipt = writeReceipt }) {
   const pending = findSinglePreparingBatch(projectRoot);
   if (!pending) return { status: "not-scheduled" };
   const replacePid = findDesktopAncestor(process.ppid, inspectProcess);
@@ -64,7 +64,7 @@ export function findDesktopAncestor(startPid, inspectProcess) {
   return null;
 }
 
-function inspectProcess(pid) {
+function inspectProcessByPid(pid) {
   try {
     const output = execFileSync("ps", ["-o", "ppid=,command=", "-p", String(pid)], { encoding: "utf8" }).trim();
     const match = /^(\d+)\s+(.+)$/u.exec(output);

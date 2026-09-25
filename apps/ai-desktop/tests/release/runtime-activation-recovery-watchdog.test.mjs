@@ -6,6 +6,15 @@ import test from "node:test";
 import { controlledTestRoot } from "#test-paths";
 import { findDesktopAncestor, findSinglePreparingBatch, watchRuntimeActivationFailure } from "../../scripts/runtime-activation-recovery-watchdog.mjs";
 
+test("观察器在未注入进程查询器时仍可读取默认依赖", async () => {
+  const projectRoot = fixtureRoot();
+  try {
+    assert.deepEqual(await watchRuntimeActivationFailure({ projectRoot }), { status: "not-scheduled" });
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("候选健康检查观察者只在唯一 preparing 批次归档失败后委托恢复控制器", async () => {
   const projectRoot = fixtureRoot();
   const releaseBatchId = "release-0.1.1-g464";
