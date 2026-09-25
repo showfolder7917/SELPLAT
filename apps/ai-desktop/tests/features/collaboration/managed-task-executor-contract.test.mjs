@@ -230,8 +230,10 @@ test("命令审批默认只允许本次，持久信任必须由用户单独选�
   assert.match(codexService, /trustedCommands\.trust/);
   assert.match(ipc, /decision === "accept" && trustProjectCommand/);
   assert.match(ipc, /trustResult\.trusted/);
-  assert.match(developerApp, /仅允许本次/);
-  assert.match(developerApp, /允许并信任/);
+  assert.match(fixedUiText, /conversationAccept: "仅允许本次"/);
+  assert.match(fixedUiText, /conversationAcceptAndTrust: "允许并信任"/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationAccept"\)/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationAcceptAndTrust"\)/);
   assert.match(developerApp, /clearTrustedCommands/);
 });
 
