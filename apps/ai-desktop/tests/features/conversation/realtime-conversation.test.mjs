@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-import { transform } from "esbuild";
+import { build } from "esbuild";
 
-const source = readFileSync(new URL("../../../src/features/conversation/model/realtime-conversation.ts", import.meta.url), "utf8");
-const compiled = await transform(source, { format: "esm", loader: "ts", target: "es2022" });
-const realtime = await import(`data:text/javascript;base64,${Buffer.from(compiled.code).toString("base64")}`);
+const bundled = await build({
+  entryPoints: [fileURLToPath(new URL("../../../src/features/conversation/model/realtime-conversation.ts", import.meta.url))],
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  target: "es2022",
+  write: false,
+});
+const realtime = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
 
 test("临时消息使用可见时间线最大顺序号加一，不会因内部消息过滤后的编号空洞插到旧回复上方", () => {
   const visibleMessages = [
@@ -42,4 +48,8 @@ test("人物消息已经交给服务后显示已发送，只有失败才显示�
   assert.equal(realtime.personaConversationDeliveryLabel("sending"), "已发送");
   assert.equal(realtime.personaConversationDeliveryLabel("completed"), "已发送");
   assert.equal(realtime.personaConversationDeliveryLabel("failed"), "发送失败");
+  assert.equal(realtime.personaConversationDeliveryLabel("sending", "ja"), "送信済み");
+  assert.equal(realtime.personaConversationDeliveryLabel("failed", "ja"), "送信失敗");
+  assert.equal(realtime.personaConversationDeliveryLabel("sending", "en"), "Sent");
+  assert.equal(realtime.personaConversationDeliveryLabel("failed", "en"), "Send failed");
 });
