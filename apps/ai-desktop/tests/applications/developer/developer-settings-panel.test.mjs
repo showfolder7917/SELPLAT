@@ -60,8 +60,11 @@ test("连接与执行设置复用 SELUI 浮动面板并支持调整宽度", () =
   assert.match(settingsPanel, /content\.append\(scrollStack\)/);
   assert.match(settingsPanel, /scrollStack\.className = "dev-settings-scroll-stack"/);
   assert.match(settingsPanel, /setPortalBody\(scrollStack\)/);
+  assert.match(settingsPanel, /setScrollContainer\(content\)/);
   assert.match(styles, /\.dev-settings-control > \.dev-settings\s*\{[^}]*left:\s*58px !important/);
-  assert.match(settingsPanel, /portalBody\?\.scrollTo\(\{ top: 0 \}\)/);
+  assert.match(settingsPanel, /scrollContainer\.scrollTo\(\{ top: 0 \}\)/);
+  assert.match(settingsPanel, /scrollContainer\.scrollTop \+= bottomOverflow/);
+  assert.doesNotMatch(settingsPanel, /portalBody\?\.scrollTo\(/);
   assert.match(settingsPanel, /portalBody && open && createPortal\(children, portalBody\)/);
   assert.match(styles, /\.dev-settings-control > \.dev-settings \.selfloating-resize-bottom, \.dev-settings-control > \.dev-settings \.selfloating-resize-corner/);
   assert.match(styles, /max-width:\s*min\(720px, calc\(100vw - 70px\)\)/);
