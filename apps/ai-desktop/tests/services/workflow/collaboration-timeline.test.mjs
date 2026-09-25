@@ -892,6 +892,14 @@ test("历史专题的有效完成归档可收口旧摘要，后续活动仍覆�
     let snapshot = fixture.timeline.snapshot(fixture.at(4)).groups[0];
     assert.equal(snapshot.status, "completed");
     assert.equal(snapshot.summary, "专题已完成");
+    const oldRevalidation = snapshot.nodes.find((node) => node.nodeId === "recovery:old");
+    assert.equal(oldRevalidation?.status, "completed");
+    assert.equal(oldRevalidation?.action, "重新验证");
+    assert.equal(oldRevalidation?.summary, "重新验证");
+    assert.equal(oldRevalidation?.content, "旧恢复");
+    assert.equal(oldRevalidation?.detail, "旧记录");
+    assert.equal(oldRevalidation?.startedAt, fixture.at(1));
+    assert.equal(oldRevalidation?.completedAt, fixture.at(3));
 
     fixture.append({
       eventId: "later-recovery", eventType: "checkpoint.progress",
