@@ -133,6 +133,20 @@ test("韩立审查完整读取可控大小的样式文件中段响应式规则",
   assert.doesNotMatch(source, /源码中段省略/u);
 });
 
+test("韩立源码审查完整读取已声明的语言设置交互场景", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const file = "apps/ai-desktop/tests/interaction/language-settings-acceptance.scenario.ts";
+  const task = { taskId: "language-settings", state: "integrated", snapshot: { title: "language settings", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [file] }] };
+  const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: path.resolve("../..") }] });
+  const source = context.sourceEvidence.find((item) => item.file === file)?.content || "";
+  assert.match(source, /getMinimumSize\(\)/u);
+  assert.match(source, /setInteractionSettingsUpdateFailure/u);
+  assert.match(source, /setInteractionSettingsReadSource\("recovered"\)/u);
+  assert.match(source, /openInteractionScreenshotWindow/u);
+  assert.doesNotMatch(source, /源码中段省略/u);
+});
+
 test("执行完成时以完整 Git 结果覆盖最后一次流式 diff", () => {
   const workflow = readFileSync("electron/services/workflow/collaboration-workflow.facade.ts", "utf8");
   assert.match(workflow, /execution\.changedFiles = normalizeChangedFiles\(result\.changedFiles\)/u);

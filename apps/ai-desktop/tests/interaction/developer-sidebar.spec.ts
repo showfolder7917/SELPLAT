@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { registerLanguageSettingsAcceptanceScenarios } from "./language-settings-acceptance.scenario";
 
 let application: ElectronApplication;
 let page: Page;
@@ -65,6 +66,8 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await application?.close();
 });
+
+registerLanguageSettingsAcceptanceScenarios(() => ({ application, page }));
 
 test("700px 正式窗口内韩立发送失败提示与重试入口完整可见", async ({}, testInfo) => {
   test.setTimeout(45_000);
@@ -674,10 +677,11 @@ test("一键清空测试数据必须二次确认且明确保留范围", async ()
 });
 
 test("生产构建在正式默认、实际复现和最小窗口中保持设置入口与面板定位", async () => {
+  const [minimumWidth, minimumHeight] = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getMinimumSize() || [0, 0]);
   const sizes = [
     { name: "正式默认", width: 1560, height: 980 },
     { name: "标准窗口", width: 1366, height: 768 },
-    { name: "正式最小", width: 1000, height: 700 },
+    { name: "正式最小", width: minimumWidth, height: minimumHeight },
   ];
   for (const size of sizes) {
     await application.evaluate(({ BrowserWindow }, nextSize) => BrowserWindow.getAllWindows()[0]?.setSize(nextSize.width, nextSize.height), size);
@@ -759,115 +763,6 @@ test("生产构建在正式默认、实际复现和最小窗口中保持设置�
     await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
   }
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
-});
-
-test("语言保存显示忙碌、成功后投影且失败时保留原语言", async () => {
-  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
-  const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
-  const languageField = language.locator("xpath=..");
-  await expect(language).toHaveValue("zh-CN");
-
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateDelay(120));
-  await language.selectOption("ja");
-  await expect(language).toHaveAttribute("aria-busy", "true");
-  // 保存成功前仍显示当前已保存的中文语言；成功后才统一投影为目标日文。
-  await expect(languageField.getByRole("status")).toContainText("正在保存语言设置");
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
-  await expect(page.getByRole("group", { name: "実行モード" })).toBeVisible();
-  await expect(language).toHaveValue("ja");
-
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateDelay(0));
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure("隔离设置保存失败"));
-  await language.selectOption("en");
-  await expect(languageField.getByRole("alert")).toContainText("言語設定を保存できません");
-  await expect(language).toHaveValue("ja");
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
-
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure(null));
-  await language.selectOption("en");
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("group", { name: "Execution mode" })).toBeVisible();
-  await expect(language).toHaveValue("en");
-  await page.getByRole("button", { name: "Close connection and execution settings" }).click();
-
-  // 只重挂载 Renderer；设置 DTO 留在隔离主进程，不能代表正式应用重启。
-  await page.reload();
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
-  await page.getByRole("button", { name: "Open connection and execution settings" }).click();
-  await page.getByRole("button", { name: "Close connection and execution settings" }).click();
-
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsReadSource("recovered"));
-  await page.reload();
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "zh-CN");
-  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
-  const recoveredLanguage = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
-  await expect(recoveredLanguage.locator("xpath=..").getByRole("status")).toContainText("无法读取已保存的设置");
-
-  // 恢复夹具的初始中文，避免共享隔离窗口把本用例状态带给后续用例。
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsReadSource("stored"));
-  await recoveredLanguage.selectOption("ja");
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
-  await recoveredLanguage.selectOption("zh-CN");
-  await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "zh-CN");
-  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
-});
-
-test("语言保存立即投影到已打开的生产截图窗口，失败不改变截图语言", async () => {
-  const screenshotWindowOpened = application.waitForEvent("window");
-  await page.evaluate(() => (window as any).desktop.openInteractionScreenshotWindow());
-  const screenshotPage = await screenshotWindowOpened;
-  await screenshotPage.waitForLoadState("domcontentloaded");
-  const loading = screenshotPage.locator(".screenshot-window-loading");
-
-  await expect(loading).toHaveAttribute("aria-label", "正在载入截图…");
-  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
-  const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
-  await language.selectOption("ja");
-  await expect(loading).toHaveAttribute("aria-label", "スクリーンショットを読み込んでいます…");
-
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure("隔离设置保存失败"));
-  await language.selectOption("en");
-  await expect(language).toHaveValue("ja");
-  await expect(loading).toHaveAttribute("aria-label", "スクリーンショットを読み込んでいます…");
-
-  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure(null));
-  await language.selectOption("en");
-  await expect(loading).toHaveAttribute("aria-label", "Loading screenshot…");
-
-  await page.getByRole("button", { name: "Close connection and execution settings" }).click();
-  await page.getByRole("button", { name: "Open connection and execution settings" }).click();
-  const restoredLanguage = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
-  await restoredLanguage.selectOption("zh-CN");
-  await expect(loading).toHaveAttribute("aria-label", "正在载入截图…");
-  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
-  const screenshotClosed = screenshotPage.waitForEvent("close");
-  await page.evaluate(() => (window as any).desktop.closeInteractionScreenshotWindow());
-  await screenshotClosed;
-});
-
-test("截图窗口在设置读取恢复时保留原始技术详情", async () => {
-  const recoveryError = "isolated settings.json: unexpected end of JSON input";
-  await page.evaluate(async () => {
-    await (window as any).desktop.setInteractionSettingsReadFailure("isolated settings.json: unexpected end of JSON input");
-    await (window as any).desktop.setInteractionSettingsReadSource("recovered");
-  });
-
-  const screenshotWindowOpened = application.waitForEvent("window");
-  await page.evaluate(() => (window as any).desktop.openInteractionScreenshotWindow());
-  const screenshotPage = await screenshotWindowOpened;
-  await screenshotPage.waitForLoadState("domcontentloaded");
-  const error = screenshotPage.getByRole("alert");
-  await expect(error.getByRole("heading")).toHaveText("无法读取语言设置");
-  await expect(error.getByRole("button", { name: "关闭" })).toBeVisible();
-  await expect(error.locator("details pre")).toHaveText(recoveryError);
-
-  const screenshotClosed = screenshotPage.waitForEvent("close");
-  await page.evaluate(() => (window as any).desktop.closeInteractionScreenshotWindow());
-  await screenshotClosed;
-  await page.evaluate(async () => {
-    await (window as any).desktop.setInteractionSettingsReadSource("stored");
-    await (window as any).desktop.setInteractionSettingsReadFailure(null);
-  });
 });
 
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {

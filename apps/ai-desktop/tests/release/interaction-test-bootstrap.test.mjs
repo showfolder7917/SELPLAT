@@ -12,6 +12,7 @@ const isolatedPreload = readFileSync(new URL("../interaction/isolated-preload.cj
 const collaborationDesktopApi = readFileSync(new URL("../../contracts/system/desktop/api/domains/collaboration.desktop-api.ts", import.meta.url), "utf8");
 const systemDesktopApi = readFileSync(new URL("../../contracts/system/desktop/api/domains/system.desktop-api.ts", import.meta.url), "utf8");
 const sidebarSpec = readFileSync(new URL("../interaction/developer-sidebar.spec.ts", import.meta.url), "utf8");
+const languageSettingsScenario = readFileSync(new URL("../interaction/language-settings-acceptance.scenario.ts", import.meta.url), "utf8");
 const viteConfig = readFileSync(new URL("../../vite.config.mjs", import.meta.url), "utf8");
 const taskTestRunner = readFileSync(new URL("../../electron/services/support/capabilities/testing/internal/task-worktree-test.runner.ts", import.meta.url), "utf8");
 
@@ -59,7 +60,9 @@ test("桌面交互测试使用固定隔离入口并加载生产文件与正式�
   assert.match(sidebarSpec, /productionRendererFile/);
   assert.match(sidebarSpec, /1560, height: 980/);
   assert.match(sidebarSpec, /1366, height: 768/);
-  assert.match(sidebarSpec, /1000, height: 700/);
+  assert.match(sidebarSpec, /正式最小[\s\S]{0,120}minimumWidth/);
+  assert.match(languageSettingsScenario, /getMinimumSize\(\)/);
+  assert.match(languageSettingsScenario, /toEqual\(\[680, 700\]\)/);
   assert.match(sidebarSpec, /设置按钮必须锚定左下/);
   assert.match(sidebarSpec, /设置标题不能竖排/);
   assert.match(viteConfig, /cssCodeSplit: false/);
