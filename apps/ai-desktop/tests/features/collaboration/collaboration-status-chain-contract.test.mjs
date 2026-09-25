@@ -68,6 +68,8 @@ test("执行成功后由令狐老祖记录统一测试结果", () => {
   assert.match(integrationSource, /task\.state = "unified-testing"/);
   assert.match(integrationSource, /unified_test\.passed/);
   assert.match(integrationSource, /unified_test\.failed/);
+  assert.match(integrationSource, /appendQuickPreflightDecision[\s\S]*preflight\.reused[\s\S]*preflight\.rerun_required/);
+  assert.match(integrationSource, /preflight\.issues_found[\s\S]*完整统一测试尚未启动/);
 });
 
 test("任务级恢复入口在等待和恢复中都位于下一流程", () => {

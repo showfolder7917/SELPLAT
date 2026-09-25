@@ -2,6 +2,7 @@ import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionSt
 import { isCompleteCustomerActionGuidance } from "../../../../contracts/services/workflow/index.js";
 import type { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { readCurrentTopicRecovery } from "./current-topic-read-recovery.js";
+import { emptyCurrentTopicDeliveryEvidence } from "./current-topic-delivery-evidence.js";
 
 type Proposal = EvolutionStateOutDto["proposals"][number];
 type Topic = EvolutionStateOutDto["topics"][number] | null;
@@ -98,7 +99,7 @@ export function projectCurrentTechnicalRecovery(input: {
     readRecovery: readCurrentTopicRecovery(resumeTaskId ? "resume" : "none", resumeTaskId ? "用户确认后由令狐复查" : waitingFor, nextAction, recovery.updatedAt),
     effectiveTaskIds: [...new Set([...recovery.occurrences.map((item) => item.taskId).filter((item): item is string => Boolean(item)), ...blockingTasks.map((item) => item.taskId)])],
     missingTaskIds: [], latestAcceptance, hostStartupAcceptance,
-    deliveryEvidence: { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" },
+    deliveryEvidence: emptyCurrentTopicDeliveryEvidence(),
     updatedAt: recovery.updatedAt,
   };
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import type { ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
+import { resolveStagedRuntimeActivationExecutable } from "./verified-package.release.js";
 
 /** 发布批次文档由发布协调器单点维护，运行中可追踪，结束后进入长期发布归档。 */
 export class ReleaseBatchStore {
@@ -48,6 +49,39 @@ export class ReleaseBatchStore {
     return document.state === "activating" && document.runtimeActivation?.state === "relaunch-scheduled" ? document : null;
   }
 
+  /**
+   * 受控启动器只可恢复一个已归档的暂存清理失败批次。
+   * 真实传参示例：release-0.1.1-g461 与候选 SHA 均匹配已提升包时，把原批次移回运行目录并安排候选进程续接。
+   * 返回示例：校验成功返回已写入 relaunch-scheduled 的批次；任一身份、来源或失败类型不匹配时返回 null，绝不扫描接管其他包。
+   */
+  recoverArchivedStagingCleanupFailure(releaseBatchId: string, candidateSha: string): ReleaseBatchDocumentOutDto | null {
+    if (!/^[a-zA-Z0-9._-]+$/.test(releaseBatchId) || !/^[0-9a-f]{40,64}$/i.test(candidateSha)) return null;
+    const archivedRoot = this.#findArchivedBatchRoot(releaseBatchId);
+    if (!archivedRoot || existsSync(path.join(this.#runningRoot, releaseBatchId, "发布批次文档.json"))) return null;
+    const documentPath = path.join(archivedRoot, "发布批次文档.json");
+    const document = JSON.parse(readFileSync(documentPath, "utf8")) as ReleaseBatchDocumentOutDto;
+    const activation = document.runtimeActivation;
+    if (document.state !== "failed" || !activation || activation.state !== "preparing"
+      || activation.candidateSha !== candidateSha || !hasCompatibleOrMissingFrozenImpactScope(activation) || !isStagingCleanupFailure(document.failureReason)) return null;
+    const executable = this.resolveStagedRuntimeActivationExecutable(releaseBatchId, candidateSha);
+    if (!executable) return null;
+    const originalFailureReason = document.failureReason;
+    mkdirSync(this.#runningRoot, { recursive: true });
+    renameSync(archivedRoot, path.join(this.#runningRoot, releaseBatchId));
+    document.state = "activating";
+    document.completedAt = null;
+    document.failureReason = null;
+    document.runtimeActivation = {
+      ...activation,
+      state: "relaunch-scheduled",
+      executable,
+      detail: `旧宿主暂存清理失败后由受控启动器接管：${activation.detail || ""}${activation.detail ? "；" : ""}${originalFailureReason}`,
+      updatedAt: new Date().toISOString(),
+    };
+    this.write(document);
+    return document;
+  }
+
   /** 读取仍在运行的精确批次，不扫描或修改其他发布记录。 */
   runningDocument(releaseBatchId: string): ReleaseBatchDocumentOutDto | null {
     if (!/^[a-zA-Z0-9._-]+$/.test(releaseBatchId)) return null;
@@ -83,6 +117,12 @@ export class ReleaseBatchStore {
     const activationRoot = path.join(this.#stableBuildRoot, "package", "activation");
     const target = path.join(activationRoot, `${releaseBatchId}-runtime`);
     if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+  }
+
+  /** 旧运行时只可接管本批已提升且来源提交一致的候选运行包。 */
+  resolveStagedRuntimeActivationExecutable(releaseBatchId: string, candidateSha: string): string | null {
+    if (!this.#stableBuildRoot) return null;
+    return resolveStagedRuntimeActivationExecutable(this.#stableBuildRoot, releaseBatchId, candidateSha);
   }
 
   /**
@@ -121,8 +161,30 @@ export class ReleaseBatchStore {
       .some((month) => existsSync(path.join(this.#archiveRoot, month.name, releaseBatchId, "发布批次文档.json")));
   }
 
+  #findArchivedBatchRoot(releaseBatchId: string): string | null {
+    if (!existsSync(this.#archiveRoot)) return null;
+    const matches = readdirSync(this.#archiveRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((month) => path.join(this.#archiveRoot, month.name, releaseBatchId))
+      .filter((root) => existsSync(path.join(root, "发布批次文档.json")));
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   /** 未归档的稳定应用同样不可复用，防止后续候选在提升阶段才发现覆盖冲突。 */
   #hasStablePublishedApplication(releaseBatchId: string): boolean {
     return Boolean(this.#stableBuildRoot && existsSync(path.join(this.#stableBuildRoot, "package", "published", releaseBatchId, "AI Desktop.app")));
   }
+}
+
+/** 旧宿主没有快照字段时允许精确候选启动后从保留分支补写；已存在的快照必须完整匹配。 */
+function hasCompatibleOrMissingFrozenImpactScope(activation: NonNullable<ReleaseBatchDocumentOutDto["runtimeActivation"]>): boolean {
+  const snapshot = activation.impactScope;
+  if (!snapshot) return true;
+  return Boolean(snapshot && snapshot.baseSha === activation.candidateBaseSha && snapshot.candidateSha === activation.candidateSha
+    && Array.isArray(snapshot.files) && snapshot.files.every((file) => typeof file === "string"));
+}
+
+function isStagingCleanupFailure(reason: string | null): boolean {
+  return Boolean(reason && /ENOTDIR: not a directory, (?:rmdir|unlink)/.test(reason)
+    && reason.includes(`${path.sep}package${path.sep}activation-staging-`));
 }

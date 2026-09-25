@@ -3,6 +3,7 @@ import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../..
 import { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { decideCurrentTopicOperation } from "./current-topic-operation.decision.js";
 import { projectCurrentTechnicalRecovery } from "./current-topic-technical-recovery.projection.js";
+import { emptyCurrentTopicDeliveryEvidence } from "./current-topic-delivery-evidence.js";
 import { projectTopicPreparationStage } from "./current-topic-preparation.projection.js";
 import { readCurrentTopicRecovery as readRecovery } from "./current-topic-read-recovery.js";
 
@@ -47,6 +48,8 @@ export function projectCurrentTopicStage(
   const task = latestEffectiveTask(execution.effectiveTasks);
   const deliveryEvidence = readDeliveryEvidence(execution.effectiveTasks, collaboration, latestAcceptance);
   const deliveryGate = readDeliveryGate(deliveryEvidence);
+  const preflightGate = readPreflightGate(deliveryEvidence, execution.effectiveTasks);
+  const stageGate = preflightGate || deliveryGate;
   const taskNeedsConfirmation = execution.effectiveTasks.some((item) => item.repairRequiresUserConfirmation === true);
   // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
   const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
@@ -62,7 +65,7 @@ export function projectCurrentTopicStage(
   else if (acceptanceStarted) status = "accepting";
   else if (failedAcceptance) status = "failed-pending-repair";
   else if (proposal.status === "completed") status = finalConclusion ? "completed" : "completed-unverified";
-  else if (deliveryGate) status = deliveryGate.status;
+  else if (stageGate) status = stageGate.status;
   else if (execution.blocked) status = "failed-pending-repair";
   else if (execution.nextStatus === "verifying") status = "verifying";
 
@@ -70,17 +73,17 @@ export function projectCurrentTopicStage(
   // 任务级客户动作只能由已核对故障关联与完整指导的技术恢复投影签发。
   const userAction = status === "awaiting-confirmation" ? "confirmation" : status === "failed-pending-repair" && runBlocked && !execution.blocked ? "resume" : "none";
   const updatedAt = [proposal.updatedAt, task?.updatedAt, latestAcceptance?.occurredAt].filter((item): item is string => Boolean(item)).sort().at(-1) || evolution.updatedAt;
-  const waitingFor = stageWaitingFor(status, deliveryGate);
-  const nextAction = stageNextAction(status, deliveryGate);
+  const waitingFor = stageWaitingFor(status, stageGate);
+  const nextAction = stageNextAction(status, stageGate);
 
   return {
     topicId: topic?.topicId || proposal.topicId,
     proposalId: proposal.proposalId,
     status,
     title: topic?.title || proposal.title,
-    summary: stageSummary(status, execution.summary, latestAcceptance, deliveryGate),
+    summary: stageSummary(status, execution.summary, latestAcceptance, stageGate),
     repairContent: task?.resultSummary?.changes || task?.resultSummary?.solvedProblem || task?.snapshot.confirmedIntent || proposal.content,
-    remaining: stageRemaining(status, task, execution.missingTaskIds, deliveryGate),
+    remaining: stageRemaining(status, task, execution.missingTaskIds, stageGate),
     waitingFor,
     nextAction,
     userAction,
@@ -111,14 +114,14 @@ function projectOperationStage(
     summary: operation.message, repairContent: "", remaining: "", waitingFor: "当前无需操作", nextAction: "本专题已取消", userAction: "none",
     resumeOneShotRunId: null,
     readRecovery: readRecovery("none", "当前无需操作", "本专题已取消", evolution.updatedAt),
-    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyCurrentTopicDeliveryEvidence(), updatedAt: evolution.updatedAt,
   };
   if (operation.kind === "unavailable") return {
     topicId: operation.topicId, proposalId: operation.proposalId, status: "not-run", title: "当前专题读取受阻",
     summary: operation.message, repairContent: "", remaining: operation.message, waitingFor: "当前专题状态", nextAction: "重新读取当前专题状态后再决定后续操作。", userAction: "none",
     resumeOneShotRunId: null,
     readRecovery: readRecovery("none", "当前专题状态", "重新读取当前专题状态后再决定后续操作。", evolution.updatedAt),
-    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyDeliveryEvidence(), updatedAt: evolution.updatedAt,
+    effectiveTaskIds: [], missingTaskIds: [], latestAcceptance: null, hostStartupAcceptance: emptyHostStartupAcceptance(), deliveryEvidence: emptyCurrentTopicDeliveryEvidence(), updatedAt: evolution.updatedAt,
   };
   return null;
 }
@@ -150,7 +153,7 @@ function projectMonitorAcceptanceStage(
     resumeOneShotRunId: null,
     readRecovery: readRecovery("none", verified ? "当前无需操作" : "韩立独立验收", verified ? "可开始下一专题。" : "核对正式页面验收证据并记录最终结论。", occurredAt),
     effectiveTaskIds: [], missingTaskIds: [], latestAcceptance, finalConclusion,
-    hostStartupAcceptance, deliveryEvidence: { ...emptyDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
+    hostStartupAcceptance, deliveryEvidence: { ...emptyCurrentTopicDeliveryEvidence(), acceptance: verified ? "passed" : "missing" }, updatedAt: occurredAt,
   };
 }
 
@@ -194,10 +197,6 @@ function readFinalConclusion(evolution: EvolutionStateOutDto, proposal: Evolutio
   };
 }
 
-function emptyDeliveryEvidence(): CurrentTopicStageOutDto["deliveryEvidence"] {
-  return { candidate: null, unifiedTest: "missing", release: "missing", restartHealth: "missing", acceptance: "missing" };
-}
-
 function emptyHostStartupAcceptance(reason = "尚未记录当前专题的 Host 启动验收依据。"): CurrentTopicStageOutDto["hostStartupAcceptance"] {
   return { launchId: null, handler: null, startedAt: null, commandStatus: "missing", exitCode: null, healthStatus: "missing", healthSummary: null, evidenceReadable: false, evidenceReferences: [], launcherSource: null, healthResponse: null, status: "unverified", reason };
 }
@@ -238,7 +237,7 @@ function readHostStartupAcceptance(evolution: EvolutionStateOutDto, proposal: Ev
 }
 
 function readDeliveryEvidence(tasks: CollaborationTaskOutDto[], collaboration: CollaborationStateOutDto, acceptance: CurrentTopicAcceptanceOutDto | null): CurrentTopicStageOutDto["deliveryEvidence"] {
-  if (!tasks.length) return { ...emptyDeliveryEvidence(), acceptance: acceptance?.status || "missing" };
+  if (!tasks.length) return { ...emptyCurrentTopicDeliveryEvidence(), acceptance: acceptance?.status || "missing" };
   const generations = [...new Set(tasks.map((task) => task.integrationGeneration).filter((value): value is number => value !== null))];
   const generation = generations.length === 1 ? generations[0] : null;
   const batch = generation === null ? null : collaboration.integrationBatches?.find((item) => item.generation === generation) || null;
@@ -248,7 +247,25 @@ function readDeliveryEvidence(tasks: CollaborationTaskOutDto[], collaboration: C
     : tasks.some((task) => task.unifiedTest?.status === "failed") ? "failed" : "missing";
   const release = candidate && tasks.every((task) => hasEvent(task, "release.published")) ? "published" : "missing";
   const restartHealth = release === "published" && tasks.every((task) => hasEvent(task, "release.restart_healthy")) ? "passed" : "missing";
-  return { candidate, unifiedTest, release, restartHealth, acceptance: acceptance?.status || "missing" };
+  const preflightEvent = tasks.flatMap((task) => task.flowEvents)
+    .filter((event) => event.type.startsWith("preflight."))
+    .sort((left, right) => (right.occurredAt || "").localeCompare(left.occurredAt || ""))[0];
+  const details = preflightEvent?.details;
+  const preflightStatus = preflightEvent?.type === "preflight.started" ? "running"
+    : preflightEvent?.type === "preflight.issues_found" ? "issues-found"
+      : preflightEvent?.type === "preflight.rerun_required" ? "rerun-required"
+        : preflightEvent?.type === "preflight.reused" ? "reused" : "not-recorded";
+  return {
+    preflight: {
+      status: preflightStatus,
+      round: details?.preflightRound || null,
+      candidateSha: typeof details?.candidateSha === "string" ? details.candidateSha : null,
+      impactScope: details?.impactScope || [], testInputs: details?.testInputs || [], evidenceReferences: details?.evidenceReferences || [],
+      evidenceValid: typeof details?.evidenceValid === "boolean" ? details.evidenceValid : null,
+      reusableStages: details?.reusableStages || [], issues: details?.preflightIssues || [],
+    },
+    candidate, unifiedTest, release, restartHealth, acceptance: acceptance?.status || "missing",
+  };
 }
 
 type DeliveryGate = {
@@ -258,6 +275,17 @@ type DeliveryGate = {
   waitingFor: string;
   nextAction: string;
 };
+
+/** 预检只决定如何处理当前候选，不能替代统一测试、发布、重启健康或真实验收。 */
+function readPreflightGate(evidence: CurrentTopicStageOutDto["deliveryEvidence"], tasks: CollaborationTaskOutDto[]): DeliveryGate | null {
+  const preflight = evidence.preflight;
+  const unifiedTestStarted = tasks.some((task) => task.flowEvents.some((event) => event.type === "unified_test.started"));
+  if (preflight.status === "running") return { status: "preflighting", summary: "快速预检进行中，尚未产生可复用结论。", remaining: "正在核对候选版本、影响范围、测试输入和证据有效性。", waitingFor: "当前任务处理者", nextAction: "完成快速预检并记录问题或复用决定。" };
+  if (preflight.status === "issues-found") return { status: "failed-pending-repair", summary: "快速预检发现问题，完整统一测试尚未启动。", remaining: preflight.issues.map((issue) => `${issue.category}：${issue.summary}（影响 ${issue.affectedStage}）`).join("；") || "预检问题尚未提供完整说明。", waitingFor: "原任务恢复处理", nextAction: "依据同轮预检问题集合处理后，从原恢复点继续。" };
+  if (!unifiedTestStarted && preflight.status === "rerun-required") return { status: "verifying", summary: "预检未满足复用条件，将重新执行。", remaining: preflight.issues.map((issue) => issue.summary).join("；") || "候选版本、影响范围、测试输入或证据有效性缺失或不一致。", waitingFor: "完整统一测试结论", nextAction: "使用当前候选重新执行完整统一测试，并保留本轮预检依据。" };
+  if (!unifiedTestStarted && preflight.status === "reused") return { status: "verifying", summary: `预检确认可复用：${preflight.reusableStages.join("、") || "未受影响阶段"}。`, remaining: "仍需按当前候选完成未复用的后续交付门禁。", waitingFor: "完整统一测试结论", nextAction: "记录当前候选的完整统一测试结果，后续发布、重启健康和验收继续独立判定。" };
+  return null;
+}
 
 /** 按交付闭环顺序找出第一个未满足事实，避免待验收状态掩盖候选或门禁缺项。 */
 function readDeliveryGate(evidence: CurrentTopicStageOutDto["deliveryEvidence"]): DeliveryGate | null {

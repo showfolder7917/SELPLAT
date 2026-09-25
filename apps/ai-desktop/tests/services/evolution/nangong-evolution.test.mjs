@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 import { controlledTestRoot, projectPaths } from "#test-paths";
@@ -16,7 +17,30 @@ const passedSourceReview = {
 // 回归测试只在内存中转换当前工作树源码，避免把其他候选的生成模块当作本轮验证结果。
 async function loadWorkflowSource(entryPoint) {
   const result = await build({ entryPoints: [entryPoint], bundle: true, format: "esm", platform: "node", target: "es2022", write: false });
-  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+  // 使用受控临时模块保留可读堆栈；data URL 会掩盖原始运行时错误。
+  const moduleRoot = path.join(controlledTestRoot, "workflow-source-modules");
+  mkdirSync(moduleRoot, { recursive: true });
+  const modulePath = path.join(moduleRoot, `${entryPoint.replaceAll(/[\\/]/g, "_").replaceAll(".", "_")}.mjs`);
+  writeFileSync(modulePath, result.outputFiles[0].text, "utf8");
+  return import(pathToFileURL(modulePath).href);
+}
+
+/** 等待持久化状态到达明确终态；不以墙钟延迟推断异步验收已经完成。 */
+function waitForEvolutionState(store, predicate, description) {
+  const current = store.state();
+  if (predicate(current)) return Promise.resolve(current);
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsubscribe();
+      reject(new Error(`${description} 未在诊断窗口内到达；当前运行=${JSON.stringify(store.state().oneShotRun)}`));
+    }, 1_000);
+    const unsubscribe = store.subscribe((state) => {
+      if (!predicate(state)) return;
+      unsubscribe();
+      clearTimeout(timeout);
+      resolve(state);
+    });
+  });
 }
 
 const [
@@ -2189,7 +2213,7 @@ test("南宫婉明确邀请后回复 1 整理课题并连续推进到真实协�
     const collaboration = {
       state() { return { members: [{ memberId: "mo-caihuan", displayName: "墨彩环", enabled: true, kind: "worker" }, { memberId: "doctor-mo", displayName: "墨大夫", enabled: true, kind: "worker" }], tasks }; },
       submitTask(request) {
-        tasks.push({ taskId: "one-shot-task", evolutionProposalId: request.evolutionProposalId, state: "executing", phase: "implementing", executorMemberId: "mo-caihuan", currentHandler: { memberId: "doctor-mo", displayName: "墨大夫" }, originalExecutor: { memberId: "doctor-mo", displayName: "墨大夫" }, snapshot: { title: request.title }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        tasks.push({ taskId: "one-shot-task", evolutionProposalId: request.evolutionProposalId, state: "executing", phase: "implementing", executorMemberId: "mo-caihuan", currentHandler: { memberId: "doctor-mo", displayName: "墨大夫" }, originalExecutor: { memberId: "doctor-mo", displayName: "墨大夫" }, snapshot: { title: request.title }, flowEvents: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         return { taskId: tasks.at(-1).taskId, state: this.state() };
       },
     };
@@ -2240,6 +2264,7 @@ test("一次性流程遇到同一集成归属阻塞时只登记停点且不直�
           executorMemberId: "mo-caihuan", currentHandler: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, originalExecutor: { memberId: "mo-caihuan", displayName: "墨彩环" },
           snapshot: { title: request.title }, blockingReason: detail, recoveryTargetState: "ready-for-integration",
           integrationFailure: { kind: "local-change-ownership", detail, conflictFiles: ["apps/ai-desktop/electron/main.ts"], baseSha: "base", resultSha: "result", generation: 1, occurredAt: new Date().toISOString() },
+          flowEvents: [],
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         });
         return { taskId: tasks.at(-1).taskId, state: this.state() };
@@ -2382,6 +2407,7 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
             state: "integrated",
             snapshot: { title: "恢复后进入韩立验收" },
             executionRecords: [],
+            flowEvents: [],
             createdAt: "2026-09-11T00:00:00.000Z",
             updatedAt: "2026-09-11T00:01:00.000Z",
           }],
@@ -2389,30 +2415,48 @@ test("旧提案验收卡点返修完成后沿修订链自动恢复韩立验收",
       },
     };
     let acceptanceRuns = 0;
+    let resolveRuntimeFailure;
+    const runtimeFailure = new Promise((resolve) => { resolveRuntimeFailure = resolve; });
     const facade = new PersonaEvolutionRuntime({
       store,
       collaboration,
       conversation,
       hanLi: { send: async () => '{"mode":"mixed","pageCriterionIds":["criterion-1"],"findings":[],"sourceReview":{"status":"passed","actual":"职责集中且便于新手阅读","evidenceReferences":["src/example.ts"]}}' },
       recordEvent: () => undefined,
+      recordFailure: (failure) => resolveRuntimeFailure(failure),
     });
-    facade.setComputerAcceptanceSession(async () => {
+    let acceptanceStarted = false;
+    facade.setComputerAcceptanceSession(async (_goal, onStarted) => {
+      // 与生产验收器一致：真实页面操作开始时先回调，随后才产生验收结果。
+      onStarted();
+      acceptanceStarted = true;
       acceptanceRuns += 1;
       return computerRun("recovered-acceptance-run", topicId, correctionProposalId, "passed", "recovered-shot", facade.state().proposals.find((proposal) => proposal.proposalId === correctionProposalId).acceptancePlan);
     });
 
+    const completed = waitForEvolutionState(store, (next) => next.oneShotRun?.status === "completed"
+      && next.oneShotRun?.proposalId === correctionProposalId, "返修链恢复后的验收完成状态");
     facade.start();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    facade.stop();
+    try {
+      state = await Promise.race([
+        completed,
+        runtimeFailure.then((failure) => {
+          if (failure.error instanceof Error) throw failure.error;
+          throw new Error(`返修链恢复运行时失败：${failure.operation}：${String(failure.error)}`);
+        }),
+      ]);
+    } finally {
+      facade.stop();
+    }
 
-    state = facade.state();
+    assert.equal(acceptanceStarted, true);
     assert.equal(acceptanceRuns, 1);
     assert.equal(state.proposals.at(-1).status, "completed");
     assert.equal(state.oneShotRun.status, "completed");
     assert.equal(state.oneShotRun.phase, "completed");
 
     facade.start();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => queueMicrotask(resolve));
     facade.stop();
     assert.equal(acceptanceRuns, 1, "完成后的轮询不得重复执行韩立验收");
   } finally { rmSync(directory, { recursive: true, force: true }); }

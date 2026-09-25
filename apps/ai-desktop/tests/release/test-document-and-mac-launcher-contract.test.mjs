@@ -7,12 +7,16 @@ const launcher = readFileSync(new URL("../../启动开发版.command", import.me
 const packageManifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
 const appConfig = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
 const startupContext = readFileSync(new URL("../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
+const collaborationBootstrap = readFileSync(new URL("../../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
 const mainEntry = readFileSync(new URL("../../electron/main.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../../electron-builder.developer.json", import.meta.url), "utf8");
 const builderConfig = readFileSync(new URL("../../electron-builder.developer.config.cjs", import.meta.url), "utf8");
+const packagedRecoveryLauncher = readFileSync(new URL("../../resources/runtime-activation-recovery.command", import.meta.url), "utf8");
 const macVerifier = readFileSync(new URL("../../scripts/verify-mac-developer-app.mjs", import.meta.url), "utf8");
 const packageContentVerifier = readFileSync(new URL("../../scripts/verify-package-content.mjs", import.meta.url), "utf8");
+const recoveryController = readFileSync(new URL("../../scripts/recover-runtime-activation.mjs", import.meta.url), "utf8");
+const recoveryWatchdog = readFileSync(new URL("../../scripts/runtime-activation-recovery-watchdog.mjs", import.meta.url), "utf8");
 const packagedBootstrap = readFileSync(new URL("../../electron/packaged-bootstrap.ts", import.meta.url), "utf8");
 const streamDetails = readFileSync(new URL("../../src/features/conversation/components/StreamDetails.tsx", import.meta.url), "utf8");
 const fixedUiText = readFileSync(new URL("../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
@@ -42,6 +46,20 @@ test("共享测试文档使用独占锁、占用身份、心跳和过期恢复",
   assert.match(runner, /heartbeatAt/);
   assert.match(runner, /共享测试正在被 \$\{lock\.executor\} 执行/);
   assert.match(runner, /isStale\(lock\)/);
+});
+
+test("发布恢复由候选包外控制器校验身份后委托已提升包资源", () => {
+  assert.equal(packageManifest.scripts["recover:runtime-activation"], "node scripts/run-with-dependencies.mjs node scripts/recover-runtime-activation.mjs");
+  assert.match(recoveryController, /document\.state !== "failed"/);
+  assert.match(recoveryController, /document\.runtimeActivation\?\.state !== "preparing"/);
+  assert.match(recoveryController, /manifest\.sourceSha !== candidateSha/);
+  assert.match(recoveryController, /runtime-activation-recovery\.command/);
+  assert.match(recoveryController, /--release-batch=\$\{request\.releaseBatchId\}/);
+  assert.match(recoveryController, /fileURLToPath\(import\.meta\.url\)/);
+  assert.doesNotMatch(recoveryController, /writeFileSync|renameSync|rmSync/);
+  assert.match(recoveryWatchdog, /findSinglePreparingBatch/);
+  assert.match(recoveryWatchdog, /requestRuntimeActivationRecovery/);
+  assert.match(recoveryWatchdog, /--replace-pid/);
 });
 
 test("韩立交互式验收超时先返回明确事实，再回收隔离 harness", () => {
@@ -100,6 +118,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(builderConfig, /const sourceBundleBuildRoot = path\.join\(selplatRoot, "build", "ai-desktop"\);[\s\S]*resource\.to === "ruleengine".*path\.join\(sourceBundleBuildRoot, "rule-bundle"\)[\s\S]*resource\.to === "prompts".*path\.join\(sourceBundleBuildRoot, "prompt-bundle"\)/);
   assert.match(builderConfig, /const candidateProjectRoot = path\.resolve\(applicationRoot, "\.\.\/\.\."\);[\s\S]*const candidateBuildRoot = path\.join\(candidateProjectRoot, "build", "ai-desktop"\);[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/renderer\/developer"[\s\S]*path\.join\(candidateBuildRoot, "renderer", "developer"\)[\s\S]*entry\.from === "\.\.\/\.\.\/build\/ai-desktop\/electron"[\s\S]*path\.join\(candidateBuildRoot, "electron"\)/);
   assert.match(builderConfig, /resource\.to === "db\/sql".*path\.join\(applicationRoot, "db", "sql"\)/);
+  assert.match(builder, /"to": "runtime-activation-recovery\.command"/);
+  assert.match(builderConfig, /resource\.to === "runtime-activation-recovery\.command"[\s\S]*path\.join\(applicationRoot, "resources", "runtime-activation-recovery\.command"\)/);
   assert.match(builder, /\{ "from": "db\/sql", "to": "db\/sql", "filter": \["load-order\.txt", "\*\.sql"\] \}/);
   assert.doesNotMatch(launcher, /^if ! npm run build:developer/m);
   assert.match(launcher, /npm run package:mac:developer/);
@@ -129,6 +149,11 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
   assert.match(launcher, /git -C "\$SELPLAT_ROOT" diff --quiet "\$CONTROLLED_SHA" HEAD --/);
   assert.match(launcher, /--ai-desktop-runtime-sha=\$CONTROLLED_SHA/);
+  assert.doesNotMatch(launcher, /recover-staged-release/);
+  assert.match(packagedRecoveryLauncher, /ai-desktop-runtime-source\.json/);
+  assert.match(packagedRecoveryLauncher, /--ai-desktop-recover-release=\$RELEASE_BATCH/);
+  assert.match(packagedRecoveryLauncher, /归档批次、候选 SHA、暂存清理失败事实或运行包来源不匹配/);
+  assert.doesNotMatch(packagedRecoveryLauncher, /npm run package:mac:developer/);
   assert.match(launcher, /--ai-desktop-user-data-dir=\$CONTROLLED_USER_DATA_DIR/);
   assert.match(electronMain, /isolatedUserDataArgument[\s\S]*--user-data-dir=\$\{isolatedUserData\}/);
   assert.match(appConfig, /--selplat-root=/);
@@ -137,6 +162,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \? true : app\.requestSingleInstanceLock\(\);/);
   assert.match(startupContext, /if \(!healthCheckFile && !ownsApplicationInstance\) app\.quit\(\);/);
   assert.match(startupContext, /else if \(!healthCheckFile\) app\.on\("second-instance"/);
+  assert.match(startupContext, /recoverReleaseBatchId = readArgument\("--ai-desktop-recover-release="\)/);
+  assert.match(collaborationBootstrap, /recoverArchivedStagingCleanupFailure\(recoveryBatchId, options\.startup\.runtimeSourceSha \|\| ""\)/);
   assert.match(macVerifier, /com\.selplat\.aidesktop\.developer/);
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);
@@ -149,10 +176,18 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(macVerifier, /候选包隔离启动失败；保留诊断目录/);
   assert.match(macVerifier, /describeHealthCheckFailure\(health, `候选包未报告 ready 状态：/);
   assert.match(macVerifier, /if \(healthCheckPassed\) rmSync\(healthRun/);
+  assert.match(macVerifier, /scheduleRuntimeActivationRecoveryWatchdog\(\)/);
+  assert.match(macVerifier, /AI_DESKTOP_PACKAGE_OUTPUT_ROOT/);
+  assert.match(macVerifier, /detached: true/);
+  assert.match(macVerifier, /findDesktopAncestor\(process\.ppid\)/);
+  assert.match(macVerifier, /--replace-pid=\$\{replacePid\}/);
+  assert.match(macVerifier, /发布激活恢复观察/);
   assert.match(packageContentVerifier, /for \(const promptResource of \["manifest\.json", "prompts\.json"\]\)/);
   assert.match(packageContentVerifier, /Packaged prompt resource is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration manifest is missing/);
   assert.match(packageContentVerifier, /Packaged SQLite migration is missing/);
+  assert.match(packageContentVerifier, /Packaged runtime activation recovery launcher is missing/);
+  assert.match(packageContentVerifier, /Packaged runtime activation recovery launcher is not executable/);
   assert.match(packageContentVerifier, /filter\(\(entry\) => entry && !entry\.startsWith\("#"\)\)/);
   assert.match(packageContentVerifier, /assertPackagedDistributionParser/);
   assert.match(packageContentVerifier, /packagedDistributionServicePath/);

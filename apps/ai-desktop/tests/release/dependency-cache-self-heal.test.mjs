@@ -131,12 +131,16 @@ test("应用路径诊断通过受控依赖入口加载公共路径包且不要�
   assert.match(ensure, /repairLocalPackageLinks\(details\)/, "本地包链接修复只属于显式依赖准备阶段");
 });
 
-test("隔离工作树只消费完整共享依赖租约且不在内层自愈缓存", () => {
+test("隔离工作树只消费完整共享依赖租约，且只重建已验证的缺失挂载", () => {
   assert.match(runner, /unresolvedCache\.dependencyLeaseId/);
   assert.match(runner, /Managed dependency lease cache is missing/);
   assert.match(runner, /Managed dependency lease is incomplete/);
   assert.match(runner, /if \(!cache\.dependencyLeaseId\) detachOwnedDependencyCache\(cache\)/);
   assert.doesNotMatch(runner, /AI_DESKTOP_TEST_TASK_ID/);
+  const attachBody = cache.slice(cache.indexOf("export function attachDependencyCache"), cache.indexOf("export function detachOwnedDependencyCache"));
+  assert.doesNotMatch(attachBody, /Managed dependency lease link is missing/);
+  assert.match(attachBody, /createDependencyLink\(details\.dependencyRoot, details\.linkPath\)/);
+  assert.doesNotMatch(attachBody, /repairLocalPackageLinks\(/);
 });
 
 test("当前哈希缓存存在时收敛实体目录和旧哈希链接", () => {

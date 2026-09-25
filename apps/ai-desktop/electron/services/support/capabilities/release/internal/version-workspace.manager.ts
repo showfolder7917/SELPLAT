@@ -334,6 +334,24 @@ export class VersionWorkspaceManager {
     }
   }
 
+  /**
+   * 旧宿主创建的激活文档可能尚未冻结影响范围；恢复包只能在稳定仓库中读取仍保留的候选分支。
+   * 真实传参示例：候选 `release/0.1.1-rc-g468` 指向登记 SHA 时，返回其固定基线到候选的文件列表。
+   * 异常或副作用示例：分支、候选 SHA 或基线祖先关系不一致时抛错，绝不回退到已退役候选 worktree。
+   */
+  async readRetainedCandidateChangedFiles(candidate: IntegrationCandidate): Promise<string[]> {
+    this.#validateCandidateBranch(candidate.branchName);
+    const retainedSha = await this.#git(this.#repositoryRoot, ["rev-parse", `refs/heads/${candidate.branchName}`]);
+    if (retainedSha !== candidate.candidateSha) {
+      throw new CandidateCompletenessError(`保留候选分支 ${candidate.branchName} 与批次候选 SHA 不一致：${retainedSha} !== ${candidate.candidateSha}。`);
+    }
+    const baseSha = await this.#git(this.#repositoryRoot, ["merge-base", candidate.baseSha, candidate.candidateSha]);
+    if (baseSha !== candidate.baseSha) {
+      throw new CandidateCompletenessError("待恢复候选不再继承批次冻结基线，禁止生成影响范围快照。");
+    }
+    return splitLines(await this.#gitRaw(this.#repositoryRoot, ["diff", "--name-only", `${candidate.baseSha}..${candidate.candidateSha}`]));
+  }
+
   /** 从固定基线创建可追溯的 release/<version>-rc 候选；只有发布锁持有者可以调用。 */
   async createReleaseCandidate(releaseBatchId: string, version: string, generation: number, tasks: CollaborationTaskOutDto[], legacyIntegrationBranch = false): Promise<IntegrationCandidate> {
     if (tasks.length === 0) throw new Error("集成批次不能为空。");

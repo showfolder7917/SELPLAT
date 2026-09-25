@@ -2,6 +2,7 @@ import type { CollaborationWorkerPhaseValue } from "./collaboration-member.value
 
 export type CollaborationFlowEventTypeValue =
   | "task.submitted" | "task.legacy_imported" | "executor.assigned" | "executor.reassigned"
+  | "preflight.started" | "preflight.issues_found" | "preflight.rerun_required" | "preflight.reused"
   | "technical_analysis.ready" | "execution.started" | `worker.phase.${Exclude<CollaborationWorkerPhaseValue, null>}`
   | "executor.self_test_started" | "executor.self_test_passed" | "executor.self_test_failed"
   | "executor.self_repair_started" | "executor.self_repair_completed" | "executor.self_repair_failed"

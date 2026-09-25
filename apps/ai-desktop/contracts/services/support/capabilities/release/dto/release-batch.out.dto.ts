@@ -22,6 +22,8 @@ export interface ReleaseBatchRuntimeActivationOutDto {
   candidateRootPath: string;
   candidateBaseSha: string;
   candidateSha: string;
+  /** 激活前从精确候选计算的影响范围；恢复进程不得再依赖可回收的候选工作树。 */
+  impactScope: { baseSha: string; candidateSha: string; files: string[] };
   executable: string | null;
   detail: string | null;
   updatedAt: string;
