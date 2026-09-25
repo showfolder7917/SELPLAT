@@ -19,7 +19,7 @@ import {
   Send24Filled,
 } from "@fluentui/react-icons";
 
-import { fixedUiText } from "../../../../contracts/foundation";
+import { fixedUiText, personaDisplayName } from "../../../../contracts/foundation";
 
 // 消息正文组件（MarkdownMessage）把人物消息渲染成统一格式。
 import { ConversationMessageImage, MarkdownMessage, personaConversationDeliveryLabel } from "../../conversation";
@@ -32,16 +32,6 @@ import type { NangongConversationWorkspaceProps } from "./NangongConversationWor
 import { NangongConversationActivity } from "./NangongConversationWorkspace/NangongConversationActivity";
 // 南宫婉页面控制方法（useNangongConversationWorkspace）准备页面数据并执行发送与课题操作。
 import { useNangongConversationWorkspace } from "./useNangongConversationWorkspace";
-
-// 人物名称表（personaNames）把内部人物编号转换成客户可见名称。
-const personaNames: Record<string, string> = {
-  // 韩立人物编号（han-li）在内部研讨区显示为“韩立”。
-  "han-li": "韩立",
-  // 南宫婉人物编号（nangong-wan）在内部研讨区显示为“南宫婉”。
-  "nangong-wan": "南宫婉",
-  // 令狐人物编号（linghu-ancestor）在内部研讨区显示为“令狐老祖”。
-  "linghu-ancestor": "令狐老祖",
-};
 
 /** 南宫婉页面只负责呈现讨论、调查事实和客户确认过的课题草稿。 */
 export function NangongConversationWorkspace(props: NangongConversationWorkspaceProps) {
@@ -103,8 +93,8 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
       {controller.visibleMessages.map((message) => {
         // 是否为内部消息（internal）表示当前内容是否来自人物内部研讨。
         const internal = controller.internalIds.has(message.messageId);
-        // 人物显示名称（personaName）把内部人物编号转换成客户可以识别的名字。
-        const personaName = personaNames[message.speakerPersonaId || "nangong-wan"] || message.speakerPersonaId;
+        // 人物显示名称（personaName）由统一资源解析已登记编号，未映射编号保持原值。
+        const personaName = personaDisplayName(props.locale, message.speakerPersonaId || "nangong-wan");
         // 发送状态文字（deliveryLabel）把处理中和已持久化统一显示为已发送，失败仍保留明确提示。
         const deliveryLabel = personaConversationDeliveryLabel(message.deliveryStatus, props.locale);
         // 内部消息类型文字（internalLabel）区分普通问答、内部研讨和内部交接。
@@ -115,7 +105,9 @@ export function NangongConversationWorkspace(props: NangongConversationWorkspace
           internalLabel = fixedUiText(props.locale, "nangongInternalDeliberation");
         }
         // 消息身份文字（speakerLabel）是消息头最终显示的客户或人物名称。
-        const speakerLabel = message.speakerType === "user" ? `我 · ${deliveryLabel}` : `${personaName}${internalLabel}`;
+        const speakerLabel = message.speakerType === "user"
+          ? fixedUiText(props.locale, "personaUserHeader").replace("{status}", deliveryLabel)
+          : `${personaName}${internalLabel}`;
 
         return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} data-internal-message-id={internal ? message.messageId : undefined}>
           {/* 消息身份区：显示客户或人物名称以及当前传递状态。 */}

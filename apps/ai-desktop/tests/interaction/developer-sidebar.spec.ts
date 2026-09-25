@@ -808,7 +808,7 @@ test("协同模式列出稳定人物并以人物名打开独立工作页", async
   await taskList.getByRole("button", { name: /韩立/ }).click();
   await expect(page.locator(".developer-tab-page:visible"), "返回韩立时应恢复原页面并保持单页可见").toHaveCount(1);
   await expect(hanliConversation.getByText(hanliQuestion, { exact: true })).toBeVisible();
-  await expect(hanliConversation.getByText("我 · 已发送", { exact: true })).toBeVisible();
+  await expect(hanliConversation.getByText("你 · 已发送", { exact: true })).toBeVisible();
   await expect(hanliComposer.getByRole("button", { name: "思考中" })).toBeDisabled();
   await expect(hanliConversation.getByText("我会结合整理后的客户语义资料回答；只有真实决策缺口才继续追问。", { exact: true })).toBeVisible();
   await expect(hanliConversation.getByText("当前观点已经形成；你可以独立输入 1，以这个观点启动我与南宫婉的内部研讨。", { exact: true })).toBeVisible();

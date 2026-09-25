@@ -4,6 +4,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { build } from "esbuild";
+
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (relativePath) => readFileSync(path.join(appRoot, relativePath), "utf8");
 const activeStableUserId = read("ruleengine/AGENTS.md").match(/当前稳定用户 ID：`([^`]+)`/u)?.[1];
@@ -36,6 +38,15 @@ const linghu = read("src/features/linghu/components/LinghuAutomationPanel.tsx");
 const developerWorkspaceRouter = read("src/applications/developer/model/createDeveloperWorkspaceRouterViewModel.ts");
 const fixedUiText = read("contracts/foundation/i18n/fixed-ui-text.ts");
 const harnessRule = read(`ruleengine/rules/local/${activeStableUserId}/selplat/应用/ai-desktop/template/RUL_AIDesktop协作与自动化规则/requirements.md`);
+const fixedUiBundle = await build({
+  entryPoints: [path.join(appRoot, "contracts/foundation/i18n/fixed-ui-text.ts")],
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  target: "es2022",
+  write: false,
+});
+const fixedUiRuntime = await import(`data:text/javascript;base64,${Buffer.from(fixedUiBundle.outputFiles[0].text).toString("base64")}`);
 
 test("人物会话头以可空 selectedModel 保存并迁移既有数据", () => {
   assert.match(conversationContract, /selectedModel\?: string \| null/);
@@ -52,6 +63,14 @@ test("人物会话固定投递状态从统一三语资源解析", () => {
   assert.match(fixedUiText, /personaDeliverySent: "已发送"/);
   assert.match(fixedUiText, /personaDeliverySent: "送信済み"/);
   assert.match(fixedUiText, /personaDeliverySent: "Sent"/);
+});
+
+test("人物名称、固定状态与简体中文回退都由统一资源解析", () => {
+  assert.equal(fixedUiRuntime.personaDisplayName("ja", "han-li"), "韩立");
+  assert.equal(fixedUiRuntime.personaDisplayName("en", "nangong-wan"), "南宫婉");
+  assert.equal(fixedUiRuntime.personaDisplayName("en", "unknown-persona"), "unknown-persona");
+  assert.equal(fixedUiRuntime.resolveFixedUiText({ "zh-CN": { personaCustomerDisplayReload: "重新读取", missingText: "缺少固定界面文案" }, ja: {} }, "ja", "personaCustomerDisplayReload"), "重新读取");
+  assert.equal(fixedUiRuntime.resolveFixedUiText({ "zh-CN": { missingText: "缺少固定界面文案" }, ja: {} }, "ja", "personaCustomerDisplayReload"), "[缺少固定界面文案: personaCustomerDisplayReload]");
 });
 
 test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID 前后缀", () => {
@@ -136,7 +155,8 @@ test("客户显示正文由唯一派生端口供应，页面、后续上下文�
   assert.match(hook, /acceptCustomerDisplayReceipt/);
   assert.doesNotMatch(hook, /setConversation\(value\)/);
   assert.match(hanli, /customerDisplayState === "missing"/);
-  assert.match(hanli, /重新读取/);
+  assert.match(hanli, /personaCustomerDisplayReload/);
+  assert.match(fixedUiText, /personaCustomerDisplayReload: "重新读取"/);
   assert.match(hook, /retryingCustomerDisplayMessageIds/);
   assert.match(hook, /retryingCustomerDisplayMessageIdsRef\.current\.has\(sourceMessageId\)/);
   assert.match(hanli, /disabled=\{controller\.retryingCustomerDisplayMessageIds\.has\(message\.messageId\)\}/);
