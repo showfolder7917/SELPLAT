@@ -7,6 +7,9 @@ export type LanguageSettingsAcceptanceProductionSurfaces = [
   typeof import("../../src/features/conversation/components/CodexConversationWorkspace/CodexConversationTimeline").CodexConversationTimeline,
   typeof import("../../src/features/conversation/components/ConversationMessageImage").ConversationMessageImage,
   typeof import("../../src/features/conversation/components/CollaborationStatusChain").CollaborationStatusChain,
+  typeof import("../../src/features/hanli/components/HanliConversationWorkspace").HanliConversationWorkspace,
+  typeof import("../../src/features/nangong/components/NangongConversationWorkspace").NangongConversationWorkspace,
+  typeof import("../../src/features/nangong/components/NangongConversationWorkspace/NangongConversationActivity").NangongConversationActivity,
 ];
 
 type InteractionHarness = {

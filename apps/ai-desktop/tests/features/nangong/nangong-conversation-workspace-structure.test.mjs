@@ -4,6 +4,7 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const view = read("../../../src/features/nangong/components/NangongConversationWorkspace.tsx");
+const fixedUiText = read("../../../contracts/foundation/i18n/fixed-ui-text.ts");
 const types = read("../../../src/features/nangong/components/NangongConversationWorkspace.types.ts");
 const controller = read("../../../src/features/nangong/components/useNangongConversationWorkspace.ts");
 const activity = read("../../../src/features/nangong/components/NangongConversationWorkspace/NangongConversationActivity.tsx");
@@ -33,9 +34,10 @@ test("南宫婉页面的新手说明覆盖真实页面区域和主要控制状�
 });
 
 test("南宫婉空会话按首次使用顺序说明现象、事实和确认边界", () => {
-  assert.match(view, /你可以说明需要调查的现象，以及不可改变的约束。/);
-  assert.match(view, /请直接提供已经确认的事实、观察结果或截图。/);
-  assert.match(view, /南宫婉核实后会形成方案；是否实施仍遵循原有确认规则。/);
+  for (const key of ["nangongEmptyGoal", "nangongEmptyEvidence", "nangongEmptyBoundary"]) assert.match(view, new RegExp(`fixedUiText\\(props\\.locale, "${key}"\\)`));
+  assert.match(fixedUiText, /nangongEmptyGoal: "你可以说明需要调查的现象，以及不可改变的约束。"/);
+  assert.match(fixedUiText, /nangongEmptyGoal: "調査したい現象と変更できない制約を説明してください。"/);
+  assert.match(fixedUiText, /nangongEmptyGoal: "Describe the issue to investigate and the constraints that cannot change\."/);
   assert.match(view, /空状态提示：按首次使用顺序说明现象与约束、直接事实和原有确认边界/);
 });
 

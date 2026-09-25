@@ -9,6 +9,7 @@
 import { Code24Regular, Dismiss20Regular, EyeOff24Regular, Screenshot24Regular, Send24Filled } from "@fluentui/react-icons";
 import { useEffect, useRef } from "react";
 
+import { fixedUiText } from "../../../../contracts/foundation";
 import { ConversationMessageImage, MarkdownMessage, personaConversationDeliveryLabel, SelUiConversation } from "../../conversation";
 import type { HanliConversationWorkspaceProps } from "./HanliConversationWorkspace.types";
 import { HanliCustodySwitch } from "./HanliConversationWorkspace/HanliCustodySwitch";
@@ -48,17 +49,17 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
     // 页面提交入口：统一会话外壳提交时调用控制 Hook 的发送操作。
     onSubmit={() => void controller.send()}
     // 会话区：页面上半部分，包含空状态、读取统计和客户问答历史。
-    timeline={<section ref={controller.timelineRef} className="selconversation-timeline hanli-person-chat" aria-label="与韩立自由讨论">
+    timeline={<section ref={controller.timelineRef} className="selconversation-timeline hanli-person-chat" aria-label={fixedUiText(props.locale, "hanliTimeline")}>
       {/* 会话空状态：尚无问答时说明韩立页面的用途。 */}
       {controller.messages.length === 0 && <div className="dev-empty">
         {/* 空状态图标：帮助客户识别当前是人物对话页面。 */}
         <div className="dev-orb"><Code24Regular /></div>
         {/* 空状态标题：说明当前页面用于和韩立讨论真实需求。 */}
-        <h1>和韩立一起说清想解决的事</h1>
+        <h1>{fixedUiText(props.locale, "hanliEmptyTitle")}</h1>
         {/* 空状态说明：按首次使用顺序说明目标、直接材料和原有确认边界。 */}
-        <p>你可以提出问题、目标，或想实现的功能。</p>
-        <p>直接描述你看到的情况，或附上截图；先说最在意的地方。</p>
-        <p>必要时韩立会交由南宫婉核实；是否实施仍遵循原有确认规则。</p>
+        <p>{fixedUiText(props.locale, "hanliEmptyGoal")}</p>
+        <p>{fixedUiText(props.locale, "hanliEmptyEvidence")}</p>
+        <p>{fixedUiText(props.locale, "hanliEmptyBoundary")}</p>
       </div>}
 
       {/* 上下文统计区：显示上一轮真正发送给韩立的各类上下文规模。 */}
@@ -70,16 +71,16 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
       </p>}
 
       {conversation.recovery && <section id={`hanli-recovery-${conversation.recovery.recoveryId}`} className={`hanli-conversation-recovery ${conversation.recovery.status}`} role="status" aria-live="polite">
-        <strong>{recoveryHeading(conversation.recovery.status)}</strong>
+        <strong>{recoveryHeading(conversation.recovery.status, props.locale)}</strong>
         <span>{conversation.recovery.summary}</span>
-        {(conversation.recovery.affectedTurnId || conversation.recovery.affectedItemId) && <small>核验记录：{conversation.recovery.affectedTurnId ? `回合 ${conversation.recovery.affectedTurnId}` : ""}{conversation.recovery.affectedTurnId && conversation.recovery.affectedItemId ? " · " : ""}{conversation.recovery.affectedItemId ? `条目 ${conversation.recovery.affectedItemId}` : ""}</small>}
-        {conversation.recovery.affectedMessageId && <small>关联的会话消息已在时间线中标注。</small>}
-        {conversation.recovery.retryable && <small>原会话与历史保持不变；可重试恢复。</small>}
+        {(conversation.recovery.affectedTurnId || conversation.recovery.affectedItemId) && <small>{fixedUiText(props.locale, "technicalDetails")}</small>}
+        {conversation.recovery.affectedMessageId && <small>{fixedUiText(props.locale, "conversationRecoverTask")}</small>}
+        {conversation.recovery.retryable && <small>{fixedUiText(props.locale, "conversationContinue")}</small>}
         {conversation.recovery.retryable && <button type="button" className="selconversation-action" disabled={controller.recovering} onClick={() => void controller.retryRecovery()}>{controller.recovering ? "正在重试恢复" : "重试恢复"}</button>}
       </section>}
 
       {/* 客户问答区：按发生顺序展示客户提问和韩立回答。 */}
-      {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>读取更早消息</button>}
+      {controller.hasEarlier && <button type="button" className="selconversation-action" onClick={() => void controller.loadEarlier()}>{fixedUiText(props.locale, "conversationContinue")}</button>}
       {controller.messages.map((message) => {
         // 消息截图预览（previews）是当前问答消息已经可以直接展示的图片。
         const previews = controller.previewsForMessage(message.messageId);
@@ -88,7 +89,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         return <article key={message.messageId} className="selconversation-message" data-role={message.speakerType} {...(isRecoveryAffected ? { "data-recovery-affected": "true", "aria-describedby": `hanli-recovery-${conversation.recovery!.recoveryId}` } : {})}>
           {/* 问答身份区：显示“我”或“韩立”，并标记客户消息的发送状态。 */}
           <header>{message.speakerType === "user"
-            ? `我 · ${personaConversationDeliveryLabel(message.deliveryStatus)}`
+            ? `我 · ${personaConversationDeliveryLabel(message.deliveryStatus, props.locale)}`
             : "韩立"}</header>
 
           {/* 问答内容区：承载本条消息的截图证据和文字正文。 */}
@@ -101,7 +102,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
               </div>
               : message.attachmentIds?.length
                 // 附件恢复状态：存在附件身份但暂时无法显示图片时给出原因。
-                ? <small>{controller.attachmentPreviewErrors[message.messageId] || "附件预览正在恢复。"}</small>
+                ? <small>{controller.attachmentPreviewErrors[message.messageId] || fixedUiText(props.locale, "personaAttachmentRestoring")}</small>
                 : null}
             {/* 消息正文区：使用统一 Markdown 组件展示客户原文或韩立回复。 */}
             <MarkdownMessage text={message.content} />
@@ -114,7 +115,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
               onClick={() => void controller.retryCustomerDisplayMessage(message.messageId)}
             >{controller.retryingCustomerDisplayMessageIds.has(message.messageId) ? "重新读取中" : "重新读取"}</button>}
             {/* 失败消息保留原文和附件，并只允许按原编号再次提交。 */}
-            {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>重试发送</button>}
+            {message.speakerType === "user" && message.deliveryStatus === "failed" && <button type="button" className="selconversation-action" onClick={() => void controller.retrySend()}>{fixedUiText(props.locale, "personaRetrySend")}</button>}
           </div>
         </article>;
       })}
@@ -136,31 +137,31 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
           {/* 待发送截图预览：让客户在发送前确认选择的图片。 */}
           <img src={attachment.dataUrl} alt={attachment.name} />
           {/* 待发送截图说明：明确该图片会作为本轮讨论证据。 */}
-          <figcaption>讨论截图</figcaption>
+          <figcaption>{fixedUiText(props.locale, "personaDiscussionScreenshot")}</figcaption>
           {/* 移除截图按钮：只从本轮待发送附件中移除当前图片。 */}
-          <button type="button" aria-label="移除截图" onClick={() => controller.removeAttachment(attachment.id)}>
+          <button type="button" aria-label={fixedUiText(props.locale, "personaRemoveScreenshot")} onClick={() => controller.removeAttachment(attachment.id)}>
             <Dismiss20Regular />
           </button>
         </figure>)}
       </div>}
 
       {/* 排查阶段由主进程持久恢复点投影；不会把排队或解释显示成调查。 */}
-      {controller.activity && <div role="status" aria-live="polite" aria-label="韩立排查进度">
+      {controller.activity && <div role="status" aria-live="polite" aria-label={fixedUiText(props.locale, "hanliInquiryProgress")}>
         <span>{controller.activity.summary}</span>
         {controller.canRetryInquiry && <button
           type="button"
           onClick={() => void controller.retryInquiry()}
-          aria-label="从原阶段继续排查"
-        >从原阶段继续排查</button>}
+          aria-label={fixedUiText(props.locale, "hanliRetryInquiry")}
+        >{fixedUiText(props.locale, "hanliRetryInquiry")}</button>}
       </div>}
       {/* 新建会话状态区：重新建立韩立会话期间显示真实等待状态。 */}
-      {newConversationBusy && <div role="status">正在归档当前会话并建立新对话…</div>}
+      {newConversationBusy && <div role="status">{fixedUiText(props.locale, "hanliNewConversationBusy")}</div>}
       {/* 页面错误区：桌面通信或业务处理失败时立即向客户显示原因。 */}
-      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.messages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <div className="composer-error-actions"><button type="button" onClick={() => void controller.retrySend()}>重试发送</button></div>}</div>}
+      {error && <div className="composer-error" role="alert"><span>{error}</span>{controller.messages.some((message) => message.speakerType === "user" && message.deliveryStatus === "failed") && <div className="composer-error-actions"><button type="button" onClick={() => void controller.retrySend()}>{fixedUiText(props.locale, "personaRetrySend")}</button></div>}</div>}
       {/* 模型目录错误紧邻输入工具区展示，并提供真实重读入口，不再用空值伪装读取成功。 */}
       {props.runtime.modelCatalogError && <div className="composer-error" role="alert">
         <span>{props.runtime.modelCatalogError}</span>
-        <button type="button" onClick={() => void props.runtime.reloadModelCatalog()}>重新读取模型</button>
+        <button type="button" onClick={() => void props.runtime.reloadModelCatalog()}>{fixedUiText(props.locale, "personaReloadModel")}</button>
       </div>}
 
       {/* 文字输入区：接收客户问题，也允许从剪贴板粘贴截图。 */}
@@ -168,8 +169,8 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         className="selconversation-input"
         ref={messageInputRef}
         data-sel-conversation-input
-        aria-label="给韩立发送消息"
-        placeholder="描述问题、真实目标或你不确定该怎么问的地方…（可粘贴截图）"
+        aria-label={fixedUiText(props.locale, "hanliInput")}
+        placeholder={fixedUiText(props.locale, "hanliPlaceholder")}
         value={controller.text}
         // 输入事件：把客户尚未发送的文字交给控制 Hook 保存。
         onChange={(event) => controller.setText(event.currentTarget.value)}
@@ -184,24 +185,24 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
           {/* 自动托管开关：调整韩立后续研讨是否允许持续自动推进。 */}
           <HanliCustodySwitch onError={onError} />
           {/* 对话模型属于输入工具，与自动托管并列；留空明确表示跟随设置页默认模型。 */}
-          <label className="selconversation-model-picker" title="本对话模型">
-            <span>模型</span>
+          <label className="selconversation-model-picker" title={fixedUiText(props.locale, "personaConversationModel")}>
+            <span>{fixedUiText(props.locale, "personaModel")}</span>
             <select
-              aria-label="韩立对话模型"
+              aria-label={fixedUiText(props.locale, "personaConversationModel")}
               value={conversation.selectedModel || ""}
               disabled={controller.busy || newConversationBusy || props.runtime.modelCatalogLoading || Boolean(props.runtime.modelCatalogError)}
               onChange={(event) => void props.runtime.selectModel(event.currentTarget.value || null)}
             >
-              <option value="">{props.runtime.modelCatalogLoading ? "正在读取模型…" : props.runtime.modelCatalogError ? "模型列表不可用" : "跟随默认模型"}</option>
+              <option value="">{props.runtime.modelCatalogLoading ? fixedUiText(props.locale, "personaModelLoading") : props.runtime.modelCatalogError ? fixedUiText(props.locale, "personaModelUnavailable") : fixedUiText(props.locale, "personaFollowDefaultModel")}</option>
               {props.runtime.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
             </select>
           </label>
           {/* 当前窗口截图按钮：保留 AI Desktop 窗口并截取当前屏幕。 */}
-          <button type="button" className="screenshot-button" aria-label="截取当前屏幕" onClick={() => onScreenshot(false)}>
+          <button type="button" className="screenshot-button" aria-label={fixedUiText(props.locale, "personaCaptureScreen")} onClick={() => onScreenshot(false)}>
             <Screenshot24Regular />
           </button>
           {/* 隐藏窗口截图按钮：截图前隐藏 AI Desktop，避免遮挡目标应用。 */}
-          <button type="button" className="screenshot-button" aria-label="隐藏窗口后截图" onClick={() => onScreenshot(true)}>
+          <button type="button" className="screenshot-button" aria-label={fixedUiText(props.locale, "personaHiddenCapture")} onClick={() => onScreenshot(true)}>
             <EyeOff24Regular />
           </button>
         </div>
@@ -209,7 +210,7 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
         {/* 主操作区：只放本轮对话的发送按钮。 */}
         <div className="selconversation-actions">
           {/* 发送按钮：满足工作区、文字或附件及空闲状态后才允许提交。 */}
-          <button type="submit" className="selconversation-action" disabled={!controller.canSend} aria-label={controller.busy ? "思考中" : "发送给韩立"}>
+          <button type="submit" className="selconversation-action" disabled={!controller.canSend} aria-label={controller.busy ? fixedUiText(props.locale, "hanliThinking") : fixedUiText(props.locale, "hanliSend")}>
             <Send24Filled />
           </button>
         </div>
@@ -219,12 +220,13 @@ export function HanliConversationWorkspace(props: HanliConversationWorkspaceProp
   </section>;
 }
 
-function recoveryHeading(status: NonNullable<HanliConversationWorkspaceProps["conversation"]["recovery"]>["status"]): string {
-  switch (status) {
-    case "verified": return "已恢复，历史已核对";
-    case "unknown-turn": return "恢复记录需要核验";
-    case "thread-unavailable": return "原线程不可恢复";
-    case "retryable": return "恢复失败，可重试";
-    case "verification-incomplete": return "恢复内容尚未核验";
-  }
+function recoveryHeading(status: NonNullable<HanliConversationWorkspaceProps["conversation"]["recovery"]>["status"], locale: HanliConversationWorkspaceProps["locale"]): string {
+  const keys = {
+    verified: "hanliRecoveryVerified",
+    "unknown-turn": "hanliRecoveryUnknownTurn",
+    "thread-unavailable": "hanliRecoveryThreadUnavailable",
+    retryable: "hanliRecoveryRetryable",
+    "verification-incomplete": "hanliRecoveryVerificationIncomplete",
+  } as const;
+  return fixedUiText(locale, keys[status]);
 }

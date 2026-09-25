@@ -46,6 +46,14 @@ test("人物会话头以可空 selectedModel 保存并迁移既有数据", () =>
   assert.match(repository, /selectModel\(ownerPersonaId: string, conversationId: string, selectedModel: string \| null\)/);
 });
 
+test("人物会话固定投递状态从统一三语资源解析", () => {
+  const projector = read("src/features/conversation/model/realtime-conversation.ts");
+  assert.match(projector, /fixedUiText\(locale, status === "failed" \? "personaDeliveryFailed" : "personaDeliverySent"\)/);
+  assert.match(fixedUiText, /personaDeliverySent: "已发送"/);
+  assert.match(fixedUiText, /personaDeliverySent: "送信済み"/);
+  assert.match(fixedUiText, /personaDeliverySent: "Sent"/);
+});
+
 test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID 前后缀", () => {
   const projector = read("src/features/conversation/model/realtime-conversation.ts");
   const inquiry = read("electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.ts");
@@ -74,7 +82,8 @@ test("Codex 恢复结论按业务会话持久化并投影到韩立时间线", ()
   assert.match(repository, /readLatestRecovery/);
   assert.match(repository, /affectedMessageId/);
   assert.match(hook, /recovery: window\.recovery/);
-  assert.match(hanli, /已恢复，历史已核对/);
+  assert.match(hanli, /hanliRecoveryVerified/);
+  assert.match(fixedUiText, /hanliRecoveryVerified: "已恢复，历史已核对"/);
   assert.match(hanli, /hanli-conversation-recovery/);
   assert.match(hanli, /data-recovery-affected/);
   assert.match(hook, /async function readPreparedRecoveryWindow\([\s\S]*?receipt\?\.conversationId \|\| expectedConversationId/);
@@ -176,10 +185,10 @@ test("人物普通发送失败后保留稳定客户消息编号并提供同编�
   assert.match(hanliController, /await send\(pending\)/);
   assert.match(nangongController, /async function retrySend\(\)/);
   assert.match(nangongController, /await sendChat\(undefined, outgoingMessage\)/);
-  assert.match(hanliView, /重试发送/);
+  assert.match(hanliView, /personaRetrySend/);
   assert.match(hanliView, /className="composer-error-actions"/);
   assert.match(hanliController, /retrying\?\.messageId \|\| `hanli-message-\$\{crypto\.randomUUID\(\)\}`/);
-  assert.match(nangongView, /重试发送/);
+  assert.match(nangongView, /personaRetrySend/);
 });
 
 test("人物临时消息按客户可见最大顺序号追加，不能用过滤后的消息条数代替数据库顺序", () => {
@@ -216,12 +225,12 @@ test("只有韩立和南宫婉输入区使用官方模型目录", () => {
   assert.match(hanli, /modelCatalog/);
   assert.match(hanli, /selectModel/);
   assert.match(hanli, /<HanliCustodySwitch[\s\S]*selconversation-model-picker/);
-  assert.match(hanli, /跟随默认模型/);
+  assert.match(hanli, /personaFollowDefaultModel/);
   assert.doesNotMatch(hanli, /当前会话模型：|使用设置页默认模型|未知/);
   assert.match(nangong, /modelCatalog/);
   assert.match(nangong, /selectModel/);
   assert.match(nangong, /selconversation-tools[\s\S]*selconversation-model-picker/);
-  assert.match(nangong, /重新读取模型/);
+  assert.match(nangong, /personaReloadModel/);
   assert.doesNotMatch(nangong, /当前会话模型：|使用设置页默认模型|未知/);
   assert.match(codex, /stringValue\(model\.slug\)/);
   assert.match(codex, /stringValue\(model\.display_name\)/);
