@@ -45,6 +45,7 @@ const systemDesktopApi = [
   "../../../contracts/system/desktop/api/desktop.api.ts",
   "../../../contracts/system/desktop/api/domains/system.desktop-api.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
+const fixedUiText = readFileSync(new URL("../../../contracts/foundation/i18n/fixed-ui-text.ts", import.meta.url), "utf8");
 
 test("截图编辑器使用可编辑红框并只在选中状态显示完成取消", () => {
   assert.match(screenshotEditor, /selectedRectangleId/);
@@ -145,11 +146,13 @@ test("Codex 执行期间仍允许截图、粘贴和排队发送", () => {
   assert.match(developerApp, /getOptionalConversationDesktopApi\(\)\?\.enqueueMessage/);
   assert.doesNotMatch(developerApp, /window\.desktop\?\.enqueueMessage/);
   assert.match(developerApp, /dispatchState\.activeTask/);
-  assert.match(developerApp, /补充到当前任务/);
+  assert.match(fixedUiText, /conversationSupplementTask: "补充到当前任务"/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationSupplementTask"\)/);
   assert.match(developerApp, /if \(screenshotBusy\) return/);
   assert.match(developerApp, /if \(screenshotBusy \|\| files\.length === 0\) return/);
   assert.doesNotMatch(developerApp, /disabled=\{screenshotBusy \|\| loading\}/);
-  assert.match(developerApp, /待发送 \{queuedSends\.length\}/);
+  assert.match(fixedUiText, /conversationPendingCount: "待发送 \{count\}"/);
+  assert.match(developerApp, /fixedUiText\(locale, "conversationPendingCount"\)\.replace\("\{count\}", String\(queuedSends\.length\)\)/);
 });
 
 test("截图按钮状态样式绑定真实对话 footer", () => {
