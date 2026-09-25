@@ -875,18 +875,29 @@ async function navigateTaskCollaboration(action: string): Promise<Record<string,
   if (!expanded) return { status: "task-panel-collapsed", taskPanelExpanded: false, taskCollaborationVisible: taskCollaborationVisible() };
   const entry = panel.querySelector<HTMLButtonElement>("button.collaboration-task-group-entry");
   if (!entry) return { status: "task-group-entry-unavailable" };
+  // SelUiDisclosure 将专题卡根和 disclosure 根放在同一元素；触发器是根的直接 heading 子项。
+  const ensureCurrentGroupOpen = async (): Promise<boolean> => {
+    const groupTrigger = document.querySelector<HTMLButtonElement>(".task-collaboration-group > .selui-disclosure-heading > button.seldisclosure-trigger[data-sel-disclosure-trigger]");
+    if (!groupTrigger) return false;
+    if (groupTrigger.getAttribute("aria-expanded") !== "true") groupTrigger.click();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const detail = document.querySelector<HTMLElement>(".task-collaboration-group .task-timeline-detail-pane");
+      if (groupTrigger.getAttribute("aria-expanded") === "true" && detail?.isConnected) return true;
+      await nextFrame();
+    }
+    return groupTrigger.getAttribute("aria-expanded") === "true"
+      && Boolean(document.querySelector<HTMLElement>(".task-collaboration-group .task-timeline-detail-pane")?.isConnected);
+  };
   if (taskCollaborationVisible()) {
-    const groupTrigger = document.querySelector<HTMLButtonElement>(".task-collaboration-group > .seldisclosure-root > button[data-sel-disclosure-trigger]");
-    if (groupTrigger?.getAttribute("aria-expanded") !== "true") groupTrigger?.click();
-    return { status: "already-visible", taskPanelExpanded: true, taskCollaborationVisible: true };
+    const detailReady = await ensureCurrentGroupOpen();
+    return { status: detailReady ? "already-visible" : "task-group-detail-not-ready", taskPanelExpanded: true, taskCollaborationVisible: true, detailPaneConnected: detailReady };
   }
   entry.click();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await nextFrame();
     if (taskCollaborationVisible()) {
-      const groupTrigger = document.querySelector<HTMLButtonElement>(".task-collaboration-group > .seldisclosure-root > button[data-sel-disclosure-trigger]");
-      if (groupTrigger?.getAttribute("aria-expanded") !== "true") groupTrigger?.click();
-      return { status: "navigated", taskPanelExpanded: true, taskCollaborationVisible: true };
+      const detailReady = await ensureCurrentGroupOpen();
+      return { status: detailReady ? "navigated" : "task-group-detail-not-ready", taskPanelExpanded: true, taskCollaborationVisible: true, detailPaneConnected: detailReady };
     }
   }
   return {
