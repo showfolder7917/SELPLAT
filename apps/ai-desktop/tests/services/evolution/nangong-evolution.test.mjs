@@ -2736,8 +2736,15 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
       askHanli: async (prompt) => { promptsSeen.push(prompt); return replies.shift(); },
       recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
     }).facade;
-    const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "候选已准备验收" });
+    const evidencePlans = [];
+    const result = await hanli.reviewResultAcceptance(proposalId, (plan) => {
+      evidencePlans.push(plan);
+      return { resultSummary: "候选已准备验收", frozenSourceEvidenceFiles: plan?.sourceEvidenceFiles || [] };
+    });
     assert.equal(promptsSeen.length, 2);
+    assert.equal(evidencePlans[0], null, "首次审查只用于条件分区，尚未冻结计划");
+    assert.equal(evidencePlans[1].version, 3, "冻结后复核必须使用同一计划的源码清单");
+    assert.ok(evidencePlans[1].sourceEvidenceFiles.length > 0);
     assert.equal(result.review.mode, "mixed");
     assert.deepEqual(result.plan.conditions.map((condition) => condition.evidenceType), ["page-experience", "page-experience"]);
     assert.equal(result.review.sourceReview.status, "passed");
@@ -2859,7 +2866,8 @@ test("旧计划把发送消息误列为页面条件时退役旧计划并重新�
       recordEvent() {}, readStableUserId: () => "XUNAN", readProjectScope: () => "/workspace",
     }).facade;
     const result = await hanli.reviewResultAcceptance(proposalId, { resultSummary: "令狐门禁已经完成" });
-    assert.equal(result.plan.version, 2);
+    assert.equal(result.plan.version, 3);
+    assert.ok(result.plan.sourceEvidenceFiles.includes("apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"));
     assert.notEqual(result.plan.planId, "legacy-plan");
     assert.notEqual(result.plan.currentRoundId, "legacy-round");
     assert.equal(result.plan.conditions[0].evidenceType, "code-conformance");

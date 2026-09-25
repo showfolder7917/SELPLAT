@@ -639,7 +639,9 @@ export class PersonaEvolutionRuntime {
           // 有效任务决定工程门禁；源码证据还须覆盖同一提案已集成的原任务和修复链。
           const proposalSourceTasks = this.#collaboration.state().tasks.filter((task) =>
             task.evolutionProposalId === proposal.proposalId && task.state === "integrated");
-          const implementationEvidence = buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState, proposalSourceTasks);
+          // 首轮只做条件分区；计划冻结后重新构建上下文，才会读取其冻结的能力证据清单。
+          const implementationEvidence = (plan: { sourceEvidenceFiles?: string[] } | null) =>
+            buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState, proposalSourceTasks, plan?.sourceEvidenceFiles || []);
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
           const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
           const plan = reviewedAcceptance.plan;

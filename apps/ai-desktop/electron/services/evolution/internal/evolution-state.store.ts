@@ -938,6 +938,7 @@ export class EvolutionStateStore {
     if (proposal.status !== "pending-acceptance") throw new Error("只有待验收提案可以冻结验收计划。 ");
     if (!plan.conditions.length || !plan.currentRoundId || !plan.rounds.some((item) => item.roundId === plan.currentRoundId)) throw new Error("验收计划缺少条件或当前验收轮次。 ");
     if (new Set(plan.conditions.map((item) => item.conditionId)).size !== plan.conditions.length) throw new Error("验收计划条件编号重复。 ");
+    validateAcceptanceSourceEvidenceFiles(plan);
     if (proposal.acceptancePlan) {
       if (proposal.acceptancePlan.planId !== plan.planId) throw new Error("同一提案版本已经冻结另一份验收计划。 ");
       return this.state();
@@ -970,7 +971,7 @@ export class EvolutionStateStore {
       return Array.isArray(retired?.payload.reclassifiedConditionIds)
         ? retired.payload.reclassifiedConditionIds.filter((id): id is string => typeof id === "string") : [];
     }
-    if (proposal.status !== "pending-acceptance" || previous.version !== 2) return [];
+    if (proposal.status !== "pending-acceptance" || ![2, 3].includes(previous.version)) return [];
     const resultRecord = [...this.#state.archiveRecords].reverse().find((record) =>
       record.proposalId === proposalId && record.eventType === "acceptance.result_checked"
       && (record.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined)?.planId === previous.planId);
@@ -1545,6 +1546,21 @@ function requireProposal(state: EvolutionStateOutDto, proposalId: string) { cons
 function requireAcceptancePlan(proposal: EvolutionProposalOutDto): EvolutionAcceptancePlanOutDto {
   if (!proposal.acceptancePlan) throw new Error("当前提案尚未冻结验收计划，不能记录或完成验收。 ");
   return proposal.acceptancePlan;
+}
+
+/** v3 只允许计划冻结时声明的项目相对源码证据；旧计划保持可读，不能被隐式升级。 */
+function validateAcceptanceSourceEvidenceFiles(plan: EvolutionAcceptancePlanOutDto): void {
+  if (plan.version !== 3) {
+    if (plan.sourceEvidenceFiles?.length) throw new Error("旧版验收计划不能附带源码证据清单。 ");
+    return;
+  }
+  const files = plan.sourceEvidenceFiles;
+  if (!Array.isArray(files) || files.length < 1 || files.length > 12) throw new Error("v3 验收计划的源码证据清单必须包含 1 至 12 个文件。 ");
+  if (new Set(files).size !== files.length) throw new Error("v3 验收计划的源码证据清单不能重复。 ");
+  const projectRelativeSource = /^apps\/ai-desktop\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|mjs|css)$/u;
+  if (files.some((file) => typeof file !== "string" || !projectRelativeSource.test(file) || file.includes("node_modules"))) {
+    throw new Error("v3 验收计划的源码证据必须是授权项目内的相对源码路径。 ");
+  }
 }
 function requireDeliberation(state: EvolutionStateOutDto, deliberationId: string) { const deliberation = state.deliberations.find((item) => item.deliberationId === deliberationId); if (!deliberation) throw new Error("韩立专题研讨不存在。"); return deliberation; }
 function requireDeliberationRound(deliberation: EvolutionStateOutDto["deliberations"][number], roundId: string) { const round = deliberation.rounds.find((item) => item.roundId === roundId); if (!round) throw new Error("韩立专题研讨轮次不存在。"); return round; }
