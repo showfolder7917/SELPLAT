@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import type { ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
+import { resolveStagedRuntimeActivationExecutable } from "./verified-package.release.js";
 
 /** 发布批次文档由发布协调器单点维护，运行中可追踪，结束后进入长期发布归档。 */
 export class ReleaseBatchStore {
@@ -83,6 +84,12 @@ export class ReleaseBatchStore {
     const activationRoot = path.join(this.#stableBuildRoot, "package", "activation");
     const target = path.join(activationRoot, `${releaseBatchId}-runtime`);
     if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+  }
+
+  /** 旧运行时只可接管本批已提升且来源提交一致的候选运行包。 */
+  resolveStagedRuntimeActivationExecutable(releaseBatchId: string, candidateSha: string): string | null {
+    if (!this.#stableBuildRoot) return null;
+    return resolveStagedRuntimeActivationExecutable(this.#stableBuildRoot, releaseBatchId, candidateSha);
   }
 
   /**

@@ -1,5 +1,6 @@
 import { summarizeTestFailure } from "../../testing/index.js";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import type { CollaborationFlowEventDetailsOutDto, CollaborationIntegrationFailureKindValue, CollaborationMemberOutDto, CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../../../contracts/services/workflow/index.js";
 import type { IntegrationReleaseInDto, ReleaseBatchDocumentOutDto } from "../../../../../../contracts/services/support/capabilities/release/index.js";
@@ -444,12 +445,30 @@ export class VersionIntegrationPipeline {
           updatedAt: new Date().toISOString(),
         };
         this.#releaseBatches.write(releaseDocument);
-        const executable = await this.#prepareRuntimeActivation(candidate, releaseBatchId);
+        let executable: string;
+        let stagingCleanupFailure: string | null = null;
+        try {
+          executable = await this.#prepareRuntimeActivation(candidate, releaseBatchId);
+        } catch (error) {
+          const failureDetail = errorMessage(error);
+          const stagedExecutable = isRuntimeActivationStagingCleanupFailure(failureDetail)
+            ? this.#releaseBatches.resolveStagedRuntimeActivationExecutable(releaseBatchId, candidate.candidateSha)
+            : null;
+          if (!stagedExecutable) throw error;
+          executable = stagedExecutable;
+          stagingCleanupFailure = failureDetail;
+          this.#durations.instant(taskIds[0], "integration.runtime_activation_staging_cleanup_recovered", {
+            generation,
+            releaseBatchId,
+            candidateSha: candidate.candidateSha,
+            detail: failureDetail,
+          });
+        }
         releaseDocument.runtimeActivation = {
           ...releaseDocument.runtimeActivation,
           state: "relaunch-scheduled",
           executable,
-          detail: null,
+          detail: stagingCleanupFailure,
           updatedAt: new Date().toISOString(),
         };
         this.#releaseBatches.write(releaseDocument);
@@ -792,4 +811,10 @@ function atomicGroupReady(task: CollaborationTaskOutDto, ready: CollaborationTas
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** 只接受旧宿主在已提升候选后清理激活暂存树时的 Node 文件类型错误。 */
+function isRuntimeActivationStagingCleanupFailure(detail: string): boolean {
+  return detail.includes("ENOTDIR: not a directory, rmdir")
+    && detail.includes(`${path.sep}package${path.sep}activation-staging-`);
 }

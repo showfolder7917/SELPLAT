@@ -178,3 +178,87 @@ test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("旧宿主清理暂存包失败时仅接管来源匹配的已提升候选", async () => {
+  const directory = path.join(controlledTestRoot, `runtime-activation-recovery-${process.pid}-${Date.now()}`);
+  const repository = path.join(directory, "repository");
+  const running = path.join(directory, "running");
+  const archive = path.join(directory, "archive");
+  const buildRoot = path.join(directory, "build");
+  const services = path.join(repository, "apps/ai-desktop/electron/services");
+  mkdirSync(path.join(services, "support/capabilities/release/internal"), { recursive: true });
+  mkdirSync(path.join(services, "evolution/internal"), { recursive: true });
+  mkdirSync(path.join(services, "workflow/internal/evolution"), { recursive: true });
+  mkdirSync(path.join(services, "workflow/domain"), { recursive: true });
+  try {
+    const verifier = path.join(repository, "apps/ai-desktop/electron/services/support/capabilities/release/internal/integration.verifier.ts");
+    const evolutionState = path.join(services, "evolution/internal/evolution-state.store.ts");
+    const evolutionRuntime = path.join(services, "workflow/internal/evolution/persona-evolution.runtime.ts");
+    const projection = path.join(services, "workflow/domain/current-topic-stage.projection.ts");
+    writeFileSync(verifier, "export const verifier = 'base';\n");
+    writeFileSync(evolutionState, "saveAcceptancePlan acceptance.plan_frozen reopenCompletedAcceptance acceptance.reopened decideResult(proposalId plan.conditions.find((condition) => condition.conditionId === step.checkId)");
+    writeFileSync(evolutionRuntime, 'if (review.mode === "mixed") { const pageCriterionIds = plan.conditions.filter((item) => item.evidenceType === "page-experience"); runResult = composeHanliResultReview(plan, review, pageRun); } completeAutomaticAcceptance');
+    writeFileSync(projection, "acceptanceRoundId currentRoundId");
+    git(repository, "init");
+    git(repository, "config", "user.name", "AI Desktop Test");
+    git(repository, "config", "user.email", "ai-desktop-test@example.invalid");
+    git(repository, "add", "-A");
+    git(repository, "commit", "-m", "base");
+    const baseSha = git(repository, "rev-parse", "HEAD");
+    writeFileSync(verifier, "export const verifier = 'candidate';\n");
+    git(repository, "add", "-A");
+    git(repository, "commit", "-m", "candidate verifier");
+    const candidateSha = git(repository, "rev-parse", "HEAD");
+    const taskId = "cleanup-recovery-task";
+    const releaseBatchId = "release-0.1.1-g1";
+    const state = {
+      mode: "collaboration", nextIntegrationGeneration: 1,
+      members: [{ memberId: "linghu-ancestor", displayName: "令狐老祖" }],
+      tasks: [{ taskId, state: "ready-for-integration", phase: null, dependencyTaskIds: [], mergeStrategy: "INDEPENDENT", flowEvents: [], executionRecords: [], snapshot: { title: "暂存清理恢复" }, initiator: { memberId: "nangong-wan", displayName: "南宫婉" }, currentHandler: { memberId: "linghu-ancestor", displayName: "令狐老祖" }, versionWorkspace: { branchName: "codex/cleanup-recovery", resultSha: candidateSha, rootPath: repository } }],
+      integrationBatches: [],
+    };
+    const store = { state: () => state, task: (id) => state.tasks.find((task) => task.taskId === id), updateTask: (id, _reason, update) => update(state.tasks.find((task) => task.taskId === id), state) };
+    const durations = { start: () => "span", startWait: () => "wait", finish() {}, instant() {}, writeGenerationReport() {} };
+    const candidate = { generation: 1, releaseBatchId, version: "0.1.1", branchName: "release/0.1.1-rc-g1", rootPath: repository, baseSha, candidateSha, taskIds: [taskId] };
+    const activationExecutable = path.join(buildRoot, "package", "activation", `${releaseBatchId}-runtime`, "AI Desktop.app", "Contents", "MacOS", "AI Desktop");
+    mkdirSync(path.dirname(activationExecutable), { recursive: true });
+    writeFileSync(activationExecutable, "candidate executable");
+    writeFileSync(path.join(buildRoot, "package", "activation", `${releaseBatchId}-runtime`, "ai-desktop-runtime-source.json"), `${JSON.stringify({ sourceSha: candidateSha })}\n`);
+    const events = [];
+    const releaseBatches = new ReleaseBatchStore(running, archive, buildRoot);
+    const otherCandidateSha = `${candidateSha.slice(0, -1)}${candidateSha.endsWith("0") ? "1" : "0"}`;
+    assert.equal(releaseBatches.resolveStagedRuntimeActivationExecutable(releaseBatchId, otherCandidateSha), null);
+    let activate;
+    const activated = new Promise((resolve) => { activate = resolve; });
+    const workspaces = { transferOwnedLocalChanges: async () => null, createReleaseCandidate: async () => { events.push("candidate"); return candidate; }, assertCandidateContainsTaskResults: async () => { events.push("candidate-complete"); }, promoteIntegrationCandidate: async () => candidateSha, mergeIntoLocalBranch: async () => "local-merge-sha", retireCandidate: async () => { events.push("retire"); }, retireWorkspace: async () => {} };
+    const pipeline = new VersionIntegrationPipeline({
+      store, durations, workspaces, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1", releaseBatches, loadedRuntimeSha: "loaded-old-sha",
+      acquireRelease: async () => { events.push("acquire"); return () => events.push("release"); },
+      verifyCandidate: async () => { throw new Error("旧运行器不得继续验证候选"); },
+      prepareRuntimeActivation: async () => { throw new Error(`ENOTDIR: not a directory, rmdir '${path.join(buildRoot, "package", "activation-staging-old", "mac-arm64", "AI Desktop.app", "Contents", "Resources", "app.asar")}'`); },
+      activateRuntime: (executable, batchId, sha) => { events.push(["activate", executable, batchId, sha]); activate(); },
+      publishRelease: () => { throw new Error("激活前不得发布"); },
+    });
+    pipeline.schedule();
+    let activationTimeout;
+    try {
+      await Promise.race([
+        activated,
+        new Promise((_, reject) => { activationTimeout = setTimeout(() => {
+          const checkpointPath = path.join(running, releaseBatchId, "发布批次文档.json");
+          const checkpoint = existsSync(checkpointPath) ? readFileSync(checkpointPath, "utf8") : "<missing>";
+          reject(new Error(`暂存清理恢复未在 5 秒内安排激活：events=${JSON.stringify(events)}；checkpoint=${checkpoint}`));
+        }, 5_000); }),
+      ]);
+    } finally { clearTimeout(activationTimeout); }
+    const checkpoint = JSON.parse(readFileSync(path.join(running, releaseBatchId, "发布批次文档.json"), "utf8"));
+    assert.equal(checkpoint.runtimeActivation.state, "relaunch-scheduled");
+    assert.equal(checkpoint.runtimeActivation.executable, activationExecutable);
+    assert.match(checkpoint.runtimeActivation.detail, /ENOTDIR/u);
+    assert.deepEqual(events.filter((event) => Array.isArray(event) && event[0] === "activate"), [["activate", activationExecutable, releaseBatchId, candidateSha]]);
+    assert.equal(events.includes("retire"), false);
+    pipeline.dispose();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
