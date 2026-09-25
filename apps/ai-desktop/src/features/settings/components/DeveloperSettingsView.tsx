@@ -15,6 +15,14 @@ type DeveloperSettingsViewProps = {
 export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps) {
   const { account, testData, model, corpus, preferences, diagnostics } = viewModel;
   const copy = (key: Parameters<typeof fixedUiText>[1]) => fixedUiText(viewModel.panel.locale, key);
+  // 保存中、保存失败和读取恢复的高度不同；状态键变化必须触发浮层重新测量滚动位置。
+  const languageFeedbackKey = preferences.saving
+    ? "saving"
+    : preferences.saveError
+      ? `save-error:${preferences.saveError}`
+      : preferences.readRecovered
+        ? "read-recovered"
+        : null;
 
   return (
     <SettingsFloatingPanel
@@ -22,6 +30,7 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
       locale={viewModel.panel.locale}
       open={viewModel.panel.open}
       onOpenChange={viewModel.panel.onOpenChange}
+      languageFeedbackKey={languageFeedbackKey}
     >
       {/* 账号区显示当前身份、Codex 来源和登录动作。 */}
       <div className="dev-account">
@@ -146,7 +155,7 @@ export function DeveloperSettingsView({ viewModel }: DeveloperSettingsViewProps)
       </div>
 
       {/* 基础偏好区允许切换界面语言和文件系统沙箱权限。 */}
-      <label>
+      <label data-language-settings-field>
         {preferences.languageLabel}
         <select aria-busy={preferences.saving} disabled={preferences.saving} value={preferences.locale} onChange={(event) => preferences.onLocaleChange(event.target.value)}>
           <option value="zh-CN">{copy("languageOptionZhCn")}</option>

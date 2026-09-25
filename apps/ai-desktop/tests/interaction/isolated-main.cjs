@@ -113,6 +113,8 @@ app.whenReady().then(async () => {
     height: initialSize.height,
     minWidth: MAIN_WINDOW_LAYOUT.minimum.width,
     minHeight: MAIN_WINDOW_LAYOUT.minimum.height,
+    // 几何验收必须使用正式主窗口相同的无边框内容视口；否则 680×700 外窗会被系统标题栏缩短。
+    frame: false,
     show: false,
     backgroundColor: "#080b12",
     webPreferences: {

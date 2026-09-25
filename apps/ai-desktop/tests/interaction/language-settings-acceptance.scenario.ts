@@ -1,4 +1,4 @@
-import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Locator, type Page } from "@playwright/test";
 
 /** 仅为源码审查声明本场景实际核对的生产表面，不产生运行时依赖。 */
 export type LanguageSettingsAcceptanceProductionSurfaces = [
@@ -11,6 +11,75 @@ type InteractionHarness = {
   page: Page;
 };
 
+/** 在正式最小窗口下核对设置反馈、时间线、输入区和主操作均保留可见的布局空间。 */
+async function expectNarrowLanguageLayout(page: Page, feedback?: Locator) {
+  if (feedback) {
+    await expect(feedback).toBeVisible();
+    await expect(feedback).toBeInViewport();
+  }
+  const feedbackBox = feedback ? await feedback.boundingBox() : null;
+  const geometry = await page.evaluate(() => {
+    const required = {
+      panel: document.querySelector<HTMLElement>(".dev-settings"),
+      settingsContent: document.querySelector<HTMLElement>(".dev-settings-content"),
+      timeline: document.querySelector<HTMLElement>(".selconversation-timeline"),
+      input: document.querySelector<HTMLElement>(".selconversation-input"),
+      action: document.querySelector<HTMLElement>(".selconversation-action"),
+    };
+    if (Object.values(required).some((element) => !element)) throw new Error("语言设置窄窗口缺少设置、滚动区、输入区或主操作。");
+    const box = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
+    };
+    const root = document.documentElement.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    return {
+      // DOM 矩形使用 CSS 分数像素；采样同坐标系的可视视口，不能用 clientHeight 的整数舍入值。
+      viewportWidth: viewport?.width ?? root.width,
+      viewportHeight: viewport?.height ?? root.height,
+      scrollWidth: document.documentElement.scrollWidth,
+      panel: box(required.panel!),
+      settingsContent: box(required.settingsContent!),
+      timeline: box(required.timeline!),
+      input: box(required.input!),
+      action: box(required.action!),
+    };
+  });
+  const boxes = [geometry.panel, geometry.timeline, geometry.input, geometry.action];
+  for (const box of boxes) {
+    expect(box.width).toBeGreaterThan(0);
+    expect(box.height).toBeGreaterThan(0);
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+    expect(box.top).toBeGreaterThanOrEqual(0);
+    expect(box.bottom).toBeLessThanOrEqual(geometry.viewportHeight + 1);
+  }
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.panel.right).toBeLessThanOrEqual(geometry.timeline.left + 1);
+  expect(geometry.timeline.bottom).toBeLessThanOrEqual(geometry.input.top + 1);
+  expect(geometry.input.bottom).toBeLessThanOrEqual(geometry.action.top + 1);
+  if (feedbackBox) {
+    expect(feedbackBox.width).toBeGreaterThan(0);
+    expect(feedbackBox.height).toBeGreaterThan(0);
+    expect(feedbackBox.x).toBeGreaterThanOrEqual(0);
+    expect(feedbackBox.x + feedbackBox.width).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+    // 设置反馈由面板内部滚动区裁切；必须完整位于该滚动区，而不是用顶层窗口坐标误判内部滚动位置。
+    expect(feedbackBox.y).toBeGreaterThanOrEqual(geometry.settingsContent.top - 1);
+    expect(feedbackBox.y + feedbackBox.height).toBeLessThanOrEqual(geometry.settingsContent.bottom + 1);
+  }
+}
+
+/**
+ * 窄窗口打开设置时会腾出 Explorer 的列宽，任务导航暂时不可见。
+ * 以同一个触发器切换面板，随后检查导航的即时语言投影，不依赖各语言的按钮文案。
+ */
+async function setSettingsPanelOpen(page: Page, open: boolean) {
+  const trigger = page.locator(".dev-settings-control > .activity-settings");
+  const expected = String(open);
+  if (await trigger.getAttribute("aria-expanded") !== expected) await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", expected);
+}
+
 export function registerLanguageSettingsAcceptanceScenarios(getHarness: () => InteractionHarness) {
   test("语言保存显示忙碌、成功后投影且失败时保留原语言", async () => {
     const { application, page } = getHarness();
@@ -18,58 +87,42 @@ export function registerLanguageSettingsAcceptanceScenarios(getHarness: () => In
     expect([minimumWidth, minimumHeight]).toEqual([680, 700]);
     await application.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height), { width: minimumWidth, height: minimumHeight });
     await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([minimumWidth, minimumHeight]);
-    const [contentWidth, contentHeight] = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getContentSize() || [0, 0]);
 
     try {
       await page.getByRole("button", { name: "打开连接与执行设置" }).click();
       const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
       const languageField = language.locator("xpath=..");
       await expect(language).toHaveValue("zh-CN");
+      await expectNarrowLanguageLayout(page);
 
       await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateDelay(120));
       await language.selectOption("ja");
       await expect(language).toHaveAttribute("aria-busy", "true");
       await expect(languageField.getByRole("status")).toContainText("正在保存语言设置");
+      await expectNarrowLanguageLayout(page, languageField.getByRole("status"));
       await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
+      await expect(language).toHaveValue("ja");
+      // 设置浮层打开时，窄窗口会隐藏 Explorer 以避免与会话区重叠；关闭后在同一 Renderer 验证导航已即时刷新。
+      await setSettingsPanelOpen(page, false);
       await expect(page.getByRole("group", { name: "実行モード" })).toBeVisible();
+      await setSettingsPanelOpen(page, true);
       await expect(language).toHaveValue("ja");
 
       await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateDelay(0));
       await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure("隔离设置保存失败"));
       await language.selectOption("en");
       await expect(languageField.getByRole("alert")).toContainText("言語設定を保存できません");
+      await expectNarrowLanguageLayout(page, languageField.getByRole("alert"));
       await expect(language).toHaveValue("ja");
       await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "ja");
 
       await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure(null));
       await language.selectOption("en");
       await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
-      await expect(page.getByRole("group", { name: "Execution mode" })).toBeVisible();
       await expect(language).toHaveValue("en");
-
-      const geometry = await page.evaluate(() => {
-        const panel = document.querySelector<HTMLElement>(".dev-settings");
-        const input = document.querySelector<HTMLElement>(".selconversation-input");
-        if (!panel || !input) throw new Error("语言设置窄窗口缺少面板或输入区。");
-        const panelBox = panel.getBoundingClientRect();
-        const inputBox = input.getBoundingClientRect();
-        return {
-          viewportWidth: innerWidth,
-          viewportHeight: innerHeight,
-          scrollWidth: document.documentElement.scrollWidth,
-          panelBox,
-          inputBox,
-        };
-      });
-      expect(geometry.viewportWidth).toBe(contentWidth);
-      expect(geometry.viewportHeight).toBe(contentHeight);
-      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth);
-      expect(geometry.panelBox.left).toBeGreaterThanOrEqual(0);
-      expect(geometry.panelBox.right).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-      expect(geometry.inputBox.left).toBeGreaterThanOrEqual(0);
-      expect(geometry.inputBox.right).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-
-      await page.getByRole("button", { name: "Close connection and execution settings" }).click();
+      await expectNarrowLanguageLayout(page);
+      await setSettingsPanelOpen(page, false);
+      await expect(page.getByRole("group", { name: "Execution mode" })).toBeVisible();
       // 只重挂载 Renderer；设置 DTO 留在隔离主进程，不能代表正式应用重启。
       await page.reload();
       await expect(page.locator(".developer-shell")).toHaveAttribute("lang", "en");
@@ -82,6 +135,7 @@ export function registerLanguageSettingsAcceptanceScenarios(getHarness: () => In
       await page.getByRole("button", { name: "打开连接与执行设置" }).click();
       const recoveredLanguage = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
       await expect(recoveredLanguage.locator("xpath=..").getByRole("status")).toContainText("无法读取已保存的设置");
+      await expectNarrowLanguageLayout(page, recoveredLanguage.locator("xpath=..").getByRole("status"));
 
       await page.evaluate(() => (window as any).desktop.setInteractionSettingsReadSource("stored"));
       // recovered 只改变读取 DTO，不能覆盖隔离主进程此前成功写入的英文设置。
