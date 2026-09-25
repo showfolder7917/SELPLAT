@@ -49,6 +49,7 @@ test("任务卡页面验收使用明确目标、语义导航和页面截图门�
   assert.match(acceptanceSource, /resize-formal-window[\s\S]*window\.getMinimumSize\(\)[\s\S]*width: minimumWidth, height: minimumHeight/);
   assert.match(acceptanceSource, /resizePreset === "restore"[\s\S]*window\.setBounds\(initialBounds\)/);
   assert.match(acceptanceSource, /仅当本步 criterionIds 包含任务卡条件[\s\S]*no-visible-conversation[\s\S]*韩立人物入口[\s\S]*不发送消息、不修改任务或设置/);
+  assert.match(acceptanceSource, /任务卡页面条件只能依据当前截图可见的主卡、交付依据、成员状态和详情面板几何裁决[\s\S]*提交号、内部事件关联、历史批次成因和未来复用行为不是页面条件[\s\S]*不得因这些不可见内部事实报告验收能力受阻/);
   assert.match(operationSource, /type: "open-hanli-conversation"/);
   assert.match(acceptanceSource, /async function navigateHanliConversation[\s\S]*task-panel-unavailable[\s\S]*task-panel-not-open/);
   assert.match(acceptanceSource, /button\.section-toggle\[aria-controls="developer-task-list"\]/);
