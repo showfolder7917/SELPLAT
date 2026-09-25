@@ -17,9 +17,13 @@ test("三类已发送消息附件只通过 conversation 公开图片组件接入
   assert.match(messageImage, /fixedUiText\(locale, "conversationImagePreview"\)/);
   assert.match(messageImage, /fixedUiText\(locale, "conversationOpenImage"\)/);
   assert.match(messageImage, /fixedUiText\(locale, "conversationImage"\)/);
+  assert.match(messageImage, /fixedUiText\(locale, "conversationImagePreviewUnavailable"\)/);
   assert.match(fixedUiText, /conversationImagePreview: "图片预览"/);
   assert.match(fixedUiText, /conversationImagePreview: "画像プレビュー"/);
   assert.match(fixedUiText, /conversationImagePreview: "Image preview"/);
+  assert.match(fixedUiText, /conversationImagePreviewUnavailable: "图片预览暂不可用。"/);
+  assert.match(fixedUiText, /conversationImagePreviewUnavailable: "画像プレビューは現在利用できません。"/);
+  assert.match(fixedUiText, /conversationImagePreviewUnavailable: "Image preview is currently unavailable\."/);
   for (const source of [codexTimeline, hanli, nangong]) {
     assert.match(source, /ConversationMessageImage[\s\S]*locale=/);
   }

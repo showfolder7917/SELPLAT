@@ -88,6 +88,21 @@ test("人物会话默认错误由统一资源解析，外部异常正文保持�
   assert.equal(fixedUiRuntime.fixedUiText("en", "personaConversationReadFailed"), "The persona conversation could not be read.");
 });
 
+test("共享模型目录本地失败由调用页面按当前语言显示，桌面异常保留原文", () => {
+  const settings = read("src/features/settings/model/useDesktopSettings.ts");
+  assert.match(modelCatalog, /class OfficialModelCatalogUnavailableError extends Error/);
+  assert.match(modelCatalog, /export async function loadOfficialModelCatalog\(force = false\)/);
+  assert.doesNotMatch(modelCatalog, /loadOfficialModelCatalog\(locale/);
+  assert.match(modelCatalog, /if \(!desktop\) throw new OfficialModelCatalogUnavailableError\(\)/);
+  assert.match(modelCatalog, /if \(!catalog\.models\.length\) throw new OfficialModelCatalogUnavailableError\(\)/);
+  assert.match(modelCatalog, /throw lastError instanceof Error \? lastError : new OfficialModelCatalogUnavailableError\(\)/);
+  assert.match(hook, /isOfficialModelCatalogUnavailableError\(error\) \? fallback : error instanceof Error \? error\.message : fallback/);
+  assert.match(settings, /isOfficialModelCatalogUnavailableError\(error\) \? fallback : error instanceof Error \? error\.message : fallback/);
+  assert.doesNotMatch(modelCatalog, /Codex 模型目录服务尚未连接|Codex 模型目录为空|无法读取官方模型目录/);
+  assert.equal(fixedUiRuntime.fixedUiText("ja", "personaModelCatalogReadFailed"), "公式モデル一覧を読み取れませんでした。");
+  assert.equal(fixedUiRuntime.fixedUiText("en", "modelCatalogFailed"), "Model list could not be read.");
+});
+
 test("人物会话消息以持久化类型投影，恢复记录不再依赖 ID 前后缀", () => {
   const projector = read("src/features/conversation/model/realtime-conversation.ts");
   const inquiry = read("electron/services/personas/hanli/internal/conversation/hanli-inquiry.service.ts");

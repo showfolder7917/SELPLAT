@@ -21,7 +21,7 @@ export function ConversationMessageImage({ src, alt, locale }: { src: string; al
   /** 打开大图：只把现有附件地址与名称交给公共预览控件。 */
   function openImagePreview() {
     const api = (window as typeof window & { sel?: { components?: { imagePreview?: ImagePreviewApi } } }).sel?.components?.imagePreview;
-    if (!api) throw new Error("SELUI image preview component is unavailable.");
+    if (!api) throw new Error(fixedUiText(locale, "conversationImagePreviewUnavailable"));
     api.open({ src, alt, title: alt || fixedUiText(locale, "conversationImagePreview") });
   }
 
