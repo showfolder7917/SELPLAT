@@ -1062,6 +1062,8 @@ test("任务协作群按真实顺序追加节点并覆盖人工审批、十人�
   await groupTrigger.click();
   await expect(group.locator(":scope > .seldisclosure-content")).toBeHidden();
   await pageRoot.getByRole("button", { name: "定位当前步骤" }).click();
+  await expect(groupTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(group.locator(":scope > .seldisclosure-content > .task-timeline-detail-pane")).toBeVisible();
   await expect(group.locator(":scope > .seldisclosure-content")).toBeVisible();
   await expect(group.locator(".task-timeline-list")).toHaveAttribute("data-task-timeline-topic-id", "interaction-timeline");
   await expect(group.locator(".task-timeline-list")).toHaveAttribute("data-task-timeline-proposal-id", "interaction-timeline-proposal");
