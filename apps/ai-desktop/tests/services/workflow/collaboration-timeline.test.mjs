@@ -857,6 +857,26 @@ test("历史专题的最终验收结论由统一投影读取，后续活动不�
   } finally { fixture.close(); }
 });
 
+test("历史专题的已完成验收事实不依赖专题持久状态", () => {
+  const fixture = createFixture("topic-final-fact-authority");
+  try {
+    const base = {
+      groupId: "topic:final-fact-authority", topicId: "topic-final-fact-authority", proposalId: "proposal-final-fact-authority",
+      title: "历史专题", status: "running", startedAt: fixture.at(1),
+    };
+    fixture.append({
+      eventId: "acceptance-passed-without-topic-completion", eventType: "legacy.acceptance.completed",
+      group: { ...base, summary: "旧节点摘要：重新验证", updatedAt: fixture.at(3) },
+      fact: { nodeId: "acceptance:final", taskId: null, proposalId: base.proposalId, sourceFactKey: "acceptance-passed-without-topic-completion", kind: "verification",
+        actor: member("han-li", "韩立"), recipients: [], status: "completed", action: "验收通过", summary: "最终验收通过",
+        contentRole: "analysis-output", content: "通过", detailRole: "result-evidence", detail: "真实验收记录", startedAt: fixture.at(3), completedAt: fixture.at(3), automaticOpen: false, manualApprovalProposalId: null, occurredAt: fixture.at(3) },
+    });
+    const group = fixture.timeline.snapshot(fixture.at(4)).groups[0];
+    assert.equal(group.status, "completed");
+    assert.equal(group.summary, "最终验收通过");
+  } finally { fixture.close(); }
+});
+
 function approvalApplication(fixture, proposalId, offset, action) {
   return businessEvent(fixture, `application:${proposalId}`, proposalId, offset, {
     nodeId: `proposal:${proposalId}`, taskId: null, proposalId, sourceFactKey: `application:${proposalId}`, kind: "approval-application",

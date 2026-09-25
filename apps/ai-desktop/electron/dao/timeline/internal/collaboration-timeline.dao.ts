@@ -335,8 +335,8 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
     const persistedStatus = String(topic.status) as CollaborationTimelineGroupOutDto["status"];
     const topicUpdatedAt = String(topic.updatedAt);
     const finalPresentation = projectTopicFinalPresentation({
-      terminal: timelineTerminalFact(rows, persistedStatus),
-      laterActivity: timelineLaterActivity(rows, persistedStatus),
+      terminal: timelineTerminalFact(rows),
+      laterActivity: timelineLaterActivity(rows),
     });
     // 统一领域规则确认终态后，只退休更早的活动展示；原始审计事实仍保留在 rows 中。
     if (finalPresentation?.status === "completed" && finalPresentation.terminalAt) {
@@ -400,18 +400,22 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
 }
 
 /** 从已追加的验收事实读取专题终态；无专题卡不参与该规则。 */
-function timelineTerminalFact(rows: Array<Record<string, unknown>>, persistedStatus: CollaborationTimelineGroupOutDto["status"]) {
-  if (persistedStatus !== "completed") return null;
-  // 新事实使用 acceptance.passed；升级前的完成档案保留为已完成验收节点，二者都是同一专题的终态证据。
-  const acceptance = [...rows].reverse().find((row) => String(row.status) === "completed"
-    && (String(row.eventType) === "acceptance.passed" || String(row.kind) === "verification"));
+function timelineTerminalFact(rows: Array<Record<string, unknown>>) {
+  // 只有最终验收通过能收口专题；统一测试、自检等完成验证仍须继续经过发布、健康检查和韩立验收。
+  // 升级前的完成档案没有 acceptance.passed 事件类型时，以验收节点和“验收通过”动作识别其同等终态证据。
+  const acceptance = [...rows].reverse().find((row) => String(row.status) === "completed" && (
+    String(row.eventType) === "acceptance.passed"
+    || (String(row.nodeId).startsWith("acceptance:")
+      && String(row.kind) === "verification"
+      && String(row.action).includes("验收通过"))
+  ));
   if (!acceptance) return null;
   return { occurredAt: String(acceptance.occurredAt), summary: String(acceptance.summary) };
 }
 
 /** 只读取终态之后的真实活动；同时间戳仍由终态事实稳定收口。 */
-function timelineLaterActivity(rows: Array<Record<string, unknown>>, persistedStatus: CollaborationTimelineGroupOutDto["status"]) {
-  const terminal = timelineTerminalFact(rows, persistedStatus);
+function timelineLaterActivity(rows: Array<Record<string, unknown>>) {
+  const terminal = timelineTerminalFact(rows);
   if (!terminal) return null;
   const later = [...rows].reverse().find((row) => String(row.occurredAt) > terminal.occurredAt
     && ["current", "waiting", "failed"].includes(String(row.status)));
