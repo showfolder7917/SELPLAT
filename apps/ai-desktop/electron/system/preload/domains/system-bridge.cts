@@ -12,6 +12,7 @@ export function systemBridge() {
     startCorpusSemanticBackfill: (limit?: number) => invoke("desktop:start-corpus-semantic-backfill", limit),
     getSettings: () => invoke("desktop:get-settings"),
     updateSettings: (settings: unknown) => invoke("desktop:update-settings", settings),
+    onSettingsChanged: (listener: (settings: unknown) => void) => subscribe("desktop:settings-changed", listener),
     getWorkspaces: () => invoke("desktop:get-workspaces"),
     onWorkspaceStateChanged: (listener: (state: unknown) => void) => subscribe("desktop:workspace-state-changed", listener),
     addWorkspace: () => invoke("desktop:add-workspace"),

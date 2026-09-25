@@ -812,6 +812,39 @@ test("语言保存显示忙碌、成功后投影且失败时保留原语言", as
   await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
 });
 
+test("语言保存立即投影到已打开的生产截图窗口，失败不改变截图语言", async () => {
+  const screenshotWindowOpened = application.waitForEvent("window");
+  await page.evaluate(() => (window as any).desktop.openInteractionScreenshotWindow());
+  const screenshotPage = await screenshotWindowOpened;
+  await screenshotPage.waitForLoadState("domcontentloaded");
+  const loading = screenshotPage.locator(".screenshot-window-loading");
+
+  await expect(loading).toHaveAttribute("aria-label", "正在载入截图…");
+  await page.getByRole("button", { name: "打开连接与执行设置" }).click();
+  const language = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+  await language.selectOption("ja");
+  await expect(loading).toHaveAttribute("aria-label", "スクリーンショットを読み込んでいます…");
+
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure("隔离设置保存失败"));
+  await language.selectOption("en");
+  await expect(language).toHaveValue("ja");
+  await expect(loading).toHaveAttribute("aria-label", "スクリーンショットを読み込んでいます…");
+
+  await page.evaluate(() => (window as any).desktop.setInteractionSettingsUpdateFailure(null));
+  await language.selectOption("en");
+  await expect(loading).toHaveAttribute("aria-label", "Loading screenshot…");
+
+  await page.getByRole("button", { name: "Close connection and execution settings" }).click();
+  await page.getByRole("button", { name: "Open connection and execution settings" }).click();
+  const restoredLanguage = page.locator(".dev-settings-content select").filter({ has: page.locator('option[value="zh-CN"]') });
+  await restoredLanguage.selectOption("zh-CN");
+  await expect(loading).toHaveAttribute("aria-label", "正在载入截图…");
+  await page.getByRole("button", { name: "关闭连接与执行设置" }).click();
+  const screenshotClosed = screenshotPage.waitForEvent("close");
+  await page.evaluate(() => (window as any).desktop.closeInteractionScreenshotWindow());
+  await screenshotClosed;
+});
+
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();

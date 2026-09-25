@@ -28,6 +28,7 @@ const ipc = [
   "../../../electron/system/ipc/register-desktop-ipc.ts",
   "../../../electron/system/ipc/domains/register-codex-ipc.ts",
   "../../../electron/system/ipc/domains/register-system-ipc.ts",
+  "../../../electron/system/ipc/domains/register-settings-ipc.ts",
 ].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 const preload = [
   "../../../electron/system/preload/preload.cts",
@@ -38,6 +39,11 @@ const preload = [
 const conversationPrompt = readFileSync(new URL("../../../prompts/execution/conversation.md", import.meta.url), "utf8");
 const developerCss = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const mainEntry = readFileSync(new URL("../../../src/main.tsx", import.meta.url), "utf8");
+const isolatedPreload = readFileSync(new URL("../../interaction/isolated-preload.cjs", import.meta.url), "utf8");
+const systemDesktopApi = [
+  "../../../contracts/system/desktop/api/desktop.api.ts",
+  "../../../contracts/system/desktop/api/domains/system.desktop-api.ts",
+].map((source) => readFileSync(new URL(source, import.meta.url), "utf8")).join("\n");
 
 test("截图编辑器使用可编辑红框并只在选中状态显示完成取消", () => {
   assert.match(screenshotEditor, /selectedRectangleId/);
@@ -113,6 +119,21 @@ test("截图使用统一控制器选择 macOS 或 Windows 取帧适配器且失�
   assert.doesNotMatch(mainEntry, /classList\.add\("screenshot-window-root"\)/);
   assert.match(ipc, /if \(!screenshotWindow\.isDestroyed\(\)\) screenshotWindow\.close\(\)/);
   assert.match(developerApp, /finally \{\s*setScreenshotBusy\(false\);/);
+});
+
+test("截图窗口订阅已保存的设置快照，初始读取不会覆盖后续语言变更", () => {
+  assert.match(systemDesktopApi, /onSettingsChanged\(listener: \(settings: DesktopSettingsOutDto\) => void\)/);
+  assert.match(systemDesktopApi, /"onSettingsChanged"/);
+  assert.match(preload, /onSettingsChanged: \(listener: \(settings: unknown\) => void\) => subscribe\("desktop:settings-changed", listener\)/);
+  assert.match(ipc, /publishSettingsChanged\(result\)/);
+  assert.match(ipc, /window\.webContents\.send\("desktop:settings-changed", nextSettings\)/);
+  assert.match(screenshotWindow, /systemApi\?\.onSettingsChanged/);
+  assert.match(screenshotWindow, /receivedSettingsChange = true/);
+  assert.match(screenshotWindow, /if \(disposed \|\| receivedSettingsChange\) return/);
+  assert.match(screenshotWindow, /removeSettingsListener\?\.\(\)/);
+  assert.match(isolatedPreload, /onScreenCaptureFrameRequested: \(\) => \(\) => undefined/);
+  assert.match(isolatedPreload, /onScreenCaptureReset: \(\) => \(\) => undefined/);
+  assert.match(isolatedPreload, /showScreenshotWindow: async \(\) => undefined/);
 });
 
 test("Codex 执行期间仍允许截图、粘贴和排队发送", () => {
