@@ -149,7 +149,9 @@ test("Codex 执行期间仍允许截图、粘贴和排队发送", () => {
   assert.match(developerApp, /if \(screenshotBusy\) return/);
   assert.match(developerApp, /if \(screenshotBusy \|\| files\.length === 0\) return/);
   assert.doesNotMatch(developerApp, /disabled=\{screenshotBusy \|\| loading\}/);
-  assert.match(developerApp, /待发送 \{queuedSends\.length\}/);
+  // 队列计数的呈现与截图能力有关；固定文案来自统一资源，由语言契约单独验证。
+  assert.match(developerApp, /className="queued-send-count"/);
+  assert.match(developerApp, /queuedSends\.length/);
 });
 
 test("截图按钮状态样式绑定真实对话 footer", () => {
