@@ -352,8 +352,11 @@ export class CheckpointCoordinator {
     // 验收卡点中的 task 只是已经集成的原开发任务；它不能代替令狐调查当前真实界面阻塞。
     if (task && !isAcceptanceCheckpoint) {
       const member = this.options.collaboration().members.find((item) => item.memberId === task.executorMemberId);
-      const heartbeat = [member?.lastHeartbeatAt, member?.lastProtocolProgressAt, task.updatedAt].filter((value): value is string => Boolean(value)).sort().at(-1);
-      const stalled = event.category === "stalled" && heartbeat === event.payload.lastHeartbeatAt;
+      // 停滞事件按真实协议进展签发；自动存活心跳和任务更新时间不能解除旧停滞。
+      const activeExecution = task.executionRecords?.find((record) => record.assignmentId === task.assignmentId);
+      const protocolProgress = [member?.lastProtocolProgressAt, activeExecution?.executionStartedAt, activeExecution?.assignedAt, task.startedAt]
+        .filter((value): value is string => Boolean(value)).sort((left, right) => Date.parse(right) - Date.parse(left))[0] || task.updatedAt;
+      const stalled = event.category === "stalled" && protocolProgress === event.payload.lastHeartbeatAt;
       // 原执行人的自修复和正常测试不抢占；只把真正停住的任务送给既有令狐恢复能力。
       if (["blocked", "recovering"].includes(task.state) || stalled) {
         this.#phase(event, state, "repairing", "已交给令狐核对原任务恢复条件，沿既有任务修复链处理。");

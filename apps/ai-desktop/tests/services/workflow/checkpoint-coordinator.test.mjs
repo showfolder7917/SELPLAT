@@ -437,6 +437,23 @@ test("执行人正常自修复不抢占，已确认心跳停滞走原任务恢�
   assert.equal(f.effects.handled.length, 1);
 });
 
+test("自动存活心跳持续刷新也不能掩盖已确认的协议进展停滞", async () => {
+  const f = fixture();
+  const progressAt = "2026-09-05T00:00:00Z";
+  f.collaboration.members.push({ memberId: "linghu-ancestor", lastHeartbeatAt: "2026-09-05T00:20:00Z", lastProtocolProgressAt: progressAt });
+  f.collaboration.tasks.push({ taskId: "original", state: "executing", phase: "implementing", executorMemberId: "linghu-ancestor",
+    assignmentId: "assignment-1", startedAt: progressAt, updatedAt: "2026-09-05T00:20:00Z",
+    executionRecords: [{ assignmentId: "assignment-1", assignedAt: progressAt, executionStartedAt: progressAt }], snapshot: { constraints: [] } });
+  f.event.correlationId = "original";
+  f.event.category = "stalled";
+  f.event.payload.lastHeartbeatAt = progressAt;
+  await f.run();
+  assert.deepEqual(f.effects.handled, [["original", true]]);
+  f.collaboration.members[0].lastProtocolProgressAt = "2026-09-05T00:21:00Z";
+  await f.run();
+  assert.equal(f.effects.handled.length, 1);
+});
+
 test("本地修改归属卡点先交令狐调查，不再提前转成人工等待", async () => {
   const f = fixture();
   f.collaboration.tasks.push({
