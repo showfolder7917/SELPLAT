@@ -31,6 +31,7 @@ export function buildHanliResultReviewContext(
     })),
     // 同一批源码只传一次；任务越多也不会重复挤掉判定模块的上下文。
     sourceEvidence: sourceEvidence.items,
+    sourceEvidenceBatches: sourceEvidence.batches,
     sourceEvidenceStatus: sourceEvidence.status,
     sourceEvidenceScope: "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
   };
@@ -39,10 +40,10 @@ export function buildHanliResultReviewContext(
 function readChangedSourceEvidence(
   tasks: CollaborationTaskOutDto[],
   fallbackWorkspaceState: WorkspaceStateOutDto,
-): { items: Array<{ file: string; content: string }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" } {
+): { items: Array<{ file: string; content: string }>; batches: Array<{ batch: number; files: string[] }>; status: "available" | "no-declared-changed-files" | "workspace-root-unavailable" | "declared-files-unreadable" } {
   // 本次专题的授权工作区是唯一读取根；任务快照不得把证据读取扩展到其他工作区。
   const root = fallbackWorkspaceState.roots.find((item) => item.id === fallbackWorkspaceState.primaryId)?.path;
-  if (!root) return { items: [], status: "workspace-root-unavailable" };
+  if (!root) return { items: [], batches: [], status: "workspace-root-unavailable" };
   const files = [...new Set(tasks.filter((task) => task.state === "integrated")
     .flatMap((task) => [
       ...task.executionRecords.flatMap((record) => record.changedFiles),
@@ -50,9 +51,9 @@ function readChangedSourceEvidence(
       ...readIntegratedCommitFiles(root, task),
     ]))]
     .filter((file): file is string => typeof file === "string" && /\.(?:[cm]?[jt]sx?|css)$/u.test(file));
-  if (!files.length) return { items: [], status: "no-declared-changed-files" };
+  if (!files.length) return { items: [], batches: [], status: "no-declared-changed-files" };
   let canonicalRoot: string;
-  try { canonicalRoot = realpathSync(root); } catch { return { items: [], status: "workspace-root-unavailable" }; }
+  try { canonicalRoot = realpathSync(root); } catch { return { items: [], batches: [], status: "workspace-root-unavailable" }; }
   // Renderer 变更的窄窗口验收还需要实际布局样式；该样式不是每次任务的变更文件。
   const layoutFile = "apps/ai-desktop/src/applications/styles/desktop-applications.css";
   if (files.some((file) => file.startsWith("apps/ai-desktop/src/"))) {
@@ -63,7 +64,8 @@ function readChangedSourceEvidence(
   }
   // 样式文件常把响应式规则放在中段；在可控大小内提供整文件，避免把省略的布局规则误判为无法验收。
   const evidenceLimit = (file: string) => file.endsWith(".css") ? 120_000 : 48_000;
-  const declaredItems = files.slice(0, 30).flatMap((file) => {
+  // 大型专题的关键交互测试常位于第 30 个文件之后；按每批 16 项分组，但不静默丢弃后续批次。
+  const declaredItems = files.flatMap((file) => {
     if (path.isAbsolute(file)) return [];
     const resolved = path.resolve(canonicalRoot, file);
     if (!resolved.startsWith(`${canonicalRoot}${path.sep}`)) return [];
@@ -107,10 +109,15 @@ function readChangedSourceEvidence(
       } catch { return []; }
     });
   });
-  const firstLevel = readDirectImports(declaredItems);
+  // 已登记文件较多时先完整覆盖每个变更文件和布局；不再额外展开依赖，把后段关键测试挤出上下文。
+  const firstLevel = files.length > 30 ? [] : readDirectImports(declaredItems);
   const secondLevel = readDirectImports(firstLevel);
-  const items = [...new Map([...declaredItems, ...firstLevel, ...secondLevel].map((item) => [item.file, item])).values()].slice(0, 48);
-  return { items, status: items.length ? "available" : "declared-files-unreadable" };
+  const items = [...new Map([...declaredItems, ...firstLevel, ...secondLevel].map((item) => [item.file, item])).values()];
+  const batches = Array.from({ length: Math.ceil(items.length / 16) }, (_, index) => ({
+    batch: index + 1,
+    files: items.slice(index * 16, (index + 1) * 16).map((item) => item.file),
+  }));
+  return { items, batches, status: items.length ? "available" : "declared-files-unreadable" };
 }
 
 function readIntegratedCommitFiles(root: string, task: CollaborationTaskOutDto): string[] {

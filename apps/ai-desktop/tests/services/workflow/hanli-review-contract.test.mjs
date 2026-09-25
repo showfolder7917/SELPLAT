@@ -121,6 +121,32 @@ test("已提交任务的流式清单只剩测试文件时从签发提交恢复�
   }
 });
 
+test("超过三十个已登记文件时按批保留后段交互场景和布局证据", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(path.join(parent, "hanli-review-batches-"));
+  try {
+    const files = Array.from({ length: 35 }, (_, index) => `apps/ai-desktop/src/features/settings/batch-${index}.ts`);
+    const scenario = "apps/ai-desktop/tests/interaction/language-settings-acceptance.scenario.ts";
+    const layout = "apps/ai-desktop/src/applications/styles/desktop-applications.css";
+    for (const file of [...files, scenario, layout]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), file === scenario ? "export const laterBatchScenario = true;\n" : file === layout ? ".later-batch-layout { display: grid; }\n" : "export const source = true;\n");
+    }
+    const task = { taskId: "many-files", state: "integrated", snapshot: { title: "batch", problemStatement: "", confirmedIntent: "", constraints: [], acceptanceCriteria: [] }, executionRecords: [{ changedFiles: [...files, scenario] }] };
+    const context = buildHanliResultReviewContext([task], { primaryId: "root", roots: [{ id: "root", path: root }] });
+    assert.equal(context.sourceEvidenceStatus, "available");
+    assert.ok(context.sourceEvidenceBatches.length >= 3);
+    assert.equal(context.sourceEvidenceBatches.flatMap((batch) => batch.files).length, context.sourceEvidence.length);
+    assert.match(context.sourceEvidence.find((item) => item.file === scenario)?.content || "", /laterBatchScenario/u);
+    assert.match(context.sourceEvidence.find((item) => item.file === layout)?.content || "", /later-batch-layout/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("韩立审查完整读取可控大小的样式文件中段响应式规则", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
