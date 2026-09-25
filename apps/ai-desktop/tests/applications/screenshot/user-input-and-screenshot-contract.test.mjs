@@ -40,6 +40,7 @@ const conversationPrompt = readFileSync(new URL("../../../prompts/execution/conv
 const developerCss = readFileSync(new URL("../../../src/applications/styles/desktop-applications.css", import.meta.url), "utf8");
 const mainEntry = readFileSync(new URL("../../../src/main.tsx", import.meta.url), "utf8");
 const isolatedPreload = readFileSync(new URL("../../interaction/isolated-preload.cjs", import.meta.url), "utf8");
+const settingsReadDto = readFileSync(new URL("../../../contracts/services/support/platform/settings/dto/settings-read.out.dto.ts", import.meta.url), "utf8");
 const systemDesktopApi = [
   "../../../contracts/system/desktop/api/desktop.api.ts",
   "../../../contracts/system/desktop/api/domains/system.desktop-api.ts",
@@ -131,6 +132,10 @@ test("截图窗口订阅已保存的设置快照，初始读取不会覆盖后�
   assert.match(screenshotWindow, /receivedSettingsChange = true/);
   assert.match(screenshotWindow, /if \(disposed \|\| receivedSettingsChange\) return/);
   assert.match(screenshotWindow, /removeSettingsListener\?\.\(\)/);
+  assert.match(settingsReadDto, /recoveryError: string \| null/);
+  assert.match(screenshotWindow, /technicalDetail: result\.recoveryError \?\? "Saved language settings could not be read\."/);
+  assert.match(screenshotWindow, /<details><summary>\{viewModel\.technicalDetailsLabel\}<\/summary><pre>\{viewModel\.technicalDetail\}<\/pre><\/details>/);
+  assert.match(isolatedPreload, /setInteractionSettingsReadFailure/);
   assert.match(isolatedPreload, /onScreenCaptureFrameRequested: \(\) => \(\) => undefined/);
   assert.match(isolatedPreload, /onScreenCaptureReset: \(\) => \(\) => undefined/);
   assert.match(isolatedPreload, /showScreenshotWindow: async \(\) => undefined/);

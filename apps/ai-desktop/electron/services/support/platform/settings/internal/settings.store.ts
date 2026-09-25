@@ -42,11 +42,15 @@ export class SettingsStore {
 
   /** IPC 读取保留恢复来源，避免 Renderer 把文件读取故障误解为用户选择了默认日文。 */
   readForRenderer(): DesktopSettingsReadOutDto {
-    if (!existsSync(this.#filePath)) return { settings: { ...DEFAULT_SETTINGS }, source: "default" };
+    if (!existsSync(this.#filePath)) return { settings: { ...DEFAULT_SETTINGS }, source: "default", recoveryError: null };
     try {
-      return { settings: this.#readStored(), source: "stored" };
-    } catch {
-      return { settings: { ...DEFAULT_SETTINGS }, source: "recovered" };
+      return { settings: this.#readStored(), source: "stored", recoveryError: null };
+    } catch (caught) {
+      return {
+        settings: { ...DEFAULT_SETTINGS },
+        source: "recovered",
+        recoveryError: caught instanceof Error ? caught.message : String(caught),
+      };
     }
   }
 

@@ -538,6 +538,7 @@ contextBridge.exposeInMainWorld("desktop", {
     return () => { ipcRenderer.removeListener("desktop:settings-changed", handler); };
   },
   setInteractionSettingsReadSource: async (source) => ipcRenderer.invoke("interaction:settings-read-source", source),
+  setInteractionSettingsReadFailure: async (message) => ipcRenderer.invoke("interaction:settings-read-failure", message),
   setInteractionSettingsUpdateFailure: async (message) => ipcRenderer.invoke("interaction:settings-update-failure", message),
   setInteractionSettingsUpdateDelay: async (milliseconds) => ipcRenderer.invoke("interaction:settings-update-delay", milliseconds),
   openInteractionScreenshotWindow: async () => ipcRenderer.invoke("interaction:open-screenshot-window"),

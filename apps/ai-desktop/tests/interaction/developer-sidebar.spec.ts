@@ -845,6 +845,31 @@ test("语言保存立即投影到已打开的生产截图窗口，失败不改�
   await screenshotClosed;
 });
 
+test("截图窗口在设置读取恢复时保留原始技术详情", async () => {
+  const recoveryError = "isolated settings.json: unexpected end of JSON input";
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionSettingsReadFailure("isolated settings.json: unexpected end of JSON input");
+    await (window as any).desktop.setInteractionSettingsReadSource("recovered");
+  });
+
+  const screenshotWindowOpened = application.waitForEvent("window");
+  await page.evaluate(() => (window as any).desktop.openInteractionScreenshotWindow());
+  const screenshotPage = await screenshotWindowOpened;
+  await screenshotPage.waitForLoadState("domcontentloaded");
+  const error = screenshotPage.getByRole("alert");
+  await expect(error.getByRole("heading")).toHaveText("无法读取语言设置");
+  await expect(error.getByRole("button", { name: "关闭" })).toBeVisible();
+  await expect(error.locator("details pre")).toHaveText(recoveryError);
+
+  const screenshotClosed = screenshotPage.waitForEvent("close");
+  await page.evaluate(() => (window as any).desktop.closeInteractionScreenshotWindow());
+  await screenshotClosed;
+  await page.evaluate(async () => {
+    await (window as any).desktop.setInteractionSettingsReadSource("stored");
+    await (window as any).desktop.setInteractionSettingsReadFailure(null);
+  });
+});
+
 test("协同模式列出稳定人物并以人物名打开独立工作页", async () => {
   const taskList = page.locator("#developer-task-list");
   await taskList.getByRole("button", { name: "协同模式" }).click();
