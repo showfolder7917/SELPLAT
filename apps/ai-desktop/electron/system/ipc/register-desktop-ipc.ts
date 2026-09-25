@@ -11,6 +11,7 @@ import type {
 } from "../../../contracts/foundation/index.js";
 import type { RendererExceptionInDto } from "../../../contracts/services/support/capabilities/event-center/index.js";
 import type { ScreenCaptureFrameInDto, ScreenCaptureFrameOutDto, ScreenCapturePreparationOutDto, ScreenCaptureInDto, ScreenshotAnnotationWindowInDto, ScreenshotSaveInDto } from "../../../contracts/services/support/platform/attachments/index.js";
+import type { DesktopSettingsOutDto } from "../../../contracts/services/support/platform/settings/index.js";
 import type { TestDataResetResultOutDto } from "../../../contracts/services/support/application/index.js";
 import type { AiMemoryDatabaseStatusOutDto, CorpusIngestionStatusOutDto, CorpusSemanticBackfillStatusOutDto } from "../../../contracts/services/support/platform/persistence/index.js";
 import { registerCollaborationIpc } from "./domains/register-collaboration-ipc.js";
@@ -140,6 +141,18 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
       if (!window.isDestroyed()) window.webContents.send("desktop:conversation-dispatch-state", state);
     }
     return state;
+  };
+
+  /** 设置领域只产出已持久化快照；窗口遍历仍由桌面装配层统一承担。 */
+  const publishSettingsChanged = (nextSettings: DesktopSettingsOutDto) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.isDestroyed()) continue;
+      try {
+        window.webContents.send("desktop:settings-changed", nextSettings);
+      } catch {
+        // 窗口可能在 isDestroyed 检查后关闭；已保存设置不应因此被回滚或报告为保存失败。
+      }
+    }
   };
 
   personaWorkflow.setComputerAcceptanceSession(async (goal, onStarted) => {
@@ -298,7 +311,7 @@ export function registerDesktopIpc(dependencies: DesktopIpcDependencies): void {
     corpusIngestionStatus: dependencies.corpusIngestionStatus,
     startCorpusSemanticBackfill: dependencies.startCorpusSemanticBackfill,
   });
-  registerSettingsIpc(settings, eventCenter);
+  registerSettingsIpc(settings, eventCenter, publishSettingsChanged);
   registerWorkspaceIpc(workspaces, eventCenter, hanliPageReviewGuard);
   registerCollaborationIpc(collaboration, collaborationNavigationPreference, collaborationInteractionPerformance, linghuAutomation, nangong, hanli, personaConversations, evolution, personaWorkflow, eventCenter, collaborationTimeline, refreshWorkflowCheckpoints);
   registerConversationIpc({ projectRoot, appRoot, codex, screenshots, workspaces, dispatch, eventCenter, prompts, activeAuditTasks, publishDispatchState, prepareForApplicationExit });

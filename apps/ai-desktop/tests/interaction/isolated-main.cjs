@@ -35,6 +35,14 @@ let interactionDesktopSettings = {
 let interactionSettingsReadSource = "stored";
 let interactionSettingsUpdateFailure = null;
 let interactionSettingsUpdateDelayMs = 0;
+let interactionScreenshotWindow = null;
+let productionRendererFile = null;
+
+function publishInteractionSettingsChanged() {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send("desktop:settings-changed", structuredClone(interactionDesktopSettings));
+  }
+}
 
 ipcMain.handle("interaction:settings-get", () => ({
   settings: structuredClone(interactionDesktopSettings),
@@ -44,6 +52,7 @@ ipcMain.handle("interaction:settings-update", async (_event, settings) => {
   if (interactionSettingsUpdateDelayMs) await new Promise((resolve) => setTimeout(resolve, interactionSettingsUpdateDelayMs));
   if (interactionSettingsUpdateFailure) throw new Error(interactionSettingsUpdateFailure);
   interactionDesktopSettings = { ...interactionDesktopSettings, ...settings };
+  publishInteractionSettingsChanged();
   return structuredClone(interactionDesktopSettings);
 });
 ipcMain.handle("interaction:settings-read-source", (_event, source) => {
@@ -54,6 +63,25 @@ ipcMain.handle("interaction:settings-update-failure", (_event, message) => {
 });
 ipcMain.handle("interaction:settings-update-delay", (_event, milliseconds) => {
   interactionSettingsUpdateDelayMs = Math.max(0, Number(milliseconds) || 0);
+});
+ipcMain.handle("interaction:open-screenshot-window", async () => {
+  if (!productionRendererFile) throw new Error("生产桌面交互测试缺少 AI_DESKTOP_INTERACTION_FILE。 ");
+  if (interactionScreenshotWindow && !interactionScreenshotWindow.isDestroyed()) return interactionScreenshotWindow.webContents.id;
+  interactionScreenshotWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "isolated-preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  interactionScreenshotWindow.once("closed", () => { interactionScreenshotWindow = null; });
+  await interactionScreenshotWindow.loadFile(productionRendererFile, { query: { mode: "screenshot" } });
+  return interactionScreenshotWindow.webContents.id;
+});
+ipcMain.handle("interaction:close-screenshot-window", () => {
+  if (interactionScreenshotWindow && !interactionScreenshotWindow.isDestroyed()) interactionScreenshotWindow.close();
 });
 
 function recordRendererConsole(event, level, message, line, sourceId) {
@@ -99,9 +127,9 @@ app.whenReady().then(async () => {
   window.webContents.on("render-process-gone", (_event, details) => {
     launchDiagnostics.renderProcessGone = { reason: details.reason, exitCode: details.exitCode };
   });
-  const productionFile = process.env.AI_DESKTOP_INTERACTION_FILE;
-  if (!productionFile) throw new Error("生产桌面交互测试缺少 AI_DESKTOP_INTERACTION_FILE。 ");
-  await window.loadFile(productionFile);
+  productionRendererFile = process.env.AI_DESKTOP_INTERACTION_FILE;
+  if (!productionRendererFile) throw new Error("生产桌面交互测试缺少 AI_DESKTOP_INTERACTION_FILE。 ");
+  await window.loadFile(productionRendererFile);
 });
 
 app.on("window-all-closed", () => app.quit());

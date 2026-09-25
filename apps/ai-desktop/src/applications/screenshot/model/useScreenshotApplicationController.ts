@@ -54,18 +54,35 @@ export function useScreenshotApplicationController() {
       (request) => { void receiveNativeFrame(request); },
     );
 
-    // 截图窗口没有自己的设置页，只读取主窗口已经保存的语言。
-    void getOptionalSystemDesktopApi()?.getSettings()
+    // 截图窗口没有自己的设置页。先订阅再读取初始快照，避免慢读取覆盖后到达的保存事件。
+    const systemApi = getOptionalSystemDesktopApi();
+    let disposed = false;
+    let receivedSettingsChange = false;
+    const removeSettingsListener = systemApi?.onSettingsChanged((settings) => {
+      receivedSettingsChange = true;
+      setLocale(settings.locale);
+      setError((current) => current?.kind === "settings" ? null : current);
+    });
+
+    void systemApi?.getSettings()
       .then((result) => {
+        if (disposed || receivedSettingsChange) return;
         if (result.source === "recovered") {
           setError({ kind: "settings", technicalDetail: "Saved language settings could not be read." });
           return;
         }
         setLocale(result.settings.locale);
       })
-      .catch((caught) => setError({ kind: "settings", technicalDetail: caught instanceof Error ? caught.message : "Unable to read language settings." }));
+      .catch((caught) => {
+        if (!disposed && !receivedSettingsChange)
+          setError({ kind: "settings", technicalDetail: caught instanceof Error ? caught.message : "Unable to read language settings." });
+      });
 
-    return () => removeFrameListener?.();
+    return () => {
+      disposed = true;
+      removeFrameListener?.();
+      removeSettingsListener?.();
+    };
   }, []);
 
   useEffect(() => {
