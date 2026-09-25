@@ -805,6 +805,12 @@ function readTaskCollaborationSurface(target: { topicId: string; proposalId: str
   const recoveryLabel = group?.querySelector<HTMLButtonElement>("button.task-recovery-continue")?.innerText.trim() || "";
   const currentTimelineNode = group?.querySelector<HTMLElement>(".task-timeline-node.current");
   const currentTimelineNodeRect = currentTimelineNode?.getBoundingClientRect();
+  // 交付依据位于详情面板顶部，不能只读取当前时间线节点而遗漏候选、测试和发布事实。
+  const deliveryEvidence = group?.querySelector<HTMLElement>(".task-delivery-evidence");
+  const deliveryEvidenceRect = deliveryEvidence?.getBoundingClientRect();
+  const deliveryEvidenceVisible = Boolean(deliveryEvidence && deliveryEvidenceRect
+    && deliveryEvidenceRect.width > 0 && deliveryEvidenceRect.height > 0
+    && getComputedStyle(deliveryEvidence).display !== "none" && getComputedStyle(deliveryEvidence).visibility !== "hidden");
   const currentTimelineNodeVisible = Boolean(currentTimelineNode && currentTimelineNodeRect
     && currentTimelineNodeRect.width > 0 && currentTimelineNodeRect.height > 0
     && getComputedStyle(currentTimelineNode).display !== "none" && getComputedStyle(currentTimelineNode).visibility !== "hidden");
@@ -831,6 +837,8 @@ function readTaskCollaborationSurface(target: { topicId: string; proposalId: str
     recoveryLabel,
     currentTimelineNode: currentTimelineNode?.innerText.trim() || "",
     currentTimelineNodeVisible,
+    deliveryEvidence: deliveryEvidence?.innerText.trim() || "",
+    deliveryEvidenceVisible,
     auditHistoryExpanded: auditHistoryTrigger?.getAttribute("aria-expanded") === "true",
     memberStates,
     taskPanelExpanded: panelToggle?.getAttribute("aria-expanded") === "true",
