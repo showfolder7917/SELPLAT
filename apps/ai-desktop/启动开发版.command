@@ -10,8 +10,9 @@ CONTROLLED_BATCH=""
 CONTROLLED_SHA=""
 CONTROLLED_OLD_PID=""
 CONTROLLED_USER_DATA_DIR=""
+CONTROLLED_MODE=""
 if (( $# > 0 )); then
-  if (( $# < 3 || $# > 4 )) || [[ "$1" != --release-batch=* || "$2" != --runtime-sha=* || "$3" != --replace-pid=* ]]; then
+  if (( $# < 3 || $# > 4 )) || { [[ "$1" != --release-batch=* ]] && [[ "$1" != --recover-staged-release=* ]]; } || [[ "$2" != --runtime-sha=* || "$3" != --replace-pid=* ]]; then
     echo "[错误] 受控重启参数不完整。"
     exit 1
   fi
@@ -19,7 +20,8 @@ if (( $# > 0 )); then
     echo "[错误] 受控重启参数不完整。"
     exit 1
   fi
-  CONTROLLED_BATCH="${1#--release-batch=}"
+  if [[ "$1" == --recover-staged-release=* ]]; then CONTROLLED_MODE="recover-staged"; else CONTROLLED_MODE="rebuild"; fi
+  CONTROLLED_BATCH="${1#*=}"
   CONTROLLED_SHA="${2#--runtime-sha=}"
   CONTROLLED_OLD_PID="${3#--replace-pid=}"
   if (( $# == 4 )); then CONTROLLED_USER_DATA_DIR="${4#--user-data-dir=}"; fi
@@ -45,7 +47,7 @@ LAUNCH_TERMINAL_TTY="$(tty 2>/dev/null || true)"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export SELPLAT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-if [[ -n "$CONTROLLED_SHA" ]]; then
+if [[ "$CONTROLLED_MODE" == "rebuild" ]]; then
   if [[ -n "$(git -C "$SELPLAT_ROOT" status --porcelain)" ]] || ! git -C "$SELPLAT_ROOT" diff --quiet "$CONTROLLED_SHA" HEAD --; then
     echo "[错误] 当前工程源码不是已核验的候选版本，已停止受控重启。"
     exit 1
@@ -71,6 +73,38 @@ RUNS_ROOT="$PACKAGE_AREA/developer-runs"
 if [[ -L "$PACKAGE_AREA" || -L "$RUNS_ROOT" ]]; then
   echo "[错误] 打包目录不能是符号链接。"
   exit 1
+fi
+
+# 旧宿主只能交给此包外脚本精确接管已提升的候选；这里不构建、不重新验证、不扫描其他批次。
+if [[ "$CONTROLLED_MODE" == "recover-staged" ]]; then
+  RECOVERY_ROOT="$PACKAGE_AREA/activation/${CONTROLLED_BATCH}-runtime"
+  APP_PATH="$RECOVERY_ROOT/AI Desktop.app"
+  APP_EXECUTABLE="$APP_PATH/Contents/MacOS/AI Desktop"
+  ARCHIVE_ROOT="$SELPLAT_ROOT/log/$APP_NAME/归档日志/发布归档"
+  if [[ ! -d "$APP_PATH" || ! -x "$APP_EXECUTABLE" ]]; then
+    echo "[错误] 未找到本批次已提升的候选运行包。"
+    exit 1
+  fi
+  if ! node -e 'const fs=require("node:fs"),path=require("node:path");const [archiveRoot,batch,sha,activationRoot]=process.argv.slice(1);const matches=fs.readdirSync(archiveRoot,{withFileTypes:true}).filter(e=>e.isDirectory()).map(e=>path.join(archiveRoot,e.name,batch,"发布批次文档.json")).filter(fs.existsSync);if(matches.length!==1)process.exit(2);const d=JSON.parse(fs.readFileSync(matches[0],"utf8"));const m=JSON.parse(fs.readFileSync(path.join(activationRoot,"ai-desktop-runtime-source.json"),"utf8"));if(d.state!=="failed"||d.runtimeActivation?.state!=="preparing"||d.candidateSha!==sha||d.runtimeActivation?.candidateSha!==sha||m.sourceSha!==sha||!d.failureReason?.includes("ENOTDIR: not a directory, rmdir")||!d.failureReason.includes(`${path.sep}package${path.sep}activation-staging-`))process.exit(3);' "$ARCHIVE_ROOT" "$CONTROLLED_BATCH" "$CONTROLLED_SHA" "$RECOVERY_ROOT"; then
+    echo "[错误] 归档批次、候选 SHA、暂存清理失败事实或运行包来源不匹配。"
+    exit 1
+  fi
+  OLD_COMMAND="$(ps -p "$CONTROLLED_OLD_PID" -o command= 2>/dev/null || true)"
+  if [[ "$OLD_COMMAND" != *"AI Desktop.app/Contents/MacOS/AI Desktop"* ]]; then
+    echo "[错误] 待替换进程不是 AI Desktop，已取消接管。"
+    exit 1
+  fi
+  kill "$CONTROLLED_OLD_PID" 2>/dev/null || true
+  for _ in {1..50}; do kill -0 "$CONTROLLED_OLD_PID" 2>/dev/null || break; sleep 0.1; done
+  if kill -0 "$CONTROLLED_OLD_PID" 2>/dev/null; then
+    echo "[错误] 旧 AI Desktop 实例未退出，拒绝并行运行候选包。"
+    exit 1
+  fi
+  LAUNCH_ARGS=("--selplat-root=$SELPLAT_ROOT" "--ai-desktop-variant=developer" "--ai-desktop-runtime-sha=$CONTROLLED_SHA" "--ai-desktop-recover-release=$CONTROLLED_BATCH")
+  if [[ -n "$CONTROLLED_USER_DATA_DIR" ]]; then LAUNCH_ARGS+=("--ai-desktop-user-data-dir=$CONTROLLED_USER_DATA_DIR"); fi
+  open -n "$APP_PATH" --args "${LAUNCH_ARGS[@]}" || exit 1
+  echo "[完成] 已请求候选运行包恢复原发布批次。"
+  exit 0
 fi
 mkdir -p "$PACKAGE_AREA" "$RUNS_ROOT" || exit 1
 RUN_ID="${CONTROLLED_BATCH:-manual-$(date +%Y%m%d%H%M%S)}-$$"

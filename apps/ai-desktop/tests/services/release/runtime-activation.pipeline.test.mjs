@@ -33,6 +33,43 @@ const { VersionIntegrationPipeline } = await import("../../../electron/services/
 
 const git = (root, ...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 
+test("包外启动器仅恢复来源匹配且仍保留暂存清理失败事实的归档批次", () => {
+  const directory = path.join(controlledTestRoot, `archived-runtime-activation-${process.pid}-${Date.now()}`);
+  const running = path.join(directory, "running");
+  const archive = path.join(directory, "archive");
+  const buildRoot = path.join(directory, "build");
+  const releaseBatchId = "release-0.1.1-g461";
+  const candidateSha = "a".repeat(40);
+  const executable = path.join(buildRoot, "package", "activation", `${releaseBatchId}-runtime`, "AI Desktop.app", "Contents", "MacOS", "AI Desktop");
+  try {
+    mkdirSync(path.dirname(executable), { recursive: true });
+    writeFileSync(executable, "candidate executable");
+    writeFileSync(path.join(buildRoot, "package", "activation", `${releaseBatchId}-runtime`, "ai-desktop-runtime-source.json"), `${JSON.stringify({ sourceSha: candidateSha })}\n`);
+    const releaseBatches = new ReleaseBatchStore(running, archive, buildRoot);
+    const document = releaseBatches.create(releaseBatchId, "0.1.1", 461, [], "linghu-ancestor");
+    document.state = "failed";
+    document.candidateSha = candidateSha;
+    document.runtimeActivation = {
+      state: "preparing", candidateRootPath: "/candidate", candidateBaseSha: "b".repeat(40), candidateSha,
+      executable: null, detail: "旧宿主", updatedAt: new Date().toISOString(),
+    };
+    document.failureReason = `ENOTDIR: not a directory, rmdir '${path.join(buildRoot, "package", "activation-staging-old", "mac-arm64", "AI Desktop.app", "Contents", "Resources", "app.asar")}'`;
+    document.completedAt = new Date().toISOString();
+    releaseBatches.write(document);
+
+    assert.equal(releaseBatches.recoverArchivedStagingCleanupFailure(releaseBatchId, `${candidateSha.slice(0, -1)}b`), null);
+    const recovered = releaseBatches.recoverArchivedStagingCleanupFailure(releaseBatchId, candidateSha);
+    assert.ok(recovered);
+    assert.equal(recovered.state, "activating");
+    assert.equal(recovered.runtimeActivation.state, "relaunch-scheduled");
+    assert.equal(recovered.runtimeActivation.executable, executable);
+    assert.match(recovered.runtimeActivation.detail, /ENOTDIR/u);
+    assert.equal(releaseBatches.pendingRuntimeActivation(releaseBatchId)?.candidateSha, candidateSha);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("预检运行器变更先激活候选包，并由候选 SHA 进程恢复同一批次", async () => {
   const directory = path.join(controlledTestRoot, `runtime-activation-${process.pid}-${Date.now()}`);
   const repository = path.join(directory, "repository");

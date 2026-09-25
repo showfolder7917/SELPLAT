@@ -7,6 +7,7 @@ const launcher = readFileSync(new URL("../../启动开发版.command", import.me
 const packageManifest = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
 const appConfig = readFileSync(new URL("../../electron/system/config/app-config.ts", import.meta.url), "utf8");
 const startupContext = readFileSync(new URL("../../electron/system/bootstrap/startup-context.ts", import.meta.url), "utf8");
+const collaborationBootstrap = readFileSync(new URL("../../electron/system/bootstrap/collaboration.bootstrap.ts", import.meta.url), "utf8");
 const mainEntry = readFileSync(new URL("../../electron/main.ts", import.meta.url), "utf8");
 const electronMain = readFileSync(new URL("../../electron/system/bootstrap/application-runtime.ts", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../../electron-builder.developer.json", import.meta.url), "utf8");
@@ -129,6 +130,10 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /open -n "\$APP_PATH" --args/);
   assert.match(launcher, /git -C "\$SELPLAT_ROOT" diff --quiet "\$CONTROLLED_SHA" HEAD --/);
   assert.match(launcher, /--ai-desktop-runtime-sha=\$CONTROLLED_SHA/);
+  assert.match(launcher, /--recover-staged-release=/);
+  assert.match(launcher, /ai-desktop-runtime-source\.json/);
+  assert.match(launcher, /归档批次、候选 SHA、暂存清理失败事实或运行包来源不匹配/);
+  assert.ok(launcher.indexOf('if [[ "$CONTROLLED_MODE" == "recover-staged" ]]') < launcher.indexOf("npm run package:mac:developer"), "已提升包接管不得重新构建候选");
   assert.match(launcher, /--ai-desktop-user-data-dir=\$CONTROLLED_USER_DATA_DIR/);
   assert.match(electronMain, /isolatedUserDataArgument[\s\S]*--user-data-dir=\$\{isolatedUserData\}/);
   assert.match(appConfig, /--selplat-root=/);
@@ -137,6 +142,8 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(startupContext, /const ownsApplicationInstance = healthCheckFile \? true : app\.requestSingleInstanceLock\(\);/);
   assert.match(startupContext, /if \(!healthCheckFile && !ownsApplicationInstance\) app\.quit\(\);/);
   assert.match(startupContext, /else if \(!healthCheckFile\) app\.on\("second-instance"/);
+  assert.match(startupContext, /recoverReleaseBatchId = readArgument\("--ai-desktop-recover-release="\)/);
+  assert.match(collaborationBootstrap, /recoverArchivedStagingCleanupFailure\(recoveryBatchId, options\.startup\.runtimeSourceSha \|\| ""\)/);
   assert.match(macVerifier, /com\.selplat\.aidesktop\.developer/);
   assert.match(macVerifier, /codesign.*--verify/s);
   assert.match(macVerifier, /expectedRequirement/);

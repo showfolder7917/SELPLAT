@@ -22,6 +22,8 @@ export interface StartupContext {
   readonly runtimeSourceSha: string | null;
   /** 候选运行包预激活后要恢复的发布批次。 */
   readonly resumeReleaseBatchId: string | null;
+  /** 包外启动器接管已提升包时，允许候选进程先恢复精确的归档批次。 */
+  readonly recoverReleaseBatchId: string | null;
   readonly workspaces: WorkspaceFacade;
   readonly eventCenter: EventCenterFacade;
   readonly ownsApplicationInstance: boolean;
@@ -70,6 +72,7 @@ export function createStartupContext(): StartupContext {
     || null;
   const runtimeSourceSha = resolvePublishedRuntimeSourceSha(process.resourcesPath, runtimeSourceShaArgument);
   const resumeReleaseBatchId = readArgument("--ai-desktop-resume-release=");
+  const recoverReleaseBatchId = readArgument("--ai-desktop-recover-release=");
 
   return {
     applicationName,
@@ -80,6 +83,7 @@ export function createStartupContext(): StartupContext {
     healthCheckFile,
     runtimeSourceSha,
     resumeReleaseBatchId,
+    recoverReleaseBatchId,
     workspaces,
     eventCenter,
     ownsApplicationInstance,
