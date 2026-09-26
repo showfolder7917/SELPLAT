@@ -30,7 +30,7 @@ function evolution(acceptanceStatus) {
     oneShotConfirmation: null,
     oneShotRun: { proposalId: "proposal-current" },
     proposals: [{ proposalId: "proposal-current", topicId: "topic-current", title: "修正测试台修复状态误导", content: "统一状态投影", status: "pending-acceptance", finalConclusionRecordId, distributedTaskIds: ["task-current"], updatedAt: "2026-09-12T04:00:00.000Z" }],
-    topics: [{ topicId: "topic-current", title: "修正测试台修复状态误导" }],
+    topics: [{ topicId: "topic-current", title: "修正测试台修复状态误导", createdAt: "2026-09-12T04:00:00.000Z" }],
     deliberations: [],
     archiveRecords: [
       { proposalId: "proposal-current", eventType: "acceptance.result_checked", occurredAt: "2026-09-12T04:42:19.000Z", payload: { acceptanceRun: { runId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243", status: acceptanceStatus } } },
@@ -60,6 +60,14 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.equal(stage.status, "failed-pending-repair");
   assert.equal(stage.latestAcceptance?.runId, "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243");
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
+  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: null, durationMs: 0, status: "running" });
+});
+
+test("专题总历时在最终结论后固定，且不使用阶段时长或候选重跑补造", () => {
+  const state = evolution("passed");
+  state.proposals[0].status = "completed";
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] }, [{ taskId: "task-current", bindingStatus: "available", events: [{ segment: "analysis", durationMs: 999999, outcome: "completed" }] }]);
+  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:42:20.000Z", durationMs: 2540000, status: "completed" });
 });
 
 test("阶段投影按候选分开统计重跑，并保留等待原因而不签发恢复操作", () => {

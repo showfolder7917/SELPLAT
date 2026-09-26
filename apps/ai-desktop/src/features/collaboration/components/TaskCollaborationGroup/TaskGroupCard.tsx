@@ -186,13 +186,9 @@ function TaskGroupHeader({
           <em>{locale === "ja" ? `タスク実行中 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `任务执行中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
         )}
         {/* 专题总耗时：已结束专题固定，未结束专题跟随当前时间增长。 */}
-        <TimelineDuration
-          durationMs={group.durationMs}
-          startedAt={group.startedAt}
-          running={!groupStopped}
-          locale={locale}
-          prefix={locale === "ja" ? "テーマ総所要時間" : "专题总历时"}
-        />
+        {currentStage?.topicDuration?.startedAt && currentStage.topicDuration.durationMs !== null
+          ? <TimelineDuration durationMs={currentStage.topicDuration.durationMs} startedAt={currentStage.topicDuration.startedAt} running={currentStage.topicDuration.status === "running"} locale={locale} prefix={locale === "ja" ? "テーマ総所要時間" : "专题总历时"} />
+          : <small>{locale === "ja" ? "テーマ総所要時間：未記録" : "专题总历时：未记录"}</small>}
       </span>
     </span>
   );

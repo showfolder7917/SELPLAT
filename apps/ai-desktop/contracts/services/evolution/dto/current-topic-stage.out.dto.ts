@@ -141,6 +141,8 @@ export interface CurrentTopicStageOutDto {
   deliveryEvidence: CurrentTopicDeliveryEvidenceOutDto;
   /** 仅由任务、候选和执行尝试绑定的已完成时段形成；页面不得以动态总时长补造。 */
   durationEvidence?: CurrentTopicStageDurationEvidenceOutDto | null;
+  /** 当前专题的权威总历时；运行中由页面从 startedAt 增长，终态固定 endedAt。 */
+  topicDuration?: { startedAt: string | null; endedAt: string | null; durationMs: number | null; status: "running" | "completed" | "missing" };
   /** 最近一次未通过验收的客户可读分类，以及同一根因是否沿唯一修复链归并。 */
   failureEvidence?: CurrentTopicFailureEvidenceOutDto | null;
   /** 生成此投影时使用的最新权威事实时间。 */
