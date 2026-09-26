@@ -339,6 +339,36 @@ test("客户操作方案保留在等待节点，唯一继续按钮位于下一�
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
+test("验收中专题在宽窗口窄侧栏仍显示专题总历时", async ({}, testInfo) => {
+  await page.evaluate(async () => {
+    const api = (window as any).desktop;
+    await api.setInteractionTaskTimelineFixture(true);
+    await api.setInteractionAcceptanceTimelineFixture("accepting");
+  });
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1366, 768));
+  await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
+  await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
+
+  const group = page.locator(".task-collaboration-group").filter({ hasText: "专题任务 01 · 修订截图按钮可用态" });
+  const facts = group.locator(".task-group-facts");
+  const duration = facts.getByText(/专题总历时/);
+  await expect(group).toContainText("韩立正在执行真实界面验收。");
+  await expect(duration).toBeVisible();
+  const [cardBounds, durationBounds] = await Promise.all([group.boundingBox(), duration.boundingBox()]);
+  if (!cardBounds || !durationBounds) throw new Error("验收中专题总历时缺少可视边界。");
+  expect(durationBounds.x).toBeGreaterThanOrEqual(cardBounds.x);
+  expect(durationBounds.x + durationBounds.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
+  await testInfo.attach("accepting-topic-duration-1366x768", { body: await page.screenshot(), contentType: "image/png" });
+
+  await page.evaluate(async () => {
+    const api = (window as any).desktop;
+    await api.setInteractionAcceptanceTimelineFixture(null);
+    await api.setInteractionTaskTimelineFixture(false);
+  });
+  await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1560, 980));
+});
+
 test("卡点人物会话实时收到令狐返回与韩立验收，重复快照不重复显示", async ({}, testInfo) => {
   await page.goto(pathToFileURL(productionRendererFile).href);
   await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
