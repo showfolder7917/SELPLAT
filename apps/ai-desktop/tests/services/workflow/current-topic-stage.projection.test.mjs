@@ -682,6 +682,7 @@ test("真实验收进行中优先于已经完成的提案状态", () => {
   assert.equal(stage.deliveryEvidence.release, "published");
   assert.equal(stage.deliveryEvidence.restartHealth, "passed");
   assert.equal(stage.deliveryEvidence.acceptance, "running");
+  assert.equal(stage.remaining, "等待真实验收结果。");
   assert.equal(stage.nextAction, "等待韩立记录本轮真实验收结果。");
 });
 
