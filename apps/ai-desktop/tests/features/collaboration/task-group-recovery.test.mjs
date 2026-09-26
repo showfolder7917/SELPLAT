@@ -85,7 +85,9 @@ test("无活动技术卡点保留审计历史时明确显示只读空状态", ()
 test("审计历史卡在窄窗口仍公开四项事实和只读长证据", () => {
   const auditBranch = auditSource;
   assert.match(auditBranch, /taskGroupPrimaryPresentation\(group, locale\)[\s\S]*task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
-  assert.match(auditBranch, /const auditEvidence = visibleTimelineNodes\(group\.nodes\)[\s\S]*node\.actor\.displayName[\s\S]*task-cancelled-history-evidence/);
+  assert.match(auditBranch, /const labels = locale === "ja"[\s\S]*动作[\s\S]*摘要[\s\S]*正文[\s\S]*详情/);
+  assert.match(auditBranch, /const auditEvidence = visibleTimelineNodes\(group\.nodes\)[\s\S]*nodeOccurredAtLabel\(node, locale\)[\s\S]*labels\.action[\s\S]*labels\.summary[\s\S]*labels\.content[\s\S]*labels\.detail[\s\S]*task-cancelled-history-evidence/);
+  assert.doesNotMatch(auditBranch, /node\.detail \|\| node\.content \|\| node\.summary/);
   assert.doesNotMatch(auditBranch, /task-recovery-continue|task-stale-retire|onManualApproval|onContinueTask|onResumeAcceptance|onRetireStaleTopic/);
 });
 
