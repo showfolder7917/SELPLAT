@@ -281,11 +281,12 @@ test("任务卡明确显示韩立验收归属，并在专题完成后隐藏处�
     await expect(card).toContainText("已完成");
     await expect(card).not.toContainText("任务执行中");
     const primaryDetails = card.locator(".task-group-primary small");
-    // 当前卡片处于展开态，“下一步”由下方流程区独占，主区域固定核验其余三项。
+    // 当前卡片处于展开态，“下一步”由下方流程区独占；主区域固定核验事项、处理人、总历时和用户操作四项。
     for (const [width, height] of [[1366, 768], [1000, 700]]) {
       await application.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height), { width, height });
       await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([width, height]);
-      await expect(primaryDetails).toHaveCount(3);
+      await expect(primaryDetails).toHaveCount(4);
+      await expect(card.locator(".task-group-primary-duration small")).toHaveCount(1);
       expect(await primaryDetails.evaluateAll((elements) => elements.every((element) => {
         const style = window.getComputedStyle(element);
         return style.whiteSpace === "normal" && style.textOverflow === "clip" && element.scrollWidth <= element.clientWidth;
@@ -339,26 +340,29 @@ test("客户操作方案保留在等待节点，唯一继续按钮位于下一�
   await page.locator("#developer-task-list").getByRole("button", { name: "单会话", exact: true }).click();
 });
 
-test("验收中专题在宽窗口窄侧栏仍显示专题总历时", async ({}, testInfo) => {
+test("验收中专题在正常和窄窗口仍从固定摘要显示专题总历时", async ({}, testInfo) => {
   await page.evaluate(async () => {
     const api = (window as any).desktop;
     await api.setInteractionTaskTimelineFixture(true);
     await api.setInteractionAcceptanceTimelineFixture("accepting");
   });
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1366, 768));
   await page.locator("#developer-task-list").getByRole("button", { name: "协同模式", exact: true }).click();
   await page.locator("#developer-task-list").getByRole("button", { name: /任务协作群/ }).click();
 
   const group = page.locator(".task-collaboration-group").filter({ hasText: "专题任务 01 · 修订截图按钮可用态" });
-  const facts = group.locator(".task-group-facts");
-  const duration = facts.getByText(/专题总历时/);
-  await expect(group).toContainText("韩立正在执行真实界面验收。");
-  await expect(duration).toBeVisible();
-  const [cardBounds, durationBounds] = await Promise.all([group.boundingBox(), duration.boundingBox()]);
-  if (!cardBounds || !durationBounds) throw new Error("验收中专题总历时缺少可视边界。");
-  expect(durationBounds.x).toBeGreaterThanOrEqual(cardBounds.x);
-  expect(durationBounds.x + durationBounds.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
-  await testInfo.attach("accepting-topic-duration-1366x768", { body: await page.screenshot(), contentType: "image/png" });
+  const duration = group.locator(".task-group-primary-duration");
+  await expect(group).toContainText("韩立已开始本轮结果验收");
+  await expect(group.locator(".task-group-facts").getByText(/专题总历时/)).toHaveCount(0);
+  for (const [width, height] of [[1366, 768], [680, 700]]) {
+    await application.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height), { width, height });
+    await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([width, height]);
+    await expect(duration).toBeVisible();
+    const [cardBounds, durationBounds] = await Promise.all([group.boundingBox(), duration.boundingBox()]);
+    if (!cardBounds || !durationBounds) throw new Error("验收中专题总历时缺少可视边界。");
+    expect(durationBounds.x).toBeGreaterThanOrEqual(cardBounds.x);
+    expect(durationBounds.x + durationBounds.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
+    await testInfo.attach(`accepting-topic-duration-${width}x${height}`, { body: await page.screenshot(), contentType: "image/png" });
+  }
 
   await page.evaluate(async () => {
     const api = (window as any).desktop;

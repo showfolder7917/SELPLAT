@@ -571,6 +571,7 @@ button { color: inherit; }
 .task-group-primary { min-width: 0; flex: 1; gap: 4px; }
 .task-group-primary > span { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
 .task-group-primary b { flex: none; color: var(--sel-theme-workbench-text); }
+.task-group-primary-duration > small { min-width: 0; }
 .task-group-facts { display: flex; align-items: center; gap: 12px; flex: none; }
 .task-group-facts b { color: var(--sel-theme-accent); }
 .task-group-facts em { color: var(--sel-theme-workbench-text); font-style: normal; }
