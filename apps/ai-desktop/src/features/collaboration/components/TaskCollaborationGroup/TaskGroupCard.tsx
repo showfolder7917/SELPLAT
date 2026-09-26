@@ -11,7 +11,7 @@ import type {
 } from "../../../../../contracts/system/desktop/index";
 import type { CurrentTopicStageOutDto } from "../../../../../contracts/services/evolution/index";
 import { TaskGroupAuditCard } from "./TaskGroupAuditCard";
-import { TaskGroupAcceptanceEvidence } from "./TaskGroupAcceptanceEvidence";
+import { TaskGroupAcceptanceEvidence, TaskGroupAcceptanceSummary } from "./TaskGroupAcceptanceEvidence";
 import { TaskTimelineNode } from "./TaskTimelineNode";
 import { useTimelineNow } from "./timeline-now";
 import {
@@ -311,6 +311,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
           )}
         </span>
       </div>
+      {currentStage && <TaskGroupAcceptanceSummary stage={currentStage} locale={locale} />}
       {open && <>
         {/* 展开后才装载人物节点正文和技术详情；详情面板单独滚动，卡片摘要与下一流程持续可见。 */}
         <div className="task-timeline-detail-pane" onScroll={model.actions.onDetailScroll}>

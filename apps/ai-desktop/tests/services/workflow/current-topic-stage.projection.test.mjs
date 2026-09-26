@@ -64,6 +64,10 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
 
 test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签发恢复动作", () => {
   const state = evolution("failed");
+  Object.assign(state.archiveRecords[0].payload.acceptanceRun, {
+    acceptanceDisposition: "product-or-safety-failure",
+    stepResults: [{ status: "failed", layoutStatus: "passed" }],
+  });
   state.technicalRecovery = {
     issueId: "technical-recovery:topic-current:proposal-current:criterion-1:product-defect",
     topicId: "topic-current", proposalId: "proposal-current", acceptanceConditionIds: ["criterion-1"], failureCategory: "product-defect",
@@ -71,12 +75,18 @@ test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签�
     attemptCount: 1, handler: "linghu-ancestor", handoffStatus: "handed-off", failureReason: null, nextAction: "等待令狐沿原验收范围调查、修复并复验。", active: true, updatedAt: "2026-09-12T05:00:00.000Z",
   };
   state.oneShotRun = { runId: "blocked-recovery", topicId: "topic-current", proposalId: "proposal-current", status: "blocked" };
-  const stage = projectCurrentTopicStage(state, { tasks: [task()] });
+  const stage = projectCurrentTopicStage(state, { tasks: [task()] }, [{
+    taskId: "task-current", candidateSha: null, resultSha: null, bindingStatus: "candidate-missing",
+    completedSegments: ["analysis"], missingSegments: [],
+    events: [{ segment: "analysis", startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:00:00.010Z", durationMs: 10, outcome: "completed" }],
+  }]);
   assert.equal(stage.userAction, "none");
   assert.equal(stage.resumeOneShotRunId, null);
   assert.equal(stage.resumeTaskId, null);
   assert.equal(stage.readRecovery.requiresUserAction, false);
   assert.match(stage.summary, /令狐老祖处理中/);
+  assert.equal(stage.failureEvidence.classification, "product-defect");
+  assert.equal(stage.durationEvidence.phases[0].durationMs, 10);
   assert.deepEqual(stage.deliveryEvidence.preflight, {
     status: "not-recorded", round: null, candidateSha: null, impactScope: [], testInputs: [],
     evidenceReferences: [], evidenceValid: null, reusableStages: [], issues: [],
@@ -876,4 +886,34 @@ test("当前专题只投影同任务同候选同执行尝试的已完成阶段�
     { phase: "hanli-acceptance", durationMs: null, status: "missing" },
   ]);
   assert.equal(stage.finalConclusion, null);
+});
+
+test("进程重启后用同任务完成事件补回真实阶段时长并公开失败归类", () => {
+  const current = task("integrated");
+  current.replacementForTaskId = "task-previous";
+  current.flowEvents = [
+    { type: "worker.phase.analyzing", status: "started", occurredAt: "2026-09-12T04:00:00.000Z" },
+    { type: "technical_analysis.ready", status: "completed", occurredAt: "2026-09-12T04:00:05.000Z" },
+    { type: "execution.started", status: "started", occurredAt: "2026-09-12T04:00:06.000Z" },
+    { type: "executor.self_test_started", status: "started", occurredAt: "2026-09-12T04:00:10.000Z" },
+    { type: "task.code_verified", status: "completed", occurredAt: "2026-09-12T04:00:13.000Z" },
+  ];
+  const state = evolution("failed");
+  Object.assign(state.archiveRecords[0].payload.acceptanceRun, {
+    acceptanceDisposition: "product-or-safety-failure",
+    stepResults: [{ status: "failed", layoutStatus: "passed" }, { status: "blocked", layoutStatus: "blocked" }],
+  });
+  const stage = projectCurrentTopicStage(state, { tasks: [current], integrationBatches: [] }, []);
+  assert.deepEqual(stage.durationEvidence.phases.slice(0, 3), [
+    { phase: "investigation", durationMs: 5_000, status: "recorded" },
+    { phase: "implementation", durationMs: 4_000, status: "recorded" },
+    { phase: "testing", durationMs: 3_000, status: "recorded" },
+  ]);
+  assert.deepEqual(stage.failureEvidence, {
+    classification: "product-defect",
+    summary: "原始验收保留 2 项未通过或未验证条件。",
+    relatedFailures: "merged-single-repair-chain",
+    acceptanceRunId: "hanli-computer-db0e8dce-a91a-46c1-b63b-51f992e48243",
+    repairTaskIds: ["task-current"],
+  });
 });

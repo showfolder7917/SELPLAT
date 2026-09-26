@@ -141,8 +141,18 @@ export interface CurrentTopicStageOutDto {
   deliveryEvidence: CurrentTopicDeliveryEvidenceOutDto;
   /** 仅由任务、候选和执行尝试绑定的已完成时段形成；页面不得以动态总时长补造。 */
   durationEvidence?: CurrentTopicStageDurationEvidenceOutDto | null;
+  /** 最近一次未通过验收的客户可读分类，以及同一根因是否沿唯一修复链归并。 */
+  failureEvidence?: CurrentTopicFailureEvidenceOutDto | null;
   /** 生成此投影时使用的最新权威事实时间。 */
   updatedAt: string;
+}
+
+export interface CurrentTopicFailureEvidenceOutDto {
+  classification: "product-defect" | "acceptance-capability-blocked" | "infrastructure-blocked";
+  summary: string;
+  relatedFailures: "merged-single-repair-chain" | "single-failure";
+  acceptanceRunId: string;
+  repairTaskIds: string[];
 }
 
 export interface CurrentTopicStageDurationEvidenceOutDto {

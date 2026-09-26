@@ -243,7 +243,9 @@ test("长任务详情只在卡片内容区滚动并保留主操作", () => {
   assert.match(developerStyles, /\.task-collaboration-group \{[\s\S]*flex: 0 0 auto[\s\S]*min-height: 0/);
   assert.match(developerStyles, /\.task-collaboration-history \{[\s\S]*flex: 0 0 auto/);
   assert.match(developerStyles, /\.task-collaboration-group\[data-sel-disclosure-open="true"\] \{[\s\S]*flex: 0 0 560px[\s\S]*min-height: 560px/);
-  assert.match(developerStyles, /\.task-collaboration-group > \.seldisclosure-content \{[\s\S]*grid-template-rows: minmax\(0, 1fr\) minmax\(140px, 1fr\)[\s\S]*overflow: hidden/);
+  assert.match(developerStyles, /\.task-collaboration-group > \.seldisclosure-content \{[\s\S]*grid-template-rows: auto auto minmax\(140px, 1fr\)[\s\S]*overflow: hidden/);
+  assert.match(developerStyles, /\.task-acceptance-summary \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*\.task-acceptance-summary \{ grid-template-columns: 1fr; \}/);
   assert.match(developerStyles, /\.task-timeline-detail-pane \{[\s\S]*min-height: 0[\s\S]*overflow: auto/);
   assert.match(developerStyles, /\.task-timeline-next \{[\s\S]*max-height: 240px[\s\S]*overflow-y: auto/);
   assert.match(developerStyles, /\.task-recovery-guidance \{[\s\S]*max-height: 112px[\s\S]*overflow-y: auto/);
