@@ -16,6 +16,7 @@ const workspaceDataToolScripts = [
   "scripts/verify-package-content.mjs",
 ];
 const pathDiagnosticScript = "scripts/resolve-application-paths.mjs";
+const dependencyRunnerScript = "scripts/run-with-dependencies.mjs";
 
 test("发布、签名、验证和规则构建共用所选工作区门面", () => {
   for (const relative of workspaceDataToolScripts) {
@@ -38,6 +39,13 @@ test("路径诊断入口只读取候选工作树，不提升为运行数据工�
   const source = readFileSync(path.join(appRoot, pathDiagnosticScript), "utf8");
   assert.match(source, /resolvePathDiagnosticWorkspaceRoot\(sourceProjectRoot\)/);
   assert.match(source, /source-worktree-diagnostic-only/);
+});
+
+test("候选工作树的默认测试根不落入候选源码目录", () => {
+  const source = readFileSync(path.join(appRoot, dependencyRunnerScript), "utf8");
+  assert.match(source, /import os from "node:os"/u);
+  assert.match(source, /isCollaborationWorktree\(cache\.projectRoot\)[\s\S]*process\.platform === "darwin" \? "\/private\/tmp" : os\.tmpdir\(\)/u);
+  assert.doesNotMatch(source, /path\.join\(cache\.projectRoot, "OPTION", "temp", cache\.applicationName/u);
 });
 
 test("发布候选源码始终使用显式选择工作区作为数据根", { concurrency: false }, () => {
