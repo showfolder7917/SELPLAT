@@ -339,15 +339,14 @@ export class SqliteCollaborationTimelineDao implements CollaborationTimelinePers
       terminal,
       laterActivity: timelineLaterActivity(rows, terminal),
     });
-    // 统一领域规则确认终态后，只退休更早的活动展示；原始审计事实仍保留在 rows 中。
+    // 统一领域规则确认终态后，只结束更早的活动状态；动作、摘要、正文和详情
+    // 仍是审计事实，历史卡必须能据此还原当时的“重新验证”等流程节点。
     if (finalPresentation?.status === "completed" && finalPresentation.terminalAt) {
       for (const node of nodes) {
         if (node.startedAt >= finalPresentation.terminalAt || !["current", "waiting"].includes(node.status)) continue;
         node.status = "completed";
         node.completedAt = finalPresentation.terminalAt;
         node.durationMs = durationMs(node.startedAt, finalPresentation.terminalAt);
-        node.action = "该阶段已结束";
-        node.summary = "本专题已完成，当前结果见后续节点。";
         node.automaticOpen = false;
       }
     }
