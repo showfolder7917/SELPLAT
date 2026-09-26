@@ -355,12 +355,35 @@ test("韩立验收原流程真正完成后才解除卡点", async () => {
   assert.equal(f.effects.submitted.length, 0);
 });
 
-test("创建后保存前中断通过原事件轮次标记找回，不重复提交", async () => {
+test("协调器重新创建后通过原事件轮次标记找回任务并延续测试状态", async () => {
   const f = fixture(); await f.run();
+  f.collaboration.tasks[0].state = "unified-testing";
   delete f.event.payload.checkpoint;
-  await f.run();
+  await new CheckpointCoordinator(f.options).process(f.events);
   assert.equal(f.effects.submitted.length, 1);
   assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
+  assert.equal(f.event.payload.checkpoint.phase, "testing");
+});
+
+test("协调器重新创建后沿已保存 repairTaskId 展示原任务阻塞状态", async () => {
+  const f = fixture(); await f.run();
+  f.collaboration.tasks[0].state = "blocked";
+  f.collaboration.tasks[0].blockingReason = "等待正式页面验收能力恢复";
+  await new CheckpointCoordinator(f.options).process(f.events);
+  assert.equal(f.effects.submitted.length, 1);
+  assert.equal(f.event.payload.checkpoint.repairTaskId, "repair-1");
+  assert.equal(f.event.payload.checkpoint.phase, "waiting");
+  assert.match(f.event.payload.checkpoint.latestProgress, /等待正式页面验收能力恢复/);
+});
+
+test("协调器重新创建后以同一运行 completed 解除验收卡点且不派发修复", async () => {
+  const f = fixture();
+  f.event.payload.operation = "run_hanli_result_acceptance";
+  f.event.payload.acceptanceFailureKind = "acceptance-capability-blocked";
+  f.evolution.oneShotRun.status = "completed";
+  await new CheckpointCoordinator(f.options).process(f.events);
+  assert.deepEqual(f.effects.resolved, ["issue-1"]);
+  assert.equal(f.effects.submitted.length, 0);
 });
 
 test("原点恢复异步运行后再次受阻，新增一轮而非重放上一份修复", async () => {
