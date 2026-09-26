@@ -82,6 +82,8 @@ export interface PersonaEvolutionRuntimeOptions {
   onPersonaConversationChanged?: (conversation: PersonaConversationOutDto) => void;
   /** 从统一数据库读取专题完整档案的可选端口。 */
   readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
+  /** 只读取当前验收任务绑定候选的阶段耗时。 */
+  readAcceptanceDurationEvidence?: (tasks: import("../../../../../contracts/services/workflow/index.js").CollaborationTaskOutDto[]) => unknown;
   /** 在 Evolution 写动作前登记幂等事务。 */
   beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   /** Evolution 写动作成功后提交新的状态版本。 */
@@ -117,6 +119,8 @@ export class PersonaEvolutionRuntime {
   readonly #memory: AsyncCollaborationMemoryPort | null;
   /** 可选专题完整档案读取端口。 */
   readonly #readDossier: PersonaEvolutionRuntimeOptions["readDossier"];
+  /** 当前验收任务的只读阶段耗时入口。 */
+  readonly #readAcceptanceDurationEvidence: NonNullable<PersonaEvolutionRuntimeOptions["readAcceptanceDurationEvidence"]>;
   /** Evolution 写动作幂等协调端口。 */
   readonly #mutations: EvolutionMutationPort;
   /** 韩立—南宫婉研讨应用服务；模型端口未装配时为空。 */
@@ -172,6 +176,7 @@ export class PersonaEvolutionRuntime {
     // 记忆和专题档案属于可选读模型；数据库不可用时由公开方法安全降级。
     this.#memory = options.memory || null;
     this.#readDossier = options.readDossier;
+    this.#readAcceptanceDurationEvidence = options.readAcceptanceDurationEvidence || (() => null);
     // 所有专题写动作共用同一个幂等和互斥协调器。
     this.#mutations = createEvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation });
     this.#deliberation = options.askHanliDeliberation && options.askNangongDeliberation
@@ -641,7 +646,13 @@ export class PersonaEvolutionRuntime {
             task.evolutionProposalId === proposal.proposalId && task.state === "integrated");
           // 首轮只做条件分区；计划冻结后重新构建上下文，才会读取其冻结的能力证据清单。
           const implementationEvidence = (plan: { sourceEvidenceFiles?: string[] } | null) =>
-            buildHanliResultReviewContext(acceptanceTasks, topic.workspaceState, proposalSourceTasks, plan?.sourceEvidenceFiles || []);
+            buildHanliResultReviewContext(
+              acceptanceTasks,
+              topic.workspaceState,
+              proposalSourceTasks,
+              plan?.sourceEvidenceFiles || [],
+              this.#readAcceptanceDurationEvidence(acceptanceTasks),
+            );
           this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在判断验收类型并核对客户原要求", topic.topicId, proposal.proposalId);
           const reviewedAcceptance = await this.#hanli.reviewResultAcceptance(proposal.proposalId, implementationEvidence);
           const plan = reviewedAcceptance.plan;

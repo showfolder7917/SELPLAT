@@ -12,6 +12,7 @@ export function buildHanliResultReviewContext(
   fallbackWorkspaceState: WorkspaceStateOutDto,
   proposalSourceTasks: CollaborationTaskOutDto[] = tasks,
   frozenSourceEvidenceFiles: readonly string[] = [],
+  durationEvidence: unknown = null,
 ): unknown {
   // 同一提案只读取一次已授权源码；大文件的中段也必须可见，否则旧恢复分支会被首尾截取漏掉。
   const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState, frozenSourceEvidenceFiles);
@@ -36,6 +37,13 @@ export function buildHanliResultReviewContext(
     sourceEvidenceStatus: sourceEvidence.status,
     // 让审查器区分本轮变更与计划冻结的回归边界；两类文件都只能来自同一工作区。
     frozenSourceEvidenceFiles: [...frozenSourceEvidenceFiles],
+    frozenSourceEvidence: {
+      required: [...frozenSourceEvidenceFiles],
+      loaded: frozenSourceEvidenceFiles.filter((file) => sourceEvidence.items.some((item) => item.file === file)),
+      missing: frozenSourceEvidenceFiles.filter((file) => !sourceEvidence.items.some((item) => item.file === file)),
+      regressionFiles: frozenSourceEvidenceFiles.filter((file) => /(?:^|\/)tests?\//u.test(file)),
+    },
+    durationEvidence,
     sourceEvidenceScope: frozenSourceEvidenceFiles.length
       ? "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports"
       : "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
@@ -181,7 +189,7 @@ function readChangedSourceEvidence(
 /** 计划清单是唯一能补充既有能力文件的入口；调用方不能借由路径绕开已冻结范围。 */
 function validateFrozenSourceEvidenceFiles(files: readonly string[]): string[] {
   if (!files.length) return [];
-  if (files.length > 12 || new Set(files).size !== files.length) throw new Error("冻结的验收源码证据清单无效。 ");
+  if (files.length > 13 || new Set(files).size !== files.length) throw new Error("冻结的验收源码证据清单无效。 ");
   const projectRelativeSource = /^apps\/ai-desktop\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|mjs|css)$/u;
   if (files.some((file) => !projectRelativeSource.test(file) || file.includes("node_modules"))) {
     throw new Error("冻结的验收源码证据包含越界路径。 ");

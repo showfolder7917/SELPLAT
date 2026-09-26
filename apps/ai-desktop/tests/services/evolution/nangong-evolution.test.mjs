@@ -2843,6 +2843,11 @@ test("页面条件覆盖全部原要求时仍同时完成源码结构审查", as
     assert.equal(promptsSeen.length, 2);
     assert.equal(evidencePlans[0], null, "首次审查只用于条件分区，尚未冻结计划");
     assert.equal(evidencePlans[1].version, 3, "冻结后复核必须使用同一计划的源码清单");
+    assert.equal(evidencePlans[1].sourceEvidenceFiles.length, 13, "新增验收契约回归必须在持久化清单上限内冻结");
+    assert.throws(() => store.saveAcceptancePlan(proposalId, {
+      ...result.plan,
+      sourceEvidenceFiles: [...result.plan.sourceEvidenceFiles, "apps/ai-desktop/electron/services/personas/hanli/internal/application/hanli-application.service.ts"],
+    }), /1 至 13 个文件/u, "持久化边界必须拒绝第十四个冻结源码证据");
     assert.ok(evidencePlans[1].sourceEvidenceFiles.length > 0);
     assert.ok(evidencePlans[1].sourceEvidenceFiles.includes("apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts"), "v3 清单必须冻结预检与复用结论的生产入口");
     assert.equal(result.review.mode, "mixed");

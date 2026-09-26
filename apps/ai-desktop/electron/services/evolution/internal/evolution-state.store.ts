@@ -1593,7 +1593,7 @@ function validateAcceptanceSourceEvidenceFiles(plan: EvolutionAcceptancePlanOutD
     return;
   }
   const files = plan.sourceEvidenceFiles;
-  if (!Array.isArray(files) || files.length < 1 || files.length > 12) throw new Error("v3 验收计划的源码证据清单必须包含 1 至 12 个文件。 ");
+  if (!Array.isArray(files) || files.length < 1 || files.length > 13) throw new Error("v3 验收计划的源码证据清单必须包含 1 至 13 个文件。 ");
   if (new Set(files).size !== files.length) throw new Error("v3 验收计划的源码证据清单不能重复。 ");
   const projectRelativeSource = /^apps\/ai-desktop\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|mjs|css)$/u;
   if (files.some((file) => typeof file !== "string" || !projectRelativeSource.test(file) || file.includes("node_modules"))) {

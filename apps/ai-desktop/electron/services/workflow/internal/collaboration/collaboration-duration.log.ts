@@ -59,6 +59,22 @@ export interface CollaborationBottleneckReport {
   evidence: string[];
 }
 
+export interface CollaborationTaskDurationEvidence {
+  taskId: string;
+  candidateSha: string | null;
+  resultSha: string | null;
+  bindingStatus: "available" | "candidate-missing" | "result-missing";
+  completedSegments: CollaborationDurationSegment[];
+  missingSegments: CollaborationDurationSegment[];
+  events: Array<Pick<CompletedSpanEvent, "segment" | "startedAt" | "endedAt" | "durationMs" | "outcome">>;
+}
+
+type DurationEvidenceTask = {
+  taskId: string;
+  versionWorkspace?: { resultSha?: string | null } | null;
+  flowEvents?: Array<{ details?: { candidateSha?: string | null } | null }>;
+};
+
 /** 把协同阶段耗时和等待归因写入日志文件，人物页面不读取或展示这些明细。 */
 export class CollaborationDurationLog {
   readonly #root: string;
@@ -170,6 +186,23 @@ export class CollaborationDurationLog {
     this.#writeJson(path.join(reportRoot, `integration-generation-${generation}.json`), report);
     this.#writeTrend();
     return report;
+  }
+
+  readTaskEvidence(task: DurationEvidenceTask, requiredSegments: readonly CollaborationDurationSegment[]): CollaborationTaskDurationEvidence {
+    const candidateSha = [...(task.flowEvents || [])].reverse()
+      .map((event) => event.details?.candidateSha || null)
+      .find((value): value is string => typeof value === "string" && /^[a-f0-9]{40,64}$/iu.test(value)) || null;
+    const resultSha = task.versionWorkspace?.resultSha && /^[a-f0-9]{40,64}$/iu.test(task.versionWorkspace.resultSha)
+      ? task.versionWorkspace.resultSha : null;
+    const bindingStatus = candidateSha ? resultSha ? "available" : "result-missing" : "candidate-missing";
+    const events = this.#readEvents().map(parseCompletedSpanEvent)
+      .filter((event): event is CompletedSpanEvent => event !== null && event.taskId === task.taskId);
+    const completedSegments = [...new Set(events.map((event) => event.segment))];
+    return {
+      taskId: task.taskId, candidateSha, resultSha, bindingStatus, completedSegments,
+      missingSegments: bindingStatus === "available" ? requiredSegments.filter((segment) => !completedSegments.includes(segment)) : [...requiredSegments],
+      events: events.map(({ segment, startedAt, endedAt, durationMs, outcome }) => ({ segment, startedAt, endedAt, durationMs, outcome })),
+    };
   }
 
   interruptOpenSpans(reason: string): void {
