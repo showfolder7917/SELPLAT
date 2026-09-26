@@ -8,6 +8,8 @@ acceptanceContextJson 中 acceptancePlan 为 null 时，才执行上述首次分
 
 只要存在可安全观察的页面条件就返回 mixed，pageCriterionIds 可以包含一条、部分或全部原始条件；findings 只覆盖其余不适合直接从页面观察的条件。完全没有可安全观察的页面条件时返回 code-conformance，findings 覆盖全部条件。
 
+同一句明确要求历史审计或历史区域显示“无记录”“读取失败”“重新读取”或保留成功内容时，该条件是任务协作群中可安全观察的页面状态：必须列入 pageCriterionIds，并在 pageCriterionSurfaces 为该编号唯一声明 task-collaboration。不得因受限源码片段不足把这类可见状态降级为 code-conformance；未明确页面显示的历史读取策略仍按源码条件处理。
+
 无论哪种模式，都必须返回 sourceReview：
 - 检查本次真实修改涉及的源码及调用边界，判断职责是否集中、依赖是否单向、后续修改是否需要跨多处联动。
 - 判断命名、模块边界和控制流是否让新手能读懂；结构会阻碍后续维护时必须 failed，不能因为功能或测试通过而放行。
