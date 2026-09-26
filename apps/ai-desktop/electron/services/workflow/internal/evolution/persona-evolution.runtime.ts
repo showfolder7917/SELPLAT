@@ -15,6 +15,7 @@ import type { PromptLibraryPort } from "../../../support/capabilities/prompts/in
 // 提案执行聚合统一解释原任务、修复任务和验收状态，Runtime 不再拼装零散布尔值。
 import { ProposalExecutionAggregate } from "../../domain/proposal-execution.aggregate.js";
 import { projectCurrentTopicStage } from "../../domain/current-topic-stage.projection.js";
+import { hasCurrentTopicAcceptanceDeliveryGate, projectCurrentTopicDeliveryEvidence } from "../../domain/current-topic-delivery-evidence.js";
 import { decideCurrentTopicOperation } from "../../domain/current-topic-operation.decision.js";
 // 单任务聚合统一解释人物是否仍真实占用任务。
 import { CollaborationTaskAggregate } from "../../domain/collaboration-task.aggregate.js";
@@ -500,6 +501,23 @@ export class PersonaEvolutionRuntime {
     return this.nangongRuntime.facade.distributeProposal(proposalId, mutation);
   }
 
+  /** 只恢复当前活动专题中已完成完整交付门禁、但丢失运行指针的原验收。 */
+  #restoreMissingPendingAcceptanceRun(state: EvolutionStateOutDto): EvolutionStateOutDto {
+    if (state.oneShotRun) return state;
+    const candidates = state.proposals.filter((item) => item.topicId === state.activeTopicId
+      && item.status === "pending-acceptance"
+      && state.topics.some((topic) => topic.topicId === item.topicId && topic.currentProposalVersion === item.version));
+    if (candidates.length !== 1) return state;
+    const proposal = candidates[0];
+    const collaboration = this.#collaboration.state();
+    if (decideCurrentTopicOperation(state, collaboration, { topicId: proposal.topicId, proposalId: proposal.proposalId }).kind !== "operable") return state;
+    const execution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
+    if (!execution.completed || execution.missingTaskIds.length) return state;
+    const deliveryEvidence = projectCurrentTopicDeliveryEvidence(execution.effectiveTasks, collaboration, null);
+    if (!hasCurrentTopicAcceptanceDeliveryGate(deliveryEvidence)) return state;
+    return this.#store.ensurePendingAcceptanceOneShotRun(proposal.topicId, proposal.proposalId);
+  }
+
   /** 一次性托管只调度现有动作；每次推进到需要等待真实任务状态的位置即返回。 */
   async #advanceOneShot(): Promise<EvolutionStateOutDto> {
     const transitionLimit = Math.max(12, this.state().automationSettings.maxCorrectionRounds * 3 + 8);
@@ -816,9 +834,9 @@ export class PersonaEvolutionRuntime {
     this.#running = true;
     // 异步推进可能跨越一次明确的专题切换。catch 只能阻塞启动本轮 tick 的运行代际；
     // 否则旧专题迟到的调查错误会把刚建立、尚未关联 topicId 的新运行误伤为卡点。
-    const tickRunId = this.state().oneShotRun?.runId || null;
+    const tickRunId = this.#store.state().oneShotRun?.runId || null;
     try {
-      let state = this.state();
+      let state = this.#store.state();
       // 旧版本把暂时的线程写入占用落成了终态；只恢复同一来源请求的建题前运行。
       if (state.oneShotRun?.status === "blocked" && !state.oneShotRun.topicId && !state.oneShotRun.proposalId
         && state.oneShotRun.sourceRequestId && /active writer/i.test(state.oneShotRun.blockingReason || "")) {
@@ -883,6 +901,7 @@ export class PersonaEvolutionRuntime {
           state = this.#store.resumeOneShotRun();
         }
       }
+      state = this.#restoreMissingPendingAcceptanceRun(state);
       if (state.oneShotRun?.status === "running") {
         // 暂停、停止和人工接管必须冻结当前专题，恢复后仍沿原卡点继续。
         if (state.automationRuntime.status !== "running") return;

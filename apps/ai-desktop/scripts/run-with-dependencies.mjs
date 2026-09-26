@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { attachDependencyCache, detachOwnedDependencyCache, resolveDependencyCache } from "./dependency-cache.mjs";
+import { isCollaborationWorktree } from "./selected-workspace-root.mjs";
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error("A command is required.");
@@ -64,8 +66,11 @@ function runCommand(dependencyRoot, appRoot, nodeCompileCache, controlledProcess
   const windowsCommandLine = `"${[quoteWindowsArgument(executable), ...commandArguments.map(quoteWindowsArgument)].join(" ")}"`;
   const launchExecutable = usesWindowsCommandInterpreter ? process.env.ComSpec || "cmd.exe" : executable;
   const launchArguments = usesWindowsCommandInterpreter ? ["/d", "/s", "/c", windowsCommandLine] : commandArguments;
-  // 直接测试在隔离工作树中仍须把临时状态留在该工作树缓存，不能继承只读源工程的数据目录。
-  const controlledTestTemporaryRoot = String(process.env.AI_DESKTOP_TEST_TEMP_ROOT || "").trim() || path.dirname(controlledProcessTemp);
+  // 候选源码不是运行数据根；测试夹具必须放在系统临时目录，避免被工作区路径门禁误判为候选数据。
+  const controlledTestTemporaryRoot = String(process.env.AI_DESKTOP_TEST_TEMP_ROOT || "").trim()
+    || (isCollaborationWorktree(cache.projectRoot)
+      ? process.platform === "darwin" ? "/private/tmp" : os.tmpdir()
+      : path.dirname(controlledProcessTemp));
   const result = spawnSync(launchExecutable, launchArguments, {
     cwd: appRoot,
     stdio: "inherit",
