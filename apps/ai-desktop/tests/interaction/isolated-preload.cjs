@@ -264,6 +264,7 @@ const synchronizeInteractionCurrentTopicStage = () => {
     status: "failed-pending-repair", title: "已阻塞", summary: "等待从原卡点继续。", repairContent: "", remaining: "等待恢复原任务。",
     waitingFor: "原任务恢复处理", nextAction: "保留失败证据并从原恢复点处理。",
     userAction: "none", resumeOneShotRunId: null, resumeTaskId: null, customerActionGuidance: null, effectiveTaskIds: ["interaction-task"], missingTaskIds: [], latestAcceptance: null,
+    topicDuration: { startedAt: "2026-08-29T00:00:00.000Z", endedAt: null, durationMs: 60_000, status: "running" },
     deliveryEvidence: emptyInteractionDeliveryEvidence(), updatedAt: now,
   };
   if (interruptedTimelineFixtureStatus === "waiting") {
