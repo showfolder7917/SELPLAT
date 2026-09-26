@@ -35,6 +35,13 @@ export function projectCurrentTopicStage(
   if (preparation) return preparation;
   if (!proposal) throw new Error("当前专题准备阶段缺少未建立提案的投影。");
 
+  // 已建立专题的每条返回路径都附带同一份总历时，避免验收监控或技术恢复绕过主卡摘要。
+  const finalConclusion = readFinalConclusion(evolution, proposal);
+  const withTopicDuration = (stage: CurrentTopicStageOutDto): CurrentTopicStageOutDto => ({
+    ...stage,
+    topicDuration: projectTopicDuration(topic, stage.status, finalConclusion, stage.updatedAt),
+  });
+
   // 已取消链只能作为历史展示，绝不能被当前专题投影重新包装成恢复、审批或验收入口。
   const operation = decideCurrentTopicOperation(evolution, collaboration, {
     topicId: topic?.topicId || proposal.topicId,
@@ -42,7 +49,7 @@ export function projectCurrentTopicStage(
     runId: evolution.oneShotRun?.runId || null,
   });
   const operationStage = projectOperationStage(operation, evolution, proposal, topic);
-  if (operationStage) return operationStage;
+  if (operationStage) return withTopicDuration(operationStage);
 
   const currentExecution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const execution = currentExecution;
@@ -64,12 +71,11 @@ export function projectCurrentTopicStage(
   const technicalStage = projectCurrentTechnicalRecovery({ evolution, proposal, topic, execution,
     latestAcceptance, hostStartupAcceptance, deliveryEvidence });
   // 技术恢复只改变责任人与恢复入口；同一专题的失败分类和真实阶段时长仍必须留在主卡。
-  if (technicalStage) return { ...technicalStage, durationEvidence: currentDurationEvidence, failureEvidence };
+  if (technicalStage) return withTopicDuration({ ...technicalStage, durationEvidence: currentDurationEvidence, failureEvidence });
 
   const monitorStage = projectMonitorAcceptanceStage(evolution, proposal, topic);
-  if (monitorStage) return monitorStage;
+  if (monitorStage) return withTopicDuration(monitorStage);
 
-  const finalConclusion = readFinalConclusion(evolution, proposal);
   const task = latestEffectiveTask(execution.effectiveTasks);
   // 完成态后的真实复核仍属于当前专题；运行明确阻塞时不得让旧完成事实覆盖恢复入口。
   const runBlocked = run?.status === "blocked"
@@ -107,11 +113,10 @@ export function projectCurrentTopicStage(
   // 任务级客户动作只能由已核对故障关联与完整指导的技术恢复投影签发。
   const userAction = status === "awaiting-confirmation" ? "confirmation" : status === "failed-pending-repair" && runBlocked && !execution.blocked ? "resume" : "none";
   const updatedAt = [proposal.updatedAt, task?.updatedAt, latestAcceptance?.occurredAt].filter((item): item is string => Boolean(item)).sort().at(-1) || evolution.updatedAt;
-  const topicDuration = projectTopicDuration(topic, status, finalConclusion, updatedAt);
   const waitingFor = stageWaitingFor(status, stageGate);
   const nextAction = stageNextAction(status, stageGate);
 
-  return {
+  return withTopicDuration({
     topicId: topic?.topicId || proposal.topicId,
     proposalId: proposal.proposalId,
     status,
@@ -134,10 +139,9 @@ export function projectCurrentTopicStage(
     hostStartupAcceptance,
     deliveryEvidence,
     durationEvidence: currentDurationEvidence,
-    topicDuration,
     failureEvidence,
     updatedAt,
-  };
+  });
 }
 
 /** 专题总历时只使用专题创建与可追溯终态，不能由阶段总和或最近刷新时间补造。 */

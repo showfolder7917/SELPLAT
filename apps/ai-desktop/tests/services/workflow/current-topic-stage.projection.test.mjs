@@ -118,6 +118,7 @@ test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签�
   assert.match(stage.summary, /令狐老祖处理中/);
   assert.equal(stage.failureEvidence.classification, "product-defect");
   assert.equal(stage.durationEvidence.phases[0].durationMs, 10);
+  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: null, durationMs: 0, status: "running" });
   assert.deepEqual(stage.deliveryEvidence.preflight, {
     status: "not-recorded", round: null, candidateSha: null, impactScope: [], testInputs: [],
     evidenceReferences: [], evidenceValid: null, reusableStages: [], issues: [],
@@ -460,6 +461,7 @@ test("已取消关联只保留历史取消结论，不生成恢复或验收动�
   assert.equal(stage.userAction, "none");
   assert.equal(stage.resumeOneShotRunId, null);
   assert.deepEqual(stage.effectiveTaskIds, []);
+  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:42:19.000Z", durationMs: 2539000, status: "completed" });
 });
 
 test("已被有效替代的旧取消任务不阻断当前专题", () => {
@@ -769,16 +771,21 @@ test("监控者独立验收卡缺少最终结论时不能冒充已通过", () =>
   assert.deepEqual(stage.effectiveTaskIds, []);
   assert.equal(stage.deliveryEvidence.candidate, null);
   assert.equal(stage.deliveryEvidence.acceptance, "missing");
+  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T05:00:00.000Z", durationMs: 3600000, status: "completed" });
 
   state.topics[0].status = "pending-acceptance";
   state.topics[0].recoveryPoint = "monitor-formal-acceptance-pending";
   state.proposals[0].status = "pending-acceptance";
   state.oneShotRun.status = "running";
-  assert.equal(projectCurrentTopicStage(state, { tasks: [], integrationBatches: [] }).status, "pending-acceptance");
+  const pending = projectCurrentTopicStage(state, { tasks: [], integrationBatches: [] });
+  assert.equal(pending.status, "pending-acceptance");
+  assert.deepEqual(pending.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: null, durationMs: 0, status: "running" });
   state.topics[0].status = "supplement-required";
   state.topics[0].recoveryPoint = "monitor-formal-acceptance-failed";
   state.oneShotRun.status = "blocked";
-  assert.equal(projectCurrentTopicStage(state, { tasks: [], integrationBatches: [] }).status, "failed-pending-repair");
+  const failed = projectCurrentTopicStage(state, { tasks: [], integrationBatches: [] });
+  assert.equal(failed.status, "failed-pending-repair");
+  assert.deepEqual(failed.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: null, durationMs: 0, status: "running" });
 });
 
 test("重启健康只将最终候选交给真实验收，不能单独完成", () => {
