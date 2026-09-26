@@ -110,9 +110,20 @@ for (const scenario of ["verified", "misclassified", "different-version", "faile
     const restored = new CollaborationStore(file);
     if (scenario === "verified") assert.equal(restored.state().integrationBatches[0].state, "verified", "启动不得把已测试版本误标失败");
     const confirmedBatches = [];
+    const durationEvents = [];
     const pipeline = new VersionIntegrationPipeline({
-      store: restored, durations, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1",
-      releaseBatches: { confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId), retireRuntimeActivationPackage: () => undefined },
+      store: restored, durations: {
+        ...durations,
+        start: (taskId, phase, detail) => { durationEvents.push(["start", taskId, phase, detail]); return "restart-health"; },
+        finish: (spanId, status, detail) => durationEvents.push(["finish", spanId, status, detail]),
+      }, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1",
+      releaseBatches: {
+        runningDocument: (batchId) => batchId === "release-0.1.1-g36" ? {
+          releaseBatchId: batchId, state: "integrated", candidateSha: "candidate-sha", executable: null,
+          tasks: [{ taskId: task.taskId, resultSha: "verified-result" }],
+        } : null,
+        confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId), retireRuntimeActivationPackage: () => undefined,
+      },
       workspaces: { retireWorkspace: async () => undefined },
       loadedRuntimeSha: scenario === "different-version" ? "other-sha" : "candidate-sha",
     });
@@ -120,6 +131,10 @@ for (const scenario of ["verified", "misclassified", "different-version", "faile
     assert.deepEqual(pipeline.confirmPublishedRestart(), expected ? [36] : []);
     assert.deepEqual(confirmedBatches, expected ? ["release-0.1.1-g36"] : []);
     assert.equal(restored.task(task.taskId).state, expected ? "integrated" : "awaiting-restart");
+    assert.deepEqual(durationEvents, expected ? [
+      ["start", task.taskId, "restart-health", { generation: 36, candidateSha: "candidate-sha" }],
+      ["finish", "restart-health", "completed", { generation: 36, candidateSha: "candidate-sha" }],
+    ] : []);
     assert.deepEqual(pipeline.confirmPublishedRestart(), [], "重复健康通知不得重复验收交接");
     pipeline.dispose();
   } finally { rmSync(directory, { recursive: true, force: true }); }
