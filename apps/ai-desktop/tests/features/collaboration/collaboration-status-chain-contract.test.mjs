@@ -235,8 +235,16 @@ test("审计历史在窄窗口保留四项状态和可展开长证据", () => {
 
 test("令狐自动处理的技术卡点在主区域显示转交原因", () => {
   const header = taskGroupCardSource.slice(taskGroupCardSource.indexOf("function TaskGroupHeader"), taskGroupCardSource.indexOf("/** 一张专题任务卡"));
-  assert.match(header, /failed-pending-repair[\s\S]*userAction === "none"[\s\S]*waitingFor === "令狐老祖"[\s\S]*currentStage\.remaining[\s\S]*转交原因/);
+  assert.match(header, /fixedBlockingReason[\s\S]*failed-pending-repair[\s\S]*userAction === "none"[\s\S]*waitingFor === "令狐老祖"[\s\S]*technicalRecoveryReason[\s\S]*转交原因/);
   assert.doesNotMatch(header, /task-recovery-continue/);
+});
+
+test("验收等待在固定摘要显示权威阻塞原因，但不签发恢复入口", () => {
+  const header = taskGroupCardSource.slice(taskGroupCardSource.indexOf("function TaskGroupHeader"), taskGroupCardSource.indexOf("/** 一张专题任务卡"));
+  assert.match(header, /fixedBlockingReason[\s\S]*currentStage\?\.remaining[\s\S]*status !== "completed"[\s\S]*status !== "cancelled"/);
+  assert.match(header, /currentBlockingReason[\s\S]*当前阻塞原因/);
+  assert.match(taskGroupCardSource, /currentStage\?\.userAction === "resume"/);
+  assert.match(interactionPreloadSource, /status: accepting \? "accepting" : "completed"[\s\S]*remaining: accepting \? "等待真实验收结果。" : ""[\s\S]*userAction: "none"/);
 });
 
 test("任务协作群说明在全部窗口宽度都完整换行而不使用省略号", () => {

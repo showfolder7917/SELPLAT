@@ -102,7 +102,7 @@ test("审计历史卡在窄窗口仍公开四项事实和只读长证据", () =>
 
 test("令狐处理中的活动技术卡点公开转交原因且不签发恢复入口", () => {
   const header = taskCardSource.slice(taskCardSource.indexOf("function TaskGroupHeader"), taskCardSource.indexOf("/** 一张专题任务卡"));
-  assert.match(header, /technicalRecoveryReason = currentStage\?\.status === "failed-pending-repair"[\s\S]*currentStage\.userAction === "none"[\s\S]*currentStage\.waitingFor === "令狐老祖"[\s\S]*currentStage\.remaining/);
+  assert.match(header, /fixedBlockingReason = currentStage\?\.remaining\.trim\(\)[\s\S]*status !== "cancelled"[\s\S]*technicalRecoveryReason = fixedBlockingReason[\s\S]*failed-pending-repair[\s\S]*currentStage\.userAction === "none"[\s\S]*currentStage\.waitingFor === "令狐老祖"/);
   assert.match(header, /task-group-primary-handoff-reason[\s\S]*转交原因[\s\S]*technicalRecoveryReason/);
   assert.doesNotMatch(header, /task-recovery-continue|onContinueTask|onResumeAcceptance/);
 });
