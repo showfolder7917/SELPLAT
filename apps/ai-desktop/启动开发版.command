@@ -164,7 +164,15 @@ EXISTING_PIDS=("${(@u)EXISTING_PIDS}")
 
 if (( ${#EXISTING_PIDS[@]} > 0 )); then
   echo "[切换] 正在关闭 ${#EXISTING_PIDS[@]} 个旧 AI Desktop 实例，防止旧代码和屏幕流继续占用..."
-  kill "${EXISTING_PIDS[@]}" 2>/dev/null || true
+  # 只发送正常退出信号；失败时记录最小进程事实，仍由下方单实例门禁决定是否取消启动。
+  for EXISTING_PID in "${EXISTING_PIDS[@]}"; do
+    if kill "$EXISTING_PID" 2>/dev/null; then
+      echo "[诊断] 已向旧 AI Desktop 实例发送 TERM：pid=$EXISTING_PID"
+    else
+      KILL_STATUS=$?
+      echo "[诊断] 无法向旧 AI Desktop 实例发送 TERM：pid=$EXISTING_PID exit=$KILL_STATUS"
+    fi
+  done
   for _ in {1..50}; do
     REMAINING=false
     for EXISTING_PID in "${EXISTING_PIDS[@]}"; do
@@ -174,6 +182,12 @@ if (( ${#EXISTING_PIDS[@]} > 0 )); then
     sleep 0.1
   done
   if [[ "$REMAINING" == true ]]; then
+    for EXISTING_PID in "${EXISTING_PIDS[@]}"; do
+      if kill -0 "$EXISTING_PID" 2>/dev/null; then
+        PROCESS_SNAPSHOT="$(ps -p "$EXISTING_PID" -o pid=,ppid=,stat=,comm= 2>/dev/null | tr -s ' ' | sed 's/^ //')"
+        echo "[诊断] 旧 AI Desktop 实例仍存活：${PROCESS_SNAPSHOT:-pid=$EXISTING_PID process-metadata-unavailable}"
+      fi
+    done
     echo "[错误] 旧 AI Desktop 实例未能正常退出，已取消启动，避免多个版本并行。"
     wait_before_close
     exit 1

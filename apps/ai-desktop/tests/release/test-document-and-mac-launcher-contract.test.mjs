@@ -126,7 +126,7 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /RUN_PATH="\$RUNS_ROOT\/\$RUN_ID"[\s\S]*mkdir "\$RUN_PATH"/);
   assert.match(launcher, /export AI_DESKTOP_PACKAGE_OUTPUT_ROOT="\$RUN_PATH"/);
   assert.match(launcher, /npm run verify:package-content \|\| ! npm run verify:mac:developer/);
-  assert.ok(launcher.indexOf("npm run verify:mac:developer") < launcher.indexOf('kill "${EXISTING_PIDS[@]}"'), "旧进程只能在隔离包验证后关闭");
+  assert.ok(launcher.indexOf("npm run verify:mac:developer") < launcher.indexOf('kill "$EXISTING_PID"'), "旧进程只能在隔离包验证后关闭");
   assert.match(launcher, /RUNS_ROOT="\$PACKAGE_AREA\/developer-runs"/);
   assert.match(launcher, /READY_FILE="\$RUN_PATH\/\.renderer-ready\.json"[\s\S]*--ai-desktop-launch-ready-file=\$READY_FILE/);
   assert.match(launcher, /NEW_PROCESS_READY[\s\S]*\[\[ -f "\$READY_FILE" \]\][\s\S]*rm -rf -- "\$OLD_RUN"/);
@@ -141,7 +141,10 @@ test("macOS 开发启动器构建并注册固定身份应用", () => {
   assert.match(launcher, /lsregister/);
   assert.match(launcher, /APP_EXECUTABLE="\$APP_PATH\/Contents\/MacOS\/AI Desktop"/);
   assert.match(launcher, /正在关闭.*旧 AI Desktop 实例/);
-  assert.match(launcher, /kill "\$\{EXISTING_PIDS\[@\]\}"/);
+  assert.match(launcher, /for EXISTING_PID in "\$\{EXISTING_PIDS\[@\]}"; do[\s\S]*kill "\$EXISTING_PID"/);
+  assert.match(launcher, /已向旧 AI Desktop 实例发送 TERM：pid=\$EXISTING_PID/);
+  assert.match(launcher, /无法向旧 AI Desktop 实例发送 TERM：pid=\$EXISTING_PID exit=\$KILL_STATUS/);
+  assert.match(launcher, /ps -p "\$EXISTING_PID" -o pid=,ppid=,stat=,comm=[\s\S]*旧 AI Desktop 实例仍存活：/);
   assert.match(mainEntry, /for \(const signal of \["SIGTERM", "SIGINT"\] as const\) process\.once\(signal, \(\) => app\.quit\(\)\);/);
   assert.match(mainEntry, /app\.on\("before-quit", \(\) => disposeApplication\(\)\)/);
   assert.doesNotMatch(mainEntry, /app\.on\("before-quit", disposeApplication\)/);
