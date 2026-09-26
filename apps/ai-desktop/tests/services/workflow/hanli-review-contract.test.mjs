@@ -124,6 +124,15 @@ test("历史终态和页面读取回归测试被冻结为验收必读证据", as
   for (const file of regressions) assert.match(application, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
   assert.deepEqual(context.frozenSourceEvidence.missing, []);
   assert.deepEqual(context.frozenSourceEvidence.regressionFiles, regressions);
+  assert.deepEqual(context.frozenSourceEvidence.regressionCoverage["criterion-3"], {
+    status: "covered",
+    scenarios: [
+      { scenario: "同一时间戳活动不覆盖终态", evidenceFiles: ["apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs"] },
+      { scenario: "终态晚于旧恢复节点时收口为完成", evidenceFiles: ["apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs"] },
+      { scenario: "终态后真实恢复活动覆盖完成", evidenceFiles: ["apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs"] },
+      { scenario: "专题更新时间未推进不替代事实发生时间", evidenceFiles: ["apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs"] },
+    ],
+  });
   const maximumFrozenEvidenceFiles = [
     "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
     "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
