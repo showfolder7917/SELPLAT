@@ -45,6 +45,14 @@ test("最终候选分别缺少每项验收计划能力时不得进入统一测�
     };
     writeCandidate(root, complete);
     assert.doesNotThrow(() => verifyAcceptancePlanCapabilities(root));
+    writeCandidate(root, {
+      ...complete,
+      runtime: complete.runtime.replace(
+        "plan?.sourceEvidenceFiles || [],\n      )",
+        "plan?.sourceEvidenceFiles || [],\n        this.#readAcceptanceDurationEvidence(acceptanceTasks),\n      )",
+      ),
+    });
+    assert.doesNotThrow(() => verifyAcceptancePlanCapabilities(root));
     const missingCapabilities = [
       ["验收计划持久化", { ...complete, state: complete.state.replace("acceptance.plan_frozen", "") }],
       ["同专题重开", { ...complete, state: complete.state.replace("acceptance.reopened", "") }],

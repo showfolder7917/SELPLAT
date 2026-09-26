@@ -408,7 +408,7 @@ export class LinghuAutomationFacade {
       return;
     }
 
-    if ((task.state === "test-failed" && snapshot?.blockingKind === "test")
+    if ((["test-failed", "blocked"].includes(task.state) && snapshot?.blockingKind === "test")
       || (task.state === "blocked" && task.integrationFailure?.kind === "infrastructure")) {
       // 测试或发布基础设施失败必须先产生新结果版本再重测；只退回队列会永久重复同一失败。
       const started = await this.#collaboration.repairTechnicalFailure(task.taskId);

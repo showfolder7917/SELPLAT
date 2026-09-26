@@ -144,10 +144,10 @@ function latestTime(...values: Array<string | null | undefined>): string {
 export function faultFingerprint(task: CollaborationTaskOutDto, snapshot: LinghuAutomaticFlowSnapshotOutDto | undefined): string {
   // 快照只用于保持公开函数签名一致；故障预算不再依赖会变化的心跳和阶段。
   void snapshot;
-  // 优先使用结构化修复原因；等待提示会随流程变化，不能作为新的故障事实。
-  const failureIdentity = task.repairFailureReason
-    // 集成失败已经持久保存原始技术事实，可以稳定区分另一种故障。
-    || task.integrationFailure?.detail
+  // 集成阶段会在执行修复之后产生新的失败事实；必须优先于已解决的旧执行错误，避免预检卡点沿用旧预算。
+  const failureIdentity = task.integrationFailure?.detail
+    // 尚未进入集成时，结构化修复原因仍是本轮故障的权威事实。
+    || task.repairFailureReason
     // 旧任务没有结构化原因时才兼容使用页面阻塞说明。
     || task.blockingReason
     // 完全没有失败正文时仍生成稳定占位值。

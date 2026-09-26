@@ -867,6 +867,54 @@ test("统一测试失败即使日志引用用户规则也由令狐修复而不�
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("候选预检在执行修复后发现新证据缺口时启动技术修复而不是重复集成", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-preflight-evidence-repair-"));
+  try {
+    const collaborationStore = new CollaborationStore(path.join(directory, "collaboration.json"));
+    collaborationStore.setMode("collaboration");
+    const submitted = collaborationStore.submitTask({
+      title: "补齐候选验收证据",
+      problemStatement: "执行修复完成后，候选预检发现验收能力证据不完整。",
+      confirmedIntent: "依据当前预检事实继续技术修复并重新统一测试。",
+      workspaceState,
+      locale: "zh-CN",
+    });
+    collaborationStore.updateTask(submitted.taskId, "fixture.preflight_blocked", (task) => {
+      task.state = "blocked";
+      task.repairFailureReason = "已解决的旧执行语法错误";
+      task.codeVerifiedAt = "2026-09-26T00:23:12.659Z";
+      task.blockingReason = "发布候选批次 511 冲突，统一测试尚未启动";
+      task.recoveryTargetState = "ready-for-integration";
+      task.integrationFailure = {
+        kind: "candidate-branch-conflict",
+        detail: "快速预检发现候选证据问题",
+        conflictFiles: [],
+        baseSha: "base",
+        resultSha: "result",
+        generation: 511,
+        occurredAt: "2026-09-26T00:23:31.611Z",
+      };
+    });
+    let repairRequests = 0;
+    let retryOnlyRequests = 0;
+    const collaboration = {
+      state: () => collaborationStore.state(),
+      setMode: (mode) => collaborationStore.setMode(mode),
+      submitTask: (request) => { collaborationStore.submitTask(request); return collaborationStore.state(); },
+      continueTask: () => { retryOnlyRequests += 1; return collaborationStore.state(); },
+      repairTechnicalFailure: async () => { repairRequests += 1; return true; },
+    };
+    const store = createTestLinghuStore(path.join(directory, "linghu.json"));
+    store.setEnabled(true);
+    const facade = new LinghuAutomationFacade({ store, collaboration, readWorkspaceState: () => workspaceState, locale: () => "zh-CN", recordEvent: () => undefined, readTestResourceState: idleTestResourceState, runUnifiedTestAndRestart: async () => undefined });
+    await facade.checkNow();
+    assert.equal(repairRequests, 1);
+    assert.equal(retryOnlyRequests, 0);
+    assert.match(facade.state().currentFaultFingerprint, /快速预检发现候选证据问题/);
+    assert.doesNotMatch(facade.state().currentFaultFingerprint, /旧执行语法错误/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("容量预检等待授权时令狐生成指导且不重复派发源码修复", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "linghu-capacity-waiting-"));
   try {

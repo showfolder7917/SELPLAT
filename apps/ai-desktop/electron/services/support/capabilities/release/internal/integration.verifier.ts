@@ -307,7 +307,7 @@ function hasFrozenAcceptanceEvidenceChain(sources: ReturnType<typeof readAccepta
   const planFreezesPreflightProducer = sources.application.includes("version: 3")
     && sources.application.includes("version-integration.pipeline.ts")
     && sources.application.includes("pageCriterionSurfaces");
-  const runtimePassesFrozenEvidence = /buildHanliResultReviewContext\(\s*acceptanceTasks,\s*topic\.workspaceState,\s*proposalSourceTasks,\s*plan\?\.sourceEvidenceFiles\s*\|\|\s*\[\]\s*,?\s*\)/.test(sources.runtime);
+  const runtimePassesFrozenEvidence = /buildHanliResultReviewContext\(\s*acceptanceTasks,\s*topic\.workspaceState,\s*proposalSourceTasks,\s*plan\?\.sourceEvidenceFiles\s*\|\|\s*\[\]\s*(?:,|\))/.test(sources.runtime);
   const runtimeConsumesFrozenPageSurface = sources.runtime.includes('item.pageSurface === "task-collaboration"');
   const preflightProducesRequiredFacts = sources.preflight.includes("appendQuickPreflightDecision")
     && sources.preflight.includes("preflight.issues_found")
