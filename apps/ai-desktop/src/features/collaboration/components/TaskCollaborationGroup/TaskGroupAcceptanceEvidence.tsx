@@ -76,9 +76,18 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
         : "阶段时段尚未完整绑定；缺失项不会以总处理时长或零时长补造。"}</p>
       <pre>{(durationEvidence?.phases || [
         "investigation", "implementation", "testing", "release", "restart", "hanli-acceptance",
-      ].map((phase) => ({ phase, durationMs: null, status: "missing" as const }))).map((phase) =>
+      ].map((phase) => ({ phase, durationMs: null, status: "missing" as const, completedCount: 0, candidateAttempts: [] }))).map((phase) =>
         `${phaseLabel[phase.phase as keyof typeof phaseLabel]}：${phase.status === "recorded" && phase.durationMs !== null
-          ? formatTimelineDuration(phase.durationMs, locale) : "未记录或尚未完成"}`).join("\n")}</pre>
+          ? `${formatTimelineDuration(phase.durationMs, locale)}（完成 ${phase.completedCount} 次）` : "未记录或尚未完成"}\n${phase.candidateAttempts.map((attempt) =>
+          `  候选 ${attempt.candidateSha || "未形成或未记录"}：${attempt.completedCount} 次，${formatTimelineDuration(attempt.durationMs, locale)}`).join("\n") || "  候选归属：未记录"}`).join("\n")}</pre>
+    </section>
+    <section className="task-node-detail task-wait-evidence">
+      <strong>{locale === "ja" ? "待機・復旧根拠" : "等待与恢复依据"}</strong>
+      <p>{durationEvidence?.waits.length
+        ? "仅显示已完成且带有等待类别的记录；它们不改变当前恢复权限。"
+        : "未记录可关联的等待或恢复时段。"}</p>
+      {durationEvidence?.waits.length ? <pre>{durationEvidence.waits.map((wait) =>
+        `${wait.waitType}：${wait.reasonCode || "原因未记录"}，${formatTimelineDuration(wait.durationMs, locale)}`).join("\n")}</pre> : null}
     </section>
     <section className="task-node-detail">
       <strong>{locale === "ja" ? "Host 起動受入" : "Host 启动验收"}</strong>

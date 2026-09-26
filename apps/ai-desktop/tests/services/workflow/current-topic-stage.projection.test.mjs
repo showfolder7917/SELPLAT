@@ -62,6 +62,29 @@ test("最新真实验收失败覆盖已集成任务，投影保持失败待处�
   assert.deepEqual(stage.effectiveTaskIds, ["task-current"]);
 });
 
+test("阶段投影按候选分开统计重跑，并保留等待原因而不签发恢复操作", () => {
+  const candidateA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const candidateB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const stage = projectCurrentTopicStage(evolution("missing"), { tasks: [task()] }, [{
+    taskId: "task-current", candidateSha: candidateB, resultSha: candidateB, bindingStatus: "available",
+    completedSegments: ["result-acceptance"], missingSegments: [],
+    events: [
+      { segment: "result-acceptance", startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:00:10.000Z", durationMs: 10_000, outcome: "completed", candidateSha: candidateA, executionAttemptId: "attempt-a", waitType: null, reasonCode: null },
+      { segment: "result-acceptance", startedAt: "2026-09-12T04:10:00.000Z", endedAt: "2026-09-12T04:10:20.000Z", durationMs: 20_000, outcome: "completed", candidateSha: candidateA, executionAttemptId: "attempt-a", waitType: null, reasonCode: null },
+      { segment: "result-acceptance", startedAt: "2026-09-12T04:20:00.000Z", endedAt: "2026-09-12T04:20:30.000Z", durationMs: 30_000, outcome: "completed", candidateSha: candidateB, executionAttemptId: "attempt-b", waitType: null, reasonCode: null },
+      { segment: "recovery", startedAt: "2026-09-12T04:30:00.000Z", endedAt: "2026-09-12T04:31:00.000Z", durationMs: 60_000, outcome: "completed", candidateSha: null, executionAttemptId: "attempt-b", waitType: "recovery-wait", reasonCode: "task-resume-queued" },
+    ],
+  }]);
+  const acceptance = stage.durationEvidence.phases.find((phase) => phase.phase === "hanli-acceptance");
+  assert.equal(acceptance.completedCount, 3);
+  assert.deepEqual(acceptance.candidateAttempts, [
+    { candidateSha: candidateA, completedCount: 2, durationMs: 30_000 },
+    { candidateSha: candidateB, completedCount: 1, durationMs: 30_000 },
+  ]);
+  assert.deepEqual(stage.durationEvidence.waits, [{ waitType: "recovery-wait", reasonCode: "task-resume-queued", durationMs: 60_000 }]);
+  assert.equal(stage.userAction, "none");
+});
+
 test("活动技术卡点即使原运行阻塞也不在缺少完整指导时签发恢复动作", () => {
   const state = evolution("failed");
   Object.assign(state.archiveRecords[0].payload.acceptanceRun, {
@@ -869,7 +892,7 @@ test("当前专题只投影同任务同候选同执行尝试的已完成阶段�
   current.assignmentId = "attempt-current";
   current.versionWorkspace = { resultSha: "b".repeat(40) };
   current.flowEvents = [{ type: "integration.candidate_ready", status: "completed", details: { candidateSha: "a".repeat(40) } }];
-  const completed = (segment, durationMs) => ({ segment, startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:00:01.000Z", durationMs, outcome: "completed" });
+  const completed = (segment, durationMs) => ({ segment, startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:00:01.000Z", durationMs, outcome: "completed", candidateSha: null, executionAttemptId: null, waitType: null, reasonCode: null });
   const stage = projectCurrentTopicStage(evolution("missing"), { tasks: [current], integrationBatches: [] }, [{
     taskId: "task-current", candidateSha: "a".repeat(40), resultSha: "b".repeat(40), bindingStatus: "available",
     completedSegments: ["analysis", "source-change", "verification", "preflight", "combination-test", "release", "restart-health"],
@@ -878,12 +901,12 @@ test("当前专题只投影同任务同候选同执行尝试的已完成阶段�
   }]);
   assert.equal(stage.durationEvidence.bindingStatus, "available");
   assert.deepEqual(stage.durationEvidence.phases, [
-    { phase: "investigation", durationMs: 10, status: "recorded" },
-    { phase: "implementation", durationMs: 20, status: "recorded" },
-    { phase: "testing", durationMs: 120, status: "recorded" },
-    { phase: "release", durationMs: 60, status: "recorded" },
-    { phase: "restart", durationMs: 70, status: "recorded" },
-    { phase: "hanli-acceptance", durationMs: null, status: "missing" },
+    { phase: "investigation", durationMs: 10, status: "recorded", completedCount: 1, candidateAttempts: [{ candidateSha: null, completedCount: 1, durationMs: 10 }] },
+    { phase: "implementation", durationMs: 20, status: "recorded", completedCount: 1, candidateAttempts: [{ candidateSha: null, completedCount: 1, durationMs: 20 }] },
+    { phase: "testing", durationMs: 120, status: "recorded", completedCount: 3, candidateAttempts: [{ candidateSha: null, completedCount: 3, durationMs: 120 }] },
+    { phase: "release", durationMs: 60, status: "recorded", completedCount: 1, candidateAttempts: [{ candidateSha: null, completedCount: 1, durationMs: 60 }] },
+    { phase: "restart", durationMs: 70, status: "recorded", completedCount: 1, candidateAttempts: [{ candidateSha: null, completedCount: 1, durationMs: 70 }] },
+    { phase: "hanli-acceptance", durationMs: null, status: "missing", completedCount: 0, candidateAttempts: [] },
   ]);
   assert.equal(stage.finalConclusion, null);
 });
@@ -905,9 +928,9 @@ test("进程重启后用同任务完成事件补回真实阶段时长并公开�
   });
   const stage = projectCurrentTopicStage(state, { tasks: [current], integrationBatches: [] }, []);
   assert.deepEqual(stage.durationEvidence.phases.slice(0, 3), [
-    { phase: "investigation", durationMs: 5_000, status: "recorded" },
-    { phase: "implementation", durationMs: 4_000, status: "recorded" },
-    { phase: "testing", durationMs: 3_000, status: "recorded" },
+    { phase: "investigation", durationMs: 5_000, status: "recorded", completedCount: 1, candidateAttempts: [] },
+    { phase: "implementation", durationMs: 4_000, status: "recorded", completedCount: 1, candidateAttempts: [] },
+    { phase: "testing", durationMs: 3_000, status: "recorded", completedCount: 1, candidateAttempts: [] },
   ]);
   assert.deepEqual(stage.failureEvidence, {
     classification: "product-defect",
