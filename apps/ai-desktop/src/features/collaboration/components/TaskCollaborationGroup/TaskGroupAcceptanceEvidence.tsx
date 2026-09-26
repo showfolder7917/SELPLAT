@@ -3,6 +3,24 @@ import type { LocaleValue } from "../../../../../contracts/system/desktop/index"
 import { SelUiDisclosure } from "../../../../theme/SelUiDisclosure";
 import { formatTimelineDuration } from "./timeline-display";
 
+const phaseLabels = { investigation: "调查", implementation: "实现", testing: "测试", release: "发布", restart: "重启", "hanli-acceptance": "韩立验收" } as const;
+
+/** 卡片固定区域直接给出故障归属、六段耗时和最终结论，避免关键验收事实埋在滚动详情中。 */
+export function TaskGroupAcceptanceSummary({ stage, locale }: { stage: CurrentTopicStageOutDto; locale: LocaleValue }) {
+  const classification = stage.failureEvidence?.classification === "product-defect" ? "产品缺陷"
+    : stage.failureEvidence?.classification === "acceptance-capability-blocked" ? "验收能力受阻"
+      : stage.failureEvidence?.classification === "infrastructure-blocked" ? "基础设施问题" : "当前无失败分类";
+  const phases = stage.durationEvidence?.phases || [];
+  return <section className="task-acceptance-summary" aria-label={locale === "ja" ? "受入要約" : "验收摘要"}>
+    <span><strong>故障分类</strong><b>{classification}</b><small>{stage.failureEvidence?.relatedFailures === "merged-single-repair-chain" ? "连带失败已归并为同一缺陷的一条修复链" : "未发现需要归并的连带失败"}</small></span>
+    <span><strong>六段真实耗时</strong><small>{(["investigation", "implementation", "testing", "release", "restart", "hanli-acceptance"] as const).map((key) => {
+      const phase = phases.find((item) => item.phase === key);
+      return `${phaseLabels[key]} ${phase?.status === "recorded" && phase.durationMs !== null ? formatTimelineDuration(phase.durationMs, locale) : "待完成"}`;
+    }).join(" · ")}</small></span>
+    <span><strong>最终结论</strong><b>{stage.finalConclusion ? "韩立验收通过" : stage.latestAcceptance?.status === "failed" ? "韩立验收未通过，正在修复" : stage.latestAcceptance?.status === "blocked" ? "韩立验收受阻，等待恢复" : stage.latestAcceptance?.status === "running" ? "韩立验收进行中" : "尚未形成"}</b></span>
+  </section>;
+}
+
 /** Host 重启和最终验收是两份独立的只读证据，不参与恢复按钮判定。 */
 export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
   stage: CurrentTopicStageOutDto;
@@ -12,9 +30,7 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
   const preflight = stage.deliveryEvidence.preflight;
   const delivery = stage.deliveryEvidence;
   const durationEvidence = stage.durationEvidence || null;
-  const phaseLabel: Record<NonNullable<typeof durationEvidence>["phases"][number]["phase"], string> = {
-    investigation: "调查", implementation: "实现", testing: "测试", release: "发布", restart: "重启", "hanli-acceptance": "韩立验收",
-  };
+  const phaseLabel: Record<NonNullable<typeof durationEvidence>["phases"][number]["phase"], string> = phaseLabels;
   return <>
     <section className="task-node-detail task-preflight-evidence">
       <strong>{locale === "ja" ? "高速事前確認と再利用根拠" : "快速预检与复用依据"}</strong>

@@ -2943,6 +2943,41 @@ test("旧 v3 缺少页面表面时只在已记录验收能力受阻后退役重�
   } finally { persistedEvolutionStates.delete(key); }
 });
 
+test("冻结源码清单缺证导致代码条件受阻时审计退役并保留原运行", () => {
+  const key = path.join(controlledTestRoot, "source-evidence-plan-retire-state.json");
+  try {
+    const store = evolutionStore(key);
+    let state = store.createTopic({ ...topicRequest("冻结源码清单缺证恢复"), acceptanceCriteria: ["恢复链源码完整", "清空实现源码完整"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    state = store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    const now = new Date().toISOString();
+    const plan = {
+      version: 3, planId: "stale-source-plan", topicId: state.activeTopicId, proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: state.proposals.at(-1).acceptanceCriteria.map((criterion, index) => ({ conditionId: `criterion-${index + 1}`, criterion, evidenceType: "code-conformance", pageSurface: null, completionRequirement: "源码审查" })),
+      sourceEvidenceFiles: ["apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts"],
+      rounds: [{ roundId: "stale-source-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+      currentRoundId: "stale-source-round", createdAt: now,
+    };
+    store.saveAcceptancePlan(proposalId, plan);
+    const run = computerRun("stale-source-run", state.activeTopicId, proposalId, "failed", "stale-source-shot", plan);
+    run.stepResults[0].status = "blocked";
+    store.recordAcceptanceRun(run);
+    const replacement = [
+      "apps/ai-desktop/electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts",
+      "apps/ai-desktop/electron/services/support/application/test-data-reset.service.ts",
+    ];
+    assert.equal(store.retireSourceEvidenceBlockedAcceptancePlan(proposalId, replacement), true);
+    const next = store.state();
+    assert.equal(next.proposals.at(-1).acceptancePlan, null);
+    assert.ok(next.archiveRecords.some((record) => record.eventType === "acceptance.result_checked" && record.payload.acceptanceRun.runId === "stale-source-run"));
+    const retired = next.archiveRecords.at(-1);
+    assert.equal(retired.eventType, "acceptance.source_evidence_plan_retired");
+    assert.deepEqual(retired.payload.replacementSourceEvidenceFiles, replacement);
+  } finally { persistedEvolutionStates.delete(key); }
+});
+
 test("复验只将受阻页面条件改为代码条件，不改写其他正式页面条件", async () => {
   const directory = mkdtempSync(path.join(controlledTestRoot, "hanli-scenario-plan-review-"));
   try {

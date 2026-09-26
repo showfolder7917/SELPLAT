@@ -1019,6 +1019,30 @@ export class EvolutionStateStore {
     return demotedConditionIds;
   }
 
+  /** 旧冻结清单导致代码条件缺证受阻时，只审计退役该计划；原运行与逐项失败证据继续保留。 */
+  retireSourceEvidenceBlockedAcceptancePlan(proposalId: string, currentSourceEvidenceFiles: readonly string[]): boolean {
+    const proposal = requireProposal(this.#state, proposalId);
+    const previous = proposal.acceptancePlan;
+    if (!previous || proposal.status !== "pending-acceptance" || previous.version !== 3) return false;
+    const previousFiles = previous.sourceEvidenceFiles || [];
+    if (previousFiles.length === currentSourceEvidenceFiles.length
+      && previousFiles.every((file, index) => file === currentSourceEvidenceFiles[index])) return false;
+    const resultRecord = [...this.#state.archiveRecords].reverse().find((record) =>
+      record.proposalId === proposalId && record.eventType === "acceptance.result_checked"
+      && (record.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined)?.planId === previous.planId);
+    const result = resultRecord?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
+    const codeEvidenceBlocked = result && result.status !== "passed" && result.acceptanceRoundId === previous.currentRoundId
+      && result.stepResults.some((step) => step.evidenceMode === "code-conformance" && step.status === "blocked");
+    if (!codeEvidenceBlocked) return false;
+    this.#commit("acceptance.source_evidence_plan_retired", proposal.topicId, proposalId, (state) => {
+      requireProposal(state, proposalId).acceptancePlan = null;
+    }, {
+      retiredPlan: structuredClone(previous), sourceAcceptanceRecordId: resultRecord!.recordId,
+      sourceRunId: result.runId, replacementSourceEvidenceFiles: [...currentSourceEvidenceFiles], nextOwner: "han-li",
+    });
+    return true;
+  }
+
   /** 仅退役缺少冻结页面表面且已有同轮验收能力受阻事实的 v3 计划；原计划和失败结果继续保留在档案中。 */
   retireAcceptanceCapabilityPlan(proposalId: string): boolean {
     const proposal = requireProposal(this.#state, proposalId);
