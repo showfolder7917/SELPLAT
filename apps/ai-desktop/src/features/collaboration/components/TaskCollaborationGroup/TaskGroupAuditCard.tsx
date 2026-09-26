@@ -1,5 +1,5 @@
 import { SelUiDisclosure } from "../../../../theme/SelUiDisclosure";
-import { taskGroupPrimaryPresentation, visibleTimelineNodes } from "./timeline-display";
+import { nodeOccurredAtLabel, taskGroupPrimaryPresentation, visibleTimelineNodes } from "./timeline-display";
 import type { TaskGroupCardModel } from "./TaskGroupCard";
 
 /** 退役专题只呈现落盘事实，不装配当前专题的恢复或派发操作。 */
@@ -7,8 +7,17 @@ export function TaskGroupAuditCard({ model }: { model: TaskGroupCardModel }) {
   const { group } = model;
   const { locale, open } = model.presentation;
   const primary = taskGroupPrimaryPresentation(group, locale);
+  const labels = locale === "ja"
+    ? { action: "操作", summary: "要約", content: "本文", detail: "詳細" }
+    : { action: "动作", summary: "摘要", content: "正文", detail: "详情" };
   const auditEvidence = visibleTimelineNodes(group.nodes)
-    .map((node) => `${node.actor.displayName}：${node.detail || node.content || node.summary}`)
+    .map((node) => [
+      nodeOccurredAtLabel(node, locale),
+      `${node.actor.displayName}：${labels.action} ${node.action}`,
+      `${labels.summary}：${node.summary}`,
+      node.content && `${labels.content}：${node.content}`,
+      node.detail && `${labels.detail}：${node.detail}`,
+    ].filter(Boolean).join("\n"))
     .filter(Boolean).join("\n\n");
   const cancelled = group.status === "cancelled";
   return (

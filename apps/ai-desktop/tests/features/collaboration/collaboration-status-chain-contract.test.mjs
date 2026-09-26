@@ -216,7 +216,9 @@ test("任务协作群空状态在窄窗口保持单列、换行和容器边界",
 
 test("审计历史在窄窗口保留四项状态和可展开长证据", () => {
   assert.match(taskAuditSource, /task-cancelled-history-facts[\s\S]*发生事项[\s\S]*处理人和状态[\s\S]*是否需要你操作[\s\S]*下一步/);
-  assert.match(taskAuditSource, /task-cancelled-history-evidence/);
+  assert.match(taskAuditSource, /const labels = locale === "ja"[\s\S]*动作[\s\S]*摘要[\s\S]*正文[\s\S]*详情/);
+  assert.match(taskAuditSource, /nodeOccurredAtLabel\(node, locale\)[\s\S]*labels\.action[\s\S]*labels\.summary[\s\S]*labels\.content[\s\S]*labels\.detail[\s\S]*task-cancelled-history-evidence/);
+  assert.doesNotMatch(taskAuditSource, /node\.detail \|\| node\.content \|\| node\.summary/);
   assert.match(developerStyles, /task-cancelled-history-facts \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)[\s\S]*task-cancelled-history-evidence \{[\s\S]*max-height: 240px[\s\S]*overflow: auto/);
   assert.match(developerStyles, /@media \(max-width: 1120px\) \{[\s\S]*task-cancelled-history-facts \{ grid-template-columns: 1fr; \}/);
 });
