@@ -40,6 +40,7 @@ const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
   "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
   "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
   "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
+  "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs",
 ] as const;
 
 /** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */

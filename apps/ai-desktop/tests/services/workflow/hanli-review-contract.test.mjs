@@ -27,6 +27,7 @@ test("韩立固定审查正式页面与源码结构", () => {
   assert.match(coordinator, /sourceEvidenceStatus: sourceEvidence\.status/);
   assert.match(prompt, /sourceEvidence` 是唯一已授权、去重后的源码片段/);
   assert.match(prompt, /sourceEvidenceStatus=available/);
+  assert.match(prompt, /durationEvidence/);
 });
 
 test("受阻验收先归档本轮真实结果再进入恢复，当前卡不沿用上一轮", () => {
@@ -114,12 +115,74 @@ test("历史终态和页面读取回归测试被冻结为验收必读证据", as
     "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
     "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
     "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
+    "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs",
   ];
   const context = buildHanliResultReviewContext([], workspace, [], regressions);
   assert.equal(context.sourceEvidenceStatus, "available");
   assert.deepEqual(context.frozenSourceEvidenceFiles, regressions);
   assert.ok(regressions.every((file) => context.sourceEvidence.some((item) => item.file === file)));
   for (const file of regressions) assert.match(application, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
+  assert.deepEqual(context.frozenSourceEvidence.missing, []);
+  assert.deepEqual(context.frozenSourceEvidence.regressionFiles, regressions);
+  const maximumFrozenEvidenceFiles = [
+    "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-delivery-evidence.ts",
+    "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-duration.log.ts",
+    "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-interaction-performance.log.ts",
+    "apps/ai-desktop/electron/system/ipc/domains/register-collaboration-ipc.ts",
+    "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
+    "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
+    "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs",
+    "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
+    "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
+    "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
+    "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs",
+  ];
+  assert.doesNotThrow(() => buildHanliResultReviewContext([], workspace, [], maximumFrozenEvidenceFiles));
+  assert.throws(
+    () => buildHanliResultReviewContext([], workspace, [], [...maximumFrozenEvidenceFiles, "apps/ai-desktop/electron/services/personas/hanli/internal/application/hanli-application.service.ts"]),
+    /冻结的验收源码证据清单无效/u,
+  );
+});
+
+test("历史审计卡只读展开回执包含可见文本和无业务操作的事实", () => {
+  const auditActionStart = computer.indexOf("async function toggleTaskAuditCard");
+  const auditActionEnd = computer.indexOf("/** 只读取正式页面中可见的任务协作群标识", auditActionStart);
+  const auditAction = computer.slice(auditActionStart, auditActionEnd);
+  assert.match(auditAction, /auditCardText: card\.innerText/u);
+  assert.match(auditAction, /auditDetailText: detail\?\.innerText/u);
+  assert.match(auditAction, /businessActionCount: businessActions\.length/u);
+  assert.doesNotMatch(auditAction, /desktop:|window\.desktop|onResumeAcceptance|onContinueTask/u);
+});
+
+test("韩立验收上下文只传入任务绑定候选的耗时证据", () => {
+  assert.match(runtime, /readAcceptanceDurationEvidence\(acceptanceTasks\)/u);
+  assert.match(coordinator, /durationEvidence,/u);
+  assert.match(prompt, /bindingStatus.*available/u);
+  assert.match(prompt, /missingSegments/u);
+});
+
+test("耗时证据拒绝用无候选绑定的同任务记录补齐阶段", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/collaboration/collaboration-duration.log.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { CollaborationDurationLog } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(path.join(parent, "hanli-duration-evidence-"));
+  try {
+    const log = new CollaborationDurationLog(root);
+    const span = log.start("task-a", "source-change");
+    log.finish(span);
+    const resultSha = "b".repeat(40);
+    const blocked = log.readTaskEvidence({ taskId: "task-a", versionWorkspace: { resultSha }, flowEvents: [] }, ["source-change"]);
+    assert.equal(blocked.bindingStatus, "candidate-missing");
+    assert.deepEqual(blocked.missingSegments, ["source-change"]);
+    const available = log.readTaskEvidence({ taskId: "task-a", versionWorkspace: { resultSha }, flowEvents: [{ details: { candidateSha: "a".repeat(40) } }] }, ["source-change", "verification"]);
+    assert.equal(available.bindingStatus, "available");
+    assert.deepEqual(available.missingSegments, ["verification"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("证据达到四十八项上限时仍完整保留冻结源码清单", async () => {

@@ -780,10 +780,17 @@ async function toggleTaskAuditCard(auditCardIndex: number): Promise<Record<strin
       auditCardSize: { width: Math.round(cardRect.width), height: Math.round(cardRect.height) },
     };
   }
+  const detail = card.querySelector<HTMLElement>(".task-cancelled-history-detail");
+  const businessActions = Array.from(card.querySelectorAll<HTMLButtonElement>("button"))
+    .filter((button) => button !== trigger && !button.matches("[data-sel-disclosure-trigger]"));
   return {
     status: wasOpen ? "closed" : "opened",
     auditCardIndex,
     auditCardCount: cards.length,
+    auditCardText: card.innerText.trim().slice(0, 12_000),
+    auditDetailText: detail?.innerText.trim().slice(0, 12_000) || "",
+    auditCardSize: { width: Math.round(cardRect.width), height: Math.round(cardRect.height) },
+    businessActionCount: businessActions.length,
   };
 }
 
