@@ -530,7 +530,7 @@ test("未授权的数据操作归工程证据，原条件明确要求的当前�
   assert.match(decision, /effectiveMode = pageCriterionIds\.length > 0 \? "mixed"/);
 });
 
-test("页面动作识别不跨句误读技术表述，同句真实操作仍强制页面验收", async () => {
+test("页面动作和可见历史读取状态不跨句误读技术表述", async () => {
   const bundled = await build({ entryPoints: ["electron/services/personas/hanli/internal/decision/hanli-decision.service.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { requiredFormalPageCriterionIds } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const criteria = [
@@ -548,9 +548,14 @@ test("页面动作识别不跨句误读技术表述，同句真实操作仍强�
     { criterionId: "test", criterion: "测试必须覆盖跨句技术说明和同句页面操作。" },
     { criterionId: "restart", criterion: "重启后必须继续复用冻结计划的证据类型。" },
     { criterionId: "return", criterion: "返回验收时既有混合页面结果结构校验必须保持有效。" },
+    { criterionId: "audit-source", criterion: "历史审计读取策略在源码中保留上次成功内容。" },
+    { criterionId: "audit-cross-sentence", criterion: "历史区域显示。读取失败后保留上次成功内容。" },
+    { criterionId: "audit-visible", criterion: "无可关联历史时，历史区域显示无记录或读取失败的实际状态；读取失败后原有成功内容仍保留。" },
     { criterionId: "interaction", criterion: "在当前正式应用中展开任务卡并点击查看详情按钮。" },
   ];
-  assert.deepEqual(requiredFormalPageCriterionIds(criteria), ["interaction"]);
+  assert.deepEqual(requiredFormalPageCriterionIds(criteria), ["audit-visible", "interaction"]);
+  assert.match(prompt, /历史审计或历史区域显示[\s\S]*task-collaboration/u);
+  assert.match(prompt, /不得因受限源码片段不足把这类可见状态降级为 code-conformance/u);
 });
 
 test("冻结的当前验收计划必须逐项复用且不得在结果审查时重新分区", () => {

@@ -354,8 +354,10 @@ export function requiredFormalPageCriterionIds(criteria: Array<{ criterionId: st
   const formalInteraction = /(?:真实|正式|当前)应用[^。！？；.!?;\r\n]{0,40}(?:点击|打开|关闭|展开|收起|滚动|拖动|选择|新建|重建|重新建立)[^。！？；.!?;\r\n]{0,40}(?:按钮|页面|任务卡|对话|窗口|面板|标签|“[^”\r\n]{1,40}”|「[^」\r\n]{1,40}」)/;
   const namedControlInteraction = /(?:点击|打开|关闭|展开|收起|滚动|拖动|选择)[^。！？；.!?;\r\n]{0,40}(?:按钮|页面|任务卡|对话|窗口|面板|标签)/;
   const visibleLayout = /(?:正常|窄|宽)[^。！？；.!?;\r\n]{0,12}窗口[^。！？；.!?;\r\n]{0,60}(?:显示|可见|遮挡|布局|滚动)/;
+  // 历史区域的无记录与读取失败属于当前任务协作页可直接观察的状态；要求“显示”与具体状态同句，避免源码策略说明被误分为页面验收。
+  const visibleAuditReadState = /(?:历史审计|历史区域|审计区域)[^。！？；.!?;\r\n]{0,60}(?:显示|可见)[^。！？；.!?;\r\n]{0,60}(?:无记录|读取失败|重新读取|保留(?:上次|最近)?成功内容|保留成功内容)/;
   return criteria
-    .filter(({ criterion }) => formalInteraction.test(criterion) || namedControlInteraction.test(criterion) || visibleLayout.test(criterion))
+    .filter(({ criterion }) => formalInteraction.test(criterion) || namedControlInteraction.test(criterion) || visibleLayout.test(criterion) || visibleAuditReadState.test(criterion))
     .map(({ criterionId }) => criterionId);
 }
 
