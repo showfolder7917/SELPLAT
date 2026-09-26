@@ -16,6 +16,7 @@ export function buildHanliResultReviewContext(
 ): unknown {
   // 同一提案只读取一次已授权源码；大文件的中段也必须可见，否则旧恢复分支会被首尾截取漏掉。
   const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState, frozenSourceEvidenceFiles);
+  const frozenEvidence = frozenSourceEvidenceSummary(sourceEvidence.items, frozenSourceEvidenceFiles);
   return {
     tasks: tasks.map((task) => ({
       taskId: task.taskId,
@@ -37,16 +38,54 @@ export function buildHanliResultReviewContext(
     sourceEvidenceStatus: sourceEvidence.status,
     // 让审查器区分本轮变更与计划冻结的回归边界；两类文件都只能来自同一工作区。
     frozenSourceEvidenceFiles: [...frozenSourceEvidenceFiles],
-    frozenSourceEvidence: {
-      required: [...frozenSourceEvidenceFiles],
-      loaded: frozenSourceEvidenceFiles.filter((file) => sourceEvidence.items.some((item) => item.file === file)),
-      missing: frozenSourceEvidenceFiles.filter((file) => !sourceEvidence.items.some((item) => item.file === file)),
-      regressionFiles: frozenSourceEvidenceFiles.filter((file) => /(?:^|\/)tests?\//u.test(file)),
-    },
+    frozenSourceEvidence: frozenEvidence,
     durationEvidence,
     sourceEvidenceScope: frozenSourceEvidenceFiles.length
       ? "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports"
       : "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
+  };
+}
+
+/** 把终态投影的已读回归转为逐项摘要，避免验收器只看到文件名而无法判断时间边界是否已覆盖。 */
+function frozenSourceEvidenceSummary(
+  items: Array<{ file: string; content: string }>,
+  frozenSourceEvidenceFiles: readonly string[],
+) {
+  const loaded = frozenSourceEvidenceFiles.filter((file) => items.some((item) => item.file === file));
+  const sourceFor = (file: string) => items.find((item) => item.file === file)?.content || "";
+  const projectionTest = "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs";
+  const timelineTest = "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs";
+  const projectionSource = sourceFor(projectionTest);
+  const timelineSource = sourceFor(timelineTest);
+  const timeBoundaryScenarios = [
+    {
+      scenario: "同一时间戳活动不覆盖终态",
+      evidenceFiles: projectionSource.includes("同时间戳活动不覆盖终态") ? [projectionTest] : [],
+    },
+    {
+      scenario: "终态晚于旧恢复节点时收口为完成",
+      evidenceFiles: timelineSource.includes("old-revalidation") && timelineSource.includes("appendCompletionArchive") ? [timelineTest] : [],
+    },
+    {
+      scenario: "终态后真实恢复活动覆盖完成",
+      evidenceFiles: timelineSource.includes("终态后出现真实恢复活动") ? [timelineTest] : [],
+    },
+    {
+      scenario: "专题更新时间未推进不替代事实发生时间",
+      evidenceFiles: timelineSource.includes("旧专题状态未推进") ? [timelineTest] : [],
+    },
+  ];
+  return {
+    required: [...frozenSourceEvidenceFiles],
+    loaded,
+    missing: frozenSourceEvidenceFiles.filter((file) => !loaded.includes(file)),
+    regressionFiles: frozenSourceEvidenceFiles.filter((file) => /(?:^|\/)tests?\//u.test(file)),
+    regressionCoverage: {
+      "criterion-3": {
+        status: timeBoundaryScenarios.every((item) => item.evidenceFiles.length > 0) ? "covered" : "incomplete",
+        scenarios: timeBoundaryScenarios,
+      },
+    },
   };
 }
 
