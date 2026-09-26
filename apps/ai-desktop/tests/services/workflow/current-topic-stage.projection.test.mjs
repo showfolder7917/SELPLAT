@@ -747,6 +747,21 @@ test("重启健康只将最终候选交给真实验收，不能单独完成", ()
   assert.equal(stage.waitingFor, "韩立真实验收");
 });
 
+test("缺失运行指针时投影唯一当前待验收专题，等待原位恢复", () => {
+  const state = evolution("missing");
+  state.oneShotRun = null;
+  state.activeTopicId = "topic-current";
+  state.topics[0].status = "pending-acceptance";
+  state.topics[0].currentProposalVersion = undefined;
+  state.proposals[0].status = "pending-acceptance";
+  state.proposals[0].version = undefined;
+  const stage = projectCurrentTopicStage(state, deliveredCollaboration());
+  assert.equal(stage.topicId, "topic-current");
+  assert.equal(stage.proposalId, "proposal-current");
+  assert.equal(stage.status, "pending-acceptance");
+  assert.equal(stage.waitingFor, "韩立真实验收");
+});
+
 test("预检统一生成当前结论，但不替代后续交付门禁", () => {
   const current = task("executing");
   current.flowEvents = [{ type: "preflight.started", status: "started", occurredAt: "2026-09-25T01:00:00.000Z", details: { preflightRound: "round-1" } }];

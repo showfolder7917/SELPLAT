@@ -3684,6 +3684,97 @@ test("韩立独立1恢复阻塞中的当前研讨而不是只返回已有研讨"
   assert.match(result.messages.at(-1).content, /已继续原有研讨/);
 });
 
+test("重启后待验收专题缺少运行指针时恢复唯一原专题验收", async () => {
+  const directory = mkdtempSync(path.join(controlledTestRoot, "nangong-missing-acceptance-run-"));
+  let facade;
+  try {
+    const statePath = path.join(directory, "state.json");
+    let store = evolutionStore(statePath);
+    const acceptanceCriteria = ["条件一", "条件二", "条件三", "条件四", "条件五", "条件六", "条件七"];
+    const pageCriterionIds = acceptanceCriteria.map((_criterion, index) => `criterion-${index + 1}`);
+    const topic = store.createTopic({ ...topicRequest("恢复缺失验收运行"), acceptanceCriteria });
+    const topicId = topic.activeTopicId;
+    let state = store.createProposal(topicId, proposalRequest());
+    const proposalId = state.proposals[0].proposalId;
+    const taskId = "missing-acceptance-run-task";
+    store.markDispatched(proposalId, taskId);
+    store.markProgress(proposalId, "pending-acceptance", "最终候选已经完成集成，等待韩立验收");
+
+    const task = {
+      taskId,
+      evolutionProposalId: proposalId,
+      evolutionRoundId: proposalId,
+      state: "integrated",
+      integrationGeneration: 519,
+      unifiedTest: { status: "passed" },
+      snapshot: { title: "恢复缺失验收运行" },
+      executionRecords: [],
+      flowEvents: [
+        { type: "unified_test.passed", status: "completed", occurredAt: "2026-09-26T01:00:00.000Z" },
+        { type: "release.published", status: "completed", occurredAt: "2026-09-26T01:01:00.000Z" },
+        { type: "release.restart_healthy", status: "completed", occurredAt: "2026-09-26T01:02:00.000Z" },
+      ],
+      createdAt: "2026-09-26T00:00:00.000Z",
+      updatedAt: "2026-09-26T01:02:00.000Z",
+    };
+    const collaboration = {
+      state() {
+        return {
+          members: [], tasks: [task],
+          integrationBatches: [{ generation: 519, integrationSha: "candidate-519", state: "completed" }],
+        };
+      },
+      subscribe() { return () => undefined; },
+    };
+    const persisted = readPersistedState(statePath);
+    persisted.oneShotRun = null;
+    persisted.automationRuntime.status = "idle";
+    writePersistedState(statePath, persisted);
+    store = evolutionStore(statePath);
+
+    let acceptanceRuns = 0;
+    facade = new PersonaEvolutionRuntime({
+      store, collaboration, conversation,
+      hanLi: { send: async () => JSON.stringify({
+        mode: "mixed", pageCriterionIds,
+        pageCriterionSurfaces: pageCriterionIds.map((criterionId) => ({ criterionId, pageSurface: "task-collaboration" })),
+        findings: [], sourceReview: passedSourceReview,
+      }) },
+      recordEvent: () => undefined,
+    });
+    facade.setComputerAcceptanceSession(async (goal, onStarted) => {
+      onStarted();
+      acceptanceRuns += 1;
+      const plan = facade.state().proposals.find((proposal) => proposal.proposalId === proposalId).acceptancePlan;
+      return computerRun("missing-pointer-acceptance", goal.topicId, goal.proposalId, "passed", "candidate-519-shot", plan);
+    });
+    const completed = waitForEvolutionState(store, (next) => next.oneShotRun?.status === "completed"
+      && next.oneShotRun.topicId === topicId && next.oneShotRun.proposalId === proposalId,
+    "缺失验收运行恢复后的完成状态");
+    facade.start();
+    facade.notifyWorkflowChanged();
+    state = await completed;
+    facade.stop();
+
+    assert.equal(acceptanceRuns, 1);
+    assert.equal(state.topics.length, 1);
+    assert.equal(state.proposals.length, 1);
+    assert.equal(state.proposals[0].acceptancePlan.conditions.length, 7);
+    assert.equal(state.archiveRecords.filter((record) => record.eventType === "one-shot.acceptance-recovered").length, 1);
+    const recoveredRunId = state.oneShotRun.runId;
+
+    facade = new PersonaEvolutionRuntime({ store: evolutionStore(statePath), collaboration, conversation, recordEvent: () => undefined });
+    facade.start();
+    facade.notifyWorkflowChanged();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    facade.stop();
+    const restarted = facade.state();
+    assert.equal(restarted.oneShotRun.runId, recoveredRunId);
+    assert.equal(restarted.archiveRecords.filter((record) => record.eventType === "one-shot.acceptance-recovered").length, 1);
+    assert.equal(acceptanceRuns, 1, "重复 tick 与重启不得再次发起韩立验收");
+  } finally { facade?.stop(); rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("恢复当前未完成研讨保留运行与轮次，拒绝跨运行历史研讨", () => {
   const key = "resume-pending-original-run";
   const store = evolutionStore(key);

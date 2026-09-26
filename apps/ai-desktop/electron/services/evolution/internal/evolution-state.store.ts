@@ -560,6 +560,32 @@ export class EvolutionStateStore {
     }, { phase, actor: approving || accepting ? "han-li" : "nangong-wan", status: "running", nextOwner: approving || accepting ? "han-li" : "nangong-wan" });
   }
 
+  /** 为当前待验收提案补回缺失运行指针；同一持久化快照至多创建一次。 */
+  ensurePendingAcceptanceOneShotRun(topicId: string, proposalId: string): EvolutionStateOutDto {
+    if (this.#state.oneShotRun) return this.state();
+    const topic = this.#state.topics.find((item) => item.topicId === topicId);
+    const proposal = this.#state.proposals.find((item) => item.proposalId === proposalId);
+    if (!topic || !proposal
+      || this.#state.activeTopicId !== topicId
+      || proposal.topicId !== topicId
+      || proposal.version !== topic.currentProposalVersion
+      || topic.status !== "pending-acceptance"
+      || proposal.status !== "pending-acceptance") return this.state();
+    const now = new Date().toISOString();
+    const runId = `evolution-one-shot-${randomUUID()}`;
+    return this.#commit("one-shot.acceptance-recovered", topicId, proposalId, (state) => {
+      if (state.oneShotRun) return;
+      state.oneShotRun = {
+        runId, sourceRequestId: null, topicId, proposalId, status: "running", phase: "accepting",
+        actor: "han-li", actorName: "韩立", action: "正在恢复当前专题的结果验收", blockingReason: null,
+        resumeMode: null, startedAt: now, updatedAt: now, completedAt: null,
+      };
+      state.automationRuntime.status = "running";
+      state.automationRuntime.pausedAt = null;
+      state.automationRuntime.stopReason = null;
+    }, { recoveredFrom: "missing-one-shot-run", nextOwner: "han-li" });
+  }
+
   createTopic(request: CreateNangongTopicInDto, sourceConversationMessageIds: string[] = []): EvolutionStateOutDto {
     const title = required(request?.title, "专项标题", 160);
     const goal = required(request?.goal, "专项目标", 8_000);
