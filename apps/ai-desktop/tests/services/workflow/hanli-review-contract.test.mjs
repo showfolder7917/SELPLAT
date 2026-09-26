@@ -206,6 +206,27 @@ test("耗时证据拒绝用旧候选或旧执行尝试补齐当前阶段", async
   }
 });
 
+test("进程外修复可用已有审计边界补记当前候选真实耗时", async () => {
+  const bundled = await build({ entryPoints: ["electron/services/workflow/internal/collaboration/collaboration-duration.log.ts"], bundle: true, platform: "node", format: "esm", write: false });
+  const { CollaborationDurationLog } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
+  const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
+  mkdirSync(parent, { recursive: true });
+  const root = mkdtempSync(path.join(parent, "hanli-duration-recovery-"));
+  try {
+    const log = new CollaborationDurationLog(root);
+    const candidateSha = "d".repeat(40);
+    log.recordCompleted("task-a", "source-change", "2026-09-26T06:03:39.000Z", "2026-09-26T06:05:23.000Z", { executionAttemptId: "attempt-current" });
+    log.recordCompleted("task-a", "restart-health", "2026-09-26T06:10:45.128Z", "2026-09-26T06:11:46.605Z", { candidateSha });
+    const evidence = log.readTaskEvidence({ taskId: "task-a", assignmentId: "attempt-current", versionWorkspace: { resultSha: candidateSha }, flowEvents: [{ details: { candidateSha } }] }, ["source-change", "restart-health"]);
+    assert.equal(evidence.bindingStatus, "available");
+    assert.deepEqual(evidence.completedSegments, ["source-change", "restart-health"]);
+    assert.deepEqual(evidence.missingSegments, []);
+    assert.throws(() => log.recordCompleted("task-a", "verification", "2026-09-26T06:06:23.000Z", "2026-09-26T06:05:23.000Z"), /时间边界无效/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("证据达到四十八项上限时仍完整保留冻结源码清单", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { buildHanliResultReviewContext } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
