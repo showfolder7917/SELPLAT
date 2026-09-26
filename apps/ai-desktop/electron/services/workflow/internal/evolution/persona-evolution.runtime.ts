@@ -34,6 +34,7 @@ import {
   type EvolutionStatePort,
 } from "../../../evolution/index.js";
 import { createOneShotFailureFingerprint } from "./one-shot-failure-identity.js";
+import type { CollaborationTaskDurationEvidence } from "../collaboration/collaboration-duration.log.js";
 
 export interface PersonaEvolutionRuntimeOptions {
   /** Evolution 专题、研讨和提案的唯一状态端口。 */
@@ -84,7 +85,9 @@ export interface PersonaEvolutionRuntimeOptions {
   /** 从统一数据库读取专题完整档案的可选端口。 */
   readDossier?: (topicId: string, state: EvolutionStateOutDto) => EvolutionTopicDossierOutDto;
   /** 只读取当前验收任务绑定候选的阶段耗时。 */
-  readAcceptanceDurationEvidence?: (tasks: import("../../../../../contracts/services/workflow/index.js").CollaborationTaskOutDto[]) => unknown;
+  readAcceptanceDurationEvidence?: (tasks: import("../../../../../contracts/services/workflow/index.js").CollaborationTaskOutDto[]) => CollaborationTaskDurationEvidence[];
+  /** 仅在真实页面工具已经开始后登记候选绑定验收时段。 */
+  beginAcceptanceDuration?: (tasks: import("../../../../../contracts/services/workflow/index.js").CollaborationTaskOutDto[]) => (outcome: "completed" | "failed") => void;
   /** 在 Evolution 写动作前登记幂等事务。 */
   beginMutation?: (topicId: string, action: string, request: EvolutionMutationInDto, currentStateVersion: string) => "started" | "completed";
   /** Evolution 写动作成功后提交新的状态版本。 */
@@ -122,6 +125,8 @@ export class PersonaEvolutionRuntime {
   readonly #readDossier: PersonaEvolutionRuntimeOptions["readDossier"];
   /** 当前验收任务的只读阶段耗时入口。 */
   readonly #readAcceptanceDurationEvidence: NonNullable<PersonaEvolutionRuntimeOptions["readAcceptanceDurationEvidence"]>;
+  /** 页面验收时段只围绕真实工具调用，不把提示词生成算作验收。 */
+  readonly #beginAcceptanceDuration: NonNullable<PersonaEvolutionRuntimeOptions["beginAcceptanceDuration"]>;
   /** Evolution 写动作幂等协调端口。 */
   readonly #mutations: EvolutionMutationPort;
   /** 韩立—南宫婉研讨应用服务；模型端口未装配时为空。 */
@@ -177,7 +182,8 @@ export class PersonaEvolutionRuntime {
     // 记忆和专题档案属于可选读模型；数据库不可用时由公开方法安全降级。
     this.#memory = options.memory || null;
     this.#readDossier = options.readDossier;
-    this.#readAcceptanceDurationEvidence = options.readAcceptanceDurationEvidence || (() => null);
+    this.#readAcceptanceDurationEvidence = options.readAcceptanceDurationEvidence || (() => []);
+    this.#beginAcceptanceDuration = options.beginAcceptanceDuration || (() => () => undefined);
     // 所有专题写动作共用同一个幂等和互斥协调器。
     this.#mutations = createEvolutionMutationCoordinator({ begin: options.beginMutation, complete: options.completeMutation, fail: options.failMutation });
     this.#deliberation = options.askHanliDeliberation && options.askNangongDeliberation
@@ -253,9 +259,10 @@ export class PersonaEvolutionRuntime {
 
   /** 在完整 Evolution 快照上附加只读阶段，避免以页面投影替换领域状态。 */
   #withCurrentTopicStage(state: EvolutionStateOutDto): EvolutionStateOutDto {
+    const collaboration = this.#collaboration.state();
     return {
       ...state,
-      currentTopicStage: projectCurrentTopicStage(state, this.#collaboration.state()),
+      currentTopicStage: projectCurrentTopicStage(state, collaboration, this.#readAcceptanceDurationEvidence(collaboration.tasks)),
     };
   }
 
@@ -697,10 +704,19 @@ export class PersonaEvolutionRuntime {
               criterionIds: pageCriterionIds,
               taskCollaborationCriterionIds,
             };
-            const pageRun = await this.#computerAcceptanceSession(goal, () => {
-              publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");
-              this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在当前正式应用中验收页面", topic.topicId, proposal.proposalId);
-            });
+            const acceptanceDuration: { finish: ((outcome: "completed" | "failed") => void) | null } = { finish: null };
+            let pageRun: HanliAcceptanceRunOutDto;
+            try {
+              pageRun = await this.#computerAcceptanceSession(goal, () => {
+                publishAcceptance("started", "韩立正在当前正式应用中操作并验收真实页面。");
+                this.#store.updateOneShotRun("accepting", "han-li", "韩立", "正在当前正式应用中验收页面", topic.topicId, proposal.proposalId);
+                acceptanceDuration.finish = this.#beginAcceptanceDuration(acceptanceTasks);
+              });
+              acceptanceDuration.finish?.("completed");
+            } catch (error) {
+              acceptanceDuration.finish?.("failed");
+              throw error;
+            }
             runResult = composeHanliResultReview(plan, review, pageRun);
           } else {
             publishAcceptance("started", "该任务不涉及页面，韩立正在只读审查代码是否符合客户原要求。");

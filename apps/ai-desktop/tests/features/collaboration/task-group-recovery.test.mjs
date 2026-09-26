@@ -42,6 +42,8 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   assert.match(evidenceSource, /快速预检与复用依据[\s\S]*候选版本[\s\S]*证据引用[\s\S]*preflight\.issues/);
   assert.match(evidenceSource, /当前候选交付依据[\s\S]*delivery\.candidate\?\.generation[\s\S]*delivery\.candidate\?\.integrationSha[\s\S]*delivery\.unifiedTest[\s\S]*delivery\.release[\s\S]*delivery\.restartHealth[\s\S]*delivery\.acceptance/);
   assert.match(evidenceSource, /delivery\.acceptance === "running"[\s\S]*等待韩立记录本轮真实验收结果[\s\S]*不替代最终验收结论/);
+  assert.match(evidenceSource, /调查[\s\S]*实现[\s\S]*测试[\s\S]*发布[\s\S]*重启[\s\S]*韩立验收[\s\S]*实际阶段耗时/);
+  assert.match(evidenceSource, /总处理时长或零时长补造[\s\S]*未记录或尚未完成/);
   assert.match(taskCardSource, /TaskGroupAcceptanceEvidence[\s\S]*task-timeline-detail-pane/);
   assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
   assert.match(evidenceSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);

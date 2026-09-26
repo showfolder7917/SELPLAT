@@ -1,5 +1,6 @@
-import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
+import type { CurrentTopicAcceptanceOutDto, CurrentTopicStageDurationEvidenceOutDto, CurrentTopicStageOutDto, EvolutionStateOutDto } from "../../../../contracts/services/evolution/index.js";
 import type { CollaborationStateOutDto, CollaborationTaskOutDto } from "../../../../contracts/services/workflow/index.js";
+import type { CollaborationTaskDurationEvidence } from "../internal/collaboration/collaboration-duration.log.js";
 import { ProposalExecutionAggregate } from "./proposal-execution.aggregate.js";
 import { decideCurrentTopicOperation } from "./current-topic-operation.decision.js";
 import { projectCurrentTechnicalRecovery } from "./current-topic-technical-recovery.projection.js";
@@ -15,6 +16,7 @@ import { projectTopicFinalPresentation } from "./topic-final-presentation.projec
 export function projectCurrentTopicStage(
   evolution: EvolutionStateOutDto,
   collaboration: CollaborationStateOutDto,
+  durationEvidence: readonly CollaborationTaskDurationEvidence[] = [],
 ): CurrentTopicStageOutDto {
   const run = evolution.oneShotRun;
   const proposalId = evolution.oneShotRun?.proposalId || null;
@@ -44,6 +46,7 @@ export function projectCurrentTopicStage(
 
   const currentExecution = new ProposalExecutionAggregate({ proposal, collaborationTasks: collaboration.tasks }).view();
   const execution = currentExecution;
+  const currentDurationEvidence = projectCurrentTopicDurationEvidence(execution.effectiveTasks, durationEvidence);
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
   const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
   // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
@@ -127,7 +130,37 @@ export function projectCurrentTopicStage(
     finalConclusion,
     hostStartupAcceptance,
     deliveryEvidence,
+    durationEvidence: currentDurationEvidence,
     updatedAt,
+  };
+}
+
+/** 只聚合当前有效任务已完成的绑定时段；缺项保留为缺项，不能用总处理时长填补。 */
+function projectCurrentTopicDurationEvidence(
+  tasks: readonly CollaborationTaskOutDto[],
+  evidence: readonly CollaborationTaskDurationEvidence[],
+): CurrentTopicStageDurationEvidenceOutDto {
+  const taskIds = new Set(tasks.map((task) => task.taskId));
+  const relevant = evidence.filter((item) => taskIds.has(item.taskId));
+  const bindingStatus = relevant.length === 0 ? "missing"
+    : relevant.some((item) => item.bindingStatus !== "available")
+      ? relevant.find((item) => item.bindingStatus !== "available")!.bindingStatus
+      : "available";
+  const phases: Array<{ phase: CurrentTopicStageDurationEvidenceOutDto["phases"][number]["phase"]; segments: string[] }> = [
+    { phase: "investigation", segments: ["analysis"] },
+    { phase: "implementation", segments: ["source-change"] },
+    { phase: "testing", segments: ["verification", "preflight", "combination-test"] },
+    { phase: "release", segments: ["release"] },
+    { phase: "restart", segments: ["restart-health"] },
+    { phase: "hanli-acceptance", segments: ["result-acceptance"] },
+  ];
+  return {
+    bindingStatus,
+    phases: phases.map(({ phase, segments }) => {
+      const events = relevant.flatMap((item) => item.events)
+        .filter((event) => event.outcome === "completed" && segments.includes(event.segment));
+      return { phase, durationMs: events.length ? events.reduce((total, event) => total + event.durationMs, 0) : null, status: events.length ? "recorded" : "missing" };
+    }),
   };
 }
 

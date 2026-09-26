@@ -874,7 +874,7 @@ export class CollaborationCoordinator {
     const assignmentId = task.assignmentId;
     const workerGeneration = task.workerGeneration;
     const segment = "analysis";
-    const span = this.#durations.start(taskId, segment, { memberId, planVersion: task.currentPlanVersion + 1 });
+    const span = this.#durations.start(taskId, segment, { memberId, planVersion: task.currentPlanVersion + 1, executionAttemptId: assignmentId || "" });
     this.#setTaskAndMemberPhase(taskId, "analyzing", "analyzing");
     try {
       const emit = (event: CodexStreamEventOutDto) => {
@@ -951,7 +951,7 @@ export class CollaborationCoordinator {
     if (!memberId || !session || !plan) return this.#blockTask(taskId, "执行阶段缺少执行人、Codex 或当前方案。");
     const assignmentId = task.assignmentId;
     const workerGeneration = task.workerGeneration;
-    let changeSpan: string | null = this.#durations.start(taskId, "source-change", { memberId, planVersion: plan.version });
+    let changeSpan: string | null = this.#durations.start(taskId, "source-change", { memberId, planVersion: plan.version, executionAttemptId: assignmentId || "" });
     let verificationSpan: string | null = null;
     this.#setTaskAndMemberPhase(taskId, "executing", "implementing");
     this.#store.updateTask(taskId, "execution.started", (current, state) => {
@@ -1004,7 +1004,7 @@ export class CollaborationCoordinator {
           if (phase === "verifying" && !verificationSpan) {
             if (changeSpan) this.#durations.finish(changeSpan, "completed", { releaseEvent: "verification.started" });
             changeSpan = null;
-            verificationSpan = this.#durations.start(taskId, "verification", { memberId, planVersion: plan.version });
+            verificationSpan = this.#durations.start(taskId, "verification", { memberId, planVersion: plan.version, executionAttemptId: assignmentId || "" });
           }
         }
       });

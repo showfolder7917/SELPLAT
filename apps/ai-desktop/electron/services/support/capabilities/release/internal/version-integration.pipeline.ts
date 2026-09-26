@@ -163,6 +163,11 @@ export class VersionIntegrationPipeline {
       if (!taskIds.length) continue;
       // 开发版只有新进程加载同一候选并通过健康检查后才成为已发布版本；等待重启事件不能替代该事实。
       this.#releaseBatches.confirmDeveloperRestart(`release-${this.#releaseVersion}-g${generation}`);
+      const releaseDocument = this.#releaseBatches.runningDocument(`release-${this.#releaseVersion}-g${generation}`);
+      const candidateSha = releaseDocument?.candidateSha || null;
+      const restartSpans = candidateSha
+        ? taskIds.map((taskId) => ({ taskId, spanId: this.#durations.start(taskId, "restart-health", { generation, candidateSha }) }))
+        : [];
       this.#store.updateTask(taskIds[0], "release.restart_healthy", (_first, mutable) => {
         const batch = mutable.integrationBatches.find((item) => item.generation === generation);
         const completedAt = new Date().toISOString();
@@ -184,6 +189,7 @@ export class VersionIntegrationPipeline {
           appendFlow(task, "release.restart_healthy", "integration", "completed", "新版本已重启并通过渲染器健康检查，结果返回南宫婉", currentActor);
         }
       });
+      for (const { spanId } of restartSpans) this.#durations.finish(spanId, "completed", { generation, candidateSha });
       // 新版本已从独立运行目录加载，预激活候选不再是运行进程；只回收本批次临时副本。
       try {
         this.#releaseBatches.retireRuntimeActivationPackage(`release-${this.#releaseVersion}-g${generation}`);
@@ -421,9 +427,13 @@ export class VersionIntegrationPipeline {
     let verificationEvidence: ManagedExecutionVerificationEvidenceOutDto[] = [];
     let candidate: IntegrationCandidate | null = null;
     let verifySpan: string | null = null;
+    let preflightSpan: string | null = null;
+    let releaseSpan: string | null = null;
     let reconcileSpan: string | null = null;
     let activationScheduled = false;
-    const integrationSpan = this.#durations.start(taskIds[0], "integration", { generation, taskCount: taskIds.length });
+    const integrationSpan = this.#durations.start(taskIds[0], "integration", {
+      generation, taskCount: taskIds.length, executionAttemptId: this.#store.task(taskIds[0]).assignmentId || "",
+    });
 
     try {
       // 组装层注入的真实操作者取得跨进程发布租约，流水线本身不认识任何固定人物。
@@ -534,11 +544,14 @@ export class VersionIntegrationPipeline {
       releaseDocument.candidateEvidence = inspectAcceptancePlanCandidateEvidence(candidate.rootPath, candidate.candidateSha, this.#loadedRuntimeSha);
       this.#releaseBatches.write(releaseDocument);
       let preflightBlocked = false;
+      preflightSpan = this.#durations.start(taskIds[0], "preflight", { generation, candidateSha: candidate.candidateSha });
       this.#store.updateTask(taskIds[0], "preflight.decided", (_first, mutable) => {
         for (const task of mutable.tasks.filter((item) => taskIds.includes(item.taskId))) {
           preflightBlocked ||= appendQuickPreflightDecision(task, candidate!, releaseDocument!, impactScope, actor);
         }
       });
+      this.#durations.finish(preflightSpan, preflightBlocked ? "failed" : "completed", { generation, candidateSha: candidate.candidateSha });
+      preflightSpan = null;
       if (preflightBlocked) throw new QuickPreflightError("快速预检发现候选证据问题");
       this.#durations.finish(reconcileSpan, "completed", { releaseEvent: "integration.candidate_ready" });
       reconcileSpan = null;
@@ -558,7 +571,7 @@ export class VersionIntegrationPipeline {
           appendFlow(task, "unified_test.started", "integration", "started", `${currentActor.displayName}正在统一测试（集成批次 ${generation}）`, currentActor);
         }
       });
-      verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length });
+      verifySpan = this.#durations.start(taskIds[0], "combination-test", { generation, taskCount: taskIds.length, candidateSha: verifiedCandidateSha });
       releaseDocument.state = "testing";
       this.#releaseBatches.write(releaseDocument);
       const verifiedCandidate = await this.#verifyCandidate(candidate, taskIds, releaseBatchId);
@@ -591,6 +604,7 @@ export class VersionIntegrationPipeline {
       verifySpan = null;
 
       // 只有候选验证完成后才能提升稳定集成指针并更新用户本地分支。
+      releaseSpan = this.#durations.start(taskIds[0], "release", { generation, candidateSha: candidate.candidateSha });
       const integrationSha = await this.#workspaces.promoteIntegrationCandidate(candidate);
       const localMergeSha = await this.#workspaces.mergeIntoLocalBranch(integrationSha);
       releaseDocument.state = "integrated";
@@ -634,6 +648,8 @@ export class VersionIntegrationPipeline {
           appendFlow(task, publishedExecutable === "developer-script" ? "release.restart_scheduled" : "release.published", "integration", "completed", publishedExecutable === "developer-script" ? "候选验证完成，等待开发版脚本打包并重启" : "最终候选已发布，等待新版本重启健康检查", currentActor);
         }
       });
+      this.#durations.finish(releaseSpan, "completed", { generation, candidateSha: candidate.candidateSha });
+      releaseSpan = null;
     } catch (error) {
       // 本地归属、Git 冲突与候选验证失败分别进入不同恢复路径，禁止统一伪装成测试失败。
       const ownershipBlocked = error instanceof LocalChangeOwnershipError;
@@ -650,6 +666,8 @@ export class VersionIntegrationPipeline {
       // 本地修改归属异常同样必须保留具体文件，不能在进入令狐调查前把证据清空。
       const conflictFiles = ownershipBlocked ? error.conflictFiles : mergeConflict ? error.conflictFiles : [];
       if (reconcileSpan) this.#durations.finish(reconcileSpan, "failed", { error: errorMessage(error) });
+      if (preflightSpan) this.#durations.finish(preflightSpan, "failed", { error: errorMessage(error), candidateSha: candidate?.candidateSha || null });
+      if (releaseSpan) this.#durations.finish(releaseSpan, "failed", { error: errorMessage(error), candidateSha: candidate?.candidateSha || null });
       if (verifySpan) this.#durations.finish(verifySpan, "failed", { error: errorMessage(error) });
       this.#durations.finish(integrationSpan, "failed", { error: errorMessage(error) });
       this.#store.updateTask(taskIds[0], "integration.failed", (_first, mutable) => {
