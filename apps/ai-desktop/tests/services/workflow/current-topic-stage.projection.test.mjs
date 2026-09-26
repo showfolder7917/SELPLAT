@@ -70,6 +70,19 @@ test("专题总历时在最终结论后固定，且不使用阶段时长或候�
   assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:42:20.000Z", durationMs: 2540000, status: "completed" });
 });
 
+test("专题终态只接受同专题运行完成时间，缺少可信终点不以刷新时间固定", () => {
+  const completedRunState = evolution("missing");
+  completedRunState.proposals[0].status = "completed";
+  completedRunState.oneShotRun = { topicId: "topic-current", proposalId: "proposal-current", status: "completed", completedAt: "2026-09-12T04:30:00.000Z" };
+  const completedRunStage = projectCurrentTopicStage(completedRunState, { tasks: [task()] });
+  assert.deepEqual(completedRunStage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:30:00.000Z", durationMs: 1800000, status: "completed" });
+
+  const missingEndState = evolution("missing");
+  missingEndState.proposals[0].status = "completed";
+  const missingEndStage = projectCurrentTopicStage(missingEndState, { tasks: [task()] });
+  assert.deepEqual(missingEndStage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: null, durationMs: null, status: "missing" });
+});
+
 test("阶段投影按候选分开统计重跑，并保留等待原因而不签发恢复操作", () => {
   const candidateA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   const candidateB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -461,7 +474,8 @@ test("已取消关联只保留历史取消结论，不生成恢复或验收动�
   assert.equal(stage.userAction, "none");
   assert.equal(stage.resumeOneShotRunId, null);
   assert.deepEqual(stage.effectiveTaskIds, []);
-  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:42:19.000Z", durationMs: 2539000, status: "completed" });
+  // 已取消任务没有专题级终止档案；不得把无关验收记录或刷新时间伪造成总历时终点。
+  assert.deepEqual(stage.topicDuration, { startedAt: "2026-09-12T04:00:00.000Z", endedAt: null, durationMs: null, status: "missing" });
 });
 
 test("已被有效替代的旧取消任务不阻断当前专题", () => {

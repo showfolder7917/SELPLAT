@@ -59,6 +59,8 @@ test("专题卡只读取当前专题投影的候选重跑和等待依据", () =>
   assert.match(taskGroupSource, /实际阶段耗时[\s\S]*候选 .*attempt\.completedCount/s);
   assert.match(taskGroupSource, /等待与恢复依据[\s\S]*它们不改变当前恢复权限/s);
   assert.match(taskGroupCardSource, /currentStage\?\.userAction === "resume"/);
+  assert.match(taskGroupCardSource, /task-group-primary-duration[\s\S]*TopicDurationFact/);
+  assert.doesNotMatch(taskGroupCardSource.slice(taskGroupCardSource.indexOf('className="task-group-facts"')), /专题总历时/);
 });
 
 test("执行失败经令狐修复并固定回到原负责人", () => {

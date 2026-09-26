@@ -27,7 +27,7 @@ test("当前专题的恢复入口只消费交付投影，不再从时间线节�
   assert.match(taskCardSource, /task-timeline-next-current[\s\S]*onResumeAcceptance[\s\S]*onContinueTask\(projectedResumeTaskId!/);
   assert.match(taskCardSource, /currentStage\?\.customerActionGuidance\?\.resumeLabel \|\| "从卡点继续"/);
   assert.doesNotMatch(taskCardSource, /latestActiveRecoveryAction|TaskGroupRecovery|oneShotRecoveryRequired/);
-  assert.match(taskCardSource, /currentStage\?\.topicDuration\?\.startedAt[\s\S]*running=\{currentStage\.topicDuration\.status === "running"\}/);
+  assert.match(taskCardSource, /function TopicDurationFact[\s\S]*duration\?\.startedAt && duration\.durationMs !== null[\s\S]*running=\{duration\.status === "running"\}/);
   assert.match(taskCardSource, /<b>\{activity\.statusLabel\}<\/b>/);
 });
 
@@ -49,7 +49,8 @@ test("任务卡在读取依据期间不沿用旧完成摘要，失败后只保�
   assert.match(evidenceSource, /产品缺陷[\s\S]*验收能力受阻[\s\S]*基础设施问题/);
   assert.match(evidenceSource, /故障分类[\s\S]*连带失败已归并为同一缺陷的一条修复链/);
   assert.match(evidenceSource, /六段真实耗时[\s\S]*最终结论[\s\S]*韩立验收通过/);
-  assert.match(taskCardSource, /currentStage\?\.topicDuration\?\.startedAt[\s\S]*专题总历时：未记录/);
+  assert.match(taskCardSource, /function TopicDurationFact[\s\S]*duration\?\.startedAt && duration\.durationMs !== null[\s\S]*未记录/);
+  assert.match(taskCardSource, /task-group-primary-duration[\s\S]*专题总历时[\s\S]*TopicDurationFact duration=\{currentStage\?\.topicDuration\}/);
   assert.match(developerStyles, /task-acceptance-summary[^}]*grid-template-columns: repeat\(3/);
   assert.match(taskCardSource, /currentStage\?\.hostStartupAcceptance \?\?[\s\S]*尚未记录当前专题的 Host 启动验收依据/);
   assert.match(evidenceSource, /task-host-startup-evidence[\s\S]*展开查看本次启动依据[\s\S]*commandStatus[\s\S]*运行中，尚无退出结果/);

@@ -284,8 +284,8 @@ const synchronizeInteractionCurrentTopicStage = () => {
     const accepting = acceptanceTimelineFixtureStatus === "accepting";
     evolutionState.currentTopicStage = {
       ...base, status: accepting ? "accepting" : "completed", title: accepting ? "韩立验收中" : "已完成",
-      summary: accepting ? "韩立正在执行真实界面验收。" : "韩立结果验收已经通过，专题已完成。",
-      remaining: "", waitingFor: accepting ? "韩立真实验收" : "", nextAction: accepting ? "等待韩立记录本轮真实验收结果。" : "本专题已完成",
+      summary: accepting ? "韩立已开始本轮结果验收，正在核对活动专题卡、当前流程节点和交付依据是否与本轮候选一致。" : "韩立结果验收已经通过，专题已完成。",
+      remaining: "", waitingFor: accepting ? "韩立真实验收" : "", nextAction: accepting ? "等待韩立记录本轮真实验收结果，并保留原始页面证据。" : "本专题已完成",
       userAction: "none", effectiveTaskIds: [], deliveryEvidence: { ...base.deliveryEvidence, acceptance: accepting ? "running" : "passed" },
     };
     return;
