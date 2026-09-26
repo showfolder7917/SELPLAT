@@ -107,6 +107,7 @@ export function projectCurrentTopicStage(
   // 任务级客户动作只能由已核对故障关联与完整指导的技术恢复投影签发。
   const userAction = status === "awaiting-confirmation" ? "confirmation" : status === "failed-pending-repair" && runBlocked && !execution.blocked ? "resume" : "none";
   const updatedAt = [proposal.updatedAt, task?.updatedAt, latestAcceptance?.occurredAt].filter((item): item is string => Boolean(item)).sort().at(-1) || evolution.updatedAt;
+  const topicDuration = projectTopicDuration(topic, status, finalConclusion, updatedAt);
   const waitingFor = stageWaitingFor(status, stageGate);
   const nextAction = stageNextAction(status, stageGate);
 
@@ -133,9 +134,20 @@ export function projectCurrentTopicStage(
     hostStartupAcceptance,
     deliveryEvidence,
     durationEvidence: currentDurationEvidence,
+    topicDuration,
     failureEvidence,
     updatedAt,
   };
+}
+
+/** 专题总历时只使用专题创建与可追溯终态，不能由阶段总和或最近刷新时间补造。 */
+function projectTopicDuration(topic: EvolutionStateOutDto["topics"][number] | null, status: CurrentTopicStageOutDto["status"], finalConclusion: CurrentTopicStageOutDto["finalConclusion"] | null, updatedAt: string): CurrentTopicStageOutDto["topicDuration"] {
+  const startedAt = topic?.createdAt || null;
+  if (!startedAt || !Number.isFinite(Date.parse(startedAt))) return { startedAt: null, endedAt: null, durationMs: null, status: "missing" };
+  const terminal = Boolean(finalConclusion) || ["completed", "completed-unverified", "cancelled"].includes(status);
+  const endedAt = terminal ? finalConclusion?.occurredAt || updatedAt : null;
+  const endMs = endedAt ? Date.parse(endedAt) : Number.NaN;
+  return { startedAt, endedAt, durationMs: Number.isFinite(endMs) && endMs >= Date.parse(startedAt) ? endMs - Date.parse(startedAt) : terminal ? null : 0, status: terminal ? "completed" : "running" };
 }
 
 /** 只聚合当前有效任务已完成的绑定时段；缺项保留为缺项，不能用总处理时长填补。 */
