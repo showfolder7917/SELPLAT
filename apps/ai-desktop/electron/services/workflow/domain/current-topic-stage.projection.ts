@@ -164,9 +164,38 @@ function projectCurrentTopicDurationEvidence(
         .filter((event) => event.outcome === "completed" && segments.includes(event.segment));
       const flowDurationMs = events.length || !flowRange ? null : sumCompletedFlowRanges(tasks, flowRange[0], flowRange[1]);
       const durationMs = events.length ? events.reduce((total, event) => total + event.durationMs, 0) : flowDurationMs;
-      return { phase, durationMs, status: durationMs === null ? "missing" : "recorded" };
+      const candidateAttempts = projectCandidateAttempts(events);
+      return {
+        phase, durationMs, status: durationMs === null ? "missing" : "recorded",
+        completedCount: events.length || flowDurationMs !== null ? Math.max(events.length, 1) : 0,
+        candidateAttempts,
+      };
     }),
+    waits: relevant.flatMap((item) => item.events)
+      .filter((event) => event.outcome === "completed" && event.waitType !== null)
+      .map((event) => ({ waitType: event.waitType!, reasonCode: event.reasonCode, durationMs: event.durationMs })),
   };
+}
+
+/** 同一候选的重复完成只在具有相同明确候选标识时合并；无标识事件单独保留缺失事实。 */
+function projectCandidateAttempts(events: Array<CollaborationTaskDurationEvidence["events"][number]>): Array<{
+  candidateSha: string | null;
+  completedCount: number;
+  durationMs: number;
+}> {
+  const attempts = new Map<string, { candidateSha: string | null; completedCount: number; durationMs: number }>();
+  for (const event of events) {
+    const candidateSha = typeof event.candidateSha === "string" ? event.candidateSha : null;
+    const key = candidateSha || "candidate-not-recorded";
+    const existing = attempts.get(key);
+    if (existing) {
+      existing.completedCount += 1;
+      existing.durationMs += event.durationMs;
+      continue;
+    }
+    attempts.set(key, { candidateSha, completedCount: 1, durationMs: event.durationMs });
+  }
+  return [...attempts.values()];
 }
 
 /** 进程重启会中断内存计时；只用同一任务已落盘的明确开始/结束事件补回真实完成时段。 */

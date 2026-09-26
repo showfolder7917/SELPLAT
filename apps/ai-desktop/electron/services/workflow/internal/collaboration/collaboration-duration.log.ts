@@ -70,7 +70,13 @@ export interface CollaborationTaskDurationEvidence {
   bindingStatus: "available" | "candidate-missing" | "result-missing" | "execution-attempt-missing";
   completedSegments: CollaborationDurationSegment[];
   missingSegments: CollaborationDurationSegment[];
-  events: Array<Pick<CompletedSpanEvent, "segment" | "startedAt" | "endedAt" | "durationMs" | "outcome">>;
+  /** 完整保留已完成时段的绑定线索，当前专题投影据此区分候选重跑与等待原因。 */
+  events: Array<Pick<CompletedSpanEvent, "segment" | "startedAt" | "endedAt" | "durationMs" | "outcome"> & {
+    candidateSha: string | null;
+    executionAttemptId: string | null;
+    waitType: CollaborationWaitType | null;
+    reasonCode: string | null;
+  }>;
 }
 
 type DurationEvidenceTask = {
@@ -234,16 +240,23 @@ export class CollaborationDurationLog {
         : !executionAttemptId ? "execution-attempt-missing"
           : "available";
     const candidateBoundSegments = new Set<CollaborationDurationSegment>(["preflight", "combination-test", "release", "restart-health", "result-acceptance"]);
-    const events = this.#readEvents().map(parseCompletedSpanEvent)
-      .filter((event): event is CompletedSpanEvent => event !== null && event.taskId === task.taskId)
-      .filter((event) => candidateBoundSegments.has(event.segment)
-        ? event.details.candidateSha === candidateSha
-        : event.details.executionAttemptId === executionAttemptId);
-    const completedSegments = [...new Set(events.filter((event) => event.outcome === "completed").map((event) => event.segment))];
+    const allTaskEvents = this.#readEvents().map(parseCompletedSpanEvent)
+      .filter((event): event is CompletedSpanEvent => event !== null && event.taskId === task.taskId);
+    // 当前候选的门禁判定仍只读取同候选或同执行尝试的事实；完整事件另行交给只读投影展示历史归因。
+    const boundEvents = allTaskEvents.filter((event) => candidateBoundSegments.has(event.segment)
+      ? event.details.candidateSha === candidateSha
+      : event.details.executionAttemptId === executionAttemptId);
+    const completedSegments = [...new Set(boundEvents.filter((event) => event.outcome === "completed").map((event) => event.segment))];
     return {
       taskId: task.taskId, candidateSha, resultSha, bindingStatus, completedSegments,
       missingSegments: bindingStatus === "available" ? requiredSegments.filter((segment) => !completedSegments.includes(segment)) : [...requiredSegments],
-      events: events.map(({ segment, startedAt, endedAt, durationMs, outcome }) => ({ segment, startedAt, endedAt, durationMs, outcome })),
+      events: allTaskEvents.map(({ segment, startedAt, endedAt, durationMs, outcome, details }) => ({
+        segment, startedAt, endedAt, durationMs, outcome,
+        candidateSha: validCandidateSha(details.candidateSha),
+        executionAttemptId: nonEmptyText(details.executionAttemptId),
+        waitType: isWaitType(details.waitType) ? details.waitType : null,
+        reasonCode: nonEmptyText(details.reasonCode),
+      })),
     };
   }
 
@@ -356,6 +369,16 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function isWaitType(value: unknown): value is CollaborationWaitType {
   return value === "system-wait" || value === "dependency-wait" || value === "approval-wait" || value === "user-wait" || value === "intent-wait" || value === "recovery-wait";
+}
+
+/** 候选标识只接受已记录的完整 SHA，缺失时由投影明确显示为未记录。 */
+function validCandidateSha(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{40,64}$/iu.test(value) ? value : null;
+}
+
+/** 等待原因和执行尝试只保留非空文本，避免把未知值伪装成可关联事实。 */
+function nonEmptyText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function sanitizeDetails(details: Record<string, unknown>): Record<string, unknown> {

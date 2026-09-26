@@ -161,5 +161,15 @@ export interface CurrentTopicStageDurationEvidenceOutDto {
     phase: "investigation" | "implementation" | "testing" | "release" | "restart" | "hanli-acceptance";
     durationMs: number | null;
     status: "recorded" | "missing";
+    /** 同一阶段具有完整起止依据的完成次数；候选变更后的次数不会合并。 */
+    completedCount: number;
+    /** 按明确候选标识归组的已完成次数；空候选仅表示无法关联，不能当作候选重跑。 */
+    candidateAttempts: Array<{ candidateSha: string | null; completedCount: number; durationMs: number }>;
+  }>;
+  /** 已完成的等待或恢复时段；没有明确原因码时保留为“未记录”。 */
+  waits: Array<{
+    waitType: "system-wait" | "dependency-wait" | "approval-wait" | "user-wait" | "intent-wait" | "recovery-wait";
+    reasonCode: string | null;
+    durationMs: number;
   }>;
 }
