@@ -1043,25 +1043,31 @@ export class EvolutionStateStore {
     return true;
   }
 
-  /** 仅退役缺少冻结页面表面且已有同轮验收能力受阻事实的 v3 计划；原计划和失败结果继续保留在档案中。 */
-  retireAcceptanceCapabilityPlan(proposalId: string): boolean {
+  /** 仅退役缺少页面表面，或已被当前强制页面规则接管且同轮受阻的 v3 计划；原计划和失败结果继续保留在档案中。 */
+  retireAcceptanceCapabilityPlan(proposalId: string, mandatoryPageConditionIds: readonly string[] = []): boolean {
     const proposal = requireProposal(this.#state, proposalId);
     const previous = proposal.acceptancePlan;
     if (!previous || proposal.status !== "pending-acceptance" || previous.version !== 3) return false;
     const hasMissingPageSurface = previous.conditions.some((condition) => condition.evidenceType === "page-experience" && !condition.pageSurface);
-    if (!hasMissingPageSurface) return false;
+    // 调用方只传入当前分类器已强制进入页面验收的条件；此处仍要求旧计划实际把它冻结为代码条件，避免任意代码阻塞触发重建。
+    const reclassifiedConditionIds = [...new Set(mandatoryPageConditionIds)].filter((conditionId) =>
+      previous.conditions.some((condition) => condition.conditionId === conditionId && condition.evidenceType === "code-conformance"));
+    if (!hasMissingPageSurface && !reclassifiedConditionIds.length) return false;
     const resultRecord = [...this.#state.archiveRecords].reverse().find((record) =>
       record.proposalId === proposalId && record.eventType === "acceptance.result_checked"
       && (record.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined)?.planId === previous.planId);
     const result = resultRecord?.payload.acceptanceRun as HanliAcceptanceRunOutDto | undefined;
-    const hasCapabilityBlock = result?.status === "blocked" && result.acceptanceRoundId === previous.currentRoundId
+    const hasMissingSurfaceCapabilityBlock = result?.status === "blocked" && result.acceptanceRoundId === previous.currentRoundId
       && result.stepResults.some((step) => step.evidenceMode === "page-experience" && step.status === "blocked" && step.blockerKind === "acceptance-capability");
-    if (!hasCapabilityBlock) return false;
+    const hasReclassifiedCodeBlock = result?.status === "blocked" && result.acceptanceRoundId === previous.currentRoundId
+      && result.stepResults.some((step) => reclassifiedConditionIds.includes(step.checkId)
+        && step.evidenceMode === "code-conformance" && step.status === "blocked");
+    if (!hasMissingSurfaceCapabilityBlock && !hasReclassifiedCodeBlock) return false;
     this.#commit("acceptance.capability_plan_retired", proposal.topicId, proposalId, (state) => {
       requireProposal(state, proposalId).acceptancePlan = null;
     }, {
       retiredPlan: structuredClone(previous), sourceAcceptanceRecordId: resultRecord!.recordId,
-      sourceRunId: result.runId, nextOwner: "han-li",
+      sourceRunId: result.runId, reclassifiedConditionIds, nextOwner: "han-li",
     });
     return true;
   }
