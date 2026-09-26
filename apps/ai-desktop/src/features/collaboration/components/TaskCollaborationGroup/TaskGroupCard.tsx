@@ -128,7 +128,18 @@ function TimelineDuration({ durationMs, startedAt, running, locale, prefix }: {
 }) {
   const nowMs = useTimelineNow(running);
   const visibleDuration = running ? Math.max(durationMs, nowMs - Date.parse(startedAt)) : durationMs;
-  return <small>{prefix} {formatTimelineDuration(visibleDuration, locale)}</small>;
+  return <small>{prefix ? `${prefix} ` : ""}{formatTimelineDuration(visibleDuration, locale)}</small>;
+}
+
+/** 专题总历时始终放在主摘要区，避免右侧状态事实在长文本下被折叠容器裁切。 */
+function TopicDurationFact({ duration, locale }: {
+  duration: CurrentTopicStageOutDto["topicDuration"] | undefined;
+  locale: LocaleValue;
+}) {
+  if (duration?.startedAt && duration.durationMs !== null) {
+    return <TimelineDuration durationMs={duration.durationMs} startedAt={duration.startedAt} running={duration.status === "running"} locale={locale} prefix="" />;
+  }
+  return <small>{locale === "ja" ? "未記録" : "未记录"}</small>;
 }
 
 /** 专题卡折叠状态下显示标题、摘要、状态、并行人数和墙钟耗时。 */
@@ -172,6 +183,7 @@ function TaskGroupHeader({
       <span className="task-group-primary" aria-label={locale === "ja" ? "現在の状況" : "当前情况"}>
         <span className="task-group-primary-matter"><b>{locale === "ja" ? "内容" : "发生事项"}</b><small>{primary.matter}</small></span>
         <span className="task-group-primary-owner"><b>{locale === "ja" ? "担当" : "处理人和状态"}</b><small>{primary.ownerAndStatus}</small></span>
+        <span className="task-group-primary-duration"><b>{locale === "ja" ? "テーマ総所要時間" : "专题总历时"}</b><TopicDurationFact duration={currentStage?.topicDuration} locale={locale} /></span>
         {technicalRecoveryReason && <span className="task-group-primary-handoff-reason"><b>{locale === "ja" ? "引き継ぎ理由" : "转交原因"}</b><small>{technicalRecoveryReason}</small></span>}
         <span className="task-group-primary-customer-action"><b>{locale === "ja" ? "必要な操作" : "是否需要你操作"}</b><small>{primary.customerAction}</small></span>
         {/* 卡片展开后由时间线中的“下一流程”独占该状态，避免同一文案重复。 */}
@@ -185,10 +197,6 @@ function TaskGroupHeader({
         {!groupStopped && activity.activeOwnerLabels.length > 0 && (
           <em>{locale === "ja" ? `タスク実行中 ${activity.activeOwnerLabels.length}人：${activity.activeOwnerLabels.join("、")}` : `任务执行中 ${activity.activeOwnerLabels.length} 人：${activity.activeOwnerLabels.join("、")}`}</em>
         )}
-        {/* 专题总耗时：已结束专题固定，未结束专题跟随当前时间增长。 */}
-        {currentStage?.topicDuration?.startedAt && currentStage.topicDuration.durationMs !== null
-          ? <TimelineDuration durationMs={currentStage.topicDuration.durationMs} startedAt={currentStage.topicDuration.startedAt} running={currentStage.topicDuration.status === "running"} locale={locale} prefix={locale === "ja" ? "テーマ総所要時間" : "专题总历时"} />
-          : <small>{locale === "ja" ? "テーマ総所要時間：未記録" : "专题总历时：未记录"}</small>}
       </span>
     </span>
   );
@@ -269,15 +277,7 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
         <strong>{locale === "ja" ? "次の工程" : "下一流程"}</strong>
         <span className="task-timeline-next-current">
           <span>{currentStage?.nextAction || group.nextStep}</span>
-          {currentStage?.customerActionGuidance && (
-            <span className="task-recovery-guidance">
-              <b>{currentStage.customerActionGuidance.affectedFiles.join("、")}</b>
-              <small>{currentStage.customerActionGuidance.problem}</small>
-              <small>{currentStage.customerActionGuidance.reasonCustomerMustAct}</small>
-              <small>{currentStage.customerActionGuidance.steps.join(" ")}</small>
-              <small>{currentStage.customerActionGuidance.completionCriteria.join(" ")}</small>
-            </span>
-          )}
+          {/* 唯一恢复动作必须先于可滚动长指导，窄窗口打开卡片时即可操作。 */}
           {projectedRecoveryId && currentStage?.topicId && currentStage.proposalId && (
             <button
               type="button"
@@ -293,6 +293,15 @@ export function TaskGroupCard({ model }: TaskGroupCardProps) {
                 ? locale === "ja" ? "復旧中…" : "恢复中…"
                 : currentStage?.customerActionGuidance?.resumeLabel || "从卡点继续"}
             </button>
+          )}
+          {currentStage?.customerActionGuidance && (
+            <span className="task-recovery-guidance">
+              <b>{currentStage.customerActionGuidance.affectedFiles.join("、")}</b>
+              <small>{currentStage.customerActionGuidance.problem}</small>
+              <small>{currentStage.customerActionGuidance.reasonCustomerMustAct}</small>
+              <small>{currentStage.customerActionGuidance.steps.join(" ")}</small>
+              <small>{currentStage.customerActionGuidance.completionCriteria.join(" ")}</small>
+            </span>
           )}
           {staleActiveTopic && group.topicId && group.proposalId && (
             <button

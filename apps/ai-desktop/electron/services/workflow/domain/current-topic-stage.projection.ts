@@ -39,7 +39,7 @@ export function projectCurrentTopicStage(
   const finalConclusion = readFinalConclusion(evolution, proposal);
   const withTopicDuration = (stage: CurrentTopicStageOutDto): CurrentTopicStageOutDto => ({
     ...stage,
-    topicDuration: projectTopicDuration(topic, stage.status, finalConclusion, stage.updatedAt),
+    topicDuration: projectTopicDuration(topic, stage.proposalId, stage.status, finalConclusion, run),
   });
 
   // 已取消链只能作为历史展示，绝不能被当前专题投影重新包装成恢复、审批或验收入口。
@@ -145,13 +145,16 @@ export function projectCurrentTopicStage(
 }
 
 /** 专题总历时只使用专题创建与可追溯终态，不能由阶段总和或最近刷新时间补造。 */
-function projectTopicDuration(topic: EvolutionStateOutDto["topics"][number] | null, status: CurrentTopicStageOutDto["status"], finalConclusion: CurrentTopicStageOutDto["finalConclusion"] | null, updatedAt: string): CurrentTopicStageOutDto["topicDuration"] {
+function projectTopicDuration(topic: EvolutionStateOutDto["topics"][number] | null, proposalId: string | null, status: CurrentTopicStageOutDto["status"], finalConclusion: CurrentTopicStageOutDto["finalConclusion"] | null, run: EvolutionStateOutDto["oneShotRun"]): CurrentTopicStageOutDto["topicDuration"] {
   const startedAt = topic?.createdAt || null;
   if (!startedAt || !Number.isFinite(Date.parse(startedAt))) return { startedAt: null, endedAt: null, durationMs: null, status: "missing" };
   const terminal = Boolean(finalConclusion) || ["completed", "completed-unverified", "cancelled"].includes(status);
-  const endedAt = terminal ? finalConclusion?.occurredAt || updatedAt : null;
+  const completedRun = run?.status === "completed" && run.topicId === topic?.topicId && run.proposalId === proposalId ? run : null;
+  const completedRunAt = completedRun?.completedAt && Number.isFinite(Date.parse(completedRun.completedAt)) ? completedRun.completedAt : null;
+  const endedAt = terminal ? finalConclusion?.occurredAt || completedRunAt : null;
   const endMs = endedAt ? Date.parse(endedAt) : Number.NaN;
-  return { startedAt, endedAt, durationMs: Number.isFinite(endMs) && endMs >= Date.parse(startedAt) ? endMs - Date.parse(startedAt) : terminal ? null : 0, status: terminal ? "completed" : "running" };
+  if (terminal && (!Number.isFinite(endMs) || endMs < Date.parse(startedAt))) return { startedAt, endedAt: null, durationMs: null, status: "missing" };
+  return { startedAt, endedAt, durationMs: terminal ? endMs - Date.parse(startedAt) : 0, status: terminal ? "completed" : "running" };
 }
 
 /** 只聚合当前有效任务已完成的绑定时段；缺项保留为缺项，不能用总处理时长填补。 */
