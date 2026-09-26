@@ -389,8 +389,12 @@ export class CollaborationCoordinator {
     const failedTask = this.#store.task(taskId);
     // 冻结本轮统一测试失败事实，避免后续状态更新使可空字段与本次修复依据脱节。
     const integrationFailure = failedTask.integrationFailure;
+    const preflightEvidenceFailure = integrationFailure?.kind === "candidate-branch-conflict"
+      && integrationFailure.detail.includes("快速预检")
+      && integrationFailure.conflictFiles.length === 0;
     const repairableFailure = integrationFailure?.kind === "verification"
-      || integrationFailure?.kind === "infrastructure";
+      || integrationFailure?.kind === "infrastructure"
+      || preflightEvidenceFailure;
     // 容量与归属等客户前置条件只能等待确认，任何直接调用也不得绕过自动恢复的等待边界。
     if (failedTask.repairRequiresUserConfirmation) return false;
     if (!repairableFailure || !["test-failed", "blocked"].includes(failedTask.state)) return false;
@@ -424,7 +428,9 @@ export class CollaborationCoordinator {
         current.repairKind = "execution";
         current.repairFailureReason = originalReason;
         current.currentHandler = participantSnapshot(handler);
-        const failureSource = originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试";
+        const failureSource = preflightEvidenceFailure
+          ? "候选快速预检"
+          : originalFailureKind === "infrastructure" ? "发布基础设施" : "统一测试";
         current.blockingReason = `${handler.displayName}正在依据${failureSource}证据调查根本原因`;
         appendFlow(current, repairStartedEvent, "recovery", "started", current.blockingReason, handler, false, {
           failureStage: current.integrationFailure?.phase || "verification", failureSummary: originalReason,

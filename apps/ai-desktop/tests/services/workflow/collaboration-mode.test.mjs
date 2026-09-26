@@ -3571,6 +3571,42 @@ test("令狐活跃调查期间晚到恢复不得重排旧结果，真实进展�
   } finally { finishDiagnosis?.("结束"); await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
 });
 
+test("候选快速预检证据失败进入技术修复而非永久等待执行容量", async () => {
+  const directory = mkdtempSync(path.join(controlledTempRoot, "preflight-evidence-repair-"));
+  let coordinator;
+  try {
+    const store = new CollaborationStore(path.join(directory, "state.json"));
+    const task = store.submitTask({ title: "候选预检", problemStatement: "候选证据不完整", confirmedIntent: "修复后从原卡点继续", workspaceState, locale: "zh-CN" });
+    store.updateTask(task.taskId, "fixture.preflight_failed", (current) => {
+      current.state = "blocked";
+      current.versionWorkspace = { workspaceId: "test", rootPath: directory, branchName: "codex/test", baseSha: "base", resultSha: "old", createdAt: new Date().toISOString(), retiredAt: null };
+      current.integrationFailure = { kind: "candidate-branch-conflict", phase: "preparation", summary: "发布候选冲突", impact: "统一测试尚未启动", recoveryAction: "修复候选证据后重试", capacity: null, detail: "快速预检发现候选证据问题", workspaceRoot: null, conflictFiles: [], baseSha: "base", resultSha: "old", generation: 511, occurredAt: new Date().toISOString() };
+    });
+    let executorCreated = 0;
+    coordinator = new CollaborationCoordinator({
+      store,
+      durations: { startWait: () => "wait", finish: () => {}, start: () => "span", instant: () => {}, interruptOpenSpans: () => {} },
+      workspaces: { commitTaskResult: async () => "new" },
+      executor: new ExecutorFacade({ createExecutor: async () => { executorCreated += 1; return {
+        isAlive: () => true,
+        investigateRepair: async () => "修复候选预检证据装配",
+        executeRepair: async () => ({ status: "code-verified", text: "预检证据已修复", pendingActions: [], changedFiles: [], authorizedFiles: [], successfulCommands: ["test"] }),
+        verifyRepairCompletion: async () => 'REPAIR_COMPLETION={"complete":true,"remaining":"","evidence":"预检回归通过"}',
+        dispose: async () => {},
+      }; } }),
+      integrationPipeline: { finishWaitingTask: () => {}, trackWaitingTask: () => {}, schedule: () => {}, dispose: () => {} },
+      emitState: () => {}, emitStream: () => {},
+    });
+
+    assert.equal(store.task(task.taskId).repairRequiresUserConfirmation, false);
+    assert.equal(store.state().members.find((member) => member.memberId === "linghu-ancestor").state, "idle");
+    assert.equal(await coordinator.repairTechnicalFailure(task.taskId), true);
+    assert.equal(executorCreated, 1);
+    assert.equal(store.task(task.taskId).state, "ready-for-integration");
+    assert.equal(store.task(task.taskId).versionWorkspace.resultSha, "new");
+  } finally { await coordinator?.dispose(); rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("容量等待的直接技术修复入口不绕过客户确认", async () => {
   const directory = mkdtempSync(path.join(controlledTempRoot, "capacity-repair-entry-"));
   let coordinator;
