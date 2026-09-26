@@ -14,10 +14,12 @@ test("Codex 子进程使用 AI Desktop 专属数据域且不继承宿主来源�
   const environment = createCodexChildEnvironment({
     PATH: "/runtime/bin",
     CODEX_HOME: "/shared/codex-home",
+    OPENAI_API_KEY: "stale-host-key",
     CODEX_INTERNAL_ORIGINATOR_OVERRIDE: "Codex Desktop",
     AI_DESKTOP_DEPENDENCY_LEASE_ID: "stale-lease",
   }, "/ai-desktop/codex-home", "task-lease-1");
   assert.equal(environment.CODEX_HOME, "/ai-desktop/codex-home");
+  assert.equal(environment.OPENAI_API_KEY, undefined);
   assert.equal(environment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
   assert.equal(environment.PATH, "/runtime/bin");
   assert.equal(environment.AI_DESKTOP_DEPENDENCY_LEASE_ID, "task-lease-1");
@@ -26,6 +28,9 @@ test("Codex 子进程使用 AI Desktop 专属数据域且不继承宿主来源�
   assert.equal(legacyEnvironment.CODEX_HOME, undefined);
   assert.equal(legacyEnvironment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE, undefined);
   assert.equal(legacyEnvironment.AI_DESKTOP_DEPENDENCY_LEASE_ID, undefined);
+
+  const legacyKeyEnvironment = createCodexChildEnvironment({ OPENAI_API_KEY: "legacy-key" }, null);
+  assert.equal(legacyKeyEnvironment.OPENAI_API_KEY, "legacy-key");
 });
 
 test("活动线程存储识别旧默认域记录并只写 AI Desktop 域版本", () => {

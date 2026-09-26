@@ -9,7 +9,9 @@ import {
 } from "../../electron/system/bootstrap/published-runtime-source.manifest.ts";
 
 test("发布重启只接受与已发布批次清单一致的候选提交", () => {
-  const root = mkdtempSync("/private/tmp/ai-desktop-runtime-source-");
+  const controlledTempRoot = path.resolve(process.cwd(), "temp", "tests");
+  mkdirSync(controlledTempRoot, { recursive: true });
+  const root = mkdtempSync(path.join(controlledTempRoot, "ai-desktop-runtime-source-"));
   const resourcesPath = path.join(root, "AI Desktop.app", "Contents", "Resources");
   const sourceSha = "b".repeat(40);
   try {

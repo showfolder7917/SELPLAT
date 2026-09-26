@@ -1044,8 +1044,13 @@ export class CodexService {
 /** 为 AI Desktop Harness 建立明确的数据域，并移除宿主 App 注入的来源冒充标记。 */
 export function createCodexChildEnvironment(environment: NodeJS.ProcessEnv, codexHome: string | null, dependencyLeaseId?: string): NodeJS.ProcessEnv {
   const childEnvironment = { ...environment };
-  if (codexHome) childEnvironment.CODEX_HOME = codexHome;
-  else delete childEnvironment.CODEX_HOME;
+  if (codexHome) {
+    childEnvironment.CODEX_HOME = codexHome;
+    // 专属数据域中的 auth.json 是唯一认证来源，避免宿主进程残留的 API Key 覆盖 ChatGPT 登录态。
+    delete childEnvironment.OPENAI_API_KEY;
+  } else {
+    delete childEnvironment.CODEX_HOME;
+  }
   delete childEnvironment.CODEX_INTERNAL_ORIGINATOR_OVERRIDE;
   // 宿主环境不得把旧任务租约泄漏给新连接；只有当前连接显式持有租约时才重新注入无路径标识。
   delete childEnvironment.AI_DESKTOP_DEPENDENCY_LEASE_ID;
