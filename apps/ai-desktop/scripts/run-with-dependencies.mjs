@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { attachDependencyCache, detachOwnedDependencyCache, resolveDependencyCache } from "./dependency-cache.mjs";
+import { isCollaborationWorktree } from "./selected-workspace-root.mjs";
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) throw new Error("A command is required.");
@@ -65,7 +66,10 @@ function runCommand(dependencyRoot, appRoot, nodeCompileCache, controlledProcess
   const launchExecutable = usesWindowsCommandInterpreter ? process.env.ComSpec || "cmd.exe" : executable;
   const launchArguments = usesWindowsCommandInterpreter ? ["/d", "/s", "/c", windowsCommandLine] : commandArguments;
   // 直接测试在隔离工作树中仍须把临时状态留在该工作树缓存，不能继承只读源工程的数据目录。
-  const controlledTestTemporaryRoot = String(process.env.AI_DESKTOP_TEST_TEMP_ROOT || "").trim() || path.dirname(controlledProcessTemp);
+  const controlledTestTemporaryRoot = String(process.env.AI_DESKTOP_TEST_TEMP_ROOT || "").trim()
+    || (isCollaborationWorktree(cache.projectRoot)
+      ? path.join(cache.projectRoot, "OPTION", "temp", cache.applicationName, "临时材料", "测试证据")
+      : path.dirname(controlledProcessTemp));
   const result = spawnSync(launchExecutable, launchArguments, {
     cwd: appRoot,
     stdio: "inherit",

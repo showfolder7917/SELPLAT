@@ -230,6 +230,43 @@ test("提案执行聚合使用已集成修复任务替代阻塞原任务", () =>
   assert.equal(view.nextStatus, "pending-acceptance");
 });
 
+test("已取消替代只保留审计，不能接管已集成原任务", () => {
+  const original = task("task-original", "integrated", {
+    evolutionProposalId: "proposal-1", createdAt: "2026-09-06T00:00:00.000Z",
+  });
+  const cancelledReplacement = task("task-cancelled-replacement", "cancelled", {
+    evolutionProposalId: "proposal-1", replacementForTaskId: "task-original",
+    createdAt: "2026-09-06T00:01:00.000Z", updatedAt: "2026-09-06T00:01:00.000Z",
+  });
+  const view = new ProposalExecutionAggregate({ proposal: proposal(["task-original"]), collaborationTasks: [original, cancelledReplacement] }).view();
+  assert.deepEqual(view.effectiveTasks.map((item) => item.taskId), ["task-original"]);
+  assert.deepEqual(view.deliveryTasks.map((item) => item.taskId), ["task-original"]);
+  assert.equal(view.cancelled, false);
+  assert.equal(view.nextStatus, "pending-acceptance");
+});
+
+test("取消的中间替代不阻止后续非取消替代按顺序接管", () => {
+  const original = task("task-original", "blocked", { evolutionProposalId: "proposal-1" });
+  const earlierReplacement = task("task-earlier-replacement", "integrated", {
+    evolutionProposalId: "proposal-1", replacementForTaskId: "task-original",
+    createdAt: "2026-09-06T00:01:00.000Z",
+  });
+  const cancelledReplacement = task("task-cancelled-replacement", "cancelled", {
+    evolutionProposalId: "proposal-1", replacementForTaskId: "task-earlier-replacement",
+    createdAt: "2026-09-06T00:02:00.000Z",
+  });
+  const laterReplacement = task("task-later-replacement", "integrated", {
+    evolutionProposalId: "proposal-1", replacementForTaskId: "task-earlier-replacement",
+    createdAt: "2026-09-06T00:03:00.000Z",
+  });
+  const aggregate = new ProposalExecutionAggregate({
+    proposal: proposal(["task-original"]),
+    collaborationTasks: [original, earlierReplacement, cancelledReplacement, laterReplacement],
+  });
+  assert.equal(aggregate.currentEffectiveTaskFor("task-original")?.taskId, "task-later-replacement");
+  assert.deepEqual(aggregate.view().effectiveTasks.map((item) => item.taskId), ["task-later-replacement"]);
+});
+
 test("当前恢复任务不覆盖同根最近已交付任务的候选证据来源", () => {
   const original = task("task-original", "blocked", { evolutionProposalId: "proposal-1" });
   const delivered = task("task-delivered", "integrated", {

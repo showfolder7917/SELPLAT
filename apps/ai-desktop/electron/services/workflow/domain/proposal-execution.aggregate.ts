@@ -199,7 +199,9 @@ export class ProposalExecutionAggregate {
 
   /** 在单一原任务链内找到最近已有候选或门禁事实的任务，作为不可被恢复状态覆盖的交付来源。 */
   #latestDeliveredTask(originalTaskId: string): CollaborationTaskAggregate | null {
-    const delivered = this.#tasks.filter((task) => this.#rootTaskId(task) === originalTaskId && this.#hasDeliveryEvidence(task));
+    // 已取消任务只保留审计，不能作为当前候选或交付门禁事实。
+    const delivered = this.#tasks.filter((task) => !task.isCancelled()
+      && this.#rootTaskId(task) === originalTaskId && this.#hasDeliveryEvidence(task));
     delivered.sort((left, right) => {
       const updatedAt = left.snapshot().updatedAt.localeCompare(right.snapshot().updatedAt);
       return updatedAt !== 0 ? updatedAt : left.taskId().localeCompare(right.taskId());
@@ -234,15 +236,18 @@ export class ProposalExecutionAggregate {
 
   /** 取得明确替代某任务的最新修复任务。 */
   #latestReplacementFor(taskId: string): CollaborationTaskAggregate | null {
-    // 收集所有显式指向当前任务的替代事实。
-    const replacements = this.#tasks.filter((task) => task.replacementForTaskId() === taskId);
+    // 已取消替代只保留审计，不能切断仍有效的原任务或更早替代。
+    const replacements = this.#tasks.filter((task) => task.replacementForTaskId() === taskId && !task.isCancelled());
     // 没有候选时当前任务仍然生效。
     if (replacements.length === 0) {
       // 返回空值表示替代链结束。
       return null;
     }
-    // 按真实创建时间排序，最后形成的修复事实优先。
-    replacements.sort((left, right) => left.snapshot().createdAt.localeCompare(right.snapshot().createdAt));
+    // 按真实创建时间排序；同一时间使用稳定标识消除快照输入顺序的影响。
+    replacements.sort((left, right) => {
+      const createdAt = left.snapshot().createdAt.localeCompare(right.snapshot().createdAt);
+      return createdAt !== 0 ? createdAt : left.taskId().localeCompare(right.taskId());
+    });
     // 返回最后一条修复任务。
     return replacements.at(-1) || null;
   }
