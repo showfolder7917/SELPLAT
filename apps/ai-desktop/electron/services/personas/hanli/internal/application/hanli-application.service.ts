@@ -32,15 +32,15 @@ const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-delivery-evidence.ts",
   "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-duration.log.ts",
-  "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-interaction-performance.log.ts",
-  "apps/ai-desktop/electron/system/ipc/domains/register-collaboration-ipc.ts",
+  "apps/ai-desktop/electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts",
+  "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration.store.ts",
+  "apps/ai-desktop/electron/services/evolution/internal/evolution-state.store.ts",
+  "apps/ai-desktop/electron/services/support/application/test-data-reset.service.ts",
+  "apps/ai-desktop/electron/system/bootstrap/application-runtime.ts",
   "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
   "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
-  "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs",
   "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
-  "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
-  "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
-  "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs",
+  "apps/ai-desktop/tests/services/workflow/collaboration-mode.test.mjs",
 ] as const;
 
 /** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */
@@ -161,6 +161,10 @@ export class HanliApplicationService implements HanliApplicationPort {
     } else {
       reclassifiedConditionIds = this.#store.retireScenarioBlockedAcceptancePlan(proposalId);
       if (reclassifiedConditionIds.length) proposal = requireProposal(this.#store.state(), proposalId);
+      // 旧清单已经让代码条件因缺少恢复链或清空实现而受阻时，审计退役旧计划并冻结当前完整边界。
+      if (this.#store.retireSourceEvidenceBlockedAcceptancePlan(proposalId, ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES)) {
+        proposal = requireProposal(this.#store.state(), proposalId);
+      }
       // v3 旧计划没有冻结页面表面时，只在本轮已有验收能力受阻事实的前提下重建；不改写历史计划或结果。
       if (this.#store.retireAcceptanceCapabilityPlan(proposalId)) proposal = requireProposal(this.#store.state(), proposalId);
     }

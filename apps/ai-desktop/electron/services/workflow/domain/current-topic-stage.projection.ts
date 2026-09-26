@@ -48,6 +48,7 @@ export function projectCurrentTopicStage(
   const execution = currentExecution;
   const currentDurationEvidence = projectCurrentTopicDurationEvidence(execution.effectiveTasks, durationEvidence);
   const latestAcceptance = readLatestAcceptance(evolution, proposal);
+  const failureEvidence = readFailureEvidence(evolution, proposal, execution.effectiveTasks);
   const hostStartupAcceptance = readHostStartupAcceptance(evolution, proposal);
   // 只有原流程已进入真实验收，且开始时间晚于上次结果，才展示新一轮验收中。
   const acceptanceStarted = run?.status === "running" && run.phase === "accepting"
@@ -62,7 +63,8 @@ export function projectCurrentTopicStage(
   const deliveryEvidence = { ...deliveredTaskEvidence, preflight: currentTaskEvidence.preflight };
   const technicalStage = projectCurrentTechnicalRecovery({ evolution, proposal, topic, execution,
     latestAcceptance, hostStartupAcceptance, deliveryEvidence });
-  if (technicalStage) return technicalStage;
+  // 技术恢复只改变责任人与恢复入口；同一专题的失败分类和真实阶段时长仍必须留在主卡。
+  if (technicalStage) return { ...technicalStage, durationEvidence: currentDurationEvidence, failureEvidence };
 
   const monitorStage = projectMonitorAcceptanceStage(evolution, proposal, topic);
   if (monitorStage) return monitorStage;
@@ -131,6 +133,7 @@ export function projectCurrentTopicStage(
     hostStartupAcceptance,
     deliveryEvidence,
     durationEvidence: currentDurationEvidence,
+    failureEvidence,
     updatedAt,
   };
 }
@@ -146,21 +149,66 @@ function projectCurrentTopicDurationEvidence(
     : relevant.some((item) => item.bindingStatus !== "available")
       ? relevant.find((item) => item.bindingStatus !== "available")!.bindingStatus
       : "available";
-  const phases: Array<{ phase: CurrentTopicStageDurationEvidenceOutDto["phases"][number]["phase"]; segments: string[] }> = [
-    { phase: "investigation", segments: ["analysis"] },
-    { phase: "implementation", segments: ["source-change"] },
-    { phase: "testing", segments: ["verification", "preflight", "combination-test"] },
-    { phase: "release", segments: ["release"] },
-    { phase: "restart", segments: ["restart-health"] },
+  const phases: Array<{ phase: CurrentTopicStageDurationEvidenceOutDto["phases"][number]["phase"]; segments: string[]; flowRange?: [string[], string[]] }> = [
+    { phase: "investigation", segments: ["analysis"], flowRange: [["worker.phase.analyzing"], ["technical_analysis.ready"]] },
+    { phase: "implementation", segments: ["source-change"], flowRange: [["execution.started"], ["executor.self_test_started"]] },
+    { phase: "testing", segments: ["verification", "preflight", "combination-test"], flowRange: [["executor.self_test_started"], ["task.code_verified"]] },
+    { phase: "release", segments: ["release"], flowRange: [["release.restart_scheduled"], ["release.published"]] },
+    { phase: "restart", segments: ["restart-health"], flowRange: [["release.published"], ["release.restart_healthy"]] },
     { phase: "hanli-acceptance", segments: ["result-acceptance"] },
   ];
   return {
     bindingStatus,
-    phases: phases.map(({ phase, segments }) => {
+    phases: phases.map(({ phase, segments, flowRange }) => {
       const events = relevant.flatMap((item) => item.events)
         .filter((event) => event.outcome === "completed" && segments.includes(event.segment));
-      return { phase, durationMs: events.length ? events.reduce((total, event) => total + event.durationMs, 0) : null, status: events.length ? "recorded" : "missing" };
+      const flowDurationMs = events.length || !flowRange ? null : sumCompletedFlowRanges(tasks, flowRange[0], flowRange[1]);
+      const durationMs = events.length ? events.reduce((total, event) => total + event.durationMs, 0) : flowDurationMs;
+      return { phase, durationMs, status: durationMs === null ? "missing" : "recorded" };
     }),
+  };
+}
+
+/** 进程重启会中断内存计时；只用同一任务已落盘的明确开始/结束事件补回真实完成时段。 */
+function sumCompletedFlowRanges(tasks: readonly CollaborationTaskOutDto[], starts: string[], ends: string[]): number | null {
+  const durations = tasks.flatMap((task) => {
+    const flow = Array.isArray(task.flowEvents) ? task.flowEvents : [];
+    const startIndex = flow.findIndex((event) => starts.includes(event.type));
+    if (startIndex < 0) return [];
+    // 某阶段的结束也可能由下一阶段 started 事件标记；事件本身无需伪装成 completed。
+    const end = flow.slice(startIndex + 1).find((event) => ends.includes(event.type));
+    const startedAt = Date.parse(flow[startIndex].occurredAt);
+    const endedAt = end ? Date.parse(end.occurredAt) : Number.NaN;
+    return Number.isFinite(startedAt) && Number.isFinite(endedAt) && endedAt >= startedAt ? [endedAt - startedAt] : [];
+  });
+  return durations.length ? durations.reduce((total, duration) => total + duration, 0) : null;
+}
+
+/** 从真实验收运行与替代链投影客户可辨分类；不解析自由文本，也不把多个条件扩成多个缺陷。 */
+function readFailureEvidence(
+  evolution: EvolutionStateOutDto,
+  proposal: EvolutionStateOutDto["proposals"][number],
+  tasks: readonly CollaborationTaskOutDto[],
+): CurrentTopicStageOutDto["failureEvidence"] {
+  const record = evolution.archiveRecords.filter((item) => item.proposalId === proposal.proposalId && item.eventType === "acceptance.result_checked")
+    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))[0];
+  const run = record?.payload.acceptanceRun as { runId?: unknown; status?: unknown; acceptanceDisposition?: unknown; stepResults?: unknown } | undefined;
+  if (!run || run.status === "passed" || typeof run.runId !== "string") return null;
+  const classification = run.acceptanceDisposition === "product-or-safety-failure" ? "product-defect"
+    : run.acceptanceDisposition === "acceptance-capability-or-runtime-blocked" ? "acceptance-capability-blocked"
+      : run.acceptanceDisposition === "acceptance-precondition-unavailable" ? "infrastructure-blocked" : null;
+  if (!classification) return null;
+  const failedSteps = Array.isArray(run.stepResults) ? run.stepResults.filter((item) => {
+    const step = item as { status?: unknown; layoutStatus?: unknown };
+    return step.status === "failed" || step.status === "blocked" || step.layoutStatus === "failed" || step.layoutStatus === "blocked";
+  }) : [];
+  const repairTaskIds = tasks.map((task) => task.taskId);
+  return {
+    classification,
+    summary: failedSteps.length ? `原始验收保留 ${failedSteps.length} 项未通过或未验证条件。` : "原始验收失败事实已保留。",
+    relatedFailures: failedSteps.length > 1 || tasks.some((task) => Boolean(task.replacementForTaskId)) ? "merged-single-repair-chain" : "single-failure",
+    acceptanceRunId: run.runId,
+    repairTaskIds,
   };
 }
 
