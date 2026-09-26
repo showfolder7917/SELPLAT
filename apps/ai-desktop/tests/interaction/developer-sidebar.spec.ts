@@ -351,16 +351,22 @@ test("验收中专题在正常和窄窗口仍从固定摘要显示专题总历�
 
   const group = page.locator(".task-collaboration-group").filter({ hasText: "专题任务 01 · 修订截图按钮可用态" });
   const duration = group.locator(".task-group-primary-duration");
+  const blockingReason = group.locator(".task-group-primary-blocking-reason");
   await expect(group).toContainText("韩立已开始本轮结果验收");
+  await expect(blockingReason).toContainText("等待真实验收结果。");
+  await expect(group.locator(".task-timeline-next-current").getByRole("button", { name: "从卡点继续", exact: true })).toHaveCount(0);
   await expect(group.locator(".task-group-facts").getByText(/专题总历时/)).toHaveCount(0);
   for (const [width, height] of [[1366, 768], [680, 700]]) {
     await application.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]?.setSize(size.width, size.height), { width, height });
     await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getSize())).toEqual([width, height]);
     await expect(duration).toBeVisible();
-    const [cardBounds, durationBounds] = await Promise.all([group.boundingBox(), duration.boundingBox()]);
-    if (!cardBounds || !durationBounds) throw new Error("验收中专题总历时缺少可视边界。");
+    await expect(blockingReason).toBeVisible();
+    const [cardBounds, durationBounds, blockingReasonBounds] = await Promise.all([group.boundingBox(), duration.boundingBox(), blockingReason.boundingBox()]);
+    if (!cardBounds || !durationBounds || !blockingReasonBounds) throw new Error("验收中专题固定摘要缺少可视边界。");
     expect(durationBounds.x).toBeGreaterThanOrEqual(cardBounds.x);
     expect(durationBounds.x + durationBounds.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
+    expect(blockingReasonBounds.x).toBeGreaterThanOrEqual(cardBounds.x);
+    expect(blockingReasonBounds.x + blockingReasonBounds.width).toBeLessThanOrEqual(cardBounds.x + cardBounds.width);
     await testInfo.attach(`accepting-topic-duration-${width}x${height}`, { body: await page.screenshot(), contentType: "image/png" });
   }
 
