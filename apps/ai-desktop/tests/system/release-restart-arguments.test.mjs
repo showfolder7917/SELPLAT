@@ -29,12 +29,27 @@ test("只有正确包真实就绪才结束任务并回收工作树", async () =>
   const store = { state: () => structuredClone(state), updateTask: (id, _reason, update) => update(state.tasks.find((task) => task.taskId === id), state) };
   const retiredStates = [];
   const confirmedBatches = [];
-  const options = { store, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1", releaseBatches: { confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId), retireRuntimeActivationPackage: () => undefined }, durations: { instant: () => {} }, workspaces: { retireWorkspace: async () => { retiredStates.push(state.tasks[0].state); } } };
+  const durationEvents = [];
+  const options = { store, actorMemberId: "linghu-ancestor", releaseVersion: "0.1.1", releaseBatches: {
+    runningDocument: (batchId) => batchId === "release-0.1.1-g17" ? {
+      releaseBatchId: batchId, state: "integrated", candidateSha: "tested-sha", executable: null,
+      tasks: [{ taskId: "original", resultSha: "tested-result" }],
+    } : null,
+    confirmDeveloperRestart: (batchId) => confirmedBatches.push(batchId), retireRuntimeActivationPackage: () => undefined,
+  }, durations: {
+    start: (taskId, phase, detail) => { durationEvents.push(["start", taskId, phase, detail]); return "restart-health"; },
+    finish: (spanId, status, detail) => durationEvents.push(["finish", spanId, status, detail]),
+    instant: () => {},
+  }, workspaces: { retireWorkspace: async () => { retiredStates.push(state.tasks[0].state); } } };
   assert.deepEqual(new VersionIntegrationPipeline({ ...options, loadedRuntimeSha: "other-sha" }).confirmPublishedRestart(), []);
   assert.deepEqual(confirmedBatches, []);
   assert.deepEqual(retiredStates, []);
   assert.deepEqual(new VersionIntegrationPipeline({ ...options, loadedRuntimeSha: "tested-sha" }).confirmPublishedRestart(), [17]);
   assert.deepEqual(confirmedBatches, ["release-0.1.1-g17"]);
+  assert.deepEqual(durationEvents, [
+    ["start", "original", "restart-health", { generation: 17, candidateSha: "tested-sha" }],
+    ["finish", "restart-health", "completed", { generation: 17, candidateSha: "tested-sha" }],
+  ]);
   await Promise.resolve();
   assert.deepEqual(retiredStates, ["integrated"]);
   assert.ok(state.tasks[0].versionWorkspace.retiredAt);

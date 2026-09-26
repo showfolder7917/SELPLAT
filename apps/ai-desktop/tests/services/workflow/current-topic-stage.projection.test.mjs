@@ -853,3 +853,27 @@ test("Host 启动通过只接受当前专题同一启动标识的完整退出与
   const releaseOnly = projectCurrentTopicStage(evolution("missing"), deliveredCollaboration());
   assert.equal(releaseOnly.hostStartupAcceptance.status, "unverified");
 });
+
+test("当前专题只投影同任务同候选同执行尝试的已完成阶段时长", () => {
+  const current = task("integrated");
+  current.assignmentId = "attempt-current";
+  current.versionWorkspace = { resultSha: "b".repeat(40) };
+  current.flowEvents = [{ type: "integration.candidate_ready", status: "completed", details: { candidateSha: "a".repeat(40) } }];
+  const completed = (segment, durationMs) => ({ segment, startedAt: "2026-09-12T04:00:00.000Z", endedAt: "2026-09-12T04:00:01.000Z", durationMs, outcome: "completed" });
+  const stage = projectCurrentTopicStage(evolution("missing"), { tasks: [current], integrationBatches: [] }, [{
+    taskId: "task-current", candidateSha: "a".repeat(40), resultSha: "b".repeat(40), bindingStatus: "available",
+    completedSegments: ["analysis", "source-change", "verification", "preflight", "combination-test", "release", "restart-health"],
+    missingSegments: ["result-acceptance"],
+    events: [completed("analysis", 10), completed("source-change", 20), completed("verification", 30), completed("preflight", 40), completed("combination-test", 50), completed("release", 60), completed("restart-health", 70)],
+  }]);
+  assert.equal(stage.durationEvidence.bindingStatus, "available");
+  assert.deepEqual(stage.durationEvidence.phases, [
+    { phase: "investigation", durationMs: 10, status: "recorded" },
+    { phase: "implementation", durationMs: 20, status: "recorded" },
+    { phase: "testing", durationMs: 120, status: "recorded" },
+    { phase: "release", durationMs: 60, status: "recorded" },
+    { phase: "restart", durationMs: 70, status: "recorded" },
+    { phase: "hanli-acceptance", durationMs: null, status: "missing" },
+  ]);
+  assert.equal(stage.finalConclusion, null);
+});

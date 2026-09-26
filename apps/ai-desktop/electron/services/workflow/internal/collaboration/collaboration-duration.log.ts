@@ -15,10 +15,14 @@ export type CollaborationDurationSegment =
   | "worktree-prepare"
   | "source-change"
   | "verification"
+  | "preflight"
   | "integration"
+  | "release"
   | "integration-wait"
   | "conflict-resolution"
   | "combination-test"
+  | "restart-health"
+  | "result-acceptance"
   | "approval-wait"
   | "user-wait"
   | "dependency-wait"
@@ -63,7 +67,7 @@ export interface CollaborationTaskDurationEvidence {
   taskId: string;
   candidateSha: string | null;
   resultSha: string | null;
-  bindingStatus: "available" | "candidate-missing" | "result-missing";
+  bindingStatus: "available" | "candidate-missing" | "result-missing" | "execution-attempt-missing";
   completedSegments: CollaborationDurationSegment[];
   missingSegments: CollaborationDurationSegment[];
   events: Array<Pick<CompletedSpanEvent, "segment" | "startedAt" | "endedAt" | "durationMs" | "outcome">>;
@@ -71,6 +75,8 @@ export interface CollaborationTaskDurationEvidence {
 
 type DurationEvidenceTask = {
   taskId: string;
+  assignmentId?: string | null;
+  executionRecords?: Array<{ assignmentId?: string | null }>;
   versionWorkspace?: { resultSha?: string | null } | null;
   flowEvents?: Array<{ details?: { candidateSha?: string | null } | null }>;
 };
@@ -194,10 +200,20 @@ export class CollaborationDurationLog {
       .find((value): value is string => typeof value === "string" && /^[a-f0-9]{40,64}$/iu.test(value)) || null;
     const resultSha = task.versionWorkspace?.resultSha && /^[a-f0-9]{40,64}$/iu.test(task.versionWorkspace.resultSha)
       ? task.versionWorkspace.resultSha : null;
-    const bindingStatus = candidateSha ? resultSha ? "available" : "result-missing" : "candidate-missing";
+    const executionAttemptId = task.assignmentId || [...(task.executionRecords || [])].reverse()
+      .map((record) => record.assignmentId || null)
+      .find((value): value is string => typeof value === "string" && value.length > 0) || null;
+    const bindingStatus = !candidateSha ? "candidate-missing"
+      : !resultSha ? "result-missing"
+        : !executionAttemptId ? "execution-attempt-missing"
+          : "available";
+    const candidateBoundSegments = new Set<CollaborationDurationSegment>(["preflight", "combination-test", "release", "restart-health", "result-acceptance"]);
     const events = this.#readEvents().map(parseCompletedSpanEvent)
-      .filter((event): event is CompletedSpanEvent => event !== null && event.taskId === task.taskId);
-    const completedSegments = [...new Set(events.map((event) => event.segment))];
+      .filter((event): event is CompletedSpanEvent => event !== null && event.taskId === task.taskId)
+      .filter((event) => candidateBoundSegments.has(event.segment)
+        ? event.details.candidateSha === candidateSha
+        : event.details.executionAttemptId === executionAttemptId);
+    const completedSegments = [...new Set(events.filter((event) => event.outcome === "completed").map((event) => event.segment))];
     return {
       taskId: task.taskId, candidateSha, resultSha, bindingStatus, completedSegments,
       missingSegments: bindingStatus === "available" ? requiredSegments.filter((segment) => !completedSegments.includes(segment)) : [...requiredSegments],
@@ -299,8 +315,8 @@ function parseCompletedSpanEvent(value: Record<string, unknown>): CompletedSpanE
 function isDurationSegment(value: unknown): value is CollaborationDurationSegment {
   return typeof value === "string" && [
     "executor-queue", "analysis", "reviewer-wait", "review", "rework", "codex-startup",
-    "worktree-prepare", "source-change", "verification", "integration", "integration-wait", "conflict-resolution",
-    "combination-test", "approval-wait", "user-wait", "dependency-wait", "recovery",
+    "worktree-prepare", "source-change", "verification", "preflight", "integration", "release", "integration-wait", "conflict-resolution",
+    "combination-test", "restart-health", "result-acceptance", "approval-wait", "user-wait", "dependency-wait", "recovery",
   ].includes(value);
 }
 

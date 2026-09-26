@@ -76,6 +76,13 @@ test("任务协作群固定候选检测只检查验收正文，不读取语料�
   ], criterionIds, taskCriterionIds), /固定候选批次/);
 });
 
+test("真实页面验收只在页面工具开始后记录候选绑定时段", () => {
+  assert.match(personaEvolutionRuntimeSource, /beginAcceptanceDuration\?: \(tasks:/u);
+  assert.match(personaEvolutionRuntimeSource, /computerAcceptanceSession\(goal, \(\) => \{[\s\S]*beginAcceptanceDuration\(acceptanceTasks\)/u);
+  assert.match(personaEvolutionRuntimeSource, /acceptanceDuration\.finish\?\.\("completed"\)[\s\S]*acceptanceDuration\.finish\?\.\("failed"\)/u);
+  assert.match(applicationRuntimeSource, /beginAcceptanceDuration: \(tasks\) =>[\s\S]*"result-acceptance"[\s\S]*candidateSha/u);
+});
+
 /**
  * 演进回归直接核验当前工作树的提示词源码，避免把候选源码测试耦合到主工程的旧构建产物。
  * 生产服务仍只能由 PromptLibraryFacade 读取构建后的只读 bundle。

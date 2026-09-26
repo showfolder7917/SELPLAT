@@ -1,6 +1,7 @@
 import type { CurrentTopicStageOutDto } from "../../../../../contracts/services/evolution/index";
 import type { LocaleValue } from "../../../../../contracts/system/desktop/index";
 import { SelUiDisclosure } from "../../../../theme/SelUiDisclosure";
+import { formatTimelineDuration } from "./timeline-display";
 
 /** Host 重启和最终验收是两份独立的只读证据，不参与恢复按钮判定。 */
 export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
@@ -10,6 +11,10 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
 }) {
   const preflight = stage.deliveryEvidence.preflight;
   const delivery = stage.deliveryEvidence;
+  const durationEvidence = stage.durationEvidence || null;
+  const phaseLabel: Record<NonNullable<typeof durationEvidence>["phases"][number]["phase"], string> = {
+    investigation: "调查", implementation: "实现", testing: "测试", release: "发布", restart: "重启", "hanli-acceptance": "韩立验收",
+  };
   return <>
     <section className="task-node-detail task-preflight-evidence">
       <strong>{locale === "ja" ? "高速事前確認と再利用根拠" : "快速预检与复用依据"}</strong>
@@ -47,6 +52,17 @@ export function TaskGroupAcceptanceEvidence({ stage, host, locale }: {
         `重启健康：${delivery.restartHealth}`,
         `真实验收：${delivery.acceptance}`,
       ].join("\n")}</pre>
+    </section>
+    <section className="task-node-detail task-duration-evidence">
+      <strong>{locale === "ja" ? "実績フェーズ時間" : "实际阶段耗时"}</strong>
+      <p>{durationEvidence?.bindingStatus === "available"
+        ? "仅显示当前任务、结果提交、候选和执行尝试绑定的已完成时段。"
+        : "阶段时段尚未完整绑定；缺失项不会以总处理时长或零时长补造。"}</p>
+      <pre>{(durationEvidence?.phases || [
+        "investigation", "implementation", "testing", "release", "restart", "hanli-acceptance",
+      ].map((phase) => ({ phase, durationMs: null, status: "missing" as const }))).map((phase) =>
+        `${phaseLabel[phase.phase as keyof typeof phaseLabel]}：${phase.status === "recorded" && phase.durationMs !== null
+          ? formatTimelineDuration(phase.durationMs, locale) : "未记录或尚未完成"}`).join("\n")}</pre>
     </section>
     <section className="task-node-detail">
       <strong>{locale === "ja" ? "Host 起動受入" : "Host 启动验收"}</strong>

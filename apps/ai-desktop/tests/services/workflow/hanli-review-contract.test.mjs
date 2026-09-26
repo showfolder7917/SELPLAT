@@ -10,6 +10,7 @@ const prompt = readFileSync("prompts/personas/hanli/result-acceptance.md", "utf8
 const computerPrompt = readFileSync("prompts/personas/hanli/computer-acceptance.md", "utf8");
 const computer = readFileSync("electron/services/personas/hanli/internal/acceptance/hanli-computer-acceptance.ts", "utf8");
 const runtime = readFileSync("electron/services/workflow/internal/evolution/persona-evolution.runtime.ts", "utf8");
+const applicationRuntime = readFileSync("electron/system/bootstrap/application-runtime.ts", "utf8");
 const decision = readFileSync("electron/services/personas/hanli/internal/decision/hanli-decision.service.ts", "utf8");
 const coordinator = readFileSync("electron/services/workflow/internal/acceptance/hanli-result-review.coordinator.ts", "utf8");
 const application = readFileSync("electron/services/personas/hanli/internal/application/hanli-application.service.ts", "utf8");
@@ -167,12 +168,14 @@ test("历史审计卡只读展开回执包含可见文本和无业务操作的�
 
 test("韩立验收上下文只传入任务绑定候选的耗时证据", () => {
   assert.match(runtime, /readAcceptanceDurationEvidence\(acceptanceTasks\)/u);
+  assert.match(runtime, /beginAcceptanceDuration\(acceptanceTasks\)/u);
+  assert.match(applicationRuntime, /"analysis", "source-change", "verification", "preflight", "combination-test", "release", "restart-health", "result-acceptance"/u);
   assert.match(coordinator, /durationEvidence,/u);
   assert.match(prompt, /bindingStatus.*available/u);
   assert.match(prompt, /missingSegments/u);
 });
 
-test("耗时证据拒绝用无候选绑定的同任务记录补齐阶段", async () => {
+test("耗时证据拒绝用旧候选或旧执行尝试补齐当前阶段", async () => {
   const bundled = await build({ entryPoints: ["electron/services/workflow/internal/collaboration/collaboration-duration.log.ts"], bundle: true, platform: "node", format: "esm", write: false });
   const { CollaborationDurationLog } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`);
   const parent = process.env.AI_DESKTOP_TEST_TEMP_ROOT || tmpdir();
@@ -180,15 +183,24 @@ test("耗时证据拒绝用无候选绑定的同任务记录补齐阶段", async
   const root = mkdtempSync(path.join(parent, "hanli-duration-evidence-"));
   try {
     const log = new CollaborationDurationLog(root);
-    const span = log.start("task-a", "source-change");
-    log.finish(span);
+    const finish = (segment, details) => {
+      const span = log.start("task-a", segment, details);
+      log.finish(span);
+    };
+    finish("source-change", { executionAttemptId: "attempt-old" });
+    finish("source-change", { executionAttemptId: "attempt-current" });
+    finish("verification", { executionAttemptId: "attempt-current" });
+    finish("preflight", { candidateSha: "c".repeat(40) });
+    finish("combination-test", { candidateSha: "a".repeat(40) });
+    finish("restart-health", { candidateSha: "b".repeat(40) });
     const resultSha = "b".repeat(40);
-    const blocked = log.readTaskEvidence({ taskId: "task-a", versionWorkspace: { resultSha }, flowEvents: [] }, ["source-change"]);
+    const blocked = log.readTaskEvidence({ taskId: "task-a", assignmentId: "attempt-current", versionWorkspace: { resultSha }, flowEvents: [] }, ["source-change"]);
     assert.equal(blocked.bindingStatus, "candidate-missing");
     assert.deepEqual(blocked.missingSegments, ["source-change"]);
-    const available = log.readTaskEvidence({ taskId: "task-a", versionWorkspace: { resultSha }, flowEvents: [{ details: { candidateSha: "a".repeat(40) } }] }, ["source-change", "verification"]);
+    const available = log.readTaskEvidence({ taskId: "task-a", assignmentId: "attempt-current", versionWorkspace: { resultSha }, flowEvents: [{ details: { candidateSha: "a".repeat(40) } }] }, ["source-change", "verification", "preflight", "combination-test", "restart-health", "result-acceptance"]);
     assert.equal(available.bindingStatus, "available");
-    assert.deepEqual(available.missingSegments, ["verification"]);
+    assert.deepEqual(available.completedSegments, ["source-change", "verification", "combination-test"]);
+    assert.deepEqual(available.missingSegments, ["preflight", "restart-health", "result-acceptance"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
