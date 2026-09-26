@@ -152,6 +152,7 @@ export function createCollaborationContext(options: CollaborationBootstrapOption
   return {
     collaboration,
     collaborationStore,
+    collaborationDurations,
     collaborationRegistry,
     collaborationNavigationPreference,
     collaborationInteractionPerformance,

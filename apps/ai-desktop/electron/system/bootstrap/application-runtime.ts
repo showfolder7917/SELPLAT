@@ -781,7 +781,7 @@ export async function startApplication(): Promise<void> {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("desktop:collaboration-stream", { taskId, memberId, timelineNodeId, event });
     },
   });
-  const { collaborationStore, collaborationNavigationPreference, collaborationInteractionPerformance, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
+  const { collaborationStore, collaborationDurations, collaborationNavigationPreference, collaborationInteractionPerformance, collaborationRegistry, versionWorkspaces, testResources, releaseBatches } = collaborationContext;
   collaboration = collaborationContext.collaboration;
   // 人物长期线程和临时执行线程共用同一全局授权路由；否则人物请求会停在主进程内存中，Renderer 永远看不到弹窗。
   collaborationRegistry.registerPersona({
@@ -1092,6 +1092,8 @@ export async function startApplication(): Promise<void> {
     recordFailure: (input) => eventCenter.recordException(input),
     memory: collaborationMemory,
     readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
+    readAcceptanceDurationEvidence: (tasks) => tasks.map((task) =>
+      collaborationDurations.readTaskEvidence(task, ["source-change", "verification", "combination-test"])),
     beginMutation: beginEvolutionMutation,
     completeMutation: completeEvolutionMutation,
     failMutation: failEvolutionMutation,

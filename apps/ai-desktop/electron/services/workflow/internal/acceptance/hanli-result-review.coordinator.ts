@@ -12,6 +12,7 @@ export function buildHanliResultReviewContext(
   fallbackWorkspaceState: WorkspaceStateOutDto,
   proposalSourceTasks: CollaborationTaskOutDto[] = tasks,
   frozenSourceEvidenceFiles: readonly string[] = [],
+  durationEvidence: unknown = null,
 ): unknown {
   // 同一提案只读取一次已授权源码；大文件的中段也必须可见，否则旧恢复分支会被首尾截取漏掉。
   const sourceEvidence = readChangedSourceEvidence(proposalSourceTasks, fallbackWorkspaceState, frozenSourceEvidenceFiles);
@@ -36,6 +37,13 @@ export function buildHanliResultReviewContext(
     sourceEvidenceStatus: sourceEvidence.status,
     // 让审查器区分本轮变更与计划冻结的回归边界；两类文件都只能来自同一工作区。
     frozenSourceEvidenceFiles: [...frozenSourceEvidenceFiles],
+    frozenSourceEvidence: {
+      required: [...frozenSourceEvidenceFiles],
+      loaded: frozenSourceEvidenceFiles.filter((file) => sourceEvidence.items.some((item) => item.file === file)),
+      missing: frozenSourceEvidenceFiles.filter((file) => !sourceEvidence.items.some((item) => item.file === file)),
+      regressionFiles: frozenSourceEvidenceFiles.filter((file) => /(?:^|\/)tests?\//u.test(file)),
+    },
+    durationEvidence,
     sourceEvidenceScope: frozenSourceEvidenceFiles.length
       ? "integrated-proposal-task-files-and-frozen-acceptance-evidence-with-two-level-relative-imports"
       : "integrated-proposal-task-files-tests-layout-and-two-level-relative-imports",
