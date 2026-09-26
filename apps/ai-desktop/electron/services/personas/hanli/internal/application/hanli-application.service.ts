@@ -10,7 +10,7 @@ import { createEvolutionMutationCoordinator, type EvolutionMutationPort } from "
 import type { HanliApplicationPort } from "../../hanli.facade.js";
 import { EvolutionApprovalService } from "../decision/evolution-approval.service.js";
 import type { HanliApplicationServiceOptions } from "./hanli-application.ports.js";
-import { HanliDecisionService } from "../decision/hanli-decision.service.js";
+import { HanliDecisionService, requiredFormalPageCriterionIds } from "../decision/hanli-decision.service.js";
 import { HanliConversationService } from "../conversation/hanli-conversation.service.js";
 import { inspectAcceptanceRunEvidence } from "../../domain/acceptance-run-evidence.policy.js";
 
@@ -165,8 +165,12 @@ export class HanliApplicationService implements HanliApplicationPort {
       if (this.#store.retireSourceEvidenceBlockedAcceptancePlan(proposalId, ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES)) {
         proposal = requireProposal(this.#store.state(), proposalId);
       }
-      // v3 旧计划没有冻结页面表面时，只在本轮已有验收能力受阻事实的前提下重建；不改写历史计划或结果。
-      if (this.#store.retireAcceptanceCapabilityPlan(proposalId)) proposal = requireProposal(this.#store.state(), proposalId);
+      // 已冻结代码条件后来被当前强制页面规则接管时，只在同轮已有阻塞事实后重建；不改写历史计划或结果。
+      const mandatoryPageCriterionIds = requiredFormalPageCriterionIds(proposal.acceptanceCriteria.map((criterion, index) => ({
+        criterionId: `criterion-${index + 1}`,
+        criterion,
+      })));
+      if (this.#store.retireAcceptanceCapabilityPlan(proposalId, mandatoryPageCriterionIds)) proposal = requireProposal(this.#store.state(), proposalId);
     }
     // 首次审查只决定页面与代码条件如何分区；此时新提案尚未有冻结计划。
     const routingReview = await this.#decision.reviewResultAcceptance(proposal, resolveAcceptanceEvidence(implementationEvidence, proposal.acceptancePlan));

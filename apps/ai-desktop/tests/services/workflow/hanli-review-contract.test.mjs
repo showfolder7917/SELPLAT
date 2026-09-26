@@ -566,6 +566,8 @@ test("冻结的当前验收计划必须逐项复用且不得在结果审查时�
   assert.match(prompt, /findings 必须逐项覆盖其余 code-conformance 条件/);
   assert.match(prompt, /不存在 page-experience 条件时返回 code-conformance/);
   assert.match(decision, /acceptancePlan 已存在时必须保持其 evidenceType 分区/);
+  assert.match(application, /requiredFormalPageCriterionIds\(proposal\.acceptanceCriteria/u);
+  assert.match(application, /retireAcceptanceCapabilityPlan\(proposalId, mandatoryPageCriterionIds\)/u);
 });
 
 test("客户未通过摘要与技术详情保持分离", () => {

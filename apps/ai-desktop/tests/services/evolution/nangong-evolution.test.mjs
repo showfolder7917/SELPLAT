@@ -2943,6 +2943,39 @@ test("旧 v3 缺少页面表面时只在已记录验收能力受阻后退役重�
   } finally { persistedEvolutionStates.delete(key); }
 });
 
+test("冻结代码条件被当前强制页面分类接管且同轮受阻时退役重建", () => {
+  const key = path.join(controlledTestRoot, "nangong-capability-reclassification-state.json");
+  try {
+    const store = evolutionStore(key);
+    let state = store.createTopic({ ...topicRequest("历史读取页面验收重分类"), acceptanceCriteria: ["历史区域显示无记录"] });
+    state = store.createProposal(state.activeTopicId, proposalRequest(), "nangong-wan", "南宫婉");
+    const proposalId = state.proposals.at(-1).proposalId;
+    state = store.markProgress(proposalId, "pending-acceptance", "等待韩立验收");
+    const now = new Date().toISOString();
+    const plan = {
+      version: 3, planId: "reclassification-plan", topicId: state.activeTopicId, proposalId,
+      proposalVersion: state.proposals.at(-1).version,
+      conditions: [{ conditionId: "criterion-1", criterion: "历史区域显示无记录", evidenceType: "code-conformance", pageSurface: null, completionRequirement: "源码审查" }],
+      sourceEvidenceFiles: ["apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs"],
+      rounds: [{ roundId: "reclassification-round", roundNumber: 1, reopenedFromRecordId: null, reopenReason: null, reopenSourceRecordId: null, openedAt: now }],
+      currentRoundId: "reclassification-round", createdAt: now,
+    };
+    store.saveAcceptancePlan(proposalId, plan);
+    const run = computerRun("reclassification-run", state.activeTopicId, proposalId, "blocked", "reclassification-shot", plan);
+    run.stepResults[0].status = "blocked";
+    run.stepResults[0].evidenceMode = "code-conformance";
+    store.recordAcceptanceRun(run);
+    assert.equal(store.retireAcceptanceCapabilityPlan(proposalId, []), false, "未被当前页面规则接管的代码阻塞不得退役计划");
+    assert.equal(store.retireAcceptanceCapabilityPlan(proposalId, ["criterion-1"]), true);
+    const next = store.state();
+    assert.equal(next.proposals.at(-1).acceptancePlan, null);
+    const retired = next.archiveRecords.at(-1);
+    assert.equal(retired.eventType, "acceptance.capability_plan_retired");
+    assert.deepEqual(retired.payload.reclassifiedConditionIds, ["criterion-1"]);
+    assert.equal(next.archiveRecords.some((record) => record.eventType === "acceptance.result_checked" && record.payload.acceptanceRun.runId === "reclassification-run"), true);
+  } finally { persistedEvolutionStates.delete(key); }
+});
+
 test("冻结源码清单缺证导致代码条件受阻时审计退役并保留原运行", () => {
   const key = path.join(controlledTestRoot, "source-evidence-plan-retire-state.json");
   try {
