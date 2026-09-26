@@ -130,6 +130,12 @@ export class HanliComputerAcceptanceRunner {
         coordinateSpace,
         criteria,
         pageEvidence: { ...pageEvidence, taskCollaboration },
+        // 截图发生在本轮韩立正式验收尚未 finish 的时刻，因此页面显示“验收运行中”是本轮自身的必然状态，
+        // 不能反过来要求本轮最终结论先于本轮验收产生。模型仍须核对结论展示区和其余真实门禁。
+        acceptanceRunContext: taskCollaborationCriterionIds.size ? {
+          status: "current-formal-run",
+          guidance: "当前页面中的‘真实验收：运行中’就是正在采集本截图的本轮韩立验收。原条件若要求本轮通过后形成最终结论，不得仅因本轮尚未 finish 或结论尚未写回而判 scenario-precondition；应核对验收摘要/最终结论展示区已经可见，当前候选的统一测试、发布、重启健康均通过，并逐项判断其他原条件。只有独立于本轮验收的真实业务前提缺失，才可使用 scenario-precondition。全部条件通过并 finish(passed) 后，系统会立即写入唯一最终结论。",
+        } : null,
         instruction: taskCollaborationCriterionIds.size
           ? "任务协作群可见时，taskCollaboration.status 与其返回的文字、currentDelivery、当前节点、成员状态及详情区域信息是独立于 pageEvidence.conversation 的正式页面证据；不得因 pageEvidence.status 为 no-visible-conversation 忽略任务协作群。所有状态必须来自当前正式业务数据；未实际发生的客户确认或新阻塞不得模拟，也不得点击任务恢复入口。成员条件在任务协作群同屏观察 memberStates、主卡和入口。仅当本步 criterionIds 包含任务卡条件时，才通过 open-task-panel 与 open-task-collaboration 到达任务协作群，并以该页面截图裁决；任务卡页面条件只能依据当前截图可见的主卡、交付依据、成员状态和详情面板几何裁决。currentDelivery 给出当前已验证候选及其门禁，是页面批次判断的唯一基线；旧条件中的批次号不得覆盖它。提交号、内部事件关联、历史批次成因和未来复用行为不是页面条件；不得因这些不可见内部事实报告验收能力受阻，它们由冻结源码审查和回归门禁负责。任务卡条件只能使用 scroll-task-collaboration 滚动当前 topicId 与 proposalId 对应的详情面板，禁止使用通用 scroll 或方向键把视口带入历史审计卡。自由讨论页没有任务卡时只能继续导航或报告验收能力受阻，不能判产品失败。detail-pane-zero-height 表示页面在有界等待后仍为零高度，必须作为真实页面布局失败；not-ready、audit-history-not-ready 或 audit-card-not-ready 只表示验收能力受阻。核对其他条件时，若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。"
           : "依据当前正式应用截图选择一个只读或安全导航动作。若 pageEvidence.status 为 no-visible-conversation，先依据当前截图点击已可见的韩立人物入口回到既有会话；这只切换页面，不发送消息、不修改任务或设置。若入口不可见或点击后仍无会话，再报告验收能力受阻。每一步都先取得新截图，导航后再观察真实页面。只判断客户能直接看到和安全操作的页面结果；原验收条件明确要求在当前人物会话内新建或重新建立会话时，允许执行该项可追溯操作。禁止发送消息、修改设置、操作任务流程或扩大到条件未授权的数据，不读取任务时间线或测试记录。",
@@ -833,6 +839,12 @@ function readTaskCollaborationSurface(target: { topicId: string; proposalId: str
       acceptance: read("真实验收：", "実際の受け入れ："),
     };
   })();
+  // 验收摘要是客户直接查看阶段耗时和最终结论的固定区域；本轮运行中也必须把其真实文字交给韩立裁决。
+  const acceptanceSummary = group?.querySelector<HTMLElement>(".task-acceptance-summary");
+  const acceptanceSummaryRect = acceptanceSummary?.getBoundingClientRect();
+  const acceptanceSummaryVisible = Boolean(acceptanceSummary && acceptanceSummaryRect
+    && acceptanceSummaryRect.width > 0 && acceptanceSummaryRect.height > 0
+    && getComputedStyle(acceptanceSummary).display !== "none" && getComputedStyle(acceptanceSummary).visibility !== "hidden");
   const currentTimelineNodeVisible = Boolean(currentTimelineNode && currentTimelineNodeRect
     && currentTimelineNodeRect.width > 0 && currentTimelineNodeRect.height > 0
     && getComputedStyle(currentTimelineNode).display !== "none" && getComputedStyle(currentTimelineNode).visibility !== "hidden");
@@ -862,6 +874,8 @@ function readTaskCollaborationSurface(target: { topicId: string; proposalId: str
     deliveryEvidence: deliveryEvidence?.innerText.trim() || "",
     deliveryEvidenceVisible,
     currentDelivery,
+    acceptanceSummary: acceptanceSummary?.innerText.trim() || "",
+    acceptanceSummaryVisible,
     auditHistoryExpanded: auditHistoryTrigger?.getAttribute("aria-expanded") === "true",
     memberStates,
     taskPanelExpanded: panelToggle?.getAttribute("aria-expanded") === "true",
