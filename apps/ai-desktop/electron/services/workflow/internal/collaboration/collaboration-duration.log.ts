@@ -141,6 +141,32 @@ export class CollaborationDurationLog {
     this.#append(event);
   }
 
+  /** 在进程外修复或重启恢复时，按已有审计时间边界补记已经真实完成的阶段；拒绝倒序或无效时间。 */
+  recordCompleted(
+    taskId: string,
+    segment: CollaborationDurationSegment,
+    startedAt: string,
+    endedAt: string,
+    details: Record<string, unknown> = {},
+  ): void {
+    const startedMs = Date.parse(startedAt);
+    const endedMs = Date.parse(endedAt);
+    if (!Number.isFinite(startedMs) || !Number.isFinite(endedMs) || endedMs < startedMs) {
+      throw new Error("协同阶段恢复时间边界无效。");
+    }
+    this.#append({
+      type: "collaboration.duration.completed",
+      spanId: randomUUID(),
+      taskId,
+      segment,
+      startedAt: new Date(startedMs).toISOString(),
+      endedAt: new Date(endedMs).toISOString(),
+      durationMs: endedMs - startedMs,
+      outcome: "completed",
+      details: sanitizeDetails(details),
+    } satisfies CompletedSpanEvent);
+  }
+
   instant(taskId: string, event: string, details: Record<string, unknown> = {}): void {
     this.#append({
       type: "collaboration.event",
