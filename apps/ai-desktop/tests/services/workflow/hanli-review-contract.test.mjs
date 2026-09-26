@@ -124,6 +124,26 @@ test("历史终态和页面读取回归测试被冻结为验收必读证据", as
   for (const file of regressions) assert.match(application, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
   assert.deepEqual(context.frozenSourceEvidence.missing, []);
   assert.deepEqual(context.frozenSourceEvidence.regressionFiles, regressions);
+  const maximumFrozenEvidenceFiles = [
+    "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
+    "apps/ai-desktop/electron/services/workflow/domain/current-topic-delivery-evidence.ts",
+    "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-duration.log.ts",
+    "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-interaction-performance.log.ts",
+    "apps/ai-desktop/electron/system/ipc/domains/register-collaboration-ipc.ts",
+    "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
+    "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
+    "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs",
+    "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
+    "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
+    "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
+    "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs",
+  ];
+  assert.doesNotThrow(() => buildHanliResultReviewContext([], workspace, [], maximumFrozenEvidenceFiles));
+  assert.throws(
+    () => buildHanliResultReviewContext([], workspace, [], [...maximumFrozenEvidenceFiles, "apps/ai-desktop/electron/services/personas/hanli/internal/application/hanli-application.service.ts"]),
+    /冻结的验收源码证据清单无效/u,
+  );
 });
 
 test("历史审计卡只读展开回执包含可见文本和无业务操作的事实", () => {

@@ -189,7 +189,7 @@ function readChangedSourceEvidence(
 /** 计划清单是唯一能补充既有能力文件的入口；调用方不能借由路径绕开已冻结范围。 */
 function validateFrozenSourceEvidenceFiles(files: readonly string[]): string[] {
   if (!files.length) return [];
-  if (files.length > 12 || new Set(files).size !== files.length) throw new Error("冻结的验收源码证据清单无效。 ");
+  if (files.length > 13 || new Set(files).size !== files.length) throw new Error("冻结的验收源码证据清单无效。 ");
   const projectRelativeSource = /^apps\/ai-desktop\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:ts|tsx|mjs|css)$/u;
   if (files.some((file) => !projectRelativeSource.test(file) || file.includes("node_modules"))) {
     throw new Error("冻结的验收源码证据包含越界路径。 ");
