@@ -31,16 +31,16 @@ const ACCEPTANCE_CAPABILITY_SOURCE_EVIDENCE_FILES = [
   "apps/ai-desktop/electron/services/support/capabilities/release/internal/version-integration.pipeline.ts",
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-stage.projection.ts",
   "apps/ai-desktop/electron/services/workflow/domain/current-topic-delivery-evidence.ts",
-  "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration-duration.log.ts",
   "apps/ai-desktop/electron/services/workflow/internal/checkpoint/checkpoint-coordinator.ts",
   "apps/ai-desktop/electron/services/workflow/internal/collaboration/collaboration.store.ts",
   "apps/ai-desktop/electron/services/evolution/internal/evolution-state.store.ts",
   "apps/ai-desktop/electron/services/support/application/test-data-reset.service.ts",
   "apps/ai-desktop/electron/system/bootstrap/application-runtime.ts",
-  "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupCard.tsx",
-  "apps/ai-desktop/src/features/collaboration/components/TaskCollaborationGroup/TaskGroupAcceptanceEvidence.tsx",
+  "apps/ai-desktop/tests/services/workflow/collaboration-timeline.test.mjs",
   "apps/ai-desktop/tests/services/workflow/current-topic-stage-projection.test.mjs",
-  "apps/ai-desktop/tests/services/workflow/collaboration-mode.test.mjs",
+  "apps/ai-desktop/tests/features/collaboration/collaboration-status-chain-contract.test.mjs",
+  "apps/ai-desktop/tests/features/collaboration/task-group-recovery.test.mjs",
+  "apps/ai-desktop/tests/services/workflow/hanli-review-contract.test.mjs",
 ] as const;
 
 /** 韩立人物应用服务：统一拥有自由讨论、方向审批和真实应用验收判断。 */
