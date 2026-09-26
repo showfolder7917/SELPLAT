@@ -1093,7 +1093,22 @@ export async function startApplication(): Promise<void> {
     memory: collaborationMemory,
     readDossier: workflowRepository ? (topicId, state) => workflowRepository!.getEvolutionTopicDossier(topicId, state) : undefined,
     readAcceptanceDurationEvidence: (tasks) => tasks.map((task) =>
-      collaborationDurations.readTaskEvidence(task, ["source-change", "verification", "combination-test"])),
+      collaborationDurations.readTaskEvidence(task, ["analysis", "source-change", "verification", "preflight", "combination-test", "release", "restart-health", "result-acceptance"])),
+    beginAcceptanceDuration: (tasks) => {
+      const spans: Array<{ spanId: string; candidateSha: string }> = [];
+      for (const task of tasks) {
+        const candidateSha = [...task.flowEvents].reverse()
+          .map((event) => event.details?.candidateSha || null)
+          .find((value): value is string => typeof value === "string" && /^[a-f0-9]{40,64}$/iu.test(value));
+        if (candidateSha) spans.push({
+          spanId: collaborationDurations.start(task.taskId, "result-acceptance", { candidateSha }),
+          candidateSha,
+        });
+      }
+      return (outcome) => {
+        for (const span of spans) collaborationDurations.finish(span.spanId, outcome, { candidateSha: span.candidateSha });
+      };
+    },
     beginMutation: beginEvolutionMutation,
     completeMutation: completeEvolutionMutation,
     failMutation: failEvolutionMutation,

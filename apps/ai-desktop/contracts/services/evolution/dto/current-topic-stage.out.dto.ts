@@ -139,6 +139,17 @@ export interface CurrentTopicStageOutDto {
   hostStartupAcceptance: CurrentTopicHostStartupAcceptanceOutDto;
   /** 最终候选的完整交付闭环证据。 */
   deliveryEvidence: CurrentTopicDeliveryEvidenceOutDto;
+  /** 仅由任务、候选和执行尝试绑定的已完成时段形成；页面不得以动态总时长补造。 */
+  durationEvidence?: CurrentTopicStageDurationEvidenceOutDto | null;
   /** 生成此投影时使用的最新权威事实时间。 */
   updatedAt: string;
+}
+
+export interface CurrentTopicStageDurationEvidenceOutDto {
+  bindingStatus: "available" | "candidate-missing" | "result-missing" | "execution-attempt-missing" | "missing";
+  phases: Array<{
+    phase: "investigation" | "implementation" | "testing" | "release" | "restart" | "hanli-acceptance";
+    durationMs: number | null;
+    status: "recorded" | "missing";
+  }>;
 }
