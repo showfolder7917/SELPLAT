@@ -18,6 +18,7 @@ const executionContractSource = readFileSync(new URL("../../../contracts/service
 const integrationContractSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-integration.out.dto.ts", import.meta.url), "utf8");
 const snapshotContractSource = readFileSync(new URL("../../../contracts/services/workflow/dto/collaboration-task-snapshot.out.dto.ts", import.meta.url), "utf8");
 const contractValueSource = readFileSync(new URL("../../../contracts/services/workflow/value/collaboration-task.value.ts", import.meta.url), "utf8");
+const currentTopicStageContractSource = readFileSync(new URL("../../../contracts/services/evolution/dto/current-topic-stage.out.dto.ts", import.meta.url), "utf8");
 // 任务协作群已经按新手结构拆成主页面、页面状态、专题卡和纯显示转换；
 // 静态契约必须读取完整模块，不能把单个组合入口误当成全部实现。
 const taskGroupSource = [
@@ -51,6 +52,13 @@ test("协作回复卡展示真实状态链并隐藏旧意图终态", () => {
   assert.match(developerSource, /collaboration-status-task-details[\s\S]*fixedUiText\(locale, "conversationTaskDetails"\)[\s\S]*task\.snapshot\.confirmedIntent/s);
   assert.doesNotMatch(developerSource, /review-failed[\s\S]*重新审批/);
   assert.match(developerSource, /test-failed[\s\S]*fixedUiText\(locale, "conversationRetryTest"\)/);
+});
+
+test("专题卡只读取当前专题投影的候选重跑和等待依据", () => {
+  assert.match(currentTopicStageContractSource, /completedCount[\s\S]*candidateAttempts[\s\S]*waits/);
+  assert.match(taskGroupSource, /实际阶段耗时[\s\S]*候选 .*attempt\.completedCount/s);
+  assert.match(taskGroupSource, /等待与恢复依据[\s\S]*它们不改变当前恢复权限/s);
+  assert.match(taskGroupCardSource, /currentStage\?\.userAction === "resume"/);
 });
 
 test("执行失败经令狐修复并固定回到原负责人", () => {
